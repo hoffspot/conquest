@@ -1116,7 +1116,7 @@ const BASE_RESTS = {
 
 // The officials of the town halls and keeps (built from the rests of others): a reeve and their
 // clerk; a ruler on the throne, their steward, councillors at the table, sentries at the door;
-// and petitioners waiting on the benches
+// and petitioners waiting on the benches; and a castle's quartermaster and arcanist
 const { patron: PATRON, worshipper: WORSHIPPER } = BASE_RESTS;
 
 export const RESTS = Object.freeze({
@@ -1128,6 +1128,10 @@ export const RESTS = Object.freeze({
     councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
     sentry: [ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[4], renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4]],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
+    // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
+    // arcanist among their jars
+    quartermaster: [renamed(BARKEEP_RESTS[3], "arms folded"), renamed(LOOKING_OVER, "looking over a blade"), renamed(BARKEEP_RESTS[0], "wiping the counter"), ADVENTURER_RESTS[2], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
+    arcanist: [PRIEST_RESTS[4], renamed(LOOKING_OVER, "holding a phial to the light"), renamed(BARKEEP_RESTS[1], "stroking the chin"), PRIEST_RESTS[2], ADVENTURER_RESTS[1]],
 });
 
 // --- Reactions to being hit ---

@@ -779,7 +779,13 @@ function castle(piece) {
         return [cx + Math.cos(a) * R, cz + Math.sin(a) * R];
     });
 
-    band(solid, towers, 0, m(9), m(2.4), "stone-black", { lean: 0.04 });
+    // The wall round from the gate, its way in 7.6 m between the two to the south: built within
+    // the lines between its towers, round from the west side of the gate to its east
+    // (core/setpieces/castles.js)
+    const [[gx0, gz0], [gx1, gz1]] = [towers[1], towers[2]];
+    const [gx, gz] = [(gx0 + gx1) / 2, (gz0 + gz1) / 2];
+
+    band(solid, [[gx - m(3.8), gz], ...towers.slice(2), towers[0], towers[1], [gx + m(3.8), gz]], 0, m(9), m(2.4), "stone-black", { closed: false, lean: 0.04 });
 
     // (Thorn merlons leaning out along its top)
     for (let k = 0; k < count; k++) {
@@ -788,7 +794,9 @@ function castle(piece) {
         for (let t = 0.1; t < 0.95; t += 0.1) {
             const [x, z] = [ax + (bx - ax) * t, az + (bz - az) * t];
 
-            spike(solid, [x, m(9), z], [x - cx, m(20), z - cz], m(1.4), m(0.25), "stone-black", { sides: 4 });
+            if (k !== 1 || Math.abs(x - gx) > m(4.6)) {
+                spike(solid, [x, m(9), z], [x - cx, m(20), z - cz], m(1.4), m(0.25), "stone-black", { sides: 4 });
+            }
         }
     }
 
@@ -801,6 +809,17 @@ function castle(piece) {
     solid.extrude(circle(cx, cz, R * 0.4, 8, Math.PI / 8), 0, m(3.6), material("stone-black"), { top: material("stone-black") });
 
     octTower(solid, cx, cz, R * 0.22, m(3.6), m(20), random, { spire: 2.6, door: { width: m(2), height: m(3) } });
+
+    // (Stairs up the terrace's south face to the Black Tower's door, a violet lamp on a post
+    // either side of their foot)
+    const face = cz + R * 0.4 * Math.cos(Math.PI / 8);
+
+    steps(solid, cx, face + m(6), 0, m(3.6), [0, -1], m(2.4), "stone-black", { tread: m(0.3), riser: m(0.18) });
+
+    for (const side of [-1, 1]) {
+        post(solid, cx + side * m(1.6), 0, face + m(6.2), m(2.2), m(0.12), "iron-black", { sides: 6 });
+        budLamp(solid, [cx + side * m(1.6), m(2.2), face + m(6.2)], [side * 0.3, 1], { light: "glow-violet", reach: m(0.5) });
+    }
 
     for (let k = 0; k < 4; k++) {
         const a = (k * Math.PI) / 2 + Math.PI / 4;
@@ -815,12 +834,17 @@ function castle(piece) {
         solid.tube([[cx, m(19), cz], mid, [x, m(13), z]], m(0.06), material("silk"), { sides: 3 });
     }
 
-    // The gate between two towers on the south
-    const [[gx0, gz0], [gx1, gz1]] = [towers[1], towers[2]];
-
+    // The gate: a slender tower either side (plain, unlit: a shaft and its spire), a web hung
+    // between them, spiders either side of the way to it
     for (const side of [-1, 1]) {
-        spider(solid, (gx0 + gx1) / 2 + side * m(3.5), 0, (gz0 + gz1) / 2 + m(3), m(2.2), "jade-dark", { facing: 0 });
+        const x = gx + side * m(3.8);
+
+        solid.extrude(circle(x, gz, m(1.3), 8, southSide(8)), 0, m(11), material("stone-black"), { top: material("stone-black") });
+        needleSpire(solid, x, gz, m(11), m(1.3), m(6), "slate-violet", { glow: "glow-violet" });
+        spider(solid, gx + side * m(5), 0, gz + m(3), m(2.2), "jade-dark", { facing: 0 });
     }
+
+    web(solid, [gx, m(8.2), gz], m(2.8), [0, 0, 1], { radials: 8, rings: 4, random });
 
     return solid.toObject();
 }

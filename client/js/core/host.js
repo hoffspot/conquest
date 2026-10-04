@@ -25,7 +25,7 @@ import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
-import { heldWithin } from "./insides.js";
+import { heldWithin, townOf } from "./insides.js";
 import { CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
@@ -216,7 +216,7 @@ const KEEP_DONE = 50;
 export const SNAPSHOT_VERSION = 4;
 
 /** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
-export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
+export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild", quartermaster: "armoury", arcanist: "arcane" });
 
 /**
  * How near a shopkeeper a player trades with them (squares): a talk's reach across a counter,
@@ -2586,18 +2586,29 @@ export class Host {
             const inside = this.#inside(site);
             const hoard = inside?.chest ?? null;
 
+            // (A master that keeps within, by its hoard: a ruined castle's wight lord in its keep)
+            const keeps = lair.within ? inside?.leader : null;
+
             if ((this.slain[site.id] ?? -Infinity) <= this.battle.time && !cleared) {
-                ids.push(...this.#pack({ creature: master, tier, count: 1 }, at, { lair: site.id, master: true, roam: 3 }));
+                ids.push(...this.#pack({ creature: master, tier, count: 1 }, keeps?.square ?? at, { lair: site.id, master: true, roam: 3, map: keeps?.map ?? "town" }));
 
                 if (hoard) {
                     this.ground.set(`chest-${site.id}`, { id: `chest-${site.id}`, chest: true, locked: true, for: null, map: hoard.map, square: hoard.square, place: site.id, until: null });
                 }
             }
 
+            // (Its guards round its heart; half of them within with it, if it keeps within)
             lair.guards.forEach(([creature, count, guardTier], k) => {
                 const angle = (k / lair.guards.length) * Math.PI * 2;
+                const posts = keeps ? (inside.guards ?? []).slice(0, Math.ceil(count / 2)) : [];
 
-                ids.push(...this.#pack({ creature, tier: guardTier, count }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
+                for (const { map, square } of posts) {
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: 1 }, square, { lair: site.id, roam: 3, map }));
+                }
+
+                if (count > posts.length) {
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: count - posts.length }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
+                }
             });
 
             this.lairs.set(site.id, { ids, maps: inside?.maps ?? [], hoard });
@@ -3756,7 +3767,7 @@ export class Host {
         }
 
         const building = this.world.interiors?.of(actor.map);
-        const town = this.war.town(building?.place === "home" ? this.world.start?.id : building?.place);
+        const town = building && this.war.town(townOf(building, { plan: this.world.plan, war: this.war, start: this.world.start }));
 
         return town ? { id, role: one.role, name: one.name, title: one.title ?? "", town: town.id, owner: town.owner, ...official } : null;
     }

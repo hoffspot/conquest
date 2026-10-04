@@ -3806,3 +3806,238 @@ converted data is to be measured in M8 against today's hm08 data.
     held by outlaws: the band's chief and chest at its top, guards below; one its people's, its
     lookout and sentry; the tree hall held by outlaws walked up and gone into, the band not in
     the way).
+- **2026-10-04, M7.5b-3a built: the elves', orcs' and cat folk's castles walked into; the cat
+  folk's keep gone into** (docs/GAME.md *Gone into*).
+  - **Laid out** (core/setpieces/castles.js `castleLayout`, `solidAt`, `inCourt`): each castle as
+    its kit builds it (world/art/peoples elf.js, orc-places.js, cat-places.js `castle`), on its lot
+    facing south: what's solid (rects, discs, walls as thick segments, the orcs' bank as a ring
+    with its gap), its courtyard (within the walls and the gateway), its ground and its gate. Pure
+    data, exact maths; only the castles' heights are left to chance in the art, and nothing here
+    depends on them.
+  - **Set down** (core/sites.js `#setDown`, `unturned`): a castle's squares blocked only where
+    something's solid there (a square's middle within 0.4 m of it); its courtyard's squares kept
+    (`courts`, `courtAt`), given its ground in the chunks (core/overworld.js: flagstones, the
+    orcs' trodden earth; no crops, so no tall grass). The cat folk's keep's door (`entry`) is cleared
+    as a neutral site's (`entranceAt`), the way to it flagged too.
+  - **Art:** the elves' gate walls run from the end towers to the gate's pillars (they stopped
+    short and left gaps); the cat folk's gate tower has a way through it, its doors open either
+    side (it was solid, a door drawn on it); the orcs' longhouse is shorter, so the yard isn't cut
+    in two.
+  - **The keep's realm** (core/insides.js `townOf`, used by host.js `postOf` and game.js
+    `#townOf`): a building out in the land speaks for the realm of the town of its people's
+    nearest it (any people's, if they've none); a castle's keep had none, its ruler no post.
+  - **NET_VERSION 36.**
+  - **Pictures** (sent in the session): each castle from above before (main) and after, the player
+    in each courtyard, the cat folk's keep's door and its great hall.
+  - **Tests:** test/castles.test.js (the layouts the same for the same lot, none for the others;
+    each courtyard walked into through its gate and none of it with the gate shut; set down in
+    seed 2's world, at least 98% of each courtyard reached from outside the gate, its ground the
+    courtyard's; the dark elves' and lizard folk's still blocked; the cat folk's keep gone into
+    from outside the gate, its ruler titled, their realm the nearest cat town's).
+  - **Next:** M7.5b-3b: the orcs' motte (steps up it and the broch's door), the elves' hall
+    within their castle, the dark elves' gate and terraces; then the lizard folk's temple-fortress
+    and the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3b built: the elves' and orcs' keeps gone into; every castle's gate 4 m
+  wide** (docs/GAME.md *Gone into*).
+  - **Which keep:** the elves' castle has no hall, only the great tree in its court: their keep is
+    the tower at the back of their ring, due north, facing the tree and the gate, an ogee door
+    in its foot as their watchtowers' have, a lamp either side (world/art/peoples/elf.js
+    `castle`). The orcs' is their longhouse, the clan's hall (the broch on the motte is left as
+    it is: its keep would want steps up the motte and a second building gone into): its door's
+    already drawn, under a porch in the middle of the middle side of its south wall, a step up
+    onto its plinth.
+  - **Laid out** (core/setpieces/castles.js `entry`): the elves' door in the south face of the
+    back tower's twelve; the orcs' worked out as the kit's lens plan has it (its sides 2.2 m
+    long, the door in the middle of the middle one: with an even count of sides, a little east
+    of the house's middle), its porch's two posts solid. Doors may stand above the ground: an
+    entry's `floor` is its sill's height (the orcs' on their 0.7 m plinth), carried to the door
+    drawn green when tapped (core/sites.js `entranceAt`, which had it at 0).
+  - **The gates widened:** the orcs' castle in seed 2 is set down at a slant, and the player
+    couldn't get through its gate: the bastions stood 3.2 m apart, and on the slant the squares
+    blocked either side stand up to 0.7 m into the gap, the navigation mesh keeping walkers
+    0.5 m off them. The bastions stand 4 m apart now, and the cat folk's gate tower is 7 m wide,
+    its way through 4 m (it was 2.2 m), its doors swung back against it, the curtain walls
+    ending within it (cat-places.js, orc-places.js `castle`).
+  - **Walls where they're drawn:** the kits' `band` builds a wall to one side of its line, not
+    astride it, and the layouts had them astride. The elves' curtain walls ran 1.6 m inward of
+    the lines between their towers, so their inner faces buried the back tower's south face and
+    its door: they're drawn astride their lines now (elf.js `castle`, its gate walls too), as the
+    layout has them, every tower standing proud of them. The cat folk's are laid out where
+    they're drawn, 2.4 m within their lines. The elves' courtyard is the polygon of their towers
+    (a new `polygon` shape), out to the walls all round, not a round that only reached the
+    middle of each.
+  - **The way to a keep's door** is the courtyard's ground however far it reaches into its walls
+    (core/sites.js: the elves' cleared into the back tower).
+  - **Pictures** (sent in the session): the castles from above, the gates; the elves' and orcs'
+    keep doors and great halls.
+  - **Tests:** test/castles.test.js: each gate 3 m clear through (squares' middles); each
+    people's keep gone into from outside its gate in seed 2's world (the orcs' at a slant), its
+    way in the courtyard's ground, its ruler titled, their realm the nearest town of theirs.
+  - **Next:** the dark elves' castle (its gate and terraces), the lizard folk's temple-fortress,
+    the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3c built: the dark elves' castle walked into, the Black Tower gone into**
+  (docs/GAME.md *Gone into*).
+  - **The gate:** their wall was a closed ring through its eight towers, no way in (the two
+    spiders before it guarded nothing). It's an open run now, round from one side of the gate to
+    the other, 7.6 m between them, a slender tower at each end of it (their spires 11 m up, a web
+    hung between them), the spiders moved out to flank the way to it; no thorn merlons over the
+    gap (world/art/peoples/darkelf.js `castle`).
+  - **The keep:** the Black Tower stands on a terrace 3.6 m high, its door at the terrace's top.
+    Stairs run up the terrace's south face to it (20 risers of 0.18 m, 2.4 m wide), a violet
+    lamp on an iron post either side of their foot. The overworld's walking mesh is made from the
+    land and the squares blocked, the terrace not part of the land, so the keep's gone into from
+    the stairs' foot: an entry's `reach` is how far out from its door its way in begins (core/
+    sites.js `entranceAt`; its door still drawn green where it is, up on the terrace).
+  - **Laid out** (core/setpieces/castles.js `darkElf`): the wall's runs as thick as they're built
+    within the lines between the towers, the towers, the gate towers, the spiders, the terrace
+    (an octagon: `polygon`), the stairs; the courtyard the polygon of the towers and the gateway;
+    its ground dark cobbles (GROUND.cobbles).
+  - **Tests:** test/castles.test.js now also in seed 1, where every castle's set down (in seed 2
+    the dark elves' has no room where it's planned), at many turns (the cat folk's at -2.68, no
+    eighth of a turn): each courtyard reached from outside its gate, each keep gone into, the
+    dark elves' from the foot of its stairs.
+  - **Pictures** (sent in the session): the dark elves' castle from above before (main) and
+    after, its courtyard, the stairs up to the Black Tower, its great hall.
+  - **Next:** the lizard folk's temple-fortress; the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3d built: the lizard folk's palace gone into** (docs/GAME.md *Gone into*).
+  - **Which way:** their temple-fortress is a square platform 4 m high in its moat, the summit
+    pyramid, the palace and a great tree on it, a causeway (1.2 m high) up to its stairs from
+    the south: all of its courtyard's up on the platform. Making it walkable would mean raising
+    the land under it (the height function, its meshes, the far land and the walking mesh all
+    taking a square pad 4 m over the castle's mound): too much for what it gives. So, as the
+    dark elves' Black Tower's, the palace (their keep) is gone into from the causeway's end, the
+    rest solid as it was.
+  - **An entry's `foot`** ([u, v] on the lot: where its way in begins, if not at its door; core/
+    sites.js `entranceAt`) takes over from 3c's `reach`, which only went straight out from the
+    door: the palace's door is east of the causeway.
+  - **Art:** the middle of the palace's three openings is its door now, wider, with a door in it
+    (world/art/peoples/lizard-places.js `castle`).
+  - **Tests:** test/castles.test.js: the lizard folk's laid out, solid all through but its way
+    in; its palace gone into in seed 1 from outside the causeway's end.
+  - **Pictures** (sent in the session): the temple-fortress from above, before and after, the
+    player at the causeway's end; the palace's great hall.
+  - **Next:** the humans' citadels' wards and keeps; then M7.5b-4 (crypts under the ruins).
+- **2026-10-04, M7.5b-3e built: the humans' hill citadels walked into** (docs/WORLD.md *Hill
+  citadels*, docs/GAME.md *Gone into*).
+  - **Which way:** decks, not the land. The citadel's terraces are already the land's (its pads);
+    what wasn't walked was what's built on and over them: the bridge over the moat, the gate
+    tower's and the gates' passages, the stairs up the terraces' faces. Each is a deck as a river
+    bridge is (`citadelWays` `decks`: two ends on the lot, a half width, the height at each end),
+    so the overworld's `heightAt` and the walking mesh take them as they take bridges, without
+    changing the land's heights. A flight's deck rises from its foot to its head, its steps the
+    look's (`CITADEL.stair` 3.5 m lanes, 0.18 m risers, 0.36 m treads, 2.6 m landings).
+  - **What's solid** (`citadelWays` `solid`, the shapes of setpieces/castles.js): walls split at
+    their gates, gatehouses, battered feet, towers, ranges, hall, chapel, the keep on its plinth,
+    its forebuilding and needles, the gate tower's sides. Their squares blocked, not seen through;
+    the wards' open ground paved and open.
+  - **The keep's door** (`citadelWays` `door`): in the forebuilding, 2.6 m wide and 3.2 high on
+    a 0.6 m sill: the keep gone into (its great hall, its lord or lady, the realm of the nearest
+    human town).
+  - **The walking mesh:** squares under a deck more than a metre over the ground (a stair's
+    masonry) aren't walked (navigation/tiles.js), so no way's found under a flight.
+  - **Tests:** test/citadel.test.js: the decks join (each flight's head the next landing's height,
+    the passage at its ward's level) in seeds 1, 7 and 23; what's solid blocked and not seen
+    through, a third or more of the wards' ground open; walked in seed 1 from outside the gate
+    tower into the keep, standing on every ward's level on the way. e2e: the gate's and the
+    bridge's ways open at the outer ward's level, the gate tower blocked either side of its way.
+  - **Pictures** (sent in the session): the bridge before and after (the player in the gate
+    tower's passage), a stair, the keep's door, its great hall; from above the same before and
+    after.
+  - **Next:** M7.5b-4 (crypts under the ruins); then M7.5c.
+- **2026-10-04, M7.5b-4a built: the crypt under the ruins** (docs/GAME.md *Gone into*).
+  - **The way down** (core/setpieces/neutral.js `ruins`, `RUINS.crypt`): a stair-house 3.4 by
+    3.2 m against the old hall's back wall in its middle, between its columns, solid; its door
+    (1.4 by 2.2 m) faces the hall's own, the site's entry (`inside: "crypt"`). The heaps of fallen
+    stone against the back wall are moved off it (from the same random numbers, so the rest of
+    every hall is laid out as it was). Drawn (world/art/kits/neutral.js `crypt`): gabled, of the
+    hall's stone, a round-arched door onto the dark of the stair, a skull over it, ivy.
+  - **The crypt** (core/insides.js `CRYPT`, `cryptRooms`; new plan marks `t` a tomb and `k` a
+    stand of candles, interiors.js): 16 by 18 m, the stair at its south end, a vaulted aisle
+    between two rows of pillars, three tombs a side, bones, the apse at the back with the dead's
+    master by their chest ("l", "h"), four posts for guards ("g"). Drawn (world/interiors3d.js
+    `crypt`): old dressed stone walls with two tiers of niches (a skull in some), the vault and
+    its ribs (hidden from above as ceilings are), pillars, lidded tombs (a cross on each, one now
+    and then pushed askew on the dark within), candles in iron stands lighting the apse, the stair
+    rising to daylight. Its sound hushed (`sound.js` `crypt`).
+  - **Held:** the dead hold it as they held the hall (host.js `#places` with `#inside`): the wight
+    lord by the chest within, half the skeletons guarding the way, the rest in the hall above.
+  - **Fix found on the way:** a place cleared from within (a cave, the crypt, an abbey's temple)
+    wasn't said: the player had to be outside (app/game.js `#cleared` now counts the place's floors).
+  - **Tests:** test/neutral.test.js (the stair-house in the way against the back wall, its door's
+    way into the hall clear, no heap of stone on it, for 24 seeds); test/insides.test.js (the
+    crypt's floor got to from its stair, its marks, drawn); test/places.test.js (the ruins gone
+    into, the dead within, put to the sword there, the share where the chest stood); e2e: the
+    ruins' chest down in the crypt, locked, then opened once the dead fall, the player told.
+  - **Pictures** (sent in the session): the ruins before and after (the stair-house), the crypt
+    from the follow camera and from above.
+  - **Next:** M7.5b-4b (the ruined castles' keeps, their wight lords within); then M7.5c.
+- **2026-10-04, M7.5b-4b built: the ruined castles' keeps gone into** (docs/GAME.md *Gone into*).
+  - **The way in** (core/setpieces/neutral.js `ruined castle`, `RUINED_KEEP`): the breach the
+    ruined keep's art has always had in the middle of its front, where its door was (kits/castle.js
+    `ruinedKeep`), 3.2 m wide over a 0.8 m step; the site's entry (`inside: "ruin"`). The stores and
+    cart its last keepers left are kept off the way to it. Its look outside unchanged.
+  - **The great hall** (core/insides.js `RUIN`, `ruinRooms`; a new plan mark `m`, a heap of
+    rubble, interiors.js): 20 by 16 m, open to the sky (world/interiors3d.js `ruin`, `open`): its
+    walls broken off high and low, daylight through tall windows, grass in tufts between its
+    flagstones, two rows of pillars (some broken short), heaps of fallen stone each with a charred
+    joist, bones, the dais and its two stone thrones (one toppled), braziers burning either side,
+    the land outside seen over the walls. Its sound open (`sound.js` `ruin`).
+  - **Held** (core/creatures.js `LAIRS` `within`; host.js `#lairs`): the wight lord keeps within by
+    its hoard (the plan's "l" and "h"), half its skeletons at the plan's "g", the rest in the
+    courtyard; slain, the hoard opened, a share for each player there, as the dragon's is.
+  - **Tests:** test/neutral.test.js (each ruined castle's keep gone into by its breach, the way to
+    it clear, 24 seeds); test/insides.test.js (its hall got to, marked, drawn open to the sky);
+    test/places.test.js (the wight lord within by its hoard, half its skeletons with it);
+    test/creatures.test.js (the master within its keep, slain there).
+  - **Pictures** (sent in the session): the keep's front from above before and after (the same:
+    only going in is new), the great hall from the follow camera and from above.
+  - **Next:** M7.5c (the castles' shops and blacksmiths, the abbey's arcane shop, the watchtowers'
+    arms, the restless dead).
+- **2026-10-04, M7.5c broken into its steps** (§8 *Friendlies*, *The dead*):
+  - **M7.5c-1:** a people's castle's shops: its keep's undercroft, its smith, quartermaster and
+    arcanist.
+  - **M7.5c-2:** the smaller shops fitting the other places: an abbey's arcane goods, a
+    watchtower's weapons and armour.
+  - **M7.5c-3:** the restless dead at the ruins: ghosts and wraiths, a greater one with an old
+    relic and a chest.
+- **2026-10-04, M7.5c-1 built: the castles' undercrofts, their smiths, quartermasters and
+  arcanists** (docs/GAME.md *The undercroft*; WAR.md *Shops*).
+  - **Where:** a people's castle's keep (the five peoples' and the humans' citadel; not a town's
+    keep, a manor's or the elves' tree hall's, which go in as keeps too: insides.js `addSite`
+    keeps the site's kind, `siteKind`) has two floors: its great hall as before but for the
+    stairs down in its north-west corner where the racks were (the steward's desk moved east of
+    the thrones), and the undercroft below.
+  - **The undercroft** (insides.js `UNDERCROFT`, a new plan mark `n` for an armour stand,
+    interiors.js): 24 by 16 metres, every open square got to from the stairs' foot. Drawn
+    (world/interiors3d.js `undercroft`): a groin vault, bay by bay between four pillars and the
+    walls (`groinVault`: the higher of two crossing barrel vaults at each point, so its edges
+    arch and its groins run corner to corner), springing at 2.5 m, its crown 3.2 m, open over
+    the stairs with a dark shaft up; the smithy's works as they were, drawn by one function now
+    (`forgeworks`, the smithy's too); the quartermaster's racks and two suits of armour on stands
+    (`armourStand`); the arcanist's shelves of glass jars and phials, some glowing (`phialShelves`)
+    and worktable with its alembic (`worktable`); the garrison's table, barrels and strongboxes.
+    The great hall's floor open round a stairwell, the stairs going down into it, a parapet
+    round it (`stairwell`).
+  - **Its folk** (insides.js `undercroftFolkOf`): the smith and apprentice as a smithy's (their
+    plan's forge, anvil, trough, bellows and grindstone; the smith talks as `castleSmith`); a
+    quartermaster (roles.js, actions.js, folk.js: an old soldier in a gambeson) behind the
+    counter and at the racks; an arcanist (in a robe, now and then a wizard's hat) behind theirs,
+    at the shelves and at the worktable. Their talks in dialogue.js.
+  - **Their shops** (progress.js `SHOPS`, host.js `SHOPKEEPERS`): the quartermaster's armoury
+    (arms, shields, armour and the people's uniform, up to legendary: the only legendary make
+    for sale anywhere), the arcanist's arcane goods (wands, grimoires, staves, hats, jewellery,
+    draughts and cures, up to masterwork; no tomes), the smith's as a town's.
+  - **Stairs either way** (insides.js `make`): a building's stairs' foot is on whichever floor
+    has it (a tavern's taproom, a keep's undercroft), their top on the other.
+  - **Versions:** `NET_VERSION` 37 (a castle's keep has a floor more).
+  - **Tests:** test/insides.test.js (every castle's keep, the six peoples', down its stairs to
+    its undercroft, every open square of it got to, its folk where they can stand, and drawn; a
+    manor's and the tree hall's one floor); test/castles.test.js (into the elves' castle and down
+    its stairs: a legendary sword bought from the quartermaster, a masterwork wand from the
+    arcanist, each only when near them; legendary sold nowhere else, no tomes from the
+    arcanist). e2e: down to the elves' castle's undercroft, the quartermaster talked to and his
+    racks open, a legendary make among them.
+  - **Pictures** (sent in the session): the elves' great hall before and after (its stairwell
+    where its racks were), the undercroft from above and within (the forge, the armoury, the
+    arcanist's shelves, the vault), the orcs' undercroft in their dark basalt.
+  - **Next:** M7.5c-2 (an abbey's arcane goods and a watchtower's arms).

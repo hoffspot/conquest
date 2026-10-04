@@ -33,6 +33,7 @@ import { DAY, daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.
 import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
+import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
@@ -2335,12 +2336,14 @@ export class Game {
      * down, sites.js, or where a camp's pitched; its plan's spot till then), holder (who holds it
      * now), rim (its colour) }].
      */
-    // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it
+    // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it or
+    // within it (a cave, the crypt under the ruins, an abbey's temple: its floors)
     #cleared({ place: id, holder }) {
         const place = placesOf(this.world.plan).find((each) => each.id === id);
         const me = this.battle.actor(this.me);
+        const within = me && this.world.interiors?.buildings.get(`site:${id}`)?.maps.includes(me.map);
 
-        if (!place || !me || me.map !== "town" || Math.hypot(me.x - place.at[0], me.y - place.at[1]) > PLACE_BANDS.far) {
+        if (!place || !me || (!within && (me.map !== "town" || Math.hypot(me.x - place.at[0], me.y - place.at[1]) > PLACE_BANDS.far))) {
             return;
         }
 
@@ -2804,24 +2807,10 @@ export class Game {
         return { rumour1: said[0], rumour2: said[1] ?? said[0], rumour3: said[2] ?? said[0], rumourRuler: ruler ?? said[0] };
     }
 
-    // Which settlement a building's in (its id): where the player started, or its own; a manor's
-    // or a watchtower's (out in the land, `site:`), the town nearest it, whose realm it keeps (of
-    // its own people's, if there's one)
+    // Which settlement a building's in (its id: insides.js townOf; a manor's, a watchtower's, a
+    // castle's keep's out in the land, the nearest town of its people's)
     #townOf(building) {
-        if (building.place === "home") {
-            return this.world.start?.id;
-        }
-
-        if (building.place !== "site") {
-            return building.place;
-        }
-
-        const [x, y] = building.at;
-        const all = (this.world.plan?.places ?? []).filter((place) => this.host.war?.town(place.id));
-        const own = all.filter((place) => place.race === building.people);
-        const towns = own.length ? own : all;
-
-        return towns.reduce((best, place) => (!best || Math.hypot(place.at[0] - x, place.at[1] - y) < Math.hypot(best.at[0] - x, best.at[1] - y) ? place : best), null)?.id;
+        return townOf(building, { plan: this.world.plan, war: this.host.war, start: this.world.start });
     }
 
     // What one of the officials of a town hall or keep (or those about them) can tell of, and

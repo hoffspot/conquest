@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { tierAt } from "../client/js/core/creatures.js";
+import { LAIRS, tierAt } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -187,17 +187,17 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
             assert.ok(folk.every((one) => one.wild.creature === band.folk && one.wild.tier === tier && host.wild.get(one.id).place === place.id));
             assert.ok([leader, ...folk].every((one) => one.wild.temper === "territorial" && one.wild.guard === PLACE_BANDS.guard));
 
-            // Its chest by the leader, locked while they hold it: in the middle of the ruins; at
-            // the back of the cave, the top of the tower, gone into (insides.js: its plan's "h"
+            // Its chest by the leader, locked while they hold it: at the back of the cave, of the
+            // crypt under the ruins, the top of the tower, gone into (insides.js: its plan's "h"
             // and "l"), as many of the band as it has room for guarding the way in, half at most,
             // the rest outside
             const chest = host.ground.get(`chest-${place.id}`);
             const building = world.interiors.buildings.get(`site:${place.id}`);
 
             assert.ok(chest.chest && chest.locked && chest.until === null);
-            // (A cave's gone into, and a watchtower, broken or a people's: all but the orcs', an
-            // open deck on poles: insides.js STRUCTURE_DOORS)
-            assert.equal(Boolean(building), kind === "cave" || (kind === "watchtower" && place.race !== "orc"), kind);
+            // (A cave's gone into, the crypt under the ruins, and a watchtower, broken or a
+            // people's: all but the orcs', an open deck on poles: insides.js STRUCTURE_DOORS)
+            assert.equal(Boolean(building), kind === "cave" || kind === "ruins" || (kind === "watchtower" && place.race !== "orc"), kind);
 
             if (!building) {
                 assert.equal(chest.map, "town");
@@ -256,8 +256,11 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
 
         assert.ok(share && share.for === HOST_PLAYER && share.bundle.gold > 0);
         assert.ok(events.some((event) => event.type === "spoils" && event.creature === "chest" && event.ground === share.id));
+        // (Where the chest stood: down in the crypt under the ruins)
+        me.map = share.map;
         put(me, [...share.square]);
         assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: share.id }).ok, true);
+        me.map = "town";
 
         // Cleared: none come back while it's empty
         put(me, [Math.floor(at[0] + PLACE_BANDS.far + 60), Math.floor(at[1])]);
@@ -292,38 +295,82 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
 });
 
 describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watchtower, the humans' abbeys and manors)", () => {
-    it("a cave's gone into by its mouth, the way kept clear; its band held so while a player's within; put to the sword there, the chest's share lies where it stood", () => {
+    it("a cave's gone into by its mouth, and the crypt under the ruins by the door of their stair-house, the way kept clear; its band held so while a player's within; put to the sword there, the chest's share lies where it stood", () => {
+        for (const kind of ["cave", "ruins"]) {
+            const context = hosted();
+            const { host, world, me } = context;
+            const place = placesOf(world.plan).find((each) => each.kind === kind);
+
+            near(context, place);
+
+            const set = world.maps.town.sites.set.get(place.id);
+            const building = world.interiors.buildings.get(`site:${place.id}`);
+            const squares = squaresOf(world.maps.town);
+
+            assert.equal(building.kind, kind === "ruins" ? "crypt" : "cave");
+            assert.ok([...set.entrance.front, set.entrance.outside].every((square) => !squares.blocked(...square)), `${kind}: the way in clear`);
+            assert.deepEqual(building.door.ends[0].squares, set.entrance.front);
+
+            // In by its way in, and a while within (kept hardy enough to stand among them, a
+            // rank in endurance or not): they're there still
+            const hardy = (ms) => {
+                const events = [];
+
+                for (let t = 0; t < ms; t += STEP_MS) {
+                    events.push(...host.advance(STEP_MS));
+                    Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+                }
+
+                return events;
+            };
+
+            put(me, [...set.entrance.outside]);
+            assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
+            hardy(3000);
+            assert.equal(me.map, building.maps[0], kind);
+            hardy(1200);
+
+            const held = host.held.get(place.id);
+
+            assert.ok(held?.maps.includes(me.map), `${kind}: held, the player within`);
+
+            // Put to the sword with the player within
+            for (const id of held.ids) {
+                host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+            }
+
+            const events = hardy(3000);
+            const share = [...host.ground.values()].find((dropped) => dropped.from === "chest" && dropped.for === HOST_PLAYER);
+
+            assert.ok(events.some((event) => event.type === "cleared" && event.place === place.id));
+            assert.equal(share?.map, building.maps[0], kind);
+            assert.deepEqual(share.square, world.maps[share.map].marks.h[0]);
+        }
+    });
+
+    it("a ruined castle's wight lord keeps within its keep's great hall, open to the sky, by its hoard, half its skeletons with it, gone into by the breach where the keep's door was", () => {
         const context = hosted();
         const { host, world, me } = context;
-        const place = placesOf(world.plan).find((each) => each.kind === "cave");
+        const site = world.plan.sites.find((one) => one.kind === "ruined castle");
+        const heart = world.maps.town.sites.heartOf(site);
 
-        near(context, place);
+        put(me, [Math.floor(heart[0] + 12), Math.floor(heart[1])]);
+        run(host, 600);
 
-        const set = world.maps.town.sites.set.get(place.id);
-        const building = world.interiors.buildings.get(`site:${place.id}`);
-        const squares = squaresOf(world.maps.town);
+        const held = host.lairs.get(site.id);
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+        const [hall] = building.maps;
+        const band = held.ids.map((id) => host.battle.actor(id));
+        const master = band.find((one) => host.wild.get(one.id)?.master);
+        const chest = host.ground.get(`chest-${site.id}`);
 
-        assert.ok([...set.entrance.front, set.entrance.outside].every((square) => !squares.blocked(...square)), "the way in clear");
-        assert.deepEqual(building.door.ends[0].squares, set.entrance.front);
-
-        // In by its mouth, and a while within: they're there still
-        put(me, [...set.entrance.outside]);
-        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
-        run(host, 3000);
-        assert.equal(me.map, building.maps[0]);
-        run(host, 1200);
-
-        const held = host.held.get(place.id);
-
-        assert.ok(held?.maps.includes(me.map), "held, the player within");
-
-        // Put to the sword with the player within
-        const events = putToTheSword(host, held);
-        const share = [...host.ground.values()].find((dropped) => dropped.from === "chest" && dropped.for === HOST_PLAYER);
-
-        assert.ok(events.some((event) => event.type === "cleared" && event.place === place.id));
-        assert.equal(share.map, building.maps[0]);
-        assert.deepEqual(share.square, world.maps[share.map].marks.h[0]);
+        assert.equal(building.kind, "ruin");
+        assert.equal(world.maps[hall].style, "ruin");
+        assert.equal(master.map, hall, "the wight lord within");
+        assert.ok(chest?.locked && chest.map === hall, "its hoard within, locked");
+        assert.ok(Math.hypot(master.square[0] - world.maps[hall].marks.l[0][0], master.square[1] - world.maps[hall].marks.l[0][1]) < 1.5, "where the plan has it");
+        assert.equal(band.filter((one) => one !== master && one.map === hall).length, Math.ceil(LAIRS["ruined castle"].guards[0][1] / 2), "half its skeletons with it");
+        assert.ok(band.some((one) => one.map === "town"), "the rest in the courtyard");
     });
 
     it("the dragon's hoard lies at the back of its lair, locked while the dragon lives; opened once it falls, a share of it for each player there", () => {

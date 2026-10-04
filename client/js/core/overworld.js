@@ -501,9 +501,12 @@ export class Overworld {
         return this.ground.heightAt(x, y);
     }
 
-    // A bridge's deck's height at a point on it, or null if the point's on none
+    // A bridge's deck's height at a point on it (or a citadel's deck's), or null if the point's on
+    // none
     #deckAt(x, y) {
-        for (const bridge of this.#bridgesNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+
+        for (const bridge of [...this.#bridgesNear(cx, cy), ...this.sites.decksNear(cx, cy)]) {
             const { a, b, half } = bridge;
             const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
             const length = hypot(dx, dy);
@@ -521,12 +524,17 @@ export class Overworld {
      * A bridge's deck's height (metres) a way `t` along it (0 at its end `a`, 1 at `b`): from the
      * ground at one end to the other's, arched to at least a metre over the river under its
      * middle; a stone bridge's level over the river, high enough for its arches, up a ramp from
-     * each end.
+     * each end. A citadel's deck (sites.js decksNear) from its height at one end to the other's.
      */
-    deckOf({ a, b, stone = false, kind = "road", ramps = null }, t) {
+    deckOf({ a, b, stone = false, kind = "road", ramps = null, from, to }, t) {
+        const along = Math.min(1, Math.max(0, t));
+
+        if (from !== undefined) {
+            return from + (to - from) * along;
+        }
+
         const [ha, hb] = [this.ground.heightAt(...a), this.ground.heightAt(...b)];
         const river = this.waters.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20);
-        const along = Math.min(1, Math.max(0, t));
 
         // A stone bridge: level over the river (high enough for its arches, and no lower than
         // halfway between its ends), up a straight ramp from each end to the river's edge
@@ -770,6 +778,19 @@ export class Overworld {
                     if (site.paved) {
                         ground[k] = GROUND.courtyard;
                     }
+                } else if (this.sites.courtAt(x, y) !== null) {
+                    // (A castle's courtyard within its walls: open ground, flagged or trodden,
+                    // nothing grown)
+                    ground[k] = this.sites.courtAt(x, y);
+                    crops[k] = 0;
+                }
+
+                // (Under a citadel's deck, over its moat or up a stair: walked on at the deck's
+                // height, whatever's under it)
+                if (this.sites.deckAt(x, y)) {
+                    bridge[k] = 1;
+                    blocked[k] = 0;
+                    crops[k] = 0;
                 }
             }
         }
@@ -933,9 +954,12 @@ export class Overworld {
         return [...new Set(this.#roadsIn(cx, cy).filter((segment) => !segment[6] && segment[4] === "path").map((segment) => segment[5]))];
     }
 
-    /** The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk). */
+    /**
+     * The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk); and a citadel's
+     * decks (the way over its moat, its stairs: sites.js decksNear), walked as theirs are.
+     */
     bridgesNear(cx, cy) {
-        return this.#bridgesNear(cx, cy);
+        return [...this.#bridgesNear(cx, cy), ...this.sites.decksNear(cx, cy)];
     }
 
     /**

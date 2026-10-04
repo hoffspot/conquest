@@ -99,6 +99,13 @@ export const CITADEL = Object.freeze({
     range: Object.freeze({ deep: 7, eaves: 7, clear: 2 }),
     /** How far round the wards' gates are, each from the last (a share of the way round). */
     round: 0.25,
+    /**
+     * A stair up to an inner gate, as world/art/kits/citadel.js builds it (metres): each flight's
+     * width, each step's rise and tread, the landing before the gate either side of its middle;
+     * and the batter at the foot of a retaining wall (how far out a metre down).
+     */
+    stair: Object.freeze({ wide: 3.5, rise: 0.18, tread: 0.36, platform: 2.6 }),
+    batter: 1 / 6,
 });
 
 /**
@@ -479,4 +486,130 @@ export function citadelLevel(plan, citadel, x, y, facing) {
     }
 
     return Math.round((sum / n + CITADEL.hill.raise) / HEIGHT_STEP) * HEIGHT_STEP;
+}
+
+// A point in a part's own frame (x along it, z out the way it faces: as world/art/kits/citadel.js
+// builds it) where it is in the citadel's: from its `at`, turned `turn`
+const framed = ([ou, ov], turn) => (x, z) => [ou + x * sin(turn) + z * cos(turn), ov - x * cos(turn) + z * sin(turn)];
+
+// A rectangle in a part's own frame (x0..x1 along, z0..z1 out) as a polygon in the citadel's, its
+// corners round from east towards south
+function framedRect(at, turn, [x0, z0, x1, z1]) {
+    const to = framed(at, turn);
+    const corners = [to(x0, z0), to(x1, z0), to(x1, z1), to(x0, z1)];
+    const area = corners.reduce((sum, [u, v], k) => sum + u * corners[(k + 1) % 4][1] - corners[(k + 1) % 4][0] * v, 0);
+
+    return { polygon: area < 0 ? corners.reverse() : corners };
+}
+
+/**
+ * How a citadel is walked (the terrain plan's M7.5b-3e), in its own metres: what of it stands in
+ * the way on its terraces (`solid`: shapes as setpieces/castles.js's: its wards' walls up to their
+ * gates' houses, the batter at the foot of the inner wards' retaining walls, their towers, the
+ * gatehouses either side of their gates' passages and the outer gate's twin towers, its ranges,
+ * hall and chapel, its keep and its forebuilding, the gate tower either side of its passage); its
+ * decks (`decks`: { a, b ([u, v]), half (metres either side of the line between), from, to (how
+ * high at a and at b, over the outer ward) }: the way in from the glacis through the gate tower,
+ * over the moat and through the outer gate; and up each stair to an inner gate, its lower flight,
+ * the landing it turns on, its upper flight, the landing before the gate and the passage through
+ * the wall onto the ward's terrace); and its keep's door (`door`: { at ([u, v]: the keep's middle),
+ * turn (the way its door faces), x, y (the door's middle in the keep's own frame, y out), width,
+ * height, floor (its sill over the inner ward) }).
+ */
+export function citadelWays(citadel) {
+    const { wards } = citadel;
+    const { gate, gatetower, stair } = CITADEL;
+    const parts = citadelParts(citadel);
+    const solid = [];
+    const decks = [];
+    const r = gate.wide / 2;
+
+    for (const [k, ward] of wards.entries()) {
+        const corners = cornersOf(citadel, ward, ward.thick / 2);
+        const below = k ? wards[k - 1].rise : 0;
+
+        for (let side = 0; side < ward.sides; side++) {
+            const turn = sideTurn(ward.sides, side);
+            const mid = ward.apothem - ward.thick / 2;
+            const to = framed([cos(turn) * mid, sin(turn) * mid], turn);
+            const [a, b] = [corners[(side + ward.sides - 1) % ward.sides], corners[side]];
+
+            if (side === ward.gate) {
+                // (Up to its gate's house either side; the house either side of its passage, from
+                // inside the wall to its front, the outer's out between its twin towers)
+                const house = k ? gate.house / 2 : r + gate.tower;
+                const [z0, z1] = [-ward.thick / 2 - gate.inward, ward.thick / 2 + (k ? 0 : 2)];
+                // (The house's ends along the wall: which corner's nearer which end)
+                const [near, far] = [to(-house, 0), to(house, 0)];
+                const [first, last] = hypot(near[0] - a[0], near[1] - a[1]) < hypot(far[0] - a[0], far[1] - a[1]) ? [near, far] : [far, near];
+
+                solid.push({ wall: [a, first, ward.thick / 2] }, { wall: [last, b, ward.thick / 2] });
+                solid.push(framedRect([cos(turn) * mid, sin(turn) * mid], turn, [-house, z0, -r, z1]), framedRect([cos(turn) * mid, sin(turn) * mid], turn, [r, z0, house, z1]));
+            } else {
+                solid.push({ wall: [a, b, ward.thick / 2] });
+            }
+
+            // (An inner ward's retaining wall battered out at its foot, on the terrace below)
+            if (k) {
+                const out = (ward.rise - below + 1.5) * CITADEL.batter;
+                const half = ward.apothem * (sin(PI / ward.sides) / cos(PI / ward.sides));
+
+                solid.push(framedRect([cos(turn) * ward.apothem, sin(turn) * ward.apothem], turn, [-half, 0, half, out]));
+            }
+        }
+
+        solid.push(...towersOf(citadel, ward).map(([u, v]) => ({ disc: [u, v, ward.tower + 0.3] })));
+    }
+
+    solid.push(...gateTowersOf(citadel).map(([u, v]) => ({ disc: [u, v, gate.tower] })));
+
+    // (Its ranges, hall and chapel: their buttresses and the chapel's apse a metre past them)
+    for (const part of parts.filter(({ part }) => ["range", "hall", "chapel"].includes(part))) {
+        const reach = part.part === "chapel" ? 4 : 1;
+
+        solid.push(framedRect(part.at, part.turn, [-part.length / 2 - reach, -part.deep / 2 - 1, part.length / 2 + reach, part.deep / 2 + 1]));
+    }
+
+    // (The keep on its plinth, its forebuilding out before its door, its towers at its corners)
+    const { keep } = citadel;
+    const plinth = keep.size / 2 + 1.4;
+    const front = plinth + 0.4;
+
+    solid.push(framedRect(keep.at, keep.turn, [-plinth, -plinth, plinth, plinth]), framedRect(keep.at, keep.turn, [-2.4, plinth, 2.4, front]));
+    solid.push(...[[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => ({ disc: [...framed(keep.at, keep.turn)((x * keep.size) / 2, (z * keep.size) / 2), keep.needle] })));
+
+    // (The gate tower either side of its passage)
+    const near = moatReach(citadel, "face") - gatetower.forward;
+
+    solid.push({ rect: [-gatetower.wide / 2, near, -r, near + gatetower.deep] }, { rect: [r, near, gatetower.wide / 2, near + gatetower.deep] });
+    solid.push(...[-1, 1].map((side) => ({ disc: [side * gatetower.wide / 2, near + gatetower.deep, gatetower.turret] })));
+
+    // The way in: from the glacis through the gate tower, over the moat on the bridge and through
+    // the outer gate, at the outer ward's level
+    const [outer] = wards;
+
+    decks.push({ a: [0, near + gatetower.deep + 0.5], b: [0, outer.apothem - outer.thick - gate.inward - 0.5], half: r - 0.2, from: 0, to: 0 });
+
+    // Up each stair to an inner gate (stairInto's: its first flight along the outer lane away from
+    // the gate the way the way in winds, up half the climb to the landing it turns on; its second
+    // back along the lane against the wall, up to the landing before the gate)
+    for (const part of parts.filter(({ part }) => part === "stair")) {
+        const ward = wards[part.ward];
+        const to = framed(part.at, part.turn);
+        const { wide: lane, rise, tread, platform } = stair;
+        const n = Math.max(2, Math.round(part.climb / 2 / rise));
+        const landing = platform + (n - 1) * tread;
+        const [low, top] = [part.rise, part.rise + part.climb];
+        const w = part.way;
+
+        decks.push(
+            { a: to(w * platform, lane * 1.5), b: to(w * landing, lane * 1.5), half: lane / 2 - 0.3, from: low, to: low + part.climb / 2 },
+            { a: to(w * landing, lane), b: to(w * (landing + lane), lane), half: lane, from: low + part.climb / 2, to: low + part.climb / 2 },
+            { a: to(w * landing, lane / 2), b: to(w * platform, lane / 2), half: lane / 2 - 0.3, from: low + part.climb / 2, to: top },
+            { a: to(-platform, lane / 2), b: to(platform, lane / 2), half: lane / 2, from: top, to: top },
+            { a: to(0, lane / 2), b: to(0, -ward.thick - gate.inward - 1), half: r - 0.2, from: top, to: top },
+        );
+    }
+
+    return { solid, decks, door: { at: keep.at, turn: keep.turn, x: 0, y: front, width: 2.6, height: 3.2, floor: 0.6 } };
 }

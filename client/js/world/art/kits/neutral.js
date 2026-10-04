@@ -11,7 +11,7 @@
 
 import { createRandom } from "../../../core/random.js";
 import { fireLight, lightTorch } from "./torches.js";
-import { NEUTRAL } from "../../../core/setpieces/neutral.js";
+import { NEUTRAL, RUINS } from "../../../core/setpieces/neutral.js";
 import { PLOT } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
@@ -534,6 +534,35 @@ const BUILD = {
 
         solid.cylinder(cx, cz, m(0.3), m(part.h), r, r * 0.94, stone, { segments: 10 });
         solid.cylinder(cx + random.range(-1, 1), cz + random.range(-1, 1), m(part.h), m(part.h) + m(0.18), r * 0.8, r * 0.5, stone, { segments: 10 });
+    },
+
+    // An old hall's way down to its crypt: a stair-house of the hall's stone against its back
+    // wall, gabled, a round-arched door in its front onto the dark of the stair going down, a
+    // skull over the door
+    crypt(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = material(STONE[piece.people] ?? STONE.human);
+        const [w, d] = [m(part.x1 - part.x0), m(part.y1 - part.y0)];
+        const [x0, x1, z0, z1] = [cx - w / 2, cx + w / 2, cz - d / 2, cz + d / 2];
+        const [eaves, thick, foot] = [m(2.7), m(0.45), m(FOOTING)];
+        const [door, high] = RUINS.crypt.door.map(m);
+
+        solid.box(x0, -foot, z0, x0 + thick, eaves, z1 - m(0.01), stone);
+        solid.box(x1 - thick, -foot, z0, x1, eaves, z1 - m(0.01), stone);
+        solid.box(x0 + thick, -foot, z0, x1 - thick, eaves, z0 + thick, stone);
+        solid.wall({ origin: [x0, -foot, z1], across: [1, 0, 0], out: [0, 0, 1] }, w, eaves + foot, [{ u0: (w - door) / 2, u1: (w + door) / 2, v0: foot, v1: foot + high, depth: thick, back: material("shadow"), arch: "round" }], stone);
+        solid.roof(x0 - m(0.2), z0, x1 + m(0.2), z1 + m(0.25), eaves, m(1.2), { ridge: "z", material: material("stone-dark"), gable: stone });
+
+        // (Within, the dark of the way down; a skull set over the door)
+        solid.box(x0 + thick, m(0.01), z0 + thick, x1 - thick, m(0.03), z1 - thick, material("shadow"));
+        solid.box(cx - m(0.13), high + m(0.22), z1 - m(0.02), cx + m(0.13), high + m(0.48), z1 + m(0.12), material("bone"));
+
+        for (const side of [-1, 1]) {
+            solid.box(cx + side * m(0.065) - m(0.035), high + m(0.36), z1 + m(0.12), cx + side * m(0.065) + m(0.035), high + m(0.42), z1 + m(0.13), material("shadow"));
+        }
+
+        // (Ivy hanging over its front, from numbers of its own)
+        ivyAlong(solid, createRandom(((piece.seed ?? 7) ^ 0x3c1) >>> 0), wallFace((u, y, v) => [x0 + u, y, z1 + v], [[0, eaves], [w, eaves]], 0, 0, 1, 0), w, { clear: [[(w - door) / 2 - m(0.2), (w + door) / 2 + m(0.2)]], chance: IVY.chance * 0.7 });
     },
 
     // A heap of fallen stone: a low mound, blocks tumbled over it every which way

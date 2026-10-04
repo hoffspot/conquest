@@ -813,6 +813,16 @@ function castle(piece) {
         return [cx + Math.cos(a) * R, cz + Math.sin(a) * R, m(random.range(16, 28))];
     });
 
+    // (A run of wall from one point to another, standing astride the line between them, as
+    // core/setpieces/castles.js has it: band builds it to the left of its run, so it's moved half
+    // its thickness to the right; the towers stand proud of the walls on both sides)
+    const astride = ([ax, az], [bx, bz]) => {
+        const long = Math.hypot(bx - ax, bz - az);
+        const [nx, nz] = [(-(bz - az) / long) * m(0.8), ((bx - ax) / long) * m(0.8)];
+
+        return [[ax - nx, az - nz], [bx - nx, bz - nz]];
+    };
+
     // Curtain walls between the towers, a wave along their tops (the gate's gap to the south)
     for (let k = 0; k < count; k++) {
         const [[ax, az], [bx, bz]] = [towers[k], towers[(k + 1) % count]];
@@ -821,7 +831,7 @@ function castle(piece) {
             continue;
         }
 
-        band(solid, [[ax, az], [bx, bz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
+        band(solid, astride([ax, az], [bx, bz]), 0, m(6.5), m(1.6), "stone-moon", { closed: false });
 
         const long = Math.hypot(bx - ax, bz - az);
         const waves = Math.max(2, Math.round(long / m(3)));
@@ -834,10 +844,25 @@ function castle(piece) {
         }
     }
 
-    for (const [x, z, height] of towers) {
+    for (const [k, [x, z, height]] of towers.entries()) {
         const r = m(2.1);
+        // (The tower at the back, due north, their keep: its door in its south face, facing the
+        // great tree and the gate, a lamp either side; core/setpieces/castles.js)
+        const keep = k === (count - 1) / 2;
+        const outline = circle(x, z, r, 12, keep ? southSide(12) : 0);
+        const openings = Object.fromEntries([3, 7, 11].map((face) => [face, [{ u0: m(0.3), u1: m(0.8), v0: height * 0.55, v1: height * 0.55 + m(1.6), depth: m(0.3), back: material("glass-green"), arch: "lancet" }]]));
 
-        solid.walls(circle(x, z, r, 12), 0, height, Object.fromEntries([3, 7, 11].map((k) => [k, [{ u0: m(0.3), u1: m(0.8), v0: height * 0.55, v1: height * 0.55 + m(1.6), depth: m(0.3), back: material("glass-green"), arch: "lancet" }]])), material("marble"));
+        if (keep) {
+            const side = lengthOf(outline, 0);
+
+            openings[0] = [{ u0: side / 2 - m(0.6), u1: side / 2 + m(0.6), v0: 0, v1: m(2.6), depth: m(0.3), back: material("heartwood"), arch: "ogee", sides: material("stone-moon") }];
+
+            for (const across of [-1, 1]) {
+                budLamp(solid, [x + across * m(1.1), m(2.9), z + r * Math.cos(Math.PI / 12) + m(0.1)], [across * 0.3, 1], { reach: m(0.5) });
+            }
+        }
+
+        solid.walls(outline, 0, height, openings, material("marble"));
         petalRoof(solid, x, z, height, r + m(0.9), r * 2.4, random.pick(ROOFS), { petals: 5, lift: m(0.4) });
         crescent(solid, x, height + r * 2.4, z, m(0.9), "silver");
     }
@@ -862,8 +887,11 @@ function castle(piece) {
     });
 
     solid.tube(arch, m(0.3), material("verdigris"), { sides: 6 });
-    band(solid, [[gx - m(4.6), gz], [gx - m(3.6), gz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
-    band(solid, [[gx + m(3.6), gz], [gx + m(4.6), gz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
+
+    // (The wall either side of the gate, from its towers up to its pillars: the way in between
+    // them alone, core/setpieces/castles.js)
+    band(solid, astride([gx1, gz1], [gx - m(3.6), gz]), 0, m(6.5), m(1.6), "stone-moon", { closed: false });
+    band(solid, astride([gx + m(3.6), gz], [gx0, gz0]), 0, m(6.5), m(1.6), "stone-moon", { closed: false });
 
     const object = solid.toObject();
 

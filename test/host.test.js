@@ -271,7 +271,7 @@ describe("the host (host.js)", () => {
         const host = hosted();
         const player = host.battle.actor(HOST_PLAYER);
         const start = host.world.spawns.player;
-        const links = host.world.links.filter(({ ends }) => ends.some(({ map, squares: [[x, y]] }) => map === "town" && Math.hypot(x - start[0], y - start[1]) < 150));
+        const links = host.world.links.filter(({ ends }) => ends.some(({ map, squares }) => map === "town" && Math.hypot(squares[0][0] - start[0], squares[0][1] - start[1]) < 150));
         const through = [];
 
         assert.ok(links.length >= 4, `${links.length} doors`);

@@ -59,7 +59,9 @@ back to the same world:
     side. Where the land's flat, a pit sunk 3.2 m into the ground instead, lined with old stone
     crumbling at its rim, steps down its front to a dark doorway. **Ruins:** an old hall's walls
     broken off along their tops, a door and a breach, column stumps, some fallen, heaps of fallen
-    stone. **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
+    stone; against its back wall in the middle, a gabled stair-house of its stone, a round-arched
+    door in its front onto the dark of the stair going down to its crypt, a skull set over it, ivy
+    hanging over it (`RUINS.crypt`). **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
     towers crumbled (below), its keep open to the sky with joists still across it, its gatehouse's
     bridge fallen, its houses heaps of stone and charred timbers; old barrels, crates and a cart
     left by its walls. **Dragon's lair:** a hollow dug into a mountainside, a great dark doorway
@@ -1478,6 +1480,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     the keep under its roof, its needles and bartizans.
   - **The ground round it** kept clear (WORLD.md *Hill citadels*): grass, no fields or hedges, no
     trees, near or seen from afar (the far fields' shader leaves them out inside `FIELDS_CLEAR`).
+  - **Walked** (WORLD.md *Hill citadels*): over the bridge and through the gate tower and the
+    gate on their decks, the player standing at their height; up each stair flight by flight,
+    step by step (`CITADEL.stair` the rules' match for the look's `CITADEL_LOOK.stair`); its wards'
+    open ground paved; the keep gone into by its forebuilding's door (`citadelWays` `door`).
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
@@ -2621,27 +2627,49 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
-- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild): its way
-  in is a door as a building's (`sites.js` `entranceAt`: the mouth, or the tower's door, kept clear
-  of what stands in the way), its floors made the first time they're wanted (`insides.js`
-  `addSite`, the key `site:` and the site's id; `caveRooms`, `lairRooms`, `towerRooms`), drawn as
-  the buildings' insides are (`interiors3d.js`):
+- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild; M7.5b-4,
+  the crypt under the ruins and a ruined castle's keep): its way in is a door as a building's
+  (`sites.js` `entranceAt`: the mouth, the tower's door, the ruins' stair-house's, the breach in
+  the ruined keep's front where its door was, kept clear of what stands in the way), its floors
+  made the first time they're wanted (`insides.js` `addSite`, the key `site:` and the site's id;
+  `caveRooms`, `lairRooms`, `cryptRooms`, `ruinRooms`, `towerRooms`), drawn as the buildings'
+  insides are (`interiors3d.js`):
   - **A cave:** a passage in from its mouth (daylight in it) to a chamber, rock all round,
     earth underfoot; the outlaws' bedrolls and their fire, sacks and a crate, torches on the walls.
   - **The dragon's lair:** a great cavern of dark rock, the floor scorched, bones about it, embers
     glowing in its cracks, heaps of gold at the back.
+  - **The crypt under the ruins** ("The crypt under Peningmoor Ruins"): down the stair, daylight
+    at its head, into a vaulted aisle between two rows of pillars, ribs across the vault from
+    pillar to pillar; its walls old dressed stone, two tiers of burial niches let into them, a
+    skull or bones in some; stone tombs either side, lidded, a cross cut in each lid, one here and
+    there pushed askew on the dark within; bones about the floor; at the back, in its apse, the
+    dead's master by their chest, candles burning in iron stands either side (`t` a tomb, `k` the
+    candles, `I` a pillar: interiors.js).
+  - **A ruined castle's keep** ("The great hall of Jazeh"): open to the sky (`open`), its walls
+    broken off along their tops, high and low, the daylight through tall windows where they still
+    stand high enough; its flagstones, grass come up between them; two rows of pillars, some
+    broken off short; heaps of what fell from its floors and roof (`m`, interiors.js), a charred
+    joist across each; bones; at the back the dais and its two thrones of stone, one toppled,
+    braziers burning either side, the wight lord before them by its hoard; the land outside seen
+    over the walls.
   - **A broken watchtower:** below, flagstones, old stone walls, the stairs up, rubble, a torch by
     the door; above, boards, a broken parapet, open to the sky (`open`: the view keeps the sky),
     its walls falling away to the ground far below.
   - **Who's within** (`host.js` `#inside`): the band's chief and their locked chest at the back of
-    the cave or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
+    the cave or the crypt or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
     for guarding the way in (its "g", half the band at most), the rest outside; the band's held
     while a player's within. Put to the sword, the chest's shares lie where it stood, inside, for
-    the players there (in or near it), and the guild's contract is done for them.
+    the players there (in or near it), and the guild's contract is done for them; a player within
+    is told the place is cleared ("The dead of Peningmoor Ruins are laid to rest, for now.") as one
+    outside near it is.
+  - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
+    `within`), half its skeletons with it, the rest in the courtyard; slain, the hoard's opened as
+    the dragon's is.
   - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
-  - Its sound's its own (`sound.js` PLACES: a cave's and the lair's hushed, the tower's open).
+  - Its sound's its own (`sound.js` PLACES: a cave's, the lair's and the crypt's hushed, the
+    tower's and the ruined keep's open).
   - **The humans' abbeys and manors** (M7.5b-2): gone into by the door of the temple or the keep
     each is built round (`sites.js`: their landmark's `entranceOf`, the way kept clear), the same
     temple and great hall as a town's (`insides.js` `add`, keyed `site:` and its id; named for the
@@ -2667,6 +2695,51 @@ metres off (back as many as ever the next time, unless it's been cleared).
     The other peoples' own places stay open to the sky (the pits, the hatchery, the spider shrine,
     the spire, the shadow gate) or have no way in at their foot (the sun temple's behind its
     altar, the ziggurat's at its top), their bands outside.
+  - **The peoples' castles walked into** (M7.5b-3; `setpieces/castles.js`): the elves', the
+    orcs', the cat folk's and the dark elves' castles are no longer solid all through. What of each is solid is
+    laid out as its kit builds it (the elves' seven towers and the walls between them, the
+    pillars of their gate and the great tree; the orcs' bank and palisade, the bastions either
+    side of its gap, the motte, the longhouse and the hut; the cat folk's curtain walls, corner
+    towers, gate tower, planted beds, fountain and tower house; the dark elves' black wall and
+    eight towers, the two slender towers either side of their gate with a web hung between them,
+    the spiders before it, the terrace in the middle), and its courtyard within is open
+    ground walked into through its gate (4 m wide at the least, so it's walked through at any
+    turn the castle's set down at): flagstones (the orcs' trodden earth) through the gateway and
+    all within, nothing grown in it (`sites.js` `courtAt`; the dark elves' dark cobbles). Each
+    has its keep, gone into from the courtyard: the elves' the tall tower at the back of their
+    ring, an ogee door in its foot between two lamps, facing the great tree and the gate; the
+    orcs' their longhouse, the clan's hall, by the door under the porch in the middle of its
+    south side, a step up onto its plinth; the cat folk's their tower house, by the door in the
+    middle of its front; the dark elves' the Black Tower on its terrace, up stairs on the
+    terrace's south face, between two violet lamps (gone into from the stairs' foot: the walking
+    mesh is the land's, the terrace not on it); the lizard folk's their palace up on the
+    platform of their temple-fortress, by the middle of the three doors in its south face (gone
+    into from the end of the causeway: the platform, its courtyard and its moat aren't walked).
+    Within, the keep's great hall: its lord or lady on the throne ("Lord of
+    Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of the town
+    of their people's nearest it (`insides.js` `townOf`). The humans' castles, hill citadels
+    (WORLD.md *Hill citadels*), walked into over their bridge, through their gate tower and up
+    the stairs from ward to ward, their keep gone into by the door of its forebuilding.
+  - **The undercroft** (the terrain plan's M7.5c-1; `insides.js` `CASTLE_KEEP`, `UNDERCROFT`,
+    `undercroftFolkOf`; world/interiors3d.js `undercroft`): a people's castle's keep (not a
+    town's, a manor's or the elves' tree hall's: `siteKind`) has its armoury below its great
+    hall. The stairs go down from the hall's north-west corner, where its racks were, a stone
+    parapet round the stairwell. Below, 24 by 16 metres under a groin vault on four pillars
+    (pilasters where its bays meet the walls; not drawn while the camera's over it, as a
+    ceiling): the castle's forge in the north-east as a smithy's (the forge under its hood,
+    bellows, anvil, quenching trough, grindstone, coals and workbench: `forgeworks`), its smith
+    and apprentice at work there; the quartermaster behind their counter before the castle's
+    racks of arms, a suit of armour on a stand either side; the garrison's long table and its
+    benches between the pillars; the arcanist behind theirs in the south-west, their shelves of
+    jars and phials of coloured glass against the south wall, their worktable beside it (an
+    alembic over its lamp, books, a crystal ball, a mortar and pestle, candles); barrels along
+    the west wall and strongboxes in the corner; lit by the forge, four torches on the walls and
+    the arcanist's candles. What each sells is in WAR.md (*Shops*); the smith talks of the
+    garrison's mail and the lord's horses (`castleSmith`), the quartermaster of where the steel
+    comes from, the arcanist of what they're brewing and why they don't sell tomes. Heard
+    further off than the hall (`sound.js` `undercroft`). The stairs between the floors have
+    their foot below and their top above whichever floor the door opens into (insides.js
+    `make`). `NET_VERSION` 37.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

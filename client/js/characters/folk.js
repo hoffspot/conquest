@@ -112,6 +112,16 @@ const PARTS = {
         m: { wear: [["shirt"], ["mail", "gambeson"], ["breeches"], ["boots"], ["belt"], ["nasalHelm"], ["sword"], ["kiteShield"]], hair: ["short", "buzz"], beard: ["short", "stubble", "none"], build: { weight: [0.5, 0.8], muscle: [0.65, 0.9], belly: [0, 0.2] }, armed: true },
         f: { wear: [["shirt"], ["mail", "gambeson"], ["breeches"], ["boots"], ["belt"], ["nasalHelm"], ["sword"], ["kiteShield"]], hair: ["ponytail", "bob"], build: { weight: [0.45, 0.65], muscle: [0.55, 0.75], bust: [0.35, 0.65] }, armed: true },
     },
+    // A castle's undercroft's traders: its quartermaster an old soldier in a padded coat, its
+    // arcanist in a robe (and, now and then, a wizard's hat)
+    quartermaster: {
+        m: { wear: [["shirt"], ["gambeson"], ["breeches", "trousers"], ["boots"], ["belt"], ["bracers", "gloves"]], hair: ["short", "buzz", "bald"], beard: ["full", "short", "stubble"], build: { weight: [0.55, 0.85], muscle: [0.6, 0.85], belly: [0.2, 0.7] } },
+        f: { wear: [["shirt"], ["gambeson"], ["breeches"], ["boots"], ["belt"], ["bracers", "gloves"]], hair: ["ponytail", "topknot", "bob"], build: { weight: [0.5, 0.7], muscle: [0.55, 0.75], bust: [0.4, 0.7] } },
+    },
+    arcanist: {
+        m: { wear: [["blueTunic", "shirt"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null, null]], hair: ["long", "swept", "bald", "short"], beard: ["full", "goatee", "short"], build: { weight: [0.3, 0.6], muscle: [0.3, 0.45], belly: [0, 0.4] } },
+        f: { wear: [["chemise", "blueTunic"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null, null]], hair: ["long", "topknot", "bob"], build: { weight: [0.35, 0.55], muscle: [0.3, 0.42], bust: [0.45, 0.8] } },
+    },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
 

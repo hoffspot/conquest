@@ -120,11 +120,12 @@ export const CAMP_FOLK = Object.freeze({
 /**
  * The perilous sites (the world plan's), and who holds each: its master (and its tier), and those
  * who guard it with it ([kind, how many, tier]); how near a player must come for them to be there
- * (metres), and how long the master's gone once it's slain (battle ms).
+ * (metres), and how long the master's gone once it's slain (battle ms); `within`, its master keeps
+ * inside, by its hoard (a ruined castle's wight lord in its keep's hall), half its guards with it.
  */
 export const LAIRS = Object.freeze({
     "dragon's lair": { master: ["dragon", 10], guards: [["wyvern", 2, 8]], near: 110, back: 45 * 60 * 1000 },
-    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 4, 7]], near: 90, back: 30 * 60 * 1000 },
+    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 4, 7]], near: 90, back: 30 * 60 * 1000, within: true },
 });
 
 /** How much more often the night's creatures are met after dark (weights, by their `night`). */

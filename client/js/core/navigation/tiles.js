@@ -83,8 +83,12 @@ export function tileInput(world, tx, ty) {
             const [a, b, c, d] = [j * across + i, j * across + i + 1, (j + 1) * across + i, (j + 1) * across + i + 1];
             let kind = PAVED.has(chunk.ground[k]) ? AREA.road : AREA.ground;
 
-            // (Water the land has, not a settlement's lagoon: what's built there is solid, below)
-            if (chunk.water[k] !== WET.none && !chunk.solid[k]) {
+            // (Under a citadel's deck well over it, a stair's flight or its landing: the stair's
+            // masonry, not walked under)
+            if (world.sites?.deckAt?.(sx, sy) && world.heightAt(sx + 0.5, sy + 0.5) > Math.max(heights[a], heights[b], heights[c], heights[d]) + 1) {
+                kind = 0;
+            } else if (chunk.water[k] !== WET.none && !chunk.solid[k]) {
+                // (Water the land has, not a settlement's lagoon: what's built there is solid, below)
                 const depth = world.surfaceAt(sx + 0.5, sy + 0.5) - Math.min(heights[a], heights[b], heights[c], heights[d]);
 
                 kind = (world.wades ? world.wades(sx + 0.5, sy + 0.5, depth) : depth <= FORD) ? AREA.ford : 0;

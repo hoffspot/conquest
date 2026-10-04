@@ -68,6 +68,7 @@ const INSIDE = {
     basin: [120, 150, 164],
     board: [206, 190, 146],
     shelves: [84, 60, 38],
+    stand: [120, 122, 130],
 };
 
 // Pixels to the metre of the painted map

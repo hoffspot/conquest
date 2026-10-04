@@ -2,7 +2,7 @@
 // wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, the smith and
 // the apprentice, the priest, an acolyte and the worshippers, a guild's receptionist, or an
 // adventurer (the player, or one of the guild's); a town hall's reeve, clerk and petitioners; a
-// keep's ruler, steward, councillors and sentries.
+// keep's ruler, steward, councillors and sentries; a castle's quartermaster and arcanist.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -230,6 +230,28 @@ export const ROLES = Object.freeze({
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
             { name: "arms folded", hitAt: 1.2, duration: 3.6 },
             { name: "hands clasped behind", hitAt: 1, duration: 3 },
+        ],
+    },
+    // A people's castle's undercroft's traders (its smith and their apprentice besides): the
+    // quartermaster, keeping its armoury, and the arcanist, selling what's arcane
+    quartermaster: {
+        title: "Quartermaster",
+        rests: [
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "looking over a blade", hitAt: 1, duration: 3 },
+            { name: "wiping the counter", hitAt: 1.4, duration: 3.6 },
+            { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    arcanist: {
+        title: "Arcanist",
+        rests: [
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
+            { name: "holding a phial to the light", hitAt: 1, duration: 3 },
+            { name: "stroking the chin", hitAt: 1, duration: 2.8 },
+            { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
         ],
     },
 });
