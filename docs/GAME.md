@@ -3152,9 +3152,25 @@ game plays on while it's open; a second finger (a pinch) closes it.
    turns them the way the camera looks (over the ground) and sends them straight ahead that way,
    running while their stamina lasts and then walking (an `ahead` order, which turns them as
    well as setting them off), with the ring where they'll stop; blocked straight away, it's
-   refused with a sound (still turned that way). The heads-up display
-   (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
-   in the bottom right; both go up over the quick actions in a fight, above), with an orange
+   refused with a sound (still turned that way). That same `ahead` order is what held input comes
+   out as (app/steering.js): W, A, S, D or the arrow keys, and a thumb stick in the bottom left
+   corner. Forward is read off the camera, as the swipe up reads it, so turning the camera turns
+   what forward means while a key is still down; two keys together give the way between them, and
+   a stick's angle goes through whole, so diagonals need nothing of their own (which is why a
+   stick suits this where four buttons wouldn't). The order is given again as that way turns (past
+   about 7 degrees), when the walk or run changes, and every half second besides; a `stop` order
+   goes when the last of the input is let go. So no held key crosses the wire, only the way it
+   adds up to, and the host still decides where they get to. Shift held along with a way runs, as
+   a Shift-click does, and so does the stick pushed past seven tenths of its reach. The stick
+   keeps to its corner rather than springing up under the thumb, and only its own circle takes
+   touches, so the rest of the view taps and drags as before. Thumb stick in Game options is what
+   puts it there, and it's off until then, tapping being how the game has always been walked; the
+   keys steer whether it's shown or not, nothing is said of the stick in the opening hint while
+   it's off, and a pause lets go of whatever was held. The heads-up display
+   (app/hud.js) shows the player's name and health in the bottom right corner (the thumb stick,
+   asked for, in the bottom left; the zoom buttons, which Game options also leaves off, take that
+   right corner and send the card up above them; all of them go up over the quick actions in a
+   fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
    menu buttons in the top right), bars over the other characters (the target's lit red, and
@@ -3509,6 +3525,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   swiping up from the player to go straight ahead (running),
+  steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the
+  thumb stick (not there till Game options asks for it, then walking pushed partway, running at
+  its rim, stopping let go, and gone again turned off, the keys still steering without it),
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser

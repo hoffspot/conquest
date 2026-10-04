@@ -141,7 +141,12 @@
                 <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 <div class="bar stamina" hidden><div class="fill"></div><span class="value"></span></div>
             </div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them. Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right (I and J).</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them.<span class="stick-only"> Or steer with the stick in the bottom left: push it over to run.</span><span class="keys-only"> W, A, S, D steer, with Shift to run.</span> Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right<span class="keys-only"> (I and J)</span>.</p>
+            <div class="stickzone" id="stickzone" aria-hidden="true">
+                <div class="stick" id="stick">
+                    <div class="stick-knob" id="stickknob"></div>
+                </div>
+            </div>
             <div class="hud-bottom">
                 <button type="button" id="zoomin" class="hud-button" aria-label="Zoom in" title="Zoom in">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -229,6 +234,16 @@
                     <label class="switch option">
                         <span class="text">Minimap<small>The map in the top left corner</small></span>
                         <input type="checkbox" id="minimapswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with; off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (Shift to run) steer either way.</span></small></span>
+                        <input type="checkbox" id="stickswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Zoom buttons<small>Plus and minus in the bottom right corner. Pinching<span class="keys-only">, or the mouse wheel,</span> zooms either way</small></span>
+                        <input type="checkbox" id="zoomswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="switch option">

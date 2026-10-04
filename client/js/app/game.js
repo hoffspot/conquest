@@ -37,6 +37,7 @@ import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
+import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
@@ -1400,6 +1401,8 @@ export class Game {
         this.pointers.clear();
         this.pinch = null;
         this.wheel?.hide();
+        this.steering?.dispose();
+        this.steering = null;
     }
 
     /** Take everything out of the scene (before building another game). */
@@ -1508,6 +1511,19 @@ export class Game {
     showMinimap(on) {
         this.minimapShown = on;
         this.minimap?.show(on);
+    }
+
+    /**
+     * Show the thumb stick, or not (Game options). Taken away mid-push, whatever it was holding is
+     * let go of, so the player doesn't walk on with nothing on screen left to stop them. W, A, S
+     * and D steer either way.
+     */
+    showStick(on) {
+        this.stickShown = on;
+
+        if (!on) {
+            this.steering?.release();
+        }
     }
 
     /**
@@ -5430,6 +5446,24 @@ export class Game {
             this.#on(document, type, () => this.#wake(), { capture: true, passive: true });
         }
 
+        // W, A, S, D (or the arrows), and a thumb stick on a touch screen: held, they come out as
+        // the same "ahead" order the swipe up gives (app/steering.js)
+        const zone = this.hud.root.querySelector("#stickzone");
+        const knob = this.hud.root.querySelector("#stickknob");
+
+        if (zone && knob) {
+            this.steering = new Steering({
+                zone,
+                knob,
+                looking: () => this.#steerable(),
+                go: (facing, run) => {
+                    this.#wake();
+                    this.#command({ type: "ahead", facing, run });
+                },
+                stop: () => this.#command({ type: "stop" }),
+            });
+        }
+
         // The pack: its button, or I; Escape closes it (not the menu)
         this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
         this.#on(this.hud.root.querySelector("#journalbutton") ?? document.createElement("button"), "click", () => this.toggleJournal());
@@ -5530,6 +5564,28 @@ export class Game {
         const [ox, oz] = this.originOf(this.mapId);
 
         this.#order({ enemy, door, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    /**
+     * Which way the camera looks over the ground (radians, as core/battle.js means "facing"), for
+     * steering by held keys or a thumb stick; or null while there's nobody to steer — dead, paused,
+     * talking, or reading a panel — so that held input stops instead of walking on blind.
+     */
+    #steerable() {
+        const player = this.battle.actor(this.me);
+
+        if (!this.running || !this.avatars.get(this.me) || !player || player.dead) {
+            return null;
+        }
+
+        if (this.talk?.open || this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open) {
+            return null;
+        }
+
+        const looking = this.view.camera.getWorldDirection(_looking);
+
+        // (Looking straight down tells us nothing: the way they face stands in)
+        return Math.hypot(looking.x, looking.z) > 1e-3 ? Math.atan2(looking.x, looking.z) : player.facing;
     }
 
     /**

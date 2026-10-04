@@ -735,8 +735,9 @@ input[type="range"] {
    shows, growing it upwards) */
 #playerplate {
     position: absolute;
-    left: calc(var(--safe-left) + 12px);
+    right: calc(var(--safe-right) + 12px);
     bottom: calc(var(--safe-bottom) + 12px);
+    text-align: right;
     transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -754,6 +755,99 @@ input[type="range"] {
 #hud.quick-up #playerplate,
 #hud.quick-up .hud-bottom {
     bottom: calc(var(--safe-bottom) + 12px + var(--quick-height) + 10px);
+}
+
+/* The thumb stick: steering with held input instead of tapping where to go (app/steering.js). It
+   sits in the bottom left corner and stays there, so the thumb always knows where to find it, and
+   it only takes touches within its own circle, leaving the rest of the view to tap and drag as
+   before. It rises over the quick actions in a fight, as the health plate does. */
+:root {
+    --stick-size: 132px;
+
+    /* How tall the two zoom buttons stand together (46px each, 12px between) */
+    --zoom-stack: 104px;
+}
+
+#hud .stickzone {
+    position: absolute;
+    left: calc(var(--safe-left) + 16px);
+    bottom: calc(var(--safe-bottom) + 16px);
+    width: var(--stick-size);
+    height: var(--stick-size);
+    pointer-events: auto;
+    touch-action: none;
+    transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#hud.quick-up .stickzone {
+    bottom: calc(var(--safe-bottom) + 16px + var(--quick-height) + 10px);
+}
+
+/* Off until Game options asks for it, and then nothing is said of it either */
+body[data-stick="off"] #hud .stickzone,
+body[data-stick="off"] .stick-only {
+    display: none;
+}
+
+/* The zoom buttons, off unless asked for in Game options: pinching and the mouse wheel zoom
+   anyway, and the corner is the player's card's */
+body[data-zoom="off"] #hud .hud-bottom {
+    display: none;
+}
+
+/* Asked for, they take the corner and the card sits above them */
+body[data-zoom="on"] #playerplate {
+    bottom: calc(var(--safe-bottom) + 12px + var(--zoom-stack) + 10px);
+}
+
+body[data-zoom="on"] #hud.quick-up #playerplate {
+    bottom: calc(var(--safe-bottom) + 12px + var(--quick-height) + 10px + var(--zoom-stack) + 10px);
+}
+
+#hud .stick {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+    background: radial-gradient(circle, rgba(255, 244, 220, 0.09), rgba(22, 18, 14, 0.5));
+    backdrop-filter: blur(1px);
+    opacity: 0.72;
+    transition: opacity 0.18s ease-out;
+}
+
+/* Held, it comes up to full strength (and the knob with it) */
+#hud .stickzone.held .stick {
+    opacity: 1;
+}
+
+#hud .stick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: 1px solid var(--field-border);
+    background: radial-gradient(circle at 38% 32%, rgba(243, 207, 130, 0.5), rgba(143, 106, 44, 0.42));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    transform: translate(-50%, -50%);
+}
+
+/* Let go, the knob eases back to the middle; while held it follows the thumb with no lag */
+#hud .stick-knob {
+    transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#hud .stickzone.held .stick-knob {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #hud .stickzone,
+    #hud .stick,
+    #hud .stick-knob {
+        transition: none;
+    }
 }
 
 /* The quick actions: four slots side by side along the bottom, risen in a fight */
@@ -1702,7 +1796,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 }
 
 #playerplate .ails {
-    justify-content: flex-start;
+    justify-content: flex-end;
     gap: 5px;
     margin-top: 5px;
 }
@@ -2777,7 +2871,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 #hud .hint {
     position: absolute;
     left: 50%;
-    /* Above the player's plate in the corner, clear of it however narrow the screen */
+    /* Above the player's card in the corner, clear of it however narrow the screen */
     bottom: calc(var(--safe-bottom) + 12px + 80px);
     transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     transform: translateX(-50%);
@@ -2796,6 +2890,29 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 #hud.quick-up .hint {
     bottom: calc(var(--safe-bottom) + 12px + 80px + var(--quick-height) + 10px);
+}
+
+/* What only a keyboard and mouse can do — the keys, the wheel — isn't said on a touch screen,
+   where there's none of it to use and the room is wanted for what is */
+@media (pointer: coarse) {
+    .keys-only {
+        display: none;
+    }
+}
+
+/* With the thumb stick in the corner it has to clear that instead, which stands taller than the
+   card; and with the zoom buttons gone there's the width of them to spare on both sides, so it
+   wraps onto fewer lines */
+body[data-stick="on"] #hud .hint {
+    bottom: calc(var(--safe-bottom) + 16px + var(--stick-size) + 10px);
+}
+
+body[data-stick="on"] #hud.quick-up .hint {
+    bottom: calc(var(--safe-bottom) + 16px + var(--stick-size) + 10px + var(--quick-height) + 10px);
+}
+
+body[data-zoom="off"] #hud .hint {
+    max-width: calc(100% - 2 * (var(--safe-right) + 12px));
 }
 
 @keyframes fade {
