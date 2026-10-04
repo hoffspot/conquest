@@ -3446,11 +3446,13 @@ test("a place's outlaws or dead hold it round their leader by a locked chest: ta
         game.advance(0.1);
 
         const share = [...game.host.ground.values()].find((dropped) => dropped.from === "chest");
+        const drawn = game.drops.drawn.get(share?.id)?.object;
 
-        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: game.drops.drawn.get(share?.id)?.object.children[0].name, locked: game.host.ground.has(`chest-${id}`) };
+        // (Open on a heap of coins: gold3d.js)
+        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: drawn?.children[0].name, coins: (drawn?.getObjectByName("coins")?.count ?? 0) > 300, locked: game.host.ground.has(`chest-${id}`) };
     }, held.id);
 
-    expect(cleared).toEqual({ holder: "cleared", open: "chest-open", locked: false });
+    expect(cleared).toEqual({ holder: "cleared", open: "chest-open", coins: true, locked: false });
     await expect(page.locator("#banner")).toHaveText(/^The dead of .+ are laid to rest, for now\.$/);
 });
 

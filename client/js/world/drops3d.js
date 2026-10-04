@@ -5,7 +5,8 @@
 // A place's chest (host.js #places: held by outlaws or the dead, by their leader) is an iron-bound
 // wooden chest (the JMI 3D Toolkit's, client/models/jmi; drawn here till it's read, or if it
 // can't be), shut while its guardians hold the place; once it's cleared, each player near has
-// their share in it, its lid thrown open (the model's own "Open") on gold.
+// their share in it, its lid thrown open (the model's own "Open") on a heap of gold coins
+// (gold3d.js).
 //
 // The icons are painted by whoever makes this (`picture`: an item id to a texture), so the world
 // needn't know how they're drawn.
@@ -13,6 +14,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { loadGltf } from "./art/engine/models.js";
+import { drawGold, GOLD, goldParts } from "./gold3d.js";
 
 // A bundle's size (metres), and where its icon floats over it
 const BUNDLE = Object.freeze({ radius: 0.2, squash: 0.55 });
@@ -23,9 +25,8 @@ const ICON = Object.freeze({ size: 0.46, above: 0.62, bob: 0.06 });
 const CHEST = Object.freeze({ width: 0.8, depth: 0.46, height: 0.4, rise: 0.6, band: 0.05, open: 1.95 });
 
 // The chest's model: where it's read from, how big it's drawn (its units to metres: 0.85 m
-// across), the clip that opens it, and the gold heaped in it (its units: the top of the heap just
-// over the rim, `at` its middle's height; `size` across, up and back)
-const CHEST_MODEL = Object.freeze({ url: "models/jmi/chest.glb", scale: 1.3, clip: "Open", lid: "Chest_Lid", gold: { at: 0.235, size: [0.26, 0.05, 0.17] } });
+// across), and the clip that opens it (the gold heaped in it in its units: gold3d.js GOLD)
+const CHEST_MODEL = Object.freeze({ url: "models/jmi/chest.glb", scale: 1.3, clip: "Open", lid: "Chest_Lid" });
 
 // Two things dropped on one square sit a little apart, round its middle
 const SPREAD = 0.28;
@@ -60,9 +61,10 @@ export class Drops {
         this.chest = chestParts();
         this.wood = new THREE.MeshStandardMaterial({ color: 0x6a4527, roughness: 0.85 });
         this.iron = new THREE.MeshStandardMaterial({ color: 0x3b3936, roughness: 0.45, metalness: 0.7 });
-        // (Its inside dark, seen once its lid's thrown back; and the gold in it)
+        // (Its inside dark, seen once its lid's thrown back; and the gold in it, made now, not as
+        // the first chest's opened)
         this.inside = new THREE.MeshStandardMaterial({ color: 0x1a120b, roughness: 1 });
-        this.gold = new THREE.MeshStandardMaterial({ color: 0xd9a632, roughness: 0.35, metalness: 0.9, emissive: 0x3a2400 });
+        this.gold = goldParts();
 
         /** The chest's model once it's read ({ scene, clip }), or null (drawn as made here). */
         this.model = null;
@@ -178,7 +180,10 @@ export class Drops {
         this.wood.dispose();
         this.iron.dispose();
         this.inside.dispose();
-        this.gold.dispose();
+
+        for (const part of [this.gold.heap, this.gold.coin, this.gold.fewer, this.gold.gem, this.gold.cup, this.gold.glint, this.gold.gold, this.gold.bed, this.gold.jewel, this.gold.glints, ...this.gold.textures]) {
+            part.dispose();
+        }
 
         for (const { icon } of this.drawn.values()) {
             icon?.material.dispose();
@@ -265,7 +270,7 @@ export class Drops {
         chest.name = open ? "chest-open" : "chest";
 
         if (open) {
-            object.add(new THREE.Mesh(this.chest.heap, this.gold));
+            object.add(drawGold(this.gold));
 
             if (this.model.clip) {
                 mixer = new THREE.AnimationMixer(object);
@@ -301,7 +306,12 @@ export class Drops {
         chest.name = open ? "chest-open" : "chest";
 
         if (open) {
-            chest.add(new THREE.Mesh(this.chest.gold, this.gold));
+            // (The model's heap, as big as it's drawn in the model, its sides at the top's height)
+            const gold = drawGold(this.gold);
+
+            gold.scale.setScalar(CHEST_MODEL.scale);
+            gold.position.y = CHEST.height - GOLD.wall * CHEST_MODEL.scale;
+            chest.add(gold);
         }
 
         return chest;
@@ -309,8 +319,8 @@ export class Drops {
 }
 
 // A chest's parts, made once: its body (standing on the ground), its lid (a flattened half-round
-// on a board, hinged at the origin along its back edge, reaching forward), the iron on each (two
-// bands round it, a rim, a lock plate), and the gold heaped in it
+// on a board, hinged at the origin along its back edge, reaching forward), and the iron on each
+// (two bands round it, a rim, a lock plate)
 function chestParts() {
     const { width, depth, height, rise, band } = CHEST;
     const half = depth / 2;
@@ -325,19 +335,5 @@ function chestParts() {
         new THREE.BoxGeometry(0.1, 0.12, 0.02).translate(0, height - 0.08, half + 0.008),
     ]);
     const lidIron = mergeGeometries(bands.map((x) => curved(half + 0.006, band).translate(x, 0, 0)));
-    // (Heaped in it, just showing over its rim)
-    const gold = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(width * 0.4, 0.07, depth * 0.38).translate(0, height - 0.035, 0);
-    // (And in the model, in its units: lumpy, as coins heaped up)
-    const heap = new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-    const corners = heap.attributes.position;
-
-    for (let k = 0; k < corners.count; k++) {
-        const [x, y, z] = [corners.getX(k), corners.getY(k), corners.getZ(k)];
-
-        corners.setY(k, y * (1 + 0.45 * Math.sin(x * 9.1 + 1.3) * Math.sin(z * 7.7 + 0.4) + 0.25 * Math.sin(x * 23 + z * 19)));
-    }
-
-    heap.scale(...CHEST_MODEL.gold.size).translate(0, CHEST_MODEL.gold.at, 0).computeVertexNormals();
-
-    return { body, lid, bodyIron, lidIron, gold, heap };
+    return { body, lid, bodyIron, lidIron };
 }

@@ -3679,3 +3679,39 @@ converted data is to be measured in M8 against today's hm08 data.
   three times as far (`CAMP_FARTHER`) if all within its reach is theirs. Seeds 1 to 3: none on a
   place's ground now (2 before). test/flats.test.js: every camp clear of them, at most two further
   than the flats' reach.
+- **2026-10-04, the chest's gold a heap of coins** (the user: "The gold can look better. See if
+  you can do some research on how to create a realistic pile of gold and use that"; before, one
+  lumpy half-round, a smooth yellow blob).
+  - **Researched** (a researcher, with a working prototype; scratchpad notes): what makes a pile
+    read as coins at 2 to 8 m (round silhouettes and rims, many flat faces each catching the light
+    its own way, dark gaps, a broken outline, coins tilted and on edge, a few spilt), how games
+    build them (a heap with a coin texture under loose coins on top), gold's values (linear
+    (1, 0.77, 0.34); deeper, (1, 0.72, 0.30); metal through and through, rough 0.25 to 0.45), and
+    why gold under a blue sky goes olive (what a metal reflects it tints with its own colour; the
+    game's outdoor environment is the sky), glints that twinkle rather than flicker, what a phone
+    can afford (no bloom: no post-processing here, 1.5 to 3 ms a frame for one prop).
+  - **Built** (world/gold3d.js, drawn by drops3d.js in the open chest, and in the chest made in
+    code): the coins let fall one at a time onto a height map of the chest's inside (3 mm cells),
+    each resting on the highest of what's under it, tilted as that lies (no steeper than 37°), a
+    few on edge leant against the rest, what each covers raised by its thickness: about 400 coins
+    3 cm across, over a domed heap that rises 2 cm over the rim in the middle; five spilt on the
+    rim, seven on the ground. Each coin redder, paler or more worn than the next (a few silver and
+    copper), darker where buried or by the chest's sides; a rim, a ring of beads and a cross on each
+    face (64² textures made in code); under them a heap of coins only painted (a 128² tile, dark in
+    the gaps). Seven cut gems (32 triangles each, lit from within a little, no light through them),
+    a goblet, and 48 glints (four-pointed stars where the sun's mirrored in a coin's facet, as bright
+    as the sun is, gone by 14 m). Lit as gold (`goldLit`): the sky it reflects less blue and warmer,
+    the light falling on the heap coming back off the coins round about (gold twice over), and no
+    smoother than its bumps can be seen, nor further off (Toksvig; at least 0.32 by 10 m), so it
+    doesn't shimmer.
+  - **Cost:** shared by every chest (made once, about 30 ms at load); near (to 5 m) the coins with
+    ten sides, 15,000 triangles; to 14 m six sides, 9,000; further, the heap alone (1,000). Five
+    draws a chest (heap, coins, gems, goblet, glints), none in the shadows. Measured at the ruin's
+    open chest: +3 draws and 11,000 triangles at the follow camera's distance, +17,000 close up.
+  - **Pictures** (sent in the session): the ruin's and the cave's chest, close and from the
+    follow camera, before and after; round the chest; at night.
+  - **Tests:** test/gold.test.js (the coins cover the chest's inside, resting on the heap or each
+    other, heaped over the rim in the middle; most nearly flat, a few on edge, a few spilt; the same
+    for the same seed; a draw each near, fewer sides further off, the heap alone far off, nothing in
+    the shadows; the budget; the shader lit as gold); e2e: the held place's chest open on its coins.
+  - **Next:** M7.5b (the places entered and explored: caves, the lair and broken watchtowers first).

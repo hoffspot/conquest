@@ -2610,7 +2610,10 @@ metres off (back as many as ever the next time, unless it's been cleared).
   place."). Once the last of them falls (the leader with them), the place is cleared (the war
   keeps it, and its rim on the maps goes grey), "The dead of … are laid to rest, for now" or
   "… is cleared of its outlaws, for now", and the chest is thrown open (the model's own opening,
-  three quarters of a second, on a heap of gold) with a share for each
+  three quarters of a second) on a heap of gold coins (world/gold3d.js: some four hundred let fall
+  one by one onto the heap, each coming to rest tilted as what's under it lies, so they lie over one
+  another as coins heaped up do, a few on edge, a few spilt on the rim and the ground by it; gems
+  and a goblet in it; the sun glinting off a coin here and there as you look) with a share for each
   player within about 40 metres (`rollLoot("chest")`: 25 to 60 gold, a third more for each tier of
   the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the livery
   of the place's people, a human's at the ruins and caves, now and then a fine sword or bow),
