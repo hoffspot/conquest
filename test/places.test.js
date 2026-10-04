@@ -1,7 +1,7 @@
 // Places worth finding (client/js/core/places.js; the terrain plan's M7.5): every site and wild camp
 // a place on the maps, who holds each (mixed by the war, a world at a time), cleared and retaken;
 // in play (core/host.js #places), the outlaws or the dead holding theirs, their leader by a locked
-// chest, put to the sword for what's in it
+// chest, put to the sword for what's in it; the guilds' contracts to clear them (core/standing.js)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
@@ -11,6 +11,8 @@ import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
+import { createRandom } from "../client/js/core/random.js";
+import { CLEAR_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
@@ -257,5 +259,96 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
         run(host, 4000);
         run(again, 4000);
         assert.equal(again.checksum(), host.checksum());
+    });
+});
+
+describe("the guilds' contracts to clear the places held (standing.js \"clear\")", () => {
+    const giver = { id: "guild/receptionist", name: "Mirabel Wren", title: "" };
+
+    // A guild's contract to clear a place near its town (the first town with one near, and the
+    // contract for the place asked for, if given)
+    function contractFor(war, { place: wanted = null } = {}) {
+        const random = createRandom(5);
+
+        for (const town of war.towns) {
+            for (let k = 0; k < 40; k++) {
+                const contract = offerContract({ war, town: town.id, giver, random });
+
+                if (contract?.kind === "clear" && (!wanted || contract.target.place === wanted)) {
+                    return { town, contract };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    it("offers a place near held by outlaws or the dead, which way it lies, paid more for a bigger place and a more dangerous land; none once it's cleared, or carried", () => {
+        const plan = planWorld(2);
+        const war = new War(plan);
+        const { town, contract } = contractFor(war);
+        const place = placesOf(plan).find((each) => each.id === contract.target.place);
+
+        assert.ok(Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= CLEAR_REACH);
+        assert.ok(PLACE_BANDS[contract.target.holder]);
+        assert.equal(contract.target.holder, holderOf(plan, place, undefined, war.turn));
+        assert.deepEqual(contract.target.at, place.at);
+        assert.match(contract.text, new RegExp(`${contract.target.name}, [0-9.]+ km (north|south|east|west|north-east|north-west|south-east|south-west) of ${town.name}`));
+        assert.match(progressOf(contract), contract.target.holder === "dead" ? /Lay the dead of .+ to rest/ : /Put the outlaws at .+ to the sword/);
+        assert.equal(contract.until, war.turn + REQUESTS.clear.turns);
+
+        const { gold, size, tier } = REQUESTS.clear.reward;
+
+        assert.ok(contract.reward.gold >= gold + size[place.size] + tier, `${contract.reward.gold}`);
+        assert.equal(contract.reward.standing, 0);
+
+        // Carried already, or cleared: not offered again
+        const random = createRandom(9);
+        const offered = (held) => Array.from({ length: 80 }, () => offerContract({ war, town: town.id, giver, held, random })).filter((each) => each?.target.place === place.id).length;
+
+        assert.ok(offered([]) > 0);
+        assert.equal(offered([{ ...contract, id: "request-1" }]), 0);
+        war.clearPlace(place.id);
+        assert.equal(offered([]), 0);
+    });
+
+    it("is done once the place is put to the sword with the player there (a ruined castle once its master falls); comes to nothing if it's cleared without them", () => {
+        const { contract } = contractFor(new War(planWorld(2)));
+        const castle = placesOf(planWorld(2)).find((each) => each.kind === "ruined castle");
+        // (The same, for the ruined castle: its master, a lair's, clears it)
+        const contracts = [contract, { ...contract, key: castle.id, target: { ...contract.target, place: castle.id, holder: "dead", at: [...castle.at], name: "the ruined castle", kind: castle.kind } }];
+
+        for (const each of contracts) {
+            const context = hosted();
+            const { host, world } = context;
+            const player = host.players.get(HOST_PLAYER);
+            const place = placesOf(world.plan).find((one) => one.id === each.target.place);
+            const taken = player.standing.take(each);
+
+            near(context, place);
+
+            const band = host.held.get(place.id);
+            const events = band ? putToTheSword(host, band) : [];
+
+            if (!band) {
+                const master = host.lairs.get(place.id).ids.find((id) => host.wild.get(id)?.master);
+
+                host.battle.afflict(master, "poison", { by: HOST_PLAYER, damage: 1e7 });
+                events.push(...run(host, 3000));
+            }
+
+            // Done, to go back to the guild for its pay
+            assert.equal(player.standing.find(taken.id).state, "done", place.kind);
+            assert.ok(events.some((event) => event.type === "request" && event.change === "ready" && event.request.id === taken.id));
+        }
+
+        // Another's, cleared without them: come to nothing
+        const { host } = hosted();
+        const theirs = host.players.get(HOST_PLAYER).standing.take(contract);
+
+        host.war.turn = contract.given + 1;
+        host.war.clearPlace(contract.target.place);
+        run(host, 3000);
+        assert.equal(host.players.get(HOST_PLAYER).standing.find(theirs.id), null, "closed");
     });
 });

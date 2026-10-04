@@ -915,6 +915,7 @@ export class Host {
                     this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
                     // (The place cleared, a while: core/places.js)
                     this.war?.clearPlace(beast.lair);
+                    this.#clearedBy(beast.lair, this.world.maps.town?.sites?.heartOf(this.#siteOf(beast.lair)) ?? this.#siteOf(beast.lair).at);
                 }
 
                 if (beast.place) {
@@ -2664,6 +2665,7 @@ export class Host {
 
         held.cleared = true;
         this.war?.clearPlace(id);
+        this.#clearedBy(id, held.at);
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
@@ -2685,6 +2687,24 @@ export class Host {
         }
 
         this.#event("cleared", { place: id, holder: held.holder });
+    }
+
+    // A place cleared (`id`, its heart `at`): the guild's contract to clear it done for each player
+    // who was there for it (core/standing.js "clear")
+    #clearedBy(id, at) {
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.map !== "town" || hypot(actor.x - at[0], actor.y - at[1]) > PLACE_BANDS.ring.large + SPOILS_REACH) {
+                continue;
+            }
+
+            for (const request of player.standing.requests) {
+                if (request.kind === "clear" && request.state === "open" && request.target.place === id) {
+                    this.#settle(player, request, "ready");
+                }
+            }
+        }
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or
@@ -4072,6 +4092,12 @@ export class Host {
 
                 // (Gone: broken, or gone home; or it took the town, and the request's failed)
                 return war.town(request.target.town)?.owner === request.target.realm ? "failed" : request.there ? "ready" : "void";
+            }
+            case "clear": {
+                // (Cleared since it was given, and not with the player there: come to nothing)
+                const kept = war.places?.[request.target.place];
+
+                return kept && kept.cleared >= request.given ? "void" : null;
             }
             case "escort":
             case "waylay": {

@@ -955,8 +955,12 @@ in gold):
 | A bounty | the town's holders at war | 2 to 4 of their enemies' soldiers brought down | 8, and 6 for each |
 | The camp outside the walls | an enemy camp before the town (M6) | the player was at it, and it's gone | 70 |
 | Wanted at the guild | always | 2 to 5 of a creature's parts (docs/WILDS.md) brought to the counter | 4, and 1.6 times what they'd sell for |
+| Put them to the sword | a place within 3 km held by outlaws or the dead (docs/GAME.md *Held, in play*) | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome |
 
 They're carried like the rulers' requests (the journal shows them), and told of at the counter.
+A place to put to the sword is told with where it lies ("Outlaws hold Peninggate, 0.8 km south-west
+of Redemoor, and rob all who pass. Put them to the sword, their chief with them."), and marked on
+the world map; if it's cleared without the player there, the contract comes to nothing.
 
 ### Envoys on the roads, grudges and favours (M7)
 
