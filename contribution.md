@@ -270,11 +270,13 @@ tick may no longer be true: the two changes can conflict, or each pass alone and
 
 GitHub enforces all of that. There's no merge queue, because that's only for repositories owned by
 an organisation and this one belongs to a person. These are the settings as they stand; keep this
-table current (the standing rule). They were last checked on 2026-10-04.
+table current (the standing rule). They were last checked on 2026-10-04, after `motion` was made a
+required check.
 
 | Where | Setting | As it is |
 | --- | --- | --- |
 | *Settings → Rules → Rulesets*, the ruleset `main` | Enforcement | Active, on the default branch (`main`); nobody can bypass it, the owner included |
+| | Restrict creations | On. It covers only creating `main` itself, which already exists, so it changes nothing day to day |
 | | Restrict deletions | On |
 | | Block force pushes | On |
 | | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |

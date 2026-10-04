@@ -457,7 +457,8 @@ is carried when walking: a shield at the side, its face out, a staff or war hamm
 sword or wand lowered, a grimoire open on the palm, fists clenched, with less arm swing and a
 gripping fist. An arm swinging free is held 10° further out when something hangs at its hip (a
 scabbard, a wand in the belt) or its hand wears spiked knuckles, so it swings past them, not
-through them (`Character.clearing`).
+through them (`Character.clearing`); an arm carrying something, 5° further out from what hangs at
+its hip only (`Character.hung`).
 
 **Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
 `skullOf`: how far the head reaches behind and before its middle at each height, and how high):
@@ -492,11 +493,12 @@ own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
 
 | Weapon | Put away |
 | --- | --- |
-| Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog at the belt, the hilt forward and up, the blade down and back |
+| Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog at the belt, the hilt forward of the hip and up, where the right hand crossing in front of the belly takes it, the blade down and back behind the thigh |
+| Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt, the grip forward, the blade down and back behind the thigh, its edge forward |
 | Wand | Tucked in the belt at the right hip, the tip down and a little back, clear of the thigh |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
-| Staff, war hammer, orc cleaver | On the back, the grip behind the right shoulder where the hand reaches over for it, the head (the staff's crystal) down across the back to the left hip; the war hammer's head side-on; the staff and the war hammer angled a little off the back, clear of the buttocks as the back arches |
-| Bow | On the back across the quiver, the grip behind the left shoulder for the left hand (a bow looks the same either way up) |
+| Staff, war hammer | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's head side-on |
+| Bow | On the back across the quiver, the grip up behind the left shoulder for the left hand, a little off the back so the upper arm coming down passes it (a bow looks the same either way up) |
 | Spiked gauntlets | Worn: the hands just open |
 
 `Character.sheathe(on)` moves every weapon between its hand and its place put away, and the hands'
@@ -504,6 +506,15 @@ holds with them (an empty hand swings and relaxes as it walks). Taking one into 
 letting it go into its sheath (`settle`), the weapon keeps where it was in the world and settles
 into its new place over a fraction of a second, the way fingers close round a grip, so the hand
 needn't meet it exactly. `sheathPose(side)` says where the weapon a hand draws is put away.
+
+**Swinging clear of the legs** (`Character.hang`, `hangs` in `SHEATHS`). A sword or cleaver hung
+from the belt swings about its grip, back or forward and out from the body, as little as keeps its
+blade clear of that side's thigh and shin (each a tapering capsule as thick as the leg is there,
+6 cm to spare), as a leg kicks a scabbard aside; it goes at once where the leg pushes it, the
+swing nearest how it hung, and falls back to hang straight again when the leg's gone by, never
+into it. Its scabbard swings with it, drawn or not. Seated, the seat pushes it back to the side
+of the hip and a little out and down (`seated`), clear of a forearm resting on the thigh. It's
+done each frame once the legs are posed (`Actions.place`).
 
 **Slots:** head, face, neck, under top, shirt, chest, armour, forearms, hands, waist, underwear,
 legs, apron, shins, feet, back, main hand and off hand. One piece per slot.
@@ -625,6 +636,15 @@ over whatever the character was doing and back out at the end. Each key says:
 - **Where a weapon is put away** (a hand's `sheath`: 0 to 1): the hand goes to the grip of its
   weapon there, pointing it the way it lies. It's turned about that as strains least (the arm is
   reached once just aiming it, to see), easing from there to how the keys either side turn it.
+- **Forearms and hands kept out of the torso** (`keepClear`). A hand's place is in arm lengths
+  from its shoulder, so on a bulkier body than the keys were set on, a forearm can come inside
+  the belly or the chest. After the arms' last reach each frame, points along each forearm and
+  hand are measured against the torso's skin; one that's in is moved out by as much (up to 20 cm
+  in all), and the arm reached again from how it was, up to three times. A move that wants the
+  arm's joints more than 6° further past their ranges, or sinks what either hand holds further
+  into the body, is halved, and after the last try taken back. A two-handed weapon's hands aren't
+  moved: moving the weapon whole took the second hand off the haft and strained the arms for no
+  less in the body, so its keys keep it clear.
 - **A second hand on and off the weapon.** A second hand that grips the other's weapon in some
   keys and not in others (`onto`) lets go of it nearer those that don't, so it can swing free
   while a staff is whirled and take hold of it again on guard.
@@ -793,6 +813,23 @@ bodies had something past a limit:
 | Something in the body | 325 | A warhammer's head through the thigh as it's drawn or put away; a cleaver's blade through the back of the head |
 | Hand off the haft | 262 | The staff's and hammer's second hand beside the haft, not on it, in some blows and flinches |
 
+M8b (2026-10-04) kept the forearms and hands out of the torso, swung hung blades clear of the
+legs, and moved the draws and the places weapons are put away (above). The baseline was kept
+again:
+
+| Measure | Failing | Past their limits, in all |
+| --- | --- | --- |
+| Limb in the torso | 2,682 → 745 | 9,050 → 2,018 cm |
+| Joint | 1,101 → 964 | 9,966° → 5,178° |
+| Something in the body | 325 → 247 | 651 → 526 cm |
+| Hand off the haft | 262 | 1,274 cm (as it was) |
+| Foot sliding, in the ground | 2,440, 559 | (as they were) |
+
+Thirty pairs came out a little worse. Most are the war hammer going onto the back (its head up to
+2.7 cm further into the back as it's hoisted there, and 4.5 cm into the hips on two bodies as it's
+drawn), which is to be carried head-up on the shoulder instead; the rest are worse by about a
+centimetre or two degrees.
+
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
 failures from it, worst first: each motion played on its body to its worst moment, the spot
@@ -839,13 +876,13 @@ a flourish:
 
 | Weapon | Drawn | Put away |
 | --- | --- | --- |
-| Sword | Across to the hilt at the left hip, swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth and slid home |
+| Sword | Across in front of the belly to the hilt at the left hip, the elbow forward and out, the body turned into it and the other hand at the scabbard's throat; swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth (the other hand at its throat, the body turning into it) and slid home |
 | Wand | Snatched from the belt, flicked up, its tip twirled round in a circle and held up a moment | A last twirl, tucked back in the belt |
 | Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand and hung back at the hip |
-| Staff | Up over the right shoulder, pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder |
-| War hammer | Heaved up overhead from the back, swung over and down, its head slapped into the open left palm | Hoisted overhead and put over the right shoulder |
-| Orc cleaver | Ripped from the back over the shoulder, raised high, wheeled round out to the right, and brandished with a snarl | Raised and put back over the shoulder |
-| Bow | Up over the left shoulder, pulled over and swung down in front, spinning, held upright and its string plucked | Raised and slung back over the left shoulder |
+| Staff | Up over the right shoulder, the elbow leading up and forward, to the staff by the ear (the other hand pushing its lower end up from behind the hip), pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder, the elbow forward as the hand comes away |
+| War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm | Hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away |
+| Orc cleaver | Across in front of the belly to the grip at the left hip, the other hand on the belt beside it, ripped up and out across the body, wheeled round over the head, and brandished with a snarl | Brought down across the body, the point down to the ring at the left hip, the body turning into it, and dropped through |
+| Bow | Up over the left shoulder, the elbow leading up and forward, pulled over and swung down in front, spinning, held upright and its string plucked | Raised, turned over at the left side, out from the head, and slung back over the left shoulder |
 | Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
 | Spiked boots | Up on guard, and shadow kicks: a snap kick high in the air, the knee driven up | Standing down: the fists dropped, the shoulders and neck rolled loose |
 

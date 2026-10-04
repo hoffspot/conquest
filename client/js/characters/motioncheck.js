@@ -15,7 +15,7 @@ import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { SPELLS } from "../core/spells.js";
 import { WEAPONS } from "../core/weapons.js";
 import { Actions, ATTACKS, DRAWS, REACTIONS } from "./actions.js";
-import { Character, placed } from "./character.js";
+import { Character, hanging, placed } from "./character.js";
 import { EQUIPMENT, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
 import { buildItem } from "./items.js";
@@ -93,7 +93,7 @@ export function dress(human, look, { sheathed = true } = {}) {
     const character = { human, rig, object, positions, normals, joints, height, holds: {}, items: [], equipment: new Map() };
     const ids = look.equipment.filter((id) => EQUIPMENT[id]?.kind === "item");
 
-    for (const method of ["sheathe", "sheathPose", "settle"]) {
+    for (const method of ["sheathe", "sheathPose", "settle", "hang"]) {
         character[method] = Character.prototype[method].bind(character);
     }
 
@@ -116,8 +116,10 @@ export function dress(human, look, { sheathed = true } = {}) {
 
             const model = new THREE.Group();
 
-            model.add(built(human, part.model, { ...socket.fit, ears: character.equipment.get("ears") === "catEars" }));
-            Object.assign(model.userData, { home, socket: part.socket, sway: item.sway ?? 0, hand: /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null });
+            const look = built(human, part.model, { ...socket.fit, ears: character.equipment.get("ears") === "catEars" });
+
+            model.add(look);
+            Object.assign(model.userData, { home, socket: part.socket, sway: item.sway ?? 0, hand: /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null, hangs: part === item ? hanging(item, look) : null });
             model.name = id;
 
             const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
@@ -137,6 +139,10 @@ export function dress(human, look, { sheathed = true } = {}) {
                     holder.quaternion.copy(place.quaternion);
                     rig.bone(place.bone).add(holder);
                     character.items.push(holder);
+
+                    if (model.userData.hangs) {
+                        model.userData.hangs.holder = holder;
+                    }
                 }
             }
 
