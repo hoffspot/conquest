@@ -11,17 +11,26 @@ you in every session).
 > built, tested, checked or merged updates this document in the same pull request. That includes:
 > `package.json`'s scripts or Node version; anything in `.github/workflows/`;
 > `playwright.config.js`, `eslint.config.js`, `e2e/fixtures.js` or how the browser tests are split;
-> `scripts/`; the rules for the version numbers; the branch, review and merge conventions; and
-> what an environment needs to run the checks. A pull request that changes the pipeline without
-> updating this file isn't ready to merge.
+> `scripts/`; the rules for the version numbers; the branch, review and merge conventions; what
+> an environment needs to run the checks; and the repository's settings on GitHub (section 6,
+> *The repository's settings*). A pull request that changes the pipeline without updating this
+> file isn't ready to merge.
+>
+> **Only the owner (hoffspot) can change the repository's settings.** When a change needs one
+> changed (a CI job added, renamed or removed; a different number of browser test jobs; a new
+> rule for `main`), say so to the owner, with the exact steps, in the pull request and in your
+> session. Update the settings table in section 6 in the same pull request, and check that the
+> owner has made the change before it's merged. Whenever a setting is changed or added, the table
+> is updated to match.
 
 The rule is written down three times, so no one can miss it:
 
 - here;
 - in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
 - in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job or the Node
-  version changes and this file hasn't been updated to match. That test is the part of the rule
-  a machine can check; everything else is up to you and your reviewer.
+  version changes and this file hasn't been updated to match, and when a CI job isn't among the
+  required checks in the settings table. That test is the part of the rule a machine can check;
+  everything else is up to you and your reviewer.
 
 ## What you need
 
@@ -84,6 +93,7 @@ pull request's run is cancelled when you push to it again; only its newest commi
 | --- | --- | --- |
 | `test` | `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`) | `npm run check`, which runs both |
 | `e2e` (8 jobs side by side) | each job's share of the Playwright browser tests (`e2e/*.spec.js`), split by how long each took (`scripts/e2e-shard.js`, `e2e/durations.json`) | `npm run test:e2e`, or only the tests you touched (below) |
+| `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report` | `npm run check:motion` |
 
 `.github/workflows/pages.yml` runs when `main` changes: lint and the unit tests again, then
 `npm run build:manifest`, and it publishes `client/` to GitHub Pages
@@ -100,6 +110,7 @@ always be green.
 | `npm run lint` | Every change. ESLint must be clean |
 | `npm run check` | Lint and the unit tests together: run it before every push |
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
+| `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
@@ -127,6 +138,37 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - After adding browser tests, time them as CI runs them so CI's split stays even:
   `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`,
   then `npm run e2e:durations -- report.json`. Commit `e2e/durations.json`, not the report.
+
+### The motion check
+
+`scripts/motion-check.js` plays every motion the characters make on each people's bodies at the
+ends of their builds (thinnest, shortest, bulkiest, tallest), holding what they hold. It measures:
+
+- joints turned past their ranges;
+- things held or worn sunk into the body, and forearms or hands sunk into the torso;
+- planted feet sliding, and feet in the ground;
+- a two-handed weapon's second hand off its haft.
+
+What's wrong already is kept in `test/motion-baseline.json`. The check fails only on what's new or
+worse than that, so CI catches a change that makes any motion worse on any body.
+
+```sh
+npm run check:motion                      # everything (about 5 minutes, all your threads)
+npm run check:motion -- --only attack/    # only the motions whose ids start so
+npm run check:motion -- --body orc-       # only those bodies
+npm run check:motion -- --update          # keep this run's failures as the new baseline
+```
+
+- **To see what it found**, run `npm start` and open `/motion-sheet.html`. It draws each failure
+  as it happened, the spot ringed in red, worst first; what's worse than the baseline is outlined
+  in amber (*Only what's new*). Tick *Close up* to look closely. It reads the report the check
+  leaves beside it (`client/motion-report.json`, not committed); a CI run's `motion-report`
+  artifact can be chosen with *Report*.
+- **When it fails** (`WORSE:` lines): fix the motion. If the change is right and the motion was
+  meant to change, run it with `--update`, which says again what got worse, and say why in the
+  pull request.
+- **When something got better** (`better:` lines), run it with `--update` and commit the smaller
+  baseline, so the improvement is kept.
 
 ## 3. Making a change
 
@@ -175,6 +217,7 @@ Run these and fix everything they find:
 ```sh
 npm run build:manifest   # if anything under client/ changed
 npm run check            # lint + unit tests, as CI's test job runs them
+npm run check:motion     # if characters' motions, bodies or what they hold changed
 npx playwright test ...  # the browser tests your change touches (above)
 git status               # only the files you meant to change
 ```
@@ -195,7 +238,7 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job and the 8 `e2e` jobs, about five minutes. A first-time contributor's
+3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about five minutes. A first-time contributor's
    CI may wait for a maintainer to approve the run.
 4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
@@ -223,17 +266,34 @@ tick may no longer be true: the two changes can conflict, or each pass alone and
 3. Push, and wait for CI to go green on that new head.
 4. Merge only if `main` hasn't moved again in the meantime. If it has, go back to step 1.
 
-**GitHub can enforce all of that** once the owner turns it on in the repository's settings. (The
-merge queue, which would do it automatically, is only for repositories owned by an organisation;
-this one belongs to a person.)
-- *Settings → Branches* (or *Rules → Rulesets*), a rule for `main`:
-  - require a pull request before merging;
-  - require these status checks to pass: `test` and `e2e (1 of 8)` to `e2e (8 of 8)`;
-  - require branches to be up to date before merging;
-  - block force pushes and deletion.
-- *Settings → General → Pull Requests*:
-  - allow auto-merge;
-  - always suggest updating pull request branches.
+### The repository's settings
+
+GitHub enforces all of that. There's no merge queue, because that's only for repositories owned by
+an organisation and this one belongs to a person. These are the settings as they stand; keep this
+table current (the standing rule). They were last checked on 2026-10-04.
+
+| Where | Setting | As it is |
+| --- | --- | --- |
+| *Settings → Rules → Rulesets*, the ruleset `main` | Enforcement | Active, on the default branch (`main`); nobody can bypass it, the owner included |
+| | Restrict deletions | On |
+| | Block force pushes | On |
+| | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |
+| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)` |
+| | Require branches to be up to date before merging | On |
+| *Settings → General → Pull Requests* | Allow auto-merge | On |
+| | Always suggest updating pull request branches | On (the *Update branch* button) |
+| | Merge methods | Merge commits, squash and rebase are all allowed; this repository's convention is a merge commit |
+
+**Every CI job is a required check.** A job that's added must be added to the ruleset once it has
+run on a pull request (GitHub only offers checks it has seen). A job that's renamed or removed must
+be changed in or taken out of the ruleset, or every pull request waits for a check that never
+comes. The same goes for the number of `e2e` jobs: each is required by its name, `e2e (N of 8)`.
+Only the owner can make these changes, so ask them, with the steps:
+
+1. *Settings → Rules → Rulesets → main → Require status checks to pass → Add checks*.
+2. Type the job's name, and choose the one from GitHub Actions. Remove any check that no longer
+   exists.
+3. *Save changes*.
 
 Then the routine is: *Update branch* on the pull request (it merges `main` in), then *Enable
 auto-merge*. GitHub merges the pull request once it's green on that up-to-date head. If `main`
@@ -246,6 +306,7 @@ moves first, update the branch again.
 | `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
 | `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
+| `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
 | `NET_VERSION`, `SNAPSHOT_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
 | `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |
 
@@ -281,4 +342,6 @@ A good first message in a session:
 | The port's in use | `E2E_PORT=8096` for the tests, `PORT=3000` for `npm start` |
 | `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |
 | A conflict in `manifest.js`, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
+| The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
+| A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |

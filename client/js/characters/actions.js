@@ -1935,6 +1935,13 @@ export class Actions {
 
         /** How far each foot is let go of the ground this frame, 0 to 1 (kicking: Walker.freed). */
         this.free = { Left: 0, Right: 0 };
+
+        /**
+         * A hand holding the other's two-handed weapon this frame: where on its haft it's to close
+         * (`wanted`) and where its grip ended up (`held`), in the world, and how far it's gone
+         * there (`weight`, 0 to 1); null, not on it (for checking poses: characters/motioncheck.js).
+         */
+        this.haft = { right: null, left: null };
     }
 
     /** Sit down (on a bench) or stand. */
@@ -2203,6 +2210,9 @@ export class Actions {
         // (What's held is kept out of the body as the arm's reached the last time this frame:
         // the arm drawn, not those blended under it)
         const last = Object.fromEntries(HANDS.map((side) => [side, this.reaching.findLastIndex(({ hands }) => hands[side] && (hands[side].reach ?? 1) > 0.001)]));
+
+        this.haft.right = null;
+        this.haft.left = null;
 
         for (const [layer, { hands, weight }] of this.reaching.entries()) {
             // A hand holding the other's weapon goes second; given its own place, the weapon lies
@@ -2770,6 +2780,10 @@ export class Actions {
 
             position = other.position.clone().addScaledVector(other.point, along * size);
             point = other.point.clone();
+
+            if (last) {
+                this.haft[side] = { wanted: position.clone(), held: null, weight };
+            }
         } else {
             position = this.#place(side, hand.at, _frame);
 
@@ -2943,6 +2957,11 @@ export class Actions {
 
         _item.copy(itemQuaternion).premultiply(_hand);
         grip.point.set(0, 1, 0).applyQuaternion(_item);
+
+        if (last && this.haft[side]) {
+            this.haft[side].held = grip.position.clone();
+        }
+
         grip.edge.set(0, 0, 1).applyQuaternion(_item);
 
         return grip;

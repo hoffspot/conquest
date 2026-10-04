@@ -1,0 +1,132 @@
+/* The motion check's contact sheet (motion-sheet.html): its filters along the top, the failures
+   in a grid under them, each outlined in red. */
+
+:root {
+    --background: #101418;
+    --panel: #171d23;
+    --line: #2d3843;
+    --text: #dce5ee;
+    --muted: #8a99a8;
+    --fail: #e5484d;
+    --new: #ffb224;
+
+    color-scheme: dark;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+}
+
+#bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    align-items: baseline;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+h1 {
+    margin: 0;
+    font-size: 18px;
+}
+
+#summary {
+    margin: 0;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    width: 100%;
+}
+
+#filters label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--muted);
+}
+
+select,
+input[type="file"] {
+    color: var(--text);
+    background: var(--background);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font: inherit;
+}
+
+#sheet {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+figure {
+    margin: 0;
+    background: var(--panel);
+    border: 3px solid var(--fail);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+figure.new {
+    border-color: var(--new);
+}
+
+figure canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 5;
+    background: #26303a;
+}
+
+figcaption {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+figcaption strong {
+    font-size: 13px;
+}
+
+figcaption .what {
+    color: var(--fail);
+}
+
+figure.new figcaption .what {
+    color: var(--new);
+}
+
+figcaption .where {
+    color: var(--muted);
+}
+
+#sheet > p {
+    grid-column: 1 / -1;
+    color: var(--muted);
+}

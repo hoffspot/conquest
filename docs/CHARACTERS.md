@@ -750,6 +750,55 @@ second, as in the game. Every point along what's held is looked at (2 cm apart a
 not only its corners), against the nearest of the body's vertices (not the hand holding it or
 that hand's forearm), and it's in only if it's behind that skin, not off to one side of it.
 
+**The motion check** (`client/js/characters/motioncheck.js`, `npm run check:motion`, CI's
+`motion` job) goes further. It plays every motion, a frame at a time at 30 frames a second, on 30
+bodies: each people's (humans, elves, dark elves, cat folk, lizard folk, orcs) at the five ends of
+their builds (the thinnest, shortest and bulkiest women, the bulkiest and tallest men), each
+holding and wearing what they would. That's 245 motions:
+
+- standing, setting off, walking and running;
+- each weapon's guard (still, walking, running) and its every blow;
+- each spell's casts, and drawing and putting away each weapon;
+- every flinch, falling dead and knocked down;
+- the folk's acts (toasting, serving, pouring, forging, blessing, stamping, reading and the rest)
+  and every rest of every role.
+
+On each it measures, keeping the worst moment and where it was:
+
+| Measure | Too much | How |
+| --- | --- | --- |
+| A joint past its range | 3° | `rig.js`'s ranges, every frame, every joint but the fingers' and thumbs' (closing round a grip turns them a little about themselves, which their ranges, having no twist, would take off) |
+| Something held or worn in the body | 1.2 cm | As the clipping test, every 0.1 s (0.3 s in falls, acts and rests) |
+| A forearm or hand in the torso | 3 cm | Points along each forearm's and hand's line, how far under the torso's skin, less how far the limb's own skin is from its line (its median: a forearm resting flat against the body comes out at up to about 2.5 cm) |
+| A planted foot sliding | 1 cm | How far its heel or ball moves along the ground while it's planted on it, every frame |
+| A foot in the ground | 0.5 cm | Its lowest point (heel, ball or toe tip) below the ground, every frame |
+| A second hand off its haft | 3.5 cm | Where a two-handed weapon's second hand holds it against where it's meant to, every frame |
+
+The limits were set by looking at the failures (the contact sheet, below): under them, what's
+measured doesn't show (a knee 2° past its range, a forearm resting on the chest); over them, it
+does.
+
+What's wrong already is kept in `test/motion-baseline.json`. The check fails only on a pair that
+is worse than that by more than a little (1° or 3 mm), or new and past its limit by as much. So CI
+catches any change that makes any motion worse on any body, while the work of making them better
+goes on (the plan's M8). When the baseline was kept (2026-10-04), 4,782 of the 7,242 motions on
+bodies had something past a limit:
+
+| Measure | Failing | Mostly |
+| --- | --- | --- |
+| Limb in the torso | 2,682 | Forearms through bulky bellies and hips (a hammer's two-handed grip; the thumb in the belt while shifting the weight); hands sunk into the back of the neck or the buttocks on the biggest bodies |
+| Foot sliding | 2,440 | Rests that shift the weight (a planted heel sliding 18 cm side to side as the hips move 4 cm); attacks' steps |
+| Joint | 1,101 | Shoulders turned far past their ranges reaching for a weapon on the back (up to 86°); ankles at the heel strike on short bodies (14°) |
+| Foot in the ground | 559 | Seated folk on the tallest bodies (the seat's the same height for everyone: feet 11 cm into the floor); falls (the feet swung 30 cm into the ground as the body goes down) |
+| Something in the body | 325 | A warhammer's head through the thigh as it's drawn or put away; a cleaver's blade through the back of the head |
+| Hand off the haft | 262 | The staff's and hammer's second hand beside the haft, not on it, in some blows and flinches |
+
+The check writes a report (`test-results/motion/report.json`, kept with each CI run as
+`motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
+failures from it, worst first: each motion played on its body to its worst moment, the spot
+ringed in red, what's worse than the baseline outlined in amber. It can show one measure, group of
+motions or people at a time, or only what's new; *Close up* looks at the spot from a metre away.
+
 **Reactions** to being hit are functions of time and of where the blow came from (which side,
 front or back), added to whatever pose the character is in, so a flinch during an attack still
 shows the attack. Each kind of blow (weapons.js: an attack's `reaction`) has its own, and its own

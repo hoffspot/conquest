@@ -274,6 +274,30 @@ export const ROLES = Object.freeze({
  */
 export const BECKON = Object.freeze({ hitAt: 0.9, duration: 3.4, again: 6000 });
 
+/**
+ * What each of the folk's acts takes (s, as a rest's: its key moment and how long it all is), and
+ * who does it (`by`, the role): a patron's toast, a barmaid serving and the barkeep pouring, a
+ * courtesan beckoning; the smith's blows at the anvil, the work heated in the coals and quenched,
+ * the apprentice's bellows and grindstone; a priest's blessing and an acolyte's candles; a notice
+ * stamped and filed, and the quest board read (app/game.js ACTS, with their sounds and sparks).
+ */
+export const ACT_TIMES = Object.freeze({
+    toast: { hitAt: 1, duration: 3.2, by: "patron" },
+    serve: { hitAt: 0.8, duration: 1.8, by: "barmaid" },
+    pour: { hitAt: 1, duration: 2.8, by: "barkeep" },
+    beckon: { hitAt: BECKON.hitAt, duration: BECKON.duration, by: "courtesan" },
+    forge: { hitAt: 0.9, duration: 2.6, by: "smith" },
+    heat: { hitAt: 0.9, duration: 2.4, by: "smith" },
+    quench: { hitAt: 0.8, duration: 2.2, by: "smith" },
+    pump: { hitAt: 0.7, duration: 2.1, by: "apprentice" },
+    crank: { hitAt: 0.9, duration: 2.6, by: "apprentice" },
+    bless: { hitAt: 1, duration: 2.8, by: "priest" },
+    light: { hitAt: 1, duration: 2.4, by: "acolyte" },
+    stamp: { hitAt: 0.8, duration: 2.2, by: "receptionist" },
+    file: { hitAt: 0.9, duration: 2, by: "clerk" },
+    read: { hitAt: 0.9, duration: 2, by: "adventurer" },
+});
+
 /** How often someone rests while seen: every this many ms, give or take (at random between). */
 export const REST_EVERY = Object.freeze([4000, 9000]);
 
