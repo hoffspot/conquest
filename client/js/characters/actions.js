@@ -1116,7 +1116,8 @@ const BASE_RESTS = {
 
 // The officials of the town halls and keeps (built from the rests of others): a reeve and their
 // clerk; a ruler on the throne, their steward, councillors at the table, sentries at the door;
-// and petitioners waiting on the benches; and a castle's quartermaster and arcanist
+// and petitioners waiting on the benches; a castle's quartermaster and arcanist; an abbey's
+// herbalist
 const { patron: PATRON, worshipper: WORSHIPPER } = BASE_RESTS;
 
 export const RESTS = Object.freeze({
@@ -1132,6 +1133,8 @@ export const RESTS = Object.freeze({
     // arcanist among their jars
     quartermaster: [renamed(BARKEEP_RESTS[3], "arms folded"), renamed(LOOKING_OVER, "looking over a blade"), renamed(BARKEEP_RESTS[0], "wiping the counter"), ADVENTURER_RESTS[2], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
     arcanist: [PRIEST_RESTS[4], renamed(LOOKING_OVER, "holding a phial to the light"), renamed(BARKEEP_RESTS[1], "stroking the chin"), PRIEST_RESTS[2], ADVENTURER_RESTS[1]],
+    // (An abbey's herbalist, as a temple's acolyte at prayer, and among their jars)
+    herbalist: [PRIEST_RESTS[0], renamed(LOOKING_OVER, "holding a phial to the light"), PRIEST_RESTS[2], PRIEST_RESTS[4], ADVENTURER_RESTS[1]],
 });
 
 // --- Reactions to being hit ---

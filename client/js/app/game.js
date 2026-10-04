@@ -368,7 +368,7 @@ function ailmentOf(kind, look = null) {
 const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
-const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], flame: ["flames", "smoke"] });
+const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"] });
 
 // What a creature that doesn't bleed red spills where it's struck (effects.js BURSTS): by its
 // blood (creatures.js), or, with none, by what it is
@@ -378,6 +378,8 @@ const SPILLS = Object.freeze({
     sap: ["sap", "dust"],
     skeleton: ["boneChips", "dust"],
     wightLord: ["boneChips", "shadows"],
+    ghost: ["wither"],
+    wraith: ["shadows"],
     blackShuck: ["shadows"],
     shadowStalker: ["shadows"],
     wisp: ["wither"],
@@ -2781,9 +2783,12 @@ export class Game {
                     }
                 });
 
-                // (Their wares, once the talk's over)
-                if (effect.shop && SHOPKEEPERS[npc.role]) {
-                    this.shopWanted = { shop: effect.shop, keeper: npc.id, name: npc.name };
+                // (Their wares, once the talk's over: their own shop, or their part's, as the host
+                // has it)
+                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? SHOPKEEPERS[npc.role];
+
+                if (effect.shop && keeps) {
+                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
                 }
             },
         });
@@ -3413,7 +3418,8 @@ export class Game {
         } else if (event.type === "spoils" && event.given) {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
         } else if (event.type === "spoils" && event.creature === "chest") {
-            this.hud.message("The chest's open, your share in it: tap it to take it.", 3);
+            // (The dead's, an old relic of theirs in it, named)
+            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : "The chest's open, your share in it: tap it to take it.", event.relic ? 4 : 3);
             this.sound?.play("coins");
         } else if (event.type === "spoils") {
             this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);

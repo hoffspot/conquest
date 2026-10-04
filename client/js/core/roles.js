@@ -2,7 +2,8 @@
 // wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, the smith and
 // the apprentice, the priest, an acolyte and the worshippers, a guild's receptionist, or an
 // adventurer (the player, or one of the guild's); a town hall's reeve, clerk and petitioners; a
-// keep's ruler, steward, councillors and sentries; a castle's quartermaster and arcanist.
+// keep's ruler, steward, councillors and sentries; a castle's quartermaster and arcanist; an
+// abbey's herbalist.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -242,6 +243,17 @@ export const ROLES = Object.freeze({
             { name: "wiping the counter", hitAt: 1.4, duration: 3.6 },
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    // An abbey's herbalist, a brother or sister of its order, behind their counter
+    herbalist: {
+        title: "Herbalist",
+        rests: [
+            { name: "hands folded in prayer", hitAt: 1, duration: 3.2 },
+            { name: "holding a phial to the light", hitAt: 1, duration: 3 },
+            { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
         ],
     },
     arcanist: {

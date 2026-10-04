@@ -520,7 +520,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     shields and armour and the pieces of its people's uniform, up to legendary, the only shop
     that sells a legendary make (`SHOPS.armoury`); its arcanist ("What have you for sale?"):
     wands, grimoires, staves, wizards' hats, jewellery, draughts and cures, up to masterwork, but
-    no tomes (`SHOPS.arcane`).
+    no tomes (`SHOPS.arcane`);
+  - an abbey's herbalist ("What does the abbey sell?"), at their counter in its nave: draughts,
+    cures, amulets, rings and grimoires, up to masterwork (`SHOPS.abbey`);
+  - a people's watchtower's quartermaster, by the racks in its guardroom ("Show me what's on the
+    racks."): the garrison's plain arms and armour and the pieces of its people's uniform, up to
+    fine (`SHOPS.watch`: their own shop, not their part's, as one of the folk can keep, host.js
+    `#shopkeeper`).
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
   The shop stays open while the player's within a few steps of the keeper.

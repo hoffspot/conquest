@@ -1810,6 +1810,16 @@ function temple(map) {
         pew(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
     }
 
+    // An abbey's herbalist's counter, and their shelves of jars, phials and books on the wall
+    // behind it
+    for (const counter of at("counter")) {
+        desk(solid, counter, "linen");
+    }
+
+    for (const shelf of at("shelves")) {
+        phialShelves(solid, shelf, { north: true });
+    }
+
     // A great ring of candles hanging over the nave
     const [cx, cz] = [w / 2, h * 0.45];
 
@@ -2391,22 +2401,27 @@ function armourStand(solid, x, z, seed) {
     solid.box(x - m(0.09), m(1.62), z + m(0.11), x + m(0.09), m(1.66), z + m(0.14), material("shadow"));
 }
 
-// An arcanist's shelves against the south wall (a shelves piece along it): four boards on a back,
-// each crowded with jars and phials of coloured glass, stoppered bottles, clay pots, books, a
-// skull, and a phial or two glowing
-function phialShelves(solid, shelf) {
+// An arcanist's shelves against the south wall (a shelves piece along it; an abbey herbalist's,
+// `north`, against the north wall): four boards on a back, each crowded with jars and phials of
+// coloured glass, stoppered bottles, clay pots, books, a skull, and a phial or two glowing
+function phialShelves(solid, shelf, { north = false } = {}) {
     const [x0, x1] = [m(shelf.x), m(shelf.x + shelf.w)];
-    const z = m(shelf.y + 1);
+    // (The wall it's against, and the way out from it)
+    const [z, out] = north ? [m(shelf.y), 1] : [m(shelf.y + 1), -1];
+    const span = (a, b) => [Math.min(z + out * a, z + out * b), Math.max(z + out * a, z + out * b)];
     const glass = ["glass-green", "glass-violet", "wine", "glass", "calabash", "pewter", "glass-green", "glow-blue", "glass-violet", "glow-green"];
+    const [back0, back1] = span(0, m(0.1));
 
-    solid.box(x0, 0, z - m(0.1), x1, m(2.2), z, material("planks-dark", WALL));
+    solid.box(x0, 0, back0, x1, m(2.2), back1, material("planks-dark", WALL));
 
     for (const [y, k0] of [[0.35, 0], [0.8, 3], [1.25, 5], [1.7, 7]]) {
-        solid.box(x0, m(y), z - m(0.45), x1, m(y + 0.05), z, material("planks", WALL));
+        const [board0, board1] = span(0, m(0.45));
+
+        solid.box(x0, m(y), board0, x1, m(y + 0.05), board1, material("planks", WALL));
 
         for (let x = x0 + m(0.18), k = k0; x < x1 - m(0.15); x += m(0.22), k++) {
             const pick = Math.round(x * 3.7 + y * 11) % 7;
-            const [cz, base] = [z - m(0.22), m(y + 0.05)];
+            const [cz, base] = [z + out * m(0.22), m(y + 0.05)];
 
             if (pick === 0) {
                 solid.box(x - m(0.07), base, cz - m(0.13), x + m(0.07), base + m(0.28), cz + m(0.13), material(k % 2 ? "ledger" : "leather", WALL));

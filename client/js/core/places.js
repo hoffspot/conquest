@@ -6,11 +6,12 @@
 //
 // Who holds a place is mixed by the war, a world at a time (the user's choice): each people's own
 // castle is theirs; their other places theirs or taken by bandits; a watchtower out in the wild,
-// and a cave, a band of outlaws'; the ruins the restless dead's; the dragon's lair the dragon's;
-// the shrines and the circles of stones no one's. Once a place's occupiers are put to the sword and
-// their leader killed it's empty for a while (`PLACE_TIMES.retake`: a few days of the world's
-// clock), and then a new band moves in, or the dead rise again (the war keeps when each was
-// cleared: war.js clearPlace).
+// and a cave, a band of outlaws'; the ruins the restless dead's (the bones, ghosts and wraiths of
+// whoever lived there long ago, led by a wight guarding an old relic); the dragon's lair the
+// dragon's; the shrines and the circles of stones no one's. Once a place's occupiers are put to
+// the sword and their leader killed it's empty for a while (`PLACE_TIMES.retake`: a few days of
+// the world's clock), and then a new band moves in, or the dead rise again (the war keeps when
+// each was cleared: war.js clearPlace).
 //
 // Pure data, no DOM; the same for the same plan.
 
@@ -60,8 +61,10 @@ export const PLACE_KINDS = Object.freeze({
 });
 
 /**
- * Who holds a place held by outlaws or the dead, and how many (host.js #places): the band (`folk`)
- * and its leader (`leader`, `lead` tiers above the band, in the middle by the chest); `count` of
+ * Who holds a place held by outlaws or the dead, and how many (host.js #places): the band (`folk`:
+ * one kind, or several taken in turn, member by member: bandFolk) and its leader (`leader`, `lead`
+ * tiers above the band, in the middle by the chest: the dead's, a wight lord, the greater one
+ * guarding their old relic, `relic`, in it: progress.js rollRelic); `count` of
  * the band by the place's size, one more for every `per` tiers of its land's danger (creatures.js
  * tierAt); the band round the middle `ring` metres off, by its size, each going for anyone who
  * comes within `guard` metres of them; put out once a player's within `near` metres, let go once
@@ -70,7 +73,8 @@ export const PLACE_KINDS = Object.freeze({
  */
 export const PLACE_BANDS = Object.freeze({
     bandits: { folk: "bandit", leader: "banditChief" },
-    dead: { folk: "skeleton", leader: "wightLord" },
+    // (The restless dead of whoever lived there long ago: their bones, their ghosts, and a wraith)
+    dead: { folk: ["skeleton", "ghost", "skeleton", "wraith", "ghost"], leader: "wightLord", relic: true },
     count: { small: 3, medium: 5, large: 7 },
     per: 3,
     lead: 2,
@@ -79,6 +83,13 @@ export const PLACE_BANDS = Object.freeze({
     near: 90,
     far: 180,
 });
+
+/** Which kind of creature a band's `k`th member is (PLACE_BANDS: its one kind, or its kinds in turn). */
+export function bandFolk(band, k) {
+    const kinds = [band.folk].flat();
+
+    return kinds[k % kinds.length];
+}
 
 /** How much more gold a chest holds for each tier of its land's danger above the first. */
 export const CHEST_GOLD = 0.35;

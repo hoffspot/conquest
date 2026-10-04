@@ -122,6 +122,11 @@ const PARTS = {
         m: { wear: [["blueTunic", "shirt"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null, null]], hair: ["long", "swept", "bald", "short"], beard: ["full", "goatee", "short"], build: { weight: [0.3, 0.6], muscle: [0.3, 0.45], belly: [0, 0.4] } },
         f: { wear: [["chemise", "blueTunic"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null, null]], hair: ["long", "topknot", "bob"], build: { weight: [0.35, 0.55], muscle: [0.3, 0.42], bust: [0.45, 0.8] } },
     },
+    // An abbey's herbalist: a brother or sister of its order in a plain habit, a belt of leather
+    herbalist: {
+        m: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["bald", "short", "buzz"], beard: ["full", "short", "none"], build: { weight: [0.4, 0.75], muscle: [0.35, 0.5], belly: [0.1, 0.6] } },
+        f: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["topknot", "bob"], build: { weight: [0.38, 0.6], muscle: [0.35, 0.48], bust: [0.35, 0.65] } },
+    },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
 
