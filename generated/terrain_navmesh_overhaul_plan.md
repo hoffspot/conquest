@@ -4205,3 +4205,38 @@ converted data is to be measured in M8 against today's hm08 data.
     checked with the motion check, adjusted from the research (the lead foot, grips) and kept
     only where it's better. Hand-made motion stays for what no clip covers (two-handed staff and
     hammer blows, drawing and putting away, pouring and toasting), seeded from the nearest clip.
+
+- **2026-10-04, M8c built: animators' clips in the game** (docs/CHARACTERS.md *Clips in the
+  game*). §10.2's steps 3 to 6 for Mesh2Motion's clips, on today's body:
+  - **The bake** (`scripts/bake-clips.js`, run by `npm run build:clips`): each clip retargeted
+    onto the average body in Node and turned into the key poses every other action is made of
+    (`client/js/characters/clip-keys.js`), not played whole: the arms are then reached within
+    their ranges, what's held kept out of the body, and the motion check measures them as it
+    does the keyed ways. A key holds the spine's, neck's, head's and collarbones' angles
+    (`rig.js` `jointAngles`, new: `jointRotation` backwards), each hand's place, turn and elbow,
+    and the pelvis; the blow is key 1 (given, or the fastest moment); keys are kept only where the
+    curve needs them (within 3°, 2.5 cm).
+  - **What didn't carry over: the clips' legs.** They stand in stances of their own and ours
+    stand where the walker plants them: with the clips' legs the feet sank up to 17 cm into the
+    ground and slid up to 1.9 m, the ankles 20° past their range. So the feet stay planted (a
+    kick's leg is the clip's, let go of the ground while its foot is off it), the pelvis turns
+    at most 12° and stays level with the rest taken up the spine, and it moves a few centimetres.
+  - **Tried on all 30 bodies, and kept where they measure as well as the keyed ways and look
+    right:** a jab (the rear fist kept at the chin: the clip flings it out), a cross, a push kick
+    from motion capture (the fists kept up: the clip drops them) and a spell thrust out from the
+    wand. Left out: the sword's four attacks and an axe chop (lunges of 0.8 m, the sword arm up to
+    111° behind the body, up to 68° past any shoulder; the one that measured well swings the
+    arm out to the side first, a flourish), a golf drive for the staff and hammer (the
+    arms 73 to 78° past their range), the bow (clean, but drawn to the shoulder, not to an anchor
+    under the jaw), a fighting stance's left and right jabs. Quaternius's clips are made for
+    games: fists, a kick and a spell came over well, blades and two-handed weapons didn't, so
+    their keyed ways (from the research) stay.
+  - **Actions** have at least five ways now (`clipped`: a clip's way, easing out from 1.6, its
+    pelvis scaled to the body's height, a hand kept as `hands` says).
+  - **The contact sheet's filmstrips** (`/motion-sheet.html?film=<motions>&body=<body>`): each
+    motion a row of frames on a body, following the pelvis; the pictures for this were made with
+    it.
+  - **Next:** M8d, the clips for what fits them best: town life (the folk's rests from the idle,
+    talking, leaning, sitting, drinking and working clips), the fighting idles for the guards,
+    hits and dodges; then the deaths and falls, whole-body, with their legs (a stance system
+    so the feet can step where a clip steps).

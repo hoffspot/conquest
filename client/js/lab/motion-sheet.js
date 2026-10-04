@@ -3,7 +3,10 @@
 // spot marked in red, worst first: what's new (worse than the baseline) outlined amber, what was
 // known red. The report is ?report=<its address>, else motion-report.json beside this page (the
 // check leaves a copy there), else a file chosen. ?measure=, ?group=, ?people=, ?count=, ?new=1
-// choose what's shown, ?close=1 draws each close up. window.sheet: { ready, shown } (for pictures and tests).
+// choose what's shown, ?close=1 draws each close up. Or a filmstrip of motions instead:
+// ?film=<motion id>,<motion id>... on ?body= (a body's id; the first, if not given), ?frames= a
+// row (8, if not given), from its start to its end, following the pelvis. window.sheet: { ready,
+// shown } (for pictures and tests).
 
 import * as THREE from "three";
 import { loadHumanData } from "../characters/body.js";
@@ -157,6 +160,72 @@ function draw(human, { key, kind, t, at: spot }) {
     return canvas;
 }
 
+// One frame of a filmstrip: `motion` played on `body` to `t` s, seen from in front and to its
+// right (a right hand's weapon side), following the pelvis; a canvas
+function still(human, motion, body, t) {
+    const played = play(human, motion, body, { until: t, every: Infinity });
+
+    if (!played) {
+        return null;
+    }
+
+    const { character } = played.dressed;
+    const mesh = bodyMesh(human, character);
+
+    scene.add(character.object);
+    character.object.updateMatrixWorld(true);
+
+    const hips = character.rig.bone("Hips").getWorldPosition(new THREE.Vector3());
+    const centre = new THREE.Vector3(hips.x, 0.95, hips.z);
+    const from = new THREE.Vector3(-0.6, 0, 1).normalize().applyQuaternion(character.object.quaternion);
+
+    marker.visible = false;
+    halo.visible = false;
+    camera.position.copy(centre).addScaledVector(from, 3.4).add(new THREE.Vector3(0, 0.35, 0));
+    camera.lookAt(centre);
+    grid.position.set(hips.x, 0.001, hips.z);
+    renderer.render(scene, camera);
+
+    const canvas = document.createElement("canvas");
+
+    canvas.width = WIDTH * ratio;
+    canvas.height = HEIGHT * ratio;
+    canvas.getContext("2d").drawImage(renderer.domElement, 0, 0);
+    scene.remove(character.object);
+    mesh.geometry.dispose();
+    halo.visible = true;
+
+    return canvas;
+}
+
+// The filmstrips: each motion a row of frames from its start to its end
+async function film(ids) {
+    const body = bodies.get(params.get("body")) ?? BODIES[0];
+    const frames = Math.max(2, Number(params.get("frames")) || 8);
+
+    summary.textContent = `${ids.join(", ")} on ${body.id}, ${frames} frames each.`;
+    sheet.classList.add("film");
+
+    for (const id of ids) {
+        const motion = all.get(id);
+
+        for (let k = 0; motion && k < frames; k++) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+
+            const t = Math.round((0.05 + (k / (frames - 1)) * Math.max(0, motion.seconds - 0.1)) * 1000) / 1000;
+            const figure = document.createElement("figure");
+            const caption = document.createElement("figcaption");
+
+            caption.innerHTML = "<strong></strong><span></span>";
+            caption.children[0].textContent = `${id}${motion.label ? ` (${motion.label})` : ""}`;
+            caption.children[1].textContent = `${t} s`;
+            figure.append(still(human, motion, body, t) ?? document.createElement("canvas"), caption);
+            sheet.append(figure);
+            window.sheet.shown++;
+        }
+    }
+}
+
 // --- The sheet ---
 
 let report = null;
@@ -225,6 +294,11 @@ async function load(text) {
 
 async function start() {
     human = await loadHumanData();
+
+    if (params.get("film")) {
+        return film(params.get("film").split(","));
+    }
+
     summary.textContent = "Loading the report…";
 
     const address = params.get("report") ?? "motion-report.json";

@@ -46,6 +46,7 @@
 import * as THREE from "three";
 import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
+import { CLIP_HEIGHT, CLIP_KEYS } from "./clip-keys.js";
 import { ITEMS, socketOn } from "./equipment.js";
 import { blendRotation, jointRotation } from "./rig.js";
 
@@ -223,6 +224,34 @@ const CAST = { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] };
 // One way of doing an action: its name and key poses, from and back to `start`
 const variant = (name, start, ...keys) => ({ name, keys: [[0, start], ...keys, [2, start]] });
 
+// A clip's key poses (clip-keys.js: each key's time and its values in the channels' order: a
+// joint's angle, "Spine.flex"; one of a vector's, "right.at.0"; a hand's shape, "right.shape")
+function unpack({ channels, keys }) {
+    return keys.map(([time, ...values]) => {
+        const pose = {};
+
+        channels.forEach((channel, c) => {
+            const [joint, name, k] = channel.split(".");
+
+            if (joint === "offset") {
+                (pose.offset ??= [0, 0, 0])[name] = values[c];
+            } else if (k !== undefined) {
+                ((pose[joint] ??= {})[name] ??= [0, 0, 0])[k] = values[c];
+            } else {
+                (pose[joint] ??= {})[name] = values[c];
+            }
+        });
+
+        return [time, pose];
+    });
+}
+
+// One way done as an animator's clip does it (Mesh2Motion's, baked into key poses by
+// scripts/bake-clips.js: clip-keys.js): the body and arms as it moves them, the feet where they
+// stand (but a kicking leg's), easing out from `settle` (its pelvis's offset is for its body's
+// height: `scaled`); a hand kept as `hands` says, not as the clip has it
+const clipped = (name, clip, { settle = 1.6, hands = {} } = {}) => ({ name, keys: unpack(CLIP_KEYS[clip]).map(([time, pose]) => [time, { ...pose, ...hands }]), settle, scaled: true, clip });
+
 // The smith's hammer, raised by the right shoulder (its head back, its face up) and brought down
 // flat on the work (the handle level, the face down); the tongs holding the work on the anvil
 const HAMMER_UP = { at: [0.05, 0.3, 0.3], point: [-0.41, 0.41, -0.82], edge: [0.18, 0.91, 0.37] };
@@ -353,6 +382,9 @@ export const ATTACKS = Object.freeze({
                 [0.65, { right: { at: [-0.3, -0.7, 0.4], point: [-0.2, -0.5, 0.85] }, left: REACH_OUT, ...spine({ flex: 10, turn: -12 }), offset: [0, -0.04, 0] }],
                 [1, { right: { at: [0.18, -0.05, 1.18], point: [0.05, 0.1, 1] }, left: DRAW_IN, ...spine({ turn: 10 }), offset: [0, -0.01, 0.05] }],
                 [1.4, { right: { at: [0.18, -0.08, 1.16], point: [0.05, 0.08, 1] }, left: DRAW_IN, ...spine({ turn: 10 }), offset: [0, -0.01, 0.04] }]),
+            // From a clip: the wand raised from the hip and thrust out at the enemy, held as the
+            // spell goes, and lowered
+            clipped("thrust out", "wandShot"),
         ],
     },
     grimoire: {
@@ -497,6 +529,11 @@ export const ATTACKS = Object.freeze({
                 [0.5, { right: { at: [-0.15, 0.3, 0.3], palm: [0.5, -0.8, 0], towards: [0.2, 0.5, 0.85] }, left: fist(-1), ...spine({ flex: -4, turn: -20 }), Hips: { turn: 8 }, offset: [0, 0, -0.03] }],
                 [1, { right: { at: [0.3, 0.08, 1.08], palm: [-0.3, -0.95, 0], towards: [0, -0.25, 1], elbow: [-0.8, 0.4, 0] }, left: fist(-1), ...spine({ flex: 10, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.04, 0.07] }],
                 [1.4, { right: { at: [0.35, -0.15, 0.78], palm: [0, -1, 0], towards: [0, -0.3, 1] }, left: fist(-1), ...spine({ flex: 12, turn: 14 }), Hips: { turn: -8 }, offset: [0, -0.04, 0.04] }]),
+            // From clips: a jab with the lead hand (the rear fist kept up at the chin, as a boxer
+            // keeps it, not flung out as the clip has it) and a cross from the rear, the body
+            // turning into each from a boxer's stance
+            clipped("jab", "jab", { hands: { left: { ...fist(-1), shape: "fist", chest: 1 } } }),
+            clipped("cross", "cross"),
         ],
     },
     kick: {
@@ -553,6 +590,12 @@ export const ATTACKS = Object.freeze({
                 [1.35, lifted({ RightUpLeg: { flex: 60, abduct: 0 }, RightLeg: { flex: 110 }, RightFoot: { flex: 5 }, ...spine({ flex: 6, turn: 30 }), Neck: { turn: 20 }, Head: { turn: 20 }, Hips: { turn: 160, tilt: -8 }, offset: [0.12, -0.05, 0] })],
                 [1.65, { ...LEG_DOWN, free: { right: 0.5 }, RightUpLeg: { flex: 25 }, RightLeg: { flex: 40 }, ...spine({ turn: 8 }), Neck: { turn: 0 }, Head: { turn: 0 }, Hips: { turn: 55, tilt: 0 }, offset: [0.05, -0.02, 0] }],
                 [1.85, { free: { right: 0 } }]),
+            // From motion capture: the knee drawn up, the foot pushed straight out at the enemy's
+            // middle, the body leaning back from it, and down again (the fists kept up before the
+            // chest, as a kicker keeps them, not dropped as the clip has them; the rear a little
+            // further out than on guard and its elbow out from the ribs, clear of the body as it
+            // comes forward again)
+            clipped("push kick", "pushKick", { hands: { right: { ...GUARDS.kick.right, at: [0.22, 0.05, 0.5], elbow: [-0.45, -1, 0] }, left: GUARDS.kick.left } }),
         ],
     },
     cleaver: {
@@ -1704,7 +1747,7 @@ function withFingers(pose) {
 // An action's tracks: for each joint it moves (and the pelvis offset, and each hand's place),
 // the names of its values and each key's values, filled in where a key leaves them out from the
 // keys either side
-function compile(rawKeys) {
+function compile(rawKeys, { settle = null, scaled = false } = {}) {
     const keys = rawKeys.map(([time, pose]) => [time, withFingers(pose)]);
     const times = keys.map(([time]) => time);
     const channels = new Map();
@@ -1822,8 +1865,9 @@ function compile(rawKeys) {
         return { joint, names, values };
     });
 
-    // (It eases out after its last key before the end, or from 1.55 if that's sooner)
-    return { times, tracks, settle: Math.max(1.55, times.at(-2) ?? 0) };
+    // (It eases out after its last key before the end, or from 1.55 if that's sooner; or from where
+    // it says. A clip's pelvis offset is for a body as tall as the one it was baked on)
+    return { times, tracks, settle: settle ?? Math.max(1.55, times.at(-2) ?? 0), scaled };
 }
 
 // A value on the smooth curve through a track's keys at time `time` (Catmull-Rom, with tangents
@@ -1857,7 +1901,7 @@ function sample(times, values, n, time) {
 }
 
 const COMPILED = new Map([
-    ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys }) => compile(keys))]),
+    ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
     ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys }) => compile(keys))]),
     ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [compile(draw.keys)]], [`sheathe:${name}`, [compile(sheathe.keys)]]]),
 ]);
@@ -2362,8 +2406,10 @@ export class Actions {
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
     // kept for place()
-    #blend({ times, tracks }, key, weight, mirror, arms = true, rest = false, upright = false) {
+    #blend({ times, tracks, scaled }, key, weight, mirror, arms = true, rest = false, upright = false) {
         const rig = this.rig;
+        // (A clip's pelvis offset, as far for a smaller body as it is for it)
+        const reach = scaled ? (this.character.height ?? CLIP_HEIGHT) / CLIP_HEIGHT : 1;
         const hands = {};
         // (A shield on the left forearm: held up in a fight; resting, carried as it is, the left
         // arm left out of the rest)
@@ -2386,9 +2432,9 @@ export class Actions {
             if (joint === "offset") {
                 const [x, y, z] = [0, 1, 2].map((n) => sample(times, values, n, key));
 
-                rig.offset.x += (mirror ? -x : x) * weight;
-                rig.offset.y += y * weight;
-                rig.offset.z += z * weight;
+                rig.offset.x += (mirror ? -x : x) * weight * reach;
+                rig.offset.y += y * weight * reach;
+                rig.offset.z += z * weight * reach;
                 continue;
             }
 

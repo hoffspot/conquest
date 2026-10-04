@@ -115,7 +115,7 @@ always be green.
 | `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
-| `npm run build:clips` | Only when remaking the character lab's animation clips |
+| `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
 | `npm run vendor:three` | Only after changing the `three` version in `package.json` |
 | `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
 | `npm run vendor:recast` | Only after changing the recast-navigation version |
@@ -164,6 +164,9 @@ npm run check:motion -- --update          # keep this run's failures as the new 
   in amber (*Only what's new*). Tick *Close up* to look closely. It reads the report the check
   leaves beside it (`client/motion-report.json`, not committed); a CI run's `motion-report`
   artifact can be chosen with *Report*.
+- **To watch a motion through**, open `/motion-sheet.html?film=attack/gauntlets/5,attack/sword/0&body=human-tallest-m&frames=8`:
+  each motion a row of frames from its start to its end on that body (ids as the report has
+  them). Use it for before-and-after pictures of a motion you've changed.
 - **When it fails** (`WORSE:` lines): fix the motion. If the change is right and the motion was
   meant to change, run it with `--update`, which says again what got worse, and say why in the
   pull request.
@@ -306,6 +309,7 @@ moves first, update the branch again.
 | File | What to do |
 | --- | --- |
 | `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
+| `client/js/characters/clip-keys.js` | Generated: take the side whose `scripts/bake-clips.js` list you keep, then `npm run build:clips -- --from=...` (above) if both changed it, and `npm run build:manifest`. |
 | `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
