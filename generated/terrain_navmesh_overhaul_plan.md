@@ -3875,3 +3875,27 @@ converted data is to be measured in M8 against today's hm08 data.
     way in the courtyard's ground, its ruler titled, their realm the nearest town of theirs.
   - **Next:** the dark elves' castle (its gate and terraces), the lizard folk's temple-fortress,
     the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3c built: the dark elves' castle walked into, the Black Tower gone into**
+  (docs/GAME.md *Gone into*).
+  - **The gate:** their wall was a closed ring through its eight towers, no way in (the two
+    spiders before it guarded nothing). It's an open run now, round from one side of the gate to
+    the other, 7.6 m between them, a slender tower at each end of it (their spires 11 m up, a web
+    hung between them), the spiders moved out to flank the way to it; no thorn merlons over the
+    gap (world/art/peoples/darkelf.js `castle`).
+  - **The keep:** the Black Tower stands on a terrace 3.6 m high, its door at the terrace's top.
+    Stairs run up the terrace's south face to it (20 risers of 0.18 m, 2.4 m wide), a violet
+    lamp on an iron post either side of their foot. The overworld's walking mesh is made from the
+    land and the squares blocked, the terrace not part of the land, so the keep's gone into from
+    the stairs' foot: an entry's `reach` is how far out from its door its way in begins (core/
+    sites.js `entranceAt`; its door still drawn green where it is, up on the terrace).
+  - **Laid out** (core/setpieces/castles.js `darkElf`): the wall's runs as thick as they're built
+    within the lines between the towers, the towers, the gate towers, the spiders, the terrace
+    (an octagon: `polygon`), the stairs; the courtyard the polygon of the towers and the gateway;
+    its ground dark cobbles (GROUND.cobbles).
+  - **Tests:** test/castles.test.js now also in seed 1, where every castle's set down (in seed 2
+    the dark elves' has no room where it's planned), at many turns (the cat folk's at -2.68, no
+    eighth of a turn): each courtyard reached from outside its gate, each keep gone into, the
+    dark elves' from the foot of its stairs.
+  - **Pictures** (sent in the session): the dark elves' castle from above before (main) and
+    after, its courtyard, the stairs up to the Black Tower, its great hall.
+  - **Next:** the lizard folk's temple-fortress; the humans' citadels' wards and keeps.

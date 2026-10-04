@@ -129,8 +129,57 @@ function cat([W, D]) {
     };
 }
 
+// The dark elves': eight towers round a ring of black wall built 2.4 m within the lines between
+// them, its gate between the two to the south between two slender gate towers, spiders either
+// side of the way to it; in the middle a terrace 3.6 m high, the Black Tower on it (their keep),
+// stairs up the terrace's south face to its door
+function darkElf([W, D]) {
+    const [cx, cz] = [W / 2, D / 2];
+    const R = Math.min(W, D) / 2 - 3;
+    const count = 8;
+    const towers = Array.from({ length: count }, (_, k) => {
+        const a = (k * PI * 2) / count + PI / count;
+
+        return [cx + cos(a) * R, cz + sin(a) * R];
+    });
+    const [gx, gz] = [(towers[1][0] + towers[2][0]) / 2, (towers[1][1] + towers[2][1]) / 2];
+    // (A run of the wall, from one point to another on the lines between the towers, as thick as
+    // it's built within them)
+    const within = (a, b) => {
+        const [mx, mz] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const [nx, nz] = [((cx - mx) / hypot(cx - mx, cz - mz)) * 1.2, ((cz - mz) / hypot(cx - mx, cz - mz)) * 1.2];
+
+        return { wall: [[a[0] + nx, a[1] + nz], [b[0] + nx, b[1] + nz], 1.2] };
+    };
+    const terrace = Array.from({ length: 8 }, (_, k) => [cx + cos(PI / 8 + (k * PI) / 4) * R * 0.4, cz + sin(PI / 8 + (k * PI) / 4) * R * 0.4]);
+    // (Its south face, flat: the stairs from it, 20 risers of 0.18 m on treads 0.3 m deep)
+    const face = cz + R * 0.4 * cos(PI / 8);
+    const door = cz + R * 0.22;
+
+    return {
+        solid: [
+            ...towers.map(([x, z]) => ({ disc: [x, z, 2.6] })),
+            ...towers.flatMap((at, k) => (k === 1 ? [] : [within(at, towers[(k + 1) % count])])),
+            within(towers[1], [gx + 3.8, gz]),
+            within([gx - 3.8, gz], towers[2]),
+            { disc: [gx - 3.8, gz, 1.3] },
+            { disc: [gx + 3.8, gz, 1.3] },
+            { disc: [gx - 5, gz + 3, 1.4] },
+            { disc: [gx + 5, gz + 3, 1.4] },
+            { polygon: terrace },
+            { rect: [cx - 1.2, face, cx + 1.2, face + 6] },
+        ],
+        // (Within its towers; and its gateway, the gate towers either side)
+        court: [{ polygon: towers }, { rect: [gx - 2.5, gz - 2.4, gx + 2.5, gz + 0.6] }],
+        ground: "cobbles",
+        gate: [gx, gz],
+        // (The Black Tower's door, up on the terrace: gone into from the stairs' foot)
+        entry: { x: cx, y: door, width: 2, height: 3, floor: 3.6, reach: face + 6 - door, inside: "keep" },
+    };
+}
+
 // Each people's whose castle can be walked into, so far
-const LAYOUTS = Object.freeze({ elf, orc, cat });
+const LAYOUTS = Object.freeze({ elf, orc, cat, darkElf });
 
 /**
  * A people's castle laid out on its lot ([W, D] metres): { solid (shapes: `rect` [u0, v0, u1,
@@ -140,7 +189,8 @@ const LAYOUTS = Object.freeze({ elf, orc, cat });
  * its courtyard), ground (what its courtyard's ground is: a GROUND kind's name, setpieces/pieces.js:
  * flagstones, or the orcs' trodden earth), gate ([u, v]: the middle of its way in, 3 m clear at
  * the least), entry (its keep's door, as a neutral site's: { x, y, width, height, floor (its sill
- * above the ground), inside }, sites.js entranceAt) }; or null for a people's not
+ * above the ground), reach (how far out from it its way in begins, if not at it: up a stair),
+ * inside }, sites.js entranceAt) }; or null for a people's not
  * laid out yet (theirs stays solid all through).
  */
 export function castleLayout(race, size) {

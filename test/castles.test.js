@@ -11,7 +11,10 @@ import { castleLayout, inCourt, solidAt } from "../client/js/core/setpieces/cast
 import { GROUND, PEOPLE_PLACES, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { WORLD_SIZE } from "../client/js/core/worldplan/plan.js";
 
-const LAID = ["elf", "orc", "cat"];
+const LAID = ["elf", "orc", "cat", "darkElf"];
+
+// What each people's courtyard's ground is
+const GROUNDS = Object.freeze({ elf: GROUND.courtyard, orc: GROUND.road, cat: GROUND.courtyard, darkElf: GROUND.cobbles });
 
 // The metre cells of a castle's lot reached from just outside its gate (to the south), never
 // through anything solid (nor `shut`, if it's given)
@@ -38,14 +41,14 @@ function walked(layout, [W, D], shut = null) {
 }
 
 describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
-    it("are laid out for the elves, the orcs and the cat folk, the same for the same lot; the others' stay solid all through", () => {
+    it("are laid out for the elves, the orcs, the cat folk and the dark elves, the same for the same lot; the others' stay solid all through", () => {
         for (const race of LAID) {
             const size = PEOPLE_PLACES[race].castle.map((plots) => plots * PLOT);
 
             assert.deepEqual(castleLayout(race, size), castleLayout(race, size), race);
         }
 
-        for (const race of ["human", "darkElf", "lizard"]) {
+        for (const race of ["human", "lizard"]) {
             assert.equal(castleLayout(race, [60, 60]), null, race);
         }
     });
@@ -83,55 +86,64 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         }
     });
 
-    it("are set down in the world so: their walls and towers blocked, their courtyards open ground reached from outside their gates; the dark elves' and lizard folk's all blocked", () => {
-        const world = buildWorld({ seed: 2 });
-        const squares = squaresOf(world.maps.town);
+    it("are set down in the world so, whichever way they're turned: their walls and towers blocked, their courtyards open ground reached from outside their gates; the lizard folk's all blocked", () => {
         const found = [];
 
-        // (The humans' are hill citadels, setpieces/citadel.js)
-        for (const site of world.plan.sites.filter((each) => each.kind === "castle" && each.race !== "human")) {
-            world.maps.town.sites.heartOf(site);
+        // (Seed 1's at many turns, the cat folk's at a slant of no eighth; in seed 2 the dark
+        // elves' has no room where it's planned. The humans' are hill citadels, setpieces/citadel.js)
+        for (const seed of [1, 2]) {
+            const world = buildWorld({ seed });
+            const squares = squaresOf(world.maps.town);
 
-            const set = world.maps.town.sites.set.get(site.id);
+            for (const site of world.plan.sites.filter((each) => each.kind === "castle" && each.race !== "human")) {
+                world.maps.town.sites.heartOf(site);
 
-            // (Unless there's no room for it where it's planned)
-            if (!LAID.includes(site.race)) {
-                assert.equal(set?.courts.size ?? 0, 0, site.race);
-                continue;
-            }
+                const set = world.maps.town.sites.set.get(site.id);
 
-            found.push(site.race);
+                // (Unless there's no room for it where it's planned)
+                if (!set) {
+                    continue;
+                }
 
-            const courts = [...set.courts].map((k) => [k % WORLD_SIZE, Math.floor(k / WORLD_SIZE)]);
-            const r = Math.ceil(Math.hypot(set.w, set.h) * 2) + 2;
-            const [hx, hy] = [Math.floor(set.x), Math.floor(set.y)];
-            const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
-            const seen = new Set([String(out)]);
-            const queue = [out];
+                if (!LAID.includes(site.race)) {
+                    assert.equal(set.courts.size, 0, site.race);
+                    continue;
+                }
 
-            while (queue.length) {
-                const [i, j] = queue.shift();
+                found.push(`${site.race} ${seed}`);
 
-                for (const next of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
-                    if (Math.abs(next[0] - hx) <= r && Math.abs(next[1] - hy) <= r && !seen.has(String(next)) && !squares.blocked(...next)) {
-                        seen.add(String(next));
-                        queue.push(next);
+                const courts = [...set.courts].map((k) => [k % WORLD_SIZE, Math.floor(k / WORLD_SIZE)]);
+                const r = Math.ceil(Math.hypot(set.w, set.h) * 2) + 2;
+                const [hx, hy] = [Math.floor(set.x), Math.floor(set.y)];
+                const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
+                const seen = new Set([String(out)]);
+                const queue = [out];
+
+                while (queue.length) {
+                    const [i, j] = queue.shift();
+
+                    for (const next of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
+                        if (Math.abs(next[0] - hx) <= r && Math.abs(next[1] - hy) <= r && !seen.has(String(next)) && !squares.blocked(...next)) {
+                            seen.add(String(next));
+                            queue.push(next);
+                        }
                     }
                 }
+
+                const ground = GROUNDS[site.race];
+                const reached = courts.filter((at) => seen.has(String(at))).length;
+
+                assert.ok(courts.length > 200 && set.squares.size > 100, `${site.race} ${seed}: ${courts.length} in its courtyard, ${set.squares.size} blocked`);
+                assert.ok(reached >= courts.length * 0.98, `${site.race} ${seed}: ${reached} of ${courts.length} reached`);
+                assert.ok(courts.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === ground && squares.ground(i, j) === ground), `${site.race} ${seed}`);
             }
-
-            const ground = site.race === "orc" ? GROUND.road : GROUND.courtyard;
-
-            assert.ok(courts.length > 200 && set.squares.size > 100, `${site.race}: ${courts.length} in its courtyard, ${set.squares.size} blocked`);
-            assert.ok(courts.filter((at) => seen.has(String(at))).length >= courts.length * 0.98, `${site.race}: ${courts.filter((at) => seen.has(String(at))).length} of ${courts.length} reached`);
-            assert.ok(courts.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === ground && squares.ground(i, j) === ground), site.race);
         }
 
-        assert.deepEqual(found.sort(), [...LAID].sort());
+        assert.deepEqual(found.sort(), ["cat 1", "cat 2", "darkElf 1", "elf 1", "elf 2", "orc 1", "orc 2"]);
     });
 
-    it("their keeps are gone into from their courtyards (the elves' tower at the back, the orcs' longhouse, the cat folk's tower house): the great hall, their lord or lady on the throne, their folk there, their realm the nearest of their people's towns", () => {
-        const world = buildWorld({ seed: 2 });
+    it("their keeps are gone into from their courtyards (the elves' tower at the back, the orcs' longhouse, the cat folk's tower house, the dark elves' Black Tower up the stairs on its terrace): the great hall, their lord or lady on the throne, their folk there, their realm the nearest of their people's towns", () => {
+        const world = buildWorld({ seed: 1 });
         const host = new Host(world, { populate: false });
 
         host.join({ id: HOST_PLAYER, hero: { name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false } });
@@ -148,7 +160,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
             const set = world.maps.town.sites.set.get(site.id);
             const keep = world.interiors.buildings.get(`site:${site.id}`);
             const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
-            const ground = race === "orc" ? GROUND.road : GROUND.courtyard;
+            const ground = GROUNDS[race];
 
             assert.equal(keep.kind, "keep", race);
             assert.equal(keep.people, race);

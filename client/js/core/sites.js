@@ -734,23 +734,27 @@ export class Sites {
 /**
  * Where a site's gone into, in the world (its layout's `entry`, turned with it: `turn`, `facing`):
  * { door: { x, z (metres: the middle of its way in), facing, width, height, floor }, front (the two
- * squares at it), outside (the square to come out onto), clear (every square of the way up to
- * it), facing, inside (what's within) }, as insides.js entranceOf's for a building.
+ * squares at it, or at the foot of the stair up to it: the entry's `reach`), outside (the square
+ * to come out onto), clear (every square of the way up to it), facing, inside (what's within) },
+ * as insides.js entranceOf's for a building.
  */
-export function entranceAt({ x, y, width, height, floor = 0, inside: within }, turn, facing) {
+export function entranceAt({ x, y, width, height, floor = 0, reach = 0, inside: within }, turn, facing) {
     const square = (u, v) => {
         const at = turn(u, v);
 
         return [Math.floor(at.x), Math.floor(at.y)];
     };
     const door = turn(x, y);
-    const front = [square(x - 0.5, y + 0.3), square(x + 0.5, y + 0.3)];
-    const outside = square(x, y + 1.6);
+    // (Where its way in begins: at the door, or `reach` out from it, at the foot of a stair up
+    // to it)
+    const foot = y + reach;
+    const front = [square(x - 0.5, foot + 0.3), square(x + 0.5, foot + 0.3)];
+    const outside = square(x, foot + 1.6);
     const across = Math.max(1.2, width / 2 + 0.3);
     const clear = [];
     const seen = new Set();
 
-    for (let v = y - 0.6; v <= y + 1.8; v += 0.25) {
+    for (let v = foot - 0.6; v <= foot + 1.8; v += 0.25) {
         for (let u = x - across; u <= x + across; u += 0.25) {
             const [i, j] = square(u, v);
             const key = `${i},${j}`;
