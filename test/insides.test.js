@@ -681,7 +681,8 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
             }
 
             if (building.kind === "watchtower") {
-                assert.deepEqual(building.folk.map(({ role }) => role), ["sentry", "sentry"]);
+                assert.deepEqual(building.folk.map(({ role }) => role), ["sentry", "sentry", "quartermaster"]);
+                assert.deepEqual(building.folk.filter(({ shop }) => shop).map(({ shop, talk }) => [shop, talk]), [["watch", "watchQuartermaster"]]);
                 assert.ok(maps.every((map) => map.look === "kept") && building.stairs);
                 assert.ok(maps.every((map, k) => ["l", "h", "g"].every((char) => (map.marks[char] ?? []).every((square) => reachable(map, from[k], square)))));
                 peoples.add(site.race);

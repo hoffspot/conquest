@@ -2765,9 +2765,12 @@ export class Game {
                     }
                 });
 
-                // (Their wares, once the talk's over)
-                if (effect.shop && SHOPKEEPERS[npc.role]) {
-                    this.shopWanted = { shop: effect.shop, keeper: npc.id, name: npc.name };
+                // (Their wares, once the talk's over: their own shop, or their part's, as the host
+                // has it)
+                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? SHOPKEEPERS[npc.role];
+
+                if (effect.shop && keeps) {
+                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
                 }
             },
         });

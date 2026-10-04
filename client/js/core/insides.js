@@ -404,9 +404,19 @@ const TEMPLE = [
     ".......DD.......",
 ];
 
-/** A temple's floors: its nave, under its patron. */
+// An abbey's church (the humans' out in their lands): its nave as a town's temple's, but for the
+// herbalist's counter in the north-west corner, their shelves of jars and books on the north wall
+// behind it
+const ABBEY = [
+    "eee.............",
+    TEMPLE[1],
+    ".MMM..aaaa......",
+    ...TEMPLE.slice(3),
+];
+
+/** A temple's floors: its nave, under its patron; an abbey's (a place worth finding) its herbalist's counter in it. */
 export function templeRooms(building) {
-    return [{ suffix: "nave", style: "temple", name: building.name, rows: TEMPLE, ground: GROUND.cobbles, sound: "temple", patron: building.patron }];
+    return [{ suffix: "nave", style: "temple", name: building.name, rows: building.place === "site" ? ABBEY : TEMPLE, ground: GROUND.cobbles, sound: "temple", patron: building.patron }];
 }
 
 /**
@@ -460,6 +470,16 @@ export function templeFolkOf(building, nave) {
     seats.forEach(([x, y], k) => {
         folk.push({ local: `worshipper${k + 1}`, title: "Worshipper", role: "worshipper", sex: random.chance(0.5) ? "f" : "m", map: nave.id, square: [x, y], facing: n, routine: { seated: true } });
     });
+
+    // An abbey's herbalist behind their counter, turning to their shelves now and then
+    const counter = nave.pieces.find(({ kind }) => kind === "counter");
+
+    if (counter) {
+        const serves = { square: [counter.x + 1, counter.y - 1], facing: s, wait: [7000, 12000] };
+        const shelves = { square: [counter.x, counter.y - 1], facing: n, act: "file", wait: [3000, 5000] };
+
+        folk.push({ local: "herbalist", title: "Herbalist", role: "herbalist", sex: random.chance(0.5) ? "f" : "m", map: nave.id, square: serves.square, facing: s, routine: { order: "alternate", wait: [7000, 12000], stops: [serves, shelves] } });
+    }
 
     return folk;
 }
@@ -931,7 +951,8 @@ export function watchtowerRooms(building) {
 
 /**
  * A people's watchtower's folk, from its plans: a lookout at the top, going round its parapet,
- * looking out each way; a sentry below, by the door, and at the end of the table now and then.
+ * looking out each way; a sentry below, by the door, and at the end of the table now and then;
+ * and the garrison's quartermaster before the racks, selling what's on them (the watch's shop).
  */
 export function watchFolkOf(building, ground, top) {
     const random = createRandom(building.seed * 17 + 5);
@@ -949,9 +970,15 @@ export function watchFolkOf(building, ground, top) {
         { square: [table[0] + 3, table[1]], facing: w, wait: [4000, 7000] },
     ];
 
+    // (The garrison's quartermaster before its racks, selling what's on them: the watch's own shop)
+    const [rack] = ground.pieces.filter(({ kind }) => kind === "rack");
+    const keeps = { square: [rack.x + 1, rack.y + 1], facing: s, wait: [7000, 12000] };
+    const racked = { ...keeps, facing: n, wait: [3000, 5000] };
+
     return [
         { local: "lookout", title: "Lookout", role: "sentry", sex: random.chance(0.3) ? "f" : "m", map: top.id, square: looks[0].square, facing: n, routine: { order: "cycle", wait: [6000, 11000], stops: looks } },
         { local: "sentry", title: "Sentry", role: "sentry", sex: random.chance(0.3) ? "f" : "m", map: ground.id, square: below[0].square, facing: s, routine: { order: "alternate", wait: [8000, 14000], stops: below } },
+        { local: "quartermaster", title: "Quartermaster", role: "quartermaster", talk: "watchQuartermaster", shop: "watch", sex: random.chance(0.3) ? "f" : "m", map: ground.id, square: keeps.square, facing: s, routine: { order: "alternate", wait: [7000, 12000], stops: [keeps, racked] } },
     ];
 }
 

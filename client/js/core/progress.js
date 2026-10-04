@@ -99,12 +99,16 @@ export const ITEMS = Object.freeze({
  * own people's uniform too (core/gear.js UNIFORM), as does a castle's quartermaster (its armoury:
  * the arms and armour of war, the only place a legendary make's sold). A castle's arcanist sells
  * the arcane (wands, grimoires, the hats and jewels of those who cast) and draughts, better made
- * than a guild's; not tomes (a guild's).
+ * than a guild's; not tomes (a guild's). An abbey's herbalist sells its draughts and cures, holy
+ * jewels and books of prayer; a people's watchtower's quartermaster (their own shop, not their
+ * part's: host.js `#shopkeeper`) the garrison's plain arms and armour, up to fine.
  */
 export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
     armoury: { items: ["sword", "hammer", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary" },
     arcane: { items: ["wand", "grimoire", "staff", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork" },
+    abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork" },
+    watch: { items: ["sword", "hammer", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
     guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },

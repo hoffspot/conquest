@@ -12,6 +12,7 @@ import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
+import { wares } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CLEAR_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
@@ -32,9 +33,9 @@ function run(host, ms) {
 
 const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, spawn: [x, y] });
 
-// A world (seed 2) with its player in it, hard to kill, the orc gone
-function hosted() {
-    const world = buildWorld({ seed: 2 });
+// A world (seed 2, unless another's asked for) with its player in it, hard to kill, the orc gone
+function hosted(seed = 2) {
+    const world = buildWorld({ seed });
     const host = new Host(world, { populate: false });
 
     host.join({ id: HOST_PLAYER, hero: HERO });
@@ -438,6 +439,46 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         assert.ok(!host.held.has(manor.id));
     });
 
+    it("the friendlies' shops at their places (M7.5c-2): an abbey's herbalist sells its draughts, cures and holy jewels; a people's watchtower's quartermaster the watch's plain arms and armour, up to fine, its own shop and not a castle's", () => {
+        // (Seed 4's abbey is its people's; seed 2's held by outlaws)
+        const visit = (seed, kind, local) => {
+            const { host, world, me } = hosted(seed);
+            const { progress } = host.players.get(HOST_PLAYER);
+            const place = placesOf(world.plan).find((each) => each.kind === kind && each.race && each.race !== "orc" && heldAtStart(world.plan, each) === "friendly");
+
+            // (Into the place, and across the counter from whoever keeps its shop)
+            world.maps.town.sites.heartOf(world.plan.sites.find((site) => site.id === place.id));
+
+            const building = world.interiors.buildings.get(`site:${place.id}`);
+
+            put(me, [...world.maps.town.sites.set.get(place.id).entrance.outside]);
+            assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true, place.kind);
+            run(host, 4000);
+            assert.equal(me.map, building.maps[0], place.kind);
+
+            const keeper = host.battle.actor(`${building.key}/${local}`);
+
+            put(me, [keeper.square[0], keeper.square[1] + 2]);
+            progress.gold = 5000;
+
+            return { host, keeper, progress };
+        };
+
+        const abbey = visit(4, "abbey", "herbalist");
+
+        assert.ok(abbey.keeper && wares("abbey").some(({ id, quality }) => id === "amulet" && quality === "masterwork"));
+        assert.deepEqual(abbey.host.command(HOST_PLAYER, { type: "buy", item: { id: "amulet", quality: "masterwork" }, from: abbey.keeper.id }), { ok: true });
+        assert.deepEqual(abbey.host.command(HOST_PLAYER, { type: "buy", item: { id: "sword" }, from: abbey.keeper.id }), { ok: false, reason: "shop" });
+        assert.deepEqual(abbey.progress.pack.filter(Boolean).map(({ id, quality }) => [id, quality]).at(-1), ["amulet", "masterwork"]);
+
+        const tower = visit(2, "watchtower", "quartermaster");
+
+        assert.ok(tower.keeper && tower.host.folk.get(tower.keeper.id).shop === "watch");
+        assert.deepEqual(tower.host.command(HOST_PLAYER, { type: "buy", item: { id: "mail", quality: "fine" }, from: tower.keeper.id }), { ok: true });
+        assert.deepEqual(tower.host.command(HOST_PLAYER, { type: "buy", item: { id: "sword", quality: "legendary" }, from: tower.keeper.id }), { ok: false, reason: "shop" });
+        assert.deepEqual(tower.progress.pack.filter(Boolean).map(({ id, quality }) => [id, quality]).at(-1), ["mail", "fine"]);
+    });
+
     it("a people's watchtower that's theirs is kept, its lookout and sentry in it; one held by outlaws has the band's chief and chest at its top", () => {
         const context = hosted();
         const { host, world, me } = context;
@@ -451,7 +492,7 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
 
         put(me, [...world.maps.town.sites.set.get(theirs.id).entrance.outside]);
         run(host, 600);
-        assert.deepEqual(host.open.get(kept.key), [`${kept.key}/lookout`, `${kept.key}/sentry`]);
+        assert.deepEqual(host.open.get(kept.key), [`${kept.key}/lookout`, `${kept.key}/sentry`, `${kept.key}/quartermaster`]);
         assert.ok(!host.held.has(theirs.id));
 
         near(context, taken);

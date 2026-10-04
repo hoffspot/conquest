@@ -2740,6 +2740,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
     further off than the hall (`sound.js` `undercroft`). The stairs between the floors have
     their foot below and their top above whichever floor the door opens into (insides.js
     `make`). `NET_VERSION` 37.
+  - **The smaller places' shops** (M7.5c-2): an abbey that's its people's has its herbalist, a
+    brother or sister of its order in a plain habit, behind a counter in the north-west corner of
+    its nave, their shelves of jars, phials and books on the wall behind (`insides.js` `ABBEY`;
+    the town's temples as they were), turning to their shelves now and then; talking of their
+    garden (`herbalist`). A people's watchtower that's theirs has its quartermaster by the racks
+    in its guardroom (`watchFolkOf`), who sends anyone after better to a castle
+    (`watchQuartermaster`). What each sells is in WAR.md (*Shops*).
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

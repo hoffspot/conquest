@@ -4041,3 +4041,27 @@ converted data is to be measured in M8 against today's hm08 data.
     where its racks were), the undercroft from above and within (the forge, the armoury, the
     arcanist's shelves, the vault), the orcs' undercroft in their dark basalt.
   - **Next:** M7.5c-2 (an abbey's arcane goods and a watchtower's arms).
+- **2026-10-04, M7.5c-2 built: an abbey's herbalist and a watchtower's quartermaster** (docs/GAME.md
+  *The smaller places' shops*; WAR.md *Shops*).
+  - **The abbey** (insides.js `ABBEY`: a town temple's plan with a counter and shelves in its
+    nave's north-west corner, for an abbey only, `place` "site"; `templeFolkOf`): a herbalist
+    (roles.js, actions.js, folk.js: a habit and a belt) behind the counter and at the shelves;
+    drawn with a desk and the arcanist's shelves of jars turned to face the other way
+    (interiors3d.js `phialShelves` `north`). Sells the abbey's goods (progress.js `SHOPS.abbey`:
+    draughts, cures, amulets, rings, grimoires, up to masterwork). Held by outlaws, none of its
+    folk are there, as before.
+  - **The watchtower** (insides.js `watchFolkOf`): a quartermaster before the guardroom's racks,
+    selling the watch's own stock (`SHOPS.watch`: plain arms and armour and the people's uniform,
+    up to fine), not a castle's: one of the folk can keep a shop of their own (their `shop`),
+    over their part's (host.js `#shopkeeper`, app/game.js `#openTalk`). Their talk sends anyone
+    after better to a castle.
+  - **Versions:** `NET_VERSION` 38.
+  - **Tests:** test/places.test.js (seed 4's abbey, its people's: an amulet bought from its
+    herbalist, a sword not sold; seed 2's elven watchtower: fine mail bought from its
+    quartermaster, a legendary sword not sold); test/insides.test.js (a watchtower's three folk,
+    its quartermaster keeping the watch's shop).
+  - **Pictures** (sent in the session): the abbey's nave before and after from above, its
+    herbalist at the counter; an elven watchtower's guardroom before and after, its
+    quartermaster before the racks.
+  - **Next:** M7.5c-3 (the restless dead at the ruins: ghosts and wraiths, a greater one guarding
+    an old relic and a chest).

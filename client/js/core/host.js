@@ -215,8 +215,11 @@ const KEEP_DONE = 50;
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
 export const SNAPSHOT_VERSION = 4;
 
-/** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
-export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild", quartermaster: "armoury", arcanist: "arcane" });
+/**
+ * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
+ * unless they keep one of their own (their `shop`: a watchtower's quartermaster, the watch's).
+ */
+export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild", quartermaster: "armoury", arcanist: "arcane", herbalist: "abbey" });
 
 /**
  * How near a shopkeeper a player trades with them (squares): a talk's reach across a counter,
@@ -1446,7 +1449,7 @@ export class Host {
     // The shopkeeper a player's trading with (an id): one of the folk who keeps a shop, near them
     #shopkeeper(actor, id) {
         const keeper = this.battle.actor(id);
-        const shop = keeper && SHOPKEEPERS[keeper.role];
+        const shop = keeper && (this.folk.get(keeper.id)?.shop ?? SHOPKEEPERS[keeper.role]);
 
         if (!shop || keeper.dead || keeper.map !== actor.map || distanceBetween(actor.square, keeper.square) > SHOP_REACH) {
             return null;
