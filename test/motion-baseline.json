@@ -3072,6 +3072,92 @@
   "cast/castStun/4|lizard-thinnest-f": {
    "limb": 0.0378
   },
+  "dodge/back|cat-bulkiest-f": {
+   "limb": 0.0507
+  },
+  "dodge/back|lizard-bulkiest-f": {
+   "limb": 0.0509
+  },
+  "dodge/back|lizard-bulkiest-m": {
+   "limb": 0.0614
+  },
+  "dodge/back|lizard-shortest-f": {
+   "limb": 0.0519
+  },
+  "dodge/back|lizard-tallest-m": {
+   "limb": 0.0579
+  },
+  "dodge/back|lizard-thinnest-f": {
+   "limb": 0.0498
+  },
+  "dodge/left|cat-bulkiest-f": {
+   "limb": 0.0373
+  },
+  "dodge/left|lizard-bulkiest-f": {
+   "limb": 0.0354
+  },
+  "dodge/left|lizard-bulkiest-m": {
+   "limb": 0.0415
+  },
+  "dodge/left|lizard-shortest-f": {
+   "limb": 0.0367
+  },
+  "dodge/left|lizard-tallest-m": {
+   "limb": 0.0384
+  },
+  "dodge/left|lizard-thinnest-f": {
+   "limb": 0.0374
+  },
+  "dodge/left|orc-bulkiest-f": {
+   "joint": 4.94
+  },
+  "dodge/left|orc-bulkiest-m": {
+   "joint": 4.94
+  },
+  "dodge/left|orc-shortest-f": {
+   "joint": 4.94
+  },
+  "dodge/left|orc-tallest-m": {
+   "joint": 4.94
+  },
+  "dodge/left|orc-thinnest-f": {
+   "joint": 4.94
+  },
+  "dodge/right|cat-bulkiest-f": {
+   "limb": 0.0373
+  },
+  "dodge/right|lizard-bulkiest-f": {
+   "limb": 0.0367
+  },
+  "dodge/right|lizard-bulkiest-m": {
+   "grip": 0.0376,
+   "limb": 0.042
+  },
+  "dodge/right|lizard-shortest-f": {
+   "limb": 0.0407
+  },
+  "dodge/right|lizard-tallest-m": {
+   "grip": 0.0384,
+   "limb": 0.0389
+  },
+  "dodge/right|lizard-thinnest-f": {
+   "limb": 0.038
+  },
+  "dodge/right|orc-bulkiest-f": {
+   "joint": 4.94
+  },
+  "dodge/right|orc-bulkiest-m": {
+   "joint": 4.94
+  },
+  "dodge/right|orc-shortest-f": {
+   "joint": 4.94
+  },
+  "dodge/right|orc-tallest-m": {
+   "joint": 4.94
+  },
+  "dodge/right|orc-thinnest-f": {
+   "joint": 4.94
+  },
   "draw/boots|cat-bulkiest-f": {
    "slide": 0.1636
   },
@@ -3803,6 +3889,24 @@
    "grip": 0.0432,
    "limb": 0.0668
   },
+  "flinch/kick/hitChest|cat-bulkiest-f": {
+   "limb": 0.0491
+  },
+  "flinch/kick/hitChest|lizard-bulkiest-f": {
+   "limb": 0.0367
+  },
+  "flinch/kick/hitChest|lizard-bulkiest-m": {
+   "limb": 0.0421
+  },
+  "flinch/kick/hitChest|lizard-shortest-f": {
+   "limb": 0.037
+  },
+  "flinch/kick/hitChest|lizard-tallest-m": {
+   "limb": 0.0389
+  },
+  "flinch/kick/hitChest|lizard-thinnest-f": {
+   "limb": 0.0378
+  },
   "flinch/kick|cat-bulkiest-f": {
    "limb": 0.0498
   },
@@ -3821,6 +3925,24 @@
   "flinch/kick|lizard-thinnest-f": {
    "limb": 0.0387
   },
+  "flinch/pierce/hitChest|cat-bulkiest-f": {
+   "limb": 0.0374
+  },
+  "flinch/pierce/hitChest|lizard-bulkiest-f": {
+   "limb": 0.0365
+  },
+  "flinch/pierce/hitChest|lizard-bulkiest-m": {
+   "limb": 0.0419
+  },
+  "flinch/pierce/hitChest|lizard-shortest-f": {
+   "limb": 0.0368
+  },
+  "flinch/pierce/hitChest|lizard-tallest-m": {
+   "limb": 0.0386
+  },
+  "flinch/pierce/hitChest|lizard-thinnest-f": {
+   "limb": 0.0376
+  },
   "flinch/pierce|cat-bulkiest-f": {
    "limb": 0.0378
   },
@@ -3838,6 +3960,24 @@
   },
   "flinch/pierce|lizard-thinnest-f": {
    "limb": 0.1026
+  },
+  "flinch/punch/hitHead|cat-bulkiest-f": {
+   "limb": 0.0496
+  },
+  "flinch/punch/hitHead|lizard-bulkiest-f": {
+   "limb": 0.0356
+  },
+  "flinch/punch/hitHead|lizard-bulkiest-m": {
+   "limb": 0.0406
+  },
+  "flinch/punch/hitHead|lizard-shortest-f": {
+   "limb": 0.0363
+  },
+  "flinch/punch/hitHead|lizard-tallest-m": {
+   "limb": 0.0372
+  },
+  "flinch/punch/hitHead|lizard-thinnest-f": {
+   "limb": 0.037
   },
   "flinch/punch|cat-bulkiest-f": {
    "limb": 0.0374
@@ -3907,6 +4047,24 @@
   },
   "flinch/slash|orc-thinnest-f": {
    "joint": 7.94
+  },
+  "flinch/strike/hitChest|cat-bulkiest-f": {
+   "limb": 0.0374
+  },
+  "flinch/strike/hitChest|lizard-bulkiest-f": {
+   "limb": 0.0365
+  },
+  "flinch/strike/hitChest|lizard-bulkiest-m": {
+   "limb": 0.0419
+  },
+  "flinch/strike/hitChest|lizard-shortest-f": {
+   "limb": 0.0368
+  },
+  "flinch/strike/hitChest|lizard-tallest-m": {
+   "limb": 0.0386
+  },
+  "flinch/strike/hitChest|lizard-thinnest-f": {
+   "limb": 0.0376
   },
   "flinch/strike|cat-bulkiest-f": {
    "limb": 0.0373

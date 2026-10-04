@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
-import { Actions, ATTACKS, DRAWS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, DODGES, DRAWS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
@@ -138,7 +138,7 @@ describe("attacks (actions.js)", () => {
         }
     });
 
-    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack, a rest or a guard's sway", () => {
+    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack, a rest, a guard's sway, a flinch or a dodge", () => {
         assert.ok(CLIP_HEIGHT > 1.5 && CLIP_HEIGHT < 1.9);
 
         for (const [clip, { channels, keys, hit, seconds }] of Object.entries(CLIP_KEYS)) {
@@ -156,7 +156,7 @@ describe("attacks (actions.js)", () => {
             assert.ok(channels.filter((channel) => /(UpLeg|Leg|Foot|ToeBase)\./.test(channel)).every((channel) => channel.startsWith("Right")), `${clip}: only a kicking leg`);
         }
 
-        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : [])).concat(Object.values(GUARD_SWAYS).map(({ clip }) => clip));
+        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : [])).concat(Object.values(GUARD_SWAYS).map(({ clip }) => clip), Object.values(REACTIONS).flatMap(({ clips = [] }) => clips), Object.values(DODGES));
 
         assert.deepEqual([...new Set(clipped)].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
     });
@@ -543,6 +543,74 @@ describe("reactions and falls (actions.js)", () => {
         walker.update(REACTIONS.crush.length);
         assert.equal(actions.reactions.length, 0);
         assert.ok(world("Head", character).distanceTo(head) < 0.01);
+    });
+
+    it("flinches each way in turn, keyed and as the animators' hits do, and settles back", () => {
+        const { character, walker, actions } = fighter();
+
+        walker.update(0);
+
+        const head = world("Head", character);
+        const ways = [];
+
+        for (let k = 0; k < 6; k++) {
+            actions.react("punch", { from: 0 });
+            ways.push(actions.reactions[0].move ? "clip" : "keyed");
+            walker.update(REACTIONS.punch.length * 0.5);
+            assert.ok(world("Head", character).distanceTo(head) > 0.01, `${ways.at(-1)}: the head moves`);
+            walker.update(REACTIONS.punch.length * 0.6);
+            assert.equal(actions.reactions.length, 0);
+            assert.ok(world("Head", character).distanceTo(head) < 0.01, `${ways.at(-1)}: back as it was`);
+        }
+
+        assert.ok(ways.every((way, k) => k === 0 || way !== ways[k - 1]), "never the same way twice running");
+    });
+
+    it("slips a blow, ducking under it aside away from it (from ahead either way) or swaying back, the feet where they were, and comes back to guard", () => {
+        // How far the head is from where it'd be on guard (another fighter, swaying the same, not
+        // dodging), in the body's own frame, a tenth of a second at a time; how far a foot slid;
+        // and whether it's back on guard after
+        const slipping = (options) => {
+            const [dodging, still] = [0, 1].map(() => fighter(undefined, ["sword"]));
+
+            for (const { walker, actions } of [dodging, still]) {
+                actions.setWeapon("sword");
+                actions.setGuard(true);
+                walker.update(1, { speed: 0 });
+            }
+
+            const head = ({ character }) => character.object.worldToLocal(world("Head", character));
+            const feet = ["LeftFoot", "RightFoot"].map((bone) => world(bone, dodging.character));
+
+            dodging.actions.dodge(options);
+
+            const moved = Array.from({ length: 10 }, () => {
+                dodging.walker.update(0.1, { speed: 0 });
+                still.walker.update(0.1, { speed: 0 });
+
+                return head(dodging).sub(head(still));
+            });
+            const slid = Math.max(...["LeftFoot", "RightFoot"].map((bone, i) => world(bone, dodging.character).distanceTo(feet[i])));
+
+            dodging.walker.update(0.5, { speed: 0 });
+            still.walker.update(0.5, { speed: 0 });
+
+            return { moved, slid, done: dodging.actions.dodging === null, back: head(dodging).distanceTo(head(still)) };
+        };
+        const most = (moved, axis) => moved.reduce((best, p) => (Math.abs(p[axis]) > Math.abs(best) ? p[axis] : best), 0);
+        const fromRight = slipping({ from: -Math.PI / 2 });
+        const fromLeft = slipping({ from: Math.PI / 2 });
+
+        assert.ok(Math.sign(most(fromRight.moved, "x")) === -Math.sign(most(fromLeft.moved, "x")) && Math.abs(most(fromLeft.moved, "x")) > 0.03, "aside, away from either side");
+
+        for (const way of ["left", "right", "back"]) {
+            const { moved, slid, done, back } = slipping({ way });
+
+            assert.ok(Math.max(...moved.map((p) => p.length())) > 0.15, `${way}: the head out of the way`);
+            assert.ok(way === "back" ? most(moved, "z") < -0.1 : most(moved, "y") < -0.1, `${way}: ${way === "back" ? "back" : "ducking"}`);
+            assert.ok(slid < 0.01, `${way}: the feet where they were (${slid.toFixed(3)} m)`);
+            assert.ok(done && back < 0.01, `${way}: back on guard`);
+        }
     });
 
     it("turns from a cut on the side it comes from", () => {

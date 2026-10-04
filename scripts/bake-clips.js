@@ -74,6 +74,13 @@ export const BAKES = [
     { name: "fightIdle", from: [["addon", "Fighting Idle"]], hold: {}, loop: true },
     { name: "swordIdle", from: [["base", "Idle_Sword"]], hold: {}, loop: true },
     { name: "spellIdle", from: [["base", "Spell_Simple_Idle"]], hold: {}, loop: true },
+    // Hits and dodges (added from each clip's first pose, the feet planted: actions.js
+    // REACTIONS' `clips`, DODGES): struck in the chest, doubling over it; struck in the head; and
+    // slipping a blow, ducking to the left (mirrored, to the right) or swaying back and round
+    { name: "hitChest", from: [["base", "Hit_Chest"]], hold: {}, hit: 0.2 },
+    { name: "hitHead", from: [["base", "Hit_Head"]], hold: {}, hit: 0.2 },
+    { name: "dodgeSide", from: [["addon", "Dodge_left"]], hold: {}, hit: 0.3 },
+    { name: "dodgeBack", from: [["addon", "Dodge_back"]], hold: {}, hit: 0.5 },
 ];
 
 // Tried and left out (the motion check, every body: docs/CHARACTERS.md):
@@ -97,7 +104,9 @@ export const BAKES = [
 //    (Salute: not with a sword in the hand, as the sentries have), sitting still (Sitting_Idle:
 //    hardly moves), and those with the legs' part in them (dances, a hunched rest, meditating);
 //  - for the guards' sway: a shield held up (Idle_Shield: hardly moves), a golfer's waggle
-//    (Golf_idle) and a pistol held out (Pistol_Idle).
+//    (Golf_idle) and a pistol held out (Pistol_Idle);
+//  - for flinches and parries: knocked off the feet (Hit_Knockback), a crouched block (Defend) and
+//    a sword block stepping into it (Sword_Block): their legs are the motion.
 
 // Each key value's tolerance, by what it is: a key's left out if the curve through the others
 // passes this near it (degrees; arm lengths; unit vectors; metres; a foot's freedom)
