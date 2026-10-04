@@ -249,8 +249,15 @@ function unpack({ channels, keys }) {
 // One way done as an animator's clip does it (Mesh2Motion's, baked into key poses by
 // scripts/bake-clips.js: clip-keys.js): the body and arms as it moves them, the feet where they
 // stand (but a kicking leg's), easing out from `settle` (its pelvis's offset is for its body's
-// height: `scaled`); a hand kept as `hands` says, not as the clip has it
-const clipped = (name, clip, { settle = 1.6, hands = {} } = {}) => ({ name, keys: unpack(CLIP_KEYS[clip]).map(([time, pose]) => [time, { ...pose, ...hands }]), settle, scaled: true, clip });
+// height: `scaled`); a hand kept as `hands` says, not as the clip has it (null: as it is, holding
+// a tankard or a sword)
+const clipped = (name, clip, { settle = 1.6, hands = {} } = {}) => ({
+    name,
+    keys: unpack(CLIP_KEYS[clip]).map(([time, pose]) => [time, Object.fromEntries(Object.entries({ ...pose, ...hands }).filter(([, part]) => part !== null))]),
+    settle,
+    scaled: true,
+    clip,
+});
 
 // The smith's hammer, raised by the right shoulder (its head back, its face up) and brought down
 // flat on the work (the handle level, the face down); the tongs holding the work on the anvil
@@ -981,8 +988,9 @@ const PRIEST_RESTS = [
 
 /**
  * How each role passes the time (roles.js ROLES: the rests' names and timings, in the same order):
- * five ways each, key 1 at the moment that matters, starting and ending in the pose it rests in.
- * Seated patrons rest sitting (the legs are the bench's), the others standing.
+ * five keyed ways each, key 1 at the moment that matters, starting and ending in the pose it rests
+ * in, and for many some of an animator's clips' ways after them (CLIP_RESTS). Seated patrons rest
+ * sitting (the legs are the bench's), the others standing.
  */
 // The barkeep's rests (the innkeeper's too, at the counter upstairs)
 const BARKEEP_RESTS = [
@@ -1194,7 +1202,22 @@ const BASE_RESTS = {
 // herbalist
 const { patron: PATRON, worshipper: WORSHIPPER } = BASE_RESTS;
 
-export const RESTS = Object.freeze({
+// Rests as animators' clips have them (clip-keys.js; tried on every body as the keyed ones are):
+// talking, both hands going (or seated, as at a table: the tankard held up before the chest as
+// the patrons hold it, or with a sword in the right, the left only); scratching the head,
+// puzzled (not under a wizard's hat); a hand on the hip, listening; a fist raised in a cheer; an
+// arm up high, waving someone over. Gesturing with one arm, the other's left as it hangs (clear
+// of a blade at the hip: Character.hung)
+const TALKING = clipped("talking", "talking");
+const TALKING_SEATED = clipped("talking", "talkingSeated");
+const TALKING_DRINKING = clipped("talking", "talkingSeated", { hands: { right: tankard } });
+const TALKING_ARMED = clipped("talking", "talkingSeated", { hands: { right: null } });
+const HEAD_SCRATCH = clipped("scratching the head", "headScratch", { hands: { left: null } });
+const LISTENING = clipped("listening, a hand on the hip", "listening");
+const CHEER = clipped("a cheer", "cheer", { hands: { right: null } });
+const HAILING = clipped("waving someone over", "hailing", { hands: { left: null } });
+
+const KEYED_RESTS = {
     ...BASE_RESTS,
     reeve: [renamed(BARKEEP_RESTS[3], "arms folded"), LOOKING_OVER, renamed(BARKEEP_RESTS[1], "a hand to the chin"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
     clerk: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[3], renamed(BARKEEP_RESTS[4], "rubbing the neck"), ADVENTURER_RESTS[4]],
@@ -1209,7 +1232,30 @@ export const RESTS = Object.freeze({
     arcanist: [PRIEST_RESTS[4], renamed(LOOKING_OVER, "holding a phial to the light"), renamed(BARKEEP_RESTS[1], "stroking the chin"), PRIEST_RESTS[2], ADVENTURER_RESTS[1]],
     // (An abbey's herbalist, as a temple's acolyte at prayer, and among their jars)
     herbalist: [PRIEST_RESTS[0], renamed(LOOKING_OVER, "holding a phial to the light"), PRIEST_RESTS[2], PRIEST_RESTS[4], ADVENTURER_RESTS[1]],
-});
+};
+
+// Who rests the clips' ways too, after their own five (those with their hands full, the priests
+// at prayer and the courtesans keep to theirs)
+const CLIP_RESTS = {
+    barkeep: [TALKING],
+    innkeeper: [TALKING],
+    patron: [TALKING_DRINKING],
+    madam: [TALKING],
+    apprentice: [HEAD_SCRATCH, TALKING],
+    receptionist: [TALKING],
+    adventurer: [CHEER, HAILING],
+    reeve: [TALKING, LISTENING],
+    clerk: [TALKING, HEAD_SCRATCH],
+    ruler: [TALKING_ARMED],
+    steward: [LISTENING, TALKING],
+    councillor: [TALKING_SEATED],
+    petitioner: [TALKING_SEATED],
+    quartermaster: [TALKING],
+    arcanist: [TALKING],
+    herbalist: [TALKING],
+};
+
+export const RESTS = Object.freeze(Object.fromEntries(Object.entries(KEYED_RESTS).map(([role, rests]) => [role, [...rests, ...(CLIP_RESTS[role] ?? [])]])));
 
 // --- Reactions to being hit ---
 
@@ -1902,7 +1948,7 @@ function sample(times, values, n, time) {
 
 const COMPILED = new Map([
     ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
-    ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys }) => compile(keys))]),
+    ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
     ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [compile(draw.keys)]], [`sheathe:${name}`, [compile(sheathe.keys)]]]),
 ]);
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, guard]) => [name, compile([[0, guard]])]));
@@ -2433,7 +2479,8 @@ export class Actions {
                 const [x, y, z] = [0, 1, 2].map((n) => sample(times, values, n, key));
 
                 rig.offset.x += (mirror ? -x : x) * weight * reach;
-                rig.offset.y += y * weight * reach;
+                // (Seated, a clip's pelvis goes no lower: the bench holds it)
+                rig.offset.y += (scaled && this.seated ? 0 : y) * weight * reach;
                 rig.offset.z += z * weight * reach;
                 continue;
             }

@@ -575,6 +575,68 @@ describe("walking (locomotion.js)", () => {
         }
     });
 
+    it("standing, keeps its planted feet where they are under a body leaning over them (the knees giving, the heels rising crouched deep), and still shuffles them round as it turns", () => {
+        const f = figure();
+        const walker = new Walker(f);
+        const dt = 1 / 30;
+        const foot = f.rig.index.get("LeftFoot");
+        const { kind, side } = f.rig.joints[foot];
+        const ankle = () => jointAngles(kind, side, f.rig.frames[f.rig.definition[foot].parent].clone().invert().multiply(f.rig.bones[foot].quaternion).multiply(f.rig.frames[foot])).flex;
+        let lean = 0;
+
+        // (Leaning: the pelvis moved back, to the side and down a long way, and turned, as a rest
+        // or a blow layered over the walk moves it)
+        walker.overlay = () => {
+            f.rig.offset.add(new THREE.Vector3(0.05, -0.18, -0.06).multiplyScalar(lean));
+            f.rig.rotations[0].multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.2 * lean));
+
+            return true;
+        };
+
+        for (let t = 0; t < 1; t += dt) {
+            walker.update(dt, { speed: 0 });
+        }
+
+        const heels = [0, 1].map((i) => walker.footPoint(i, "heel"));
+        let slide = 0;
+        let bent = 0;
+        let lifted = 0;
+
+        for (let t = 0; t < 2; t += dt) {
+            lean = Math.min(1, t);
+            walker.update(dt, { speed: 0 });
+
+            for (const i of [0, 1]) {
+                const heel = walker.footPoint(i, "heel");
+
+                slide = Math.max(slide, Math.hypot(heel.x - heels[i].x, heel.z - heels[i].z));
+                lifted = Math.max(lifted, heel.y - f.object.position.y);
+            }
+
+            bent = Math.max(bent, ankle());
+        }
+
+        assert.ok(slide < 0.01, `the planted feet slide ${slide} m`);
+        assert.ok(bent < JOINTS.Foot[0].range[1] + 0.5, `the ankle bends ${bent}°`);
+        assert.ok(lifted > 0.02, `the heels rise ${lifted} m`);
+
+        // Turned on the spot, upright, the feet still shuffle round under it
+        lean = 0;
+
+        for (let t = 0; t < 2; t += dt) {
+            f.object.rotation.y += (Math.PI / 2) * Math.min(dt, Math.max(0, 1 - t));
+            f.object.updateMatrixWorld(true);
+            walker.update(dt, { speed: 0 });
+        }
+
+        const hips = f.rig.bone("Hips").getWorldPosition(new THREE.Vector3());
+        const feet = [0, 1].map((i) => walker.footPoint(i, "heel"));
+        const across = new THREE.Vector3(1, 0, 0).applyQuaternion(f.object.quaternion);
+
+        assert.ok(Math.abs(feet[0].clone().sub(feet[1]).dot(across)) > 0.1, "the feet side by side across the turned body");
+        assert.ok(feet.every((at) => Math.hypot(at.x - hips.x, at.z - hips.z) < 0.25), "and under it");
+    });
+
     it("keeps its knees bending forward, never flicking sideways or backwards, run and walked round corners, starting and stopping", () => {
         for (const [speed, fps] of [[7.9, 60], [7.9, 30], [1.7, 60]]) {
             const f = figure();

@@ -138,7 +138,7 @@ describe("attacks (actions.js)", () => {
         }
     });
 
-    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack", () => {
+    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack or a rest", () => {
         assert.ok(CLIP_HEIGHT > 1.5 && CLIP_HEIGHT < 1.9);
 
         for (const [clip, { channels, keys, hit, seconds }] of Object.entries(CLIP_KEYS)) {
@@ -156,9 +156,9 @@ describe("attacks (actions.js)", () => {
             assert.ok(channels.filter((channel) => /(UpLeg|Leg|Foot|ToeBase)\./.test(channel)).every((channel) => channel.startsWith("Right")), `${clip}: only a kicking leg`);
         }
 
-        const clipped = Object.entries(ATTACKS).flatMap(([name, { variants }]) => variants.flatMap((variant, way) => (variant.clip ? [{ name, way, clip: variant.clip }] : [])));
+        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : []));
 
-        assert.deepEqual([...new Set(clipped.map(({ clip }) => clip))].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
+        assert.deepEqual([...new Set(clipped)].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
     });
 
     it("never does an attack the same way twice in a row, and does it every way", () => {
@@ -680,18 +680,27 @@ describe("resting (actions.js RESTS, roles.js)", () => {
 
     const wayOf = (role, name) => ROLES[role].rests.findIndex((rest) => rest.name === name);
 
-    it("has five named rests for every role, each timed, posed from key time 0 to 2", () => {
+    it("has at least five named rests for every role (five keyed, then animators' clips'), each timed, posed from key time 0 to 2", () => {
         assert.deepEqual(Object.keys(RESTS).sort(), Object.keys(ROLES).sort());
 
         for (const [role, { title, rests }] of Object.entries(ROLES)) {
             assert.ok(title, role);
-            assert.equal(rests.length, 5, role);
+            assert.ok(rests.length >= 5, role);
             assert.deepEqual(RESTS[role].map(({ name }) => name), rests.map(({ name }) => name), role);
-            assert.equal(new Set(rests.map(({ name }) => name)).size, 5, `${role}: five different rests`);
+            assert.equal(new Set(rests.map(({ name }) => name)).size, rests.length, `${role}: all different rests`);
+            assert.ok(RESTS[role].slice(0, 5).every(({ clip }) => !clip), `${role}: its own five first`);
 
             for (const { name, hitAt, duration } of rests) {
                 assert.ok(hitAt > 0.3 && hitAt < duration && duration <= 4, `${role}: ${name}`);
             }
+
+            // (A clip's timed as it was baked)
+            RESTS[role].forEach(({ clip }, way) => {
+                if (clip) {
+                    assert.equal(rests[way].clip, clip, `${role}: ${rests[way].name}`);
+                    assert.deepEqual([rests[way].hitAt, rests[way].duration], [CLIP_KEYS[clip].hit, CLIP_KEYS[clip].seconds], `${role}: ${rests[way].name} timed as its clip`);
+                }
+            });
 
             for (const { name, keys } of RESTS[role]) {
                 const times = keys.map(([time]) => time);

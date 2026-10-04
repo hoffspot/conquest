@@ -7,13 +7,15 @@
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
-// upstairs, BECKON), and how it passes the time: five resting animations (`rests`), one of which
-// it plays every several seconds while the player can see it (battle.js #rest; the player, after
-// standing a while with nothing going on: game.js). It picks any of the five at first, then any but the
-// last (variety.js). Everyone of a role shares its rests. Each rest is named, and timed like an
-// attack (actions.js): `hitAt` seconds to the moment that matters (the top of a toast, a slap on
-// the table), `duration` seconds in all; the poses are actions.js's RESTS. A rest can make a
-// sound (`sound`: sound.js SOUNDS, at hitAt, `volume` times as loud as it is).
+// upstairs, BECKON), and how it passes the time: five resting animations of its own, and for many
+// some of an animator's clips after them (`rests`), one of which it plays every several seconds
+// while the player can see it (battle.js #rest; the player, after standing a while with nothing
+// going on: game.js). It picks any of them at first, then any but the last (variety.js). Everyone
+// of a role shares its rests. Each rest is named, and timed like an attack (actions.js): `hitAt`
+// seconds to the moment that matters (the top of a toast, a slap on the table), `duration`
+// seconds in all (a clip's, `clip`: its timing in characters/clip-keys.js); the poses are
+// actions.js's RESTS. A rest can make a sound (`sound`: sound.js SOUNDS, at hitAt, `volume` times
+// as loud as it is).
 //
 // Pure data, no DOM.
 
@@ -27,6 +29,7 @@ export const ROLES = Object.freeze({
             { name: "leaning on the bar", hitAt: 1.2, duration: 3.4 },
             { name: "arms folded", hitAt: 1.2, duration: 3.6 },
             { name: "rubbing his neck", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     barmaid: {
@@ -47,6 +50,7 @@ export const ROLES = Object.freeze({
             { name: "leaning on the counter", hitAt: 1.2, duration: 3.4 },
             { name: "arms folded", hitAt: 1.2, duration: 3.6 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     patron: {
@@ -58,6 +62,7 @@ export const ROLES = Object.freeze({
             { name: "a belly laugh", hitAt: 1, duration: 2.8 },
             { name: "thumping the table", hitAt: 0.7, duration: 2.2, sound: "stepWood", volume: 2.5 },
             { name: "looking about", hitAt: 1, duration: 3.2 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talkingSeated" },
         ],
     },
     madam: {
@@ -68,6 +73,7 @@ export const ROLES = Object.freeze({
             { name: "touching her necklace", hitAt: 1, duration: 2.6 },
             { name: "drumming her fingers", hitAt: 1, duration: 2.8 },
             { name: "smoothing her gown", hitAt: 1, duration: 2.4 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     courtesan: {
@@ -101,6 +107,8 @@ export const ROLES = Object.freeze({
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "stretching", hitAt: 1.2, duration: 3.2 },
+            { name: "scratching the head", hitAt: 1, duration: 2.933, clip: "headScratch" },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     // A temple's: the priest (in white), an acolyte, and worshippers praying in the pews
@@ -144,6 +152,7 @@ export const ROLES = Object.freeze({
             { name: "a little bow", hitAt: 0.8, duration: 1.9 },
             { name: "tidying the papers", hitAt: 1.4, duration: 3.6 },
             { name: "tucking back her hair", hitAt: 1, duration: 2.2 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     adventurer: {
@@ -154,6 +163,8 @@ export const ROLES = Object.freeze({
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "a cheer", hitAt: 1, duration: 2.167, clip: "cheer" },
+            { name: "waving someone over", hitAt: 1, duration: 2.667, clip: "hailing" },
         ],
     },
     // A town hall's: the reeve who runs the town for its people's rulers, their clerk, and
@@ -166,6 +177,8 @@ export const ROLES = Object.freeze({
             { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
             { name: "hands clasped behind", hitAt: 1, duration: 3 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
+            { name: "listening, a hand on the hip", hitAt: 0.8, duration: 1.7, clip: "listening" },
         ],
     },
     clerk: {
@@ -176,6 +189,8 @@ export const ROLES = Object.freeze({
             { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
+            { name: "scratching the head", hitAt: 1, duration: 2.933, clip: "headScratch" },
         ],
     },
     petitioner: {
@@ -187,6 +202,7 @@ export const ROLES = Object.freeze({
             { name: "hands in the lap", hitAt: 1, duration: 3 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
             { name: "looking up", hitAt: 1, duration: 2.6 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talkingSeated" },
         ],
     },
     // A keep's: the ruler on the throne (their title their people's: war/peoples.js), their
@@ -200,6 +216,7 @@ export const ROLES = Object.freeze({
             { name: "looking about the hall", hitAt: 1, duration: 3.2 },
             { name: "brooding", hitAt: 1, duration: 3 },
             { name: "stroking the chin", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talkingSeated" },
         ],
     },
     steward: {
@@ -210,6 +227,8 @@ export const ROLES = Object.freeze({
             { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
             { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+            { name: "listening, a hand on the hip", hitAt: 0.8, duration: 1.7, clip: "listening" },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     councillor: {
@@ -221,6 +240,7 @@ export const ROLES = Object.freeze({
             { name: "looking about", hitAt: 1, duration: 3.2 },
             { name: "hands in the lap", hitAt: 1, duration: 3 },
             { name: "stroking the chin", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talkingSeated" },
         ],
     },
     sentry: {
@@ -243,6 +263,7 @@ export const ROLES = Object.freeze({
             { name: "wiping the counter", hitAt: 1.4, duration: 3.6 },
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     // An abbey's herbalist, a brother or sister of its order, behind their counter
@@ -254,6 +275,7 @@ export const ROLES = Object.freeze({
             { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
             { name: "hands clasped behind", hitAt: 1, duration: 3 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
     arcanist: {
@@ -264,6 +286,7 @@ export const ROLES = Object.freeze({
             { name: "stroking the chin", hitAt: 1, duration: 2.8 },
             { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
         ],
     },
 });

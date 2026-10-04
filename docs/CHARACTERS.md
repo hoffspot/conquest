@@ -569,6 +569,27 @@ standing, arms at the sides, palms facing the thighs.
     far from where the gait put it (running, turning, starting off), the line from the hip to
     the foot passed right by the knee, so which side the knee was on flickered: for a frame it
     swung 20 cm or more to the side, or bent backwards, bowing the leg.
+- **Standing over planted feet.** Standing still, anything layered over the walk (a rest's weight
+  shifted, a blow's lunge, a cast) leans the body over the feet; it doesn't step them:
+  - The feet shuffle round under the body only as it turns (to face someone): towards where each
+    would be under the pelvis as the walk has it (`stance`), not after the lean. They used to
+    follow the pelvis wherever an action moved it, at 0.8 m/s, so every weight shift and lunge
+    skated the feet.
+  - The knees give: the pelvis is lowered as far as lets each planted foot stay where it is, the
+    leg no straighter than the walk has it. Standing, the legs are already at 99.6% of their
+    length, past the 98.5% a planted foot was let reach, so any lean at all slid the foot along
+    with the body.
+  - The heels rise: crouched lower than the ankle bends (its 20° of dorsiflexion), the foot turns
+    up about its ball, which stays where it is, and the leg's reached again, a few times as the
+    shin tips. A deep overhead blow's ankle went 17° past its range keeping the foot flat.
+  - The test leans a standing body back, aside, 18 cm down and turned, and checks the feet stay
+    within a centimetre, the ankle within its range and the heels up, then turns it on the spot
+    and checks the feet came round under it. In the motion check, planted feet sliding fell from
+    2,566 pairs (18,885 cm past the limit in all) to 470 (2,809 cm), and joints past their range
+    from 977 to 596; every punch's slide, 7 to 8 cm on every body, is now under a centimetre on
+    every body, and the weight shifting from foot to foot, 18.6 cm, none.
+  - The knees give a millimetre more than they must: given exactly enough, rounding tipped a
+    planted foot just out of reach now and then, and it let go.
 - **Styles.** A walk style sets lean, crouch, arm spread, stance width, toe-out, swagger, sway,
   head carriage and finger curl. The orc's is hunched, wide and heavy.
 - **Footsteps.** `onStep(foot, speed)` hears each foot land while moving (the game plays a
@@ -930,9 +951,10 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
 ### Resting
 
 How each class of character passes the time (`RESTS`, by class: the game's roles, core/roles.js,
-which name and time them): five ways each, key poses timed like an attack's (key 1 at the moment
-that matters: the top of a toast, a slap on the table), played every several seconds while the
-player can see them, and by the player after standing still a while. `rest(role)` plays one of
+which name and time them): five ways each, and for many some of an animator's clips' ways after
+them (below), key poses timed like an attack's (key 1 at the moment that matters: the top of a
+toast, a slap on the table), played every several seconds while the player can see them, and by
+the player after standing still a while. `rest(role)` plays one of
 a class's rests, any at first and then any but the last; `stopResting()` eases out of it (in
 0.35 s). A patron rests sitting down. An innkeeper (keeping the rooms upstairs at an inn) rests
 as the barkeep does, at the counter.
@@ -993,6 +1015,18 @@ as the barkeep does, at the counter.
 | | a yawn | a hand to the mouth, the head back, the shoulders up |
 | | shifting the weight | from one foot to the other, a thumb in the belt (the hand brought to it from the front, over a sword's hilt) |
 
+And from the animators' clips (`CLIP_RESTS`; *Clips in the game*, below), after each class's own
+(which rest the rules pick changed with them: `NET_VERSION` 41):
+
+| Rest | The pose | Whose |
+| --- | --- | --- |
+| talking | both hands going before the chest as the words come (`Idle_Talking`) | barkeep, innkeeper, madam, apprentice, receptionist, reeve, clerk, steward, quartermaster, arcanist, herbalist |
+| talking (seated) | as at a table, leaning in, both hands going (`Sitting_Talking`); a patron's tankard held up before the chest, a ruler's sword hand left as it is | councillors, petitioners, patrons, rulers |
+| scratching the head | a hand up to the top of the head, puzzled (`Confused`), the other arm left hanging | apprentice, clerk (not those who wear a wizard's hat) |
+| listening, a hand on the hip | the elbow back, the weight on one leg (`Idle Listening`) | reeve, steward |
+| a cheer | a fist raised high (motion capture, `Cheer_One_arm`, mirrored: the left, clear of a blade at the left hip), the other arm left hanging | adventurer |
+| waving someone over | an arm up high, waving (motion capture, `Help_One_Arm`), the other arm left hanging | adventurer |
+
 The lab's Motion tab has them (Resting: a class, the way from Fighting's Way, Rest), and
 `?action=rest&rest=barkeep&way=2&at=1` shows one frozen.
 
@@ -1038,7 +1072,7 @@ The lab plays these whole, as the clip has them.
 
 **Clips in the game** (`scripts/bake-clips.js`, run by `npm run build:clips` too): a clip that's
 to be one of the game's ways of doing something is baked into key poses, the same keys every
-other action is made of (`client/js/characters/clip-keys.js`: four clips, 85 keys, 29 KB), so its
+other action is made of (`client/js/characters/clip-keys.js`: ten clips, 181 keys, 59 KB), so its
 arms are reached within their ranges, what's held is kept out of the body, and the motion check
 measures it as it does any other:
 
@@ -1052,7 +1086,11 @@ measures it as it does any other:
 3. Keep the body over the walker's feet, not the clip's: the clips stand in stances of their own
    (a boxer's left foot forward, a pelvis tipped back), and ours stand where the walker plants
    them. So the pelvis turns at most 12° and stays level, the rest of its turn, tilt and lean
-   taken up the spine (the chest faces as the clip's does), and moves only a few centimetres.
+   taken up the spine (the chest faces as the clip's does), and moves only a few centimetres:
+   as far from the clip's feet as from where ours stand under it (an animator's figure stands
+   anywhere: the motion capture's 5 to 10 cm off its origin), following only the feet on the
+   ground (a heel lifting doesn't jolt it). Seated (`seated`), only as it moves from where the
+   clip sits at its start; on a bench, never lower.
    The clips' legs are left out (they sank the feet into the ground and slid them up to 1.9 m),
    but a kicking leg's: that's let go of the ground (`free`) while the clip's foot is off it or
    moving, found on the clip's own legs.
@@ -1062,7 +1100,8 @@ measures it as it does any other:
 
 `clipped(name, clip)` in actions.js makes a way from one: easing out from key 1.6, its pelvis's
 offset scaled to the body's height, and a hand kept as the research has it (`hands`) where the
-clip's is wrong. What was tried, on all 30 of the motion check's bodies:
+clip's is wrong, or left as it is (null: holding a tankard or a sword, or hanging clear of a blade
+at the hip). What was tried, on all 30 of the motion check's bodies:
 
 | Mesh2Motion's | For | | Why |
 |---|---|---|---|
@@ -1077,21 +1116,38 @@ clip's is wrong. What was tried, on all 30 of the motion check's bodies:
 | `Golf_Drive` | Staff, war hammer | Left out | The arms 73 to 78° past their range, the hammer into the forearm (the only clip with both hands on a haft) |
 | `Fighting Left Jab` | Punch | Left out | The shoulder 59° past its range |
 | `Fighting Right Jab` | Punch | Left out | Clean, but from the clip's idle, the fists down at the belly before it punches |
+| `Idle_Talking`, `Sitting_Talking` | Rest: *talking* | Kept | |
+| `Confused` | Rest: *scratching the head* | Kept | Not for those who may wear a wizard's hat (the hand through it); the other arm left hanging (the clip's into a sword's hilt at the hip) |
+| `Idle Listening` | Rest: *listening, a hand on the hip* | Kept | |
+| `Cheer_One_arm` (motion capture, mirrored) | Rest: *a cheer* | Kept | Mirrored: the clip's right arm, hanging, went into a sword's hilt at the hip as the body leaned |
+| `Help_One_Arm` (motion capture) | Rest: *waving someone over* | Kept | |
+| `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
+| `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |
+| `Greeting`, `Cheering_Two_Hands`, `Victory Fist Pump` | Rest | Left out | Clean; the keyed wave and the adventurer's two clip rests cover them |
+| `Idle_ShakeOff`, `Sitting_Idle`, `Yes`, `Salute`, `Consume Item` | Rest | Left out | Hardly moves; reads as pointing; not with a sword in the hand (the sentries'); drinking from nothing |
+| dances, `Tired Hunched`, `Meditate`, `Power Up`, `Shivering` | Rest | Left out | Their legs are the motion (deep crouches, steps), and ours stand where they are |
 
-Quaternius's clips are made for games: big lunges, wide stances and flourishes. Fists, a kick and
-a spell came over well; blades and two-handed weapons didn't, so their keyed ways (from the
-research) stay. The kept ones against the keyed ways beside them (the motion check, all 30 bodies:
-how many past the limit, and the worst):
+Quaternius's clips are made for games: big lunges, wide stances and flourishes. Fists, a kick, a
+spell and the town's idles came over well; blades and two-handed weapons didn't, so their keyed
+ways (from the research) stay. The kept ones against the keyed ways beside them (the motion
+check, all 30 bodies: how many past the limit, and the worst; the feet as they stand now, kept
+where they're planted, *Movement*):
 
 | | Joint past its range | Forearm in the torso | Planted foot sliding |
 | --- | --- | --- | --- |
-| Punch: *jab* (clip) | 10, 4.3° | 9, 7.5 cm | 30, 10.5 cm |
-| Punch: *cross* (clip) | none | 11, 6.1 cm | 30, 5.9 cm |
-| Punch: the five keyed ways | 0 to 26, up to 9.4° | 19 to 21, up to 7.7 cm | 30, 7.4 to 8.0 cm |
-| Kick: *push kick* (clip) | none | 14, 5.5 cm | 30, 16.2 cm |
-| Kick: the five keyed ways | 1 to 30, up to 23.1° | 0 to 23, up to 11.7 cm | 30, 16.4 to 23.4 cm |
-| Wand: *thrust out* (clip) | 3, 3.4° | none | 30, 9.9 cm |
-| Wand: the five keyed ways | none | none | 0 to 30, up to 6.1 cm |
+| Punch: *jab* (clip) | none | 9, 7.5 cm | none |
+| Punch: *cross* (clip) | none | 11, 6.1 cm | none |
+| Punch: the five keyed ways | none | 19 to 21, up to 7.7 cm | none |
+| Kick: *push kick* (clip) | none | 14, 5.5 cm | 30, 15.5 cm |
+| Kick: the five keyed ways | 0 to 30, up to 23.1° | 0 to 23, up to 11.7 cm | 30, 14.8 to 23.4 cm |
+| Wand: *thrust out* (clip) | 3, 3.4° | none | none |
+| Wand: the five keyed ways | none | none | none |
+| Rests: the clips' (talking, seated or not; scratching the head; listening; waving someone over) | none | none | none |
+| Rest: *a cheer* (clip) | 2, 3.1° | none | none |
+| Rests: the clerk's, reeve's and adventurer's five keyed | 0 to 30, up to 4.0° | 0 to 5, up to 9.6 cm | none |
+
+(Seated, every rest's feet are as far into the floor on the tallest 18 bodies as the bench puts
+them, clip or keyed: the seat's height isn't fitted to the body yet.)
 
 ### Performance
 
@@ -1347,7 +1403,7 @@ sources.
 | Bandai Namco motion dataset (walks and fights in many styles) | [GitHub](https://github.com/BandaiNamcoResearchInc/Bandai-Namco-Research-Motiondataset) | CC BY-NC 4.0 |
 | Ubisoft LAFAN1 | [GitHub](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | CC BY-NC-ND 4.0 |
 | Quaternius Universal Animation Library, modular outfits | quaternius.com, itch.io | CC0 (stylised) |
-| Mesh2Motion's human animations (the Universal Animation Library as glTF) and creature rigs | [mesh2motion-app](https://github.com/Mesh2Motion/mesh2motion-app) `static/animations` | CC0 (five clips in the lab, four baked into the game's attacks); its `CarnegieMellonAnimations` folder is CMU's terms |
+| Mesh2Motion's human animations (the Universal Animation Library as glTF) and creature rigs | [mesh2motion-app](https://github.com/Mesh2Motion/mesh2motion-app) `static/animations` | CC0 (five clips in the lab, ten baked into the game's attacks and rests); its `CarnegieMellonAnimations` folder is CMU's terms |
 | KayKit Adventurers (characters, weapons, shields) | [GitHub](https://github.com/KayKit-Game-Assets) | CC0 (low-poly) |
 | Mixamo characters and animations | mixamo.com (Adobe login) | Free in games; raw files can't be redistributed |
 

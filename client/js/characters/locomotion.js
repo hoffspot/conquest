@@ -23,6 +23,7 @@
 
 import * as THREE from "three";
 import { amplitude, CURVES, curveAt, PELVIC_TILT, RUN_CURVES, RUN_STANCE, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "./gait.js";
+import { jointAngles } from "./rig.js";
 
 /** How a character walks (all angles in degrees). */
 export const WALK_STYLES = Object.freeze({
@@ -63,6 +64,14 @@ const LET_GO = 5;
 // Knees bend forward (in the thigh's anatomical frame)
 const KNEE = new THREE.Vector3(0, 0, 1);
 
+// How far the shin bends over a planted foot standing (degrees of the ankle's dorsiflexion: its
+// range's 20, less a little) before the heel lifts, up onto the ball of the foot
+const DORSIFLEXION = 19;
+const RISES = 4;
+
+// How far short of the most a leg's let reach the knees give, leaning over a planted foot (m)
+const GIVE_SPARE = 0.001;
+
 // Running: from the fastest walk to this much faster, the walk blends into a run. Running, the
 // body leans this much further forward (degrees), the feet land this far apart (metres), and the
 // body rises and falls this share of the leg's length (each way) through each step, lowest this
@@ -77,6 +86,16 @@ const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _hip = new THREE.Vector3();
 const _reach = new THREE.Vector3();
+const _hips = new THREE.Vector3();
+const _under = new THREE.Vector3();
+const _turn = new THREE.Quaternion();
+const _scale = new THREE.Vector3();
+const _ankle = new THREE.Quaternion();
+const _lift = new THREE.Quaternion();
+const _footTurn = new THREE.Quaternion();
+const _ball = new THREE.Vector3();
+const _heel = new THREE.Vector3();
+const _angles = {};
 
 export class Walker {
     /**
@@ -107,6 +126,13 @@ export class Walker {
          * the joint angles, not the ground): ("Left" or "Right") => share, or null for neither.
          */
         this.freed = null;
+
+        /**
+         * The pelvis as the walk has it this frame, before anything's layered over it: where it
+         * is (the rig's offset) and how it's turned. Anything layered over the walk leans the body
+         * over the feet (a rest's weight shifted, a blow's lunge): it doesn't step them.
+         */
+        this.stance = { offset: new THREE.Vector3(), turn: new THREE.Quaternion() };
 
         /**
          * Per foot: whether it's planted, the pivot it's planted on (world), how far the joint
@@ -260,10 +286,18 @@ export class Walker {
 
         // Anything layered over the walk (an attack, a flinch, a fall) changes the joints now. It
         // says false when the feet shouldn't be kept on the ground (falling down)
+        this.stance.offset.copy(rig.offset);
+        this.stance.turn.copy(rig.rotations[0]);
+
         const planted = this.overlay?.(dt) ?? true;
 
         rig.apply();
         this.character.object.updateMatrixWorld(true);
+
+        // Standing, a body leaning over its planted feet bends its knees as far as keeps them there
+        if (planted && s === 0) {
+            this.#give();
+        }
 
         if (!planted) {
             this.release();
@@ -495,6 +529,45 @@ export class Walker {
         return Math.min(...["heel", "ball", "tip"].map((which) => this.#contact(i, which).y)) - ground;
     }
 
+    // Lower the pelvis as far as lets each planted foot (not let go of the ground) stay where it
+    // is with its leg no straighter than the walk has it, or than it reaches (REACH)
+    #give() {
+        const object = this.character.object;
+        const scale = object.getWorldScale(_scale).y;
+        let drop = 0;
+
+        SIDES.forEach((side, i) => {
+            const foot = this.feet[i];
+
+            if (!foot.planted || this.freed?.(side) > 0) {
+                return;
+            }
+
+            const now = this.#contact(i, foot.pivot, _under);
+            const ankle = _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
+            const hip = _hip.setFromMatrixPosition(this.rig.bone(`${side}UpLeg`).matrixWorld);
+            // (A millimetre short of that, so it's within reach after rounding)
+            const most = Math.max(this.reaches[i] * REACH * scale, ankle.distanceTo(hip)) - GIVE_SPARE * scale;
+
+            ankle.x += foot.lock.x - now.x;
+            ankle.z += foot.lock.z - now.z;
+            ankle.y -= this.#lowest(i);
+            ankle.sub(hip);
+
+            const across = ankle.x * ankle.x + ankle.z * ankle.z;
+
+            if (ankle.lengthSq() > most * most && across < most * most) {
+                drop = Math.max(drop, -ankle.y - Math.sqrt(most * most - across));
+            }
+        });
+
+        if (drop > 1e-4) {
+            this.rig.offset.y -= drop / scale;
+            this.rig.apply();
+            object.updateMatrixWorld(true);
+        }
+    }
+
     #plant(side, i, phase, s, dt = 0, r = 0) {
         const foot = this.feet[i];
         const free = Math.min(1, Math.max(0, this.freed?.(side) ?? 0));
@@ -528,14 +601,24 @@ export class Walker {
         }
 
         // Standing still and turned (to face someone), the feet shuffle round under the body
-        // (not while the other's off the ground, kicking: this one stands firm)
+        // (not while the other's off the ground, kicking: this one stands firm), but not after a
+        // body leaning over them: towards where the foot would be under the pelvis as the walk
+        // has it (moved back and turned back from where what's layered over the walk put it)
         const other = SIDES[1 - i];
 
         if (foot.planted && s === 0 && dt > 0 && !(this.freed?.(other) > 0)) {
-            const off = foot.lock.distanceTo(now);
+            const { rig, stance } = this;
+            const space = rig.root.parent ?? rig.root;
+            const hips = _hips.copy(rig.heads[0]);
+            const under = space.worldToLocal(_under.copy(now)).sub(hips).sub(rig.offset);
+
+            under.applyQuaternion(_turn.copy(rig.rotations[0]).invert().premultiply(stance.turn)).add(hips).add(stance.offset);
+            space.localToWorld(under);
+
+            const off = foot.lock.distanceTo(under);
 
             if (off > 0.02) {
-                foot.lock.lerp(now, Math.min(1, (dt * SHUFFLE) / off));
+                foot.lock.lerp(under, Math.min(1, (dt * SHUFFLE) / off));
             }
         }
 
@@ -579,10 +662,13 @@ export class Walker {
         // Where the ankle has to be: no further from the hip than the leg reaches (a planted foot
         // that would need it slides along with the body instead)
         _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
-        _target.y += lift;
         _hip.setFromMatrixPosition(this.rig.bone(`${side}UpLeg`).matrixWorld);
 
-        const reach = this.reaches[i] * REACH * object.getWorldScale(_reach).y;
+        // (As far as it reaches, or as straight as the walk has it)
+        const reach = Math.max(this.reaches[i] * REACH * object.getWorldScale(_scale).y, _target.distanceTo(_hip));
+
+        _target.y += lift;
+
         const d = _reach.copy(_target).sub(_hip);
         const c = foot.correction;
 
@@ -603,6 +689,46 @@ export class Walker {
         _target.add(c);
         object.worldToLocal(_target);
         this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+
+        // Standing, crouched lower than the ankle bends: up onto the ball of the foot, the heel
+        // lifted, rather than the shin bent further over it (a few times: the shin tips as the
+        // ankle rises)
+        if (foot.planted && s === 0 && free === 0) {
+            for (let k = 0; k < RISES && this.#rise(side, i); k++) {
+                // (Again, from where the last lift left the shin)
+            }
+        }
+    }
+
+    // Lift a planted foot's heel (turning it about the ball, which stays where it is) as far as
+    // keeps its ankle within DORSIFLEXION, the leg reached again to the ankle there. Whether it
+    // was lifted
+    #rise(side, i) {
+        const rig = this.rig;
+        const b = rig.index.get(`${side}Foot`);
+        const foot = rig.bones[b];
+        const { kind, side: s } = rig.joints[b];
+
+        _ankle.copy(rig.frames[rig.definition[b].parent]).invert().multiply(foot.quaternion).multiply(rig.frames[b]);
+
+        const over = jointAngles(kind, s, _ankle, _angles).flex - DORSIFLEXION;
+
+        if (!(over > 0.25)) {
+            return false;
+        }
+
+        const ball = this.#contact(i, "ball", _ball);
+        const forward = this.#contact(i, "heel", _heel).sub(ball).negate();
+        const axis = forward.crossVectors(UP, forward.setY(0)).normalize();
+
+        _lift.setFromAxisAngle(axis, (over * Math.PI) / 180);
+        _target.setFromMatrixPosition(foot.matrixWorld).sub(ball).applyQuaternion(_lift).add(ball);
+        foot.quaternion.copy(foot.parent.getWorldQuaternion(_footTurn).invert().multiply(foot.getWorldQuaternion(_ankle).premultiply(_lift)));
+        foot.updateMatrixWorld(true);
+        this.character.object.worldToLocal(_target);
+        rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+
+        return true;
     }
 
     #flattenToes(side, i) {
