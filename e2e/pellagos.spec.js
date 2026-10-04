@@ -3201,18 +3201,55 @@ test("what lingers after a creature's blow shows on the player's plate, and its 
     await expect(icon).toBeVisible();
     await expect(banner).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
 
-    // (What does them good shown apart from it, first: a blessing, on a tile rimmed in gold)
+    // (What does them good shown apart from it, after it, the soonest over first: a blessing and
+    // a ward, on tiles rimmed in gold)
+    const shown = () => page.locator("#playerplate .ail:visible").evaluateAll((icons) => icons.map((each) => [each.getAttribute("aria-label"), each.classList.contains("buff")]));
+
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.host.players.get(game.me).boons.push({ id: "blessing", label: "Blessed", melee: 0.05, until: game.battle.time + 600000, ms: 600000 });
+        game.battle.buff(game.me, "resistFire", { ms: 60000 });
         game.advance(0.1, { render: false });
     });
     await expect(page.locator('#playerplate .ail.buff[aria-label="Blessed"]')).toBeVisible();
-    expect(await page.locator("#playerplate .ail").evaluateAll((icons) => icons.map((each) => [each.getAttribute("aria-label"), each.classList.contains("buff")]))).toEqual([
-        ["Blessed", true],
+    expect(await shown()).toEqual([
         ["Poisoned", false],
+        ["Resist Fire", true],
+        ["Blessed", true],
     ]);
+
+    // More than a row as wide as the bars: the last that won't fit an ellipsis; held, the card
+    // shows them all; tapped, one row again
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const kind of ["resistWater", "resistAir", "resistEarth", "resistMagic", "resistPoison", "resistDisease", "swole", "levitate"]) {
+            game.battle.buff(game.me, kind, { ms: 120000 });
+        }
+
+        game.advance(0.1, { render: false });
+    });
+
+    const card = page.locator("#playerplate");
+    const more = card.locator(".ail.more");
+
+    await expect(more).toBeVisible();
+    expect((await shown()).length).toBeLessThan(12);
+    expect((await shown())[0]).toEqual(["Poisoned", false]);
+
+    const { x, y } = await card.boundingBox();
+
+    await card.dispatchEvent("pointerdown", { clientX: x + 20, clientY: y + 10 });
+    await expect(card).toHaveClass(/\ball\b/);
+    await card.dispatchEvent("pointerup");
+    await expect(more).toBeHidden();
+    expect((await shown()).length).toBe(11);
+
+    await card.dispatchEvent("pointerdown", { clientX: x + 20, clientY: y + 10 });
+    await card.dispatchEvent("pointerup");
+    await expect(card).not.toHaveClass(/\ball\b/);
+    await expect(more).toBeVisible();
 
     // (Hurting now and then: less health)
     expect(await playUntil(page, () => window.pellagos.game.battle.actor(window.pellagos.game.me).hp < 50)).toBe(true);
