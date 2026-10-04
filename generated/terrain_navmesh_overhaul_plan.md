@@ -4163,3 +4163,45 @@ converted data is to be measured in M8 against today's hm08 data.
     table's required checks).
   - **Next:** M8b, the clips: Mesh2Motion's (the main source, §10.3) baked onto today's rig
     (§10.2's steps 3 to 6), each checked with the motion check before it's used.
+
+- **2026-10-04, M8b built: arms that fit every body** (docs/CHARACTERS.md *Equipment*, *Fighting*,
+  *The motion check*). The user found the arms in the contact sheet at crazy angles and through
+  the body, and asked for research into how the weapons are really held and drawn (the report
+  "Real weapon technique for poses": stances, guards, blows, grips, carrying and drawing for all
+  nine weapons, from period manuals, sports references and 44 public-domain pictures; the
+  manuals' own plates were blocked from here).
+  - **Forearms and hands out of the torso** (`Actions.place`, `keepClear`): after the last reach
+    each frame, each forearm and hand measured against the torso's skin, moved out by as much and
+    the arm reached again, up to three times; a move that strains the arm more than 6° further
+    past its range, or sinks what either hand holds deeper, halved, then taken back. The skin's
+    measured as the arms are each time (it was placed once a frame). Not two-handed weapons:
+    moving the weapon whole took the second hand off the haft for no less in the body.
+  - **Hung blades swing clear of the legs** (`Character.hang`): the sword and the cleaver at the
+    hip swing back, forward and out about their grips, as little as clears the thigh and shin,
+    falling back slowly; seated, pushed back to the side of the hip. A carrying arm is held out
+    from what hangs at its hip (`Character.hung`).
+  - **Weapons where real ones go** (`SHEATHS`, from the research): the hilt forward of the left
+    hip, where the cross-draw meets it; the cleaver at the hip as a messer was worn, not on the
+    back; the staff's and hammer's grips up behind the right shoulder by the ear, their lower ends
+    angled back off the hip; the bow a little off the back.
+  - **Draws** (`DRAWS`): the cross-draw in front of the belly, the elbow forward and out, the body
+    turned 32° into it and the other hand at the scabbard's throat; reaching over the shoulder
+    for the staff, hammer and bow with the elbow leading up and forward (the shoulders had gone
+    up to 86° past their ranges); the bow turned over at the side, out from the head.
+  - **Numbers** (the motion check, 30 bodies): limbs in the torso 2,682 → 745 pairs (9,050 →
+    2,018 cm past the limit in all); joints 1,101 → 964 (9,966° → 5,178°); things in the body
+    325 → 247 (651 → 526 cm). Thirty pairs a little worse, most the hammer going onto the back.
+  - **Pictures** (sent in the session): eight of the worst moments before, and the same moments
+    after: the cross-draw and put-away, a patron's long drink, a clerk's thumb in the belt, the
+    staff and hammer reached for over the shoulder, a guard running with gauntlets, a side kick.
+  - **Along the way:** the contact sheet keeps its own choice when the address asks for one it
+    doesn't offer (it showed nothing for `count=4`); the motion check dresses its characters'
+    hung blades through `hanging()`, shared with `Character`, and binds `hang`.
+  - **Next (the user, 2026-10-04: "start with as many pre-vetted animations as possible"):**
+    CharMorph's Vitruvian has no animations (a body: mesh, morphs, rigs; the add-on has only
+    still poses, for its older characters), but its Mixamo rig matches ours bone for bone. So
+    M8c bakes Mesh2Motion's CC0 clips (about 180 human ones: walks and runs, idles, sword and
+    shield, bow, spells, fists and a kick, hits, dodges, deaths, town life) onto today's rig, each
+    checked with the motion check, adjusted from the research (the lead foot, grips) and kept
+    only where it's better. Hand-made motion stays for what no clip covers (two-handed staff and
+    hammer blows, drawing and putting away, pouring and toasting), seeded from the nearest clip.

@@ -73,23 +73,27 @@ const HOLDS = {
  * Worn weapons (`worn`: spiked gauntlets) stay on, the hands just open.
  */
 const SHEATHS = {
-    // (At the left hip, hung from its frog a little off it, the hilt forward and up, the blade
-    // down and back behind the thigh)
-    sword: { socket: "leftHip", at: [0.04, -0.06, 0.0], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt" },
+    // (At the left hip, hung from its frog a little off it, the hilt forward of the hip and up at
+    // the belt, where the right hand crossing in front of the belly takes it, the blade down and
+    // back behind the thigh, swinging back as the leg pushes it: Character.hang; seated, pushed
+    // back by the seat to the side of the hip, `seated`)
+    sword: { socket: "leftHip", at: [0.045, -0.03, 0.17], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt", hangs: true, seated: [0.04, -0.02, -0.12] },
+    // (At the left hip too, as a messer was worn: hung from a ring on the belt, the grip forward,
+    // the blade down behind the thigh, its edge forward, swinging as the sword's does)
+    cleaver: { socket: "leftHip", at: [0.045, -0.03, 0.15], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], garment: "belt", hangs: true, seated: [0.04, -0.02, -0.1] },
     // (Tucked in the belt at the right hip, the tip down)
     wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
     grimoire: { socket: "leftHip", at: [0.045, -0.07, -0.07], point: [0, 0, 1], edge: [0, -1, 0], model: "grimoireClosed", garment: "belt" },
-    // (On the back, slung from the right shoulder: the grip behind it, where the hand reaches
-    // over for it, the staff's crystal, the hammer's and the cleaver's heads down across the back
-    // to the left hip; the staff and the hammer angled a little off the back, clear of the
-    // buttocks as the back arches)
-    staff: { socket: "back", at: [-0.12, 0.15, -0.04], point: [0.3, -0.94, -0.15], edge: [0, 0, 1], garment: "baldric" },
-    hammer: { socket: "back", at: [-0.12, 0.15, -0.05], point: [0.3, -0.94, -0.16], edge: [0.95, 0.3, 0], garment: "baldric" },
-    cleaver: { socket: "back", at: [-0.12, 0.15, -0.035], point: [0.45, -0.89, 0], edge: [-0.89, -0.45, 0], garment: "baldric" },
-    // (On the back across the quiver, the grip behind the left shoulder for the left hand, a
+    // (On the back, slung from the right shoulder: the grip up behind it at about the ear, where
+    // a hand reaching up over the shoulder takes it without the elbow folding further than it
+    // can, the staff's crystal and the hammer's head down across the back to the left hip; the
+    // staff and the hammer angled a little off the back, clear of the buttocks as the back arches)
+    staff: { socket: "back", at: [-0.2, 0.28, 0.02], point: [0.28, -0.92, -0.26], edge: [0, 0, 1], garment: "baldric" },
+    hammer: { socket: "back", at: [-0.2, 0.28, 0.01], point: [0.28, -0.92, -0.27], edge: [0.95, 0.3, 0], garment: "baldric" },
+    // (On the back across the quiver, the grip up behind the left shoulder for the left hand, a
     // limb up past it, the other down to the right hip)
-    bow: { socket: "back", at: [0.12, 0.15, -0.1], point: [-0.3, -0.95, 0], edge: [0, 0, 1], garment: "baldric" },
+    bow: { socket: "back", at: [0.15, 0.22, -0.08], point: [-0.28, -0.96, -0.06], edge: [0, 0, 1], garment: "baldric" },
     worn: { worn: true },
 };
 
@@ -373,10 +377,10 @@ function boneExtent(character, boneNames, score = null) {
 
 /**
  * How thick a limb is along a bone (`bone` to `end`, the next bone down it: metres from the bone
- * to its skin, as far as it goes round most of its middle half, the joints aside): a strong arm's,
- * or an orc's, more than a slight one's.
+ * to its skin, as far as it goes round most of its middle half, the joints aside, or of the
+ * shares along it `between`): a strong arm's, or an orc's, more than a slight one's.
  */
-function limbThickness(character, name, endName) {
+export function limbThickness(character, name, endName, between = [0.25, 0.75]) {
     const { human, positions, rig } = character;
     const bone = rig.index.get(name);
     const [from, to] = [rig.heads[bone], rig.heads[rig.index.get(endName)]];
@@ -396,7 +400,7 @@ function limbThickness(character, name, endName) {
 
         const t = point.dot(along);
 
-        if (t > length * 0.25 && t < length * 0.75) {
+        if (t > length * between[0] && t < length * between[1]) {
             reach.push(point.addScaledVector(along, -t).length());
         }
     }

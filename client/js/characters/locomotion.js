@@ -417,10 +417,11 @@ export class Walker {
             rig.setAngles(`${side}Shoulder`, { elevate: 0, protract: mix(swing, pump) * 0.15 });
 
             if (hold?.Arm) {
-                // Carrying something, the arm pumps less, the elbow bending towards a sprinter's
+                // Carrying something, the arm pumps less, the elbow bending towards a sprinter's (and
+                // held out a little from what hangs at that hip: Character.hung)
                 const amount = hold.swing ?? 0.3;
 
-                rig.setAngles(`${side}Arm`, { ...hold.Arm, flex: hold.Arm.flex + mix(amount * (swing + style.armForward * s) + breathe * 0.5, (0.35 + amount * 0.6) * pump), abduct: (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 });
+                rig.setAngles(`${side}Arm`, { ...hold.Arm, flex: hold.Arm.flex + mix(amount * (swing + style.armForward * s) + breathe * 0.5, (0.35 + amount * 0.6) * pump), abduct: (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 + (this.character.hung?.[side] ?? 0) * 0.5 });
                 rig.setAngles(`${side}ForeArm`, { ...hold.ForeArm, flex: mix(hold.ForeArm.flex + amount * elbowSwing * 0.5, hold.ForeArm.flex + (bend - hold.ForeArm.flex) * 0.6) });
                 rig.setAngles(`${side}Hand`, hold.Hand ?? {});
             } else {

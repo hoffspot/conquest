@@ -103,6 +103,18 @@ const fist = (side, lead = side < 0) => ({ at: [side * (lead ? 0.24 : 0.28), lea
 // wound up, to balance it; drawn in to the chest as it lands, turning the body into it; or
 // swung back to the hip (a lunge)
 const FREE = { at: [-0.22, -0.58, 0.5], pronate: 40, wrist: { flex: 8, deviate: -5 }, shape: "relaxed" };
+// Reaching up over a shoulder for what's on the back: the elbow up and forward, the hand by the
+// ear (bent further back, an elbow folds past what it can); and the other hand behind the hip
+// pushing the lower end of a staff or hammer out and up, and at the left hip holding a scabbard's
+// throat (and pulling it back as the blade comes out)
+const OVER_RIGHT = [-0.4, 0.8, 0.45];
+const OVER_LEFT = [0.4, 0.8, 0.45];
+const PUSH_UP = { at: [0.05, -0.8, -0.25], palm: [0, 0.4, -0.9], towards: [0, -0.2, -1], shape: "open", elbow: [0.6, -0.3, -0.75] };
+// Crossing the body for a hilt at the left hip: the elbow forward and out, in front of the
+// lower ribs, so the forearm passes before the belly, not through it
+const CROSS = [-0.55, -0.35, 0.75];
+const THROAT = { at: [-0.04, -0.66, 0.12], palm: [-0.9, 0, -0.3], towards: [0, -0.4, 0.9], shape: "relaxed" };
+const THROAT_BACK = { at: [-0.04, -0.66, -0.04], palm: [-0.9, 0, -0.3], towards: [0, -0.4, 0.9], shape: "relaxed" };
 const REACH_OUT = { at: [-0.15, -0.35, 0.75], pronate: 20, wrist: { flex: -5, deviate: 0 }, shape: "relaxed" };
 
 // The shield arm (a shield strapped to the left forearm: equipment.js), whatever the free hand
@@ -146,6 +158,25 @@ const HELD_ROUGH = 0.03;
 // How far off to one side of the nearest skin of its sample a point behind that skin can be (the
 // sample's a few centimetres apart; further, and it's beside the skin, not in it)
 const HELD_SPREAD = 0.05;
+// The forearms and hands kept out of the torso (a hand's place is measured in arm lengths from the
+// shoulder, so on a bulkier body than the keys were set on it can come inside it): the points looked
+// at along each forearm (elbow to wrist) and hand (wrist to the middle knuckles), how near the
+// torso's skin their own skin comes (metres: resting on it, not in it), how far the hand's moved out
+// at most (metres) and how many times the arm's reached again
+const LIMBS = [
+    ["ForeArm", "Hand", [0.25, 0.5, 0.75, 1]],
+    ["Hand", "HandMiddle1", [0.5, 1]],
+];
+const TORSO = /^(Hips|Spine|Spine1|Spine2|Neck)$/;
+const LIMB_CLEAR = 0.004;
+const LIMB_MOVE = 0.2;
+const LIMB_TRIES = 3;
+// How much further past their ranges (degrees, Rig.reachArm's strain) moving a hand out may want
+// its arm's joints: past that, the move's halved (a hand behind a thick neck rubs nearer it rather
+// than the shoulder going round further than it can)
+const LIMB_STRAIN = 6;
+// (Nor further than sinks what the hand holds into the body by more than this: metres)
+const LIMB_SINK = 0.005;
 const DRAW_IN = { at: [-0.08, -0.62, 0.32], pronate: 30, shape: "relaxed" };
 const SWUNG_BACK = { at: [0.05, -0.85, -0.2], pronate: 10, shape: "relaxed" };
 
@@ -1171,9 +1202,10 @@ export const DRAWS = Object.freeze({
             settle: 0.24,
             keys: [
                 [0, EASY],
-                // Across to the hilt at the left hip, turning towards it...
-                [0.55, { right: { at: [0.3, -0.6, 0.35], sheath: 0.6 }, ...spine({ turn: 10 }) }],
-                [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, left: FREE, ...spine({ turn: 24, flex: 6 }), Hips: { turn: 8 } }],
+                // Across to the hilt at the left hip, turning towards it, the other hand at the
+                // scabbard's throat...
+                [0.55, { right: { at: [0.25, -0.45, 0.6], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 20 }) }],
+                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 6 }), Hips: { turn: 8 } }],
                 // ...drawn up and out across the body in one sweep...
                 [1.14, { right: { at: [0.01, 0.25, 0.6], point: [0.5, 0.45, 0.74], edge: [-0.3, 0.9, -0.3] }, left: REACH_OUT, ...spine({ turn: -12 }), Hips: { turn: -4 } }],
                 // ...raised in a salute before the face, then twirled round at the wrist, the
@@ -1195,11 +1227,11 @@ export const DRAWS = Object.freeze({
                 // A salute, a twirl forward...
                 [0.3, { right: { at: [0.15, 0.05, 0.4], point: [0, 1, 0.12], edge: [0.1, -0.12, 0.99], elbow: [-0.33, -0.91, -0.26] }, left: FREE }],
                 [0.55, { right: { at: [0, -0.13, 0.63], point: [0.2, -0.3, 0.93], edge: [-0.3, -0.9, -0.1] } }],
-                // ...then the point round to the scabbard's mouth, the hilt kept out clear of the
-                // waist, and slid home
-                [0.8, { right: { at: [0.48, -0.43, 0.71], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.5 }, ...spine({ turn: 10 }) }],
-                [0.9, { right: { at: [0.52, -0.62, 0.48], sheath: 0.75 }, ...spine({ turn: 14, flex: 2 }), Hips: { turn: 3 } }],
-                [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, ...spine({ turn: 16, flex: 4 }), Hips: { turn: 5 } }],
+                // ...then the point round to the scabbard's mouth (the other hand at its throat,
+                // guiding it in), the hilt kept out clear of the waist, and slid home
+                [0.8, { right: { at: [0.38, -0.4, 0.75], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 18 }) }],
+                [0.9, { right: { at: [0.45, -0.55, 0.6], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 26, flex: 2 }), Hips: { turn: 3 } }],
+                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 4 }), Hips: { turn: 5 } }],
                 // (The hand let go, falling to the side)
                 [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
                 [2, EASY],
@@ -1276,12 +1308,13 @@ export const DRAWS = Object.freeze({
             settle: 0.3,
             keys: [
                 [0, EASY],
-                // Up over the right shoulder to the staff, pulled up overhead, its crystal
-                // swinging up from behind, over and forward, raised up high...
-                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
-                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
-                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
+                // Up over the right shoulder to the staff by the ear (the other hand pushing its
+                // lower end up from behind the hip), pulled up overhead, its crystal swinging up
+                // from behind, over and forward, raised up high...
+                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.85, 0.1, 0.45] } }],
+                [0.6, { right: { at: [-0.1, 0.3, 0.12], sheath: 0.6, elbow: OVER_RIGHT }, left: PUSH_UP }],
+                [1, { right: { at: [-0.05, 0.4, -0.1], sheath: 1, elbow: OVER_RIGHT }, left: PUSH_UP, Head: { bend: -6 } }],
+                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, left: FREE, ...spine({ flex: -6 }), Head: { bend: 0 } }],
                 [1.4, { right: { at: [0.1, 0.45, 0.5], point: [0.72, -0.08, 0.69] }, ...spine({ flex: 2 }) }],
                 [1.55, { right: { at: [0.15, 0.15, 0.6], point: [0.2, 0.95, 0.2] }, ...spine({}) }],
                 // ...and brought down on guard, the other hand taking it
@@ -1297,9 +1330,9 @@ export const DRAWS = Object.freeze({
                 // Raised up high in one hand, then swung up and back over the right shoulder
                 [0.3, { right: { at: [0.15, 0.15, 0.6], point: [0.2, 0.95, 0.2] }, left: FREE }],
                 [0.55, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
-                [0.8, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] }, ...spine({}) }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
-                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
+                [0.8, { right: { at: [-0.08, 0.45, 0], sheath: 0.6, elbow: OVER_RIGHT }, ...spine({}) }],
+                [1, { right: { at: [-0.05, 0.4, -0.1], sheath: 1, elbow: OVER_RIGHT } }],
+                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.85, 0.1, 0.45] } }],
                 [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
                 [2, EASY],
             ],
@@ -1312,11 +1345,12 @@ export const DRAWS = Object.freeze({
             settle: 0.3,
             keys: [
                 [0, EASY],
-                // Up over the right shoulder to the haft, heaved up overhead...
-                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
-                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
-                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
+                // Up over the right shoulder to the haft by the ear (the other hand pushing its
+                // lower end up from behind the hip), heaved up overhead...
+                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.85, 0.1, 0.45] } }],
+                [0.6, { right: { at: [-0.1, 0.3, 0.12], sheath: 0.6, elbow: OVER_RIGHT }, left: PUSH_UP }],
+                [1, { right: { at: [-0.05, 0.4, -0.1], sheath: 1, elbow: OVER_RIGHT }, left: PUSH_UP, Head: { bend: -6 } }],
+                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, left: FREE, ...spine({ flex: -6 }), Head: { bend: 0 } }],
                 // ...swung over and down, its head slapped into the open left palm...
                 [1.45, { right: { at: [0.1, 0.4, 0.55], point: [0.87, 0.13, 0.48] }, left: { at: [-0.1, -0.45, 0.62], palm: [0.3, 1, 0], towards: [0.3, 0, 1], shape: "open" }, ...spine({ flex: 4 }) }],
                 [1.65, { right: { at: [0.2, -0.55, 0.55], point: [-0.4, 0.14, 0.91] }, left: { at: [-0.1, -0.5, 0.62], palm: [0.3, 1, 0], towards: [0.3, 0, 1], shape: "open" }, ...spine({ flex: 8 }), offset: [0, -0.03, 0] }],
@@ -1332,9 +1366,9 @@ export const DRAWS = Object.freeze({
                 [0, guard("hammer")],
                 // Hoisted up overhead and put over the right shoulder, onto the back
                 [0.4, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, left: FREE, ...spine({ flex: -6 }) }],
-                [0.75, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] }, ...spine({}) }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
-                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
+                [0.75, { right: { at: [-0.08, 0.45, 0], sheath: 0.6, elbow: OVER_RIGHT }, ...spine({}) }],
+                [1, { right: { at: [-0.05, 0.4, -0.1], sheath: 1, elbow: OVER_RIGHT } }],
+                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.85, 0.1, 0.45] } }],
                 [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
                 [2, EASY],
             ],
@@ -1342,35 +1376,37 @@ export const DRAWS = Object.freeze({
     },
     cleaver: {
         draw: {
-            hitAt: 0.36,
-            duration: 1.6,
-            settle: 0.28,
+            hitAt: 0.34,
+            duration: 1.55,
+            settle: 0.24,
             keys: [
                 [0, EASY],
-                // Ripped from the back over the right shoulder, raised high...
-                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
-                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
-                [1.2, { right: { at: [-0.11, 0.55, 0.2], point: [0.18, 1.03, -0.3] }, ...spine({ flex: -8 }) }],
-                // ...wheeled round out to the right and back up, and brandished with a snarl
-                [1.4, { right: { at: [-0.41, 0.1, 0.5], point: [-0.6, 0.5, 0.58] }, ...spine({ turn: -12 }) }],
-                [1.6, { right: { at: [-0.2, -0.5, 0.5], point: [-0.2, -0.5, 0.85] } }],
-                [1.8, { right: { at: [0.1, 0.12, 0.6], point: [0.2, 0.8, 0.5] }, left: REACH_OUT, ...spine({ flex: 6 }), Neck: { flex: -8 }, Head: { flex: -8 } }],
+                // Across the body to the grip at the left hip, the other hand on the belt beside
+                // it...
+                [0.55, { right: { at: [0.25, -0.45, 0.6], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 20 }) }],
+                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 6 }), Hips: { turn: 6 } }],
+                // ...ripped up and out across the body, wheeled round over the head...
+                [1.15, { right: { at: [0.05, 0.2, 0.65], point: [0.4, 0.65, 0.65] }, left: THROAT_BACK, ...spine({ turn: -10 }), Hips: { turn: -3 } }],
+                [1.4, { right: { at: [-0.15, 0.55, 0.3], point: [0.2, 0.9, -0.4] }, left: FREE, ...spine({ flex: -6 }), Hips: { turn: 0 } }],
+                // ...and brandished with a snarl
+                [1.75, { right: { at: [0.1, 0.12, 0.6], point: [0.2, 0.8, 0.5] }, left: REACH_OUT, ...spine({ flex: 6 }), Neck: { flex: -8 }, Head: { flex: -8 } }],
                 [2, guard("cleaver")],
             ],
         },
         sheathe: {
             hitAt: 0.95,
-            duration: 1.4,
-            settle: 0.28,
+            duration: 1.35,
+            settle: 0.24,
             keys: [
                 [0, guard("cleaver")],
-                // Raised and put back over the shoulder
-                [0.4, { right: { at: [-0.16, 0.62, 0.39], point: [0.12, 0.92, -0.38] }, left: FREE }],
-                [0.75, { right: { at: [-0.03, 0.33, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
-                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
-                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
-                [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                // Brought down across the body, the point down to the ring at the left hip and
+                // dropped through it
+                [0.4, { right: { at: [0.15, -0.1, 0.6], point: [0.2, 0.3, 0.9] }, left: FREE }],
+                [0.75, { right: { at: [0.38, -0.4, 0.72], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 18 }) }],
+                [0.88, { right: { at: [0.45, -0.55, 0.6], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 34, flex: 2 }), Hips: { turn: 4 } }],
+                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 40, flex: 4 }), Hips: { turn: 5 } }],
+                // (The hand let go, falling to the side)
+                [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
                 [2, EASY],
             ],
         },
@@ -1385,11 +1421,11 @@ export const DRAWS = Object.freeze({
                 // Up over the left shoulder to the bow, lifted up out of its sling along its length
                 // (so its lower limb comes up clear of the back), then over the shoulder and swung
                 // down in front, spinning...
-                [0.3, { left: { at: [0.15, -0.1, 0.35], pronate: 40, shape: "relaxed", elbow: [0.9, 0, -0.3] } }],
-                [0.6, { left: { at: [0.05, 0.25, 0.05], sheath: 0.6, elbow: [0.5, 0.85, 0] } }],
-                [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: [0.5, 0.85, 0] } }],
-                [1.1, { left: { at: [0.1, 0.5, -0.3], point: [-0.2, -0.95, -0.2], elbow: [0.5, 0.85, 0] } }],
-                [1.22, { left: { at: [-0.1, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] } }],
+                [0.3, { left: { at: [0.15, -0.1, 0.35], pronate: 40, shape: "relaxed", elbow: [0.85, 0.1, 0.45] } }],
+                [0.6, { left: { at: [0.05, 0.25, 0.05], sheath: 0.6, elbow: OVER_LEFT } }],
+                [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: OVER_LEFT } }],
+                [1.1, { left: { at: [0.18, 0.5, -0.3], point: [-0.2, -0.95, -0.2], elbow: OVER_LEFT } }],
+                [1.22, { left: { at: [0.02, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] } }],
                 [1.42, { left: { at: [-0.2, -0.2, 0.7], point: [-0.4, 0.85, 0.35], edge: [-0.13, -0.35, 0.93], elbow: [0.95, -0.23, 0.23] } }],
                 // ...held upright, its string plucked to try it, then on guard
                 [1.62, { left: { at: [-0.15, -0.4, 0.62], point: [0, 1, 0.1], edge: [-0.21, -0.1, 0.97], elbow: [0.56, -0.61, -0.57] }, right: { at: [-0.05, -0.38, 0.45], palm: [-0.9, 0, 0.3], shape: "hook" } }],
@@ -1406,7 +1442,8 @@ export const DRAWS = Object.freeze({
                 // Raised and slung back over the left shoulder, brought above its sling and slid
                 // down into it along its length
                 [0.4, { left: { at: [-0.2, 0.45, 0.45], point: [-0.77, 0.32, 0.59], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] }, right: { at: [0.2, -0.7, 0.2], pronate: 40, shape: "relaxed" } }],
-                [0.75, { left: { at: [0.05, 0.45, -0.3], point: [-0.25, -0.95, -0.1], elbow: [0.5, 0.85, 0] } }],
+                [0.58, { left: { at: [0.35, 0.15, 0.3], point: [0.6, 0.6, -0.5] } }],
+                [0.75, { left: { at: [0.15, 0.45, -0.3], point: [-0.2, -0.95, -0.1], elbow: OVER_LEFT } }],
                 [1, { left: { at: [-0.15, 0.15, -0.25], sheath: 1, elbow: [0.65, 0.75, 0] } }],
                 [1.12, { left: { at: [0.3, 0.2, 0.35], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
                 [1.35, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
@@ -1865,6 +1902,9 @@ const _moved = new THREE.Vector3();
 const _grip = new THREE.Vector3();
 const _handTurn = new THREE.Quaternion();
 const _heldOut = { turn: new THREE.Vector3(), move: new THREE.Vector3(), push: new THREE.Vector3() };
+const _limbFrom = new THREE.Vector3();
+const _limbTo = new THREE.Vector3();
+const _limbPush = new THREE.Vector3();
 const _skinning = Array.from({ length: 64 }, () => new THREE.Matrix4());
 
 // Which of SECTORS ways round a shield's face (in its own frame: its face out along x) a point is
@@ -1900,6 +1940,8 @@ export class Actions {
         this.character = character;
         this.rig = character.rig;
         this.time = 0;
+        // (Each time the arms are posed: what's measured against the skin is placed as they are)
+        this.posed = 0;
         /** Whether what's held is kept out of the body (not for those seen too small for it to show). */
         this.keepClear = true;
 
@@ -2122,6 +2164,7 @@ export class Actions {
      */
     apply(dt) {
         this.time += dt;
+        this.posed++;
         this.character.settle?.(dt);
         this.guard += Math.sign(this.guardTarget - this.guard) * Math.min(Math.abs(this.guardTarget - this.guard), dt * 4);
         this.reaching = [];
@@ -2207,6 +2250,9 @@ export class Actions {
     /** Reach the hands to where the actions want them (once the body is posed and the feet planted). */
     place() {
         const reached = new Set();
+
+        // (What hangs at the hips swung clear of the legs as they're posed now, or the seat)
+        this.character.hang?.(this.time, this.seated);
         // (What's held is kept out of the body as the arm's reached the last time this frame:
         // the arm drawn, not those blended under it)
         const last = Object.fromEntries(HANDS.map((side) => [side, this.reaching.findLastIndex(({ hands }) => hands[side] && (hands[side].reach ?? 1) > 0.001)]));
@@ -2218,14 +2264,90 @@ export class Actions {
             // A hand holding the other's weapon goes second; given its own place, the weapon lies
             // along the line through both hands' places
             const order = HANDS.filter((side) => hands[side] && (hands[side].reach ?? 1) > 0.001).sort((a, b) => Number("on" in hands[a]) - Number("on" in hands[b]));
-            const grips = {};
+            // (The forearms and hands kept out of the torso, as the arms are reached the last time
+            // this frame: each hand moved out, the arm reached again from how it was. Not a
+            // two-handed weapon's: moved whole, its second hand came off the haft and the arms
+            // strained for no less in the body, so its keys keep it clear)
+            const clear = this.keepClear && !order.some((side) => "on" in hands[side]) ? order.filter((side) => layer === last[side]) : [];
+            const before = clear.length ? order.map((side) => this.#armPose(side)) : null;
+            // (Each reach again starts from the elbow's swivel this one did, not one a move swung it to)
+            const swivel = { ...this.swivel };
+            const shift = { right: null, left: null };
+            const moved = { right: 0, left: 0 };
+            // (How strained each moved hand's arm was before it was moved, and how deep in the
+            // body what it holds was; the last move, and whether it's been held back)
+            const strained = (side) => this.strain[side] ?? 0;
+            const sunk = () => this.#sunk("right") + this.#sunk("left");
+            const start = {};
+            let deep = null;
+            const step = { right: null, left: null };
+            const held = { right: false, left: false };
 
-            for (const side of order) {
-                const other = side === "right" ? "left" : "right";
-                const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at, this.#frame(hands[other], new THREE.Quaternion())) : null;
+            for (let k = 0; ; k++) {
+                const grips = {};
 
-                grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second, layer === last[side]);
-                reached.add(side);
+                for (const side of order) {
+                    const other = side === "right" ? "left" : "right";
+                    const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at, this.#frame(hands[other], new THREE.Quaternion())) : null;
+
+                    grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second, layer === last[side], shift[side]);
+                    reached.add(side);
+                }
+
+                // (After the last move, only to take it back)
+                if (!clear.length || k > LIMB_TRIES) {
+                    break;
+                }
+
+                // (The skin measured as the arms are now)
+                this.posed++;
+
+                const torso = this.#heldSkin("torso");
+                const most = LIMB_MOVE * this.#size();
+                const final = k === LIMB_TRIES;
+                let again = false;
+
+                deep ??= sunk();
+
+                // (Sunk what either hand holds further into the body: the moves taken back too)
+                const sinking = HANDS.some((side) => step[side]) && sunk() > deep + LIMB_SINK;
+
+                for (const side of HANDS) {
+                    start[side] ??= strained(side);
+
+                    // (Moved so far it strains the arm, or turns what a hand holds into the body:
+                    // half the last move taken back, or after the last, all of it, back to a move
+                    // that didn't)
+                    if (step[side] && (strained(side) > start[side] + LIMB_STRAIN || sinking)) {
+                        step[side].multiplyScalar(final ? 1 : 0.5);
+                        shift[side].sub(step[side]);
+                        step[side] = final ? null : step[side];
+                        held[side] = again = true;
+                    }
+                }
+
+                if (final && !again) {
+                    break;
+                }
+
+                for (const side of clear) {
+                    const push = this.#limbOut(side === "right" ? "Right" : "Left", torso);
+
+                    if (push && moved[side] < most && !held[side] && !final) {
+                        push.clampLength(0, most - moved[side]);
+                        moved[side] += push.length();
+                        shift[side] = (shift[side] ?? new THREE.Vector3()).add(push);
+                        step[side] = push.clone();
+                        again = true;
+                    }
+                }
+
+                if (!again) {
+                    break;
+                }
+
+                order.forEach((side, i) => this.#armPose(side, before[i]));
+                Object.assign(this.swivel, swivel);
             }
         }
 
@@ -2395,10 +2517,120 @@ export class Actions {
                 arm: head("RightForeArm").distanceTo(head("RightArm")) + head("RightHand").distanceTo(head("RightForeArm")),
                 sockets: { right: socketOn(character, "rightHand"), left: socketOn(character, "leftHand") },
                 skin: null,
+                limbs: null,
             };
         }
 
         return this.body;
+    }
+
+    // An arm's joints as they are (its shoulder, elbow and wrist: [quaternions]), or set back to
+    // how they were (`pose`)
+    #armPose(side, pose = null) {
+        const Side = side === "right" ? "Right" : "Left";
+        const names = [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`];
+
+        if (!pose) {
+            return names.map((name) => this.rig.bone(name).quaternion.clone());
+        }
+
+        names.forEach((name, i) => this.rig.bone(name).quaternion.copy(pose[i]));
+        this.rig.bone(`${Side}Arm`).updateMatrixWorld(true);
+
+        return pose;
+    }
+
+    // How far each forearm's and hand's skin is from the line through its bone (metres, as the
+    // body's made: the median of its vertices', left and right alike), found once for each body
+    #limbs() {
+        const body = this.#measure();
+
+        if (!body.limbs) {
+            const { human, positions } = this.character;
+            const rig = this.rig;
+            const point = new THREE.Vector3();
+            const closest = new THREE.Vector3();
+
+            body.limbs = Object.fromEntries(
+                LIMBS.map(([start, end]) => {
+                    const bone = rig.index.get(`Left${start}`);
+                    const line = new THREE.Line3(rig.heads[bone], rig.heads[rig.index.get(`Left${end}`)]);
+                    const apart = [];
+
+                    for (let v = 0; v < human.vertexCount; v++) {
+                        if (human.partOf[v] === 0 && human.skinIndices[v * 4] === bone) {
+                            line.closestPointToPoint(point.fromArray(positions, v * 3), true, closest);
+                            apart.push(point.distanceTo(closest));
+                        }
+                    }
+
+                    apart.sort((a, b) => a - b);
+
+                    return [start, apart[Math.floor(apart.length / 2)] ?? 0];
+                }),
+            );
+        }
+
+        return body.limbs;
+    }
+
+    // How deep in the body what a hand ("right" or "left") holds is (metres; 0, clear or empty)
+    #sunk(side) {
+        const handBone = this.rig.bone(side === "right" ? "RightHand" : "LeftHand");
+        const item = this.character.items.find((model) => model.parent === handBone);
+        const out = item ? this.#heldOut(item, handBone.getWorldPosition(_wrist), this.#heldSkin(side)) : null;
+
+        return out ? out.push.length() : 0;
+    }
+
+    // How far a forearm or hand has come into the torso (`Side`'s; `skin`: the torso's), and the
+    // push (world) that'd take its deepest point out again, its skin resting on the torso's
+    // (LIMB_CLEAR off it); or null, if it's clear
+    #limbOut(Side, skin) {
+        const rig = this.rig;
+        const size = this.#size();
+        const limbs = this.#limbs();
+        let deepest = 0;
+
+        for (const [start, end, along] of LIMBS) {
+            const from = rig.bone(`${Side}${start}`).getWorldPosition(_limbFrom);
+            const to = rig.bone(`${Side}${end}`).getWorldPosition(_limbTo);
+            const thick = (limbs[start] + LIMB_CLEAR) * size;
+
+            for (const share of along) {
+                const at = _slice.copy(from).lerp(to, share);
+
+                this.#nearby(skin, at, thick + HELD_NEAR, _near);
+
+                let nearest = -1;
+                let best = (thick + HELD_NEAR) ** 2;
+
+                for (const k of _near) {
+                    const apart = skin.exact[k].distanceToSquared(at);
+
+                    if (apart < best) {
+                        best = apart;
+                        nearest = k;
+                    }
+                }
+
+                if (nearest < 0) {
+                    continue;
+                }
+
+                // (How far its skin is past the torso's: its line's depth behind the nearest skin,
+                // and its own thickness; only behind that skin, not off to one side of it)
+                const behind = _lever.copy(skin.exact[nearest]).sub(at).dot(skin.facing[nearest]);
+                const into = behind + thick;
+
+                if (into > deepest && (behind <= 0 || best - behind * behind < HELD_SPREAD ** 2)) {
+                    deepest = into;
+                    _limbPush.copy(skin.facing[nearest]).multiplyScalar(into);
+                }
+            }
+        }
+
+        return deepest > 0.002 ? _limbPush : null;
     }
 
     // The shield strapped to the left forearm, if there's one; and, found once, its shape (in its
@@ -2488,8 +2720,9 @@ export class Actions {
 
     // Some of the body's skin but what holds something (`holding`: a hand and its forearm,
     // "right" or "left", and the other hand and forearm too on a two-handed haft, "right+" or
-    // "left+"; or the shield arm, "shield"): every so many of its vertices, by their heaviest
-    // bones (with how far from each bone its vertices go), placed as they're needed
+    // "left+"; or the shield arm, "shield"), or only the torso's ("torso", which the forearms and
+    // hands are kept out of): every so many of its vertices, by their heaviest bones (with how
+    // far from each bone its vertices go), placed as they're needed
     #heldSkin(holding) {
         const body = this.#measure();
         const { human, positions } = this.character;
@@ -2500,24 +2733,25 @@ export class Actions {
         if (!body.held[holding]) {
             const [Side, Other] = holding.startsWith("right") ? ["Right", "Left"] : ["Left", "Right"];
             const arms = new RegExp(holding === "shield" ? "^Left(Shoulder|Arm|ForeArm|Hand)" : `^${Side}(ForeArm|Hand)${holding.endsWith("+") ? `|^${Other}(ForeArm|Hand)` : ""}`);
+            const kept = holding === "torso" ? (name) => TORSO.test(name) : (name) => !arms.test(name);
             const vertices = [];
 
             for (let v = 0; v < human.vertexCount; v++) {
-                if (human.partOf[v] === 0 && !arms.test(human.bones[human.skinIndices[v * 4]].name)) {
+                if (human.partOf[v] === 0 && kept(human.bones[human.skinIndices[v * 4]].name)) {
                     vertices.push(v);
                 }
             }
 
             const every = Math.max(1, Math.floor(vertices.length / HELD_POINTS));
-            const kept = vertices.filter((_, k) => k % every === 0);
-            const heaviest = kept.map((v) => {
+            const sampled = vertices.filter((_, k) => k % every === 0);
+            const heaviest = sampled.map((v) => {
                 const weights = [0, 1, 2, 3].map((j) => human.skinWeights[v * 4 + j]);
 
                 return human.skinIndices[v * 4 + weights.indexOf(Math.max(...weights))];
             });
             const bones = new Map();
 
-            kept.forEach((v, k) => {
+            sampled.forEach((v, k) => {
                 const bone = heaviest[k];
                 const apart = _local.fromArray(positions, v * 3).distanceTo(rig.heads[bone]);
 
@@ -2529,14 +2763,14 @@ export class Actions {
                 bones.get(bone).reach = Math.max(bones.get(bone).reach, apart);
             });
 
-            body.held[holding] = { vertices: kept, heaviest, bones: [...bones.values()], rough: kept.map(() => new THREE.Vector3()), placed: new Float64Array(kept.length).fill(-1), exact: kept.map(() => new THREE.Vector3()), facing: kept.map(() => new THREE.Vector3()), done: new Float64Array(kept.length).fill(-1) };
+            body.held[holding] = { vertices: sampled, heaviest, bones: [...bones.values()], rough: sampled.map(() => new THREE.Vector3()), placed: new Float64Array(sampled.length).fill(-1), exact: sampled.map(() => new THREE.Vector3()), facing: sampled.map(() => new THREE.Vector3()), done: new Float64Array(sampled.length).fill(-1) };
         }
 
         // (The bones as they're drawn, once a frame)
-        if (body.skinned !== this.time) {
+        if (body.skinned !== this.posed) {
             rig.root.updateMatrixWorld(true);
             rig.bones.forEach((bone, i) => _skinning[i].multiplyMatrices(bone.matrixWorld, rig.skeleton.boneInverses[i]));
-            body.skinned = this.time;
+            body.skinned = this.posed;
         }
 
         return body.held[holding];
@@ -2557,9 +2791,9 @@ export class Actions {
             const within = (reach + HELD_ROUGH) ** 2;
 
             for (const k of kept) {
-                if (skin.placed[k] !== this.time) {
+                if (skin.placed[k] !== this.posed) {
                     skin.rough[k].fromArray(positions, skin.vertices[k] * 3).applyMatrix4(_skinning[bone]);
-                    skin.placed[k] = this.time;
+                    skin.placed[k] = this.posed;
                 }
 
                 if (skin.rough[k].distanceToSquared(at) < within) {
@@ -2575,7 +2809,7 @@ export class Actions {
     // Where one of the skin's vertices (`k` of `skin`'s) is now and which way it faces there, moved
     // by all its bones (once a frame)
     #exactly(skin, k) {
-        if (skin.done[k] !== this.time) {
+        if (skin.done[k] !== this.posed) {
             const { human, positions, normals } = this.character;
             const v = skin.vertices[k];
             const [at, facing] = [skin.exact[k].set(0, 0, 0), skin.facing[k].set(0, 0, 0)];
@@ -2592,7 +2826,7 @@ export class Actions {
             }
 
             facing.normalize();
-            skin.done[k] = this.time;
+            skin.done[k] = this.posed;
         }
 
         return skin.exact[k];
@@ -2748,7 +2982,7 @@ export class Actions {
     // what it holds points the way the pose says (`point`, `edge`), or, empty, so its palm faces
     // `palm` with the fingers `towards` (else relaxed); the arm's `last` reach this frame keeps
     // what it holds out of the body. Returns its grip: { position, point, edge, haft } in the world
-    #reach(side, hand, weight, other, second = null, last = true) {
+    #reach(side, hand, weight, other, second = null, last = true, shift = null) {
         const rig = this.rig;
         const Side = side === "right" ? "Right" : "Left";
         const body = this.#measure();
@@ -2786,6 +3020,11 @@ export class Actions {
             }
         } else {
             position = this.#place(side, hand.at, _frame);
+
+            // (Moved out of the torso: place())
+            if (shift) {
+                position.add(shift);
+            }
 
             // (A shield held up, crouching or lunging: kept up and out over the thighs as they come up)
             if (hand.shield) {

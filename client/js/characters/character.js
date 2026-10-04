@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { Rig } from "./rig.js";
-import { EQUIPMENT, socketOn } from "./equipment.js";
+import { EQUIPMENT, limbThickness, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
@@ -189,6 +189,18 @@ export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0
         position: new THREE.Vector3(...at).applyQuaternion(socket.quaternion).add(socket.position),
         quaternion: socket.quaternion.clone().multiply(turn),
     };
+}
+
+/**
+ * What a blade hung from the belt (`item`, its `look` built) needs to swing clear of the leg
+ * (Character.hang): its side, how far it reaches down from its grip, and how it's swung; or null.
+ */
+export function hanging(item, look) {
+    if (!item.sheath?.hangs) {
+        return null;
+    }
+
+    return { side: item.sheath.socket.startsWith("left") ? "Left" : "Right", length: new THREE.Box3().setFromObject(look).max.y, seated: new THREE.Vector3(...(item.sheath.seated ?? [0, 0, 0])), angle: 0, out: 0, time: null, holder: null, radius: null };
 }
 
 export class Character {
@@ -593,6 +605,8 @@ export class Character {
 
                 model.name = id;
                 model.add(look);
+
+                model.userData.hangs = part === item ? hanging(item, look) : null;
                 model.userData.home = home;
                 model.userData.sway = item.sway ?? 0;
                 model.userData.hand = /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null;
@@ -624,6 +638,10 @@ export class Character {
                         holder.quaternion.copy(place.quaternion);
                         holder.userData.home = place;
                         this.rig.bone(place.bone).add(holder);
+
+                        if (model.userData.hangs) {
+                            model.userData.hangs.holder = holder;
+                        }
                         this.items.push(holder);
                     }
                 }
@@ -697,8 +715,10 @@ export class Character {
         }
 
         // (An arm swinging free held a little out, clear of what hangs at that hip: a scabbard, a
-        // wand in the belt; or with what's worn on its hand, spiked knuckles, clear of the thigh)
+        // wand in the belt; or with what's worn on its hand, spiked knuckles, clear of the thigh.
+        // An arm carrying something, clear of what hangs at that hip only: `hung`)
         this.clearing = { Left: 0, Right: 0 };
+        this.hung = { Left: 0, Right: 0 };
 
         for (const id of this.equipment.values()) {
             const item = EQUIPMENT[id]?.kind === "item" ? EQUIPMENT[id] : null;
@@ -706,6 +726,10 @@ export class Character {
 
             if (socket === "leftHip" || socket === "rightHip" || socket === "leftHand" || socket === "rightHand") {
                 this.clearing[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
+            }
+
+            if (socket === "leftHip" || socket === "rightHip") {
+                this.hung[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
             }
         }
     }
@@ -736,6 +760,104 @@ export class Character {
                 if (settling.left === 0) {
                     model.userData.settling = null;
                 }
+            }
+        }
+    }
+
+    /**
+     * Swing what hangs from the belt at a hip (a sheathed sword or cleaver, and its scabbard, drawn
+     * or not) about its grip, back or forward as little as keeps it clear of that side's thigh and
+     * shin, as a leg pushes a scabbard hung from its frog; and let it fall back to hang as it was
+     * when the leg's gone by, not at once; and, `seated`, where the seat pushes it. With the legs
+     * posed for the frame (Actions.place), at `time` (seconds, any clock).
+     */
+    hang(time, seated = false) {
+        for (const model of this.items) {
+            const hangs = model.userData.hangs;
+
+            if (!hangs) {
+                continue;
+            }
+
+            const dt = hangs.time === null ? 0 : Math.min(0.1, Math.max(0, time - hangs.time));
+            const place = model.userData.sheath;
+            const hips = this.rig.bone(place.bone);
+            const sheathed = this.sheathed && !model.userData.settling;
+
+            hangs.time = time;
+            // (The thigh thicker at the hip than the knee, the calf than the ankle)
+            hangs.radius ??= [`${hangs.side}UpLeg`, `${hangs.side}Leg`].map((bone, k) => HANG_THICK.map((between) => limbThickness(this, bone, k ? `${hangs.side}Foot` : `${hangs.side}Leg`, between)));
+
+            const leg = [`${hangs.side}UpLeg`, `${hangs.side}Leg`, `${hangs.side}Foot`].map((name, i) => this.rig.bone(name).getWorldPosition(_legJoints[i]));
+            const across = this.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(this.rig.bone("RightUpLeg").getWorldPosition(_hangFrom)).normalize();
+            const at = _hangAt.copy(place.position).addScaledVector(hangs.seated, seated ? 1 : 0);
+            const grip = hips.localToWorld(_hangFrom.copy(at));
+            const down = _hangDown.set(0, 1, 0).applyQuaternion(hips.getWorldQuaternion(_hangTurn).multiply(place.quaternion));
+
+            const forward = _hangForward.crossVectors(across, _up);
+            // (Out from the body: the left hip's to the left)
+            const outward = hangs.side === "Left" ? 1 : -1;
+
+            // How near (metres, less the limb's thickness) the blade swung `back` and `out` comes to
+            // the leg
+            const nearest = (back, out) => {
+                const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+                let least = Infinity;
+
+                for (const share of HANG_SAMPLES) {
+                    const point = _hangPoint.copy(grip).addScaledVector(along, hangs.length * share);
+
+                    for (let k = 0; k < 2; k++) {
+                        const [top, bottom] = hangs.radius[k];
+                        const on = _segment.set(leg[k], leg[k + 1]).closestPointToPointParameter(point, true);
+
+                        least = Math.min(least, _segment.at(on, _hangOn).distanceTo(point) - (top + (bottom - top) * on));
+                    }
+                }
+
+                return least;
+            };
+
+            // The swing clear of the leg nearest how it hangs now (pushed no further than it must
+            // be), and the one nearest hanging straight (where it falls back to); or, if none is
+            // clear, the most clear
+            let [pushed, resting, best, most] = [null, null, null, -Infinity];
+
+            for (const out of HANG_OUT) {
+                for (const back of HANG_ANGLES) {
+                    const clear = nearest(back, out);
+                    const moved = Math.abs(back - hangs.angle) + Math.abs(out - hangs.out);
+                    const hanging = Math.abs(back) + Math.abs(out) * 1.5;
+
+                    if (clear > most) {
+                        [best, most] = [[back, out], clear];
+                    }
+
+                    if (clear >= HANG_CLEAR) {
+                        pushed = !pushed || moved < pushed[2] ? [back, out, moved] : pushed;
+                        resting = !resting || hanging < resting[2] ? [back, out, hanging] : resting;
+                    }
+                }
+            }
+
+            // Pushed at once by the leg it's in; falling back slowly, never into it
+            if (nearest(hangs.angle, hangs.out) < HANG_CLEAR || dt === 0) {
+                [hangs.angle, hangs.out] = pushed ?? best;
+            } else {
+                const [back, out] = resting ?? [0, 0];
+                const step = HANG_FALL * dt;
+                const next = [hangs.angle + Math.sign(back - hangs.angle) * Math.min(Math.abs(back - hangs.angle), step), hangs.out + Math.sign(out - hangs.out) * Math.min(Math.abs(out - hangs.out), step)];
+
+                [hangs.angle, hangs.out] = nearest(...next) >= HANG_CLEAR ? next : [hangs.angle, hangs.out];
+            }
+
+            // (Turned about the hip's own across, then its forward, in the hip's frame)
+            const local = _hangInverse.copy(hips.matrixWorld).invert();
+            const swing = _hangTurn.setFromAxisAngle(forward.transformDirection(local), hangs.out * outward).multiply(_hangBack.setFromAxisAngle(across.transformDirection(local), hangs.angle));
+
+            for (const hung of [sheathed ? model : null, hangs.holder]) {
+                hung?.position.copy(at);
+                hung?.quaternion.copy(swing).multiply(place.quaternion);
             }
         }
     }
@@ -1371,6 +1493,34 @@ function known(id) {
 
 const _sway = new THREE.Quaternion();
 const _swayAngles = new THREE.Euler();
+
+// A blade hung from the belt (Character.hang): the swings about its grip tried (radians: forward,
+// below 0, to back; and out from the body, as a leg kicks a scabbard aside), where along it is
+// kept clear of the leg, by how much (metres), and how fast it falls back to hang as it was
+// (radians a second)
+const HANG_ANGLES = Array.from({ length: 26 }, (_, k) => ((k * 5 - 45) * Math.PI) / 180);
+const HANG_OUT = [0, 10, 20, 30, 40].map((degrees) => (degrees * Math.PI) / 180);
+const HANG_SAMPLES = [0.3, 0.5, 0.7, 0.85, 1];
+const HANG_CLEAR = 0.06;
+const HANG_THICK = [
+    [0, 0.3],
+    [0.6, 0.9],
+];
+const HANG_FALL = 2.5;
+const _legJoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const _across = new THREE.Vector3();
+const _hangFrom = new THREE.Vector3();
+const _hangAt = new THREE.Vector3();
+const _hangDown = new THREE.Vector3();
+const _hangAlong = new THREE.Vector3();
+const _hangPoint = new THREE.Vector3();
+const _hangOn = new THREE.Vector3();
+const _hangTurn = new THREE.Quaternion();
+const _hangBack = new THREE.Quaternion();
+const _hangForward = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _hangInverse = new THREE.Matrix4();
+const _segment = new THREE.Line3();
 
 // How far out (degrees) an arm swinging free is held to clear what hangs at its hip
 const HIP_CLEARING = 10;

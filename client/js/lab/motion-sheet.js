@@ -36,8 +36,9 @@ for (const people of new Set(BODIES.map(({ people }) => people))) {
     select.people.add(new Option(people, people));
 }
 
+// (A choice the address makes that isn't offered leaves the control as it was, not blank)
 for (const [id, control] of Object.entries(select)) {
-    if (params.has(id)) {
+    if ([...control.options].some(({ value }) => value === params.get(id))) {
         control.value = params.get(id);
     }
 }
