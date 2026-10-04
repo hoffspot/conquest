@@ -409,6 +409,9 @@ run by hand from the **Actions** tab.
 
 ## Development
 
+Contributing, with Claude Code or without it: [contribution.md](contribution.md) explains how to set up,
+the checks CI runs and how to run them, and how to open a pull request that's safe to merge.
+
 ```sh
 npm run lint        # ESLint
 npm test            # unit tests (Node's built-in test runner)
