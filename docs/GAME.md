@@ -1478,6 +1478,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     the keep under its roof, its needles and bartizans.
   - **The ground round it** kept clear (WORLD.md *Hill citadels*): grass, no fields or hedges, no
     trees, near or seen from afar (the far fields' shader leaves them out inside `FIELDS_CLEAR`).
+  - **Walked** (WORLD.md *Hill citadels*): over the bridge and through the gate tower and the
+    gate on their decks, the player standing at their height; up each stair flight by flight,
+    step by step (`CITADEL.stair` the rules' match for the look's `CITADEL_LOOK.stair`); its wards'
+    open ground paved; the keep gone into by its forebuilding's door (`citadelWays` `door`).
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
@@ -2689,8 +2693,9 @@ metres off (back as many as ever the next time, unless it's been cleared).
     into from the end of the causeway: the platform, its courtyard and its moat aren't walked).
     Within, the keep's great hall: its lord or lady on the throne ("Lord of
     Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of the town
-    of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill citadels,
-    their wards and keeps to come.
+    of their people's nearest it (`insides.js` `townOf`). The humans' castles, hill citadels
+    (WORLD.md *Hill citadels*), walked into over their bridge, through their gate tower and up
+    the stairs from ward to ward, their keep gone into by the door of its forebuilding.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

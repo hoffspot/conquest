@@ -560,10 +560,23 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   and under the water at its face); each ward in a terrace higher (the outer above the moat),
   eased up inside its wall's outer face over 2.5 m (under its retaining wall). Each of these a pad
   (the glacis and the moat's bed discs, then each ward a regular polygon: core/terrain/ground.js
-  `sides`, `apothem`, `turn`, `level`), applied in that order. It takes every square
-  inside its outer wall, under its outer towers and the outer gate's, on its bridge and in its
-  gate tower (`insideCitadel`: blocked, not seen through, paved: `GROUND.courtyard`); none can be
-  walked into yet (the plan's M7.5 opens the castles). Its moat's squares (`inMoat`: from the
+  `sides`, `apothem`, `turn`, `level`), applied in that order. It's walked into (the plan's
+  M7.5b-3e; `citadelWays`): over its bridge, through its gate tower and its gate, up the stair
+  to each inner ward's gate and on through it, to the door of its keep (gone into: its great
+  hall, as the other peoples' keeps). What stands within its outer wall (`citadelWays` `solid`:
+  each ward's walls, split at its gate, and its gatehouse; the retaining walls' battered feet;
+  its towers, the outer gate's twin towers, the ranges, hall, chapel and the keep on its plinth
+  with its forebuilding, its needles and the gate tower's sides and turrets) takes its squares
+  (blocked, not seen through); the rest of its wards' ground is open, paved (`GROUND.courtyard`),
+  but down a terrace's face under its wall, too steep to stand. Its ways over what's built
+  (`citadelWays` `decks`: the way from the bridge's far end over the moat, through the gate tower
+  and the outer gate to the outer ward; each stair's lower flight, its turning landing, its upper
+  flight, its gate's landing and the passage through the gate into the ward above) are decks, as
+  the bridges over the rivers are: their squares open and paved whatever's under them, their
+  height along each the deck's (`sites.js` `deckAt`, `decksNear`; the overworld's `heightAt`),
+  rising from one end to the other up a flight; under a deck more than a metre over the ground,
+  the stair's masonry, nothing's walked (navigation/tiles.js). The rest within it (`insideCitadel`)
+  still blocked. Its moat's squares (`inMoat`: from the
   outer wall's face on in under its far side's wall, nearly to its back, so the water meets the
   face wherever the squares fall) are still water at the moat's level (`moatAt`, `moatLevelAt`;
   the overworld's `surfaceAt`), too deep to wade (even where the glacis stands over the water

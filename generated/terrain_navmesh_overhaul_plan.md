@@ -3917,3 +3917,30 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Pictures** (sent in the session): the temple-fortress from above, before and after, the
     player at the causeway's end; the palace's great hall.
   - **Next:** the humans' citadels' wards and keeps; then M7.5b-4 (crypts under the ruins).
+- **2026-10-04, M7.5b-3e built: the humans' hill citadels walked into** (docs/WORLD.md *Hill
+  citadels*, docs/GAME.md *Gone into*).
+  - **Which way:** decks, not the land. The citadel's terraces are already the land's (its pads);
+    what wasn't walked was what's built on and over them: the bridge over the moat, the gate
+    tower's and the gates' passages, the stairs up the terraces' faces. Each is a deck as a river
+    bridge is (`citadelWays` `decks`: two ends on the lot, a half width, the height at each end),
+    so the overworld's `heightAt` and the walking mesh take them as they take bridges, without
+    changing the land's heights. A flight's deck rises from its foot to its head, its steps the
+    look's (`CITADEL.stair` 3.5 m lanes, 0.18 m risers, 0.36 m treads, 2.6 m landings).
+  - **What's solid** (`citadelWays` `solid`, the shapes of setpieces/castles.js): walls split at
+    their gates, gatehouses, battered feet, towers, ranges, hall, chapel, the keep on its plinth,
+    its forebuilding and needles, the gate tower's sides. Their squares blocked, not seen through;
+    the wards' open ground paved and open.
+  - **The keep's door** (`citadelWays` `door`): in the forebuilding, 2.6 m wide and 3.2 high on
+    a 0.6 m sill: the keep gone into (its great hall, its lord or lady, the realm of the nearest
+    human town).
+  - **The walking mesh:** squares under a deck more than a metre over the ground (a stair's
+    masonry) aren't walked (navigation/tiles.js), so no way's found under a flight.
+  - **Tests:** test/citadel.test.js: the decks join (each flight's head the next landing's height,
+    the passage at its ward's level) in seeds 1, 7 and 23; what's solid blocked and not seen
+    through, a third or more of the wards' ground open; walked in seed 1 from outside the gate
+    tower into the keep, standing on every ward's level on the way. e2e: the gate's and the
+    bridge's ways open at the outer ward's level, the gate tower blocked either side of its way.
+  - **Pictures** (sent in the session): the bridge before and after (the player in the gate
+    tower's passage), a stair, the keep's door, its great hall; from above the same before and
+    after.
+  - **Next:** M7.5b-4 (crypts under the ruins); then M7.5c.

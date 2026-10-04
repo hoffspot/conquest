@@ -15,7 +15,7 @@
 import { ENTRANCES, entranceOf, structureDoor } from "./insides.js";
 import { castleLayout, inCourt, solidAt } from "./setpieces/castles.js";
 import { GOD_IDS } from "./lore/gods.js";
-import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
+import { CITADEL, citadelLevel, citadelParts, citadelWays, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
 import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
@@ -242,6 +242,8 @@ export class Sites {
         this.bySquare = new Set();
         this.paved = new Set();
         this.courts = new Map();
+        this.decked = new Set();
+        this.decks = new Map();
         this.moats = new Set();
         this.rims = new Set();
         this.cleared = [];
@@ -297,6 +299,23 @@ export class Sites {
 
             for (const square of set.courts ?? []) {
                 this.courts.set(square, set.court);
+            }
+
+            // (A citadel's decks: the way over its moat and through its gates, its stairs; each in
+            // every chunk it reaches into)
+            for (const square of set.decked ?? []) {
+                this.decked.add(square);
+            }
+
+            for (const deck of set.decks ?? []) {
+                const [x0, x1] = [Math.min(deck.a[0], deck.b[0]) - deck.half, Math.max(deck.a[0], deck.b[0]) + deck.half];
+                const [y0, y1] = [Math.min(deck.a[1], deck.b[1]) - deck.half, Math.max(deck.a[1], deck.b[1]) + deck.half];
+
+                for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
+                    for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
+                        this.decks.set(cy * CHUNKS + cx, [...(this.decks.get(cy * CHUNKS + cx) ?? []), deck]);
+                    }
+                }
             }
 
             const chunk = Math.floor(set.y / CHUNK) * CHUNKS + Math.floor(set.x / CHUNK);
@@ -369,6 +388,19 @@ export class Sites {
      */
     courtAt(x, y) {
         return this.courts.get(y * WORLD_SIZE + x) ?? null;
+    }
+
+    /** Whether a square's under a citadel's deck (walked on at its height, whatever's under it). */
+    deckAt(x, y) {
+        return this.decked.has(y * WORLD_SIZE + x);
+    }
+
+    /**
+     * The citadels' decks reaching into a chunk: [{ a, b ([x, y] metres), half, from, to (their
+     * heights at a and b, metres) }], as the overworld's bridges are (overworld.js deckOf).
+     */
+    decksNear(cx, cy) {
+        return this.decks.get(cy * CHUNKS + cx) ?? [];
     }
 
     /** Whether a square's in a citadel's moat (water, too deep to wade). */
@@ -573,25 +605,63 @@ export class Sites {
             { at: [x, y], radius: moatReach(citadel, "face"), level: level(base - deep), ease: CITADEL.moat.rim / 4 },
             ...citadel.wards.map((ward) => ({ ...ring(ward.sides, ward.apothem - CITADEL.terrace.ease - 0.3), level: level(base + ward.rise), ease: CITADEL.terrace.ease })),
         ];
-        // (Its squares, its moat's and those under its far side's wall and kept behind it: out to
-        // its glacis)
+        // (How it's walked: what of it stands in the way, its decks, its keep's door; each deck's
+        // height from the wards' terraces it climbs between, as their pads are levelled)
+        const ways = citadelWays(citadel);
+        const rises = citadel.wards.map(({ rise }) => rise);
+        const lift = (h) => {
+            const k = Math.max(0, Math.min(rises.length - 2, rises.findLastIndex((rise) => rise <= h)));
+            const t = (h - rises[k]) / (rises[k + 1] - rises[k]);
+
+            return level(base + rises[k]) + (level(base + rises[k + 1]) - level(base + rises[k])) * t;
+        };
+        const decks = ways.decks.map(({ a, b, half, from, to }) => ({ a: place(a), b: place(b), half, from: lift(from), to: lift(to), site: site.id }));
+        const decked = ([u, v]) =>
+            ways.decks.some(({ a, b, half }) => {
+                const [du, dv] = [b[0] - a[0], b[1] - a[1]];
+                const long = hypot(du, dv);
+                const along = ((u - a[0]) * du + (v - a[1]) * dv) / long;
+
+                return along >= 0 && along <= long && Math.abs((u - a[0]) * dv - (v - a[1]) * du) / long <= half;
+            });
+        const [outer] = citadel.wards;
+        const shapes = { solid: ways.solid };
+        // (Its keep's door, gone into from the inner ward: turned as the keep is)
+        const keepTurn = (u, v) => {
+            const [px, py] = place([ways.door.at[0] + u * sin(ways.door.turn) + v * cos(ways.door.turn), ways.door.at[1] - u * cos(ways.door.turn) + v * sin(ways.door.turn)]);
+
+            return { x: px, y: py };
+        };
+        const entrance = entranceAt({ ...ways.door, inside: "keep" }, keepTurn, facing + PI / 2 - ways.door.turn);
+        const way = new Set(entrance.clear.map(([i, j]) => j * WORLD_SIZE + i));
+        // (Its squares: those in the way, and the wards' open ground, its courtyards; those under
+        // its decks (over the moat, its water still under them); its moat's and those under its far
+        // side's wall and kept behind it: out to its glacis)
         const radius = moatReach(citadel, "glacis");
         const reach = Math.ceil(radius + 1);
         const kept = moatReach(citadel, "lip") + CITADEL.moat.kept;
         const squares = new Set();
+        const courts = new Set();
+        const deckSquares = new Set();
         const moat = new Set();
         const rim = new Set();
 
         for (let j = Math.floor(y) - reach; j <= Math.floor(y) + reach; j++) {
             for (let i = Math.floor(x) - reach; i <= Math.floor(x) + reach; i++) {
                 const at = local(i + 0.5, j + 0.5);
+                const k = j * WORLD_SIZE + i;
 
-                if (insideCitadel(citadel, at, 0.25)) {
-                    squares.add(j * WORLD_SIZE + i);
+                if (decked(at)) {
+                    deckSquares.add(k);
+                    (inMoat(citadel, at) ? moat : courts).add(k);
+                } else if (insideWard(citadel, outer, at, 0.25)) {
+                    (solidAt(shapes, at) && !way.has(k) ? squares : courts).add(k);
+                } else if (insideCitadel(citadel, at, 0.25)) {
+                    squares.add(k);
                 } else if (inMoat(citadel, at)) {
-                    moat.add(j * WORLD_SIZE + i);
+                    moat.add(k);
                 } else if (hypot(...at) < kept) {
-                    rim.add(j * WORLD_SIZE + i);
+                    rim.add(k);
                 }
             }
         }
@@ -603,7 +673,7 @@ export class Sites {
             return { ...part, kind: "citadel", key: `citadel-${part.part}`, site: site.id, seed: site.seed, people: "human", x: px, y: py, w: 0, h: 0, facing: facing + PI / 2 - part.turn, base: level(base + part.rise) };
         });
 
-        return { site, x, y, facing, w, h, pieces, squares, moat, rim, water: level(base) - water, radius, clearing: clearingOf(citadel), heart: [x, y], pads, citadel, level: base };
+        return { site, x, y, facing, w, h, pieces, squares, courts, court: GROUND.courtyard, decks, decked: deckSquares, entrance, moat, rim, water: level(base) - water, radius, clearing: clearingOf(citadel), heart: [x, y], pads, citadel, level: base };
     }
 
     // The spots a site that would rather lie high or low may stand (LIE), best first: LYING.step

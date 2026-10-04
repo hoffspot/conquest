@@ -1208,7 +1208,7 @@ test("out in the human lands a broken aqueduct strides across a dip: drawn over 
     expect(under.nearest).toBeLessThan(3);
 });
 
-test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls, its moat and its gate tower in the way", async ({ page }) => {
+test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls and its moat in the way, its gate tower's and its gate's ways walked through at its outer ward's level", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
     await page.evaluate(() => window.pellagos.game.stop());
@@ -1266,8 +1266,11 @@ test("the humans' castle is a hill citadel: its wards on terraces up its hill, d
             top: top - (set.level + citadel.wards.at(-1).rise + keep.high),
             inner: land.ground.heightAt(keep.x, keep.y) - set.pads.at(-1).level,
             outer: land.ground.heightAt(...place([0, outer.apothem - 6])) - set.pads[0].level,
-            tower: land.squares.blocked(Math.floor(tower.x), Math.floor(tower.y)),
-            gate: land.squares.blocked(Math.floor(gx), Math.floor(gy)),
+            // (Its gate tower either side of the way through it)
+            tower: [-4, 4].every((u) => land.squares.blocked(Math.floor(tower.x + u * Math.cos(facing)), Math.floor(tower.y - u * Math.sin(facing)))) && !land.squares.blocked(Math.floor(tower.x), Math.floor(tower.y)),
+            // (The way through its gate, the outer ward's level, as over its bridge before it)
+            gate: !land.squares.blocked(Math.floor(gx), Math.floor(gy)) && Math.abs(land.heightAt(gx, gy) - set.pads[0].level) < 0.05,
+            bridge: !land.squares.blocked(...place([0, outer.apothem + 10]).map(Math.floor)) && Math.abs(land.heightAt(...place([0, outer.apothem + 10])) - set.pads[0].level) < 0.05,
             moat: Boolean(moat.water[(Math.floor(my) - moat.y0) * 64 + (Math.floor(mx) - moat.x0)]) && land.squares.blocked(Math.floor(mx), Math.floor(my)),
             before: land.squares.blocked(Math.floor(sx), Math.floor(sy)),
         };
@@ -1279,6 +1282,7 @@ test("the humans' castle is a hill citadel: its wards on terraces up its hill, d
     expect(Math.abs(seen.outer)).toBeLessThan(0.05);
     expect(seen.tower).toBe(true);
     expect(seen.gate).toBe(true);
+    expect(seen.bridge).toBe(true);
     expect(seen.moat).toBe(true);
     expect(seen.before).toBe(false);
 });
