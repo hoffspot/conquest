@@ -49,7 +49,7 @@ import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
-import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
+import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
@@ -199,29 +199,30 @@ const LIGHT_REACH = 30;
 const LEAN = { share: 0.4, most: 4.5 };
 
 // The tavern's folk: how much hair they grow (at most: less than the player, as there are more
-// of them), and what each of their acts is: its animation's timing (s) and the sound it makes
+// of them), and what each of their acts is: its animation's timing (s: core/roles.js ACT_TIMES)
+// and the sound it makes
 const FOLK_HAIR = 0.2;
 const ACTS = {
-    toast: { hitAt: 1, duration: 3.2, sound: "clink", volume: 1 },
-    serve: { hitAt: 0.8, duration: 1.8, sound: "clink", volume: 0.45 },
-    pour: { hitAt: 1, duration: 2.8, sound: "pour", volume: 1, early: 0.3 },
-    beckon: { hitAt: BECKON.hitAt, duration: BECKON.duration },
+    toast: { ...ACT_TIMES.toast, sound: "clink", volume: 1 },
+    serve: { ...ACT_TIMES.serve, sound: "clink", volume: 0.45 },
+    pour: { ...ACT_TIMES.pour, sound: "pour", volume: 1, early: 0.3 },
+    beckon: { ...ACT_TIMES.beckon },
     // The smithy's: three blows on the anvil (each ringing and throwing sparks, `beats`: s after
     // key 1), the work thrust into the coals, quenched in the trough (hissing, steam rising), the
     // bellows pumped (the forge's fire flaring), and the grindstone cranked (turning as it is)
-    forge: { hitAt: 0.9, duration: 2.6, sound: "anvil", volume: 1, beats: [0, 0.37, 0.71], burst: "sparks", ahead: 0.62, height: 0.9 },
-    heat: { hitAt: 0.9, duration: 2.4, sound: "bellows", volume: 0.5, burst: "embers", ahead: 0.9, height: 1, flare: 0.5 },
-    quench: { hitAt: 0.8, duration: 2.2, sound: "hiss", volume: 1, burst: "steam", ahead: 0.7, height: 0.7 },
-    pump: { hitAt: 0.7, duration: 2.1, sound: "bellows", volume: 1, beats: [0, 0.38, 0.76], flare: 0.8 },
-    crank: { hitAt: 0.9, duration: 2.6, sound: "grind", volume: 1, drive: "grindstone" },
+    forge: { ...ACT_TIMES.forge, sound: "anvil", volume: 1, beats: [0, 0.37, 0.71], burst: "sparks", ahead: 0.62, height: 0.9 },
+    heat: { ...ACT_TIMES.heat, sound: "bellows", volume: 0.5, burst: "embers", ahead: 0.9, height: 1, flare: 0.5 },
+    quench: { ...ACT_TIMES.quench, sound: "hiss", volume: 1, burst: "steam", ahead: 0.7, height: 0.7 },
+    pump: { ...ACT_TIMES.pump, sound: "bellows", volume: 1, beats: [0, 0.38, 0.76], flare: 0.8 },
+    crank: { ...ACT_TIMES.crank, sound: "grind", volume: 1, drive: "grindstone" },
     // A temple's: the priest's blessing (a soft chime, a glimmer over the pews), and a candle lit
-    bless: { hitAt: 1, duration: 2.8, sound: "healed", volume: 0.35, burst: "blessing", ahead: 0.5, height: 1.7 },
-    light: { hitAt: 1, duration: 2.4, burst: "embers", ahead: 0.6, height: 1 },
+    bless: { ...ACT_TIMES.bless, sound: "healed", volume: 0.35, burst: "blessing", ahead: 0.5, height: 1.7 },
+    light: { ...ACT_TIMES.light, burst: "embers", ahead: 0.6, height: 1 },
     // A guild's: a notice stamped, twice (a thump on the counter each time), one filed on the
     // shelves, and the quest board read (paper rustling)
-    stamp: { hitAt: 0.8, duration: 2.2, sound: "stepWood", volume: 2, beats: [0, 0.7] },
-    file: { hitAt: 0.9, duration: 2, sound: "rustle", volume: 1 },
-    read: { hitAt: 0.9, duration: 2, sound: "rustle", volume: 0.6 },
+    stamp: { ...ACT_TIMES.stamp, sound: "stepWood", volume: 2, beats: [0, 0.7] },
+    file: { ...ACT_TIMES.file, sound: "rustle", volume: 1 },
+    read: { ...ACT_TIMES.read, sound: "rustle", volume: 0.6 },
 };
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)

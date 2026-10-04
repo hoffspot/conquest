@@ -15,6 +15,7 @@
     "e2e:durations": "node scripts/e2e-durations.js",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
+    "check:motion": "node scripts/motion-check.js",
     "vendor:three": "node scripts/vendor-three.js",
     "vendor:meshopt": "node scripts/vendor-meshopt.js",
     "build:manifest": "node scripts/build-manifest.js",

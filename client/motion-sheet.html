@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="The motion check's contact sheet: each failure drawn as it happened, the spot marked in red">
+
+        <title>Motion Check</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="motion-sheet.css">
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+        <script type="module" src="js/lab/motion-sheet.js"></script>
+    </head>
+    <body>
+        <header id="bar">
+            <h1>Motion check</h1>
+            <p id="summary" role="status">Loading the body…</p>
+
+            <form id="filters">
+                <label>Report <input id="file" type="file" accept="application/json,.json"></label>
+                <label>Measure <select id="measure"><option value="">Every measure</option></select></label>
+                <label>Motions <select id="group"><option value="">Every motion</option></select></label>
+                <label>People <select id="people"><option value="">Every people</option></select></label>
+                <label>Showing <select id="count">
+                    <option value="24">24</option>
+                    <option value="48" selected>48</option>
+                    <option value="96">96</option>
+                    <option value="200">200</option>
+                </select></label>
+                <label class="check"><input id="close" type="checkbox"> Close up</label>
+                <label class="check"><input id="new" type="checkbox"> Only what's new (worse than the baseline)</label>
+            </form>
+        </header>
+
+        <main id="sheet" aria-live="polite"></main>
+    </body>
+</html>
