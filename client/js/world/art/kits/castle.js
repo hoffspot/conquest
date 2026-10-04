@@ -91,8 +91,11 @@ export function wall({ axis, length }, { stone = "stone" } = {}) {
     return solid.toObject();
 }
 
-/** A tower, 3 x 3 squares: round or square, with battlements or a roof. */
-export function tower({ shape, top }, { stone = "stone", roof = "slate" } = {}) {
+/**
+ * A tower, 3 x 3 squares: round or square, with battlements or a roof; with `door` (a watchtower
+ * standing alone), a door in its foot at the front, its step and a torch by it.
+ */
+export function tower({ shape, top, door }, { stone = "stone", roof = "slate" } = {}) {
     const solid = new Solid();
     const s = material(stone);
     const c = CELL * 1.5;
@@ -129,6 +132,16 @@ export function tower({ shape, top }, { stone = "stone", roof = "slate" } = {}) 
 
         slit(solid, c, 24, 54);
         slit(solid, c, 42, 54);
+    }
+
+    if (door) {
+        // (Its frame standing out of the tower's foot, the door in it, a step before it)
+        const face = shape === "round" ? c + 27.5 : 56;
+
+        solid.box(c - 6, 0, face - 5, c + 6, 15, face + 1, s);
+        solid.box(c - 4, 1.5, face + 1, c + 4, 12.5, face + 1.4, material("planks-dark"));
+        solid.box(c - 7, 0, face, c + 7, 1.5, face + 3, s);
+        torch(solid, [c + 9, 14, shape === "round" ? c + Math.sqrt(25 * 25 - 9 * 9) : 54], [0, 1]);
     }
 
     return solid.toObject();

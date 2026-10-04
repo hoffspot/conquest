@@ -2146,6 +2146,31 @@ function hall(map) {
 // their dais, pillars down the hall, the council's tables, a hearth in each side wall, the
 // steward's desk and shelves, strongboxes, the armoury's racks of swords, spears and shields, and
 // long banners on the walls; a great wheel of candles over the carpet
+// An armoury's rack against the north wall (a plan's "R" run along it): swords and spears
+// upright, shields hung above
+function armoury(solid, rack) {
+    const [x0, x1] = [m(rack.x), m(rack.x + rack.w)];
+    const z = m(rack.y);
+
+    solid.box(x0, m(0.2), z + m(0.1), x1, m(0.3), z + m(0.5), material("timber", WALL));
+    solid.box(x0, m(1.2), z + m(0.05), x1, m(1.3), z + m(0.3), material("timber", WALL));
+
+    for (let x = x0 + m(0.3), k = 0; x < x1 - m(0.2); x += m(0.35), k++) {
+        if (k % 3 === 2) {
+            solid.box(x - 0.2, m(0.3), z + m(0.25), x + 0.2, m(2.4), z + m(0.3), material("timber"));
+            solid.cylinder(x, z + m(0.28), m(2.4), m(2.7), m(0.05), 0, material("iron"), { segments: 6 });
+        } else {
+            solid.box(x - 0.35, m(0.3), z + m(0.22), x + 0.35, m(1.3), z + m(0.3), material("iron"));
+            solid.box(x - 0.9, m(1.3), z + m(0.2), x + 0.9, m(1.36), z + m(0.32), material("brass"));
+            solid.box(x - 0.25, m(1.36), z + m(0.22), x + 0.25, m(1.55), z + m(0.3), material("leather"));
+        }
+    }
+
+    for (let x = x0 + m(0.6); x < x1 - m(0.3); x += m(1)) {
+        solid.cylinder(x, z + m(0.05), m(1.7), m(1.72), m(0.35), m(0.35), material("wool-blue", WALL), { segments: 12 });
+    }
+}
+
 function keep(map) {
     const solid = new Solid();
     const [w, h] = [m(map.width), m(map.height)];
@@ -2228,28 +2253,9 @@ function keep(map) {
         chest(solid, m(box.x + 0.5), m(box.y + 0.5));
     }
 
-    // The armoury's racks in the corner: swords and spears upright, shields hung above
+    // The armoury's racks in the corner
     for (const rack of at("rack")) {
-        const [x0, x1] = [m(rack.x), m(rack.x + rack.w)];
-        const z = m(rack.y);
-
-        solid.box(x0, m(0.2), z + m(0.1), x1, m(0.3), z + m(0.5), material("timber", WALL));
-        solid.box(x0, m(1.2), z + m(0.05), x1, m(1.3), z + m(0.3), material("timber", WALL));
-
-        for (let x = x0 + m(0.3), k = 0; x < x1 - m(0.2); x += m(0.35), k++) {
-            if (k % 3 === 2) {
-                solid.box(x - 0.2, m(0.3), z + m(0.25), x + 0.2, m(2.4), z + m(0.3), material("timber"));
-                solid.cylinder(x, z + m(0.28), m(2.4), m(2.7), m(0.05), 0, material("iron"), { segments: 6 });
-            } else {
-                solid.box(x - 0.35, m(0.3), z + m(0.22), x + 0.35, m(1.3), z + m(0.3), material("iron"));
-                solid.box(x - 0.9, m(1.3), z + m(0.2), x + 0.9, m(1.36), z + m(0.32), material("brass"));
-                solid.box(x - 0.25, m(1.36), z + m(0.22), x + 0.25, m(1.55), z + m(0.3), material("leather"));
-            }
-        }
-
-        for (let x = x0 + m(0.6); x < x1 - m(0.3); x += m(1)) {
-            solid.cylinder(x, z + m(0.05), m(1.7), m(1.72), m(0.35), m(0.35), material("wool-blue", WALL), { segments: 12 });
-        }
+        armoury(solid, rack);
     }
 
     // Long banners either side of the dais, and down the side walls
@@ -2505,39 +2511,75 @@ function lair(map) {
 }
 
 // A broken watchtower below: flagstones, its walls of old stone, the stairs up along the north
-// wall, rubble in the corners, a torch by the door; its floor above carried on beams
+// wall, rubble in the corners, a torch by the door; its floor above carried on beams. A people's,
+// kept (`look` "kept"): its walls their stone, its door shut behind, the racks of their arms by
+// the stairs, a table and benches, barrels, a torch either side, no rubble
 function tower(map) {
     const solid = new Solid();
     const [w, h] = [m(map.width), m(map.height)];
-    const stair = map.pieces.find((piece) => piece.kind === "stairs");
+    const kept = map.look === "kept";
+    const stone = kept ? "stone" : "stone-old";
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const stair = at("stairs")[0];
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
     solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
-    walledIn(solid, map, "stone-old", [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.3 }], []);
+    walledIn(solid, map, stone, [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.3 }], []);
     stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
     ceiling(solid, map, [m(stair.x), m(stair.y), m(stair.x + stair.w), m(stair.y + stair.h)]);
 
-    for (const [x, z] of [[map.width - 1.2, map.height - 1.6], [0.8, map.height - 2.4], [map.width - 1.4, 3.4]]) {
-        for (let k = 0; k < 4; k++) {
-            const [dx, dz, size] = [roughOf(x, k) - 0.5, roughOf(k, z) - 0.5, 0.18 + 0.2 * roughOf(x + k, z)];
+    if (kept) {
+        solid.box(m(doorMiddle - 0.8), 0, h - 0.2, m(doorMiddle + 0.8), m(2.3), h + 0.4, material("planks-dark", WALL));
 
-            solid.box(m(x + dx * 0.8 - size), 0, m(z + dz * 0.8 - size), m(x + dx * 0.8 + size), m(size * 1.4), m(z + dz * 0.8 + size), material("stone-old"));
+        for (const rack of at("rack")) {
+            armoury(solid, rack);
+        }
+
+        for (const piece of at("table")) {
+            const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+
+            table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
+            tankard(solid, x0 + m(0.6), (z0 + z1) / 2, m(0.78), true);
+            tankard(solid, x1 - m(0.8), z0 + m(0.35), m(0.78), true);
+            candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+        }
+
+        for (const run of benchRuns(map)) {
+            bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+        }
+
+        for (const barrels of at("barrels")) {
+            for (let y = barrels.y; y < barrels.y + barrels.h; y++) {
+                cask(solid, m(barrels.x + 0.1), m(y + 0.5), 0, m(0.8), m(0.4));
+            }
+        }
+    } else {
+        for (const [x, z] of [[map.width - 1.2, map.height - 1.6], [0.8, map.height - 2.4], [map.width - 1.4, 3.4]]) {
+            for (let k = 0; k < 4; k++) {
+                const [dx, dz, size] = [roughOf(x, k) - 0.5, roughOf(k, z) - 0.5, 0.18 + 0.2 * roughOf(x + k, z)];
+
+                solid.box(m(x + dx * 0.8 - size), 0, m(z + dz * 0.8 - size), m(x + dx * 0.8 + size), m(size * 1.4), m(z + dz * 0.8 + size), material("stone-old"));
+            }
         }
     }
 
-    const { fire, light } = wallTorch(solid, m(doorMiddle + 1.6), h - m(0.45));
+    const torches = kept ? [doorMiddle - 1.6, doorMiddle + 1.6] : [doorMiddle + 1.6];
+    const lit = torches.map((x) => wallTorch(solid, m(x), h - m(0.45)));
 
-    return { solid, moving: [], flames: [fire], lights: [light], hearth: null };
+    return { solid, moving: [], flames: lit.map(({ fire }) => fire), lights: lit.map(({ light }) => light), hearth: null };
 }
 
 // How far a watchtower's top is over the ground round it (metres)
 const TOWER_TALL = 11;
 
 // A broken watchtower's top: boards over the floor below, the stairs coming up through them, its
-// parapet broken (its merlons fallen here and there), rubble on it, open to the sky
+// parapet broken (its merlons fallen here and there), rubble on it, open to the sky. A people's,
+// kept: its parapet whole, a brazier burning on it
 function towerTop(map) {
     const solid = new Solid();
+    const kept = map.look === "kept";
+    const stone = kept ? "stone" : "stone-old";
     const [w, h] = [m(map.width), m(map.height)];
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
     const [hole0, hole1, well0, well1] = [m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h)];
@@ -2549,38 +2591,59 @@ function towerTop(map) {
 
     // (The stairwell down a dark well: the floor below, and its walls)
     solid.box(hole0, -m(STOREY) - 0.5, well0, hole1, -m(STOREY), well1, material("stone"));
-    solid.box(hole0 - 0.5, -m(STOREY), well0 - 0.5, hole1, -0.5, well0, material("stone-old"));
-    solid.box(hole1, -m(STOREY), well0, hole1 + 0.5, -0.5, well1, material("stone-old"));
-    solid.box(hole0 - 0.5, -m(STOREY), well0, hole0, -0.5, well1, material("stone-old"));
+    solid.box(hole0 - 0.5, -m(STOREY), well0 - 0.5, hole1, -0.5, well0, material(stone));
+    solid.box(hole1, -m(STOREY), well0, hole1 + 0.5, -0.5, well1, material(stone));
+    solid.box(hole0 - 0.5, -m(STOREY), well0, hole0, -0.5, well1, material(stone));
 
     // (Its walls falling away to the ground below, far down, where the parapet's looked over)
     const thick = m(0.5);
     const fall = m(TOWER_TALL);
 
-    solid.box(-thick, -fall, -thick, w + thick, -0.5, h + thick, material("stone-old"));
+    solid.box(-thick, -fall, -thick, w + thick, -0.5, h + thick, material(stone));
     solid.box(-m(120), -fall - 0.5, -m(120), m(map.width + 120), -fall, m(map.height + 120), material("grass"));
 
-    // The parapet, a merlon every metre and a half, some fallen
+    // The parapet, a merlon every metre and a half, some fallen (none on a kept one)
 
     for (const [x0, z0, x1, z1] of [[-thick, -thick, w + thick, 0], [-thick, h, w + thick, h + thick], [-thick, 0, 0, h], [w, 0, w + thick, h]]) {
-        solid.box(x0, 0, z0, x1, m(1), z1, material("stone-old", WALL));
+        solid.box(x0, 0, z0, x1, m(1), z1, material(stone, WALL));
 
         const along = x1 - x0 > z1 - z0;
         const length = along ? x1 - x0 : z1 - z0;
 
         for (let s = m(0.4); s < length - m(0.6); s += m(1.5)) {
-            if (roughOf(x0 + s, z0 + s) < 0.3) {
+            if (!kept && roughOf(x0 + s, z0 + s) < 0.3) {
                 continue;
             }
 
-            const tall = m(1.6 + 0.3 * roughOf(s, x0));
+            const tall = kept ? m(1.75) : m(1.6 + 0.3 * roughOf(s, x0));
 
             if (along) {
-                solid.box(x0 + s, m(1), z0, x0 + s + m(0.7), tall, z1, material("stone-old", WALL));
+                solid.box(x0 + s, m(1), z0, x0 + s + m(0.7), tall, z1, material(stone, WALL));
             } else {
-                solid.box(x0, m(1), z0 + s, x1, tall, z0 + s + m(0.7), material("stone-old", WALL));
+                solid.box(x0, m(1), z0 + s, x1, tall, z0 + s + m(0.7), material(stone, WALL));
             }
         }
+    }
+
+    // (A kept one's brazier: an iron bowl on three legs, its coals and its fire)
+    const fires = [];
+
+    for (const piece of map.pieces.filter((each) => each.kind === "campfire")) {
+        const [x, z] = [m(piece.x + 0.5), m(piece.y + 0.5)];
+
+        for (let k = 0; k < 3; k++) {
+            const a = (k / 3) * Math.PI * 2;
+
+            solid.turnedBox(x + Math.cos(a) * m(0.22), z + Math.sin(a) * m(0.22), m(0.04), m(0.04), 0, m(0.7), a, material("iron"));
+        }
+
+        solid.cylinder(x, z, m(0.62), m(0.82), m(0.18), m(0.36), material("iron"), { segments: 12 });
+        solid.cylinder(x, z, m(0.8), m(0.84), m(0.32), m(0.32), material("embers"), { segments: 12 });
+
+        const fire = flame(m(0.55), m(0.6), x * 0.011 + z * 0.019, "hearth");
+
+        fire.position.set(x, m(0.84), z);
+        fires.push({ fire, light: { kind: "fire", x: x / M, y: 1.5, z: z / M, colour: 0xff9a40, intensity: 7, distance: 12, flicker: 0.3, ...fire.userData.fire } });
     }
 
     for (const piece of map.pieces.filter((each) => each.kind === "rock")) {
@@ -2596,7 +2659,7 @@ function towerTop(map) {
     // (The sky over it, the sun on it)
     lighting.daylight = [0.45, 1, 0.35];
 
-    return { solid, moving: [], flames: [], lights: [], hearth: null, open: true };
+    return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
 }
 
 const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, cave, lair, tower, "tower-top": towerTop };

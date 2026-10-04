@@ -3774,3 +3774,35 @@ converted data is to be measured in M8 against today's hm08 data.
     chief by the altar, the chest beside it, guards within, no priest; a manor its people's has its
     folk).
   - **Next:** M7.5b-2b, the other peoples' halls and temples held by outlaws.
+- **2026-10-04, M7.5b-2b built: the peoples' watchtowers and the elves' tree hall gone into**
+  (docs/GAME.md *Gone into*).
+  - **Which:** surveyed every people's own place for a way in. Each people's watchtower is the
+    commonest (about 22 a world, half held by outlaws) and where the friendlies' weapons and armour
+    are to be sold (M7.5c); the elves' tree hall has its door already. The orcs' watchtower (an
+    open deck on poles), the pits, the hatchery, the spider shrine, the spire and the shadow gate
+    are open or solid: their bands stay outside. The sun temple's door is behind its altar and
+    obelisk, the ziggurat's at its top: left for later, with art to change.
+  - **The doors** (core/insides.js `STRUCTURE_DOORS`, `structureDoor`; `entranceOf` taking a door's
+    numbers; core/sites.js: the door on the watchtower's piece, `door`): drawn in each kit's tower
+    (kits/castle.js `tower`; peoples cat-places.js `bastion`, darkelf.js `tower`, elf.js `tower`,
+    lizard-places.js `lookout`), only for a watchtower, so the towers on town walls are as they
+    were.
+  - **Fixed on the way:** the humans' watchtower (a castle's round tower, 10 m across) stood on two
+    plots, drawn 2 m off its ground towards the front and over its edge: walked into. It stands on
+    three now, in their middle.
+  - **Within** (insides.js `watchtowerRooms`, `watchFolkOf`; world/interiors3d.js `tower`,
+    `towerTop` with `look` "kept", `armoury` from the keep's racks): the guardroom and the top as
+    above; a lookout and a sentry; held by outlaws, the plans' "l", "h", "g" as a broken tower's.
+  - **The band outside** a place gone into stands before its way in, not round its heart (host.js
+    `#places`): round the tree hall's heart, deep in its ground, the only open squares near were
+    the way up to its door, and the band crowded it so it couldn't be walked.
+  - **NET_VERSION 35.**
+  - **Named** for the place (insides.js `addSite`: "Caeliavyn Tree Hall"; a watchtower with no
+    name of its own "the watchtower"), of its people (their materials within).
+  - **Pictures** (sent in the session): each people's watchtower's door from in front, the tree
+    hall's; a cat folk's watchtower inside, both floors, its sentries; a humans' held by outlaws.
+  - **Tests:** test/insides.test.js (every people's watchtower and the tree hall: the way in
+    clear, all within got to, folk where they stand); test/places.test.js (a people's watchtower
+    held by outlaws: the band's chief and chest at its top, guards below; one its people's, its
+    lookout and sentry; the tree hall held by outlaws walked up and gone into, the band not in
+    the way).

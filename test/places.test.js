@@ -195,8 +195,9 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
             const building = world.interiors.buildings.get(`site:${place.id}`);
 
             assert.ok(chest.chest && chest.locked && chest.until === null);
-            // (A cave's gone into; a people's watchtower, standing, isn't yet: M7.5b-2)
-            assert.equal(Boolean(building), kind === "cave" || (kind === "watchtower" && !world.plan.sites.find((site) => site.id === place.id).race), kind);
+            // (A cave's gone into, and a watchtower, broken or a people's: all but the orcs', an
+            // open deck on poles: insides.js STRUCTURE_DOORS)
+            assert.equal(Boolean(building), kind === "cave" || (kind === "watchtower" && place.race !== "orc"), kind);
 
             if (!building) {
                 assert.equal(chest.map, "town");
@@ -219,10 +220,12 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
             assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }), { ok: false, reason: "locked" });
             me.map = "town";
 
-            // Come in among them: they go for the player
+            // Come in among them (from outside, in sight of one of them): they go for the player
             const outside = folk.find((one) => one.map === "town");
+            const [dx, dy] = [outside.x - at[0], outside.y - at[1]];
+            const off = Math.hypot(dx, dy) || 1;
 
-            put(me, [outside.square[0] + 3, outside.square[1]]);
+            put(me, [Math.floor(outside.x + (dx / off) * 3), Math.floor(outside.y + (dy / off) * 3)]);
             run(host, 1500);
             assert.equal(outside.target, HOST_PLAYER, `${kind}'s band guards it`);
 
@@ -386,6 +389,59 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         assert.equal(keep.kind, "keep");
         assert.ok(host.open.get(keep.key)?.includes(`${keep.key}/ruler`), JSON.stringify(host.open.get(keep.key)));
         assert.ok(!host.held.has(manor.id));
+    });
+
+    it("a people's watchtower that's theirs is kept, its lookout and sentry in it; one held by outlaws has the band's chief and chest at its top", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const towers = placesOf(world.plan).filter((each) => each.kind === "watchtower" && each.race && each.race !== "orc");
+        const theirs = towers.find((each) => heldAtStart(world.plan, each) === "friendly");
+        const taken = towers.find((each) => heldAtStart(world.plan, each) === "bandits");
+
+        world.maps.town.sites.heartOf(world.plan.sites.find((site) => site.id === theirs.id));
+
+        const kept = world.interiors.buildings.get(`site:${theirs.id}`);
+
+        put(me, [...world.maps.town.sites.set.get(theirs.id).entrance.outside]);
+        run(host, 600);
+        assert.deepEqual(host.open.get(kept.key), [`${kept.key}/lookout`, `${kept.key}/sentry`]);
+        assert.ok(!host.held.has(theirs.id));
+
+        near(context, taken);
+
+        const held = host.held.get(taken.id);
+        const building = world.interiors.buildings.get(`site:${taken.id}`);
+        const [, top] = building.maps;
+
+        assert.equal(held.map, top);
+        assert.equal(host.battle.actor(held.leader).map, top);
+        assert.deepEqual(host.open.get(building.key) ?? [], []);
+    });
+
+    it("the elves' tree hall held by outlaws, its door deep in its ground: those of the band outside stand before the way in, not in it, and it's walked up and gone into", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const hall = placesOf(world.plan).find((each) => each.kind === "tree hall" && heldAtStart(world.plan, each) === "bandits");
+
+        near(context, hall);
+
+        const set = world.maps.town.sites.set.get(hall.id);
+        const building = world.interiors.buildings.get(`site:${hall.id}`);
+        const way = new Set(set.entrance.clear.map(String));
+        const outside = host.held.get(hall.id).ids.map((id) => host.battle.actor(id)).filter((one) => one.map === "town");
+
+        assert.equal(building.kind, "keep");
+        assert.ok(outside.length > 0 && outside.every((one) => !way.has(String(one.square))), "none in the way");
+
+        put(me, [...set.entrance.outside]);
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
+
+        for (let t = 0; t < 12000 && me.map === "town"; t += STEP_MS) {
+            me.hp = me.maxHp;
+            host.advance(STEP_MS);
+        }
+
+        assert.equal(me.map, building.maps[0]);
     });
 
     it("carries on exactly from a snapshot, the cave's floor made again and its band within it", () => {

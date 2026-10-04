@@ -875,14 +875,14 @@ export function gatehouse(piece) {
     return solid.toObject();
 }
 
-/** An octagonal tower of black stone under a needle spire. */
+/** An octagonal tower of black stone under a needle spire (a watchtower's with its door: `door`). */
 export function tower(piece) {
     const random = randomFor(piece, 97);
     const [W, D] = [piece.w * CELL, piece.h * CELL];
     const solid = new Solid();
 
     toned(solid, random, []);
-    octTower(solid, W / 2, D / 2, Math.min(W, D) / 2 - m(1.2), 0, m(12), random, { spire: 2.6 });
+    octTower(solid, W / 2, D / 2, Math.min(W, D) / 2 - m(1.2), 0, m(12), random, { spire: 2.6, door: piece.door ? { width: m(1.3), height: m(2.6) } : null });
 
     return solid.toObject();
 }

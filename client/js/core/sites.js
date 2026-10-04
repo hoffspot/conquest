@@ -12,12 +12,12 @@
 //
 // Pure data, no DOM; the same for the same plan.
 
-import { ENTRANCES, entranceOf } from "./insides.js";
+import { ENTRANCES, entranceOf, structureDoor } from "./insides.js";
 import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
-import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, towerKey } from "./setpieces/pieces.js";
+import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
@@ -30,8 +30,9 @@ const HUMAN_PLACES = Object.freeze({ castle: [42, 42], abbey: LANDMARKS.church, 
 const isCitadel = (site) => site.race === "human" && site.kind === "castle";
 const HUMAN_LANDMARK = Object.freeze({ abbey: "church", windmill: "windmill", manor: "keep" });
 
-// A watchtower, anyone's: two plots square
+// A watchtower, anyone's: two plots square; the humans' a castle's round tower, three
 const WATCHTOWER = [2, 2];
+const HUMAN_WATCHTOWER = [TOWER_SIZE, TOWER_SIZE];
 
 // How far a site may be moved off its cell's middle to stand clear of the roads and the water
 // (metres), in steps of
@@ -74,7 +75,7 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 /** The size (plots across and deep) of what's built at a site, or null if nothing is. */
 export function siteSize(site) {
     if (site.kind === "watchtower" && site.race) {
-        return WATCHTOWER;
+        return site.race === "human" ? HUMAN_WATCHTOWER : WATCHTOWER;
     }
 
     return ownPlace(site) ?? NEUTRAL[site.kind] ?? null;
@@ -469,9 +470,12 @@ export class Sites {
             const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
             const turn = turned(x, y, facing, [w, h]);
             // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
-            // its layout's way in; the humans' abbey and manor by their church's and keep's door)
-            const [building] = !laid && site.race === "human" && ENTRANCES[HUMAN_LANDMARK[site.kind]] ? this.#pieces(site, x, y, facing, [w, h]) : [];
-            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : building ? { ...entranceOf(building), building: building.name } : null;
+            // its layout's way in; the humans' abbey and manor by their church's and keep's door; a
+            // people's watchtower, the elves' tree hall, by theirs, insides.js STRUCTURE_DOORS)
+            const landmark = site.race === "human" && ENTRANCES[HUMAN_LANDMARK[site.kind]];
+            const door = !laid && !landmark ? structureDoor(site) : null;
+            const [building] = !laid && (landmark || door) ? this.#pieces(site, x, y, facing, [w, h]) : [];
+            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
             const squares = (laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners)).filter(([i, j]) => !way.has(j * size + i));
             const heart = laid ? turn(...laid.heart) : { x, y };
@@ -684,8 +688,11 @@ export class Sites {
             return [...parts, ...castle];
         }
 
+        // (A people's watchtower with its door, if it can be gone into: insides.js STRUCTURE_DOORS)
         if (site.kind === "watchtower") {
-            return [site.race === "human" ? { ...catalog.get(towerKey("round", "roof")), ...own, key: towerKey("round", "roof"), x, y, w, h } : { kind: "tower", people: site.race, key: `tower-${site.race}`, ...own, x, y, w, h }];
+            const door = Boolean(structureDoor(site));
+
+            return [site.race === "human" ? { ...catalog.get(towerKey("round", "roof")), ...own, key: towerKey("round", "roof"), x, y, w, h, door } : { kind: "tower", people: site.race, key: `tower-${site.race}`, ...own, x, y, w, h, door }];
         }
 
         if (site.race !== "human") {

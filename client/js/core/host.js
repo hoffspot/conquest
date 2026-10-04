@@ -2703,10 +2703,15 @@ export class Host {
                 ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, square, { ...keeps, roam: 3, map }));
             }
 
+            // (The rest round its heart; or, a place gone into, before its way in, out on the open
+            // ground there: not crowding the way itself, a deep one's, as the tree hall's)
+            const way = inside ? this.world.maps.town.sites.set.get(site.id).entrance : null;
+            const middle = way ? [way.outside[0] + 0.5 + sin(way.facing) * ring, way.outside[1] + 0.5 + cos(way.facing) * ring] : at;
+
             for (let k = 0; k < count - within.length; k++) {
                 const angle = ((k + 0.5) / (count - within.length)) * Math.PI * 2;
 
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [at[0] + cos(angle) * ring, at[1] + sin(angle) * ring], { ...keeps, roam: 4 }));
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [middle[0] + cos(angle) * ring, middle[1] + sin(angle) * ring], { ...keeps, roam: 4 }));
             }
 
             // (The chest on open ground by the leader: not in a wall)

@@ -2652,6 +2652,21 @@ metres off (back as many as ever the next time, unless it's been cleared).
     altar or the thrones, the chest beside it, guards up the aisle from the door (`insides.js`
     `heldWithin`, for plans without the marks), the rest outside; put to the sword, it's empty a
     while, then held again.
+  - **The peoples' watchtowers and the elves' tree hall** (M7.5b-2b; `insides.js`
+    `STRUCTURE_DOORS`): each people's watchtower has a door in its foot (the humans' round tower,
+    now on its own three plots, with a stone frame, a step and a torch; the cat folk's under a
+    timber lintel; the elves' an ogee, the tower turned a side to the front; the dark elves' a
+    lancet; the lizard folk's a red portal at the foot of their stepped lookout; the orcs' an open
+    deck on poles, none). Within, kept, not broken (`watchtowerRooms`, the art's `look` "kept"):
+    below, a guardroom, its walls whole and its door shut, the racks of their arms by the stairs,
+    a table and benches, barrels, a torch either side of the door; above, the parapet whole and a
+    brazier burning. Its people's: a lookout going round the top, a sentry below by the door
+    (speaking for the realm of the nearest town of their people's). The elves' tree hall is gone
+    into by its door into a great hall as a keep's, in their marble and green, its lord or lady
+    on the throne ("Lady of Caeliavyn Tree Hall"). Held by outlaws, as an abbey or a manor is.
+    The other peoples' own places stay open to the sky (the pits, the hatchery, the spider shrine,
+    the spire, the shadow gate) or have no way in at their foot (the sun temple's behind its
+    altar, the ziggurat's at its top), their bands outside.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

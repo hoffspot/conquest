@@ -2805,7 +2805,8 @@ export class Game {
     }
 
     // Which settlement a building's in (its id): where the player started, or its own; a manor's
-    // (out in the land, `site:`), the town nearest it, whose realm it keeps
+    // or a watchtower's (out in the land, `site:`), the town nearest it, whose realm it keeps (of
+    // its own people's, if there's one)
     #townOf(building) {
         if (building.place === "home") {
             return this.world.start?.id;
@@ -2816,7 +2817,9 @@ export class Game {
         }
 
         const [x, y] = building.at;
-        const towns = (this.world.plan?.places ?? []).filter((place) => this.host.war?.town(place.id));
+        const all = (this.world.plan?.places ?? []).filter((place) => this.host.war?.town(place.id));
+        const own = all.filter((place) => place.race === building.people);
+        const towns = own.length ? own : all;
 
         return towns.reduce((best, place) => (!best || Math.hypot(place.at[0] - x, place.at[1] - y) < Math.hypot(best.at[0] - x, best.at[1] - y) ? place : best), null)?.id;
     }

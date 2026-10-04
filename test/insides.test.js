@@ -643,6 +643,52 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
         // (A building with nothing to gather by: no one)
         assert.equal(heldWithin("tavern", readPlan("test", "Test", ["...", ".D."])), null);
     });
+
+    it("each people's watchtower (but the orcs' open deck) and the elves' tree hall gone into by its door, the way clear: a watchtower kept, its two floors joined by stairs, its lookout and sentry where they can be got to; the tree hall a great hall of their own", () => {
+        const world = buildWorld({ seed: 2 });
+        const sites = world.maps.town.sites;
+        const squares = squaresOf(world.maps.town);
+        const peoples = new Set();
+
+        for (const site of world.plan.sites.filter((one) => (one.kind === "watchtower" && one.race) || one.kind === "tree hall")) {
+            sites.heartOf(site);
+
+            const set = sites.set.get(site.id);
+            const building = world.interiors.buildings.get(`site:${site.id}`);
+
+            assert.equal(Boolean(building), site.race !== "orc", `${site.id}, the ${site.race}'s`);
+
+            if (!building) {
+                continue;
+            }
+
+            assert.equal(building.people, site.race);
+            assert.equal(building.kind, site.kind === "tree hall" ? "keep" : "watchtower");
+            assert.deepEqual(building.door.ends[0].squares, set.entrance.front);
+            assert.ok([...set.entrance.front, set.entrance.outside].every((square) => !squares.blocked(...square)), `${site.id}: the way in clear`);
+            assert.ok(set.pieces[0].door || site.kind === "tree hall", `${site.id}: its door drawn`);
+            world.interiors.make(building.key);
+
+            const maps = building.maps.map((id) => world.maps[id]);
+            const from = [building.door.ends[1].arrive, building.stairs?.ends[1].arrive];
+
+            // (Those on their feet: the seated sit on their seats)
+            for (const one of building.folk.filter(({ routine }) => !routine?.seated)) {
+                const k = building.maps.indexOf(one.map);
+
+                assert.ok(reachable(maps[k], from[k], one.square), `${site.id}'s ${one.local}`);
+            }
+
+            if (building.kind === "watchtower") {
+                assert.deepEqual(building.folk.map(({ role }) => role), ["sentry", "sentry"]);
+                assert.ok(maps.every((map) => map.look === "kept") && building.stairs);
+                assert.ok(maps.every((map, k) => ["l", "h", "g"].every((char) => (map.marks[char] ?? []).every((square) => reachable(map, from[k], square)))));
+                peoples.add(site.race);
+            }
+        }
+
+        assert.deepEqual([...peoples].sort(), ["cat", "darkElf", "elf", "human", "lizard"]);
+    });
 });
 
 describe("folk made up as they're wanted (characters/folk.js)", () => {
