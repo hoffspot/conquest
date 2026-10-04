@@ -784,6 +784,16 @@ export function lookout(piece) {
 
     hipThatch(solid, (t) => inset(square, -m(0.4) + t * top.half), top.y + m(2.2), m(1.8), "palm", { steps: 3 });
 
+    // (A watchtower's door: a portal at the foot of its front, painted red, a lintel of lime
+    // stone over it, as their temples' are)
+    if (piece.door) {
+        const face = D / 2 + (Math.min(W, D) - m(0.6)) / 2 + m(0.3);
+        const portal = [[W / 2 - m(1.3), face - m(1.2)], [W / 2 + m(1.3), face - m(1.2)], [W / 2 + m(1.3), face], [W / 2 - m(1.3), face]];
+
+        solid.walls(portal, 0, m(2.6), { 2: [{ u0: m(0.7), u1: m(1.9), v0: 0, v1: m(2.1), depth: m(0.4), back: material("planks-dark") }] }, material("plaster-red"));
+        solid.extrude(inset(portal, -m(0.2)), m(2.6), m(2.9), material("stone-lime"));
+    }
+
     return solid.toObject();
 }
 

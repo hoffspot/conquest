@@ -12,11 +12,12 @@
 //
 // Pure data, no DOM; the same for the same plan.
 
+import { ENTRANCES, entranceOf, structureDoor } from "./insides.js";
 import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
-import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, towerKey } from "./setpieces/pieces.js";
+import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
@@ -29,8 +30,9 @@ const HUMAN_PLACES = Object.freeze({ castle: [42, 42], abbey: LANDMARKS.church, 
 const isCitadel = (site) => site.race === "human" && site.kind === "castle";
 const HUMAN_LANDMARK = Object.freeze({ abbey: "church", windmill: "windmill", manor: "keep" });
 
-// A watchtower, anyone's: two plots square
+// A watchtower, anyone's: two plots square; the humans' a castle's round tower, three
 const WATCHTOWER = [2, 2];
+const HUMAN_WATCHTOWER = [TOWER_SIZE, TOWER_SIZE];
 
 // How far a site may be moved off its cell's middle to stand clear of the roads and the water
 // (metres), in steps of
@@ -73,7 +75,7 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 /** The size (plots across and deep) of what's built at a site, or null if nothing is. */
 export function siteSize(site) {
     if (site.kind === "watchtower" && site.race) {
-        return WATCHTOWER;
+        return site.race === "human" ? HUMAN_WATCHTOWER : WATCHTOWER;
     }
 
     return ownPlace(site) ?? NEUTRAL[site.kind] ?? null;
@@ -219,10 +221,19 @@ export function restingOf(plan, site) {
  * set down and grows to its size.
  */
 export class Sites {
-    constructor(plan, { landAt, clearing = 12, facingOf = () => null }) {
+    /**
+     * @param {object} plan - The world plan.
+     * @param {object} options
+     * @param {Function} options.landAt - The land at a square ((i, j) => { road, water, ... }).
+     * @param {number} [options.clearing] - How far round a site's plan spot is kept clear till it's set down.
+     * @param {Function} [options.facingOf] - Which way a site faces (its trail's): (site) => radians, or null.
+     * @param {Function} [options.onSet] - Told of each site as it's set down (its record: settle).
+     */
+    constructor(plan, { landAt, clearing = 12, facingOf = () => null, onSet = null }) {
         this.plan = plan;
         this.landAt = landAt;
         this.facingOf = facingOf;
+        this.onSet = onSet;
         this.set = new Map();
         this.near = new Map();
         this.byChunk = new Map();
@@ -308,6 +319,7 @@ export class Sites {
             }
 
             Object.assign(this.clearings.get(site.id), { at: [set.x, set.y], radius: (set.clearing ?? set.radius) + SITE_MARGIN });
+            this.onSet?.(set);
         }
     }
 
@@ -327,6 +339,11 @@ export class Sites {
             this.settle(Math.floor(site.at[0] / CHUNK), Math.floor(site.at[1] / CHUNK));
         }
 
+        return this.set.get(site.id)?.heart ?? site.at;
+    }
+
+    /** Where a site's heart is if it's been set down (metres; heartOf), else its plan's spot: nothing set down for it. */
+    placedAt(site) {
         return this.set.get(site.id)?.heart ?? site.at;
     }
 
@@ -452,7 +469,15 @@ export class Sites {
             // (All it stands on, or for a neutral site just what of it stands in the way)
             const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
             const turn = turned(x, y, facing, [w, h]);
-            const squares = laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners);
+            // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
+            // its layout's way in; the humans' abbey and manor by their church's and keep's door; a
+            // people's watchtower, the elves' tree hall, by theirs, insides.js STRUCTURE_DOORS)
+            const landmark = site.race === "human" && ENTRANCES[HUMAN_LANDMARK[site.kind]];
+            const door = !laid && !landmark ? structureDoor(site) : null;
+            const [building] = !laid && (landmark || door) ? this.#pieces(site, x, y, facing, [w, h]) : [];
+            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
+            const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
+            const squares = (laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners)).filter(([i, j]) => !way.has(j * size + i));
             const heart = laid ? turn(...laid.heart) : { x, y };
             const radius = hypot(w, h) * (PLOT / 2);
             // (Its pad, if it's levelled into the land: every people's place, on a mound or in a
@@ -483,6 +508,7 @@ export class Sites {
                 h,
                 pieces: this.#pieces(site, x, y, facing, [w, h], laid, cut),
                 squares: new Set(squares.map(([i, j]) => j * size + i)),
+                entrance,
                 radius,
                 heart: [heart.x, heart.y],
                 pad,
@@ -662,8 +688,11 @@ export class Sites {
             return [...parts, ...castle];
         }
 
+        // (A people's watchtower with its door, if it can be gone into: insides.js STRUCTURE_DOORS)
         if (site.kind === "watchtower") {
-            return [site.race === "human" ? { ...catalog.get(towerKey("round", "roof")), ...own, key: towerKey("round", "roof"), x, y, w, h } : { kind: "tower", people: site.race, key: `tower-${site.race}`, ...own, x, y, w, h }];
+            const door = Boolean(structureDoor(site));
+
+            return [site.race === "human" ? { ...catalog.get(towerKey("round", "roof")), ...own, key: towerKey("round", "roof"), x, y, w, h, door } : { kind: "tower", people: site.race, key: `tower-${site.race}`, ...own, x, y, w, h, door }];
         }
 
         if (site.race !== "human") {
@@ -676,6 +705,40 @@ export class Sites {
 
         return [{ kind: "landmark", name, key: `landmark-${name}`, ...own, x, y, w, h, style: "stone", storeys: 2, patron: GOD_IDS[site.seed % GOD_IDS.length], ...(name === "church" ? { grade: "minster", gothic: true } : {}) }];
     }
+}
+
+/**
+ * Where a site's gone into, in the world (its layout's `entry`, turned with it: `turn`, `facing`):
+ * { door: { x, z (metres: the middle of its way in), facing, width, height, floor }, front (the two
+ * squares at it), outside (the square to come out onto), clear (every square of the way up to
+ * it), facing, inside (what's within) }, as insides.js entranceOf's for a building.
+ */
+export function entranceAt({ x, y, width, height, inside: within }, turn, facing) {
+    const square = (u, v) => {
+        const at = turn(u, v);
+
+        return [Math.floor(at.x), Math.floor(at.y)];
+    };
+    const door = turn(x, y);
+    const front = [square(x - 0.5, y + 0.3), square(x + 0.5, y + 0.3)];
+    const outside = square(x, y + 1.6);
+    const across = Math.max(1.2, width / 2 + 0.3);
+    const clear = [];
+    const seen = new Set();
+
+    for (let v = y - 0.6; v <= y + 1.8; v += 0.25) {
+        for (let u = x - across; u <= x + across; u += 0.25) {
+            const [i, j] = square(u, v);
+            const key = `${i},${j}`;
+
+            if (!seen.has(key)) {
+                seen.add(key);
+                clear.push([i, j]);
+            }
+        }
+    }
+
+    return { door: { x: door.x, z: door.y, facing, width, height, floor: 0 }, front, outside, clear: [...front, outside, ...clear], facing, inside: within };
 }
 
 // Where a point of a site laid out facing south ([u, v] metres from its north-west corner) is in

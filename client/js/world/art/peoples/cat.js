@@ -739,7 +739,7 @@ export function house(piece) {
     const storeys = type === "townhouse" && (area > 5 || wealth > 0.4) ? [m(random.range(2.9, 3.2)), m(random.range(2.6, 2.9))] : [m(3.1)];
     const eaves = { hut: [m(2.4)], twin: [m(2.7)], block: [m(2.9)], townhouse: [m(0.25) + storeys.reduce((a, b) => a + b, 0)], compound: [m(1.9), m(3)] }[type] ?? [];
 
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: ["mud", "mud-pale", "mud-red", "plaster-white"], tint: [random.range(0.95, 1.05), random.range(0.94, 1.03), random.range(0.92, 1.02)], mottle: ["thatch", "thatch-grey", "mud-pale"] });
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing: piece.facing ?? 0, washes: ["mud", "mud-pale", "mud-red", "plaster-white"], tint: [random.range(0.95, 1.05), random.range(0.94, 1.03), random.range(0.92, 1.02)], mottle: ["thatch", "thatch-grey", "mud-pale"] });
 
     if (type === "hut") {
         const r = Math.min(W, D) / 2 - m(0.7);

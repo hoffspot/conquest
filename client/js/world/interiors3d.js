@@ -147,6 +147,10 @@ function material(asked, how = {}) {
             result = new THREE.MeshBasicMaterial({ color: name === "window" ? 0xc9dcef : 0xfff0d2, toneMapped: name === "window" });
             result.name = name;
             result.userData.leaded = true;
+        } else if (name === "daylight") {
+            // Daylight seen out of a cave's mouth, bright
+            result = new THREE.MeshBasicMaterial({ color: 0xfff0d2, toneMapped: false });
+            result.name = name;
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
@@ -2142,6 +2146,31 @@ function hall(map) {
 // their dais, pillars down the hall, the council's tables, a hearth in each side wall, the
 // steward's desk and shelves, strongboxes, the armoury's racks of swords, spears and shields, and
 // long banners on the walls; a great wheel of candles over the carpet
+// An armoury's rack against the north wall (a plan's "R" run along it): swords and spears
+// upright, shields hung above
+function armoury(solid, rack) {
+    const [x0, x1] = [m(rack.x), m(rack.x + rack.w)];
+    const z = m(rack.y);
+
+    solid.box(x0, m(0.2), z + m(0.1), x1, m(0.3), z + m(0.5), material("timber", WALL));
+    solid.box(x0, m(1.2), z + m(0.05), x1, m(1.3), z + m(0.3), material("timber", WALL));
+
+    for (let x = x0 + m(0.3), k = 0; x < x1 - m(0.2); x += m(0.35), k++) {
+        if (k % 3 === 2) {
+            solid.box(x - 0.2, m(0.3), z + m(0.25), x + 0.2, m(2.4), z + m(0.3), material("timber"));
+            solid.cylinder(x, z + m(0.28), m(2.4), m(2.7), m(0.05), 0, material("iron"), { segments: 6 });
+        } else {
+            solid.box(x - 0.35, m(0.3), z + m(0.22), x + 0.35, m(1.3), z + m(0.3), material("iron"));
+            solid.box(x - 0.9, m(1.3), z + m(0.2), x + 0.9, m(1.36), z + m(0.32), material("brass"));
+            solid.box(x - 0.25, m(1.36), z + m(0.22), x + 0.25, m(1.55), z + m(0.3), material("leather"));
+        }
+    }
+
+    for (let x = x0 + m(0.6); x < x1 - m(0.3); x += m(1)) {
+        solid.cylinder(x, z + m(0.05), m(1.7), m(1.72), m(0.35), m(0.35), material("wool-blue", WALL), { segments: 12 });
+    }
+}
+
 function keep(map) {
     const solid = new Solid();
     const [w, h] = [m(map.width), m(map.height)];
@@ -2224,28 +2253,9 @@ function keep(map) {
         chest(solid, m(box.x + 0.5), m(box.y + 0.5));
     }
 
-    // The armoury's racks in the corner: swords and spears upright, shields hung above
+    // The armoury's racks in the corner
     for (const rack of at("rack")) {
-        const [x0, x1] = [m(rack.x), m(rack.x + rack.w)];
-        const z = m(rack.y);
-
-        solid.box(x0, m(0.2), z + m(0.1), x1, m(0.3), z + m(0.5), material("timber", WALL));
-        solid.box(x0, m(1.2), z + m(0.05), x1, m(1.3), z + m(0.3), material("timber", WALL));
-
-        for (let x = x0 + m(0.3), k = 0; x < x1 - m(0.2); x += m(0.35), k++) {
-            if (k % 3 === 2) {
-                solid.box(x - 0.2, m(0.3), z + m(0.25), x + 0.2, m(2.4), z + m(0.3), material("timber"));
-                solid.cylinder(x, z + m(0.28), m(2.4), m(2.7), m(0.05), 0, material("iron"), { segments: 6 });
-            } else {
-                solid.box(x - 0.35, m(0.3), z + m(0.22), x + 0.35, m(1.3), z + m(0.3), material("iron"));
-                solid.box(x - 0.9, m(1.3), z + m(0.2), x + 0.9, m(1.36), z + m(0.32), material("brass"));
-                solid.box(x - 0.25, m(1.36), z + m(0.22), x + 0.25, m(1.55), z + m(0.3), material("leather"));
-            }
-        }
-
-        for (let x = x0 + m(0.6); x < x1 - m(0.3); x += m(1)) {
-            solid.cylinder(x, z + m(0.05), m(1.7), m(1.72), m(0.35), m(0.35), material("wool-blue", WALL), { segments: 12 });
-        }
+        armoury(solid, rack);
     }
 
     // Long banners either side of the dais, and down the side walls
@@ -2272,7 +2282,387 @@ function keep(map) {
     };
 }
 
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep };
+// --- The places worth finding gone into (core/insides.js: a cave, the dragon's lair, a broken
+// watchtower) ---
+
+// Each square its own way (0 to 1: from where it is)
+function roughOf(x, y) {
+    const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+
+    return s - Math.floor(s);
+}
+
+// The rock round a cave or a lair: each of its plan's rock squares by open ground a crag from the
+// floor to over head height, of two blocks, each square's its own height and lean into the cave,
+// cut away as a wall is (in front of the player); and a rock roof over it all, not drawn lower
+// than the camera (as a ceiling)
+function crags(solid, map, stuff, { low = 2.8, high = 4.2 } = {}) {
+    const rock = (x, y) => x < 0 || y < 0 || x >= map.width || y >= map.height || map.plan[y][x] === "#";
+    const near = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (!rock(x, y) || near.every(([dx, dy]) => rock(x + dx, y + dy))) {
+                continue;
+            }
+
+            const [r, s, t] = [roughOf(x, y), roughOf(y + 17, x + 5), roughOf(x + 31, y + 11)];
+            const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
+            const top = m(low + (high - low) * r);
+            // (Leaning out over the floor a little, towards the open ground beside it)
+            const [ox, oz] = near.reduce(([sx, sz], [dx, dy]) => (rock(x + dx, y + dy) ? [sx, sz] : [sx + dx, sz + dy]), [0, 0]);
+            const lean = Math.hypot(ox, oz) || 1;
+            const [lx, lz] = [(ox / lean) * m(0.25), (oz / lean) * m(0.25)];
+
+            solid.turnedBox(cx, cz, m(0.62 + 0.1 * s), m(0.62 + 0.1 * t), 0, top * 0.55, r * 1.2, material(stuff, WALL));
+            solid.turnedBox(cx + lx * 0.6, cz + lz * 0.6, m(0.5 + 0.12 * t), m(0.45 + 0.12 * r), top * 0.45, top * 0.85, s * 1.5 + 0.4, material(stuff, WALL));
+            solid.turnedBox(cx - lx * 0.3, cz - lz * 0.3, m(0.35 + 0.15 * r), m(0.4 + 0.1 * s), top * 0.8, top, t * 1.4 + 0.9, material(stuff, WALL));
+            solid.turnedBox(cx + lx, cz + lz, m(0.3 + 0.15 * s), m(0.25 + 0.12 * t), 0, m(0.3 + 0.5 * t), s * 2.3, material(stuff, WALL));
+        }
+    }
+
+    solid.box(-m(1), m(high + 0.6), -m(1), m(map.width + 1), m(high + 1), m(map.height + 1), material(stuff, CEILING), { under: material(stuff, CEILING) });
+}
+
+// The way out (its door squares, the plan's "D"): daylight in the mouth, the rock over it; and
+// the daylight it lets in, a light a little inside it (`bright`: how bright)
+function mouth(solid, map, stuff, { wide = 1, bright = 5 } = {}) {
+    const doors = map.marks.D;
+    const [x0, x1] = [doors[0][0] - wide * 0.1, doors.at(-1)[0] + 1 + wide * 0.1];
+    const z = m(map.height);
+
+    solid.facing([[m(x0), 0, z], [m(x1), 0, z], [m(x1), m(2.6), z], [m(x0), m(2.6), z]], [0, 0, -1], material("daylight", WALL));
+    solid.box(m(x0) - m(0.3), m(2.4), z - m(0.4), m(x1) + m(0.3), m(3.4), z + 0.3, material(stuff, WALL));
+
+    return { kind: "fire", x: (x0 + x1) / 2, y: 1.8, z: map.height - 1.2, colour: 0xe8eeff, intensity: bright, distance: 12, flicker: 0, seed: 0.5, rate: 0.1, steady: 1 };
+}
+
+// A fire on the ground, ringed with stones, logs in it (art pixels: its middle): { fire (fire.js's
+// flames), light }
+function campfire(solid, x, z) {
+    for (let k = 0; k < 9; k++) {
+        const angle = (k / 9) * Math.PI * 2;
+        const [sx, sz] = [x + Math.cos(angle) * m(0.42), z + Math.sin(angle) * m(0.42)];
+
+        solid.box(sx - m(0.09), 0, sz - m(0.08), sx + m(0.09), m(0.12 + 0.05 * roughOf(k, x)), sz + m(0.08), material("rock-dark"));
+    }
+
+    solid.cylinder(x, z, 0, m(0.05), m(0.34), m(0.3), material("embers"), { segments: 10 });
+    solid.turnedBox(x, z, m(0.32), m(0.05), m(0.04), m(0.13), 0.5, material("timber"));
+    solid.turnedBox(x, z, m(0.32), m(0.05), m(0.08), m(0.17), 2.1, material("timber"));
+
+    const fire = flame(m(0.75), m(0.7), x * 0.013 + z * 0.007, "hearth");
+
+    fire.position.set(x, m(0.05), z);
+
+    return { fire, light: { kind: "fire", x: x / M, y: 0.8, z: z / M, colour: 0xff8a3a, intensity: 9, distance: 13, flicker: 0.3, ...fire.userData.fire } };
+}
+
+// A torch in an iron bracket on a wall (art pixels: where it stands, by the wall), its flame and
+// its light
+function wallTorch(solid, x, z) {
+    solid.box(x - 0.3, m(1.55), z - 0.3, x + 0.3, m(2.05), z + 0.3, material("timber"));
+    solid.box(x - 0.6, m(1.65), z - 0.6, x + 0.6, m(1.75), z + 0.6, material("iron"));
+
+    const fire = flame(m(0.24), m(0.46), x * 0.031 + z * 0.017, "torch");
+
+    fire.position.set(x, m(2.05), z);
+
+    return { fire, light: { kind: "fire", x: x / M, y: 2.2, z: z / M, colour: 0xffa050, intensity: 4.5, distance: 10, flicker: 0.25, ...fire.userData.fire } };
+}
+
+// Where a torch goes by a stretch of open ground's edge: the open square nearest (x, y) that has
+// rock or wall beside it, and the way to it
+function byTheWall(map, [x, y]) {
+    const open = (i, j) => i >= 0 && j >= 0 && i < map.width && j < map.height && !map.blocked[j][i];
+    let best = null;
+
+    for (let j = 0; j < map.height; j++) {
+        for (let i = 0; i < map.width; i++) {
+            if (!open(i, j) || map.plan[j][i] !== ".") {
+                continue;
+            }
+
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                if (!open(i + dx, j + dy) && map.plan[j + dy]?.[i + dx] === "#") {
+                    const apart = Math.hypot(i - x, j - y);
+
+                    if (!best || apart < best.apart) {
+                        best = { apart, x: m(i + 0.5 + dx * 0.42), z: m(j + 0.5 + dy * 0.42) };
+                    }
+                }
+            }
+        }
+    }
+
+    return best;
+}
+
+// A bedroll on the ground (art pixels: its middle), a blanket over a hide, a rolled cloak for a
+// pillow, along z
+function bedroll(solid, x, z, seed) {
+    const turn = (seed - 0.5) * 0.5;
+
+    solid.turnedBox(x, z, m(0.38), m(0.95), 0, m(0.04), turn, material("hide"));
+    solid.turnedBox(x + m(0.03), z + m(0.15), m(0.33), m(0.7), m(0.04), m(0.1), turn, material(seed > 0.5 ? "wool-blue" : "wool-green"));
+    solid.turnedBox(x - Math.sin(turn) * m(0.75), z - Math.cos(turn) * m(0.75), m(0.3), m(0.11), 0, m(0.2), turn, material("linen"));
+}
+
+// Old bones on the floor (art pixels: where): a skull, long bones about it
+function bones(solid, x, z, seed) {
+    solid.box(x - m(0.1), 0, z - m(0.12), x + m(0.1), m(0.17), z + m(0.1), material("bone"));
+    solid.box(x - m(0.07), 0, z + m(0.1), x + m(0.07), m(0.08), z + m(0.18), material("bone"));
+
+    for (let k = 0; k < 4; k++) {
+        const angle = seed * 6 + k * 1.7;
+        const [bx, bz] = [x + Math.cos(angle) * m(0.35 + 0.1 * k), z + Math.sin(angle) * m(0.3)];
+
+        solid.turnedBox(bx, bz, m(0.22 + 0.08 * (k % 2)), m(0.035), 0, m(0.06), angle + 0.8, material("bone"));
+    }
+}
+
+// An outlaws' cave: earth underfoot, rock all round, its mouth bright with daylight; their
+// bedrolls and their fire, sacks and a crate by them, torches on the walls of its passage
+function cave(map) {
+    const solid = new Solid();
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const lights = [];
+    const flames = [];
+
+    solid.box(-m(1), -0.5, -m(1), m(map.width + 1), 0, m(map.height + 1), material("mud"));
+    crags(solid, map, "rock-dark");
+    lights.push(mouth(solid, map, "rock-dark"));
+
+    for (const spot of at("campfire")) {
+        const { fire, light } = campfire(solid, m(spot.x + 0.5), m(spot.y + 0.5));
+
+        flames.push(fire);
+        lights.push(light);
+    }
+
+    for (const roll of at("bedroll")) {
+        bedroll(solid, m(roll.x + 0.5), m(roll.y + 0.5), roughOf(roll.x, roll.y));
+    }
+
+    // (Sacks of plunder and a crate by the chief)
+    const [chief] = map.marks.l ?? [[map.width / 2, 3]];
+
+    solid.box(m(chief[0] - 1.4), 0, m(chief[1] - 1.2), m(chief[0] - 0.6), m(0.7), m(chief[1] - 0.4), material("planks-dark"));
+    solid.cylinder(m(chief[0] + 1.6), m(chief[1] - 0.8), 0, m(0.6), m(0.28), m(0.22), material("canvas-sack"), { segments: 8 });
+    solid.cylinder(m(chief[0] + 2.1), m(chief[1] - 0.6), 0, m(0.5), m(0.25), m(0.2), material("canvas-sack"), { segments: 8 });
+
+    for (const spot of [[map.width / 2, map.height - 3], [map.width / 2, map.height / 2]]) {
+        const wall = byTheWall(map, spot);
+
+        if (wall) {
+            const { fire, light } = wallTorch(solid, wall.x, wall.z);
+
+            flames.push(fire);
+            lights.push(light);
+        }
+    }
+
+    return { solid, moving: [], flames, lights, hearth: lights[0] ? { x: lights[0].x, y: 0.5, z: lights[0].z } : null };
+}
+
+// The dragon's lair: a great cavern of dark rock, the floor scorched, bones about it, embers
+// smouldering in its cracks, the hoard heaped at the back (gold in heaps, coins strewn), its mouth
+// bright with daylight
+function lair(map) {
+    const solid = new Solid();
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const lights = [];
+
+    solid.box(-m(1), -0.5, -m(1), m(map.width + 1), 0, m(map.height + 1), material("basalt"));
+    crags(solid, map, "basalt", { low: 4, high: 6 });
+    lights.push(mouth(solid, map, "basalt", { wide: 2, bright: 7 }));
+
+    for (const heap of at("bones")) {
+        bones(solid, m(heap.x + 0.5), m(heap.y + 0.5), roughOf(heap.x, heap.y));
+    }
+
+    // The hoard: heaps of gold either side of where the chest stands, coins strewn round them
+    const hoard = map.marks.h ?? [];
+
+    if (hoard.length) {
+        const [hx, hz] = [m((hoard[0][0] + hoard.at(-1)[0] + 1) / 2), m(hoard[0][1] + 0.5)];
+
+        for (const [dx, dz, r, tall] of [[-1.6, -0.2, 1.1, 0.55], [1.7, 0, 1, 0.5], [-0.6, -0.9, 0.8, 0.4], [0.9, -0.8, 0.7, 0.35]]) {
+            solid.cone(hx + m(dx), hz + m(dz), 0, m(tall), m(r), material("gold"), 14);
+        }
+
+        for (let k = 0; k < 40; k++) {
+            const [a, d] = [roughOf(k, 3) * Math.PI * 2, 1 + roughOf(5, k) * 2.2];
+
+            solid.cylinder(hx + Math.cos(a) * m(d), hz + Math.sin(a) * m(d) * 0.8, 0, m(0.012), m(0.06), m(0.06), material("gold"), { segments: 6 });
+        }
+
+        // (Embers smouldering by it, the gold catching their light)
+        lights.push({ kind: "fire", x: hx / M, y: 1.4, z: hz / M + 1.5, colour: 0xffa040, intensity: 6, distance: 9, flicker: 0.25, seed: 0.37, rate: 1.4, steady: 0.8 });
+    }
+
+    // Embers in the cracks, the dragon's breath's (a glow, flickering)
+    for (const [cx, cz] of [[0.3, 0.55], [0.7, 0.4], [0.45, 0.75], [0.62, 0.2]].map(([u, v]) => [map.width * u, map.height * v])) {
+        solid.turnedBox(m(cx), m(cz), m(1.2), m(0.12), 0, 0.15, roughOf(cx, cz) * 3, material("embers"));
+        lights.push({ kind: "fire", x: cx, y: 0.5, z: cz, colour: 0xff5a20, intensity: 6, distance: 11, flicker: 0.35, seed: cx * 0.1 + cz * 0.3, rate: 1.6, steady: 0.8 });
+    }
+
+    return { solid, moving: [], flames: [], lights, hearth: null };
+}
+
+// A broken watchtower below: flagstones, its walls of old stone, the stairs up along the north
+// wall, rubble in the corners, a torch by the door; its floor above carried on beams. A people's,
+// kept (`look` "kept"): its walls their stone, its door shut behind, the racks of their arms by
+// the stairs, a table and benches, barrels, a torch either side, no rubble
+function tower(map) {
+    const solid = new Solid();
+    const [w, h] = [m(map.width), m(map.height)];
+    const kept = map.look === "kept";
+    const stone = kept ? "stone" : "stone-old";
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const stair = at("stairs")[0];
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    walledIn(solid, map, stone, [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.3 }], []);
+    stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
+    ceiling(solid, map, [m(stair.x), m(stair.y), m(stair.x + stair.w), m(stair.y + stair.h)]);
+
+    if (kept) {
+        solid.box(m(doorMiddle - 0.8), 0, h - 0.2, m(doorMiddle + 0.8), m(2.3), h + 0.4, material("planks-dark", WALL));
+
+        for (const rack of at("rack")) {
+            armoury(solid, rack);
+        }
+
+        for (const piece of at("table")) {
+            const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+
+            table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
+            tankard(solid, x0 + m(0.6), (z0 + z1) / 2, m(0.78), true);
+            tankard(solid, x1 - m(0.8), z0 + m(0.35), m(0.78), true);
+            candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+        }
+
+        for (const run of benchRuns(map)) {
+            bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+        }
+
+        for (const barrels of at("barrels")) {
+            for (let y = barrels.y; y < barrels.y + barrels.h; y++) {
+                cask(solid, m(barrels.x + 0.1), m(y + 0.5), 0, m(0.8), m(0.4));
+            }
+        }
+    } else {
+        for (const [x, z] of [[map.width - 1.2, map.height - 1.6], [0.8, map.height - 2.4], [map.width - 1.4, 3.4]]) {
+            for (let k = 0; k < 4; k++) {
+                const [dx, dz, size] = [roughOf(x, k) - 0.5, roughOf(k, z) - 0.5, 0.18 + 0.2 * roughOf(x + k, z)];
+
+                solid.box(m(x + dx * 0.8 - size), 0, m(z + dz * 0.8 - size), m(x + dx * 0.8 + size), m(size * 1.4), m(z + dz * 0.8 + size), material("stone-old"));
+            }
+        }
+    }
+
+    const torches = kept ? [doorMiddle - 1.6, doorMiddle + 1.6] : [doorMiddle + 1.6];
+    const lit = torches.map((x) => wallTorch(solid, m(x), h - m(0.45)));
+
+    return { solid, moving: [], flames: lit.map(({ fire }) => fire), lights: lit.map(({ light }) => light), hearth: null };
+}
+
+// How far a watchtower's top is over the ground round it (metres)
+const TOWER_TALL = 11;
+
+// A broken watchtower's top: boards over the floor below, the stairs coming up through them, its
+// parapet broken (its merlons fallen here and there), rubble on it, open to the sky. A people's,
+// kept: its parapet whole, a brazier burning on it
+function towerTop(map) {
+    const solid = new Solid();
+    const kept = map.look === "kept";
+    const stone = kept ? "stone" : "stone-old";
+    const [w, h] = [m(map.width), m(map.height)];
+    const stair = map.pieces.find((piece) => piece.kind === "stairs");
+    const [hole0, hole1, well0, well1] = [m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h)];
+
+    solid.box(-m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3), material("planks"));
+    solid.box(hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+    solid.box(hole0, -0.5, well1, hole1, 0, h + m(0.3), material("planks"));
+    stairs(solid, hole0, hole1, well0, well1, -m(STOREY), 0, well1);
+
+    // (The stairwell down a dark well: the floor below, and its walls)
+    solid.box(hole0, -m(STOREY) - 0.5, well0, hole1, -m(STOREY), well1, material("stone"));
+    solid.box(hole0 - 0.5, -m(STOREY), well0 - 0.5, hole1, -0.5, well0, material(stone));
+    solid.box(hole1, -m(STOREY), well0, hole1 + 0.5, -0.5, well1, material(stone));
+    solid.box(hole0 - 0.5, -m(STOREY), well0, hole0, -0.5, well1, material(stone));
+
+    // (Its walls falling away to the ground below, far down, where the parapet's looked over)
+    const thick = m(0.5);
+    const fall = m(TOWER_TALL);
+
+    solid.box(-thick, -fall, -thick, w + thick, -0.5, h + thick, material(stone));
+    solid.box(-m(120), -fall - 0.5, -m(120), m(map.width + 120), -fall, m(map.height + 120), material("grass"));
+
+    // The parapet, a merlon every metre and a half, some fallen (none on a kept one)
+
+    for (const [x0, z0, x1, z1] of [[-thick, -thick, w + thick, 0], [-thick, h, w + thick, h + thick], [-thick, 0, 0, h], [w, 0, w + thick, h]]) {
+        solid.box(x0, 0, z0, x1, m(1), z1, material(stone, WALL));
+
+        const along = x1 - x0 > z1 - z0;
+        const length = along ? x1 - x0 : z1 - z0;
+
+        for (let s = m(0.4); s < length - m(0.6); s += m(1.5)) {
+            if (!kept && roughOf(x0 + s, z0 + s) < 0.3) {
+                continue;
+            }
+
+            const tall = kept ? m(1.75) : m(1.6 + 0.3 * roughOf(s, x0));
+
+            if (along) {
+                solid.box(x0 + s, m(1), z0, x0 + s + m(0.7), tall, z1, material(stone, WALL));
+            } else {
+                solid.box(x0, m(1), z0 + s, x1, tall, z0 + s + m(0.7), material(stone, WALL));
+            }
+        }
+    }
+
+    // (A kept one's brazier: an iron bowl on three legs, its coals and its fire)
+    const fires = [];
+
+    for (const piece of map.pieces.filter((each) => each.kind === "campfire")) {
+        const [x, z] = [m(piece.x + 0.5), m(piece.y + 0.5)];
+
+        for (let k = 0; k < 3; k++) {
+            const a = (k / 3) * Math.PI * 2;
+
+            solid.turnedBox(x + Math.cos(a) * m(0.22), z + Math.sin(a) * m(0.22), m(0.04), m(0.04), 0, m(0.7), a, material("iron"));
+        }
+
+        solid.cylinder(x, z, m(0.62), m(0.82), m(0.18), m(0.36), material("iron"), { segments: 12 });
+        solid.cylinder(x, z, m(0.8), m(0.84), m(0.32), m(0.32), material("embers"), { segments: 12 });
+
+        const fire = flame(m(0.55), m(0.6), x * 0.011 + z * 0.019, "hearth");
+
+        fire.position.set(x, m(0.84), z);
+        fires.push({ fire, light: { kind: "fire", x: x / M, y: 1.5, z: z / M, colour: 0xff9a40, intensity: 7, distance: 12, flicker: 0.3, ...fire.userData.fire } });
+    }
+
+    for (const piece of map.pieces.filter((each) => each.kind === "rock")) {
+        for (const [x, y] of piece.squares) {
+            for (let k = 0; k < 3; k++) {
+                const size = 0.2 + 0.18 * roughOf(x + k, y);
+
+                solid.box(m(x + 0.3 + 0.4 * roughOf(k, x) - size), 0, m(y + 0.3 + 0.4 * roughOf(y, k) - size), m(x + 0.3 + 0.4 * roughOf(k, x) + size), m(size * 1.3 + 0.1 * k), m(y + 0.3 + 0.4 * roughOf(y, k) + size), material("stone-old"));
+            }
+        }
+    }
+
+    // (The sky over it, the sun on it)
+    lighting.daylight = [0.45, 1, 0.35];
+
+    return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
+}
+
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, cave, lair, tower, "tower-top": towerTop };
 
 // --- Each people's own ---
 
@@ -2610,6 +3000,7 @@ export function* buildingInterior(map) {
         object,
         lights: gather([...built.lights, ...lit.flames]).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: light.seed ?? k * 17.3 })),
         daylight: lit.daylight,
+        open: Boolean(built.open),
         ceiling: STOREY,
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {

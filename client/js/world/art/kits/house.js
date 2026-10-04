@@ -24,8 +24,10 @@ import { createRandom, noise } from "../../../core/random.js";
 import { TRADES } from "../../../core/setpieces/pieces.js";
 import { awning as awningCloth, AWNINGS } from "../../cloth.js";
 import { material } from "../engine/materials.js";
+import { wallWeather, WEATHERING_BANDS } from "../peoples/kit.js";
 import { Solid } from "../engine/solid.js";
 import { frameWall } from "./framing.js";
+import { CLIMBING, IVY, ivyClimb } from "./ivy.js";
 import { chimney, pitchedRoof } from "./roofs.js";
 
 const CELL = 20;
@@ -442,7 +444,62 @@ export function buildHouse(plan) {
         goods(solid, plan, faces0(plan), random);
     }
 
+    climbingIvy(solid, plan);
+
     return solid;
+}
+
+// Ivy climbing a bare stretch of the ground floor's wall now and then (ivy.js CLIMBING: a house
+// kept, not let go): on a side or the back, never the front; clear of its openings and of the
+// middle of its gable ends (where a chimney may stand); from its own random numbers, so the rest
+// of the house is as it was
+function climbingIvy(solid, plan) {
+    const random = createRandom((plan.seed ^ 0x2f6b9a1d) >>> 0);
+
+    if (plan.back || !random.chance(CLIMBING.chance)) {
+        return;
+    }
+
+    const level = plan.levels[0];
+    const faces = facesOf(level.box, 0);
+    const gables = plan.ridge === "z" ? ["back"] : ["left", "right"];
+    const margin = IVY.clear * M;
+
+    for (const side of random.shuffle(["left", "right", "back"])) {
+        const face = faces[side];
+        const taken = (plan.openings[side][0] ?? []).map(({ u0, u1 }) => [u0 - margin, u1 + margin]);
+
+        if (gables.includes(side) && plan.chimney) {
+            taken.push([face.length / 2 - M * 0.8, face.length / 2 + M * 0.8]);
+        }
+
+        // (The bare stretches along it, the corners' posts kept clear of too)
+        const stretches = [];
+        let from = margin;
+
+        for (const [a, b] of taken.sort(([a], [b]) => a - b)) {
+            stretches.push([from, a]);
+            from = Math.max(from, b);
+        }
+
+        stretches.push([from, face.length - margin]);
+
+        const bare = stretches.filter(([a, b]) => b - a >= CLIMBING.bare * M);
+
+        if (!bare.length) {
+            continue;
+        }
+
+        const [a, b] = random.pick(bare);
+        const width = Math.min(b - a, random.range(...CLIMBING.width) * M);
+        const u0 = a + random.range(0, b - a - width);
+        const { origin, across, out } = face;
+        const wall = { place: (u, y, proud) => [origin[0] + across[0] * u + out[0] * proud, y, origin[2] + across[2] * u + out[2] * proud], out: () => out, base: 0 };
+
+        ivyClimb(solid, random, wall, [u0, u0 + width], (level.y + level.height - M * 0.3) * random.range(...CLIMBING.rise));
+
+        return;
+    }
 }
 
 const faces0 = (plan) => facesOf(plan.levels[0].box, plan.levels[0].y);
@@ -821,8 +878,9 @@ const GOODS = {
 export { TRADES };
 
 // The weathering painted on a house's corners (Solid's tone): dirt splashed up the foot of its
-// walls, shade under its eaves and jetties and on the soffits, streaks, moss on the roof where it
-// faces north (the house turned as it will stand), and its limewash its own colour
+// walls and damp rising up it, a little green low on a wall facing north (kit.js wallWeather),
+// shade under its eaves and jetties and on the soffits, streaks, moss on the roof where it faces
+// north (the house turned as it will stand), and its limewash its own colour
 function weathering(plan) {
     const underEaves = [plan.eaves, ...(plan.jetty ? plan.levels.slice(1).map(({ y }) => y) : [])];
     const limewash = new Set(["plaster", "plaster-white", "plaster-ochre", "plaster-rose"]);
@@ -831,7 +889,8 @@ function weathering(plan) {
     const seed = plan.seed;
     // (Where it turns up a wall, for walls to be cut there: Solid's tone bands. The shade under
     // the eaves stops just over them, so a gable's foot isn't shaded all the way up the gable)
-    const bands = [m(1.25), ...underEaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
+    const bands = [...WEATHERING_BANDS, m(1.25), ...underEaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
+    const low = [1, 1, 1];
 
     return Object.assign((point, normal, material) => {
         // (Worked out for every corner of every house: numbers, not lists taken apart)
@@ -856,6 +915,10 @@ function weathering(plan) {
             }
 
             k *= 0.93 + 0.07 * noise(x + z, y * 0.3, seed, m(1.5), 2);
+            wallWeather(x, y, z, normal, cos, sin, seed, low);
+            r *= low[0];
+            g *= low[1];
+            b *= low[2];
         } else if (upward < -0.45) {
             k *= 0.5;
         } else if (roofs.has(material.name)) {

@@ -33,6 +33,7 @@ const ABOUT = {
     goblin: ["Goblin raider", "Far out", "cleaver"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
     cultist: ["Cultist", "Far out, in camps", "wand"],
+    banditChief: ["Bandit chief", "Leading the outlaws who hold a place", "sword"],
     troll: ["Troll", "The far wilds", "hammer"],
     ogre: ["Ogre", "The far wilds", "hammer"],
     wyvern: ["Wyvern", "The far wilds, and the mountains"],
@@ -279,7 +280,7 @@ function advance(seconds, step = 1 / 60) {
 const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "wisp", "treant", "caveSpider", "shadowStalker", "hyena", "scorpion", "bogFrog", "crocodile", "magmaSlime", "rockTusker"]],
-    ["For the mightiest", ["dragon", "wightLord", "frostTroll"]],
+    ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],
 ];
 
 for (const [label, ids] of groups) {

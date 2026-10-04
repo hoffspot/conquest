@@ -186,6 +186,13 @@ export class War {
          */
         this.watched = new Set();
 
+        /**
+         * The places worth finding whose occupiers were put to the sword (core/places.js): by the
+         * place's id, { cleared: the turn it was, times: how often it's been }. Empty a while, then
+         * held again (places.js holderOf).
+         */
+        this.places = {};
+
         this.#discover({ quietly: true });
     }
 
@@ -364,6 +371,11 @@ export class War {
      */
     watch(ids) {
         this.watched = new Set(ids);
+    }
+
+    /** A place's occupiers put to the sword and their leader killed (core/places.js): cleared this turn. */
+    clearPlace(id) {
+        this.places[id] = { cleared: this.turn, times: (this.places[id]?.times ?? 0) + 1 };
     }
 
     /**
@@ -607,6 +619,7 @@ export class War {
             victor: this.victor,
             log: this.log,
             watched: [...this.watched],
+            places: this.places,
         });
     }
 
@@ -627,6 +640,8 @@ export class War {
 
         war.events = [];
         war.watched = new Set(kept.watched ?? []);
+        // (A war kept before places were cleared has none)
+        war.places = kept.places ?? {};
 
         return war;
     }

@@ -554,6 +554,16 @@ export function bastion(piece) {
         ears(solid, [W / 2 + Math.cos(a) * (r - m(0.8)), m(7.9), D / 2 + Math.sin(a) * (r - m(0.8))], [-Math.sin(a), Math.cos(a)], m(0.3), m(0.55), name);
     }
 
+    // (A watchtower's door in its foot, at the front: a frame of pale mud standing out of the
+    // battered wall, a timber lintel, the door dark in it)
+    if (piece.door) {
+        const face = D / 2 + r * Math.cos(Math.PI / 14);
+
+        solid.box(W / 2 - m(1.1), 0, face - m(0.6), W / 2 + m(1.1), m(2.9), face + m(0.35), material("mud-pale"));
+        solid.box(W / 2 - m(0.7), 0, face + m(0.35), W / 2 + m(0.7), m(2.2), face + m(0.38), material("planks-dark"));
+        solid.box(W / 2 - m(1.3), m(2.35), face + m(0.35), W / 2 + m(1.3), m(2.55), face + m(0.55), material("timber"));
+    }
+
     return solid.toObject();
 }
 

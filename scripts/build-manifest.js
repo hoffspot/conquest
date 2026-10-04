@@ -114,6 +114,7 @@ export async function manifestSource() {
         { id: "body", label: "Body and shapes", detail: "MakeHuman base mesh, skeleton and sliders", files: await sized(["characters/human.json", "characters/human.bin"]) },
         { id: "skin", label: "Skin details", detail: "MakeHuman masks", files: await sized(masks) },
         { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
+        { id: "models", label: "Things in the world", detail: "A treasure chest (JMI 3D Toolkit)", files: await sized(["models/jmi/chest.glb"]) },
     ];
     const lines = groups.map(({ id, label, detail, files }) => [
         `    {`,

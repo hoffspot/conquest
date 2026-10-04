@@ -90,6 +90,7 @@ export const SPOILS = Object.freeze({
     boar: { items: [{ id: "boarTusk", chance: 0.4 }, { id: "boarHide", chance: 0.3 }, { id: "boarMeat", chance: 0.5 }] },
     snake: { items: [{ id: "snakeSkin", chance: 0.35 }, { id: "venomSac", chance: 0.3 }] },
     bandit: { gold: [3, 12], items: [{ id: "potion", chance: 0.2 }, { id: "sword", chance: 0.04 }] },
+    banditChief: { gold: [15, 40], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }] },
     bear: { items: [{ id: "bearPelt", chance: 0.35 }, { id: "bearClaw", chance: 0.45 }, { id: "bearMeat", chance: 0.4 }] },
     puma: { items: [{ id: "pumaPelt", chance: 0.35 }, { id: "pumaClaw", chance: 0.45 }] },
     direWolf: { items: [{ id: "direPelt", chance: 0.35 }, { id: "direFang", chance: 0.45 }] },

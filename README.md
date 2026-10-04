@@ -656,6 +656,9 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
+- The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
+  (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
+  (`client/models/jmi/LICENSE`).
 - Houses laid out with a facade grammar after Wonka and Müller's split grammars; their jetties,
   timber framing and windows sized after the carpenters' own, and BlendBuildingCreator
   (<https://github.com/plastdrake/BlendBuildingCreator>), studied, not copied.

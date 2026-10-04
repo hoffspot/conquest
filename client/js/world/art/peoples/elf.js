@@ -21,8 +21,8 @@ import { budLamp, crescent, greatTree, petalRoof, ringDeck, spiralStair, treeCol
 
 const ROOFS = ["leafscale", "leafscale", "leafscale-sage", "leafscale-silver"];
 
-function toned(solid, random, eaves = []) {
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: ["marble", "stone-moon"], tint: [random.range(0.97, 1.03), random.range(0.97, 1.03), random.range(0.97, 1.04)], dirt: 0.25, mottle: ["leafscale", "leafscale-sage", "leafscale-silver"] });
+function toned(solid, random, eaves = [], facing = 0) {
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing, washes: ["marble", "stone-moon"], tint: [random.range(0.97, 1.03), random.range(0.97, 1.03), random.range(0.97, 1.04)], dirt: 0.25, mottle: ["leafscale", "leafscale-sage", "leafscale-silver"] });
 }
 
 // A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round
@@ -290,7 +290,7 @@ export function house(piece) {
     const solid = new Solid();
     const trees = [];
 
-    toned(solid, random, [m(4)]);
+    toned(solid, random, [m(4)], piece.facing ?? 0);
 
     if (type === "trunk") {
         trunkHouse(solid, W / 2, D / 2, { random, wealth, trees });
@@ -935,15 +935,26 @@ export function gatehouse(piece) {
     return solid.toObject();
 }
 
-/** A slender round tower of pale stone under a petal cap. */
+/**
+ * A slender round tower of pale stone under a petal cap; a watchtower's (`door`) turned a side to
+ * the front, an ogee door in it.
+ */
 export function tower(piece) {
     const random = randomFor(piece, 77);
     const [W, D] = [piece.w * CELL, piece.h * CELL];
     const solid = new Solid();
     const r = Math.min(W, D) / 2 - m(1);
+    const outline = circle(W / 2, D / 2, r, 12, piece.door ? southSide(12) : 0);
+    const openings = { 3: [{ u0: m(0.3), u1: m(0.8), v0: m(7), v1: m(8.6), depth: m(0.3), back: material("glass-green"), arch: "lancet" }] };
+
+    if (piece.door) {
+        const side = lengthOf(outline, 0);
+
+        openings[0] = [{ u0: side / 2 - m(0.6), u1: side / 2 + m(0.6), v0: 0, v1: m(2.6), depth: m(0.3), back: material("heartwood"), arch: "ogee", sides: material("stone-moon") }];
+    }
 
     toned(solid, random, []);
-    solid.walls(circle(W / 2, D / 2, r, 12), 0, m(12), { 3: [{ u0: m(0.3), u1: m(0.8), v0: m(7), v1: m(8.6), depth: m(0.3), back: material("glass-green"), arch: "lancet" }] }, material("marble"));
+    solid.walls(outline, 0, m(12), openings, material("marble"));
     petalRoof(solid, W / 2, D / 2, m(12), r + m(0.9), r * 2.4, "leafscale", { petals: 5, lift: m(0.4) });
     crescent(solid, W / 2, m(12) + r * 2.4, D / 2, m(0.8), "silver");
 

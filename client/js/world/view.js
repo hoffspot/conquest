@@ -24,6 +24,7 @@ import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
+import { setShadowView, watchShadows } from "./shadowpasses.js";
 import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
@@ -32,7 +33,8 @@ import { WATER_DETAIL } from "./water.js";
 
 /**
  * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow; `grass`:
- * how far the tall grass reaches, its near band and its far, metres, or null for none: grass.js;
+ * how far the tall grass reaches, its inner band (thicker, round the player), its near band and
+ * its far, metres, or null for none: grass.js;
  * `motes`: how many motes drift in the air round the player, motes.js; `smoke`: how many of each
  * chimney's puffs of smoke are drawn, smoke.js; `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
  * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
@@ -46,8 +48,8 @@ import { WATER_DETAIL } from "./water.js";
  */
 export const QUALITY = Object.freeze({
     low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, cliffs: 0, frameRate: 60 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, frameRate: 60 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -207,6 +209,7 @@ const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
 const _centre = new THREE.Vector3();
+const _down = new THREE.Vector3();
 const _colour = new THREE.Color();
 
 export class View {
@@ -309,6 +312,8 @@ export class View {
             return { light, from: null, handed: false };
         });
         this.lampFrame = 0;
+        // (Their shadow maps, and the sun's, drawn with only what they need: shadowpasses.js)
+        watchShadows({ sun: this.sun, lamps: this.lamps.map(({ light }) => light) });
         this.room = null;
         // (How far the greatest spells have darkened the sky: setOmen)
         this.omen = 0;
@@ -848,10 +853,12 @@ export class View {
      */
     setIndoors(interior) {
         const look = interior ? INDOORS : OUTDOORS;
+        // (A place inside that's open to the sky, a broken tower's top: the sky over it)
+        const open = Boolean(interior?.open);
 
         this.indoors = Boolean(interior);
-        this.scene.background.set(look.background);
-        this.scene.fog.color.set(look.background);
+        this.scene.background.set(open ? OUTDOORS.background : look.background);
+        this.scene.fog.color.set(open ? OUTDOORS.background : look.background);
 
         if (interior) {
             [this.scene.fog.near, this.scene.fog.far] = look.fog;
@@ -866,7 +873,7 @@ export class View {
         this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
-        this.sky.object.visible = !interior;
+        this.sky.object.visible = !interior || open;
         this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 
@@ -1251,6 +1258,15 @@ export class View {
         }
 
         const timing = this.timingGpu && scene === this.scene;
+
+        // (Whose shadows may be seen: from where the camera looks this frame, the sun's light
+        // coming down as it does)
+        if (scene === this.scene) {
+            camera.updateMatrixWorld();
+            setShadowView(camera, _down.subVectors(this.sun.target.position, this.sun.position));
+        } else {
+            setShadowView(null);
+        }
 
         this.renderer.info.reset();
 

@@ -724,7 +724,10 @@ and open-source generators, licences checked).
 - **Cascaded shadows: not built.** With the sun about 50° up, the near shadow map (±24 m) covers
   what the camera looks at, and far relief reads from the far land's slope shading and snow.
   Each cascade draws every shadow caster in it again, on phones already near their draw-call
-  budget. Left for M7's lighting pass, to be measured there.
+  budget. Left for M7's lighting pass, to be measured there. **Measured in M7k (2026-10-03): it
+  doesn't fit.** A second cascade out to 60 m would draw 28 to 51 more draws and 76,000 to 443,000
+  more triangles a frame on Medium (22 spots on the phone's profile), with frames at 9 of the 22
+  spots already over 500,000 triangles; see the change log.
 
 **As built in M6c** (row 2 and the landmark; see the change log):
 - **The landmark is the volcano.** It needed a crater: the old one (60 m subtracted at the
@@ -3421,3 +3424,385 @@ converted data is to be measured in M8 against today's hm08 data.
     no lone oak within 450 m of it); no new shader made as the player walks out of the town or
     into the taproom (the e2e).
   - **Next:** M7j-2, a denser grass ring round the player and gusts of wind through the grass.
+- **2026-10-03, M7j-1 merged** (#162), CI green on all nine checks.
+- **2026-10-03, M7j-2 built: a thicker grass ring round the player, and the wind's gusts** (§9 row
+  9: "denser inner ring; wind gusts; drifts per region"; docs/GAME.md *Tall grass*).
+  - **The inner ring** (grass.js `GRASS_BANDS.inner`, view.js `QUALITY.grass.inner`): a third band
+    of clumps, 0.35 m apart (the near band's 0.5), eight blades each, its hashes salted so its
+    clumps aren't the near band's, out to 6 m on medium and 9 m on high (none on low), thinning
+    to the near band's alone over its outer half. The grass where the camera looks closest is
+    about two and a half times as thick.
+  - **One wind** (world/wind.js): `WIND_WAY`, the way the smoke already leant, now the flags'
+    breeze (cloth.js `BREEZE`), the fires' (`FIRE_WIND`) and the grass's (it leant a slightly
+    different way before). `windGust(x, z, time)`: two octaves of smooth noise, stretched across
+    the wind (9 m along, 16 m across) and carried downwind at 5 m a second, changing shape as it
+    goes; at any moment about a fifth of the land in a gust of half strength or more. The same in
+    GLSL (`WIND_GLSL`), the hash in whole numbers (checked against the GPU in Chromium: the same
+    to 1/255, where a float hash differed on a quarter of the cells).
+  - **What takes it:** the tall grass and the crops (`GRASS_GUSTS`: half their height further
+    downwind at the tip, pressed a quarter lower, tips up to 60% paler), so a wave runs through
+    them; the ground past the blades and the fields' standing crops (ground.js `GROUND_GUSTS`, up
+    to 30% paler, worked out at the ground's corners and passed on), so the waves run on across
+    the fields out of the grass's reach; the undergrowth (atlas.js `WILDS.gust`: tossing 1.2
+    times harder and leaning as much again); the trees' leaves (kits/trees.js `TREE_GUSTS`:
+    stirring 1.5 times harder, leaning downwind up to 2.5 times their sway, in the world's frame
+    whichever way the tree's turned).
+  - **Drifts per region:** already there (kits/wilds.js: each land's own flowers, in drifts of
+    one kind from smooth fields across the world), so nothing added.
+  - **Cost** (the pictures' spots on seed 1, medium): the inner band about 31,000 triangles and
+    one draw (farmland eye 615,500 to 647,900); the gusts a smooth noise at each blade's corner,
+    each leaf's, each undergrowth corner and each ground corner, and a multiply a ground pixel.
+  - **Tests:** test/wind.test.js (one way for smoke, flags and fires; gusts on a fifth of the land
+    or so however long the game's run; carried downwind at their speed, longer across the wind
+    than along it; the grass, leaves and undergrowth shaders made with them); test/grass.test.js
+    (three bands on medium and high, the inner closer-set and salted, none where the quality has
+    no inner). e2e: walking out of town, the mountains, the bridge, the tavern (no new shader made),
+    keeping up, the building lab.
+  - **Next:** M7j-3, weathering on the peoples' buildings and a glow under lit windows.
+- **2026-10-03, M7j-2 opened as #163** (CI green; left for review: merging it myself was flagged
+  by the permission system, so from here the merges are the user's).
+- **2026-10-03, M7j-3 built: the peoples' buildings weathered as kept, ivy on some cottages, and
+  lit windows' light on the ground** (§9 row 10: "extend `weathering()` in `peoples/kit.js` and
+  `house.js` … ivy leaf quads"; the lit windows' entry above: "a cheap glow on the ground under
+  each would do"; docs/GAME.md *Houses*, *Lit windows*).
+  - **Weathering** (peoples/kit.js `WEATHERING`, `wallWeather`, shared by `weathering()` and
+    house.js's): damp rising up a wall's foot, darker and a little brown-green (from 0.15 m, gone
+    by 0.95 m), and on a wall facing north as the building stands (`weathering`'s `facing`: each
+    people's house passes its piece's) a little green in patches low down (to 0.4 m, gone by
+    1.8 m). Damp only rises from the ground: walls up on platforms and stilts (the elves', the
+    lizard folk's) start above it. None on the war camps' tents (`damp: false`). The heights are
+    tone bands, so walls are cut there and drawn as worked out. A wall's foot about a tenth
+    darker than before, over the grime it had: tidy, not ruined.
+  - **Ivy climbing** (kits/ivy.js `ivyClimb`, `CLIMBING`; house.js `climbingIvy`): on about three
+    of ten human houses (not the back buildings), a patch 1.1 to 2.4 m across climbing a bare
+    stretch of a side or back wall from its foot, up to 0.55 to 0.9 of the ground floor's
+    height, rounded over its top; never on the front, within 0.3 m of an opening, or across the
+    middle of a gable end with a chimney. Its own random numbers, so every house is otherwise as
+    it was. The castle's walls still have none (test/neutral.test.js).
+  - **The windows' light on the ground** (world/windowpools.js `poolsMesh`, `WINDOW_POOLS`;
+    atlas.js `windowSeeds`' `panes`, `PANES`, `WINDOW_ON_GLSL`): as a building's merged, its
+    windows' upright panes are found (each pane's middle, which way it lies from its corners'
+    spread on the ground, facing out from the building's middle; not a lantern's box or a
+    bottle), and each throws a pool of warm light on the ground in front of it (1.6 m out at the
+    wall's foot to 3.4 m from 4 m up, fainter the higher; none over 7 m), lit, going out and
+    flickering with its own window through the same GLSL function as the glow. One mesh a
+    chunk (and the start town), additive, lying 4 cm over the ground; hidden by day (no draw),
+    fading out from 35 to 80 m; its shader made at load in the chunks' primer.
+  - **Cost:** houses 2 to 16% more triangles for the bands and ivy (40 houses each: humans 2,245
+    to 2,447, elves 2,917 to 2,963, cat folk 860 to 995), no more draws by day; at night one
+    draw a settlement chunk for its pools, about 24 triangles a lit window.
+  - **Tests:** test/weathering.test.js (damp at the foot and none above; green only on walls
+    facing north as built and turned, in patches, none high up; none on tents, their walls not
+    cut; climbing ivy on about three houses in ten, low on a side or the back, never the front,
+    the same every time; a house's panes upright and facing out, each with its glass's seed; a
+    lantern's box none; the pools on the ground in front of their windows, none from too high,
+    further and fainter from higher, lit by WINDOW_LIGHT through windowOn, hidden by day,
+    facing up). e2e: the building lab (7), walking out of town, the mountains, the bridge, the
+    citadel, the tavern (no new shader made), keeping up, the hired adventurer, the minimap's
+    buildings.
+  - **Next:** M7k, the whole frame measured on the phone's profile, and cascaded shadows only if
+    they fit.
+- **2026-10-03, M7k: the whole frame measured on the phone's profile; no second shadow cascade;
+  the shadow maps drawn with only what they need** (§13 budgets; docs/GAME.md *Shadow maps drawn
+  with only what they need*).
+  - **How:** 22 spots on seed 1 (the ten lands and a village and a town of each people), the
+    game's own follow camera, Medium, 874 by 402 points at three times (1311 by 603 drawn, as
+    Medium's 1.5 has it), settled 6 frames, then the middle of 8 frames and the worst; every
+    draw counted by its pass (the near world, the far land, the sun's shadow map, the lamps' cube
+    maps), a batch's trees as it draws them; then the sun's map widened to 60 m and 100 m, as a
+    second cascade would draw.
+  - **Found, before:** a frame 86 to 140 draws (budget 250) and 385,000 to 708,000 triangles
+    (budget 500,000), over at 13 spots. The sun's map 22 to 61 draws and 66,000 to 281,000
+    triangles of it. A lamp's shadows, drawn again every 4th frame on Medium, up to 103 draws and
+    1,048,000 triangles (an elven town: its chunk's buildings, one merged mesh, drawn whole into
+    each of the cube's six maps), a frame then 222 draws and 1,757,000 triangles. A creature out
+    of view behind the camera drew 40,000 to 80,000 triangles into the sun's map.
+  - **A second cascade doesn't fit:** a map out to 60 m drew 36 to 91 draws and 77,000 to
+    555,000 triangles (100 m: 43 to 101 draws, 84,000 to 742,000); even drawn with only what it
+    needs (below), 28 to 51 draws and 76,000 to 443,000 (100 m: 33 to 60, 83,000 to 629,000), on
+    top of frames already over budget, and one more texture in every lit shader (the ground reads
+    14 of an iPhone's 16). Not built; far relief stays with the far land's slope shading.
+  - **Built instead: shadow maps drawn with only what they need** (world/shadowpasses.js): a
+    merged mesh keeps where each building is in it (town3d.js `joined`, `runsOf`), and a lamp's
+    maps and the sun's draw only the buildings in their view; something small is drawn into the
+    sun's map only if its shadow may fall where the camera looks. Both answered where three.js
+    asks a mesh whether it's in a shadow camera's view (`Mesh.intersectsFrustum`, with that
+    light's frustum: `watchShadows`), so nothing seen changes.
+  - **After:** a lamp's shadows drawn again 21,000 to 207,000 triangles (elven town 1,048,000 to
+    207,000; cat folk's town 360,000 to 92,000; orcs' town 359,000 to 76,000), the worst frame
+    of the elven town 1,757,000 to 873,000 triangles; the sun's map 52,000 to 186,000 (marsh
+    281,000 to 84,000, woods 204,000 to 129,000, tundra 151,000 to 79,000). A frame 83 to 141
+    draws, 368,000 to 665,000 triangles: still over 500,000 at 9 of the 22 spots (meadow 618,000,
+    elfwood 582,000, darkwood 598,000, jungle 616,000, an elven village 591,000 and town 665,000,
+    a dark elves' village 559,000, the lizard folk's village 508,000 and town 528,000), most of
+    it the near world's tall grass (129,000 on Medium) and undergrowth (up to 171,000 in the
+    meadow) and the trees' trunks in the sun's map (the darkwood's 86,000). Draws are well within
+    their budget everywhere.
+  - **Not done:** Medium's grass and undergrowth trimmed to the 500,000 (it would thin the look
+    the user chose), and the trees' trunks left out of the sun's map when their shadows can't be
+    seen (a batch culls its trees itself). A phone's own frame time (the debug overlay's GPU
+    timer) is what would say whether Medium's 500,000 is the right line.
+  - **Pictures:** before/after at the marsh, the woods and the darkwood by day and the elven,
+    orcs' and cat folk's towns at night, the shadows the same (sent in the session).
+  - **Tests:** test/shadowpasses.test.js (a run for each building, things in none together while
+    close, every corner in one; a chunk's merged buildings keep theirs; a lamp by one building
+    draws only its runs, as parts, and the mesh is as it was after; the camera's view and a lamp
+    by neither; something small into the sun's map only if its shadow may fall in view, out of
+    view to the side with its shadow falling in, never something big; a mesh of several
+    materials left as it is).
+  - **Next:** M7.5, places worth finding.
+- **2026-10-03, M7.5 broken into its steps** (§8 *Places worth finding*):
+  - **M7.5a-1:** every place on the maps, and who holds it (the war's record of what's been
+    cleared, retaken after a while).
+  - **M7.5a-2:** outlaws and the dead at their places (as many and as strong as the place is big
+    and its land dangerous), a leader stronger than the rest guarding a chest; clearing it.
+  - **M7.5a-3:** a guild mission for each place held by outlaws or the dead.
+  - **M7.5b:** the places of any size entered and explored (castles' courtyards and keeps, manors,
+    abbeys, watchtowers' floors, caves, the dragon's lair), their occupiers inside.
+  - **M7.5c:** the friendlies' shops; ghosts and wraiths at the ruins, a greater one with its relic.
+- **2026-10-03, M7.5a-1 built: every place worth finding on the maps, and who holds it** (§8;
+  docs/GAME.md *Places worth finding*, *Who holds them*). The user, on the castle between two
+  human towns: "It didn't show up on the minimap."
+  - **Places** (core/places.js `placesOf`, `PLACE_KINDS`): every site in the plan (each people's
+    castle and own places, the watchtowers, ruins, caves, shrines, stones, ruined castles and the
+    dragon's lair) and every wild camp, each with its size (small, medium, large: for how many
+    hold it, next), its icon and who may hold it.
+  - **Who holds each** (`heldAtStart`, `holderOf`): a people's castle theirs; their other places
+    theirs or outlaws' (about a third, `PLACE_TIMES.taken`, by the world's seed and the place's
+    id); a wild watchtower and a cave outlaws'; the ruins and ruined castles the dead's; the lair
+    the dragon's; shrines and stones no one's. Cleared (war.js `clearPlace`: `places`, kept with
+    the war, an old war's none), it's empty 120 turns (two days of the clock), then held again.
+  - **On the maps** (app/mapicons.js: 16 new icons, `PLACE_RIMS`; game.js `placeIcons`): on the
+    minimap every place in its view, where it stands once set down (sites.js `placedAt`; a camp
+    where it's pitched, overworld.js `campPlacedAt`), rimmed in who holds it; on the world map
+    those within a chunk of where the player's been.
+  - **Versions:** `NET_VERSION` 31 (the war's snapshot carries what's been cleared).
+  - **Seen, not fixed:** a wild camp on seed 1 is pitched inside the human citadel's cleared
+    ground (camps keep off roads, not off the sites: overworld.js `campAt`); for M7.5a-2, where
+    camps and places are put out together.
+  - **Pictures:** the minimap at a ruin, the citadel, a cave, a watchtower, a shrine and the
+    stones, before and after, and the world map (sent in the session).
+  - **Tests:** test/places.test.js (every site and camp a place with an icon that's drawn and who
+    may hold it; held at the start as the war has it, about a third of a people's places taken,
+    the same every time; cleared empty a while then held again, a people's own never; cleared as
+    the war keeps it, carried on from its snapshot, an old snapshot's none). e2e: the places near
+    on the minimap and on the world map once the player's been by, rimmed in who holds them, a
+    cleared one grey till it's held again; a building gone into still marked as it was.
+  - **Next:** M7.5a-2, outlaws and the dead at their places, a leader and a chest.
+- **2026-10-04, M7.5a-2 built: outlaws and the dead at their places, a leader by a locked chest,
+  cleared for what's in it** (§8; docs/GAME.md *Held, in play*).
+  - **The band** (core/host.js `#places`, places.js `PLACE_BANDS`): near a player (90 m), a place
+    held by outlaws or the dead puts out its band round its heart: 3/5/7 by its size, one more for
+    every 3 tiers of the land's danger, at the land's tier, territorial, each going for anyone
+    within 10 m (`guard`, a new option for the wild's creatures: a territorial creature with no
+    guard only fought back); let go once every player's 180 m off. Not counted among the wild's
+    creatures about a player, nor sent off at daybreak.
+  - **The leader:** 2 tiers above the band, in the middle: the bandit chief (creatures.js
+    `banditChief`, new: looks, spoils, the bestiary lab) or the wight lord.
+  - **The chest** (ground `chest-<place>`, `locked`, never lying out too long: `until` null, so a
+    saved game keeps it): on the free ground nearest the leader (not inside a tower's wall);
+    tapped while held, refused ("locked"). Drawn (world/drops3d.js) as an iron-bound wooden chest
+    (body, rounded lid on a board, two iron bands, rim, lock plate; open: the lid thrown back, a
+    dark inside, gold heaped in it).
+  - **Cleared:** once every one of the band has fallen, checked after all that fell in the same
+    step (so "cleared" is told last): the war clears the place (`clearPlace`; the dragon's lair and
+    the ruined castles too when their master falls, their master not back till it's held again),
+    the locked chest goes, and each player within 39 m has their own share of a chest's loot
+    (progress.js `LOOT.chest`, gold a third more for each tier above the first) in it, open; the
+    HUD says so (game.js `#cleared`: "The dead of Peningmoor are laid to rest, for now.").
+  - **Kept:** the host's held places with its snapshot (`held`), restored; `NET_VERSION` 32.
+  - **Cost** (the phone's profile, Medium, steady frame; before → after, draws / triangles): at a
+    ruin 99 / 465k → 115 / 655k; at a cave held by six bandits 152 / 702k → 238 / 1.14M; at a wild
+    tower 97 / 464k → 129 / 625k. A band of people, close by, costs what a camp's does: each about
+    36k triangles drawn, and again into the sun's shadows (garments and bodies at full detail till
+    they're under 140 pixels tall). Over the triangle budget near a band of outlaws; for M8 (the
+    Vitruvian characters), with the characters' shadows from their lower-detail bodies.
+  - **Pictures** (sent in the session): a held ruin, cave and wild tower before and after; the
+    chest close up at the ruin and the cave, held and then cleared.
+  - **Tests:** test/places.test.js (the band near a player, as many and as strong as the place
+    and its land, the leader stronger, all guarding, coming at the player; the chest on open ground
+    in its middle, locked; let go once far, the chest with them; put to the sword: cleared, told
+    last, the war keeps it, the share the player's own, none back while it's empty, held again
+    after; carried on exactly from a snapshot). e2e: a ruin's band and its chest drawn, tapped
+    locked, put to the sword, cleared on the map and the chest open, the HUD saying so.
+  - **Seen, not fixed:** the wild camp pitched inside the citadel's cleared ground (seed 1), as
+    before.
+  - **Next:** a free animated chest model in place of the drawn one (the user's ask), then
+    M7.5a-3, a guild mission for each place held.
+- **2026-10-04, M7.5a-3 built: the guilds' contracts to put a place's holders to the sword** (§8;
+  docs/WAR.md the guild's board, docs/GAME.md *Held, in play*).
+  - **On the board** (core/standing.js `offerContract`, kind "clear", `REQUESTS.clear`,
+    `CLEAR_REACH`): a place within 3 km of the guild's town held by outlaws or the dead (not
+    cleared, not one the player carries already), as often as the camp outside: "Outlaws hold
+    Peninggate, 0.8 km south-west of Redemoor, and rob all who pass. Put them to the sword, their
+    chief with them." / "The dead walk at Zolazul, 2.4 km west of Norleywick, … Lay them to rest,
+    the wight lord that leads them with them." (which way by the compass, `compass`).
+  - **Pays** 30 gold, 25 more for a middling place and 60 for a great one, 9 for each tier of its
+    land's danger (as from the town), and half the time a tome from the guild's library.
+  - **Done** (host.js `#clearedBy`) when the place is cleared with the player within 39 m of its
+    heart: its band and leader put to the sword, or a ruined castle's master felled; then back to
+    the guild for the pay, as any contract. Cleared without them (`#check`): it comes to nothing.
+  - **Marked** on the world map where the place lies (standing.js `whereTo`, its `at`); the journal
+    says what's to do (`progressOf`).
+  - **Tests:** test/places.test.js (the contract: a place near held, which way it lies, paid by its
+    size and danger, not offered again once carried or cleared; done once put to the sword with the
+    player there, a cave's band and a ruined castle's master; nothing if cleared without them);
+    test/news.test.js (the board's kinds, with the place near when there is one). e2e: the guild,
+    the town hall's work and the journal, hiring an adventurer, an envoy (all passed).
+  - **Next:** the chest model the user asked for, then M7.5b (the places entered and explored).
+- **2026-10-04, the places' chest a model, opening as it should** (the user: "Go try to find a
+  model of a good chest with animations. There is probably a free one out there.").
+  - **Looked for** (a researcher, free only, nothing bought): CC0 and MIT first, glTF, a phone's
+    budget. Most asset sites are blocked from here (Quaternius, Poly Pizza, itch.io, Kenney,
+    OpenGameArt, Sketchfab, Poly Haven); GitHub isn't. Found: the JMI 3D Toolkit's treasure chest
+    (vidarr101, MIT; planks and iron straps, a hasp, ring handles; 952 triangles, 512²/256² maps,
+    174 KiB; a separate lid and its own "Open" clip, 0.75 s), KayKit's Dungeon Remastered chest
+    (CC0, but toy-like and with no clip), a PS1-style one (CC-BY); seen, not fetched: Theo Kain's
+    "Medieval Treasure Chest - animated" (CC-BY, 1.8k triangles, realistic and grimy: a fair
+    alternative if fetched by hand) and Quaternius' Fantasy Props MegaKit (CC0, chests).
+  - **Used:** the JMI chest (client/models/jmi: chest.glb unchanged, its LICENSE, where it's
+    from; README credits), downloaded with the game (the manifest's "models" group, "Things in the
+    world", read through the loader as the other data: models.js `loadGltf`). world/drops3d.js
+    draws a place's chest as a copy of it (1.3 times: 0.85 m across), shut while held; the share
+    in it once cleared plays its "Open" once and stays open, on a heap of gold (lumpy, as coins).
+    The chest made in code stays, till the model's read or if it can't be.
+  - **Cost:** 5 draws a chest (wood, inside, iron; the lid's wood and iron), about 950 triangles;
+    a chest at a place at a time.
+  - **Pictures** (sent in the session): the ruin's chest held and cleared, and the cave's
+    cleared, the chest made in code against the model.
+  - **Tests:** test/manifest.test.js (the models group, the chest in it); e2e: the loading screen's
+    seven groups, the held place's chest locked then open.
+- **2026-10-04, fixed: wild camps pitched on a place's ground** (seen in M7.5a-1: seed 1's camp-3
+  inside the human citadel's cleared ground; and camp-60 on top of the standing stones 96 m from its
+  cell, the flattest ground near). overworld.js `campAt`: a camp keeps off the settlements', the
+  sites', the arches' and the piers' ground (`clearings`) with its own room besides, and looks
+  three times as far (`CAMP_FARTHER`) if all within its reach is theirs. Seeds 1 to 3: none on a
+  place's ground now (2 before). test/flats.test.js: every camp clear of them, at most two further
+  than the flats' reach.
+- **2026-10-04, the chest's gold a heap of coins** (the user: "The gold can look better. See if
+  you can do some research on how to create a realistic pile of gold and use that"; before, one
+  lumpy half-round, a smooth yellow blob).
+  - **Researched** (a researcher, with a working prototype; scratchpad notes): what makes a pile
+    read as coins at 2 to 8 m (round silhouettes and rims, many flat faces each catching the light
+    its own way, dark gaps, a broken outline, coins tilted and on edge, a few spilt), how games
+    build them (a heap with a coin texture under loose coins on top), gold's values (linear
+    (1, 0.77, 0.34); deeper, (1, 0.72, 0.30); metal through and through, rough 0.25 to 0.45), and
+    why gold under a blue sky goes olive (what a metal reflects it tints with its own colour; the
+    game's outdoor environment is the sky), glints that twinkle rather than flicker, what a phone
+    can afford (no bloom: no post-processing here, 1.5 to 3 ms a frame for one prop).
+  - **Built** (world/gold3d.js, drawn by drops3d.js in the open chest, and in the chest made in
+    code): the coins let fall one at a time onto a height map of the chest's inside (3 mm cells),
+    each resting on the highest of what's under it, tilted as that lies (no steeper than 37°), a
+    few on edge leant against the rest, what each covers raised by its thickness: about 400 coins
+    3 cm across, over a domed heap that rises 2 cm over the rim in the middle; five spilt on the
+    rim, seven on the ground. Each coin redder, paler or more worn than the next (a few silver and
+    copper), darker where buried or by the chest's sides; a rim, a ring of beads and a cross on each
+    face (64² textures made in code); under them a heap of coins only painted (a 128² tile, dark in
+    the gaps). Seven cut gems (32 triangles each, lit from within a little, no light through them),
+    a goblet, and 48 glints (four-pointed stars where the sun's mirrored in a coin's facet, as bright
+    as the sun is, gone by 14 m). Lit as gold (`goldLit`): the sky it reflects less blue and warmer,
+    the light falling on the heap coming back off the coins round about (gold twice over), and no
+    smoother than its bumps can be seen, nor further off (Toksvig; at least 0.32 by 10 m), so it
+    doesn't shimmer.
+  - **Cost:** shared by every chest (made once, about 30 ms at load); near (to 5 m) the coins with
+    ten sides, 15,000 triangles; to 14 m six sides, 9,000; further, the heap alone (1,000). Five
+    draws a chest (heap, coins, gems, goblet, glints), none in the shadows. Measured at the ruin's
+    open chest: +3 draws and 11,000 triangles at the follow camera's distance, +17,000 close up.
+  - **Pictures** (sent in the session): the ruin's and the cave's chest, close and from the
+    follow camera, before and after; round the chest; at night.
+  - **Tests:** test/gold.test.js (the coins cover the chest's inside, resting on the heap or each
+    other, heaped over the rim in the middle; most nearly flat, a few on edge, a few spilt; the same
+    for the same seed; a draw each near, fewer sides further off, the heap alone far off, nothing in
+    the shadows; the budget; the shader lit as gold); e2e: the held place's chest open on its coins.
+  - **Next:** M7.5b (the places entered and explored: caves, the lair and broken watchtowers first).
+- **2026-10-04, M7.5b-1 built: a cave, the dragon's lair and the broken watchtowers gone into**
+  (§8 *Places worth finding*: "enterable castles and forts with interiors"; docs/GAME.md *Held,
+  in play*). M7.5b is in steps, each playable: **b-1** (this) the caves, the lair and the wild
+  watchtowers; **b-2** the manors, abbeys and the other peoples' halls and temples held by
+  outlaws; **b-3** the castles' courtyards and keeps; **b-4** crypts under the ruins and the
+  ruined castles' keeps.
+  - **The way in** (core/sites.js `entranceAt`, from the layouts' `entry`: core/setpieces/neutral.js):
+    a door as a building's, the squares up to it kept clear of the site's solid parts; added to the
+    world's links as the site's set down (`Sites` `onSet`, overworld.js, insides.js `addSite`).
+  - **The floors** (core/insides.js `caveRooms`, `lairRooms`, `towerRooms`; plans with new marks:
+    "#" rock, "l" the chief's place, "g" a guard's, "h" the chest's, "u" a bedroll, "x" a fire, "j"
+    bones), made as the band's put out (and again for a snapshot's `made`: host.js `#building`
+    sets the site down for a `site:` key).
+  - **Drawn** (world/interiors3d.js `cave`, `lair`, `tower`, `towerTop`): crags of rock from the
+    plan's rock by open ground (blocks turned this way and that, leaning in, cut away in front of
+    the player as walls are), a rock roof (hidden from above), daylight in the mouth and a light
+    in from it, a camp fire ringed with stones, bedrolls, torches on the walls; the lair's bones,
+    ember cracks and heaps of gold; the tower's stairs, rubble, broken parapet, its top open to the
+    sky (view.js `setIndoors`: `open` keeps the sky) over the ground far below.
+  - **Who's within** (host.js `#places`, `#inside`, `#pack`/`#rouse` on a map): the chief and the
+    locked chest at the plan's "l" and "h", as many of the band as it has "g" for (half at most)
+    within, the rest outside. A player within counts as at the place (`#atPlace`): the band's held,
+    the chest's shares are theirs where it stood, the guild's contract's done.
+  - **The dragon's hoard** (host.js `#lairs`, `#opened`; progress.js `LOOT.hoard`): a chest at the
+    back of its lair, locked while it lives; opened when it falls.
+  - **NET_VERSION 33** (bands and chests on the insides' maps).
+  - **Cost:** the cave's floor 2,900 triangles, 8 draws (its crags, rock roof, floor, fire, things);
+    the tower's two floors and the lair as little. What costs within is who's there: each person
+    about 40,000 triangles, as anywhere (M8's).
+  - **Pictures** (sent in the session): the cave's band outside before; in by the cave's mouth,
+    the cave from above, the dragon's lair, a broken watchtower below and its top.
+  - **Tests:** test/places.test.js (the band's chief, guards and chest within a cave or a wild
+    tower; in by the cave's mouth, the band held, put to the sword within, the share where the
+    chest stood; the dragon's hoard locked, opened when it falls; carried on from a snapshot);
+    test/insides.test.js (the way in among the links, all within got to from it, the marks, a
+    tower's stairs, each floor drawn, the top open). e2e: in by a cave's mouth (its band within,
+    its chief by the chest, lit) and out again.
+  - **Next:** M7.5b-2, the manors, abbeys and halls held by outlaws.
+- **2026-10-04, M7.5b-2a built: the humans' abbeys and manors gone into** (docs/GAME.md *Gone
+  into*).
+  - **The way in** (core/sites.js): an abbey's or manor's landmark (its church, its keep) has its
+    door as a town's has (insides.js `entranceOf`), the squares before it kept clear; added to the
+    interiors as the site's set down (overworld.js `#enterSite`: insides.js `add`, the key `site:`
+    and its id, named "Galingdale Abbey", "Brombridge Manor").
+  - **Its people's:** its folk as a town's temple's or keep's; the manor's ruler its lord or lady
+    (host.js `#enthrone`), speaking for the realm of the town nearest it (game.js `#townOf`).
+  - **Held by outlaws:** its folk aren't in it (host.js `#notTheirs`, by places.js `holderOf`);
+    the band's chief, chest and guards where insides.js `heldWithin` puts them (for plans with no
+    "l", "h", "g": the chief before the altar or the thrones, the chest beside it, guards up the
+    aisle from the door), half the band within, the rest outside.
+  - **NET_VERSION 34** (new buildings out in the land).
+  - **Pictures** (sent in the session): an abbey held by outlaws, fought in its nave, and from
+    above (the chief by the altar, the chest beside it); a manor its people's, its folk in the
+    great hall.
+  - **Tests:** test/insides.test.js (the abbey's and manor's way in, clear; where outlaws holding
+    them stand, each got to from the door); test/places.test.js (an abbey held by outlaws: its
+    chief by the altar, the chest beside it, guards within, no priest; a manor its people's has its
+    folk).
+  - **Next:** M7.5b-2b, the other peoples' halls and temples held by outlaws.
+- **2026-10-04, M7.5b-2b built: the peoples' watchtowers and the elves' tree hall gone into**
+  (docs/GAME.md *Gone into*).
+  - **Which:** surveyed every people's own place for a way in. Each people's watchtower is the
+    commonest (about 22 a world, half held by outlaws) and where the friendlies' weapons and armour
+    are to be sold (M7.5c); the elves' tree hall has its door already. The orcs' watchtower (an
+    open deck on poles), the pits, the hatchery, the spider shrine, the spire and the shadow gate
+    are open or solid: their bands stay outside. The sun temple's door is behind its altar and
+    obelisk, the ziggurat's at its top: left for later, with art to change.
+  - **The doors** (core/insides.js `STRUCTURE_DOORS`, `structureDoor`; `entranceOf` taking a door's
+    numbers; core/sites.js: the door on the watchtower's piece, `door`): drawn in each kit's tower
+    (kits/castle.js `tower`; peoples cat-places.js `bastion`, darkelf.js `tower`, elf.js `tower`,
+    lizard-places.js `lookout`), only for a watchtower, so the towers on town walls are as they
+    were.
+  - **Fixed on the way:** the humans' watchtower (a castle's round tower, 10 m across) stood on two
+    plots, drawn 2 m off its ground towards the front and over its edge: walked into. It stands on
+    three now, in their middle.
+  - **Within** (insides.js `watchtowerRooms`, `watchFolkOf`; world/interiors3d.js `tower`,
+    `towerTop` with `look` "kept", `armoury` from the keep's racks): the guardroom and the top as
+    above; a lookout and a sentry; held by outlaws, the plans' "l", "h", "g" as a broken tower's.
+  - **The band outside** a place gone into stands before its way in, not round its heart (host.js
+    `#places`): round the tree hall's heart, deep in its ground, the only open squares near were
+    the way up to its door, and the band crowded it so it couldn't be walked.
+  - **NET_VERSION 35.**
+  - **Named** for the place (insides.js `addSite`: "Caeliavyn Tree Hall"; a watchtower with no
+    name of its own "the watchtower"), of its people (their materials within).
+  - **Pictures** (sent in the session): each people's watchtower's door from in front, the tree
+    hall's; a cat folk's watchtower inside, both floors, its sentries; a humans' held by outlaws.
+  - **Tests:** test/insides.test.js (every people's watchtower and the tree hall: the way in
+    clear, all within got to, folk where they stand); test/places.test.js (a people's watchtower
+    held by outlaws: the band's chief and chest at its top, guards below; one its people's, its
+    lookout and sentry; the tree hall held by outlaws walked up and gone into, the band not in
+    the way).

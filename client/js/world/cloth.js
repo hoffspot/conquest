@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { COLOURS as PEOPLES } from "../core/war/peoples.js";
 import { material } from "./art/engine/materials.js";
 import { TREE_WIND } from "./art/kits/trees.js";
-import { SMOKE } from "./smoke.js";
+import { WIND_WAY } from "./wind.js";
 
 // Each cloth's picture (pixels)
 const PICTURE = Object.freeze({ width: 128, height: 224 });
@@ -186,8 +186,8 @@ export const CLOTH = Object.freeze({
     grid: { hang: [6, 8], wash: [4, 4], fly: [8, 3], awning: [8, 4], valance: [8, 2] },
 });
 
-/** The way the breeze blows (east and south, a unit: the way the chimneys' smoke leans). */
-export const BREEZE = Object.freeze(((x, z) => [x / Math.sqrt(x * x + z * z), z / Math.sqrt(x * x + z * z)])(...SMOKE.wind));
+/** The way the breeze blows (east and south, a unit: the wind's, wind.js, as the chimneys' smoke leans). */
+export const BREEZE = WIND_WAY;
 
 /**
  * The awnings' stripes: each look's two colours (sRGB), the canvas sun-faded a little; and the

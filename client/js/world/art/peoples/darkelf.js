@@ -19,8 +19,8 @@ import { budLamp, needleSpire, spider, whiplash } from "./sylvan.js";
 
 const LIGHTS = ["glow-violet", "glow-violet", "glow-violet", "glow-violet", "glow-deep", "glow-blue", "glow-green"];
 
-function toned(solid, random, eaves = []) {
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: [], dirt: 0.2, mottle: ["slate-violet"] });
+function toned(solid, random, eaves = [], facing = 0) {
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing, washes: [], dirt: 0.2, mottle: ["slate-violet"] });
 }
 
 // A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round
@@ -298,7 +298,7 @@ export function house(piece) {
     const type = piece.type ?? (piece.back ? "pod" : W * D > m(9) * m(10) && wealth > 0.55 ? "spire" : random.pick(["thorn", "thorn", "pod"]));
     const solid = new Solid();
 
-    toned(solid, random, [m(7)]);
+    toned(solid, random, [m(7)], piece.facing ?? 0);
 
     if (type === "pod") {
         pod(solid, W / 2, D / 2, { r: Math.min(m(2.6), Math.min(W, D) / 2 - m(0.8)), random });
@@ -875,14 +875,14 @@ export function gatehouse(piece) {
     return solid.toObject();
 }
 
-/** An octagonal tower of black stone under a needle spire. */
+/** An octagonal tower of black stone under a needle spire (a watchtower's with its door: `door`). */
 export function tower(piece) {
     const random = randomFor(piece, 97);
     const [W, D] = [piece.w * CELL, piece.h * CELL];
     const solid = new Solid();
 
     toned(solid, random, []);
-    octTower(solid, W / 2, D / 2, Math.min(W, D) / 2 - m(1.2), 0, m(12), random, { spire: 2.6 });
+    octTower(solid, W / 2, D / 2, Math.min(W, D) / 2 - m(1.2), 0, m(12), random, { spire: 2.6, door: piece.door ? { width: m(1.3), height: m(2.6) } : null });
 
     return solid.toObject();
 }
