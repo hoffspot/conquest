@@ -1953,6 +1953,81 @@ const COMPILED = new Map([
 ]);
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, guard]) => [name, compile([[0, guard]])]));
 
+// The guards kept alive: each sways as an animator's fighting idle does (CLIP_KEYS' loops), less
+// the loop's mean, over the keyed guard, standing (eased out as the walk sets off): the pelvis and
+// the body's angles (as far as `body` says) added to the walk's, and each hand's place to the
+// guard's (as far as `hands` says). Kept only as far as keeps the forearms out of the torso on
+// every body (the motion check): a swordsman's weight shifting from foot to foot, the sword hand
+// going with it; a caster breathing, the wand hand moving a little (the bow's half as far); a
+// fighter rocking from the pelvis, the fists held as they are (the guard has them a finger's
+// breadth off the chest on the bulkier bodies: bobbing, or the spine leaning, brought a forearm
+// into it). Two hands on a haft, and the grimoire on its forearm, go with the body only
+export const GUARD_SWAYS = {
+    sword: { clip: "swordIdle", hands: 1 },
+    cleaver: { clip: "swordIdle", hands: 1 },
+    staff: { clip: "swordIdle", hands: 0 },
+    hammer: { clip: "swordIdle", hands: 0 },
+    bow: { clip: "spellIdle", hands: 0.5 },
+    wand: { clip: "spellIdle", hands: 1 },
+    grimoire: { clip: "spellIdle", hands: 0 },
+    punch: { clip: "fightIdle", hands: 0, body: 0 },
+    kick: { clip: "fightIdle", hands: 0, body: 0 },
+};
+// How many even steps round its loop a sway's sampled at, and how far into setting off walking
+// (Walker.amount) it's eased out
+const SWAY_STEPS = 12;
+const SWAY_WALK = 0.3;
+// (And how fast it's eased out as anything else is done, a blow, a flinch or a fall, and back in
+// after: a tenth of a second. Under a kick the pelvis rocking slid the standing foot)
+const SWAY_EASE = 10;
+const SWAY_BODY = /^(Hips|Spine|Spine1|Spine2|Neck|Head|LeftShoulder|RightShoulder)\./;
+
+// A guard's sway (a GUARD_SWAYS entry): { seconds, body: [[joint, [[angle, values]]]], offset:
+// [values] (x, y, z), hands: { right, left: [values] (at's x, y, z) } or null }, each channel's
+// values at even steps round its clip's loop, less their mean
+function swayOf({ clip, hands, body: bent = 1 }) {
+    const { channels, keys, seconds } = CLIP_KEYS[clip];
+    const times = keys.map(([time]) => time);
+    const rows = keys.map(([, ...values]) => values);
+    const around = (c, share) => {
+        const values = Array.from({ length: SWAY_STEPS }, (_, k) => sample(times, rows, c, (2 * k) / SWAY_STEPS));
+        const mean = values.reduce((sum, value) => sum + value, 0) / SWAY_STEPS;
+
+        return values.map((value) => (value - mean) * share);
+    };
+    const body = new Map();
+    const sway = { seconds, body: [], offset: [], hands: hands > 0 ? { right: [], left: [] } : null };
+
+    channels.forEach((channel, c) => {
+        const [joint, name, k] = channel.split(".");
+
+        if (joint === "offset") {
+            sway.offset[Number(name)] = around(c, 1);
+        } else if (HANDS.includes(joint) && name === "at" && sway.hands) {
+            sway.hands[joint][Number(k)] = around(c, hands);
+        } else if (SWAY_BODY.test(channel) && bent > 0) {
+            body.set(joint, [...(body.get(joint) ?? []), [name, around(c, bent)]]);
+        }
+    });
+
+    sway.body = [...body];
+
+    return sway;
+}
+
+const SWAYS = new Map(Object.entries(GUARD_SWAYS).map(([guard, sway]) => [guard, swayOf(sway)]));
+
+// A looped value `u` of the way round (0 to 1) through its even steps (Catmull-Rom, round the end)
+function looped(values, u) {
+    const n = values.length;
+    const x = (((u % 1) + 1) % 1) * n;
+    const i = Math.floor(x);
+    const t = x - i;
+    const [p0, p1, p2, p3] = [n - 1, 0, 1, 2].map((d) => values[(i + d) % n]);
+
+    return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
+}
+
 const MIRROR = { Left: "Right", Right: "Left", left: "right", right: "left" };
 const mirrored = (joint) => joint.replace(/^(Left|Right|left|right)/, (side) => MIRROR[side]);
 
@@ -2025,9 +2100,14 @@ function palmFrame(side, palm, towards) {
 }
 
 export class Actions {
-    /** @param {import("./character.js").Character} character */
-    constructor(character) {
+    /**
+     * @param {import("./character.js").Character} character
+     * @param {{ phase?: number }} [options] how far round its guard's sway (0 to 1) it starts, so
+     *   those on guard together don't sway as one
+     */
+    constructor(character, { phase = Math.random() } = {}) {
         this.character = character;
+        this.phase = phase;
         this.rig = character.rig;
         this.time = 0;
         // (Each time the arms are posed: what's measured against the skin is placed as they are)
@@ -2045,6 +2125,11 @@ export class Actions {
         this.guard = 0;
         this.guardTarget = 0;
         this.attacks = 0;
+        // (The guard's sway: how far it's let sway, eased out while anything else is done; this
+        // frame, how far each hand's place is moved, and a joint's angles)
+        this.calm = 1;
+        this.nudge = { right: [0, 0, 0], left: [0, 0, 0] };
+        this.swayed = {};
 
         // The hands' places to reach this frame, after the feet are planted
         this.reaching = [];
@@ -2249,10 +2334,11 @@ export class Actions {
     }
 
     /**
-     * Layer the actions over the pose the walk has set (rig.rotations and rig.offset). Returns
-     * false while falling or lying dead (the feet aren't to be kept planted).
+     * Layer the actions over the pose the walk has set (rig.rotations and rig.offset), `walking`
+     * as far into its stride as the walk is (Walker.amount: 0 standing). Returns false while
+     * falling or lying dead (the feet aren't to be kept planted).
      */
-    apply(dt) {
+    apply(dt, walking = 0) {
         this.time += dt;
         this.posed++;
         this.character.settle?.(dt);
@@ -2265,8 +2351,22 @@ export class Actions {
             this.#sit();
         }
 
+        const calm = this.attack || this.reactions.length || this.fall ? 0 : 1;
+
+        this.calm += Math.sign(calm - this.calm) * Math.min(Math.abs(calm - this.calm), dt * SWAY_EASE);
+
         if (this.guard > 0.001 && this.guardName) {
-            this.#blend(GUARD_TRACKS.get(this.guardName), 0, smooth(0, 1, this.guard), false);
+            const weight = smooth(0, 1, this.guard);
+            const sway = SWAYS.get(this.guardName);
+            // (Round its sway at its own pace, a little quicker or slower than the clip's)
+            const u = (this.time / (sway.seconds * (0.92 + 0.16 * this.phase)) + this.phase) % 1;
+            const swaying = weight * (1 - smooth(0, SWAY_WALK, walking)) * smooth(0, 1, this.calm);
+
+            this.#blend(GUARD_TRACKS.get(this.guardName), 0, weight, false, true, false, false, swaying > 0.001 && sway.hands ? this.#swayHands(sway, u, swaying) : null);
+
+            if (swaying > 0.001) {
+                this.#sway(sway, u, swaying);
+            }
         }
 
         // (Drawing a weapon or putting it away, it moves when the hand takes hold of it)
@@ -2452,7 +2552,7 @@ export class Actions {
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
     // kept for place()
-    #blend({ times, tracks, scaled }, key, weight, mirror, arms = true, rest = false, upright = false) {
+    #blend({ times, tracks, scaled }, key, weight, mirror, arms = true, rest = false, upright = false, nudge = null) {
         const rig = this.rig;
         // (A clip's pelvis offset, as far for a smaller body as it is for it)
         const reach = scaled ? (this.character.height ?? CLIP_HEIGHT) / CLIP_HEIGHT : 1;
@@ -2521,6 +2621,12 @@ export class Actions {
                     delete hand.on;
                 }
 
+                // (Its place moved as says `nudge`: a guard's sway; a hand on the other's haft
+                // goes along with it)
+                if (nudge && hand.at && !("on" in hand)) {
+                    hand.at = hand.at.map((x, k) => x + nudge[name][k]);
+                }
+
                 if (shielded && name === "left") {
                     shieldHand = carried ? null : hand;
                     continue;
@@ -2569,6 +2675,50 @@ export class Actions {
         if (Object.keys(hands).length && weight > 0.001) {
             this.reaching.push({ hands, weight });
         }
+    }
+
+    // Each hand's place moved as the guard's sway has it (arm lengths), `u` of the way round and
+    // `weight` of it
+    #swayHands(sway, u, weight) {
+        const nudge = this.nudge;
+
+        for (const side of HANDS) {
+            sway.hands[side].forEach((values, k) => (nudge[side][k] = looped(values, u) * weight));
+        }
+
+        return nudge;
+    }
+
+    // The body swayed as the guard's sway has it (its angles and the pelvis, as far for a smaller
+    // body as for the one it was baked on), `u` of the way round and `weight` of it
+    #sway(sway, u, weight) {
+        const rig = this.rig;
+        const reach = ((this.character.height ?? CLIP_HEIGHT) / CLIP_HEIGHT) * weight;
+        const angles = this.swayed;
+
+        for (const [joint, channels] of sway.body) {
+            const index = rig.index.get(joint);
+
+            if (index === undefined) {
+                continue;
+            }
+
+            for (const key in angles) {
+                delete angles[key];
+            }
+
+            for (const [name, values] of channels) {
+                angles[name] = looped(values, u) * weight;
+            }
+
+            const { kind, side } = rig.joints[index];
+
+            rig.rotations[index].multiply(jointRotation(kind, side, angles, _rotation));
+        }
+
+        rig.offset.x += looped(sway.offset[0], u) * reach;
+        rig.offset.y += looped(sway.offset[1], u) * reach;
+        rig.offset.z += looped(sway.offset[2], u) * reach;
     }
 
     // Add angles (and a pelvis offset) to the pose

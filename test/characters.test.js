@@ -1352,10 +1352,10 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
 describe("the tavern's folk (presets.js, actions.js)", () => {
     // Pose a body by its walk and actions for a moment, and say where a bone is (world metres)
     const posed = (f, set, seconds = 0.1) => {
-        const actions = new Actions(f);
+        const actions = new Actions(f, { phase: 0 });
         const walker = new Walker(f);
 
-        walker.overlay = (dt) => actions.apply(dt);
+        walker.overlay = (dt, walking) => actions.apply(dt, walking);
         walker.afterPose = () => actions.place();
         set(actions);
 

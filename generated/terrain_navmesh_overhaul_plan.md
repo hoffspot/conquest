@@ -4275,3 +4275,22 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** M8d-2, the guards' fighting idles (the clips' sway layered over the keyed guards) and
     hits and dodges (a slip for the Dodge spell); then deaths and falls with their legs; then
     the Vitruvian body (§10).
+
+- **2026-10-04, M8d-2 built: the guards sway** (docs/CHARACTERS.md *Fighting*, *Clips in the
+  game*). On guard, a body stood still as a statue; now it sways as an animator's fighting idle
+  does, layered over the keyed guards (`GUARD_SWAYS`):
+  - **Three loops baked** (`loop` in `bake-clips.js`: timed evenly, kept four times closer to the
+    clip): `Idle_Sword` for the sword, cleaver, staff and hammer; `Spell_Simple_Idle` for the
+    wand, bow and grimoire; `Fighting Idle` for fists and kicks. 13 clips in all (210 keys, 69 KB).
+  - **Added from each loop's mean:** the pelvis and the spine's, neck's and head's angles on top
+    of the walk's, each hand's place on top of the guard's. Standing only: eased out as the walk
+    sets off (the walker tells its overlay how far into its stride it is), and over a tenth of a
+    second as a blow, a flinch or a fall starts (under a kick the pelvis rocking slid the standing
+    foot on 150 pairs). Each fighter at its own place in the loop, a little quicker or slower.
+  - **Kept as far as keeps the forearms out of the torso on every body** (the motion check): the
+    fists sway from the pelvis only (their bob brought a forearm into the chest on 5 to 8 bodies,
+    the spine's lean on 3); two hands on a haft and the grimoire's book hand go with the body
+    only; the bow's hands half as far. Left out: `Idle_Shield` (hardly moves), `Golf_idle`, `Pistol_Idle`.
+  - The motion check's guard "still" is 2 s now, a sway's loop.
+  - **Next:** M8d-3, hits from the clips (`Hit_Chest`, `Hit_Head`) and a slip for the Dodge spell;
+    then deaths and falls with their legs; then the Vitruvian body (§10).

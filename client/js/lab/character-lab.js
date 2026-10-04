@@ -159,7 +159,7 @@ const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.l
 // rest: a role's, roles.js)
 const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
-walker.overlay = (dt) => actions.apply(dt * fight.slow);
+walker.overlay = (dt, walking) => actions.apply(dt * fight.slow, walking);
 walker.afterPose = () => actions.place();
 const skeletonHelper = new THREE.SkeletonHelper(character.rig.root);
 

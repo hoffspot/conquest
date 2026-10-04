@@ -705,6 +705,24 @@ each too, chosen the same way (see [GAME.md](GAME.md), Effects).
 On guard (while fighting), each weapon is held ready: the sword upright in front, the staff and
 hammer across the body in both hands, the fists up, the book open.
 
+**Swaying on guard** (`GUARD_SWAYS`). Standing on guard, a body isn't still. It sways as an
+animator's fighting idle does (Mesh2Motion's, baked as loops: *Clips in the game*, below), layered
+over the keyed guard. The clip's movement from its own mean is added: the pelvis and the spine's,
+neck's and head's angles on top of the walk's, and each hand's place on top of the guard's. It
+eases out as the walk sets off (`apply(dt, walking)`: the walker says how far into its stride it
+is), and over a tenth of a second as a blow, a flinch or a fall starts, back in after (under a
+kick, the pelvis rocking slid the standing foot on 150 pairs of the motion check). Each fighter starts at its own place in the loop and goes round it a little quicker or
+slower (`new Actions(character, { phase })`), so a line of guards doesn't sway as one. It's kept
+only as far as keeps the forearms out of the torso on every body:
+
+| Guard | Clip | What sways |
+| --- | --- | --- |
+| Sword, cleaver | `Idle_Sword` | The weight shifting from foot to foot, the sword hand going with it |
+| Wand; bow (the hands half as far) | `Spell_Simple_Idle` | Breathing, the chest rising, the hand moving a little |
+| Grimoire | `Spell_Simple_Idle` | Breathing; the book held still (the book hand's forearm came into the belly) |
+| Staff, war hammer | `Idle_Sword` | The weight shifting; both hands go with the body (the clip's moving apart brought the right forearm into the belly) |
+| Fists, kicks | `Fighting Idle` | Rocking forward and back from the pelvis; the fists held as the guard has them (it keeps them a finger's breadth off the chest on the bulkier bodies: bobbing them, or leaning the spine, brought a forearm into it) |
+
 **Arms and hands, as real ones move** (`Rig.reachArm`). The arms reach where the keys say
 anatomically, whatever the body's size:
 
@@ -799,7 +817,8 @@ their builds (the thinnest, shortest and bulkiest women, the bulkiest and talles
 holding and wearing what they would. That's 245 motions:
 
 - standing, setting off, walking and running;
-- each weapon's guard (still, walking, running) and its every blow;
+- each weapon's guard (still for two seconds, a sway's loop; walking; running) and its every
+  blow;
 - each spell's casts, and drawing and putting away each weapon;
 - every flinch, falling dead and knocked down;
 - the folk's acts (toasting, serving, pouring, forging, blessing, stamping, reading and the rest)
@@ -1072,7 +1091,7 @@ The lab plays these whole, as the clip has them.
 
 **Clips in the game** (`scripts/bake-clips.js`, run by `npm run build:clips` too): a clip that's
 to be one of the game's ways of doing something is baked into key poses, the same keys every
-other action is made of (`client/js/characters/clip-keys.js`: ten clips, 181 keys, 59 KB), so its
+other action is made of (`client/js/characters/clip-keys.js`: 13 clips, 210 keys, 69 KB), so its
 arms are reached within their ranges, what's held is kept out of the body, and the motion check
 measures it as it does any other:
 
@@ -1096,7 +1115,9 @@ measures it as it does any other:
    moving, found on the clip's own legs.
 4. Time it as actions are: key 1 when the blow lands (given, or when whatever's fastest, a hand,
    a held thing's tip or a foot, goes fastest), 2 at its end; and keep only the keys the curve
-   through them needs to come within 3°, 2.5 cm (as arm lengths) or a little of every value.
+   through them needs to come within 3°, 2.5 cm (as arm lengths) or a little of every value. A
+   loop (`loop`: a guard's sway) is timed evenly, key 1 halfway, and kept four times closer to
+   the clip, its movements being small.
 
 `clipped(name, clip)` in actions.js makes a way from one: easing out from key 1.6, its pelvis's
 offset scaled to the body's height, and a hand kept as the research has it (`hands`) where the
@@ -1121,6 +1142,10 @@ at the hip). What was tried, on all 30 of the motion check's bodies:
 | `Idle Listening` | Rest: *listening, a hand on the hip* | Kept | |
 | `Cheer_One_arm` (motion capture, mirrored) | Rest: *a cheer* | Kept | Mirrored: the clip's right arm, hanging, went into a sword's hilt at the hip as the body leaned |
 | `Help_One_Arm` (motion capture) | Rest: *waving someone over* | Kept | |
+| `Idle_Sword` (a loop) | Guard: the sword's, cleaver's, staff's and hammer's sway | Kept | Two hands on a haft go with the body only |
+| `Spell_Simple_Idle` (a loop) | Guard: the wand's, bow's and grimoire's sway | Kept | The bow's hands half as far, the grimoire's held still |
+| `Fighting Idle` (a loop) | Guard: the fists' and kicks' sway | Kept | The pelvis only: the fists' bob (even at 40%) brought a forearm into the chest on 5 to 8 bodies, the spine's lean on 3 |
+| `Idle_Shield`, `Golf_idle`, `Pistol_Idle` | Guard | Left out | Hardly moves; a golfer's waggle; a pistol held out |
 | `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
 | `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |
 | `Greeting`, `Cheering_Two_Hands`, `Victory Fist Pump` | Rest | Left out | Clean; the keyed wave and the adventurer's two clip rests cover them |

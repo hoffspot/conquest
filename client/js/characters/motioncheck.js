@@ -153,9 +153,9 @@ export function dress(human, look, { sheathed = true } = {}) {
     character.sheathe(sheathed);
 
     const walker = new Walker(character, WALK_STYLES[look.walk] ?? WALK_STYLES.natural);
-    const actions = new Actions(character);
+    const actions = new Actions(character, { phase: 0 });
 
-    walker.overlay = (dt) => actions.apply(dt);
+    walker.overlay = (dt, walking) => actions.apply(dt, walking);
     walker.afterPose = () => actions.place();
     walker.freed = (side) => actions.free[side];
     walker.update(0, { speed: 0 });
@@ -715,7 +715,7 @@ export function motions() {
     for (const weapon of Object.keys(WEAPON_GUARD)) {
         const guard = WEAPON_GUARD[weapon];
 
-        for (const [name, speed, seconds] of [["still", 0, 1], ["walk", 1.3, 1.2], ["run", 3.5, 1.2]]) {
+        for (const [name, speed, seconds] of [["still", 0, 2], ["walk", 1.3, 1.2], ["run", 3.5, 1.2]]) {
             const { start } = onGuard(weapon);
 
             list.push({

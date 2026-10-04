@@ -180,7 +180,7 @@
   },
   "attack/boots/1|darkElf-bulkiest-m": {
    "joint": 23.09,
-   "slide": 0.1954
+   "slide": 0.1945
   },
   "attack/boots/1|darkElf-shortest-f": {
    "joint": 23.09,
@@ -213,7 +213,7 @@
   },
   "attack/boots/1|elf-tallest-m": {
    "joint": 23.09,
-   "slide": 0.2195,
+   "slide": 0.2173,
    "item": 0.0126
   },
   "attack/boots/1|elf-thinnest-f": {
@@ -325,7 +325,7 @@
   },
   "attack/boots/2|darkElf-tallest-m": {
    "joint": 19.03,
-   "slide": 0.1981,
+   "slide": 0.1976,
    "item": 0.0124,
    "limb": 0.0978
   },
@@ -472,7 +472,7 @@
    "slide": 0.1562
   },
   "attack/boots/3|elf-tallest-m": {
-   "slide": 0.2337,
+   "slide": 0.2321,
    "item": 0.0126
   },
   "attack/boots/3|elf-thinnest-f": {
@@ -1397,7 +1397,7 @@
    "limb": 0.0392
   },
   "attack/grimoire/1|lizard-tallest-m": {
-   "limb": 0.0325
+   "limb": 0.0312
   },
   "attack/grimoire/2|cat-bulkiest-f": {
    "limb": 0.0905
@@ -1509,7 +1509,7 @@
    "limb": 0.0389
   },
   "attack/grimoire/4|darkElf-tallest-m": {
-   "limb": 0.0386
+   "limb": 0.0383
   },
   "attack/grimoire/4|elf-bulkiest-f": {
    "limb": 0.0347
@@ -1597,7 +1597,7 @@
   },
   "attack/hammer/0|human-bulkiest-m": {
    "slide": 0.0146,
-   "item": 0.0151,
+   "item": 0.0153,
    "limb": 0.1261,
    "grip": 0.1648
   },
@@ -1740,7 +1740,7 @@
   },
   "attack/hammer/1|human-bulkiest-m": {
    "joint": 3.2,
-   "item": 0.0151,
+   "item": 0.0153,
    "limb": 0.1259
   },
   "attack/hammer/1|human-shortest-f": {
@@ -1887,7 +1887,7 @@
   "attack/hammer/2|human-bulkiest-m": {
    "joint": 10.63,
    "slide": 0.0126,
-   "item": 0.0151,
+   "item": 0.0153,
    "limb": 0.0979
   },
   "attack/hammer/2|human-shortest-f": {
@@ -2016,7 +2016,7 @@
    "limb": 0.0604
   },
   "attack/hammer/3|human-bulkiest-m": {
-   "item": 0.0151,
+   "item": 0.0153,
    "limb": 0.0851
   },
   "attack/hammer/3|human-shortest-f": {
@@ -2144,7 +2144,7 @@
   },
   "attack/hammer/4|human-bulkiest-m": {
    "slide": 0.0275,
-   "item": 0.0151,
+   "item": 0.0153,
    "limb": 0.1136,
    "grip": 0.1518
   },
@@ -2316,7 +2316,7 @@
   "attack/staff/0|orc-bulkiest-f": {
    "grip": 0.0522,
    "item": 0.0814,
-   "limb": 0.0486
+   "limb": 0.0489
   },
   "attack/staff/0|orc-bulkiest-m": {
    "grip": 0.0597,
@@ -2342,7 +2342,7 @@
   },
   "attack/staff/1|cat-bulkiest-m": {
    "grip": 0.0828,
-   "limb": 0.0399
+   "limb": 0.0403
   },
   "attack/staff/1|cat-shortest-f": {
    "grip": 0.0806,
@@ -2350,7 +2350,7 @@
   },
   "attack/staff/1|cat-tallest-m": {
    "grip": 0.0898,
-   "limb": 0.0419
+   "limb": 0.0421
   },
   "attack/staff/1|cat-thinnest-f": {
    "grip": 0.0799,
@@ -2394,43 +2394,43 @@
   },
   "attack/staff/1|human-bulkiest-f": {
    "grip": 0.0798,
-   "limb": 0.0398
+   "limb": 0.0401
   },
   "attack/staff/1|human-bulkiest-m": {
    "grip": 0.0703,
-   "limb": 0.0639
+   "limb": 0.0646
   },
   "attack/staff/1|human-shortest-f": {
    "grip": 0.081,
-   "limb": 0.0437
+   "limb": 0.044
   },
   "attack/staff/1|human-tallest-m": {
    "grip": 0.0916,
-   "limb": 0.0492
+   "limb": 0.0496
   },
   "attack/staff/1|human-thinnest-f": {
    "grip": 0.0801,
-   "limb": 0.0389
+   "limb": 0.0394
   },
   "attack/staff/1|lizard-bulkiest-f": {
    "grip": 0.0825,
-   "limb": 0.036
+   "limb": 0.0362
   },
   "attack/staff/1|lizard-bulkiest-m": {
    "grip": 0.0889,
-   "limb": 0.0416
+   "limb": 0.042
   },
   "attack/staff/1|lizard-shortest-f": {
    "grip": 0.0803,
-   "limb": 0.0368
+   "limb": 0.037
   },
   "attack/staff/1|lizard-tallest-m": {
    "grip": 0.0949,
-   "limb": 0.0379
+   "limb": 0.0388
   },
   "attack/staff/1|lizard-thinnest-f": {
    "grip": 0.083,
-   "limb": 0.0375
+   "limb": 0.0377
   },
   "attack/staff/1|orc-bulkiest-f": {
    "grip": 0.1037,
@@ -2462,7 +2462,7 @@
   "attack/staff/2|cat-shortest-f": {
    "slide": 0.0102,
    "grip": 0.0911,
-   "limb": 0.037
+   "limb": 0.0372
   },
   "attack/staff/2|cat-tallest-m": {
    "grip": 0.1075,
@@ -2510,17 +2510,17 @@
   "attack/staff/2|human-bulkiest-f": {
    "slide": 0.0107,
    "grip": 0.0905,
-   "limb": 0.0398
+   "limb": 0.0401
   },
   "attack/staff/2|human-bulkiest-m": {
    "slide": 0.0105,
    "grip": 0.1011,
-   "limb": 0.0639
+   "limb": 0.0646
   },
   "attack/staff/2|human-shortest-f": {
    "slide": 0.0107,
    "grip": 0.0973,
-   "limb": 0.0437
+   "limb": 0.044
   },
   "attack/staff/2|human-tallest-m": {
    "slide": 0.0102,
@@ -2530,7 +2530,7 @@
   "attack/staff/2|human-thinnest-f": {
    "slide": 0.0108,
    "grip": 0.0952,
-   "limb": 0.0392
+   "limb": 0.0394
   },
   "attack/staff/2|lizard-bulkiest-f": {
    "slide": 0.0107,
@@ -2712,25 +2712,25 @@
   "attack/staff/4|cat-bulkiest-f": {
    "grip": 0.0504,
    "item": 0.0246,
-   "limb": 0.0342
+   "limb": 0.0345
   },
   "attack/staff/4|cat-bulkiest-m": {
    "grip": 0.0657,
-   "limb": 0.0399
+   "limb": 0.0403
   },
   "attack/staff/4|cat-shortest-f": {
    "grip": 0.0508,
    "item": 0.0269,
-   "limb": 0.037
+   "limb": 0.0372
   },
   "attack/staff/4|cat-tallest-m": {
    "grip": 0.0647,
-   "limb": 0.0419
+   "limb": 0.0421
   },
   "attack/staff/4|cat-thinnest-f": {
    "grip": 0.0504,
    "item": 0.0192,
-   "limb": 0.0319
+   "limb": 0.0322
   },
   "attack/staff/4|darkElf-bulkiest-f": {
    "grip": 0.0723,
@@ -2772,44 +2772,44 @@
   },
   "attack/staff/4|human-bulkiest-m": {
    "grip": 0.065,
-   "limb": 0.0639
+   "limb": 0.0646
   },
   "attack/staff/4|human-shortest-f": {
    "grip": 0.0507,
    "item": 0.0256,
-   "limb": 0.0437
+   "limb": 0.044
   },
   "attack/staff/4|human-tallest-m": {
    "grip": 0.0717,
-   "limb": 0.0492
+   "limb": 0.0496
   },
   "attack/staff/4|human-thinnest-f": {
    "grip": 0.0504,
    "item": 0.0261,
-   "limb": 0.0389
+   "limb": 0.0394
   },
   "attack/staff/4|lizard-bulkiest-f": {
    "grip": 0.0519,
    "item": 0.0141,
-   "limb": 0.036
+   "limb": 0.0362
   },
   "attack/staff/4|lizard-bulkiest-m": {
    "grip": 0.0689,
-   "limb": 0.0416
+   "limb": 0.042
   },
   "attack/staff/4|lizard-shortest-f": {
    "grip": 0.0557,
    "item": 0.0188,
-   "limb": 0.0368
+   "limb": 0.037
   },
   "attack/staff/4|lizard-tallest-m": {
    "grip": 0.0662,
-   "limb": 0.0379
+   "limb": 0.0388
   },
   "attack/staff/4|lizard-thinnest-f": {
    "grip": 0.0519,
    "item": 0.0161,
-   "limb": 0.0375
+   "limb": 0.0377
   },
   "attack/staff/4|orc-bulkiest-f": {
    "grip": 0.0693,
@@ -2893,73 +2893,73 @@
    "limb": 0.0373
   },
   "cast/castHeal/0|lizard-bulkiest-f": {
-   "limb": 0.0362
+   "limb": 0.0364
   },
   "cast/castHeal/0|lizard-bulkiest-m": {
-   "limb": 0.0424
+   "limb": 0.0426
   },
   "cast/castHeal/0|lizard-shortest-f": {
-   "limb": 0.0375
+   "limb": 0.0372
   },
   "cast/castHeal/0|lizard-tallest-m": {
-   "limb": 0.0389
+   "limb": 0.0397
   },
   "cast/castHeal/0|lizard-thinnest-f": {
-   "limb": 0.0383
+   "limb": 0.0375
   },
   "cast/castHeal/1|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castHeal/1|lizard-bulkiest-f": {
-   "limb": 0.0362
+   "limb": 0.0364
   },
   "cast/castHeal/1|lizard-bulkiest-m": {
-   "limb": 0.0424
+   "limb": 0.0426
   },
   "cast/castHeal/1|lizard-shortest-f": {
-   "limb": 0.0375
+   "limb": 0.0372
   },
   "cast/castHeal/1|lizard-tallest-m": {
-   "limb": 0.0389
+   "limb": 0.0397
   },
   "cast/castHeal/1|lizard-thinnest-f": {
-   "limb": 0.0383
+   "limb": 0.0375
   },
   "cast/castHeal/2|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castHeal/2|lizard-bulkiest-f": {
-   "limb": 0.0362
+   "limb": 0.0364
   },
   "cast/castHeal/2|lizard-bulkiest-m": {
-   "limb": 0.0424
+   "limb": 0.0426
   },
   "cast/castHeal/2|lizard-shortest-f": {
-   "limb": 0.0375
+   "limb": 0.0372
   },
   "cast/castHeal/2|lizard-tallest-m": {
-   "limb": 0.0389
+   "limb": 0.0397
   },
   "cast/castHeal/2|lizard-thinnest-f": {
-   "limb": 0.0383
+   "limb": 0.0375
   },
   "cast/castHeal/3|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castHeal/3|lizard-bulkiest-f": {
-   "limb": 0.0362
+   "limb": 0.0364
   },
   "cast/castHeal/3|lizard-bulkiest-m": {
-   "limb": 0.0424
+   "limb": 0.0426
   },
   "cast/castHeal/3|lizard-shortest-f": {
-   "limb": 0.0375
+   "limb": 0.0372
   },
   "cast/castHeal/3|lizard-tallest-m": {
-   "limb": 0.0389
+   "limb": 0.0397
   },
   "cast/castHeal/3|lizard-thinnest-f": {
-   "limb": 0.0383
+   "limb": 0.0375
   },
   "cast/castHeal/4|cat-bulkiest-f": {
    "limb": 0.0516
@@ -2968,109 +2968,109 @@
    "limb": 0.0305
   },
   "cast/castHeal/4|lizard-bulkiest-f": {
-   "limb": 0.0362
+   "limb": 0.0364
   },
   "cast/castHeal/4|lizard-bulkiest-m": {
-   "limb": 0.0424
+   "limb": 0.0426
   },
   "cast/castHeal/4|lizard-shortest-f": {
-   "limb": 0.0375
+   "limb": 0.0372
   },
   "cast/castHeal/4|lizard-tallest-m": {
-   "limb": 0.0389
+   "limb": 0.0397
   },
   "cast/castHeal/4|lizard-thinnest-f": {
-   "limb": 0.0383
+   "limb": 0.0375
   },
   "cast/castStun/0|cat-bulkiest-f": {
    "limb": 0.0405
   },
   "cast/castStun/0|lizard-bulkiest-f": {
-   "limb": 0.0364
+   "limb": 0.0359
   },
   "cast/castStun/0|lizard-bulkiest-m": {
-   "limb": 0.0422
+   "limb": 0.042
   },
   "cast/castStun/0|lizard-shortest-f": {
-   "limb": 0.0373
+   "limb": 0.0372
   },
   "cast/castStun/0|lizard-tallest-m": {
-   "limb": 0.0387
+   "limb": 0.0384
   },
   "cast/castStun/0|lizard-thinnest-f": {
-   "limb": 0.0381
+   "limb": 0.0378
   },
   "cast/castStun/1|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castStun/1|lizard-bulkiest-f": {
-   "limb": 0.0364
+   "limb": 0.0359
   },
   "cast/castStun/1|lizard-bulkiest-m": {
-   "limb": 0.0422
+   "limb": 0.042
   },
   "cast/castStun/1|lizard-shortest-f": {
-   "limb": 0.0373
+   "limb": 0.0372
   },
   "cast/castStun/1|lizard-tallest-m": {
-   "limb": 0.0387
+   "limb": 0.0384
   },
   "cast/castStun/1|lizard-thinnest-f": {
-   "limb": 0.0381
+   "limb": 0.0378
   },
   "cast/castStun/2|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castStun/2|lizard-bulkiest-f": {
-   "limb": 0.0364
+   "limb": 0.0359
   },
   "cast/castStun/2|lizard-bulkiest-m": {
-   "limb": 0.0422
+   "limb": 0.042
   },
   "cast/castStun/2|lizard-shortest-f": {
-   "limb": 0.0373
+   "limb": 0.0372
   },
   "cast/castStun/2|lizard-tallest-m": {
-   "limb": 0.0387
+   "limb": 0.0384
   },
   "cast/castStun/2|lizard-thinnest-f": {
-   "limb": 0.0381
+   "limb": 0.0378
   },
   "cast/castStun/3|cat-bulkiest-f": {
    "limb": 0.0373
   },
   "cast/castStun/3|lizard-bulkiest-f": {
-   "limb": 0.0364
+   "limb": 0.0359
   },
   "cast/castStun/3|lizard-bulkiest-m": {
-   "limb": 0.0422
+   "limb": 0.042
   },
   "cast/castStun/3|lizard-shortest-f": {
-   "limb": 0.0373
+   "limb": 0.0372
   },
   "cast/castStun/3|lizard-tallest-m": {
-   "limb": 0.0387
+   "limb": 0.0384
   },
   "cast/castStun/3|lizard-thinnest-f": {
-   "limb": 0.0381
+   "limb": 0.0378
   },
   "cast/castStun/4|cat-bulkiest-f": {
    "limb": 0.0458
   },
   "cast/castStun/4|lizard-bulkiest-f": {
-   "limb": 0.0364
+   "limb": 0.0359
   },
   "cast/castStun/4|lizard-bulkiest-m": {
-   "limb": 0.0422
+   "limb": 0.042
   },
   "cast/castStun/4|lizard-shortest-f": {
-   "limb": 0.0373
+   "limb": 0.0372
   },
   "cast/castStun/4|lizard-tallest-m": {
-   "limb": 0.0387
+   "limb": 0.0384
   },
   "cast/castStun/4|lizard-thinnest-f": {
-   "limb": 0.0381
+   "limb": 0.0378
   },
   "draw/boots|cat-bulkiest-f": {
    "slide": 0.1636
@@ -3741,19 +3741,19 @@
    "limb": 0.0397
   },
   "flinch/crush|lizard-bulkiest-f": {
-   "limb": 0.0358
+   "limb": 0.0354
   },
   "flinch/crush|lizard-bulkiest-m": {
    "limb": 0.0416
   },
   "flinch/crush|lizard-shortest-f": {
-   "limb": 0.0368
+   "limb": 0.0369
   },
   "flinch/crush|lizard-tallest-m": {
-   "limb": 0.0379
+   "limb": 0.0383
   },
   "flinch/crush|lizard-thinnest-f": {
-   "limb": 0.0375
+   "limb": 0.0371
   },
   "flinch/crush|orc-bulkiest-f": {
    "item": 0.0129
@@ -3768,19 +3768,19 @@
    "limb": 0.0373
   },
   "flinch/fire|lizard-bulkiest-f": {
-   "limb": 0.0358
+   "limb": 0.0355
   },
   "flinch/fire|lizard-bulkiest-m": {
-   "limb": 0.0415
+   "limb": 0.042
   },
   "flinch/fire|lizard-shortest-f": {
-   "limb": 0.0366
+   "limb": 0.037
   },
   "flinch/fire|lizard-tallest-m": {
-   "limb": 0.0376
+   "limb": 0.0388
   },
   "flinch/fire|lizard-thinnest-f": {
-   "limb": 0.0373
+   "limb": 0.0377
   },
   "flinch/hack|cat-bulkiest-f": {
    "limb": 0.0373
@@ -4416,8 +4416,8 @@
    "slide": 0.0135
   },
   "guard/hammer/still|human-bulkiest-m": {
-   "item": 0.0144,
-   "limb": 0.0686
+   "item": 0.0165,
+   "limb": 0.0707
   },
   "guard/hammer/walk|human-bulkiest-m": {
    "item": 0.0175,
@@ -4534,49 +4534,49 @@
    "slide": 0.0135
   },
   "guard/staff/still|cat-bulkiest-f": {
-   "limb": 0.0342
+   "limb": 0.036
   },
   "guard/staff/still|cat-bulkiest-m": {
-   "limb": 0.0399
+   "limb": 0.0418
   },
   "guard/staff/still|cat-shortest-f": {
-   "limb": 0.037
+   "limb": 0.0388
   },
   "guard/staff/still|cat-tallest-m": {
-   "limb": 0.0419
-  },
-  "guard/staff/still|cat-thinnest-f": {
-   "limb": 0.0319
-  },
-  "guard/staff/still|human-bulkiest-f": {
-   "limb": 0.0398
-  },
-  "guard/staff/still|human-bulkiest-m": {
-   "limb": 0.0639
-  },
-  "guard/staff/still|human-shortest-f": {
    "limb": 0.0437
   },
-  "guard/staff/still|human-tallest-m": {
-   "limb": 0.0492
+  "guard/staff/still|cat-thinnest-f": {
+   "limb": 0.0338
   },
-  "guard/staff/still|human-thinnest-f": {
-   "limb": 0.0389
-  },
-  "guard/staff/still|lizard-bulkiest-f": {
-   "limb": 0.0358
-  },
-  "guard/staff/still|lizard-bulkiest-m": {
+  "guard/staff/still|human-bulkiest-f": {
    "limb": 0.0416
   },
+  "guard/staff/still|human-bulkiest-m": {
+   "limb": 0.0653
+  },
+  "guard/staff/still|human-shortest-f": {
+   "limb": 0.0455
+  },
+  "guard/staff/still|human-tallest-m": {
+   "limb": 0.0511
+  },
+  "guard/staff/still|human-thinnest-f": {
+   "limb": 0.041
+  },
+  "guard/staff/still|lizard-bulkiest-f": {
+   "limb": 0.0382
+  },
+  "guard/staff/still|lizard-bulkiest-m": {
+   "limb": 0.0436
+  },
   "guard/staff/still|lizard-shortest-f": {
-   "limb": 0.0368
+   "limb": 0.0375
   },
   "guard/staff/still|lizard-tallest-m": {
-   "limb": 0.0379
+   "limb": 0.041
   },
   "guard/staff/still|lizard-thinnest-f": {
-   "limb": 0.0375
+   "limb": 0.0394
   },
   "guard/staff/walk|cat-bulkiest-f": {
    "limb": 0.0434
