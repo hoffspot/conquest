@@ -37,6 +37,12 @@ export const NEUTRAL = Object.freeze({
  */
 export const RUINS = Object.freeze({ crypt: { wide: 3.4, deep: 3.2, door: [1.4, 2.2] } });
 
+/**
+ * A ruined castle's keep's way in (metres): the breach where its door was (kits/castle.js
+ * ruinedKeep's), `breach` wide and high, over the step before it (`sill` high).
+ */
+export const RUINED_KEEP = Object.freeze({ breach: [3.2, 3.5], sill: 0.8 });
+
 const TAU = 6.283185307179586;
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
@@ -275,9 +281,14 @@ const LAYOUTS = {
             }
         }
 
+        // (Gone into by the breach where its keep's door was, in the middle of its south face: its
+        // great hall within, open to the sky, insides.js)
+        const keep = pieces.find(({ key }) => catalog.get(key)?.kind === "keep" && catalog.get(key).door);
+        const entry = keep ? { x: (keep.x + keep.w / 2) * PLOT, y: (keep.y + keep.h) * PLOT - 0.2, width: RUINED_KEEP.breach[0], height: RUINED_KEEP.breach[1], floor: RUINED_KEEP.sill, inside: "ruin" } : null;
+
         // (What its last keepers left: stores of barrels and crates against its walls, a cart, on
-        // open squares of the courtyard beside what stands, clear of its heart and of the way in
-        // from the gate)
+        // open squares of the courtyard beside what stands, clear of its heart, of the way in from
+        // the gate and of the breach into its keep)
         const beside = (x, y) => [[PLOT, 0], [-PLOT, 0], [0, PLOT], [0, -PLOT]].some(([dx, dy]) => !free(x + dx, y + dy));
         const spots = [];
 
@@ -285,7 +296,7 @@ const LAYOUTS = {
             for (let i = 1; i < w - 1; i++) {
                 const [x, y] = [(i + 0.5) * PLOT, (j + 0.5) * PLOT];
 
-                if (free(x, y) && beside(x, y) && Math.abs(x - width / 2) > PLOT * 1.5 && Math.abs(x - heart[0]) + Math.abs(y - heart[1]) > PLOT * 2) {
+                if (free(x, y) && beside(x, y) && Math.abs(x - width / 2) > PLOT * 1.5 && Math.abs(x - heart[0]) + Math.abs(y - heart[1]) > PLOT * 2 && !(entry && Math.abs(x - entry.x) < PLOT * 1.5 && y > entry.y && y - entry.y < PLOT * 2)) {
                     spots.push([x, y]);
                 }
             }
@@ -299,7 +310,7 @@ const LAYOUTS = {
             solid.push(box(x, y, cart ? 3 : 2.2, cart ? 3 : 2.2));
         }
 
-        return { parts, solid, heart, castle: pieces };
+        return { parts, solid, heart, castle: pieces, ...(entry ? { entry } : {}) };
     },
 
     // The dragon's lair, cut into a mountainside: a great cave's mouth in a face of dark rock, the

@@ -2628,10 +2628,11 @@ metres off (back as many as ever the next time, unless it's been cleared).
   3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
 - **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild; M7.5b-4,
-  the crypt under the ruins): its way in is a door as a building's (`sites.js` `entranceAt`: the
-  mouth, the tower's door, the ruins' stair-house's, kept clear of what stands in the way), its
-  floors made the first time they're wanted (`insides.js` `addSite`, the key `site:` and the
-  site's id; `caveRooms`, `lairRooms`, `cryptRooms`, `towerRooms`), drawn as the buildings'
+  the crypt under the ruins and a ruined castle's keep): its way in is a door as a building's
+  (`sites.js` `entranceAt`: the mouth, the tower's door, the ruins' stair-house's, the breach in
+  the ruined keep's front where its door was, kept clear of what stands in the way), its floors
+  made the first time they're wanted (`insides.js` `addSite`, the key `site:` and the site's id;
+  `caveRooms`, `lairRooms`, `cryptRooms`, `ruinRooms`, `towerRooms`), drawn as the buildings'
   insides are (`interiors3d.js`):
   - **A cave:** a passage in from its mouth (daylight in it) to a chamber, rock all round,
     earth underfoot; the outlaws' bedrolls and their fire, sacks and a crate, torches on the walls.
@@ -2644,6 +2645,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
     there pushed askew on the dark within; bones about the floor; at the back, in its apse, the
     dead's master by their chest, candles burning in iron stands either side (`t` a tomb, `k` the
     candles, `I` a pillar: interiors.js).
+  - **A ruined castle's keep** ("The great hall of Jazeh"): open to the sky (`open`), its walls
+    broken off along their tops, high and low, the daylight through tall windows where they still
+    stand high enough; its flagstones, grass come up between them; two rows of pillars, some
+    broken off short; heaps of what fell from its floors and roof (`m`, interiors.js), a charred
+    joist across each; bones; at the back the dais and its two thrones of stone, one toppled,
+    braziers burning either side, the wight lord before them by its hoard; the land outside seen
+    over the walls.
   - **A broken watchtower:** below, flagstones, old stone walls, the stairs up, rubble, a torch by
     the door; above, boards, a broken parapet, open to the sky (`open`: the view keeps the sky),
     its walls falling away to the ground far below.
@@ -2654,11 +2662,14 @@ metres off (back as many as ever the next time, unless it's been cleared).
     the players there (in or near it), and the guild's contract is done for them; a player within
     is told the place is cleared ("The dead of Peningmoor Ruins are laid to rest, for now.") as one
     outside near it is.
+  - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
+    `within`), half its skeletons with it, the rest in the courtyard; slain, the hoard's opened as
+    the dragon's is.
   - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
   - Its sound's its own (`sound.js` PLACES: a cave's, the lair's and the crypt's hushed, the
-    tower's open).
+    tower's and the ruined keep's open).
   - **The humans' abbeys and manors** (M7.5b-2): gone into by the door of the temple or the keep
     each is built round (`sites.js`: their landmark's `entranceOf`, the way kept clear), the same
     temple and great hall as a town's (`insides.js` `add`, keyed `site:` and its id; named for the

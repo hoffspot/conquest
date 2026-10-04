@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { tierAt } from "../client/js/core/creatures.js";
+import { LAIRS, tierAt } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -346,6 +346,31 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
             assert.equal(share?.map, building.maps[0], kind);
             assert.deepEqual(share.square, world.maps[share.map].marks.h[0]);
         }
+    });
+
+    it("a ruined castle's wight lord keeps within its keep's great hall, open to the sky, by its hoard, half its skeletons with it, gone into by the breach where the keep's door was", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const site = world.plan.sites.find((one) => one.kind === "ruined castle");
+        const heart = world.maps.town.sites.heartOf(site);
+
+        put(me, [Math.floor(heart[0] + 12), Math.floor(heart[1])]);
+        run(host, 600);
+
+        const held = host.lairs.get(site.id);
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+        const [hall] = building.maps;
+        const band = held.ids.map((id) => host.battle.actor(id));
+        const master = band.find((one) => host.wild.get(one.id)?.master);
+        const chest = host.ground.get(`chest-${site.id}`);
+
+        assert.equal(building.kind, "ruin");
+        assert.equal(world.maps[hall].style, "ruin");
+        assert.equal(master.map, hall, "the wight lord within");
+        assert.ok(chest?.locked && chest.map === hall, "its hoard within, locked");
+        assert.ok(Math.hypot(master.square[0] - world.maps[hall].marks.l[0][0], master.square[1] - world.maps[hall].marks.l[0][1]) < 1.5, "where the plan has it");
+        assert.equal(band.filter((one) => one !== master && one.map === hall).length, Math.ceil(LAIRS["ruined castle"].guards[0][1] / 2), "half its skeletons with it");
+        assert.ok(band.some((one) => one.map === "town"), "the rest in the courtyard");
     });
 
     it("the dragon's hoard lies at the back of its lair, locked while the dragon lives; opened once it falls, a share of it for each player there", () => {

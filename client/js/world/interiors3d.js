@@ -2660,6 +2660,161 @@ function crypt(map) {
     return { solid, moving: [], flames: [], lights, hearth: null };
 }
 
+// How high a ruined keep's walls still stand round its hall, at the least and the most (metres)
+const RUIN_WALL = Object.freeze({ low: 3.2, high: 9 });
+
+// An iron brazier on three legs (art pixels: where it stands), its coals and its fire, and its light
+function brazier(solid, x, z, seed) {
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+
+        solid.turnedBox(x + Math.cos(a) * m(0.22), z + Math.sin(a) * m(0.22), m(0.04), m(0.04), 0, m(0.7), a, material("iron"));
+    }
+
+    solid.cylinder(x, z, m(0.62), m(0.82), m(0.18), m(0.36), material("iron"), { segments: 12 });
+    solid.cylinder(x, z, m(0.8), m(0.84), m(0.32), m(0.32), material("embers"), { segments: 12 });
+
+    const fire = flame(m(0.55), m(0.6), seed, "hearth");
+
+    fire.position.set(x, m(0.84), z);
+
+    return { fire, light: { kind: "fire", x: x / M, y: 1.5, z: z / M, colour: 0xff9a40, intensity: 7, distance: 12, flicker: 0.3, ...fire.userData.fire } };
+}
+
+// A ruined castle's keep's great hall, open to the sky: its flagstones, its old stone walls broken
+// off along their tops, high and low, the light through tall windows where they still stand high
+// enough; two rows of pillars, some broken off short; heaps of what fell from its floors and roof,
+// charred joists lying across them; bones about; at the back the dais and its two thrones of
+// stone, one toppled; braziers burning either side of it, where the wight lord keeps its hoard; the
+// land outside seen over the walls
+function ruin(map) {
+    const solid = new Solid();
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const stone = "stone-old";
+    const [w, h] = [m(map.width), m(map.height)];
+    const wall = (x, y) => x < 0 || y < 0 || x >= map.width || y >= map.height || map.plan[y][x] === "#";
+    const sides = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    // (How high the wall still stands at a square, rising and falling along it)
+    const topAt = (x, y) => m(RUIN_WALL.low + (RUIN_WALL.high - RUIN_WALL.low) * (0.5 + 0.3 * Math.sin(x * 0.7 + y * 0.45) + 0.2 * Math.sin(x * 1.9 - y * 1.3 + 1.7)));
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("cobbles"));
+    solid.box(-m(60), -m(0.6), -m(60), w + m(60), -m(0.5), h + m(60), material("grass"));
+
+    // (Grass come up between the flagstones here and there, in tufts turned this way and that)
+    for (let k = 0; k < 40; k++) {
+        const [x, z] = [1.5 + roughOf(k, 3) * (map.width - 3), 1.5 + roughOf(7, k) * (map.height - 4)];
+
+        for (let t = 0; t < 3; t++) {
+            const [dx, dz] = [roughOf(k, t + 5) - 0.5, roughOf(t + 9, k) - 0.5];
+
+            solid.turnedBox(m(x + dx * 0.8), m(z + dz * 0.8), m(0.12 + 0.2 * roughOf(k + t, 2)), m(0.08 + 0.14 * roughOf(4, k + t)), 0, 0.06 + 0.04 * t, roughOf(k * 3, t) * Math.PI, material("grass"));
+        }
+    }
+
+    // Its walls, broken off along their tops; a window through each stretch high enough, the
+    // daylight through it
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (!wall(x, y) || map.plan[y]?.[x] === "D" || sides.every(([dx, dy]) => wall(x + dx, y + dy))) {
+                continue;
+            }
+
+            const top = topAt(x, y);
+
+            solid.box(m(x), 0, m(y), m(x + 1), top, m(y + 1), material(stone, WALL));
+
+            for (const [dx, dy] of sides) {
+                if (wall(x + dx, y + dy) || (x + y) % 4 !== 0 || top < m(5.2) || y + dy >= map.height - 1) {
+                    continue;
+                }
+
+                const face = dy ? m(y + 0.5 + dy * 0.51) : m(x + 0.5 + dx * 0.51);
+                const quad = dy
+                    ? [[m(x + 0.15), m(1.8), face], [m(x + 0.85), m(1.8), face], [m(x + 0.85), m(4.2), face], [m(x + 0.15), m(4.2), face]]
+                    : [[face, m(1.8), m(y + 0.15)], [face, m(1.8), m(y + 0.85)], [face, m(4.2), m(y + 0.85)], [face, m(4.2), m(y + 0.15)]];
+
+                solid.facing(quad, [dx, 0, dy], material("daylight", WALL));
+            }
+        }
+    }
+
+    // Its pillars: some whole to their capitals, some broken off short
+    for (const pillar of at("pillar")) {
+        const [cx, cz] = [m(pillar.x + 0.5), m(pillar.y + 0.5)];
+        const broken = roughOf(pillar.x * 3, pillar.y * 7) > 0.55;
+        const tall = broken ? m(1.2 + 2 * roughOf(pillar.y, pillar.x)) : m(6.5);
+
+        solid.box(cx - m(0.42), 0, cz - m(0.42), cx + m(0.42), m(0.35), cz + m(0.42), material("stone-dark"));
+        solid.cylinder(cx, cz, m(0.35), tall, m(0.3), m(0.3), material(stone), { segments: 10 });
+
+        if (broken) {
+            solid.turnedBox(cx + m(0.05), cz, m(0.26), m(0.2), tall, tall + m(0.25), roughOf(pillar.x, 9) * 3, material(stone));
+        } else {
+            solid.box(cx - m(0.44), tall, cz - m(0.44), cx + m(0.44), tall + m(0.4), cz + m(0.44), material("stone-dark"));
+        }
+    }
+
+    // Heaps of what fell, a charred joist across each
+    for (const heap of at("rubble")) {
+        for (const [x, y] of heap.squares) {
+            const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
+
+            solid.cone(cx, cz, 0, m(0.55 + 0.25 * roughOf(x, y)), m(0.75), material("rubble-old"), 7);
+
+            for (let k = 0; k < 4; k++) {
+                const size = m(0.18 + 0.16 * roughOf(x + k, y));
+                const [bx, bz] = [cx + m(roughOf(k, x) - 0.5) * 1.1, cz + m(roughOf(y, k) - 0.5) * 1.1];
+
+                solid.turnedBox(bx, bz, size, size * 0.8, 0, size * 1.3 + m(0.1 * k), roughOf(k, y) * 3, material(stone));
+            }
+        }
+
+        const [x, y] = heap.squares[0];
+        const turn = roughOf(x * 5, y) * Math.PI;
+
+        solid.turnedBox(m(x + 0.5 + Math.cos(turn) * 1.4), m(y + 0.5 + Math.sin(turn) * 1.4), m(2.2), m(0.13), 0, m(0.7), turn, material("timber-char"));
+    }
+
+    for (const heap of at("bones")) {
+        bones(solid, m(heap.x + 0.5), m(heap.y + 0.5), roughOf(heap.x, heap.y));
+    }
+
+    // The dais and its thrones, the second toppled on its back
+    const lights = [];
+    const flames = [];
+    const thrones = at("throne");
+
+    if (thrones.length) {
+        const [x0, x1] = [m(Math.min(...thrones.map(({ x }) => x)) - 1), m(Math.max(...thrones.map(({ x }) => x)) + 2)];
+
+        solid.box(x0, 0, m(0.5), x1, m(0.3), m(2.4), material("stone-dark"));
+
+        thrones.forEach((throne, k) => {
+            const [cx, cz] = [m(throne.x + 0.5), m(throne.y + 0.5)];
+
+            if (k === 0) {
+                solid.box(cx - m(0.4), m(0.3), cz - m(0.3), cx + m(0.4), m(0.8), cz + m(0.3), material(stone));
+                solid.box(cx - m(0.42), m(0.3), cz - m(0.42), cx + m(0.42), m(2.4), cz - m(0.28), material(stone));
+            } else {
+                solid.turnedBox(cx + m(0.3), cz + m(0.5), m(0.4), m(1.1), m(0.3), m(0.75), 0.25, material(stone));
+            }
+        });
+
+        // (A brazier burning either side of it)
+        for (const x of [Math.min(...thrones.map((one) => one.x)) - 2, Math.max(...thrones.map((one) => one.x)) + 3]) {
+            const { fire, light } = brazier(solid, m(x + 0.5), m(2.5), x * 0.37);
+
+            flames.push(fire);
+            lights.push(light);
+        }
+    }
+
+    // (The sky over it, the sun on it)
+    lighting.daylight = [0.45, 1, 0.35];
+
+    return { solid, moving: [], flames, lights, hearth: null, open: true };
+}
+
 // A broken watchtower below: flagstones, its walls of old stone, the stairs up along the north
 // wall, rubble in the corners, a torch by the door; its floor above carried on beams. A people's,
 // kept (`look` "kept"): its walls their stone, its door shut behind, the racks of their arms by
@@ -2812,7 +2967,7 @@ function towerTop(map) {
     return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
 }
 
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, cave, lair, crypt, tower, "tower-top": towerTop };
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, cave, lair, crypt, ruin, tower, "tower-top": towerTop };
 
 // --- Each people's own ---
 

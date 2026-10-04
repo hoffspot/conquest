@@ -2586,18 +2586,29 @@ export class Host {
             const inside = this.#inside(site);
             const hoard = inside?.chest ?? null;
 
+            // (A master that keeps within, by its hoard: a ruined castle's wight lord in its keep)
+            const keeps = lair.within ? inside?.leader : null;
+
             if ((this.slain[site.id] ?? -Infinity) <= this.battle.time && !cleared) {
-                ids.push(...this.#pack({ creature: master, tier, count: 1 }, at, { lair: site.id, master: true, roam: 3 }));
+                ids.push(...this.#pack({ creature: master, tier, count: 1 }, keeps?.square ?? at, { lair: site.id, master: true, roam: 3, map: keeps?.map ?? "town" }));
 
                 if (hoard) {
                     this.ground.set(`chest-${site.id}`, { id: `chest-${site.id}`, chest: true, locked: true, for: null, map: hoard.map, square: hoard.square, place: site.id, until: null });
                 }
             }
 
+            // (Its guards round its heart; half of them within with it, if it keeps within)
             lair.guards.forEach(([creature, count, guardTier], k) => {
                 const angle = (k / lair.guards.length) * Math.PI * 2;
+                const posts = keeps ? (inside.guards ?? []).slice(0, Math.ceil(count / 2)) : [];
 
-                ids.push(...this.#pack({ creature, tier: guardTier, count }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
+                for (const { map, square } of posts) {
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: 1 }, square, { lair: site.id, roam: 3, map }));
+                }
+
+                if (count > posts.length) {
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: count - posts.length }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
+                }
             });
 
             this.lairs.set(site.id, { ids, maps: inside?.maps ?? [], hoard });

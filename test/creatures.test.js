@@ -465,14 +465,18 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(master.wild.creature, "wightLord");
         assert.equal(master.wild.tier, LAIRS["ruined castle"].master[1]);
         assert.ok(held.ids.length > 1, "its guards with it");
+        // (Within its keep's great hall, by its hoard)
+        assert.ok(held.maps.includes(master.map) && host.ground.get(`chest-${site.id}`)?.map === master.map, master.map);
 
         // Slain: gone till it's back, even after the site's let go and come to again
         master.hp = 1;
+        me.map = master.map;
         put(me, [master.square[0] + 3, master.square[1]]);
         host.command(HOST_PLAYER, { type: "engage", target: master.id });
         run(host, 8000);
 
         assert.ok(host.slain[site.id] > host.battle.time);
+        me.map = "town";
 
         put(me, [Math.floor(site.at[0] + 600), Math.floor(site.at[1])]);
         run(host, 600);

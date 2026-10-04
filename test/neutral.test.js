@@ -114,6 +114,22 @@ describe("the sites no people keeps (setpieces/neutral.js)", () => {
         const middle = [(gate.x + gate.w / 2) * PLOT, (gate.y + gate.h / 2) * PLOT];
 
         assert.ok(!laid.solid.some((rect) => within(middle, rect)), "the way through the gate is open");
+
+        // (Its keep gone into by the breach where its door was, in the middle of its south face,
+        // the way to it clear of the stores and carts left in the courtyard)
+        for (let seed = 1; seed <= 24; seed++) {
+            const each = layoutNeutral({ kind: "ruined castle", seed });
+            const keep = each.castle.find(({ key }) => key.startsWith("keep"));
+
+            assert.equal(each.entry.inside, "ruin", `${seed}`);
+            assert.deepEqual([each.entry.x, each.entry.y], [(keep.x + keep.w / 2) * PLOT, (keep.y + keep.h) * PLOT - 0.2]);
+
+            for (let v = 0.4; v <= 2; v += 0.2) {
+                for (let u = -1; u <= 1; u += 0.25) {
+                    assert.ok(!each.solid.some((rect) => within([each.entry.x + u, each.entry.y + v], rect)), `${seed}: the way to its keep clear at ${u}, ${v}`);
+                }
+            }
+        }
     });
 });
 

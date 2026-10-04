@@ -803,6 +803,34 @@ export function cryptRooms(building) {
     return [{ suffix: "crypt", style: "crypt", name: `The crypt under ${building.name}`, rows: CRYPT, ground: GROUND.courtyard, sound: "crypt" }];
 }
 
+// A ruined castle's keep, its great hall, 20 by 16: open to the sky, its floors and roof fallen in
+// heaps, two rows of its pillars standing (some broken), bones about; at the back the dais and its
+// two thrones, the wight lord before them by its hoard, its skeletons guarding the hall; in by the
+// breach where its door was (south)
+const RUIN = [
+    "####################",
+    "#..j.....YY.....m..#",
+    "#.......l..h.......#",
+    "#..................#",
+    "#..I....g..g....I..#",
+    "#..................#",
+    "#.mm...........j...#",
+    "#..I............I..#",
+    "#..........mm......#",
+    "#..j...............#",
+    "#..I....g..g....I..#",
+    "#..................#",
+    "#....m.........j...#",
+    "#..................#",
+    "#..................#",
+    "#########DD#########",
+];
+
+/** A ruined castle's keep's great hall, open to the sky. */
+export function ruinRooms(building) {
+    return [{ suffix: "hall", style: "ruin", name: `The great hall of ${building.name}`, rows: RUIN, ground: GROUND.cobbles, sound: "ruin" }];
+}
+
 /** The dragon's lair's floor. */
 export function lairRooms(building) {
     return [{ suffix: "lair", style: "lair", name: building.name, rows: LAIR, ground: GROUND.soil, sound: "lair" }];
@@ -862,13 +890,14 @@ const KINDS = Object.freeze({
     cave: { first: "cave", rooms: caveRooms, folk: () => [] },
     lair: { first: "lair", rooms: lairRooms, folk: () => [] },
     crypt: { first: "crypt", rooms: cryptRooms, folk: () => [] },
+    ruin: { first: "hall", rooms: ruinRooms, folk: () => [] },
     tower: { first: "ground", rooms: towerRooms, folk: () => [] },
     // (A people's watchtower: kept, its sentries in it)
     watchtower: { first: "ground", rooms: watchtowerRooms, folk: (building, [ground, top]) => watchFolkOf(building, ground, top) },
 });
 
 /** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
-export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "tower", "watchtower"]);
+export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "watchtower"]);
 
 // What those holding a building not theirs gather by: a temple's altar, a keep's thrones
 const HELD_BY = Object.freeze({ church: "altar", keep: "throne" });
@@ -927,7 +956,7 @@ export function heldWithin(kind, map) {
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", tower: "the watchtower", watchtower: "the watchtower" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column

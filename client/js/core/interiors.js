@@ -77,6 +77,8 @@ export const PLAN_KEY = Object.freeze({
     // candles burning on the floor in a stand
     t: { kind: "tomb", blocks: true, joins: true },
     k: { kind: "candles", blocks: true },
+    // A ruined keep's (its great hall open to the sky): heaps of what fell from its floors and roof
+    m: { kind: "rubble", blocks: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

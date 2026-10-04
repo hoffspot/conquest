@@ -3971,3 +3971,25 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Pictures** (sent in the session): the ruins before and after (the stair-house), the crypt
     from the follow camera and from above.
   - **Next:** M7.5b-4b (the ruined castles' keeps, their wight lords within); then M7.5c.
+- **2026-10-04, M7.5b-4b built: the ruined castles' keeps gone into** (docs/GAME.md *Gone into*).
+  - **The way in** (core/setpieces/neutral.js `ruined castle`, `RUINED_KEEP`): the breach the
+    ruined keep's art has always had in the middle of its front, where its door was (kits/castle.js
+    `ruinedKeep`), 3.2 m wide over a 0.8 m step; the site's entry (`inside: "ruin"`). The stores and
+    cart its last keepers left are kept off the way to it. Its look outside unchanged.
+  - **The great hall** (core/insides.js `RUIN`, `ruinRooms`; a new plan mark `m`, a heap of
+    rubble, interiors.js): 20 by 16 m, open to the sky (world/interiors3d.js `ruin`, `open`): its
+    walls broken off high and low, daylight through tall windows, grass in tufts between its
+    flagstones, two rows of pillars (some broken short), heaps of fallen stone each with a charred
+    joist, bones, the dais and its two stone thrones (one toppled), braziers burning either side,
+    the land outside seen over the walls. Its sound open (`sound.js` `ruin`).
+  - **Held** (core/creatures.js `LAIRS` `within`; host.js `#lairs`): the wight lord keeps within by
+    its hoard (the plan's "l" and "h"), half its skeletons at the plan's "g", the rest in the
+    courtyard; slain, the hoard opened, a share for each player there, as the dragon's is.
+  - **Tests:** test/neutral.test.js (each ruined castle's keep gone into by its breach, the way to
+    it clear, 24 seeds); test/insides.test.js (its hall got to, marked, drawn open to the sky);
+    test/places.test.js (the wight lord within by its hoard, half its skeletons with it);
+    test/creatures.test.js (the master within its keep, slain there).
+  - **Pictures** (sent in the session): the keep's front from above before and after (the same:
+    only going in is new), the great hall from the follow camera and from above.
+  - **Next:** M7.5c (the castles' shops and blacksmiths, the abbey's arcane shop, the watchtowers'
+    arms, the restless dead).
