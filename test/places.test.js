@@ -527,6 +527,48 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         assert.deepEqual(tower.progress.pack.filter(Boolean).map(({ id, quality }) => [id, quality]).at(-1), ["mail", "fine"]);
     });
 
+    it("the cat folk's sun temple and the lizard folk's ziggurat gone into (M7.5d): the sun temple held by outlaws theirs within, its chief before the altar by the chest, the rest before the foot of its stair; the ziggurat its people's, its priest and herbalist in it, the herbalist selling an abbey's goods", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const { progress } = host.players.get(HOST_PLAYER);
+        // (Seed 2's sun temple is held by outlaws, its ziggurat its people's)
+        const temple = placesOf(world.plan).find((each) => each.kind === "sun temple" && heldAtStart(world.plan, each) === "bandits");
+        const ziggurat = placesOf(world.plan).find((each) => each.kind === "ziggurat" && heldAtStart(world.plan, each) === "friendly");
+
+        near(context, temple);
+
+        const building = world.interiors.buildings.get(`site:${temple.id}`);
+        const held = host.held.get(temple.id);
+        const nave = world.maps[building.maps[0]];
+        const [leader, ...band] = held.ids.map((id) => host.battle.actor(id));
+        const altar = nave.pieces.find(({ kind }) => kind === "altar");
+
+        assert.equal(building.kind, "church");
+        assert.ok(leader.map === nave.id && hypot(leader.x - (altar.x + altar.w / 2), leader.y - (altar.y + altar.h)) < 3, `the chief by the altar: ${leader.x}, ${leader.y}`);
+        assert.equal(held.map, nave.id);
+        assert.equal(band.filter((one) => one.map === nave.id).length, Math.ceil(band.length / 2));
+        assert.ok(band.some((one) => one.map === "town"), "the rest outside, before the foot of its stair");
+
+        // The ziggurat its people's: in by the portal at its foot, its priest and herbalist there;
+        // the herbalist's an abbey's goods
+        world.maps.town.sites.heartOf(world.plan.sites.find((site) => site.id === ziggurat.id));
+
+        const sanctum = world.interiors.buildings.get(`site:${ziggurat.id}`);
+
+        put(me, [...world.maps.town.sites.set.get(ziggurat.id).entrance.outside]);
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: sanctum.door.id }).ok, true);
+        run(host, 4000);
+        assert.equal(me.map, sanctum.maps[0]);
+        assert.ok([`${sanctum.key}/priest`, `${sanctum.key}/herbalist`].every((id) => host.open.get(sanctum.key)?.includes(id)), JSON.stringify(host.open.get(sanctum.key)));
+
+        const herbalist = host.battle.actor(`${sanctum.key}/herbalist`);
+
+        put(me, [herbalist.square[0], herbalist.square[1] + 2]);
+        progress.gold = 5000;
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "amulet", quality: "masterwork" }, from: herbalist.id }), { ok: true });
+        assert.ok(!host.held.has(ziggurat.id));
+    });
+
     it("a people's watchtower that's theirs is kept, its lookout and sentry in it; one held by outlaws has the band's chief and chest at its top", () => {
         const context = hosted();
         const { host, world, me } = context;

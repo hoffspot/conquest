@@ -521,8 +521,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     that sells a legendary make (`SHOPS.armoury`); its arcanist ("What have you for sale?"):
     wands, grimoires, staves, wizards' hats, jewellery, draughts and cures, up to masterwork, but
     no tomes (`SHOPS.arcane`);
-  - an abbey's herbalist ("What does the abbey sell?"), at their counter in its nave: draughts,
-    cures, amulets, rings and grimoires, up to masterwork (`SHOPS.abbey`);
+  - an abbey's herbalist ("What do you sell?"; a sun temple's and a ziggurat's too), at their
+    counter in its nave: draughts, cures, amulets, rings and grimoires, up to masterwork
+    (`SHOPS.abbey`);
   - a people's watchtower's quartermaster, by the racks in its guardroom ("Show me what's on the
     racks."): the garrison's plain arms and armour and the pieces of its people's uniform, up to
     fine (`SHOPS.watch`: their own shop, not their part's, as one of the folk can keep, host.js
