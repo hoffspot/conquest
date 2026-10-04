@@ -19,10 +19,11 @@ import { humanoidLook, LOOKS } from "./looks.js";
 import { quadruped } from "./quadruped.js";
 import { serpent } from "./serpent.js";
 import { fold, sculpting } from "./sculpt.js";
+import { spectre } from "./spectre.js";
 import { seeded } from "./shapes.js";
 
 /** What builds each body. */
-export const BUILDERS = Object.freeze({ quadruped, blob, serpent, arachnid, swarm, wisp, frog, biped });
+export const BUILDERS = Object.freeze({ quadruped, blob, serpent, arachnid, swarm, wisp, frog, biped, spectre });
 
 // As world/avatar.js: how fast it turns, how closely it follows its place, and how fast it has to
 // go to face the way it's going

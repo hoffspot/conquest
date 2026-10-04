@@ -99,12 +99,16 @@ export const ITEMS = Object.freeze({
  * own people's uniform too (core/gear.js UNIFORM), as does a castle's quartermaster (its armoury:
  * the arms and armour of war, the only place a legendary make's sold). A castle's arcanist sells
  * the arcane (wands, grimoires, the hats and jewels of those who cast) and draughts, better made
- * than a guild's; not tomes (a guild's).
+ * than a guild's; not tomes (a guild's). An abbey's herbalist sells its draughts and cures, holy
+ * jewels and books of prayer; a people's watchtower's quartermaster (their own shop, not their
+ * part's: host.js `#shopkeeper`) the garrison's plain arms and armour, up to fine.
  */
 export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
     armoury: { items: ["sword", "hammer", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary" },
     arcane: { items: ["wand", "grimoire", "staff", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork" },
+    abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork" },
+    watch: { items: ["sword", "hammer", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
     guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
@@ -162,6 +166,29 @@ export const LOOT = Object.freeze({
     // (The dragon's hoard in its lair, opened once it's slain: core/host.js #lairs)
     hoard: { gold: [180, 320], items: [{ id: "potion", chance: 1 }, { id: "potion", chance: 0.6 }, { id: "ring", quality: "fine", chance: 0.8 }, { id: "amulet", quality: "fine", chance: 0.5 }, { id: "sword", quality: "masterwork", chance: 0.35 }, { id: "bow", quality: "masterwork", chance: 0.25 }] },
 });
+
+/**
+ * The relics the restless dead guard (their chest at the ruins, the wight lord's hoard in a ruined
+ * castle's keep: core/host.js), one in each share of it: a jewel of whoever lived there long ago,
+ * of the legendary make (its bonuses rolled as any's are: gear.js rollGear) and named for them, an
+ * amulet (`amulet`) or a ring (`ring`) "of" one of them (`of`).
+ */
+export const RELICS = Object.freeze({
+    amulet: ["Reliquary", "Torc", "Locket", "Pendant"],
+    ring: ["Signet", "Seal", "Band"],
+    of: ["the Last King", "the Drowned Queen", "the Barrow Lord", "the Hollow Saint", "the Fallen Abbot", "the Forgotten House", "the Old Kings", "the Ashen Bride", "the Pale Knight", "the Lost Prince"],
+});
+
+/** One of the dead's relics (RELICS), made (random.js random): a legendary amulet or ring, with its own name. */
+export function rollRelic(random) {
+    const id = random.chance(0.5) ? "amulet" : "ring";
+    const relic = rollGear(id, "legendary", random);
+    const pick = (list) => list[Math.floor(random.next() * list.length) % list.length];
+
+    relic.name = `${pick(RELICS[id])} of ${pick(RELICS.of)}`;
+
+    return relic;
+}
 
 /** How likely a piece of gear found on a foe is to be of each make. */
 export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.07, legendary: 0.01 });
@@ -325,16 +352,17 @@ export function rollMake(random) {
 
 /**
  * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
- * uniform's pieces): { gold, items }. Gear comes with its bonuses rolled.
+ * uniform's pieces), or what's in a place's chest: { gold, items }. Gear comes with its bonuses
+ * rolled; and, the dead's (`relic`), one of their relics (rollRelic).
  */
-export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human" } = {}) {
+export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false } = {}) {
     const table = LOOT[kind];
 
     if (!table) {
         return { gold: 0, items: [] };
     }
 
-    return {
+    const bundle = {
         gold: random.int(...table.gold),
         items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality, uniform }) => {
             const kindOf = uniform ? UNIFORM[Math.floor(random.next() * UNIFORM.length) % UNIFORM.length] : id;
@@ -342,6 +370,13 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
             return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random) : "common"), random, { people }) : { id: kindOf, quality: quality ?? "common" };
         }),
     };
+
+    // (What the restless dead guarded: one of their relics too, `relic`)
+    if (relic) {
+        bundle.items.push(rollRelic(random));
+    }
+
+    return bundle;
 }
 
 /** The most of each blow armour takes off, all of it together. */

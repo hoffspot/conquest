@@ -51,13 +51,17 @@ two tiers above it, up to their most.
 | Marsh crocodile | 60 | territorial | 1 | 3–8 | the lizard folk's wilds only |
 | Magma slime | 45 | territorial | 1–2 | 3–8 | the orcs' wilds only |
 | Rock tusker | 80 | territorial | 1 | 4–9 | the orcs' wilds only |
+| Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins and ruined castles, with their dead |
+| Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
 A few do something besides biting and clawing: the adder, bog frog and magma slime spit (venom,
 venom, lava), the will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
-spits webs, the dragon breathes fire and the wight lord lays a curse (each flies as a projectile).
+spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
+whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
+as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws wither.
 The bog frog's tongue reaches two squares off. The rock tusker's charge knocks whoever it catches
 off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
 bleeding wound, a web or roots holding them (below: "What lingers").
@@ -72,7 +76,9 @@ grows the further they go. What's found at a place (`candidatesAt`) is whatever 
 and has that tier among its tiers; the people's own creatures only in the wilds of their lands.
 
 The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the dragon at the
-dragon's lair, a wight lord and skeletons in each ruined castle, the frost troll in the snows.
+dragon's lair, a wight lord and its dead in each ruined castle (three skeletons, two ghosts and a
+wraith), the frost troll in the snows. The ghosts and wraiths are found nowhere else but with the
+dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago.
 Once slain, a master is gone a long while (it comes back after `slain` has passed). The world
 plan's wild camps (bandits, wolves, goblins, spiders and the rest) come to life when a player's
 near them, as strong as the camp's distance from that player's home (`CAMP_FOLK`).
@@ -134,10 +140,10 @@ an adder's near home.
 | --- | --- | --- | --- | --- | --- |
 | Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite | Cure poison draught, 12 gold |
 | Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, skeletons, boggarts | Cure disease draught, 18 gold |
-| Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite | Invigorating draught, 22 gold |
+| Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite, a wraith's claws and draining | Invigorating draught, 22 gold |
 | Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam | Burn salve, 8 gold |
 | Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, the dragon's bite... | Bandage, 5 gold |
-| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club | Quickening draught, 10 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch | Quickening draught, 10 gold |
 
 A cure ends it at once (and only it: used with nothing to cure, it isn't used). Each can go on an
 action wheel, as a draught can.
@@ -158,10 +164,11 @@ action wheel, as a draught can.
 **The creatures' own attacks.** Fire's breathed in a roaring stream from the dragon's jaws to
 whoever it's at, smoke rolling off it; venom and lava are spat in an arc and splash where they
 land (spattering sparks and smoke, for lava); a web's thrown and bursts; roots burrow along the
-ground and break it up at their feet; a curse bursts in shadow. What doesn't bleed red spills its
+ground and break it up at their feet; a curse bursts in shadow; a ghost's wail flies pale and
+swirling, a wraith's draining green and dark, bursting in shadow. What doesn't bleed red spills its
 own when struck: a slime's gel, a spider's or scorpion's ichor, a treant's sap, a skeleton's and a
 wight lord's bone chips, a rock tusker's stone chips, lava from a magma slime, shadow from a
-black shuck or a shadow stalker.
+black shuck or a shadow stalker or a wraith, a ghost's pale motes.
 
 ## What they leave
 
@@ -257,6 +264,21 @@ smaller, its colour a little different, its markings its own.
   joined by threads, fastened across its shoulders, falling under its own weight, streaming back as
   it walks, kept out of its legs, its hem torn. A treant's crown is boughs forking into branches
   and twigs, sparse leaves at their tips.
+- **The restless dead that never lay down** (`spectre.js`): no legs, a hooded shroud sculpted in
+  one piece (sculpt.js) from the hood to the tatters it ends in, each tatter two joints that stir
+  as it hangs and stream back as it glides; sleeves sculpted held out from the body, so each goes
+  with its arm, the bones of the arm and hand within (bones.js). A **ghost** is half see-through
+  and faintly aglow (a soft light round it, seen in the dark), its skull in its hood and its arm
+  bones dim through its sleeves, thinning below the waist to a wisp that floats clear of the
+  ground; it casts no shadow. A **wraith** is a black robe flaring to a ragged hem, nothing under
+  its deep cowl but two cold green lights, bony claws out of its cuffs. Each floats, bobbing, and
+  leans into its glide; a ghost reaches to touch, claws, or throws back its head and wails, arms
+  spread, brightening; resting, it drifts, mourns (head bowed, hands to its face) or fades almost
+  away; struck, it flickers; dying, it sinks and fades to nothing. A wraith rakes with both claws,
+  claws, or holds out its hand to drain; resting, it hovers, looms (rising tall, arms spread) or
+  turns slowly; dying, it collapses into its empty robe, its lights going out. A ghost is four
+  things to draw and three soft lights, about 17,000 triangles; a wraith three and two, about
+  14,000 (a skeleton's about 20,000).
 - **People-shaped** (bandits, cultists, goblins, boggarts, trolls, ogres, frost trolls) are built
   on the character engine as everyone in the towns is (`characters/`), bigger or smaller, their
   hands placed for their size.

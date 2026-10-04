@@ -2605,9 +2605,12 @@ masters: `LAIRS`), its band is put out round its heart, and let go again once ev
 metres off (back as many as ever the next time, unless it's been cleared).
 - **As many and as strong as the place is big and its land dangerous:** 3, 5 or 7 of them by its
   size, one more for every 3 tiers of the land's danger (creatures.js `tierAt`), round the middle
-  4, 6 or 9 metres off; outlaws (`bandit`) or skeletons, at the land's tier.
+  4, 6 or 9 metres off; outlaws (`bandit`), or the dead (M7.5c-3: their bones, their ghosts and
+  a wraith, by turns: `bandFolk`, `skeleton`, `ghost`, `skeleton`, `wraith`, `ghost`), at the
+  land's tier.
 - **Their leader**, 2 tiers above them, stands in the middle: a bandit chief (`banditChief`, new:
-  a big warrior with a sword, and better spoils) or a wight lord.
+  a big warrior with a sword, and better spoils) or a wight lord, the greater one of the dead,
+  guarding their old relic.
 - **They guard it:** each goes for anyone who comes within 10 metres of them (`guard`), and none
   wanders off; they don't count among the wild's creatures about a player.
 - **The chest** stands by the leader on open ground (drops3d.js: the JMI 3D Toolkit's iron-bound
@@ -2623,7 +2626,12 @@ metres off (back as many as ever the next time, unless it's been cleared).
   player within about 40 metres (`rollLoot("chest")`: 25 to 60 gold, a third more for each tier of
   the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the livery
   of the place's people, a human's at the ruins and caves, now and then a fine sword or bow),
-  theirs alone to take, for five minutes.
+  theirs alone to take, for five minutes. The dead's chest (and a ruined castle's hoard) holds one
+  of their old relics in each share too (progress.js `RELICS`, `rollRelic`: a legendary amulet or
+  ring, its three bonuses rolled as any's are, named for whoever lived there long ago, "Signet of
+  the Last King", "Reliquary of the Hollow Saint"), and the player's told of it by name ("The
+  chest's open, and in your share an old relic of theirs: the Torc of the Drowned Queen. Tap it to
+  take it.").
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
@@ -2663,8 +2671,9 @@ metres off (back as many as ever the next time, unless it's been cleared).
     is told the place is cleared ("The dead of Peningmoor Ruins are laid to rest, for now.") as one
     outside near it is.
   - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
-    `within`), half its skeletons with it, the rest in the courtyard; slain, the hoard's opened as
-    the dragon's is.
+    `within`), half of each kind of its dead with it (three skeletons, two ghosts and a wraith,
+    each at a post of its own), the rest in the courtyard; slain, the hoard's opened as the
+    dragon's is, an old relic in each share.
   - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
@@ -2740,6 +2749,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
     further off than the hall (`sound.js` `undercroft`). The stairs between the floors have
     their foot below and their top above whichever floor the door opens into (insides.js
     `make`). `NET_VERSION` 37.
+  - **The smaller places' shops** (M7.5c-2): an abbey that's its people's has its herbalist, a
+    brother or sister of its order in a plain habit, behind a counter in the north-west corner of
+    its nave, their shelves of jars, phials and books on the wall behind (`insides.js` `ABBEY`;
+    the town's temples as they were), turning to their shelves now and then; talking of their
+    garden (`herbalist`). A people's watchtower that's theirs has its quartermaster by the racks
+    in its guardroom (`watchFolkOf`), who sends anyone after better to a castle
+    (`watchQuartermaster`). What each sells is in WAR.md (*Shops*).
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

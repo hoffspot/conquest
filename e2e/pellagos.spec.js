@@ -3519,7 +3519,9 @@ test("a place's outlaws or dead hold it round their leader by a locked chest, th
 
     expect(held.within).toBe(true);
     expect(held.band[0]).toBe("wightLord");
-    expect(held.band.slice(1).every((creature) => creature === "skeleton")).toBe(true);
+    // (Its dead: their bones, their ghosts and a wraith)
+    expect(held.band.slice(1).every((creature) => ["skeleton", "ghost", "wraith"].includes(creature))).toBe(true);
+    expect(new Set(held.band.slice(1))).toEqual(new Set(["skeleton", "ghost", "wraith"]));
     expect(held.chest).toBe("chest");
 
     // (Going again, so it's heard; tapped where it's seen there and then, before the camera's
@@ -3564,12 +3566,14 @@ test("a place's outlaws or dead hold it round their leader by a locked chest, th
         const drawn = game.drops.drawn.get(share?.id)?.object;
 
         // (Open on a heap of coins: gold3d.js)
-        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: drawn?.children[0].name, coins: (drawn?.getObjectByName("coins")?.count ?? 0) > 300, locked: game.host.ground.has(`chest-${id}`), told };
+        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: drawn?.children[0].name, coins: (drawn?.getObjectByName("coins")?.count ?? 0) > 300, locked: game.host.ground.has(`chest-${id}`), relic: share?.bundle.items.at(-1), told };
     }, held.id);
 
-    expect({ ...cleared, told: undefined }).toEqual({ holder: "cleared", open: "chest-open", coins: true, locked: false, told: undefined });
+    expect({ ...cleared, relic: undefined, told: undefined }).toEqual({ holder: "cleared", open: "chest-open", coins: true, locked: false, relic: undefined, told: undefined });
     expect(cleared.told.some((text) => /^The dead of .+ are laid to rest, for now\.$/.test(text)), JSON.stringify(cleared.told)).toBe(true);
-    expect(cleared.told).toContain("The chest's open, your share in it: tap it to take it.");
+    // (And what the dead guarded: one of their old relics, named)
+    expect(cleared.relic.quality).toBe("legendary");
+    expect(cleared.told).toContain(`The chest's open, and in your share an old relic of theirs: the ${cleared.relic.name}. Tap it to take it.`);
 });
 
 test("a cave held by outlaws is gone into by its mouth: within, the rock all round, their fire, their chief by the locked chest; and out again the same way", async ({ page }) => {

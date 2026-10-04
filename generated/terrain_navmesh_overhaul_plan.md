@@ -4041,3 +4041,59 @@ converted data is to be measured in M8 against today's hm08 data.
     where its racks were), the undercroft from above and within (the forge, the armoury, the
     arcanist's shelves, the vault), the orcs' undercroft in their dark basalt.
   - **Next:** M7.5c-2 (an abbey's arcane goods and a watchtower's arms).
+- **2026-10-04, M7.5c-2 built: an abbey's herbalist and a watchtower's quartermaster** (docs/GAME.md
+  *The smaller places' shops*; WAR.md *Shops*).
+  - **The abbey** (insides.js `ABBEY`: a town temple's plan with a counter and shelves in its
+    nave's north-west corner, for an abbey only, `place` "site"; `templeFolkOf`): a herbalist
+    (roles.js, actions.js, folk.js: a habit and a belt) behind the counter and at the shelves;
+    drawn with a desk and the arcanist's shelves of jars turned to face the other way
+    (interiors3d.js `phialShelves` `north`). Sells the abbey's goods (progress.js `SHOPS.abbey`:
+    draughts, cures, amulets, rings, grimoires, up to masterwork). Held by outlaws, none of its
+    folk are there, as before.
+  - **The watchtower** (insides.js `watchFolkOf`): a quartermaster before the guardroom's racks,
+    selling the watch's own stock (`SHOPS.watch`: plain arms and armour and the people's uniform,
+    up to fine), not a castle's: one of the folk can keep a shop of their own (their `shop`),
+    over their part's (host.js `#shopkeeper`, app/game.js `#openTalk`). Their talk sends anyone
+    after better to a castle.
+  - **Versions:** `NET_VERSION` 38.
+  - **Tests:** test/places.test.js (seed 4's abbey, its people's: an amulet bought from its
+    herbalist, a sword not sold; seed 2's elven watchtower: fine mail bought from its
+    quartermaster, a legendary sword not sold); test/insides.test.js (a watchtower's three folk,
+    its quartermaster keeping the watch's shop).
+  - **Pictures** (sent in the session): the abbey's nave before and after from above, its
+    herbalist at the counter; an elven watchtower's guardroom before and after, its
+    quartermaster before the racks.
+  - **Next:** M7.5c-3 (the restless dead at the ruins: ghosts and wraiths, a greater one guarding
+    an old relic and a chest).
+- **2026-10-04, M7.5c-3 built: the restless dead at the ruins** (docs/GAME.md *Held, in play*;
+  WILDS.md).
+  - **Who:** two new creatures (creatures.js, found nowhere but with the dead): a **restless
+    ghost** (26 hit points, tiers 3 to 9: a grave-cold touch that slows, and a wail that flies
+    and staggers) and a **wraith** (46, tiers 5 to 10: claws and a draining, both withering).
+    Their weapons (weapons.js `NATURAL`), parts (spoils.js: a spectral veil and ectoplasm; a
+    wraith's shroud and a soul shard), the wail's and draining's flight and bursts (effects.js,
+    sound.js, app/game.js), and their place in the creature lab (*The restless dead*).
+  - **The bands:** the dead at a ruins are their bones, their ghosts and a wraith by turns
+    (places.js `PLACE_BANDS.dead.folk`, `bandFolk`), led by the wight lord, the greater one
+    guarding their relic; a ruined castle's dead three skeletons, two ghosts and a wraith (`LAIRS`),
+    each kind's half within its keep at posts of their own (host.js `#lairs`: no two on one post).
+  - **The relic:** each share of the dead's chest, and of a ruined castle's hoard, holds one of
+    their old relics (progress.js `RELICS`, `rollRelic`, `rollLoot`'s `relic`): a legendary amulet
+    or ring named for whoever lived there long ago, told by name when the chest opens (the
+    `spoils` event's `relic`).
+  - **Drawn** (beasts/spectre.js, a new body): legless, a hooded shroud sculpted in one piece down
+    to its tatters, sleeves sculpted held out so each goes with its arm; a ghost half see-through
+    and aglow, its skull in its hood, casting no shadow; a wraith black, two cold lights in its
+    cowl, bony claws. Each floats and glides; three ways of attacking and three of resting each;
+    a ghost fades away dying, a wraith collapses into its robe. Four or three things to draw,
+    14,000 to 17,000 triangles (a skeleton's 20,000).
+  - **Versions:** `NET_VERSION` 39.
+  - **Tests:** test/places.test.js (the dead's band by turns, all three kinds; the chest's share
+    with a relic named as `RELICS` has it, and told of it; a relic's make, name and bonuses, and
+    none in a chest the dead didn't guard; the ruined keep's dead within by kind); test/
+    creatures.test.js (the ruined castle's guards, each kind as many as `LAIRS` has, none on
+    another's post); beast-culling (both bodies held in their spheres through every move). e2e:
+    the ruins' band all three kinds; the relic told of by name when the chest opens.
+  - **Pictures** (sent in the session): the creature lab (a ghost's and a wraith's moves), a
+    ruins' ghost and wraith in play at dusk and at night, a ghost among the crypt's coffins.
+  - **Next:** the sun temple's and the ziggurat's doors; then M8.

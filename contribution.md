@@ -1,0 +1,235 @@
+# Contributing to Pellagos with Claude Code
+
+This is how to set up Claude Code in your own account so it can work on this game, run the same
+checks CI runs, and open a pull request that's safe to merge. It's written for a person and for
+Claude: point Claude Code at this file before it starts (the repository's `CLAUDE.md` does this for
+you in every session).
+
+## The standing rule: keep this document current
+
+> **contribution.md is part of the development pipeline.** Any change to how the game is set up,
+> built, tested, checked or merged updates this document in the same pull request. That includes:
+> `package.json`'s scripts or Node version; anything in `.github/workflows/`;
+> `playwright.config.js`, `eslint.config.js`, `e2e/fixtures.js` or how the browser tests are split;
+> `scripts/`; the rules for the version numbers; the branch, review and merge conventions; and
+> what an environment needs to run the checks. A pull request that changes the pipeline without
+> updating this file isn't ready to merge.
+
+The rule is written down three times, so no one can miss it:
+
+- here;
+- in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
+- in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job or the Node
+  version changes and this file hasn't been updated to match. That test is the part of the rule
+  a machine can check; everything else is up to you and your reviewer.
+
+## What you need
+
+- A GitHub account.
+- Claude Code: the command line, the desktop app, or Claude Code on the web
+  (<https://claude.ai/code>). It runs on your own Claude plan, so its usage is yours.
+- Node.js 22 or newer (`package.json`'s `engines`; CI uses 22).
+- Chromium for the browser tests. Playwright downloads it, or you point it at one you already
+  have with `CHROMIUM_PATH`.
+
+Nothing in this pipeline costs money. CI runs on GitHub's free runners for this public
+repository, and the game needs no paid services, keys or secrets. Never add a secret to the
+repository or to a pull request.
+
+## 1. Get the code where Claude can reach it
+
+The repository is public: <https://github.com/hoffspot/conquest>.
+
+- **Without write access (most contributors):** fork it on GitHub, and have Claude Code work on
+  your fork. Your pull requests go from your fork's branch to `hoffspot/conquest`'s `main`.
+- **With write access** (ask the owner, hoffspot): work on a branch of your own in the
+  repository. Never push to `main`.
+
+### Claude Code on the web (a cloud session)
+
+1. Connect GitHub to Claude: <https://claude.ai/connect-github>. If the Claude GitHub App isn't
+   installed on your fork (or on the repository, if you have write access), install it from that
+   page.
+2. Create a cloud environment for the repository (in claude.ai/code, from the environment menu;
+   the steps are at <https://code.claude.com/docs/en/cloud-environments>):
+   - **Network access:** any level that lets the package managers through (the default does).
+     `npm ci` needs the npm registry; nothing else is fetched.
+   - **Setup script:** `npm ci`
+   - **Environment variables:** `CHROMIUM_PATH=/opt/pw-browsers/chromium`. Chromium is already
+     installed in Claude's cloud containers. Don't have Claude run `npx playwright install`
+     there.
+3. Start a session with your fork (or your branch) selected and give it the task. Ask it to
+   follow `contribution.md`.
+
+### Claude Code on your own computer (the command line or desktop app)
+
+```sh
+git clone https://github.com/<you>/conquest.git   # your fork
+cd conquest
+npm ci                                            # exactly the versions in package-lock.json
+npx playwright install chromium                   # once; or set CHROMIUM_PATH instead
+npm start                                         # http://localhost:8080 (PORT=3000 for another port)
+```
+
+Then run `claude` in the folder. Claude Code asks before running commands and before editing
+files. Read what it wants to do, above all a `git push`.
+
+## 2. The checks: what CI runs, and how to run them yourself
+
+CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged:
+
+| CI job | What it runs | Locally |
+| --- | --- | --- |
+| `test` | `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`) | `npm run check`, which runs both |
+| `e2e` (8 jobs side by side) | each job's share of the Playwright browser tests (`e2e/*.spec.js`), split by how long each took (`scripts/e2e-shard.js`, `e2e/durations.json`) | `npm run test:e2e`, or only the tests you touched (below) |
+
+`.github/workflows/pages.yml` runs when `main` changes: lint and the unit tests again, then
+`npm run build:manifest`, and it publishes `client/` to GitHub Pages
+(<https://hoffspot.github.io/conquest/>). Whatever is merged to `main` goes live, so `main` must
+always be green.
+
+### Every npm script
+
+| Script | When to run it |
+| --- | --- |
+| `npm start` | Serves the game and the multiplayer relay on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`) |
+| `npm run dev` | The same, restarting the server when its code changes |
+| `npm test` | Every change. The unit tests take a few minutes |
+| `npm run lint` | Every change. ESLint must be clean |
+| `npm run check` | Lint and the unit tests together: run it before every push |
+| `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
+| `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
+| `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
+| `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
+| `npm run build:music` | Only when remaking the music's instrument recordings |
+| `npm run build:clips` | Only when remaking the character lab's animation clips |
+| `npm run vendor:three` | Only after changing the `three` version in `package.json` |
+| `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
+| `npm run vendor:recast` | Only after changing the recast-navigation version |
+
+### The browser tests
+
+They play the game in Chromium, in software without a GPU, so they're slow (each has 2 minutes).
+Run the ones your change touches, one at a time:
+
+```sh
+CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
+  npx playwright test e2e/pellagos.spec.js -g "<part of the test's name>" --workers=1 --reporter=line
+```
+
+- `E2E_PORT` picks the port for the test server, so it doesn't clash with a game you're running
+  (the default is 8095).
+- `rm -rf test-results` first, if an earlier run left its pictures and traces there.
+- A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
+  `e2e/pellagos.spec.js`). Do the same in new tests, and never wait on the clock.
+- After adding browser tests, time them as CI runs them so CI's split stays even:
+  `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`,
+  then `npm run e2e:durations -- report.json`. Commit `e2e/durations.json`, not the report.
+
+## 3. Making a change
+
+1. **Start from the latest `main`**, on a branch named for the change
+   (`git fetch origin main && git checkout -b <you>/<what-it-does> origin/main`). One topic per
+   pull request: small pull requests are reviewed quickly and are easy to undo.
+2. **Read the docs for what you're changing first.** The game's design lives in `docs/`
+   (`GAME.md`, `WORLD.md`, `WAR.md`, `WILDS.md`, `MAGIC.md`, `CHARACTERS.md`), the tooling in
+   `README.md`, and plans in progress in `generated/` (e.g.
+   `generated/terrain_navmesh_overhaul_plan.md`).
+3. **Write the code the way the code around it is written:**
+   - Four-space indents, double quotes, semicolons. There's no formatter: don't run Prettier or
+     any other formatter over the code. ESLint (`eslint.config.js`) is the only style check.
+   - `client/js/core/` is the game's rules, its world generation and multiplayer. It must not
+     touch the DOM (it also runs under Node). It must come out the same in every browser: use
+     `client/js/core/exact.js` (`sin`, `cos`, `atan2`, `hypot`, `sqrt`, `pow`, `log`, `exp`)
+     instead of `Math.sin` and the like, and the seeded random numbers
+     (`client/js/core/random.js`) it's given, never `Math.random`. Two players' browsers must
+     build the same world and play out the same fight.
+   - The game has to run well on a phone (the budget is an iPhone 16 Pro). Anything costly to
+     draw goes under the Visual quality setting's levels.
+4. **Bump a version number when you change what it guards:**
+   - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
+     anything that changes the world or the rules two games must agree on. A game of another
+     version can't join.
+   - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds.
+   - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
+     set aside, not misread.
+5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
+   rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
+   screen. Never skip, disable or loosen a test to get CI green: fix the cause.
+6. **Show it.** For anything that changes how the game looks, take before and after pictures
+   from the same place, and put them in the pull request. Picture sheets and scratch scripts
+   aren't committed.
+7. **Document it.** Update the `docs/` page for the game's behaviour, `README.md` for tooling,
+   and this file for the pipeline (the standing rule).
+8. **Assets:** only your own work, or CC0, MIT and similarly permissive assets, each with its
+   licence file and a credit in `README.md`'s *Credits and license*. Nothing with a licence that
+   restricts use. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
+   script.
+
+## 4. Before you push
+
+Run these and fix everything they find:
+
+```sh
+npm run build:manifest   # if anything under client/ changed
+npm run check            # lint + unit tests, as CI's test job runs them
+npx playwright test ...  # the browser tests your change touches (above)
+git status               # only the files you meant to change
+```
+
+- Add files by name (`git add path/to/file`), not `git add -A` or `git add .`. Never commit
+  `node_modules/`, `test-results/`, `playwright-report/`, reports, pictures you took to check
+  your work, or scratch files.
+- Read your own diff as a reviewer would.
+- Write a commit message that says what changed and why. If Claude wrote the commit, it adds
+  its own `Co-Authored-By` line. Keep it.
+
+## 5. Opening the pull request
+
+1. Push your branch (`git push -u origin <branch>`) to your fork, or to the repository if you
+   have write access.
+2. Open a pull request against `hoffspot/conquest`'s `main`. Say:
+   - what it changes and why;
+   - how you tested it (which unit and browser tests; what you checked by playing);
+   - before and after pictures for anything that looks different;
+   - any version you bumped.
+3. CI runs: the `test` job and the 8 `e2e` jobs, about five minutes. A first-time contributor's
+   CI may wait for a maintainer to approve the run.
+4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
+   failure is never "just flaky" until a re-run of the same commit passes and you know why it
+   failed. Don't push empty commits, or close and reopen the pull request, to set CI going again.
+5. If `main` moves on and your branch conflicts, merge `main` into your branch and fix the
+   conflicts. Don't rebase or force-push a branch someone else has checked out. Run
+   `npm run build:manifest` again if `client/` changed on both sides.
+6. Answer every review comment: change the code, or say why not.
+7. A maintainer merges it, with a merge commit, once CI is green and it's been reviewed. Don't
+   merge your own pull request unless the owner has said you may. Once it's merged, GitHub Pages
+   publishes the game from `main`.
+
+## Working with Claude Code: what to ask for
+
+A good first message in a session:
+
+> Read contribution.md and CLAUDE.md. Then: <the change>. Branch from the latest main, follow the
+> conventions there, add tests, run `npm run build:manifest`, `npm run check` and the browser
+> tests the change touches, show me the diff and the pictures, and only then commit and push.
+> Don't open the pull request until I say so.
+
+- Keep Claude's permission prompts on for `git push` and anything that leaves your machine.
+- Claude Code on the web can watch your pull request: ask it to subscribe to the pull request's
+  activity, and it will answer review comments and fix CI failures as they come in.
+- If Claude says it can't reach something (GitHub, the npm registry, a host it needs), it's your
+  environment's settings, not the code. Its message says where to change them.
+- Claude follows the rules here, but you're the contributor: review what it pushes as your own
+  work.
+
+## When something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| `manifest.test.js` fails: "is up to date" | `npm run build:manifest`, and commit `client/js/app/manifest.js` |
+| `contribution.test.js` fails | You changed the pipeline: update this file (the standing rule) |
+| Browser tests can't find Chromium | `npx playwright install chromium`, or set `CHROMIUM_PATH` to a Chromium or Chrome |
+| Browser tests time out locally | Run fewer at once (`--workers=1`), and close other heavy programs: drawing without a GPU is slow |
+| The port's in use | `E2E_PORT=8096` for the tests, `PORT=3000` for `npm start` |
+| `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |

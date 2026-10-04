@@ -50,6 +50,8 @@ const ABOUT = {
     magmaSlime: ["Magma slime", "Only in the orcs' wilds"],
     rockTusker: ["Rock tusker", "Only in the orcs' wilds"],
     dragon: ["Dragon", "The dragon's lair: for the mightiest"],
+    ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
+    wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
     frostTroll: ["Frost troll", "The snows: for the mightiest", "hammer"],
 };
@@ -280,6 +282,7 @@ function advance(seconds, step = 1 / 60) {
 const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "wisp", "treant", "caveSpider", "shadowStalker", "hyena", "scorpion", "bogFrog", "crocodile", "magmaSlime", "rockTusker"]],
+    ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],
 ];
 
