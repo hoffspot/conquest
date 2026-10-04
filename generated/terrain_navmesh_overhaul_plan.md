@@ -3672,3 +3672,10 @@ converted data is to be measured in M8 against today's hm08 data.
     cleared, the chest made in code against the model.
   - **Tests:** test/manifest.test.js (the models group, the chest in it); e2e: the loading screen's
     seven groups, the held place's chest locked then open.
+- **2026-10-04, fixed: wild camps pitched on a place's ground** (seen in M7.5a-1: seed 1's camp-3
+  inside the human citadel's cleared ground; and camp-60 on top of the standing stones 96 m from its
+  cell, the flattest ground near). overworld.js `campAt`: a camp keeps off the settlements', the
+  sites', the arches' and the piers' ground (`clearings`) with its own room besides, and looks
+  three times as far (`CAMP_FARTHER`) if all within its reach is theirs. Seeds 1 to 3: none on a
+  place's ground now (2 before). test/flats.test.js: every camp clear of them, at most two further
+  than the flats' reach.

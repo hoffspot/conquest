@@ -117,6 +117,9 @@ const TREE_CLEAR = 2;
 const CLEAR_OF_TOWN = 3;
 const CLEAR_OF_PLACES = 12;
 
+/** How much further than its own flats' reach a camp's pitched if all near it is a place's ground. */
+export const CAMP_FARTHER = 3;
+
 // How many chunks to keep once made (the rest are made again when they're needed)
 const KEEP = 256;
 
@@ -573,9 +576,13 @@ export class Overworld {
      */
     campAt(camp) {
         if (!this.campSpots.has(camp.id)) {
+            // (Off the roads, and clear of the settlements, the sites, the arches and the piers,
+            // the camp's own ground with them: further off if all near is theirs, a citadel's)
             const road = (x, y) => this.plan.road[cellAt(y) * CELLS + cellAt(x)] > 0;
+            const taken = (x, y) => road(x, y) || this.clearings.some(({ at, radius }) => hypot(x - at[0], y - at[1]) < radius + CLEAR_OF_PLACES);
+            const near = flatSpot(this.plan, camp.at, { avoid: taken, size: WORLD_SIZE });
 
-            this.campSpots.set(camp.id, flatSpot(this.plan, camp.at, { avoid: road, size: WORLD_SIZE }));
+            this.campSpots.set(camp.id, taken(...near) ? flatSpot(this.plan, camp.at, { avoid: taken, size: WORLD_SIZE, reach: FLATS.reach * CAMP_FARTHER }) : near);
         }
 
         return this.campSpots.get(camp.id);
