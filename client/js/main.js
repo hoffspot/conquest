@@ -215,6 +215,8 @@ $("#newbutton").addEventListener("click", (event) => {
 
 $("#debugswitch").checked = settings.debug;
 $("#minimapswitch").checked = settings.minimap;
+$("#stickswitch").checked = settings.stick;
+$("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
 $("#adaptiveswitch").checked = settings.adaptive;
 $("#soundswitch").checked = settings.sound;
@@ -368,6 +370,8 @@ async function playing(save) {
     game.showSquares(settings.squares);
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
+    showStick(settings.stick);
+    showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -850,6 +854,8 @@ async function playingJoined(save, welcome, joining) {
     game.showSquares(settings.squares);
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
+    showStick(settings.stick);
+    showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -903,6 +909,8 @@ $("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#quickbutton").addEventListener("click", () => openQuick(0));
 $("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
+$("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
+$("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 
 // Visual quality, Low to High (world/view.js QUALITY): the level named as the slider moves, chosen
@@ -1041,6 +1049,10 @@ function applySetting(key, value) {
         state.game?.showNavigation(value);
     } else if (key === "minimap") {
         showMinimap(value);
+    } else if (key === "stick") {
+        showStick(value);
+    } else if (key === "zoom") {
+        showZoom(value);
     } else if (key === "resistSummons") {
         if (state.game) {
             state.game.resistSummons = value;
@@ -1056,6 +1068,18 @@ function applySetting(key, value) {
 function showMinimap(on) {
     document.body.dataset.minimap = on ? "on" : "off";
     state.game?.showMinimap(on);
+}
+
+// The thumb stick: hidden with it, anything the thumb was holding is let go of, so the player
+// doesn't walk on with nothing left on screen to stop them
+function showStick(on) {
+    document.body.dataset.stick = on ? "on" : "off";
+    state.game?.showStick(on);
+}
+
+// The zoom buttons; shown, the player's card sits above them rather than under them (styles.css)
+function showZoom(on) {
+    document.body.dataset.zoom = on ? "on" : "off";
 }
 
 function applyViewSettings() {
