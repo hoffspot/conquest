@@ -50,7 +50,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         }
     });
 
-    it("are walled all round but for their gates: their courtyards walked into through them, and not with their gates shut", () => {
+    it("are walled all round but for their gates, 3 m clear through: their courtyards walked into through them, and not with their gates shut", () => {
         for (const race of LAID) {
             const size = PEOPLE_PLACES[race].castle.map((plots) => plots * PLOT);
             const layout = castleLayout(race, size);
@@ -69,6 +69,15 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
 
             assert.ok(court.length > 200, `${race}: a courtyard (${court.length})`);
             assert.ok(!solidAt(layout, layout.gate) && inCourt(layout, layout.gate), `${race}: its gate's open, its gateway's ground its courtyard's`);
+
+            // (3 m clear through its gate, so it's walked through at whatever turn it's set down
+            // at: the squares blocked stand up to 0.7 m into a gap on the slant, and the
+            // navigation mesh keeps walkers 0.5 m off them, navigation/settings.js AGENT)
+            for (let v = layout.gate[1] - 2.5; v <= layout.gate[1] + 2; v += 0.25) {
+                for (let u = -1.5; u <= 1.5; u += 0.25) {
+                    assert.ok(!solidAt(layout, [layout.gate[0] + u, v]), `${race}: its gate clear at ${u}, ${v}`);
+                }
+            }
             assert.ok(court.filter((cell) => reached.has(cell)).length >= court.length * 0.98, `${race}: ${court.filter((cell) => reached.has(cell)).length} of ${court.length} reached`);
             assert.equal(court.filter((cell) => shut.has(cell)).length, 0, `${race}: none with its gate shut`);
         }
@@ -121,7 +130,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         assert.deepEqual(found.sort(), [...LAID].sort());
     });
 
-    it("the cat folk's keep's gone into from its courtyard: its great hall, their lord on the throne, their folk there, their realm the nearest of the cat folk's towns", () => {
+    it("their keeps are gone into from their courtyards (the elves' tower at the back, the orcs' longhouse, the cat folk's tower house): the great hall, their lord or lady on the throne, their folk there, their realm the nearest of their people's towns", () => {
         const world = buildWorld({ seed: 2 });
         const host = new Host(world, { populate: false });
 
@@ -130,32 +139,36 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
 
         const me = host.battle.actor(HOST_PLAYER);
-        const site = world.plan.sites.find((each) => each.kind === "castle" && each.race === "cat");
 
-        world.maps.town.sites.heartOf(site);
+        for (const race of LAID) {
+            const site = world.plan.sites.find((each) => each.kind === "castle" && each.race === race);
 
-        const set = world.maps.town.sites.set.get(site.id);
-        const keep = world.interiors.buildings.get(`site:${site.id}`);
-        const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
+            world.maps.town.sites.heartOf(site);
 
-        assert.equal(keep.kind, "keep");
-        assert.equal(keep.people, "cat");
-        assert.ok(set.courts.has(set.entrance.outside[1] * WORLD_SIZE + set.entrance.outside[0]), "its door's in its courtyard");
-        assert.ok(set.entrance.clear.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === GROUND.courtyard), "its way in's flagged, nothing grown in it");
+            const set = world.maps.town.sites.set.get(site.id);
+            const keep = world.interiors.buildings.get(`site:${site.id}`);
+            const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
+            const ground = race === "orc" ? GROUND.road : GROUND.courtyard;
 
-        Object.assign(me, { hp: 1e6, maxHp: 1e6, square: out, x: out[0] + 0.5, y: out[1] + 0.5, path: [], order: null, target: null, spawn: out });
-        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: keep.door.id }).ok, true);
+            assert.equal(keep.kind, "keep", race);
+            assert.equal(keep.people, race);
+            assert.ok(set.courts.has(set.entrance.outside[1] * WORLD_SIZE + set.entrance.outside[0]), `${race}: its door's in its courtyard`);
+            assert.ok(set.entrance.clear.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === ground), `${race}: its way in's the courtyard's ground, nothing grown in it`);
 
-        for (let t = 0; t < 40000 && me.map === "town"; t += STEP_MS) {
-            host.advance(STEP_MS);
+            Object.assign(me, { hp: 1e6, maxHp: 1e6, map: "town", square: out, x: out[0] + 0.5, y: out[1] + 0.5, path: [], order: null, target: null, spawn: out });
+            assert.equal(host.command(HOST_PLAYER, { type: "enter", link: keep.door.id }).ok, true, race);
+
+            for (let t = 0; t < 60000 && me.map === "town"; t += STEP_MS) {
+                host.advance(STEP_MS);
+            }
+
+            const post = host.postOf(`${keep.key}/ruler`);
+            const nearest = world.plan.places.filter((place) => place.race === race && host.war.town(place.id)).sort((a, b) => Math.hypot(a.at[0] - keep.at[0], a.at[1] - keep.at[1]) - Math.hypot(b.at[0] - keep.at[0], b.at[1] - keep.at[1]))[0];
+
+            assert.equal(me.map, keep.maps[0], race);
+            assert.ok(host.open.get(keep.key)?.includes(`${keep.key}/ruler`), JSON.stringify(host.open.get(keep.key)));
+            assert.match(host.folk.get(`${keep.key}/ruler`).title, new RegExp(`^(Lord|Lady) of ${keep.name}$`));
+            assert.equal(post?.town, nearest.id, race);
         }
-
-        const post = host.postOf(`${keep.key}/ruler`);
-        const nearest = world.plan.places.filter((place) => place.race === "cat" && host.war.town(place.id)).sort((a, b) => Math.hypot(a.at[0] - keep.at[0], a.at[1] - keep.at[1]) - Math.hypot(b.at[0] - keep.at[0], b.at[1] - keep.at[1]))[0];
-
-        assert.equal(me.map, keep.maps[0]);
-        assert.ok(host.open.get(keep.key)?.includes(`${keep.key}/ruler`), JSON.stringify(host.open.get(keep.key)));
-        assert.match(host.folk.get(`${keep.key}/ruler`).title, new RegExp(`^(Lord|Lady) of ${keep.name}$`));
-        assert.equal(post?.town, nearest.id);
     });
 });

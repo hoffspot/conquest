@@ -692,17 +692,18 @@ function castle(piece) {
         stake(solid, cx + Math.cos(a) * R, m(2.1), cz + Math.sin(a) * R, m(random.range(4, 5)), m(0.18), "timber", { lean, sides: 5 });
     }
 
-    // The gate: two bastions of basalt, a great lintel, tusks and a skull
+    // The gate: two bastions of basalt 4 m apart (so it's walked through at any turn the castle's
+    // set down at: core/setpieces/castles.js), a great lintel, tusks and a skull
     const gz = cz + R;
 
     for (const side of [-1, 1]) {
-        const x = cx + side * m(3.4);
+        const x = cx + side * m(3.8);
 
         solid.extrude([[x - m(1.8), gz - m(2.5)], [x + m(1.8), gz - m(2.5)], [x + m(1.8), gz + m(2)], [x - m(1.8), gz + m(2)]], 0, m(6.5), material("basalt"), { batter: m(0.5) });
         spike(solid, [x, m(6.5), gz], [0, 1, 0], m(1.2), m(0.2), "iron");
     }
 
-    solid.box(cx - m(2.2), m(4.6), gz - m(1.2), cx + m(2.2), m(6), gz + m(1.2), material("rock-dark"));
+    solid.box(cx - m(2.6), m(4.6), gz - m(1.2), cx + m(2.6), m(6), gz + m(1.2), material("rock-dark"));
 
     for (const side of [-1, 1]) {
         tusk(solid, [cx + side * m(0.8), m(6), gz + m(0.4)], [side * 0.3, 1, 0.2], m(3), { up: [-side, 0.4, 0], r: m(0.25) });

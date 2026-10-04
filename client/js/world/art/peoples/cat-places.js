@@ -414,8 +414,8 @@ function castle(piece) {
     const ring = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
     const gateAt = (x0 + x1) / 2 + m(4);
 
-    band(solid, [[gateAt - m(2.2), z1], [x0, z1], [x0, z0], [x1, z0], [x1, z1], [gateAt + m(2.2), z1]], 0, curtain, m(2.4), name, { closed: false, lean });
-    band(solid, [[gateAt - m(2.2), z1 - m(0.1)], [x0 + m(0.1), z1 - m(0.1)], [x0 + m(0.1), z0 + m(0.1)], [x1 - m(0.1), z0 + m(0.1)], [x1 - m(0.1), z1 - m(0.1)], [gateAt + m(2.2), z1 - m(0.1)]].map(([x, z]) => [x, z]), curtain, curtain + m(1.1), m(0.4), name, { closed: false, rounded: true });
+    band(solid, [[gateAt - m(2.6), z1], [x0, z1], [x0, z0], [x1, z0], [x1, z1], [gateAt + m(2.6), z1]], 0, curtain, m(2.4), name, { closed: false, lean });
+    band(solid, [[gateAt - m(2.6), z1 - m(0.1)], [x0 + m(0.1), z1 - m(0.1)], [x0 + m(0.1), z0 + m(0.1)], [x1 - m(0.1), z0 + m(0.1)], [x1 - m(0.1), z1 - m(0.1)], [gateAt + m(2.6), z1 - m(0.1)]].map(([x, z]) => [x, z]), curtain, curtain + m(1.1), m(0.4), name, { closed: false, rounded: true });
 
     // (Toron down its outer faces)
     for (const [k, [ax, az]] of ring.entries()) {
@@ -425,7 +425,7 @@ function castle(piece) {
         const [ox, oz] = [across[2], -across[0]];
         const outward = (ox * ((ax + bx) / 2 - W / 2) + oz * ((az + bz) / 2 - D / 2)) > 0 ? [ox, 0, oz] : [-ox, 0, -oz];
 
-        toron(solid, { origin: [ax, 0, az], across, out: outward, length: long }, lean, [lean, lean], [m(2), m(5), m(8)], m(1.2), random, { margin: m(3.5), clear: k === 2 ? [[Math.abs(gateAt - bx) - m(2.5), Math.abs(gateAt - bx) + m(2.5), 0, curtain]] : [] });
+        toron(solid, { origin: [ax, 0, az], across, out: outward, length: long }, lean, [lean, lean], [m(2), m(5), m(8)], m(1.2), random, { margin: m(3.5), clear: k === 2 ? [[Math.abs(gateAt - bx) - m(3), Math.abs(gateAt - bx) + m(3), 0, curtain]] : [] });
     }
 
     // The corner towers
@@ -433,17 +433,18 @@ function castle(piece) {
         tower(solid, [x - m(3), z - m(3), x + m(3), z + m(3)], 0, m(15), name, random, { lean, cap: "ears" });
     }
 
-    // The gate tower, the way in through it to the court (core/setpieces/castles.js), its studded
-    // doors swung back against the passage's walls
-    const gate = { u0: m(1.9), u1: m(4.1), v0: 0, v1: m(3.8), depth: m(5), back: null, arch: null, sides: material("mud-dark") };
+    // The gate tower, the way in through it to the court, 4 m wide (so it's walked through at any
+    // turn the castle's set down at: core/setpieces/castles.js), its studded doors swung back
+    // against the passage's walls
+    const gate = { u0: m(1.5), u1: m(5.5), v0: 0, v1: m(4.2), depth: m(5), back: null, arch: null, sides: material("mud-dark") };
 
-    tower(solid, [gateAt - m(3), z1 - m(2.5), gateAt + m(3), z1 + m(2.5)], 0, m(12.5), name, random, { lean, cap: "ears", openings: { 0: [{ ...gate, depth: m(0.2) }], 2: [gate] } });
+    tower(solid, [gateAt - m(3.5), z1 - m(2.5), gateAt + m(3.5), z1 + m(2.5)], 0, m(12.5), name, random, { lean, cap: "ears", openings: { 0: [{ ...gate, depth: m(0.2) }], 2: [gate] } });
 
     for (const side of [-1, 1]) {
-        solid.box(gateAt + side * m(1.05) - m(0.06), 0, z1 + m(1.2), gateAt + side * m(1.05) + m(0.06), m(3.4), z1 + m(2.3), material("planks-dark"));
+        solid.box(gateAt + side * m(1.95) - m(0.06), 0, z1 + m(1.2), gateAt + side * m(1.95) + m(0.06), m(3.8), z1 + m(2.3), material("planks-dark"));
     }
-    guardian(solid, gateAt - m(3.8), z1 + m(3.2), 0, "mud-pale");
-    guardian(solid, gateAt + m(3.8), z1 + m(3.2), 0, "mud-pale");
+    guardian(solid, gateAt - m(4.4), z1 + m(3.2), 0, "mud-pale");
+    guardian(solid, gateAt + m(4.4), z1 + m(3.2), 0, "mud-pale");
 
     // The court: four planted quarters round a fountain
     const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2 + m(3)];

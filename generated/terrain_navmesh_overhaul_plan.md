@@ -3837,3 +3837,41 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** M7.5b-3b: the orcs' motte (steps up it and the broch's door), the elves' hall
     within their castle, the dark elves' gate and terraces; then the lizard folk's temple-fortress
     and the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3b built: the elves' and orcs' keeps gone into; every castle's gate 4 m
+  wide** (docs/GAME.md *Gone into*).
+  - **Which keep:** the elves' castle has no hall, only the great tree in its court: their keep is
+    the tower at the back of their ring, due north, facing the tree and the gate, an ogee door
+    in its foot as their watchtowers' have, a lamp either side (world/art/peoples/elf.js
+    `castle`). The orcs' is their longhouse, the clan's hall (the broch on the motte is left as
+    it is: its keep would want steps up the motte and a second building gone into): its door's
+    already drawn, under a porch in the middle of the middle side of its south wall, a step up
+    onto its plinth.
+  - **Laid out** (core/setpieces/castles.js `entry`): the elves' door in the south face of the
+    back tower's twelve; the orcs' worked out as the kit's lens plan has it (its sides 2.2 m
+    long, the door in the middle of the middle one: with an even count of sides, a little east
+    of the house's middle), its porch's two posts solid. Doors may stand above the ground: an
+    entry's `floor` is its sill's height (the orcs' on their 0.7 m plinth), carried to the door
+    drawn green when tapped (core/sites.js `entranceAt`, which had it at 0).
+  - **The gates widened:** the orcs' castle in seed 2 is set down at a slant, and the player
+    couldn't get through its gate: the bastions stood 3.2 m apart, and on the slant the squares
+    blocked either side stand up to 0.7 m into the gap, the navigation mesh keeping walkers
+    0.5 m off them. The bastions stand 4 m apart now, and the cat folk's gate tower is 7 m wide,
+    its way through 4 m (it was 2.2 m), its doors swung back against it, the curtain walls
+    ending within it (cat-places.js, orc-places.js `castle`).
+  - **Walls where they're drawn:** the kits' `band` builds a wall to one side of its line, not
+    astride it, and the layouts had them astride. The elves' curtain walls ran 1.6 m inward of
+    the lines between their towers, so their inner faces buried the back tower's south face and
+    its door: they're drawn astride their lines now (elf.js `castle`, its gate walls too), as the
+    layout has them, every tower standing proud of them. The cat folk's are laid out where
+    they're drawn, 2.4 m within their lines. The elves' courtyard is the polygon of their towers
+    (a new `polygon` shape), out to the walls all round, not a round that only reached the
+    middle of each.
+  - **The way to a keep's door** is the courtyard's ground however far it reaches into its walls
+    (core/sites.js: the elves' cleared into the back tower).
+  - **Pictures** (sent in the session): the castles from above, the gates; the elves' and orcs'
+    keep doors and great halls.
+  - **Tests:** test/castles.test.js: each gate 3 m clear through (squares' middles); each
+    people's keep gone into from outside its gate in seed 2's world (the orcs' at a slant), its
+    way in the courtyard's ground, its ruler titled, their realm the nearest town of theirs.
+  - **Next:** the dark elves' castle (its gate and terraces), the lizard folk's temple-fortress,
+    the humans' citadels' wards and keeps.

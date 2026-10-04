@@ -498,8 +498,8 @@ export class Sites {
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
             const all = laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners);
             const squares = (castle ? all.filter(([i, j]) => solidAt(castle, lot(i + 0.5, j + 0.5))) : all).filter(([i, j]) => !way.has(j * size + i));
-            // (The way into its keep, too: cleared through its walls, flagged as its courtyard)
-            const courts = castle ? all.filter(([i, j]) => (way.has(j * size + i) || !solidAt(castle, lot(i + 0.5, j + 0.5))) && inCourt(castle, lot(i + 0.5, j + 0.5))) : [];
+            // (The way into its keep, too: cleared into its walls, flagged as its courtyard)
+            const courts = castle ? all.filter(([i, j]) => way.has(j * size + i) || (!solidAt(castle, lot(i + 0.5, j + 0.5)) && inCourt(castle, lot(i + 0.5, j + 0.5)))) : [];
             const heart = laid ? turn(...laid.heart) : { x, y };
             const radius = hypot(w, h) * (PLOT / 2);
             // (Its pad, if it's levelled into the land: every people's place, on a mound or in a
@@ -737,7 +737,7 @@ export class Sites {
  * squares at it), outside (the square to come out onto), clear (every square of the way up to
  * it), facing, inside (what's within) }, as insides.js entranceOf's for a building.
  */
-export function entranceAt({ x, y, width, height, inside: within }, turn, facing) {
+export function entranceAt({ x, y, width, height, floor = 0, inside: within }, turn, facing) {
     const square = (u, v) => {
         const at = turn(u, v);
 
@@ -762,7 +762,7 @@ export function entranceAt({ x, y, width, height, inside: within }, turn, facing
         }
     }
 
-    return { door: { x: door.x, z: door.y, facing, width, height, floor: 0 }, front, outside, clear: [...front, outside, ...clear], facing, inside: within };
+    return { door: { x: door.x, z: door.y, facing, width, height, floor }, front, outside, clear: [...front, outside, ...clear], facing, inside: within };
 }
 
 // Where a point of a site laid out facing south ([u, v] metres from its north-west corner) is in

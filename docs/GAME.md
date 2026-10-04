@@ -2673,12 +2673,17 @@ metres off (back as many as ever the next time, unless it's been cleared).
     pillars of their gate and the great tree; the orcs' bank and palisade, the bastions either
     side of its gap, the motte, the longhouse and the hut; the cat folk's curtain walls, corner
     towers, gate tower, planted beds, fountain and tower house), and its courtyard within is open
-    ground walked into through its gate: flagstones (the orcs' trodden earth) through the gateway
-    and all within, nothing grown in it (`sites.js` `courtAt`). The cat folk's tower house has a
-    door in the middle of its front, into the keep's great hall: its lord or lady on the throne
-    ("Lord of Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of
-    the town of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill
-    citadels; the dark elves' and the lizard folk's are still solid, to come.
+    ground walked into through its gate (4 m wide at the least, so it's walked through at any
+    turn the castle's set down at): flagstones (the orcs' trodden earth) through the gateway and
+    all within, nothing grown in it (`sites.js` `courtAt`). Each has its keep, gone into from the
+    courtyard (M7.5b-3b for the elves' and orcs'): the elves' the tall tower at the back of their
+    ring, an ogee door in its foot between two lamps, facing the great tree and the gate; the
+    orcs' their longhouse, the clan's hall, by the door under the porch in the middle of its
+    south side, a step up onto its plinth; the cat folk's their tower house, by the door in the
+    middle of its front. Within, the keep's great hall: its lord or lady on the throne ("Lord of
+    Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of the town
+    of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill citadels;
+    the dark elves' and the lizard folk's are still solid, to come.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

@@ -297,8 +297,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   6 metres clear of it. The same every time. The elves', the orcs' and the cat folk's castles
   take only the squares under what of them is solid (`core/setpieces/castles.js`: their walls,
   towers and buildings), their courtyards open ground walked into through their gates
-  (`courtAt`: flagstones, the orcs' trodden earth), the cat folk's keep's door cleared as a
-  neutral site's (the terrain plan's M7.5b-3a).
+  (`courtAt`: flagstones, the orcs' trodden earth), their keeps' doors cleared as a neutral
+  site's (the elves' back tower, the orcs' longhouse, the cat folk's tower house: the terrain
+  plan's M7.5b-3).
   - **Where they'd rather lie** (`LIE`): each people's castle, the dark elves' obsidian spire,
     the elves' starwatch, the cat folk's pride rock and the watchtowers stand on the highest
     ground they can within 64 m of their cell's middle (of spots 16 m apart, as high as they
