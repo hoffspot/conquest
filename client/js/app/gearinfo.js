@@ -157,6 +157,7 @@ export function totals(progress, { hp = 50, stamina = 50 } = {}) {
     const pct = (value) => `${Math.round(value * 100)}%`;
     const rows = [
         { label: "Armour", value: `${pct(bonus.armor)} off each blow` },
+        { label: "Dodge", value: `${pct(bonus.dodge)} of blows and shots` },
         { label: "Hit points", value: String(hp + bonus.hp) },
         { label: "Stamina", value: String(stamina + bonus.stamina) },
         { label: "Melee", value: `+${pct(bonus.melee)}` },

@@ -906,8 +906,8 @@ and eased out over its last third: its spine's, neck's, head's and collarbones' 
 pelvis, mirrored when the blow comes from the right and leaning the other way from behind. The
 hands stay where they were.
 
-**Slipping a blow** (`dodge({ from })`, `DODGES`): when the Dodge spell turns a blow aside (the
-battle's `dodged`), the body ducks under it as Mesh2Motion's `Dodge_left` does: forward and down
+**Slipping a blow** (`dodge({ from })`, `DODGES`): when a blow is slipped (the battle's `dodged`:
+by the player's own knack for it, Evasion, or the Dodge spell), the body ducks under it as Mesh2Motion's `Dodge_left` does: forward and down
 by up to 28 cm at the head, leaning aside, away from a blow from the side (mirrored for one from
 the left). Or it sways back and round as `Dodge_back` does. From one ahead it goes either way or
 back, never the same twice running. It's added from the clip's first pose like a clip's hit, eased
@@ -1167,7 +1167,7 @@ at the hip). What was tried, on all 30 of the motion check's bodies:
 | `Idle_Shield`, `Golf_idle`, `Pistol_Idle` | Guard | Left out | Hardly moves; a golfer's waggle; a pistol held out |
 | `Hit_Chest` | Flinch: the staff's, bow's and kick's other way | Kept | Added from its first pose, the hands left as they were |
 | `Hit_Head` | Flinch: the punch's other way | Kept | Likewise |
-| `Dodge_left` (mirrored for the right), `Dodge_back` | Slipping a blow (the Dodge spell) | Kept | Its lean at 65%; the feet planted (the clips step out of the way) |
+| `Dodge_left` (mirrored for the right), `Dodge_back` | Slipping a blow (Evasion, the Dodge spell) | Kept | Its lean at 65%; the feet planted (the clips step out of the way) |
 | `Hit_Knockback`, `Defend`, `Sword_Block` | Flinch, a parry | Left out | Their legs are the motion: a fall, a crouch and a step (for the deaths and falls with their legs, to come) |
 | `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
 | `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |

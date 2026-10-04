@@ -426,7 +426,8 @@ whoever holds the town, and whom they fight is as their peoples stand.
 A player grows by what they do (`Progress`, `core/progress.js`), kept with their character
 (`app/save.js`) and changed only by the host.
 
-**Skills.** Eight trees, each grown by its own use. A rank takes 100, 300, 800, 2,000 and 4,500
+**Skills.** Eight trees, each grown by its own use (healing is now magic's Healing school:
+docs/MAGIC.md). A rank takes 100, 300, 800, 2,000 and 4,500
 experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 
 | Tree | Grows by | Brings, by Legend | Rank 2 ability |
@@ -436,9 +437,17 @@ experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 | Healing | healing with spells (what's healed) | +100% healed | Greater heal |
 | Hexes | stunning foes (15 a stun) | stuns twice as long | Hold |
 | Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
+| Evasion | slipping blows (20 a blow), and three tenths of all Blade, Marksman and Endurance grow by | a blow or a shot slipped one time in four (one in twenty from the start) | |
 | Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold | |
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
+
+**Evasion.** Every player slips a blow or a shot now and then: one in twenty from the start, and 4
+in a hundred more each rank, to one in four as a Legend (`dodge`, as the battle's `#hit` rolls
+it). Magic isn't slipped this way. The Dodge spell's chance (docs/MAGIC.md) is added on top, so a
+Legend under its strongest Dodge slips half of the blows. Slipping one shows "Dodged" over the
+head, and the body ducks or sways out of the way (docs/CHARACTERS.md). The pack's totals show the
+chance.
 
 **Abilities** come with a tree's second rank, and can then be put on an action wheel (Game
 options, Action wheels: docs/GAME.md):

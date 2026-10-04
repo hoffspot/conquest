@@ -240,7 +240,10 @@ export const BOUGHT = Object.freeze({
 });
 
 /** The skills' experience for each thing done, besides the damage done or taken, or healed. */
-const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5 });
+const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5, evasion: 0.3, dodged: 20 });
+
+// The skills of the body: as each grows, Evasion grows by a share of it (XP.evasion)
+const BODILY = new Set(["blade", "marksman", "endurance"]);
 
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
@@ -1288,6 +1291,11 @@ export class Host {
         if (ups.length) {
             this.#outfit(player);
         }
+
+        // (Using the body: quicker on the feet too)
+        if (BODILY.has(tree)) {
+            this.#gain(player, "evasion", amount * XP.evasion);
+        }
     }
 
     // A school of magic grows (by `amount`): each tier it comes to, its spell told of ("tier")
@@ -1364,6 +1372,10 @@ export class Host {
             case "exhausted":
                 this.#gain(own, "endurance", XP.exhausted);
                 break;
+            case "dodged":
+                // (Slipping a blow, by the knack or a spell: the knack grows)
+                this.#gain(own, "evasion", XP.dodged);
+                break;
             case "death": {
                 const fallen = this.battle.actor(event.id);
 
@@ -1430,6 +1442,7 @@ export class Host {
 
         actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell };
         actor.armor = Math.min(ARMOR_CAP, bonus.armor);
+        actor.dodge = bonus.dodge;
 
         const [hp, stamina] = [KINDS.player.hp + bonus.hp, KINDS.player.hp + bonus.stamina];
 

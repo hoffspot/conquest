@@ -148,6 +148,41 @@ describe("the tomes' spells in the battle (battle.js)", () => {
         assert.ok(Math.abs(slipped(5) - SPELLS.dodge.dodge[4]) < 0.05);
     });
 
+    it("slips blows and shots by a player's own knack (Evasion), not magic, the Dodge spell's on top", () => {
+        // How many of a foe's blows (with `weapon`) the caster slips, its knack and the spell as given
+        const slipped = ({ knack = 0, level = 0, weapon = "cleaver" }) => {
+            const { battle } = field([[6, 15]], { seed: 3 });
+            let dodged = 0;
+            let blows = 0;
+
+            battle.actor("caster").dodge = knack;
+            battle.rearm("foe-0", weapon);
+            battle.actor("foe-0").ai = null;
+
+            if (level) {
+                battle.buff("caster", "dodge", { ms: 1e9, level });
+            }
+
+            for (let k = 0; k < 400; k++) {
+                const events = run(battle, 1500);
+
+                blows += events.filter(({ type, id, by }) => (type === "hit" || type === "dodged") && id === "caster" && by === "foe-0").length;
+                dodged += events.filter(({ type, id }) => type === "dodged" && id === "caster").length;
+                battle.actor("caster").hp = 500;
+            }
+
+            return dodged / blows;
+        };
+
+        assert.equal(slipped({}), 0);
+        assert.ok(Math.abs(slipped({ knack: 0.25 }) - 0.25) < 0.05);
+        assert.ok(Math.abs(slipped({ knack: 0.25, level: 5 }) - (0.25 + SPELLS.dodge.dodge[4])) < 0.06, "the spell's on top");
+
+        // (A wand's bolts are magic: only the spell slips them)
+        assert.equal(slipped({ knack: 0.25, weapon: "wand" }), 0);
+        assert.ok(Math.abs(slipped({ knack: 0.25, level: 5, weapon: "wand" }) - SPELLS.dodge.dodge[4]) < 0.06);
+    });
+
     it("turns a fifth of every blow back on whoever dealt it with Reflect (a wand in hand)", () => {
         const { battle } = field([[6, 15]], { weapon: "sword" });
 

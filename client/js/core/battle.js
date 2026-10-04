@@ -2808,10 +2808,12 @@ export class Battle {
     #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null, ground = false } = {}) {
         const magic = magicOf(attack, spell);
 
-        // Slipped (Dodge): nothing, but they know they were set on
-        const dodge = !ground && attacker && attacker !== target && this.buffOf(target, "dodge");
+        // Slipped: by a player's own knack for it (Evasion: blows and shots, not magic) and the
+        // Dodge spell's (anything) on top of it, added; nothing, but they know they were set on
+        const spelled = this.buffOf(target, "dodge");
+        const dodge = (magic ? 0 : (target.dodge ?? 0)) + (spelled ? SPELLS.dodge.dodge[Math.min(spelled.level, SPELLS.dodge.dodge.length) - 1] : 0);
 
-        if (dodge && this.random.chance(SPELLS.dodge.dodge[Math.min(dodge.level, SPELLS.dodge.dodge.length) - 1])) {
+        if (!ground && attacker && attacker !== target && dodge > 0 && this.random.chance(dodge)) {
             this.#emit("dodged", { id: target.id, by: attacker.id, attack: attack.id, spell, projectile });
             this.#provoke(attacker, target);
 
