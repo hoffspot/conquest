@@ -2610,8 +2610,12 @@ metres off (back as many as ever the next time, unless it's been cleared).
   keeps it, and its rim on the maps goes grey), "The dead of … are laid to rest, for now" or
   "… is cleared of its outlaws, for now", and the chest is thrown open with a share for each
   player within about 40 metres (`rollLoot("chest")`: 25 to 60 gold, a third more for each tier of
-  the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the
-  livery of the place's people, a human's at the ruins and caves, now and then a fine sword or bow), theirs alone to take, for five minutes.
+  the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the livery
+  of the place's people, a human's at the ruins and caves, now and then a fine sword or bow),
+  theirs alone to take, for five minutes.
+- **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
+  3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
+  it's cleared with the player there.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

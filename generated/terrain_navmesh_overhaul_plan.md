@@ -3629,3 +3629,24 @@ converted data is to be measured in M8 against today's hm08 data.
     before.
   - **Next:** a free animated chest model in place of the drawn one (the user's ask), then
     M7.5a-3, a guild mission for each place held.
+- **2026-10-04, M7.5a-3 built: the guilds' contracts to put a place's holders to the sword** (§8;
+  docs/WAR.md the guild's board, docs/GAME.md *Held, in play*).
+  - **On the board** (core/standing.js `offerContract`, kind "clear", `REQUESTS.clear`,
+    `CLEAR_REACH`): a place within 3 km of the guild's town held by outlaws or the dead (not
+    cleared, not one the player carries already), as often as the camp outside: "Outlaws hold
+    Peninggate, 0.8 km south-west of Redemoor, and rob all who pass. Put them to the sword, their
+    chief with them." / "The dead walk at Zolazul, 2.4 km west of Norleywick, … Lay them to rest,
+    the wight lord that leads them with them." (which way by the compass, `compass`).
+  - **Pays** 30 gold, 25 more for a middling place and 60 for a great one, 9 for each tier of its
+    land's danger (as from the town), and half the time a tome from the guild's library.
+  - **Done** (host.js `#clearedBy`) when the place is cleared with the player within 39 m of its
+    heart: its band and leader put to the sword, or a ruined castle's master felled; then back to
+    the guild for the pay, as any contract. Cleared without them (`#check`): it comes to nothing.
+  - **Marked** on the world map where the place lies (standing.js `whereTo`, its `at`); the journal
+    says what's to do (`progressOf`).
+  - **Tests:** test/places.test.js (the contract: a place near held, which way it lies, paid by its
+    size and danger, not offered again once carried or cleared; done once put to the sword with the
+    player there, a cave's band and a ruined castle's master; nothing if cleared without them);
+    test/news.test.js (the board's kinds, with the place near when there is one). e2e: the guild,
+    the town hall's work and the journal, hiring an adventurer, an envoy (all passed).
+  - **Next:** the chest model the user asked for, then M7.5b (the places entered and explored).
