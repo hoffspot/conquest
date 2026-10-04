@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { Actions, ATTACKS, DRAWS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
@@ -108,30 +109,56 @@ function atTheBlow(name, variant, { shape, hitAt = 0.4, duration = 0.8, held = [
 }
 
 describe("attacks (actions.js)", () => {
-    it("has five ways of doing every weapon's attack and every spell, each timed with 1 as the blow and 2 as the end", () => {
+    it("has at least five ways of doing every weapon's attack and every spell, each timed with 1 as the blow and 2 as the end", () => {
         const names = [...new Set(Object.values(WEAPONS).flatMap(({ attacks }) => attacks.map(({ animation }) => animation))), "castHeal", "castStun"];
 
         for (const name of names) {
             const { variants } = ATTACKS[name] ?? {};
 
-            assert.equal(variants?.length, 5, `${name} has five ways`);
-            assert.equal(new Set(variants.map((variant) => variant.name)).size, 5, `${name}'s ways have their own names`);
+            assert.ok(variants?.length >= 5, `${name} has five ways`);
+            assert.equal(new Set(variants.map((variant) => variant.name)).size, variants.length, `${name}'s ways have their own names`);
 
-            for (const { name: way, keys } of variants) {
+            for (const { name: way, keys, clip } of variants) {
                 const times = keys.map(([time]) => time);
 
                 assert.equal(times[0], 0);
                 assert.ok(times.includes(1), `${name} (${way}) has a key at the blow`);
                 assert.equal(times.at(-1), 2);
                 assert.ok(times.every((time, k) => k === 0 || time > times[k - 1]), `${name} (${way})'s keys in order`);
-                assert.deepEqual(keys[0][1], keys.at(-1)[1], `${name} (${way}) ends as it starts`);
+                // (A clip's ends where the clip does: eased out of before then)
+                if (!clip) {
+                    assert.deepEqual(keys[0][1], keys.at(-1)[1], `${name} (${way}) ends as it starts`);
+                }
             }
 
             // Each way really is different where the blow lands
             const blows = variants.map(({ keys }) => JSON.stringify(keys.find(([time]) => time === 1)[1]));
 
-            assert.equal(new Set(blows).size, 5, `${name}'s blows all differ`);
+            assert.equal(new Set(blows).size, variants.length, `${name}'s blows all differ`);
         }
+    });
+
+    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack", () => {
+        assert.ok(CLIP_HEIGHT > 1.5 && CLIP_HEIGHT < 1.9);
+
+        for (const [clip, { channels, keys, hit, seconds }] of Object.entries(CLIP_KEYS)) {
+            const times = keys.map(([time]) => time);
+
+            assert.ok(hit > 0 && hit < seconds, `${clip}: the blow inside it`);
+            assert.equal(new Set(channels).size, channels.length, `${clip}: each channel once`);
+            assert.ok(keys.every((key) => key.length === channels.length + 1), `${clip}: a value for every channel`);
+            assert.ok(keys.every((key) => key.slice(1).every((value, c) => (channels[c].endsWith(".shape") ? typeof value === "string" : Number.isFinite(value)))), `${clip}: numbers (and hands' shapes)`);
+            assert.deepEqual([times[0], times.at(-1)], [0, 2], `${clip}: from 0 to 2`);
+            assert.ok(times.includes(1) && times.every((time, k) => k === 0 || time > times[k - 1]), `${clip}: in order, through the blow`);
+
+            // (The body and hands, the pelvis kept over the feet: no legs but a kicking one)
+            assert.ok(channels.includes("Spine2.turn") && channels.includes("right.at.2") && channels.includes("offset.1"), clip);
+            assert.ok(channels.filter((channel) => /(UpLeg|Leg|Foot|ToeBase)\./.test(channel)).every((channel) => channel.startsWith("Right")), `${clip}: only a kicking leg`);
+        }
+
+        const clipped = Object.entries(ATTACKS).flatMap(([name, { variants }]) => variants.flatMap((variant, way) => (variant.clip ? [{ name, way, clip: variant.clip }] : [])));
+
+        assert.deepEqual([...new Set(clipped.map(({ clip }) => clip))].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
     });
 
     it("never does an attack the same way twice in a row, and does it every way", () => {
@@ -158,7 +185,7 @@ describe("attacks (actions.js)", () => {
 
     it("lands every way of every melee blow in front, at the enemy, between the hips and the top of the head", () => {
         for (const name of ["sword", "staff", "hammer", "cleaver", "punch"]) {
-            for (let variant = 0; variant < 5; variant++) {
+            for (let variant = 0; variant < ATTACKS[name].variants.length; variant++) {
                 const { character, shoulders, arm, right } = atTheBlow(name, variant, { shape: name === "cleaver" ? PRESETS.orc.shape : undefined });
                 const way = `${name} (${ATTACKS[name].variants[variant].name})`;
 
@@ -170,19 +197,21 @@ describe("attacks (actions.js)", () => {
 
     it("lets go of every bolt, fireball and stun from a hand held out towards the enemy, draws every bow to the face, and raises every heal", () => {
         for (const [name, hand] of [["wand", "right"], ["grimoire", "right"], ["castStun", "left"]]) {
-            for (let variant = 0; variant < 5; variant++) {
+            for (let variant = 0; variant < ATTACKS[name].variants.length; variant++) {
                 const blow = atTheBlow(name, variant);
 
                 assert.ok(blow[hand].z > blow.shoulders[hand].z + blow.arm * 0.6, `${name} ${variant}: held out ${(blow[hand].z - blow.shoulders[hand].z).toFixed(2)} m`);
             }
         }
 
-        for (let variant = 0; variant < 5; variant++) {
+        for (let variant = 0; variant < ATTACKS.bow.variants.length; variant++) {
             const bow = atTheBlow("bow", variant, { hitAt: 0.66, duration: 1 });
 
             assert.ok(bow.left.z > bow.shoulders.left.z + bow.arm * 0.5, `bow ${variant}: the bow held out`);
             assert.ok(bow.right.distanceTo(bow.head) < 0.35, `bow ${variant}: drawn to the face (${bow.right.distanceTo(bow.head).toFixed(2)} m)`);
+        }
 
+        for (let variant = 0; variant < ATTACKS.castHeal.variants.length; variant++) {
             const heal = atTheBlow("castHeal", variant, { hitAt: 0.6, duration: 1 });
 
             assert.ok(heal.left.y > heal.shoulders.left.y, `heal ${variant}: raised`);
@@ -242,7 +271,7 @@ describe("attacks (actions.js)", () => {
 
     it("holds a two-handed weapon with both hands, one below the other, whichever way it's swung", () => {
         for (const name of ["staff", "hammer"]) {
-            for (let variant = 0; variant < 5; variant++) {
+            for (let variant = 0; variant < ATTACKS[name].variants.length; variant++) {
                 const { hitAt, duration } = WEAPONS[name === "staff" ? "staff" : "hammer"].attacks[0];
                 const { left, right } = atTheBlow(name, variant, { hitAt: hitAt / 1000, duration: duration / 1000, held: [name === "staff" ? "staff" : "warHammer"] });
                 const gap = left.distanceTo(right);
@@ -269,10 +298,10 @@ describe("attacks (actions.js)", () => {
         assert.ok(reach[1] < -0.15, "then the left");
     });
 
-    it("kicks five ways, with the right leg and the left in turn: the foot off the ground and out at the enemy, the standing foot staying put", () => {
+    it("kicks every way, with the right leg and the left in turn: the foot off the ground and out at the enemy, the standing foot staying put", () => {
         const { hitAt, duration } = WEAPONS.boots.attacks[0];
 
-        for (let variant = 0; variant < 5; variant++) {
+        for (let variant = 0; variant < ATTACKS.kick.variants.length; variant++) {
             for (const mirror of [false, true]) {
                 const { character, walker, actions } = fighter();
 

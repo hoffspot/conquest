@@ -8,12 +8,15 @@
 // It writes client/characters/animations/mesh2motion.glb: the skeleton (its 66 joints, without
 // the mannequin's mesh) and the clips chosen below, each named for what it is. Only what moves is
 // kept: each joint's rotation, and the pelvis's position (the joints' lengths never change), and
-// none that only holds the rest pose. bvh.js retargets them to our skeleton.
+// none that only holds the rest pose. bvh.js retargets them to our skeleton (the character lab
+// plays them). And it bakes the clips the game plays (bake-clips.js BAKES) into key poses:
+// client/js/characters/clip-keys.js.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Document, NodeIO } from "@gltf-transform/core";
+import { bakeAll, keysModule, referenceBody } from "./bake-clips.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -128,4 +131,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
     writeFileSync(out, glb);
     console.log(`${path.relative(root, out)}: ${CLIPS.length} clips, ${(glb.byteLength / 1024).toFixed(0)} KB`);
+
+    const baked = await bakeAll(from);
+    const keys = path.join(root, "client/js/characters/clip-keys.js");
+
+    writeFileSync(keys, keysModule(baked, { height: referenceBody().character.height }));
+    console.log(`${path.relative(root, keys)}: ${Object.keys(baked).length} clips baked into ${Object.values(baked).reduce((sum, { keys: each }) => sum + each.length, 0)} keys`);
 }

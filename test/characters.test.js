@@ -12,6 +12,7 @@ import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/chara
 import { EQUIPMENT, ITEMS, SLOTS, socketOn } from "../client/js/characters/equipment.js";
 import { placed } from "../client/js/characters/character.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
+import { createRandom } from "../client/js/core/random.js";
 import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
@@ -23,7 +24,7 @@ import { decodeSection, encodeSection, Packer } from "../client/js/characters/pa
 import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
 import { FOLK, PRESETS } from "../client/js/characters/presets.js";
-import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
+import { JOINTS, jointAngles, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
 import { paintEye, paintSkin, SKIN_ROUGHNESS, SkinAtlas } from "../client/js/characters/skin.js";
 import { HAIR_SHINE, HairMaterial, SKIN_WRAP, SkinMaterial } from "../client/js/characters/surfaces.js";
 
@@ -282,6 +283,30 @@ describe("joints (rig.js)", () => {
         const beyond = jointRotation("ForeArm", 1, { flex: 175 }, new THREE.Quaternion(), false);
 
         assert.ok(Math.abs(limitRotation("ForeArm", 1, beyond.clone()).angleTo(new THREE.Quaternion()) - 150 * DEG) < 1e-4);
+    });
+
+    it("reads a joint rotation's angles back, as jointRotation takes them", () => {
+        // (Every joint but the thumb's, each side, each angle within its range; the arm's abduction
+        // and flexion near ±90° make two sets of angles one turn, so its rotation's checked instead)
+        const random = createRandom(7).next;
+
+        for (const kind of Object.keys(JOINTS).filter((name) => name !== "thumb")) {
+            for (const side of [-1, 0, 1]) {
+                for (let n = 0; n < 50; n++) {
+                    const angles = Object.fromEntries(JOINTS[kind].map(({ name, range }) => [name, range[0] + random() * (range[1] - range[0])]));
+                    const rotation = jointRotation(kind, side, angles);
+                    const back = jointAngles(kind, side, rotation);
+
+                    assert.ok(rotation.angleTo(jointRotation(kind, side, back, undefined, false)) < 1e-6, `${kind} ${side}`);
+
+                    if (kind !== "Arm") {
+                        for (const [name, angle] of Object.entries(angles)) {
+                            assert.ok(Math.abs(back[name] - angle) < 1e-6, `${kind} ${side} ${name}: ${angle} read as ${back[name]}`);
+                        }
+                    }
+                }
+            }
+        }
     });
 
     it("mirrors the right side", () => {

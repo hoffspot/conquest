@@ -53,7 +53,8 @@ to them.
 | `gait.js` | Walking and running data: joint angle curves, cadence and stride by speed |
 | `locomotion.js` | The walker: poses the skeleton from the gait data as the character walks and runs |
 | `bvh.js` | Motion capture: reading BVH files and glTF clips and retargeting them to our skeleton |
-| `scripts/build-clips.js` | Takes the clips the lab tries out from Mesh2Motion's (CC0) into `client/characters/animations/mesh2motion.glb` (206 KB, 102 KB gzipped) |
+| `scripts/build-clips.js` | Takes the clips the lab tries out from Mesh2Motion's (CC0) into `client/characters/animations/mesh2motion.glb` (206 KB, 102 KB gzipped), and has the game's baked |
+| `scripts/bake-clips.js`, `clip-keys.js` | Bakes the clips the game plays (Mesh2Motion's) into key poses for actions.js: `clip-keys.js` |
 | `presets.js` | The human, heroine and orc |
 | `peoples.js` | The other peoples' bodies, skins and parts: elves, dark elves, cat folk, lizard folk and orcs (docs/WAR.md M5) |
 | `folk.js`, `soldiers.js` | Townsfolk and soldiers made up from a part, a sex, a seed and a people |
@@ -835,6 +836,10 @@ The check writes a report (`test-results/motion/report.json`, kept with each CI 
 failures from it, worst first: each motion played on its body to its worst moment, the spot
 ringed in red, what's worse than the baseline outlined in amber. It can show one measure, group of
 motions or people at a time, or only what's new; *Close up* looks at the spot from a metre away.
+It draws filmstrips too: `?film=<motion id>,<motion id>&body=<body id>&frames=8` plays each motion
+on that body as a row of frames from its start to its end, seen from in front and to its right,
+following the pelvis (`attack/gauntlets/5` is the punch's sixth way on a soldier with gauntlets;
+the bodies' ids are as the report has them, `human-tallest-m`).
 
 **Reactions** to being hit are functions of time and of where the blow came from (which side,
 front or back), added to whatever pose the character is in, so a flinch during an attack still
@@ -854,8 +859,9 @@ effect where it lands, so how a character reacts depends on what hit it:
 | kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | a flash and dust |
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
-A new attack needs its five ways (`ATTACKS[name].variants`: a name and key poses each); the tests
-check each lands in front at a fighting height.
+A new attack needs at least five ways (`ATTACKS[name].variants`: a name and key poses each, or an
+animator's clip baked into them: *Clips in the game*, below); the tests check each lands in front
+at a fighting height.
 
 **Kicks** (spiked boots): five ways, with the right leg and then the left (`alternate`, every
 other one mirrored), each landing its blow at the enemy:
@@ -1028,8 +1034,64 @@ mannequin's mesh, keeping only what moves (rotations, and where the pelvis is):
 | Sword attack | `Sword_Attack` | 1.9 s | Once (a turning slash with a lunge) |
 | Death | `Death_A` (add-on file) | 4.5 s | Once (staggers, falls to the knees, then on its face) |
 
-They're the lab's only, for now: a try-out of the plan's animation pipeline
-(generated/terrain_navmesh_overhaul_plan.md §10.2).
+The lab plays these whole, as the clip has them.
+
+**Clips in the game** (`scripts/bake-clips.js`, run by `npm run build:clips` too): a clip that's
+to be one of the game's ways of doing something is baked into key poses, the same keys every
+other action is made of (`client/js/characters/clip-keys.js`: four clips, 85 keys, 29 KB), so its
+arms are reached within their ranges, what's held is kept out of the body, and the motion check
+measures it as it does any other:
+
+1. Retarget it (above) onto the average body, in Node: the arms as the clip has them (not held to
+   their ranges: they're reached again within them), every other joint within its range; the
+   lower foot on the ground.
+2. At every frame, take the spine's, neck's, head's and collarbones' joint angles (`rig.js`
+   `jointAngles`: `jointRotation` backwards), and each hand's place (arm lengths from its
+   shoulder, as `at`), how what it holds points (`point`, `edge`) or its palm faces (`palm`,
+   `towards`, and the nearest `shape` to its fingers' curl), and which way its elbow points.
+3. Keep the body over the walker's feet, not the clip's: the clips stand in stances of their own
+   (a boxer's left foot forward, a pelvis tipped back), and ours stand where the walker plants
+   them. So the pelvis turns at most 12° and stays level, the rest of its turn, tilt and lean
+   taken up the spine (the chest faces as the clip's does), and moves only a few centimetres.
+   The clips' legs are left out (they sank the feet into the ground and slid them up to 1.9 m),
+   but a kicking leg's: that's let go of the ground (`free`) while the clip's foot is off it or
+   moving, found on the clip's own legs.
+4. Time it as actions are: key 1 when the blow lands (given, or when whatever's fastest, a hand,
+   a held thing's tip or a foot, goes fastest), 2 at its end; and keep only the keys the curve
+   through them needs to come within 3°, 2.5 cm (as arm lengths) or a little of every value.
+
+`clipped(name, clip)` in actions.js makes a way from one: easing out from key 1.6, its pelvis's
+offset scaled to the body's height, and a hand kept as the research has it (`hands`) where the
+clip's is wrong. What was tried, on all 30 of the motion check's bodies:
+
+| Mesh2Motion's | For | | Why |
+|---|---|---|---|
+| `Punch_Jab` (mirrored: the right hand's, as every punch's is before every other is mirrored) | Punch: *jab* | Kept | The rear fist kept at the chin (the clip flings it out beside the head) |
+| `Punch_Cross` | Punch: *cross* | Kept | |
+| `Kick_Breach` (motion capture) | Kick: *push kick* | Kept | The kicking leg the clip's, the standing foot planted; the fists kept up before the chest (the clip drops them) |
+| `Spell_Simple_Enter`, `_Shoot`, `_Exit` (mirrored, to the wand's hand) | Wand: *thrust out* | Kept | |
+| `Bow Pull Back`, `Bow Pull Hold`, `Bow Release` | Bow | Left out | Clean on every body, but drawn only to the shoulder, 40 cm from the face, not to an anchor under the jaw |
+| `Sword_Regular_A`, `_B`, `_C` with their recoveries | Sword, cleaver | Left out | Lunges of up to 0.8 m; the sword arm taken up to 111° behind the body, 49 to 68° past any shoulder's range on every body |
+| `Sword_Attack` | Sword | Left out | 9° past its range, but the sword arm swung straight out to the side before the cut: a flourish, not a swordsman's cut |
+| `Chop_Tree` | Cleaver | Left out | The arm 27° past its range raising the axe |
+| `Golf_Drive` | Staff, war hammer | Left out | The arms 73 to 78° past their range, the hammer into the forearm (the only clip with both hands on a haft) |
+| `Fighting Left Jab` | Punch | Left out | The shoulder 59° past its range |
+| `Fighting Right Jab` | Punch | Left out | Clean, but from the clip's idle, the fists down at the belly before it punches |
+
+Quaternius's clips are made for games: big lunges, wide stances and flourishes. Fists, a kick and
+a spell came over well; blades and two-handed weapons didn't, so their keyed ways (from the
+research) stay. The kept ones against the keyed ways beside them (the motion check, all 30 bodies:
+how many past the limit, and the worst):
+
+| | Joint past its range | Forearm in the torso | Planted foot sliding |
+| --- | --- | --- | --- |
+| Punch: *jab* (clip) | 10, 4.3° | 9, 7.5 cm | 30, 10.5 cm |
+| Punch: *cross* (clip) | none | 11, 6.1 cm | 30, 5.9 cm |
+| Punch: the five keyed ways | 0 to 26, up to 9.4° | 19 to 21, up to 7.7 cm | 30, 7.4 to 8.0 cm |
+| Kick: *push kick* (clip) | none | 14, 5.5 cm | 30, 16.2 cm |
+| Kick: the five keyed ways | 1 to 30, up to 23.1° | 0 to 23, up to 11.7 cm | 30, 16.4 to 23.4 cm |
+| Wand: *thrust out* (clip) | 3, 3.4° | none | 30, 9.9 cm |
+| Wand: the five keyed ways | none | none | 0 to 30, up to 6.1 cm |
 
 ### Performance
 
@@ -1285,7 +1347,7 @@ sources.
 | Bandai Namco motion dataset (walks and fights in many styles) | [GitHub](https://github.com/BandaiNamcoResearchInc/Bandai-Namco-Research-Motiondataset) | CC BY-NC 4.0 |
 | Ubisoft LAFAN1 | [GitHub](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | CC BY-NC-ND 4.0 |
 | Quaternius Universal Animation Library, modular outfits | quaternius.com, itch.io | CC0 (stylised) |
-| Mesh2Motion's human animations (the Universal Animation Library as glTF) and creature rigs | [mesh2motion-app](https://github.com/Mesh2Motion/mesh2motion-app) `static/animations` | CC0 (five clips used in the lab); its `CarnegieMellonAnimations` folder is CMU's terms |
+| Mesh2Motion's human animations (the Universal Animation Library as glTF) and creature rigs | [mesh2motion-app](https://github.com/Mesh2Motion/mesh2motion-app) `static/animations` | CC0 (five clips in the lab, four baked into the game's attacks); its `CarnegieMellonAnimations` folder is CMU's terms |
 | KayKit Adventurers (characters, weapons, shields) | [GitHub](https://github.com/KayKit-Game-Assets) | CC0 (low-poly) |
 | Mixamo characters and animations | mixamo.com (Adobe login) | Free in games; raw files can't be redistributed |
 

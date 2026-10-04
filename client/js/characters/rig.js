@@ -156,6 +156,28 @@ export function jointRotation(kind, side, angles, target = new THREE.Quaternion(
     return target;
 }
 
+const _euler = new THREE.Euler();
+
+/**
+ * The angles (degrees) of a joint rotation (in the anatomical frame), as jointRotation takes
+ * them: the turn about each movement's axis, in their order (not for the thumb, whose axes are
+ * its own). Into `target`.
+ */
+export function jointAngles(kind, side, rotation, target = {}) {
+    const movements = JOINTS[kind];
+    const along = movements.map(({ axis }) => axis.findIndex((value) => value !== 0));
+    const order = [...along, ...[0, 1, 2].filter((k) => !along.includes(k))].map((k) => "XYZ"[k]).join("");
+
+    _euler.setFromQuaternion(rotation, order);
+    movements.forEach(({ name, axis }, i) => {
+        const turn = [_euler.x, _euler.y, _euler.z][along[i]];
+
+        target[name] = (turn * axisFor(axis, side).getComponent(along[i])) / DEG;
+    });
+
+    return target;
+}
+
 const _twist = new THREE.Quaternion();
 const _swing = new THREE.Quaternion();
 const _vector = new THREE.Vector3();
