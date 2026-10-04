@@ -11,8 +11,8 @@ import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
-import { wares } from "../client/js/core/progress.js";
+import { bandFolk, heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
+import { RELICS, rollLoot, rollRelic, wares } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CLEAR_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
@@ -185,7 +185,13 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
             assert.equal(leader.wild.tier, tier + PLACE_BANDS.lead);
             assert.ok(host.wild.get(leader.id).master);
             assert.equal(folk.length, PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per), `${kind}'s band`);
-            assert.ok(folk.every((one) => one.wild.creature === band.folk && one.wild.tier === tier && host.wild.get(one.id).place === place.id));
+            // (The band each its kind in turn: the outlaws all bandits; the dead their bones, their
+            // ghosts and a wraith)
+            assert.ok(folk.every((one, k) => one.wild.creature === bandFolk(band, k) && one.wild.tier === tier && host.wild.get(one.id).place === place.id));
+
+            if (holder === "dead") {
+                assert.deepEqual(new Set(folk.map((one) => one.wild.creature)), new Set(["skeleton", "ghost", "wraith"]));
+            }
             assert.ok([leader, ...folk].every((one) => one.wild.temper === "territorial" && one.wild.guard === PLACE_BANDS.guard));
 
             // Its chest by the leader, locked while they hold it: at the back of the cave, of the
@@ -256,7 +262,13 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
         const share = [...host.ground.values()].find((dropped) => dropped.from === "chest");
 
         assert.ok(share && share.for === HOST_PLAYER && share.bundle.gold > 0);
-        assert.ok(events.some((event) => event.type === "spoils" && event.creature === "chest" && event.ground === share.id));
+
+        // (And what the dead guarded: one of their old relics, a legendary jewel with its own name)
+        const relic = share.bundle.items.at(-1);
+        const [what, whose] = relic.name.split(" of ");
+
+        assert.ok(relic.quality === "legendary" && RELICS[relic.id]?.includes(what) && RELICS.of.includes(whose), relic.name);
+        assert.ok(events.some((event) => event.type === "spoils" && event.creature === "chest" && event.ground === share.id && event.relic === relic.name), "told of the relic by name");
         // (Where the chest stood: down in the crypt under the ruins)
         me.map = share.map;
         put(me, [...share.square]);
@@ -292,6 +304,32 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
         run(host, 4000);
         run(again, 4000);
         assert.equal(again.checksum(), host.checksum());
+    });
+});
+
+describe("the restless dead's relics (M7.5c-3: progress.js rollRelic)", () => {
+    it("makes each a legendary amulet or ring of whoever lived there long ago, its bonuses rolled, the same for the same numbers; only the dead's chests hold one", () => {
+        const random = createRandom(7);
+        const relics = Array.from({ length: 40 }, () => rollRelic(random));
+
+        for (const relic of relics) {
+            const [what, whose] = relic.name.split(" of ");
+
+            assert.ok(["amulet", "ring"].includes(relic.id) && relic.quality === "legendary", relic.name);
+            assert.ok(RELICS[relic.id].includes(what) && RELICS.of.includes(whose), relic.name);
+            assert.ok(relic.name.length <= 40 && Object.keys(relic.bonuses).length === 3, relic.name);
+        }
+
+        assert.deepEqual(new Set(relics.map(({ id }) => id)), new Set(["amulet", "ring"]));
+        assert.deepEqual(rollRelic(createRandom(3)), rollRelic(createRandom(3)));
+
+        // (A chest the dead didn't guard: none)
+        const plain = rollLoot("chest", createRandom(5));
+        const theirs = rollLoot("chest", createRandom(5), { relic: true });
+
+        assert.deepEqual(theirs.items.slice(0, -1), plain.items);
+        assert.ok(!plain.items.some((item) => item.name?.includes(" of the ")));
+        assert.equal(theirs.items.at(-1).quality, "legendary");
     });
 });
 
@@ -349,7 +387,7 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         }
     });
 
-    it("a ruined castle's wight lord keeps within its keep's great hall, open to the sky, by its hoard, half its skeletons with it, gone into by the breach where the keep's door was", () => {
+    it("a ruined castle's wight lord keeps within its keep's great hall, open to the sky, by its hoard, half of each kind of its dead with it, gone into by the breach where the keep's door was", () => {
         const context = hosted();
         const { host, world, me } = context;
         const site = world.plan.sites.find((one) => one.kind === "ruined castle");
@@ -370,7 +408,17 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         assert.equal(master.map, hall, "the wight lord within");
         assert.ok(chest?.locked && chest.map === hall, "its hoard within, locked");
         assert.ok(Math.hypot(master.square[0] - world.maps[hall].marks.l[0][0], master.square[1] - world.maps[hall].marks.l[0][1]) < 1.5, "where the plan has it");
-        assert.equal(band.filter((one) => one !== master && one.map === hall).length, Math.ceil(LAIRS["ruined castle"].guards[0][1] / 2), "half its skeletons with it");
+        // (Half of each kind, its bones, ghosts and wraith, as long as there are posts for them)
+        let posts = building.maps.flatMap((id) => world.maps[id].marks.g ?? []).length;
+        const within = LAIRS["ruined castle"].guards.reduce((sum, [, count]) => {
+            const here = Math.min(posts, Math.ceil(count / 2));
+
+            posts -= here;
+
+            return sum + here;
+        }, 0);
+
+        assert.equal(band.filter((one) => one !== master && one.map === hall).length, within, "half of each of its dead with it");
         assert.ok(band.some((one) => one.map === "town"), "the rest in the courtyard");
     });
 

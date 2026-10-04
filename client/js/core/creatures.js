@@ -20,7 +20,8 @@
 // people's lands (`people`: the uniques).
 //
 // When (the terrain plan's M7e, §9 Night in play): some are the night's own, out only after dark
-// (`night` "only": the bats, the restless dead, the wisps, the black shuck, the shadow stalkers),
+// (`night` "only": the bats, the restless dead (skeletons, ghosts, wraiths), the wisps, the black
+// shuck, the shadow stalkers),
 // gone to ground by day; some hunt by night, met more often then (`night` "more": the wolves, the
 // big cats, the hyenas, the scorpions, the cultists at their rites); and some see in the dark as
 // by day (`darkSight`), so out of the light they see a hero before the hero sees them. Pure data
@@ -98,6 +99,10 @@ export const CREATURES = Object.freeze({
     rockTusker: { name: "Rock tusker", hp: 80, weapon: "rockTusker", speed: 1.1, chase: 2.8, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [4, 9], biomes: null, people: "orc", blood: "none", armor: 0.2 },
     // The mightiest: only in the perilous places
     dragon: { name: "Dragon", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true },
+    // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
+    // PLACE_BANDS, and in the ruined castles with their lords: LAIRS)
+    ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true },
+    wraith: { name: "Wraith", hp: 46, weapon: "wraith", speed: 1.2, chase: 2.6, temper: "aggressive", roam: 6, leash: 18, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "none", armor: 0.2, night: "only", darkSight: true },
     wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true, darkSight: true },
     frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true },
 });
@@ -125,7 +130,7 @@ export const CAMP_FOLK = Object.freeze({
  */
 export const LAIRS = Object.freeze({
     "dragon's lair": { master: ["dragon", 10], guards: [["wyvern", 2, 8]], near: 110, back: 45 * 60 * 1000 },
-    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 4, 7]], near: 90, back: 30 * 60 * 1000, within: true },
+    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true },
 });
 
 /** How much more often the night's creatures are met after dark (weights, by their `night`). */

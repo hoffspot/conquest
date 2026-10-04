@@ -167,6 +167,29 @@ export const LOOT = Object.freeze({
     hoard: { gold: [180, 320], items: [{ id: "potion", chance: 1 }, { id: "potion", chance: 0.6 }, { id: "ring", quality: "fine", chance: 0.8 }, { id: "amulet", quality: "fine", chance: 0.5 }, { id: "sword", quality: "masterwork", chance: 0.35 }, { id: "bow", quality: "masterwork", chance: 0.25 }] },
 });
 
+/**
+ * The relics the restless dead guard (their chest at the ruins, the wight lord's hoard in a ruined
+ * castle's keep: core/host.js), one in each share of it: a jewel of whoever lived there long ago,
+ * of the legendary make (its bonuses rolled as any's are: gear.js rollGear) and named for them, an
+ * amulet (`amulet`) or a ring (`ring`) "of" one of them (`of`).
+ */
+export const RELICS = Object.freeze({
+    amulet: ["Reliquary", "Torc", "Locket", "Pendant"],
+    ring: ["Signet", "Seal", "Band"],
+    of: ["the Last King", "the Drowned Queen", "the Barrow Lord", "the Hollow Saint", "the Fallen Abbot", "the Forgotten House", "the Old Kings", "the Ashen Bride", "the Pale Knight", "the Lost Prince"],
+});
+
+/** One of the dead's relics (RELICS), made (random.js random): a legendary amulet or ring, with its own name. */
+export function rollRelic(random) {
+    const id = random.chance(0.5) ? "amulet" : "ring";
+    const relic = rollGear(id, "legendary", random);
+    const pick = (list) => list[Math.floor(random.next() * list.length) % list.length];
+
+    relic.name = `${pick(RELICS[id])} of ${pick(RELICS.of)}`;
+
+    return relic;
+}
+
 /** How likely a piece of gear found on a foe is to be of each make. */
 export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.07, legendary: 0.01 });
 
@@ -329,16 +352,17 @@ export function rollMake(random) {
 
 /**
  * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
- * uniform's pieces): { gold, items }. Gear comes with its bonuses rolled.
+ * uniform's pieces), or what's in a place's chest: { gold, items }. Gear comes with its bonuses
+ * rolled; and, the dead's (`relic`), one of their relics (rollRelic).
  */
-export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human" } = {}) {
+export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false } = {}) {
     const table = LOOT[kind];
 
     if (!table) {
         return { gold: 0, items: [] };
     }
 
-    return {
+    const bundle = {
         gold: random.int(...table.gold),
         items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality, uniform }) => {
             const kindOf = uniform ? UNIFORM[Math.floor(random.next() * UNIFORM.length) % UNIFORM.length] : id;
@@ -346,6 +370,13 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
             return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random) : "common"), random, { people }) : { id: kindOf, quality: quality ?? "common" };
         }),
     };
+
+    // (What the restless dead guarded: one of their relics too, `relic`)
+    if (relic) {
+        bundle.items.push(rollRelic(random));
+    }
+
+    return bundle;
 }
 
 /** The most of each blow armour takes off, all of it together. */

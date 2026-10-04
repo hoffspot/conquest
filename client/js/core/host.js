@@ -26,7 +26,7 @@ import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
 import { heldWithin, townOf } from "./insides.js";
-import { CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
+import { bandFolk, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
@@ -926,7 +926,7 @@ export class Host {
                     this.#clearedBy(beast.lair, heart, lair?.maps);
 
                     if (lair?.hoard && this.ground.has(`chest-${beast.lair}`)) {
-                        this.#opened(beast.lair, "hoard", { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1 });
+                        this.#opened(beast.lair, "hoard", { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, relic: this.#siteOf(beast.lair).kind === "ruined castle" });
                     }
                 }
 
@@ -2600,10 +2600,15 @@ export class Host {
                 }
             }
 
-            // (Its guards round its heart; half of them within with it, if it keeps within)
+            // (Its guards round its heart; half of each kind within with it, if it keeps within,
+            // each at a post of their own)
+            let post = 0;
+
             lair.guards.forEach(([creature, count, guardTier], k) => {
                 const angle = (k / lair.guards.length) * Math.PI * 2;
-                const posts = keeps ? (inside.guards ?? []).slice(0, Math.ceil(count / 2)) : [];
+                const posts = keeps ? (inside.guards ?? []).slice(post, post + Math.ceil(count / 2)) : [];
+
+                post += posts.length;
 
                 for (const { map, square } of posts) {
                     ids.push(...this.#pack({ creature, tier: guardTier, count: 1 }, square, { lair: site.id, roam: 3, map }));
@@ -2712,9 +2717,11 @@ export class Host {
             const leader = inside?.leader ?? { map: "town", square: at };
             const ids = this.#pack({ creature: band.leader, tier: tier + PLACE_BANDS.lead, count: 1 }, leader.square, { ...keeps, master: true, roam: 2, map: leader.map });
             const within = (inside?.guards ?? []).slice(0, Math.ceil(count / 2));
+            let member = 0;
 
+            // (Each of the band its kind: the dead's bones, ghosts and wraiths in turn)
             for (const { map, square } of within) {
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, square, { ...keeps, roam: 3, map }));
+                ids.push(...this.#pack({ creature: bandFolk(band, member++), tier, count: 1 }, square, { ...keeps, roam: 3, map }));
             }
 
             // (The rest round its heart; or, a place gone into, before its way in, out on the open
@@ -2725,7 +2732,7 @@ export class Host {
             for (let k = 0; k < count - within.length; k++) {
                 const angle = ((k + 0.5) / (count - within.length)) * Math.PI * 2;
 
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [middle[0] + cos(angle) * ring, middle[1] + sin(angle) * ring], { ...keeps, roam: 4 }));
+                ids.push(...this.#pack({ creature: bandFolk(band, member++), tier, count: 1 }, [middle[0] + cos(angle) * ring, middle[1] + sin(angle) * ring], { ...keeps, roam: 4 }));
             }
 
             // (The chest on open ground by the leader: not in a wall)
@@ -2749,15 +2756,16 @@ export class Host {
         held.cleared = true;
         this.war?.clearPlace(id);
         this.#clearedBy(id, held.at, held.maps);
-        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier });
+        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier, relic: Boolean(PLACE_BANDS[held.holder]?.relic) });
         this.#event("cleared", { place: id, holder: held.holder });
     }
 
     // A place's chest (`kind`: "chest", or a dragon's "hoard") opened: in its stead, a share of
     // what's in it for each player at the place (core/progress.js LOOT: the gear in it of the
     // place's `people`, a human's at the ruins and the caves; more gold the more dangerous its land,
-    // CHEST_GOLD), theirs alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, tier }) {
+    // CHEST_GOLD; and what the dead guarded, one of their old relics each, `relic`), theirs alone
+    // to take, where it stood (`map`, `square`)
+    #opened(id, kind, { at, maps, map, square, people, tier, relic = false }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
@@ -2767,14 +2775,15 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollLoot(kind, this.random, { people });
+            const bundle = rollLoot(kind, this.random, { people, relic });
 
             bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
 
             const ground = `ground-${this.nextGround++}`;
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map, square: [...square], until: this.battle.time + GROUND_MS });
-            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest" });
+            // (Told of the relic in it by name, if there's one: the last thing in it)
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
         }
     }
 

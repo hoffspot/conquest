@@ -205,6 +205,22 @@ export const NATURAL = Object.freeze({
             ranged({ id: "breath", reach: 6, damage: [6, 12], hitAt: 700, duration: 1400, interval: 3000, stagger: 300, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
         ],
     },
+    // (A ghost's touch is the grave's cold, slowing; its wail staggers whoever hears it. A wraith
+    // rakes with its claws, and draws the life out of whoever it holds its hand out to)
+    ghost: {
+        label: "Grave-cold touch and wail",
+        attacks: [
+            melee({ id: "touch", damage: [3, 6], hitAt: 450, duration: 900, interval: 1300, reaction: "arcane", animation: "melee", afflict: { kind: "slow", chance: 0.35, look: "frost" } }),
+            ranged({ id: "wail", reach: 5, damage: [2, 4], hitAt: 600, duration: 1200, interval: 3600, stagger: 450, reaction: "arcane", animation: "wail", projectile: { kind: "wail", speed: 9 } }),
+        ],
+    },
+    wraith: {
+        label: "Claws and draining",
+        attacks: [
+            melee({ id: "rake", damage: [5, 9], hitAt: 400, duration: 850, interval: 1250, reaction: "slash", animation: "melee", afflict: { kind: "wither", chance: 0.3 } }),
+            ranged({ id: "drain", reach: 6, damage: [4, 7], hitAt: 650, duration: 1300, interval: 3000, reaction: "arcane", animation: "drain", projectile: { kind: "drain", speed: 8 }, afflict: { kind: "wither", chance: 0.6 } }),
+        ],
+    },
     wightLord: {
         label: "Greatsword and curse",
         attacks: [

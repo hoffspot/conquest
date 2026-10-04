@@ -230,6 +230,22 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x561410, saddle: 0x2e0806, mask: 0x4a100c, belly: 0x8a5e34, dark: 0x160604, wings: 0x3a0e0c, wingBones: 0x2a0a08, claws: 0xc8b89a, ivory: 0xd8ccb0, eyes: 0xffc020, glow: 0xffa010 },
         attacks: ["bite", "swipe", "tailSlap", "stamp"], rests: ["lie", "yawn", "stretch", "sniff"], specials: ["breath"],
     },
+    // (The restless dead of the ruins: a ghost, the pale shade of one who lived there long ago; a
+    // wraith, a black-robed horror with nothing under its cowl but two cold lights)
+    ghost: {
+        body: "spectre",
+        scale: [0.92, 1.05],
+        kind: "ghost", height: 1.75,
+        colours: { shroud: 0xb4cad8, glow: 0x7ab8e0, bone: 0xd8e4ea, eyes: 0xc8f4ff },
+        attacks: ["reach", "claw"], rests: ["drift", "mourn", "fade"], specials: ["wail"],
+    },
+    wraith: {
+        body: "spectre",
+        scale: [1, 1.1],
+        kind: "wraith", height: 2.05,
+        colours: { shroud: 0x17151c, glow: 0x2a6a50, bone: 0x8a8274, eyes: 0x8affc0 },
+        attacks: ["rake", "claw"], rests: ["hover", "loom", "turn"], specials: ["drain"],
+    },
     wightLord: {
         body: "biped",
         scale: [1, 1],

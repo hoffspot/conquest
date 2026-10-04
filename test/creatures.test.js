@@ -465,6 +465,13 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(master.wild.creature, "wightLord");
         assert.equal(master.wild.tier, LAIRS["ruined castle"].master[1]);
         assert.ok(held.ids.length > 1, "its guards with it");
+        // (The bones, ghosts and a wraith of its dead, as many of each as it keeps; none of those
+        // within on another's post)
+        const guards = held.ids.map((id) => host.battle.actor(id)).filter((actor) => !host.wild.get(actor.id).master);
+        const within = guards.filter((actor) => actor.map !== "town").map((actor) => `${actor.map}:${Math.floor(actor.x)},${Math.floor(actor.y)}`);
+
+        assert.deepEqual(Object.fromEntries(LAIRS["ruined castle"].guards.map(([kind]) => [kind, guards.filter((actor) => actor.wild.creature === kind).length])), Object.fromEntries(LAIRS["ruined castle"].guards.map(([kind, count]) => [kind, count])));
+        assert.equal(new Set(within).size, within.length, within.join(" "));
         // (Within its keep's great hall, by its hoard)
         assert.ok(held.maps.includes(master.map) && host.ground.get(`chest-${site.id}`)?.map === master.map, master.map);
 
