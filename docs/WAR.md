@@ -542,7 +542,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   The shop stays open while the player's within a few steps of the keeper.
 - **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
-  little more of everything).
+  little more of everything), shown on the player's plate while it lasts (a sword on a whetstone,
+  sparks flying; a six-pointed star under a halo).
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
 - **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape

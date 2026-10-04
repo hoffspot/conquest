@@ -196,6 +196,12 @@ cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`), each s
 The wards, Swole, Reflect, Invisibility, Levitate, Inertial Barrier, Surge, Dodge and Light last on
 whoever they're cast on (battle.js `buff`: their kind, till when, by whom, at what level), shown
 by their icon on their plate (and the player's), and said when they end ("Your fire ward fades").
+On a plate, what harms someone (poison, a web...: docs/WILDS.md) is shown first, each on a
+blood-red disc, pulsing; then what does them good (these spells, and a player's boons:
+docs/WAR.md), each on a sapphire tile rimmed in gold, steady. In each, the soonest over comes
+first, and each darkens round as it wears off. It's one row, as wide as the health and stamina
+bars: if more are on someone than fit, the last that fits is an ellipsis. Hold the player's card
+(half a second) and it grows to show them all, row on row; tap it, and it's one row again.
 Cast again, one lasts from then. They end at death.
 
 - A **ward** (`WARD`: 0.7) takes 30% off what it's against (an element's attack spells, a

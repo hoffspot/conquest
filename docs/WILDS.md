@@ -151,7 +151,9 @@ action wheel, as a draught can.
 **How it shows.**
 - **On the player's plate**, an icon for each (a venom drop with a skull in it, a pocked ball with
   flies, a cracked grey heart, a flame, a drop of blood, a web or roots or a snowflake for what's
-  slowing them), ringed in its colour, darkening round as it wears off. Over the bars of anyone
+  slowing them), on a blood-red disc ringed in its colour, darkening round as it wears off, the
+  soonest over first (before the gold-rimmed sapphire tiles of what does them good, in one row:
+  docs/MAGIC.md). Over the bars of anyone
   else with something on them, the same, smaller. The player's told when something takes hold
   ("You're poisoned!"), the first time with the cure and where it's sold, and when it's over.
 - **On whoever has it:** venom's bubbles rising and green drips falling, and their skin tinged

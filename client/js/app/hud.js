@@ -1,8 +1,10 @@
 // The game's heads-up display, drawn with the page (not in 3D): the player's name and health,
 // a name and health bar over every other character, numbers for the damage each blow does, and
 // messages across the middle of the screen. Under a health bar, an orange bar shows stamina
-// while it isn't full; under that, an icon for each thing lingering on them (poison, a web...),
-// and each spell lasting on them (a ward, Reflect...), darkening round as it wears off. A choice
+// while it isn't full; under that, an icon for each thing lingering on them (poison, a web...) on
+// a blood-red disc, then each spell lasting on them (a ward, Reflect...) and each boon (a
+// blessing) on a sapphire tile, darkening round as it wears off: in one row as wide as the bars,
+// the last that won't fit an ellipsis, all of them shown while the player's card is held. A choice
 // to be made (who to summon; whether to go to someone summoning them) asked in a small panel.
 
 import { ICONS } from "./icons.js";
@@ -17,6 +19,10 @@ const element = (tag, className, text = "") => Object.assign(document.createElem
  * a third), so those near stay easily read; never less than `least` of it.
  */
 export const PLATE_SIZE = Object.freeze({ near: 8, falloff: 0.75, least: 0.3 });
+
+/** How long the player's card is held (ms), not moving more than HOLD_MOVE pixels, to show all that's on them. */
+export const HOLD_MS = 500;
+const HOLD_MOVE = 10;
 
 /**
  * How big a bar's drawn (a share of its full size) over a character `distance` metres from the
@@ -45,6 +51,52 @@ export class Hud {
         this.playerId = "player";
         this.bannerTimer = null;
         this.targeted = null;
+
+        // Held, the player's card grows to show all that's on them (not one row of it, the rest
+        // an ellipsis); a tap, or held again, and it's back
+        let held = null;
+        const letGo = () => {
+            clearTimeout(held?.timer);
+            held = null;
+        };
+
+        this.plate.addEventListener("pointerdown", (event) => {
+            letGo();
+
+            const opened = this.plate.classList.contains("all");
+
+            held = { x: event.clientX, y: event.clientY, timer: setTimeout(() => this.showAll(!opened), HOLD_MS) };
+
+            if (opened) {
+                // (Open: a tap shuts it)
+                held.tap = true;
+            }
+        });
+        this.plate.addEventListener("pointermove", (event) => {
+            if (held && Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+                letGo();
+            }
+        });
+        this.plate.addEventListener("pointerup", () => {
+            if (held?.tap) {
+                this.showAll(false);
+            }
+
+            letGo();
+        });
+        this.plate.addEventListener("pointercancel", letGo);
+        this.plate.addEventListener("contextmenu", (event) => event.preventDefault());
+    }
+
+    /** Show all that's on the player on their card (`all`), or one row of it, the rest an ellipsis. */
+    showAll(all = true) {
+        this.plate.classList.toggle("all", all);
+
+        const row = this.plate.querySelector(".ails");
+
+        if (row) {
+            this.#fit(row);
+        }
     }
 
     /** Show the player's name, health and stamina (their id: what's said of them after). */
@@ -109,7 +161,8 @@ export class Hud {
     /**
      * Show what's lingering on a character (the player's plate, or over another's bar): an icon
      * for each ([{ kind, icon (an ICONS key), label, left (the share of its time still to go),
-     * buff (a spell lasting on them, not an affliction) }]), or none.
+     * buff (what does them good: a spell lasting on them, a boon; not an affliction) }]), or
+     * none.
      */
     setAfflictions(id, ailments) {
         const plate = this.#plateOf(id);
@@ -131,10 +184,14 @@ export class Hud {
             plate.append(row);
         }
 
-        // (Made again only when what's on them changes; how long each has to go, every time)
+        // (Made again only when what's on them, or its order, changes; how long each has to go,
+        // every time)
         const key = ailments.map(({ kind, icon }) => `${kind}:${icon}`).join(",");
 
         if (row.dataset.key !== key) {
+            const more = element("span", "ail more", "…");
+
+            more.setAttribute("role", "img");
             row.dataset.key = key;
             row.replaceChildren(
                 ...ailments.map(({ kind, icon, label, buff = false }) => {
@@ -147,10 +204,42 @@ export class Hud {
 
                     return each;
                 }),
+                more,
             );
+            this.#fit(row);
         }
 
         ailments.forEach(({ left }, index) => row.children[index]?.style.setProperty("--left", Math.max(0, Math.min(1, left)).toFixed(3)));
+    }
+
+    // One row of what's on someone, as wide as their bars: as many as fit, the last of them an
+    // ellipsis if not all do (all of them on the player's card while it's held open)
+    #fit(row) {
+        const icons = [...row.children].filter((each) => !each.classList.contains("more"));
+        const more = row.querySelector(".more");
+
+        for (const each of icons) {
+            each.hidden = false;
+        }
+
+        more.hidden = true;
+
+        if (row.closest(".plate")?.classList.contains("all") || row.scrollWidth <= row.clientWidth + 1) {
+            return;
+        }
+
+        more.hidden = false;
+
+        let shown = icons.length;
+
+        while (shown > 1 && row.scrollWidth > row.clientWidth + 1) {
+            icons[--shown].hidden = true;
+        }
+
+        const hidden = icons.length - shown;
+
+        more.title = `${hidden} more: hold your card to see them all`;
+        more.setAttribute("aria-label", more.title);
     }
 
     /** Change a character's stamina: its orange bar, shown while it isn't full. */

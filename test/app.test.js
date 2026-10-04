@@ -19,6 +19,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { guardOf, heroEquipment } from "../client/js/app/game.js";
+import { BOUGHT } from "../client/js/core/host.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -576,6 +577,16 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal(SPELLS.vigor.target, "any", "healing: on anyone");
         assert.equal(SPELLS.burn.target, "enemy");
         assert.equal(SPELLS.stun.target, "enemy");
+    });
+
+    it("has an icon for everything that does someone good, as their plate shows it: each spell that lasts, and each boon bought by talking", () => {
+        for (const [id, spell] of Object.entries(SPELLS).filter(([, spell]) => spell.lasts)) {
+            assert.match(ICONS[id], /<(path|circle|ellipse)/, `${spell.label} has an icon`);
+        }
+
+        for (const { boon } of Object.values(BOUGHT).filter(({ boon }) => boon)) {
+            assert.match(ICONS[boon.id], /<(path|circle|ellipse)/, `${boon.label} has an icon`);
+        }
     });
 
     it("gives everything that can be carried an icon, and puts things to use on the player's own wheel by a short name", () => {
