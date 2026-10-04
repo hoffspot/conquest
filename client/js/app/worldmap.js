@@ -7,8 +7,8 @@
 // the buildings they've gone into (app/mapicons.js); and where they are, pointing the way they
 // face. Drag to look about, pinch or scroll to zoom, and tap the buttons to zoom or come back to
 // where they are. Hold a finger (or the mouse) down somewhere to drop a pin there (or on the pin,
-// to take it away), shown with the way there from where they are (the terrain plan's M7g); tap
-// twice somewhere to run there.
+// to take it away), shown with the way there from where they are (the terrain plan's M7g) and how
+// far that is beside it; tap twice somewhere to run there.
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -58,6 +58,22 @@ const PIN_REACH = 22;
 
 // The pin and the way to it: their colours (the column's blue in the world)
 const PIN = { colour: "#64b4ff", glow: "rgba(100, 180, 255, 0.9)", way: "rgba(130, 196, 255, 0.85)" };
+
+/** How far something is, in words: "640 m"; past a kilometre, to a tenth of one ("1.3 km"). */
+export function distanceLabel(metres) {
+    return metres > 1000 ? `${(metres / 1000).toFixed(1)} km` : `${Math.round(metres)} m`;
+}
+
+// How far it is along a way ([[x, z], ...] metres)
+function lengthAlong(way) {
+    let length = 0;
+
+    for (let k = 1; k < way.length; k++) {
+        length += Math.hypot(way[k][0] - way[k - 1][0], way[k][1] - way[k - 1][1]);
+    }
+
+    return length;
+}
 
 // The fog: its colour (and how much its clouds vary from it), and how big a tile of its clouds is
 // (pixels of the screen)
@@ -520,7 +536,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, scale: view.scale };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale };
     }
 
     /**
@@ -588,7 +604,8 @@ export class WorldMap {
     }
 
     // The way to the pin (a glowing blue line, from where the player is), and the pin over its
-    // point: a blue head on a pin, glowing
+    // point: a blue head on a pin, glowing, and how far it is beside it (along the way, or as the
+    // crow flies when there's none)
     #drawPin(at) {
         const { context } = this;
 
@@ -626,6 +643,29 @@ export class WorldMap {
         context.arc(x - 2, y - 18, 2.2, 0, Math.PI * 2);
         context.fillStyle = "rgba(255, 255, 255, 0.8)";
         context.fill();
+
+        const far = this.way?.length > 1 ? lengthAlong(this.way) : this.player ? Math.hypot(this.pin.x - this.player.x, this.pin.z - this.player.z) : null;
+
+        this.pinDistance = far === null ? null : distanceLabel(far);
+
+        if (this.pinDistance) {
+            // (On the pin's right, or its left if that's off the edge)
+            const [width] = this.#size();
+
+            context.font = `600 13px Georgia, "Times New Roman", serif`;
+            context.textBaseline = "middle";
+
+            const wide = context.measureText(this.pinDistance).width;
+            const left = x + 12 + wide > width - 6;
+
+            context.textAlign = left ? "right" : "left";
+            context.lineWidth = 3.5;
+            context.strokeStyle = "rgba(10, 20, 40, 0.9)";
+            context.strokeText(this.pinDistance, left ? x - 12 : x + 12, y - 16);
+            context.fillStyle = "#e6f3ff";
+            context.fillText(this.pinDistance, left ? x - 12 : x + 12, y - 16);
+        }
+
         context.restore();
     }
 
