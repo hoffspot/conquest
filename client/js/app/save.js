@@ -39,9 +39,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     squares: false,
     navigation: false,
     minimap: true,
-    // The thumb stick in the bottom left corner to walk with (app/steering.js); W, A, S, D steer
-    // whether it's shown or not
-    stick: true,
+    // The thumb stick in the bottom left corner to walk with (app/steering.js): off until it's
+    // asked for, since tapping is how the game has always been walked. W, A, S, D steer whether
+    // it's shown or not
+    stick: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
     // (Summoned by another player: said no to at once, not asked)

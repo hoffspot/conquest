@@ -727,14 +727,26 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     expect((await told(page)).order).toBe(null);
 });
 
-test("the thumb stick walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when turned off in Game options", async ({ page }) => {
+test("the thumb stick, off until Game options asks for it, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off again", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const way = await clearestWayAhead(page);
-    const zone = await page.locator("#stickzone").boundingBox();
 
-    // It's there to begin with, and only its own circle takes touches
+    // Not there until it's asked for, and nothing said of it either
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).display)).toBe("none");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".stick-only")).display)).toBe("none");
+
+    await page.evaluate(() => {
+        const switched = document.querySelector("#stickswitch");
+
+        switched.checked = true;
+        switched.dispatchEvent(new Event("change"));
+    });
+
+    // Asked for, it's there, and only its own circle takes touches
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).pointerEvents)).toBe("auto");
+
+    const zone = await page.locator("#stickzone").boundingBox();
 
     const middle = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
 
@@ -800,7 +812,7 @@ test("the thumb stick walks the player the way it's pushed, runs pushed to its r
     await page.mouse.up();
     await page.evaluate(() => window.pellagos.game.start());
 
-    // Turned off in Game options it's gone, and a thumb where it was does nothing
+    // Turned off again it's gone, and a thumb where it was does nothing
     await page.evaluate(() => {
         const switched = document.querySelector("#stickswitch");
 

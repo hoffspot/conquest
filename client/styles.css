@@ -783,8 +783,9 @@ input[type="range"] {
     bottom: calc(var(--safe-bottom) + 16px + var(--quick-height) + 10px);
 }
 
-/* Turned off in Game options */
-body[data-stick="off"] #hud .stickzone {
+/* Off until Game options asks for it, and then nothing is said of it either */
+body[data-stick="off"] #hud .stickzone,
+body[data-stick="off"] .stick-only {
     display: none;
 }
 

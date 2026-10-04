@@ -3163,11 +3163,14 @@ game plays on while it's open; a second finger (a pinch) closes it.
    adds up to, and the host still decides where they get to. Shift held along with a way runs, as
    a Shift-click does, and so does the stick pushed past seven tenths of its reach. The stick
    keeps to its corner rather than springing up under the thumb, and only its own circle takes
-   touches, so the rest of the view taps and drags as before; Thumb stick in Game options takes it
-   away (the keys steer without it), and a pause lets go of whatever was held. The heads-up display
-   (app/hud.js) shows the player's name and health in the bottom right corner (the thumb stick in
-   the bottom left; the zoom buttons, which Game options leaves off, take that right corner and
-   send the card up above them; all of them go up over the quick actions in a fight, above), with an orange
+   touches, so the rest of the view taps and drags as before. Thumb stick in Game options is what
+   puts it there, and it's off until then, tapping being how the game has always been walked; the
+   keys steer whether it's shown or not, nothing is said of the stick in the opening hint while
+   it's off, and a pause lets go of whatever was held. The heads-up display
+   (app/hud.js) shows the player's name and health in the bottom right corner (the thumb stick,
+   asked for, in the bottom left; the zoom buttons, which Game options also leaves off, take that
+   right corner and send the card up above them; all of them go up over the quick actions in a
+   fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
    menu buttons in the top right), bars over the other characters (the target's lit red, and
@@ -3523,8 +3526,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   swiping up from the player to go straight ahead (running),
   steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the
-  thumb stick (walking pushed partway, running at its rim, stopping let go, gone and the keys
-  still steering once Game options turns it off),
+  thumb stick (not there till Game options asks for it, then walking pushed partway, running at
+  its rim, stopping let go, and gone again turned off, the keys still steering without it),
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
