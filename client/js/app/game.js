@@ -2694,7 +2694,7 @@ export class Game {
         names.keeper ??= names.innkeeper;
 
         // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother")
-        names.town = building?.place === "home" ? this.world.start?.name : this.world.plan?.places.find(({ id }) => id === building?.place)?.name;
+        names.town = building ? this.world.plan?.places.find(({ id }) => id === this.#townOf(building))?.name : undefined;
 
         if (building?.patron) {
             names.patron = GODS[building.patron].name;
@@ -2804,6 +2804,23 @@ export class Game {
         return { rumour1: said[0], rumour2: said[1] ?? said[0], rumour3: said[2] ?? said[0], rumourRuler: ruler ?? said[0] };
     }
 
+    // Which settlement a building's in (its id): where the player started, or its own; a manor's
+    // (out in the land, `site:`), the town nearest it, whose realm it keeps
+    #townOf(building) {
+        if (building.place === "home") {
+            return this.world.start?.id;
+        }
+
+        if (building.place !== "site") {
+            return building.place;
+        }
+
+        const [x, y] = building.at;
+        const towns = (this.world.plan?.places ?? []).filter((place) => this.host.war?.town(place.id));
+
+        return towns.reduce((best, place) => (!best || Math.hypot(place.at[0] - x, place.at[1] - y) < Math.hypot(best.at[0] - x, best.at[1] - y) ? place : best), null)?.id;
+    }
+
     // What one of the officials of a town hall or keep (or those about them) can tell of, and
     // what they ask the game (dialogue.js's reeve, clerk, petitioner, ruler, steward, councillor
     // and sentry): their words (`words`: the town, who holds it and rules them, the war, the
@@ -2812,7 +2829,7 @@ export class Game {
     // the talk's words, `names`, filled in from what came of it)
     #officialOf(npc, building, names) {
         const war = this.host.war;
-        const town = building && war ? war.town(building.place === "home" ? this.world.start?.id : building.place) : null;
+        const town = building && war ? war.town(this.#townOf(building)) : null;
 
         if (!town || !["reeve", "clerk", "petitioner", "ruler", "steward", "councillor", "sentry", "receptionist"].includes(npc.role)) {
             return null;

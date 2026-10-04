@@ -17,7 +17,7 @@ const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, LAYOUTS, openEntrances, shrinesOf, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
+const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -567,7 +567,7 @@ describe("the buildings (insides.js Interiors)", () => {
     });
 });
 
-describe("the places worth finding gone into (insides.js: a cave, the dragon's lair, a broken watchtower)", () => {
+describe("the places worth finding gone into (insides.js: a cave, the dragon's lair, a broken watchtower, the humans' abbeys and manors)", () => {
     it("have their way in among the world's links as they're set down, their floors made when wanted: all in them got to from the way in, their holders' and chest's places marked, a tower's two floors joined by stairs; and are drawn", () => {
         const world = buildWorld({ seed: 1 });
         const sites = world.maps.town.sites;
@@ -608,6 +608,40 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
                 interior.dispose();
             }
         }
+    });
+
+    it("the humans' abbeys and manors gone into by their temple's and keep's door, the way kept clear; where outlaws holding one would stand worked out from it: their chief before the altar or the thrones, the chest beside them, guards up the aisle", () => {
+        const world = buildWorld({ seed: 2 });
+        const sites = world.maps.town.sites;
+        const squares = squaresOf(world.maps.town);
+
+        for (const [kind, building, by] of [["abbey", "church", "altar"], ["manor", "keep", "throne"]]) {
+            const site = world.plan.sites.find((one) => one.kind === kind && one.race === "human");
+
+            sites.heartOf(site);
+
+            const set = sites.set.get(site.id);
+            const inside = world.interiors.buildings.get(`site:${site.id}`);
+
+            assert.equal(inside?.kind, building, kind);
+            assert.equal(set.entrance.building, building);
+            assert.deepEqual(inside.door.ends[0].squares, set.entrance.front);
+            assert.ok([...set.entrance.front, set.entrance.outside].every((square) => !squares.blocked(...square)), `${kind}: the way in clear`);
+            world.interiors.make(inside.key);
+
+            const map = world.maps[inside.maps[0]];
+            const held = heldWithin(inside.kind, map);
+            const all = [held.leader, held.chest, ...held.guards];
+            const near = (square, kinds, reach) => map.pieces.some((piece) => piece.kind === kinds && piece.squares.some((each) => Math.max(Math.abs(each[0] - square[0]), Math.abs(each[1] - square[1])) <= reach));
+
+            assert.equal(new Set(all.map(String)).size, all.length, `${kind}: none the same`);
+            assert.ok(all.every((square) => !map.blocked[square[1]][square[0]] && reachable(map, inside.door.ends[1].arrive, square)), `${kind}: each got to`);
+            assert.ok(near(held.leader, by, 2) && near(held.chest, by, 1), `${kind}: by the ${by}`);
+            assert.ok(held.guards.every(([, y]) => y > held.leader[1] + 2), `${kind}: guards between it and the door`);
+        }
+
+        // (A building with nothing to gather by: no one)
+        assert.equal(heldWithin("tavern", readPlan("test", "Test", ["...", ".D."])), null);
     });
 });
 

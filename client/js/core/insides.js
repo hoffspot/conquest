@@ -732,6 +732,60 @@ const KINDS = Object.freeze({
 /** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
 export const SITE_INSIDES = Object.freeze(["cave", "lair", "tower"]);
 
+// What those holding a building not theirs gather by: a temple's altar, a keep's thrones
+const HELD_BY = Object.freeze({ church: "altar", keep: "throne" });
+
+// Where they guard its way in: either side of the aisle up from the door, four and eight steps in,
+// and two more off it (by its first door square and how many it has, `wide`)
+const HELD_GUARDS = Object.freeze([[-1, -4], ["wide", -4], [-1, -8], ["wide", -8], [-3, -6], ["wide+2", -6]]);
+
+/**
+ * Where those holding a building that isn't theirs stand, for a kind whose plan doesn't mark it
+ * (a cave's and a tower's do: "l", "h", "g"): outlaws in the humans' abbeys and manors (core/host.js
+ * #inside), on its first floor (`map`, readPlan's): their leader before the altar or the thrones,
+ * the chest beside them, their guards up the aisle from the door. { leader, chest, guards } ([x, y]
+ * squares, each free and none the same), or null for a kind with nothing to gather by.
+ */
+export function heldWithin(kind, map) {
+    const by = map.pieces.filter((piece) => piece.kind === HELD_BY[kind]);
+
+    if (!by.length || !map.marks.D) {
+        return null;
+    }
+
+    const taken = new Set();
+    // (The free square nearest one, not taken already)
+    const nearest = ([x, y]) => {
+        for (let reach = 0; reach < Math.max(map.width, map.height); reach++) {
+            for (let dy = -reach; dy <= reach; dy++) {
+                for (let dx = -reach; dx <= reach; dx++) {
+                    const [i, j] = [x + dx, y + dy];
+
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) === reach && i >= 0 && j >= 0 && i < map.width && j < map.height && !map.blocked[j][i] && !taken.has(j * map.width + i)) {
+                        taken.add(j * map.width + i);
+
+                        return [i, j];
+                    }
+                }
+            }
+        }
+
+        return null;
+    };
+    const x0 = Math.min(...by.map(({ x }) => x));
+    const x1 = Math.max(...by.map(({ x, w }) => x + w));
+    const y1 = Math.max(...by.map(({ y, h }) => y + h));
+    const [door] = map.marks.D;
+    const wide = map.marks.D.filter(([, y]) => y === door[1]).length;
+    const across = { wide, "wide+2": wide + 2 };
+
+    return {
+        leader: nearest([Math.floor((x0 + x1) / 2), y1]),
+        chest: nearest([x1, y1 - 1]),
+        guards: HELD_GUARDS.map(([dx, dy]) => nearest([door[0] + (across[dx] ?? dx), door[1] + dy])),
+    };
+}
+
 // --- The buildings ---
 
 // What a building's called that has no name of its own

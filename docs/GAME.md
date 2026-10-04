@@ -2642,6 +2642,16 @@ metres off (back as many as ever the next time, unless it's been cleared).
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
   - Its sound's its own (`sound.js` PLACES: a cave's and the lair's hushed, the tower's open).
+  - **The humans' abbeys and manors** (M7.5b-2): gone into by the door of the temple or the keep
+    each is built round (`sites.js`: their landmark's `entranceOf`, the way kept clear), the same
+    temple and great hall as a town's (`insides.js` `add`, keyed `site:` and its id; named for the
+    place: "Galingdale Abbey", "Brombridge Manor"). Its people's, its folk are in it: a priest,
+    an acolyte and worshippers; the manor's lord or lady on the throne ("Lord of Brombridge
+    Manor", speaking for the realm of the town nearest it), their steward, councillors and
+    sentries. Held by outlaws, none of them (`host.js` `#notTheirs`): the band's chief before the
+    altar or the thrones, the chest beside it, guards up the aisle from the door (`insides.js`
+    `heldWithin`, for plans without the marks), the rest outside; put to the sword, it's empty a
+    while, then held again.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

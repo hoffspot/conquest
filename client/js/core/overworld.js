@@ -436,11 +436,16 @@ export class Overworld {
         }
     }
 
-    // A site that can be gone into (a cave, the dragon's lair, a broken watchtower), added to the
-    // interiors as it's set down
+    // A site that can be gone into, added to the interiors as it's set down: a cave, the dragon's
+    // lair, a broken watchtower by its own way in; the humans' abbey and manor as the church and
+    // the keep they're built as (insides.js add: "Galingdale Abbey"), by the key `site:` and its id
     #enterSite(set) {
-        if (set.entrance) {
+        if (set.entrance?.inside) {
             this.interiors?.addSite(set);
+        } else if (set.entrance?.building) {
+            const { kind, name, race } = set.site;
+
+            this.interiors?.add({ ...set.pieces[0], id: set.site.id }, { place: "site", name: name ? `${name} ${kind[0].toUpperCase()}${kind.slice(1)}` : null, people: race ?? "human" });
         }
     }
 

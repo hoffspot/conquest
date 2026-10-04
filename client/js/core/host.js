@@ -25,6 +25,7 @@ import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
+import { heldWithin } from "./insides.js";
 import { CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
@@ -2607,10 +2608,12 @@ export class Host {
         return this.world.plan.sites.find((site) => site.id === id);
     }
 
-    // A place worth finding that can be gone into (a cave, the dragon's lair, a broken watchtower:
-    // sites.js `entrance`), its floors made: { maps (their ids), leader, chest (where its plan has
-    // them: insides.js "l" and "h", { map, square }), guards (where they stand: "g", a list) }; or
-    // null for a site that can't
+    // A place worth finding that can be gone into (a cave, the dragon's lair, a broken watchtower,
+    // the humans' abbeys and manors: sites.js `entrance`), its floors made: { maps (their ids),
+    // leader, chest (where its plan has them: insides.js "l" and "h", { map, square }), guards
+    // (where they stand: "g", a list) }, or, for an abbey's temple and a manor's keep, by their
+    // altar and thrones and up from their door (insides.js heldWithin); or null for a site that
+    // can't be gone into
     #inside(site) {
         const set = this.world.maps.town?.sites?.set.get(site.id);
         const building = set?.entrance ? this.#building(`site:${site.id}`) : null;
@@ -2622,8 +2625,16 @@ export class Host {
         this.world.interiors.make(building.key);
 
         const marks = (char) => building.maps.flatMap((id) => (this.world.maps[id].marks[char] ?? []).map((square) => ({ map: id, square: [...square] })));
+        const [first] = building.maps;
+        const held = marks("l").length ? null : heldWithin(building.kind, this.world.maps[first]);
+        const on = (square) => (square ? { map: first, square } : null);
 
-        return { maps: [...building.maps], leader: marks("l")[0] ?? null, chest: marks("h")[0] ?? null, guards: marks("g") };
+        return {
+            maps: [...building.maps],
+            leader: marks("l")[0] ?? on(held?.leader),
+            chest: marks("h")[0] ?? on(held?.chest),
+            guards: held ? held.guards.map(on).filter(Boolean) : marks("g"),
+        };
     }
 
     // The free square in the world nearest a square (or that square, if none's free near)
@@ -4316,17 +4327,33 @@ export class Host {
         this.world.interiors.make(key);
         this.#enthrone(building);
 
-        const folk = building.folk.filter((one) => this.#addFolk(one)).map(({ id }) => id);
+        const folk = this.#notTheirs(building) ? [] : building.folk.filter((one) => this.#addFolk(one)).map(({ id }) => id);
 
         this.open.set(key, folk);
         this.#event("open", { key, folk });
     }
 
+    // Whether a place worth finding gone into (an abbey, a manor: `site:` its id) isn't its
+    // people's now: held by outlaws, or empty a while once they're put to the sword (core/places.js
+    // holderOf); its folk not in it
+    #notTheirs(building) {
+        const place = this.war && building.key.startsWith("site:") ? placesOf(this.world.plan).find(({ id }) => id === building.key.slice(5)) : null;
+
+        return Boolean(place) && holderOf(this.world.plan, place, this.war.places[place.id], this.war.turn) !== "friendly";
+    }
+
     // Who sits on a keep's throne, as the war has it: the ruler of the people who hold it, if
     // it's their seat (their name, and their title: "Queen"); else a governor for them (one of
-    // them, whoever's town it was)
+    // them, whoever's town it was); a manor's, its lord or lady
     #enthrone(building) {
         const one = building.kind === "keep" ? building.folk.find(({ role }) => role === "ruler") : null;
+
+        if (one && building.place === "site") {
+            one.title = `${one.sex === "f" ? "Lady" : "Lord"} of ${building.name}`;
+
+            return;
+        }
+
         const town = one && this.war?.town(building.place === "home" ? this.world.start?.id : building.place);
 
         if (!town) {

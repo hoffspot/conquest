@@ -12,6 +12,7 @@
 //
 // Pure data, no DOM; the same for the same plan.
 
+import { ENTRANCES, entranceOf } from "./insides.js";
 import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
@@ -467,8 +468,10 @@ export class Sites {
             // (All it stands on, or for a neutral site just what of it stands in the way)
             const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
             const turn = turned(x, y, facing, [w, h]);
-            // (Where it's gone into, if it can be: the way in kept clear)
-            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : null;
+            // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
+            // its layout's way in; the humans' abbey and manor by their church's and keep's door)
+            const [building] = !laid && site.race === "human" && ENTRANCES[HUMAN_LANDMARK[site.kind]] ? this.#pieces(site, x, y, facing, [w, h]) : [];
+            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : building ? { ...entranceOf(building), building: building.name } : null;
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
             const squares = (laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners)).filter(([i, j]) => !way.has(j * size + i));
             const heart = laid ? turn(...laid.heart) : { x, y };

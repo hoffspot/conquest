@@ -7,6 +7,7 @@ import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { tierAt } from "../client/js/core/creatures.js";
+import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -287,7 +288,7 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
     });
 });
 
-describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watchtower)", () => {
+describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watchtower, the humans' abbeys and manors)", () => {
     it("a cave's gone into by its mouth, the way kept clear; its band held so while a player's within; put to the sword there, the chest's share lies where it stood", () => {
         const context = hosted();
         const { host, world, me } = context;
@@ -346,6 +347,45 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
 
         assert.ok(!host.ground.has(chest.id), "opened");
         assert.ok(share?.for === HOST_PLAYER && share.bundle.gold >= 180, JSON.stringify(share?.bundle));
+    });
+
+    it("an abbey held by outlaws is theirs within: its chief before the altar by the chest, guards up the aisle, no priest or worshippers; a manor that's its people's has its folk", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const abbey = placesOf(world.plan).find((each) => each.kind === "abbey" && heldAtStart(world.plan, each) === "bandits");
+        const manor = placesOf(world.plan).find((each) => each.kind === "manor" && heldAtStart(world.plan, each) === "friendly");
+
+        near(context, abbey);
+
+        const building = world.interiors.buildings.get(`site:${abbey.id}`);
+        const set = world.maps.town.sites.set.get(abbey.id);
+        const held = host.held.get(abbey.id);
+        const nave = world.maps[building.maps[0]];
+        const [leader, ...band] = held.ids.map((id) => host.battle.actor(id));
+        const altar = nave.pieces.find(({ kind }) => kind === "altar");
+
+        assert.equal(building.kind, "church");
+        assert.ok(leader.map === nave.id && hypot(leader.x - (altar.x + altar.w / 2), leader.y - (altar.y + altar.h)) < 3, `the chief by the altar: ${leader.x}, ${leader.y}`);
+        assert.equal(held.map, nave.id);
+        assert.ok(Math.abs(held.chest[0] - (altar.x + altar.w)) <= 1 && Math.abs(held.chest[1] - altar.y) <= 1, `the chest by it: ${held.chest}`);
+        assert.equal(band.filter((one) => one.map === nave.id).length, Math.ceil(band.length / 2));
+
+        // In by the temple's door: no priest, no worshippers
+        put(me, [...set.entrance.outside]);
+        run(host, 600);
+        assert.deepEqual(host.open.get(building.key), []);
+        assert.ok(!building.folk.some(({ id }) => host.battle.actor(id)), "none of its folk");
+
+        // The manor its people's: its folk about their business in its keep
+        world.maps.town.sites.heartOf(world.plan.sites.find((site) => site.id === manor.id));
+
+        const keep = world.interiors.buildings.get(`site:${manor.id}`);
+
+        put(me, [...world.maps.town.sites.set.get(manor.id).entrance.outside]);
+        run(host, 600);
+        assert.equal(keep.kind, "keep");
+        assert.ok(host.open.get(keep.key)?.includes(`${keep.key}/ruler`), JSON.stringify(host.open.get(keep.key)));
+        assert.ok(!host.held.has(manor.id));
     });
 
     it("carries on exactly from a snapshot, the cave's floor made again and its band within it", () => {

@@ -3753,3 +3753,24 @@ converted data is to be measured in M8 against today's hm08 data.
     tower's stairs, each floor drawn, the top open). e2e: in by a cave's mouth (its band within,
     its chief by the chest, lit) and out again.
   - **Next:** M7.5b-2, the manors, abbeys and halls held by outlaws.
+- **2026-10-04, M7.5b-2a built: the humans' abbeys and manors gone into** (docs/GAME.md *Gone
+  into*).
+  - **The way in** (core/sites.js): an abbey's or manor's landmark (its church, its keep) has its
+    door as a town's has (insides.js `entranceOf`), the squares before it kept clear; added to the
+    interiors as the site's set down (overworld.js `#enterSite`: insides.js `add`, the key `site:`
+    and its id, named "Galingdale Abbey", "Brombridge Manor").
+  - **Its people's:** its folk as a town's temple's or keep's; the manor's ruler its lord or lady
+    (host.js `#enthrone`), speaking for the realm of the town nearest it (game.js `#townOf`).
+  - **Held by outlaws:** its folk aren't in it (host.js `#notTheirs`, by places.js `holderOf`);
+    the band's chief, chest and guards where insides.js `heldWithin` puts them (for plans with no
+    "l", "h", "g": the chief before the altar or the thrones, the chest beside it, guards up the
+    aisle from the door), half the band within, the rest outside.
+  - **NET_VERSION 34** (new buildings out in the land).
+  - **Pictures** (sent in the session): an abbey held by outlaws, fought in its nave, and from
+    above (the chief by the altar, the chest beside it); a manor its people's, its folk in the
+    great hall.
+  - **Tests:** test/insides.test.js (the abbey's and manor's way in, clear; where outlaws holding
+    them stand, each got to from the door); test/places.test.js (an abbey held by outlaws: its
+    chief by the altar, the chest beside it, guards within, no priest; a manor its people's has its
+    folk).
+  - **Next:** M7.5b-2b, the other peoples' halls and temples held by outlaws.
