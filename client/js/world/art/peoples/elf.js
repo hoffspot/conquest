@@ -862,8 +862,11 @@ function castle(piece) {
     });
 
     solid.tube(arch, m(0.3), material("verdigris"), { sides: 6 });
-    band(solid, [[gx - m(4.6), gz], [gx - m(3.6), gz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
-    band(solid, [[gx + m(3.6), gz], [gx + m(4.6), gz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
+
+    // (The wall either side of the gate, from its towers up to its pillars: the way in between
+    // them alone, core/setpieces/castles.js)
+    band(solid, [[gx1, gz1], [gx - m(3.6), gz]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
+    band(solid, [[gx + m(3.6), gz], [gx0, gz0]], 0, m(6.5), m(1.6), "stone-moon", { closed: false });
 
     const object = solid.toObject();
 

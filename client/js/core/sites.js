@@ -13,11 +13,12 @@
 // Pure data, no DOM; the same for the same plan.
 
 import { ENTRANCES, entranceOf, structureDoor } from "./insides.js";
+import { castleLayout, inCourt, solidAt } from "./setpieces/castles.js";
 import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
-import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
+import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
@@ -240,6 +241,7 @@ export class Sites {
         this.parts = new Map();
         this.bySquare = new Set();
         this.paved = new Set();
+        this.courts = new Map();
         this.moats = new Set();
         this.rims = new Set();
         this.cleared = [];
@@ -291,6 +293,10 @@ export class Sites {
                 if (set.citadel) {
                     this.paved.add(square);
                 }
+            }
+
+            for (const square of set.courts ?? []) {
+                this.courts.set(square, set.court);
             }
 
             const chunk = Math.floor(set.y / CHUNK) * CHUNKS + Math.floor(set.x / CHUNK);
@@ -355,6 +361,14 @@ export class Sites {
         const k = y * WORLD_SIZE + x;
 
         return this.bySquare.has(k) ? { blocked: 1, opaque: 1, paved: this.paved.has(k) } : null;
+    }
+
+    /**
+     * What ground a square in a castle's courtyard has (a GROUND kind: open ground, trodden,
+     * setpieces/castles.js), or null for one not in a courtyard.
+     */
+    courtAt(x, y) {
+        return this.courts.get(y * WORLD_SIZE + x) ?? null;
     }
 
     /** Whether a square's in a citadel's moat (water, too deep to wade). */
@@ -475,9 +489,17 @@ export class Sites {
             const landmark = site.race === "human" && ENTRANCES[HUMAN_LANDMARK[site.kind]];
             const door = !laid && !landmark ? structureDoor(site) : null;
             const [building] = !laid && (landmark || door) ? this.#pieces(site, x, y, facing, [w, h]) : [];
-            const entrance = laid?.entry ? entranceAt(laid.entry, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
+            // (A people's castle, as it's built: what of it's solid, its courtyard walked through
+            // its gate, its keep's door, setpieces/castles.js; the rest of its lot open ground)
+            const castle = site.kind === "castle" ? castleLayout(site.race, [w * PLOT, h * PLOT]) : null;
+            const lot = castle && unturned(x, y, facing, [w, h]);
+            const entry = laid?.entry ?? castle?.entry;
+            const entrance = entry ? entranceAt(entry, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
-            const squares = (laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners)).filter(([i, j]) => !way.has(j * size + i));
+            const all = laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners);
+            const squares = (castle ? all.filter(([i, j]) => solidAt(castle, lot(i + 0.5, j + 0.5))) : all).filter(([i, j]) => !way.has(j * size + i));
+            // (The way into its keep, too: cleared through its walls, flagged as its courtyard)
+            const courts = castle ? all.filter(([i, j]) => (way.has(j * size + i) || !solidAt(castle, lot(i + 0.5, j + 0.5))) && inCourt(castle, lot(i + 0.5, j + 0.5))) : [];
             const heart = laid ? turn(...laid.heart) : { x, y };
             const radius = hypot(w, h) * (PLOT / 2);
             // (Its pad, if it's levelled into the land: every people's place, on a mound or in a
@@ -508,6 +530,8 @@ export class Sites {
                 h,
                 pieces: this.#pieces(site, x, y, facing, [w, h], laid, cut),
                 squares: new Set(squares.map(([i, j]) => j * size + i)),
+                courts: new Set(courts.map(([i, j]) => j * size + i)),
+                court: castle ? GROUND[castle.ground] : null,
                 entrance,
                 radius,
                 heart: [heart.x, heart.y],
@@ -750,6 +774,19 @@ function turned(x, y, facing, [w, h]) {
         const [du, dv] = [u - (w * PLOT) / 2, v - (h * PLOT) / 2];
 
         return { x: x + du * c + dv * s, y: y - du * s + dv * c };
+    };
+}
+
+// Where a point in the world (x, y metres) is on the lot of a site set down at (x, y), facing
+// `facing` (turned's the other way): a function (x, y) => [u, v] (metres from its north-west corner
+// as it would face south)
+function unturned(x, y, facing, [w, h]) {
+    const [c, s] = [cos(facing), sin(facing)];
+
+    return (px, py) => {
+        const [dx, dy] = [px - x, py - y];
+
+        return [dx * c - dy * s + (w * PLOT) / 2, dx * s + dy * c + (h * PLOT) / 2];
     };
 }
 

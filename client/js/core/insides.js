@@ -63,6 +63,29 @@ export const STRUCTURE_DOORS = Object.freeze({
     "tree hall": Object.freeze({ elf: { inside: "keep", depth: 8.1, offset: 0, width: 2, height: 3.2, floor: 0.5 } }),
 });
 
+/**
+ * Which settlement a building's in (a plan place's id, as the war has its towns): where the player
+ * started (`home`), or its own; one out in the land (`site:`: a manor, a watchtower, a castle's
+ * keep), the town nearest it the war has of its own people (or of anyone's, if they've none), whose
+ * realm it keeps. Null if there's none.
+ */
+export function townOf(building, { plan, war, start }) {
+    if (building.place === "home") {
+        return start?.id ?? null;
+    }
+
+    if (building.place !== "site") {
+        return building.place;
+    }
+
+    const [x, y] = building.at;
+    const all = (plan?.places ?? []).filter((place) => war?.town(place.id));
+    const own = all.filter((place) => place.race === building.people);
+    const nearest = (own.length ? own : all).reduce((best, place) => (!best || hypot(place.at[0] - x, place.at[1] - y) < hypot(best.at[0] - x, best.at[1] - y) ? place : best), null);
+
+    return nearest?.id ?? null;
+}
+
 /** A site's door, if it's a people's own place that can be gone into (STRUCTURE_DOORS), else null. */
 export const structureDoor = (site) => (site.race && STRUCTURE_DOORS[site.kind]?.[site.race]) || null;
 

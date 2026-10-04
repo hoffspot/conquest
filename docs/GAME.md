@@ -2667,6 +2667,18 @@ metres off (back as many as ever the next time, unless it's been cleared).
     The other peoples' own places stay open to the sky (the pits, the hatchery, the spider shrine,
     the spire, the shadow gate) or have no way in at their foot (the sun temple's behind its
     altar, the ziggurat's at its top), their bands outside.
+  - **The peoples' castles walked into** (M7.5b-3a; `setpieces/castles.js`): the elves', the
+    orcs' and the cat folk's castles are no longer solid all through. What of each is solid is
+    laid out as its kit builds it (the elves' seven towers and the walls between them, the
+    pillars of their gate and the great tree; the orcs' bank and palisade, the bastions either
+    side of its gap, the motte, the longhouse and the hut; the cat folk's curtain walls, corner
+    towers, gate tower, planted beds, fountain and tower house), and its courtyard within is open
+    ground walked into through its gate: flagstones (the orcs' trodden earth) through the gateway
+    and all within, nothing grown in it (`sites.js` `courtAt`). The cat folk's tower house has a
+    door in the middle of its front, into the keep's great hall: its lord or lady on the throne
+    ("Lord of Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of
+    the town of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill
+    citadels; the dark elves' and the lizard folk's are still solid, to come.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

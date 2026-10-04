@@ -770,6 +770,11 @@ export class Overworld {
                     if (site.paved) {
                         ground[k] = GROUND.courtyard;
                     }
+                } else if (this.sites.courtAt(x, y) !== null) {
+                    // (A castle's courtyard within its walls: open ground, flagged or trodden,
+                    // nothing grown)
+                    ground[k] = this.sites.courtAt(x, y);
+                    crops[k] = 0;
                 }
             }
         }

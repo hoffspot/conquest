@@ -3806,3 +3806,34 @@ converted data is to be measured in M8 against today's hm08 data.
     held by outlaws: the band's chief and chest at its top, guards below; one its people's, its
     lookout and sentry; the tree hall held by outlaws walked up and gone into, the band not in
     the way).
+- **2026-10-04, M7.5b-3a built: the elves', orcs' and cat folk's castles walked into; the cat
+  folk's keep gone into** (docs/GAME.md *Gone into*).
+  - **Laid out** (core/setpieces/castles.js `castleLayout`, `solidAt`, `inCourt`): each castle as
+    its kit builds it (world/art/peoples elf.js, orc-places.js, cat-places.js `castle`), on its lot
+    facing south: what's solid (rects, discs, walls as thick segments, the orcs' bank as a ring
+    with its gap), its courtyard (within the walls and the gateway), its ground and its gate. Pure
+    data, exact maths; only the castles' heights are left to chance in the art, and nothing here
+    depends on them.
+  - **Set down** (core/sites.js `#setDown`, `unturned`): a castle's squares blocked only where
+    something's solid there (a square's middle within 0.4 m of it); its courtyard's squares kept
+    (`courts`, `courtAt`), given its ground in the chunks (core/overworld.js: flagstones, the
+    orcs' trodden earth; no crops, so no tall grass). The cat folk's keep's door (`entry`) is cleared
+    as a neutral site's (`entranceAt`), the way to it flagged too.
+  - **Art:** the elves' gate walls run from the end towers to the gate's pillars (they stopped
+    short and left gaps); the cat folk's gate tower has a way through it, its doors open either
+    side (it was solid, a door drawn on it); the orcs' longhouse is shorter, so the yard isn't cut
+    in two.
+  - **The keep's realm** (core/insides.js `townOf`, used by host.js `postOf` and game.js
+    `#townOf`): a building out in the land speaks for the realm of the town of its people's
+    nearest it (any people's, if they've none); a castle's keep had none, its ruler no post.
+  - **NET_VERSION 36.**
+  - **Pictures** (sent in the session): each castle from above before (main) and after, the player
+    in each courtyard, the cat folk's keep's door and its great hall.
+  - **Tests:** test/castles.test.js (the layouts the same for the same lot, none for the others;
+    each courtyard walked into through its gate and none of it with the gate shut; set down in
+    seed 2's world, at least 98% of each courtyard reached from outside the gate, its ground the
+    courtyard's; the dark elves' and lizard folk's still blocked; the cat folk's keep gone into
+    from outside the gate, its ruler titled, their realm the nearest cat town's).
+  - **Next:** M7.5b-3b: the orcs' motte (steps up it and the broch's door), the elves' hall
+    within their castle, the dark elves' gate and terraces; then the lizard folk's temple-fortress
+    and the humans' citadels' wards and keeps.

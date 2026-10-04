@@ -25,7 +25,7 @@ import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
-import { heldWithin } from "./insides.js";
+import { heldWithin, townOf } from "./insides.js";
 import { CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
@@ -3756,7 +3756,7 @@ export class Host {
         }
 
         const building = this.world.interiors?.of(actor.map);
-        const town = this.war.town(building?.place === "home" ? this.world.start?.id : building?.place);
+        const town = building && this.war.town(townOf(building, { plan: this.world.plan, war: this.war, start: this.world.start }));
 
         return town ? { id, role: one.role, name: one.name, title: one.title ?? "", town: town.id, owner: town.owner, ...official } : null;
     }

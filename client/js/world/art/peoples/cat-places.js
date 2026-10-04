@@ -433,10 +433,15 @@ function castle(piece) {
         tower(solid, [x - m(3), z - m(3), x + m(3), z + m(3)], 0, m(15), name, random, { lean, cap: "ears" });
     }
 
-    // The gate tower, its door studded, and the way in turning behind it
-    const gate = { u0: m(1.9), u1: m(4.1), v0: 0, v1: m(3.8), depth: m(0.5), back: null, arch: "round" };
+    // The gate tower, the way in through it to the court (core/setpieces/castles.js), its studded
+    // doors swung back against the passage's walls
+    const gate = { u0: m(1.9), u1: m(4.1), v0: 0, v1: m(3.8), depth: m(5), back: null, arch: null, sides: material("mud-dark") };
 
-    tower(solid, [gateAt - m(3), z1 - m(2.5), gateAt + m(3), z1 + m(2.5)], 0, m(12.5), name, random, { lean, cap: "ears", openings: { 2: [{ ...gate, back: material("planks-dark") }] } });
+    tower(solid, [gateAt - m(3), z1 - m(2.5), gateAt + m(3), z1 + m(2.5)], 0, m(12.5), name, random, { lean, cap: "ears", openings: { 0: [{ ...gate, depth: m(0.2) }], 2: [gate] } });
+
+    for (const side of [-1, 1]) {
+        solid.box(gateAt + side * m(1.05) - m(0.06), 0, z1 + m(1.2), gateAt + side * m(1.05) + m(0.06), m(3.4), z1 + m(2.3), material("planks-dark"));
+    }
     guardian(solid, gateAt - m(3.8), z1 + m(3.2), 0, "mud-pale");
     guardian(solid, gateAt + m(3.8), z1 + m(3.2), 0, "mud-pale");
 
