@@ -284,12 +284,13 @@ export class Walker {
         // Sway over the standing foot (less, running), and rise and fall
         rig.offset.set(this.style.sway * Math.min(1, s * 1.5) * (1 - 0.6 * r) * Math.sin(2 * Math.PI * p), height, 0);
 
-        // Anything layered over the walk (an attack, a flinch, a fall) changes the joints now. It
+        // Anything layered over the walk (an attack, a flinch, a fall; told how far into its
+        // stride the walk is) changes the joints now. It
         // says false when the feet shouldn't be kept on the ground (falling down)
         this.stance.offset.copy(rig.offset);
         this.stance.turn.copy(rig.rotations[0]);
 
-        const planted = this.overlay?.(dt) ?? true;
+        const planted = this.overlay?.(dt, s) ?? true;
 
         rig.apply();
         this.character.object.updateMatrixWorld(true);

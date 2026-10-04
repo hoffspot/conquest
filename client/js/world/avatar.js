@@ -82,7 +82,7 @@ export class Avatar {
         this.walker = new Walker(character, WALK_STYLES[walk] ?? WALK_STYLES.natural);
         this.actions = new Actions(character);
         this.actions.setWeapon(guard);
-        this.walker.overlay = (dt) => this.actions.apply(dt);
+        this.walker.overlay = (dt, walking) => this.actions.apply(dt, walking);
         this.walker.freed = (side) => this.actions.free[side];
         this.walker.afterPose = () => this.actions.place();
         this.facing = 0;

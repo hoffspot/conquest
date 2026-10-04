@@ -45,7 +45,8 @@ const FILES = { base: "human-base-animations.glb", addon: "human-addon-animation
  * lands; else as the fastest thing goes fastest), crop ([from, to] seconds: only that part),
  * mirror (left for right), legs ("right" or "left": that leg kicks, as the clip's does, let go
  * of the ground; else the feet stay where they stand), seated (sitting: the pelvis moved only as
- * it moves from where the clip sits at its start) }.
+ * it moves from where the clip sits at its start), loop (a loop, played round and round: timed
+ * evenly, 1 halfway, and kept closer to the clip, LOOP_KEEP) }.
  */
 export const BAKES = [
     // Fists: a jab with the lead hand (the clip's left: mirrored, so it's the right's, as every
@@ -67,6 +68,12 @@ export const BAKES = [
     { name: "listening", from: [["addon", "Idle Listening"]], hold: {}, hit: 0.8 },
     { name: "cheer", from: [["mocap", "Cheer_One_arm"]], hold: {}, hit: 1, mirror: true },
     { name: "hailing", from: [["mocap", "Help_One_Arm"]], hold: {}, hit: 1 },
+    // The guards' sway (loops, layered over the keyed guards from their means: actions.js
+    // GUARD_SWAYS): a fighter rocking on the balls of the feet, the fists going; a swordsman's
+    // weight shifting from foot to foot; a caster breathing, the right hand held out
+    { name: "fightIdle", from: [["addon", "Fighting Idle"]], hold: {}, loop: true },
+    { name: "swordIdle", from: [["base", "Idle_Sword"]], hold: {}, loop: true },
+    { name: "spellIdle", from: [["base", "Spell_Simple_Idle"]], hold: {}, loop: true },
 ];
 
 // Tried and left out (the motion check, every body: docs/CHARACTERS.md):
@@ -88,11 +95,15 @@ export const BAKES = [
 //    off (Idle_ShakeOff: hardly moves), a nod with an arm out (Yes: reads as pointing), drinking
 //    (Consume Item: from nothing, and the patrons drink from their tankards already), a salute
 //    (Salute: not with a sword in the hand, as the sentries have), sitting still (Sitting_Idle:
-//    hardly moves), and those with the legs' part in them (dances, a hunched rest, meditating).
+//    hardly moves), and those with the legs' part in them (dances, a hunched rest, meditating);
+//  - for the guards' sway: a shield held up (Idle_Shield: hardly moves), a golfer's waggle
+//    (Golf_idle) and a pistol held out (Pistol_Idle).
 
 // Each key value's tolerance, by what it is: a key's left out if the curve through the others
 // passes this near it (degrees; arm lengths; unit vectors; metres; a foot's freedom)
 const KEEP = { angle: 3, at: 0.025, vector: 0.08, offset: 0.01, free: 0.2 };
+// (A loop's moves are small, a sway: kept this much closer)
+const LOOP_KEEP = 0.25;
 
 // What a foot's moving at (m/s), or how high its lowest point is (m), off the ground
 const STEPPING = 0.3;
@@ -479,7 +490,7 @@ function curve(times, values, time) {
 // The frames to keep as keys: the first, the blow and the last, and then whichever's furthest
 // from the curve through those kept, until every value's within KEEP of it (and a hand's shape
 // changes only at a key)
-function reduce(times, poses, must) {
+function reduce(times, poses, must, keep = 1) {
     const flat = poses.map(flatten);
     const channels = flat[0].map(([channel, , kind]) => ({ channel, kind }));
     const values = channels.map((_, c) => flat.map((row) => row[c][1]));
@@ -500,7 +511,7 @@ function reduce(times, poses, must) {
             const keyValues = keys.map((f) => values[c][f]);
 
             times.forEach((time, f) => {
-                const over = Math.abs(curve(keyTimes, keyValues, time) - values[c][f]) / KEEP[kind];
+                const over = Math.abs(curve(keyTimes, keyValues, time) - values[c][f]) / (KEEP[kind] * keep);
 
                 if (over > worst.over) {
                     worst = { over, frame: f };
@@ -520,7 +531,7 @@ function reduce(times, poses, must) {
  * Bake one clip (a BAKES entry) on the reference body: { source, seconds, hit, channels, keys }
  * (each key its time and its values, in the channels' order).
  */
-export async function bake(from, { from: clips, hold, hit = null, crop = null, mirror = false, legs = null, seated = false }, body = referenceBody()) {
+export async function bake(from, { from: clips, hold, hit = null, crop = null, mirror = false, legs = null, seated = false, loop = false }, body = referenceBody()) {
     const poses = await sequence(from, clips);
     const clip = retarget(poses, body.character.rig, { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH, limit: false });
     const { rig } = body.character;
@@ -575,11 +586,12 @@ export async function bake(from, { from: clips, hold, hit = null, crop = null, m
 
     // The frame the blow lands: given (seconds into it, or into one of its clips: [which, seconds]),
     // or as the fastest of the hands, what they hold and the feet goes fastest
-    const at = hit === null ? fastest(measured, frameTime) : Math.round((Array.isArray(hit) ? poses.starts[hit[0]] * frameTime + hit[1] : hit) / frameTime) - first;
+    // (A loop's halfway, so its key times go evenly)
+    const at = loop ? Math.round((measured.length - 1) / 2) : hit === null ? fastest(measured, frameTime) : Math.round((Array.isArray(hit) ? poses.starts[hit[0]] * frameTime + hit[1] : hit) / frameTime) - first;
     const keyed = measured.map(({ pose: each }, f) => (legs ? { ...each, free: { [legs]: free[f][legs === "left" ? 0 : 1] } } : each));
     const times = keyed.map((_, f) => f * frameTime);
     const seconds = times.at(-1);
-    const keys = reduce(times, keyed, [0, at, keyed.length - 1]);
+    const keys = reduce(times, keyed, [0, at, keyed.length - 1], loop ? LOOP_KEEP : 1);
     const channels = flatten(keyed[0]).map(([channel]) => channel);
     const shapes = SIDES.filter((side) => keyed[0][side].shape);
     const places = (channel) => (/\.at\./.test(channel) || channel.startsWith("offset") ? 3 : /\.(point|edge|palm|towards|elbow)\./.test(channel) ? 2 : 1);
@@ -588,7 +600,7 @@ export async function bake(from, { from: clips, hold, hit = null, crop = null, m
     const keyTime = (f) => (f === at ? 1 : round(f <= at ? times[f] / times[at] : 1 + (times[f] - times[at]) / (seconds - times[at]), 3));
 
     return {
-        source: clips.map(([, name]) => name).join(" + ") + (crop ? ` (${crop[0]} to ${crop[1]} s)` : "") + (mirror ? ", mirrored" : "") + (seated ? ", seated" : ""),
+        source: clips.map(([, name]) => name).join(" + ") + (crop ? ` (${crop[0]} to ${crop[1]} s)` : "") + (mirror ? ", mirrored" : "") + (seated ? ", seated" : "") + (loop ? ", looped" : ""),
         seconds: round(seconds, 3),
         hit: round(times[at], 3),
         channels: [...channels, ...shapes.map((side) => `${side}.shape`)],

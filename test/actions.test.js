@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
-import { Actions, ATTACKS, DRAWS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, DRAWS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
@@ -46,7 +46,7 @@ function figure(shape = {}) {
 // A figure that walks (standing still) with actions layered over it, holding things (items'
 // ids) as a Character holds them: each item's model on its hand's socket, turned in it, and the
 // hand's hold (equipment.js); and putting its weapons away as a Character does
-function fighter(shape, held = []) {
+function fighter(shape, held = [], { phase = 0 } = {}) {
     const character = figure(shape);
 
     character.equipment = new Map();
@@ -81,9 +81,9 @@ function fighter(shape, held = []) {
     }
 
     const walker = new Walker(character, WALK_STYLES.natural);
-    const actions = new Actions(character);
+    const actions = new Actions(character, { phase });
 
-    walker.overlay = (dt) => actions.apply(dt);
+    walker.overlay = (dt, walking) => actions.apply(dt, walking);
     walker.afterPose = () => actions.place();
     walker.freed = (side) => actions.free[side];
 
@@ -138,7 +138,7 @@ describe("attacks (actions.js)", () => {
         }
     });
 
-    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack or a rest", () => {
+    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack, a rest or a guard's sway", () => {
         assert.ok(CLIP_HEIGHT > 1.5 && CLIP_HEIGHT < 1.9);
 
         for (const [clip, { channels, keys, hit, seconds }] of Object.entries(CLIP_KEYS)) {
@@ -156,7 +156,7 @@ describe("attacks (actions.js)", () => {
             assert.ok(channels.filter((channel) => /(UpLeg|Leg|Foot|ToeBase)\./.test(channel)).every((channel) => channel.startsWith("Right")), `${clip}: only a kicking leg`);
         }
 
-        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : []));
+        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : [])).concat(Object.values(GUARD_SWAYS).map(({ clip }) => clip));
 
         assert.deepEqual([...new Set(clipped)].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
     });
@@ -343,6 +343,38 @@ describe("attacks (actions.js)", () => {
                 assert.ok(world(`${kicking}Foot`, character).y < 0.12, `${label}: back down`);
             }
         }
+    });
+
+    it("sways on guard as an animator's fighting idle does, standing: the chest and sword hand going round a loop, each fighter at its own place in it, and not walking", () => {
+        // Where the chest and the sword hand are on the body (metres, in its own frame; the hand
+        // from its shoulder), a tenth of a second at a time over two seconds on guard, at `speed`
+        const swaying = (phase, speed) => {
+            const { character, walker, actions } = fighter(undefined, ["sword"], { phase });
+            const local = (bone) => character.object.worldToLocal(world(bone, character));
+
+            actions.setWeapon("sword");
+            actions.setGuard(true);
+            walker.update(1, { speed });
+
+            return Array.from({ length: 20 }, () => {
+                walker.update(0.1, { speed });
+
+                return { chest: local("Spine2"), hand: local("RightHand").sub(local("RightArm")) };
+            });
+        };
+        const spread = (points) => Math.max(...["x", "y", "z"].map((axis) => Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis]))));
+        const standing = swaying(0, 0);
+        const other = swaying(0.5, 0);
+
+        assert.ok(spread(standing.map(({ chest }) => chest)) > 0.02, "the weight shifts");
+        assert.ok(spread(standing.map(({ hand }) => hand)) > 0.02, "the sword hand goes, from the shoulder");
+        assert.ok(standing.some(({ chest }, k) => chest.distanceTo(other[k].chest) > 0.01), "another fighter at another place in it");
+
+        // (Walking, the walk's own: the same for both)
+        const walking = swaying(0, 1.3);
+        const otherWalking = swaying(0.5, 1.3);
+
+        assert.ok(walking.every(({ chest, hand }, k) => chest.distanceTo(otherWalking[k].chest) < 1e-6 && hand.distanceTo(otherWalking[k].hand) < 1e-6), "no sway walking");
     });
 
     it("kicks with a weapon in hand without moving the hands off guard", () => {
