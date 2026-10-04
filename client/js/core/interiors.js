@@ -73,6 +73,10 @@ export const PLAN_KEY = Object.freeze({
     u: { kind: "bedroll", blocks: true },
     x: { kind: "campfire", blocks: true },
     j: { kind: "bones" },
+    // A crypt's (under an old hall's ruins): its tombs (each run of squares one, lidded), and
+    // candles burning on the floor in a stand
+    t: { kind: "tomb", blocks: true, joins: true },
+    k: { kind: "candles", blocks: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

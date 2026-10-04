@@ -54,6 +54,8 @@ export const PLACES = Object.freeze({
     // through its stones)
     cave: { score: "town", level: 0.12, muffle: 300 },
     lair: { score: "town", level: 0.1, muffle: 250 },
+    // (In a crypt, the world above barely heard through the hall's floor)
+    crypt: { score: "town", level: 0.1, muffle: 280 },
     tower: { score: "town", level: 0.5, muffle: 1100 },
 });
 

@@ -82,6 +82,26 @@ describe("the sites no people keeps (setpieces/neutral.js)", () => {
         assert.equal(layoutNeutral({ kind: "castle", seed: 1 }), null);
     });
 
+    it("puts a stair-house down to the crypt under an old hall against its back wall, in its middle: in the way, its door's way into the hall clear of the columns, no heap of fallen stone on it", () => {
+        for (let seed = 1; seed <= 24; seed++) {
+            const laid = layoutNeutral({ kind: "ruins", seed });
+            const house = laid.parts.find(({ part }) => part === "crypt");
+            const { entry } = laid;
+
+            assert.equal(entry.inside, "crypt");
+            assert.ok(laid.solid.some((rect) => within([(house.x0 + house.x1) / 2, (house.y0 + house.y1) / 2], rect)), `${seed}: the stair-house in the way`);
+            assert.deepEqual([entry.x, entry.y], [(house.x0 + house.x1) / 2, house.y1]);
+
+            for (let v = 0.2; v <= 2; v += 0.2) {
+                for (let u = -1; u <= 1; u += 0.25) {
+                    assert.ok(!laid.solid.some((rect) => within([entry.x + u, entry.y + v], rect)), `${seed}: its way into the hall clear at ${u}, ${v}`);
+                }
+            }
+
+            assert.ok(laid.parts.filter(({ part }) => part === "rubble").every(({ x, y, r }) => x + r < house.x0 || x - r > house.x1 || y - r > house.y1), `${seed}: no heap of stone on it`);
+        }
+    });
+
     it("lays a ruined castle out as the humans' are, its pieces left to ruin and its gate's way through open", () => {
         const laid = layoutNeutral({ kind: "ruined castle", seed: 7 });
         const kinds = new Set(laid.castle.map(({ key }) => key.split("-")[0]));

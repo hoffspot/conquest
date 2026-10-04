@@ -31,6 +31,12 @@ export const NEUTRAL = Object.freeze({
     watchtower: [3, 3],
 });
 
+/**
+ * An old hall's crypt's way down (metres): a stair-house `wide` across and `deep`, against the
+ * hall's back wall, its door `door` wide and high.
+ */
+export const RUINS = Object.freeze({ crypt: { wide: 3.4, deep: 3.2, door: [1.4, 2.2] } });
+
 const TAU = 6.283185307179586;
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
@@ -181,18 +187,34 @@ const LAYOUTS = {
             }
         }
 
-        // (Heaps of fallen stone, in the breach's way out and against the walls)
+        // (The way down to its crypt: a stair-house of the hall's stone against its back wall in
+        // the middle, between its columns, its arched door facing the hall's own; the crypt under
+        // the hall, gone into by it: insides.js)
+        const crypt = { x: (x0 + x1) / 2, half: RUINS.crypt.wide / 2, back: y0 + thick / 2, deep: RUINS.crypt.deep };
+
+        // (Heaps of fallen stone, in the breach's way out and against the walls: clear of the
+        // stair-house)
         const breachX = side === "west" ? x0 - 1.4 : x1 + 1.4;
 
         parts.push({ part: "rubble", x: breachX, y: breach.at + random.range(-0.6, 0.6), r: random.range(1, 1.4), seed: random.seed() });
 
         for (let k = 0; k < random.int(2, 4); k++) {
-            const [x, y] = [random.range(x0 + 1.4, x1 - 1.4), random.pick([y0 + 1.2, y1 - 1.6])];
+            const [along, y, r] = [random.range(x0 + 1.4, x1 - 1.4), random.pick([y0 + 1.2, y1 - 1.6]), random.range(0.7, 1.1)];
+            const aside = crypt.half + r + 0.3;
+            const x = y < crypt.back + crypt.deep && Math.abs(along - crypt.x) < aside ? crypt.x + (along < crypt.x ? -aside : aside) : along;
 
-            parts.push({ part: "rubble", x, y, r: random.range(0.7, 1.1), seed: random.seed() });
+            parts.push({ part: "rubble", x, y, r, seed: random.seed() });
         }
 
-        return { parts, solid, heart: [(x0 + x1) / 2, (y0 + y1) / 2] };
+        parts.push({ part: "crypt", x0: crypt.x - crypt.half, y0: crypt.back, x1: crypt.x + crypt.half, y1: crypt.back + crypt.deep });
+        solid.push([crypt.x - crypt.half, crypt.back, crypt.x + crypt.half, crypt.back + crypt.deep]);
+
+        return {
+            parts,
+            solid,
+            heart: [(x0 + x1) / 2, (y0 + y1) / 2],
+            entry: { x: crypt.x, y: crypt.back + crypt.deep, width: RUINS.crypt.door[0], height: RUINS.crypt.door[1], inside: "crypt" },
+        };
     },
 
     // A castle laid out as the humans' are (castle.js), left to ruin: its walls broken down, its

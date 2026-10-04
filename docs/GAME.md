@@ -59,7 +59,9 @@ back to the same world:
     side. Where the land's flat, a pit sunk 3.2 m into the ground instead, lined with old stone
     crumbling at its rim, steps down its front to a dark doorway. **Ruins:** an old hall's walls
     broken off along their tops, a door and a breach, column stumps, some fallen, heaps of fallen
-    stone. **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
+    stone; against its back wall in the middle, a gabled stair-house of its stone, a round-arched
+    door in its front onto the dark of the stair going down to its crypt, a skull set over it, ivy
+    hanging over it (`RUINS.crypt`). **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
     towers crumbled (below), its keep open to the sky with joists still across it, its gatehouse's
     bridge fallen, its houses heaps of stone and charred timbers; old barrels, crates and a cart
     left by its walls. **Dragon's lair:** a hollow dug into a mountainside, a great dark doorway
@@ -2625,27 +2627,38 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
-- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild): its way
-  in is a door as a building's (`sites.js` `entranceAt`: the mouth, or the tower's door, kept clear
-  of what stands in the way), its floors made the first time they're wanted (`insides.js`
-  `addSite`, the key `site:` and the site's id; `caveRooms`, `lairRooms`, `towerRooms`), drawn as
-  the buildings' insides are (`interiors3d.js`):
+- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild; M7.5b-4,
+  the crypt under the ruins): its way in is a door as a building's (`sites.js` `entranceAt`: the
+  mouth, the tower's door, the ruins' stair-house's, kept clear of what stands in the way), its
+  floors made the first time they're wanted (`insides.js` `addSite`, the key `site:` and the
+  site's id; `caveRooms`, `lairRooms`, `cryptRooms`, `towerRooms`), drawn as the buildings'
+  insides are (`interiors3d.js`):
   - **A cave:** a passage in from its mouth (daylight in it) to a chamber, rock all round,
     earth underfoot; the outlaws' bedrolls and their fire, sacks and a crate, torches on the walls.
   - **The dragon's lair:** a great cavern of dark rock, the floor scorched, bones about it, embers
     glowing in its cracks, heaps of gold at the back.
+  - **The crypt under the ruins** ("The crypt under Peningmoor Ruins"): down the stair, daylight
+    at its head, into a vaulted aisle between two rows of pillars, ribs across the vault from
+    pillar to pillar; its walls old dressed stone, two tiers of burial niches let into them, a
+    skull or bones in some; stone tombs either side, lidded, a cross cut in each lid, one here and
+    there pushed askew on the dark within; bones about the floor; at the back, in its apse, the
+    dead's master by their chest, candles burning in iron stands either side (`t` a tomb, `k` the
+    candles, `I` a pillar: interiors.js).
   - **A broken watchtower:** below, flagstones, old stone walls, the stairs up, rubble, a torch by
     the door; above, boards, a broken parapet, open to the sky (`open`: the view keeps the sky),
     its walls falling away to the ground far below.
   - **Who's within** (`host.js` `#inside`): the band's chief and their locked chest at the back of
-    the cave or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
+    the cave or the crypt or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
     for guarding the way in (its "g", half the band at most), the rest outside; the band's held
     while a player's within. Put to the sword, the chest's shares lie where it stood, inside, for
-    the players there (in or near it), and the guild's contract is done for them.
+    the players there (in or near it), and the guild's contract is done for them; a player within
+    is told the place is cleared ("The dead of Peningmoor Ruins are laid to rest, for now.") as one
+    outside near it is.
   - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
-  - Its sound's its own (`sound.js` PLACES: a cave's and the lair's hushed, the tower's open).
+  - Its sound's its own (`sound.js` PLACES: a cave's, the lair's and the crypt's hushed, the
+    tower's open).
   - **The humans' abbeys and manors** (M7.5b-2): gone into by the door of the temple or the keep
     each is built round (`sites.js`: their landmark's `entranceOf`, the way kept clear), the same
     temple and great hall as a town's (`insides.js` `add`, keyed `site:` and its id; named for the

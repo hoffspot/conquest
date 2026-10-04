@@ -2336,12 +2336,14 @@ export class Game {
      * down, sites.js, or where a camp's pitched; its plan's spot till then), holder (who holds it
      * now), rim (its colour) }].
      */
-    // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it
+    // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it or
+    // within it (a cave, the crypt under the ruins, an abbey's temple: its floors)
     #cleared({ place: id, holder }) {
         const place = placesOf(this.world.plan).find((each) => each.id === id);
         const me = this.battle.actor(this.me);
+        const within = me && this.world.interiors?.buildings.get(`site:${id}`)?.maps.includes(me.map);
 
-        if (!place || !me || me.map !== "town" || Math.hypot(me.x - place.at[0], me.y - place.at[1]) > PLACE_BANDS.far) {
+        if (!place || !me || (!within && (me.map !== "town" || Math.hypot(me.x - place.at[0], me.y - place.at[1]) > PLACE_BANDS.far))) {
             return;
         }
 

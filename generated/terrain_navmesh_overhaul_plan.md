@@ -3944,3 +3944,30 @@ converted data is to be measured in M8 against today's hm08 data.
     tower's passage), a stair, the keep's door, its great hall; from above the same before and
     after.
   - **Next:** M7.5b-4 (crypts under the ruins); then M7.5c.
+- **2026-10-04, M7.5b-4a built: the crypt under the ruins** (docs/GAME.md *Gone into*).
+  - **The way down** (core/setpieces/neutral.js `ruins`, `RUINS.crypt`): a stair-house 3.4 by
+    3.2 m against the old hall's back wall in its middle, between its columns, solid; its door
+    (1.4 by 2.2 m) faces the hall's own, the site's entry (`inside: "crypt"`). The heaps of fallen
+    stone against the back wall are moved off it (from the same random numbers, so the rest of
+    every hall is laid out as it was). Drawn (world/art/kits/neutral.js `crypt`): gabled, of the
+    hall's stone, a round-arched door onto the dark of the stair, a skull over it, ivy.
+  - **The crypt** (core/insides.js `CRYPT`, `cryptRooms`; new plan marks `t` a tomb and `k` a
+    stand of candles, interiors.js): 16 by 18 m, the stair at its south end, a vaulted aisle
+    between two rows of pillars, three tombs a side, bones, the apse at the back with the dead's
+    master by their chest ("l", "h"), four posts for guards ("g"). Drawn (world/interiors3d.js
+    `crypt`): old dressed stone walls with two tiers of niches (a skull in some), the vault and
+    its ribs (hidden from above as ceilings are), pillars, lidded tombs (a cross on each, one now
+    and then pushed askew on the dark within), candles in iron stands lighting the apse, the stair
+    rising to daylight. Its sound hushed (`sound.js` `crypt`).
+  - **Held:** the dead hold it as they held the hall (host.js `#places` with `#inside`): the wight
+    lord by the chest within, half the skeletons guarding the way, the rest in the hall above.
+  - **Fix found on the way:** a place cleared from within (a cave, the crypt, an abbey's temple)
+    wasn't said: the player had to be outside (app/game.js `#cleared` now counts the place's floors).
+  - **Tests:** test/neutral.test.js (the stair-house in the way against the back wall, its door's
+    way into the hall clear, no heap of stone on it, for 24 seeds); test/insides.test.js (the
+    crypt's floor got to from its stair, its marks, drawn); test/places.test.js (the ruins gone
+    into, the dead within, put to the sword there, the share where the chest stood); e2e: the
+    ruins' chest down in the crypt, locked, then opened once the dead fall, the player told.
+  - **Pictures** (sent in the session): the ruins before and after (the stair-house), the crypt
+    from the follow camera and from above.
+  - **Next:** M7.5b-4b (the ruined castles' keeps, their wight lords within); then M7.5c.

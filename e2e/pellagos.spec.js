@@ -3371,7 +3371,7 @@ test("the places worth finding are on the minimap near them and on the world map
     expect(seen.kinds).toBeGreaterThan(10);
 });
 
-test("a place's outlaws or dead hold it round their leader by a locked chest: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
+test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Up to the ruins nearest the start town, by their chest
@@ -3396,41 +3396,65 @@ test("a place's outlaws or dead hold it round their leader by a locked chest: ta
             }
         };
 
+        const until = async (done, steps = 80) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
         Object.assign(player, { x: ruins.x + 30, y: ruins.z, path: [], order: null, progress: null });
         await settle(8);
+
+        // Down the stair-house's stair into the crypt
+        const building = game.world.interiors.buildings.get(`site:${ruins.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map !== "town");
+        await until(() => game.interiors.get(player.map)?.object.visible, 120);
 
         const place = game.host.held.get(ruins.id);
         const chest = game.host.ground.get(`chest-${ruins.id}`);
 
-        // (By the chest, its guardians stood off a way so the tap's on it)
-        Object.assign(player, { x: chest.square[0] - 0.6, y: chest.square[1] + 0.5, path: [], order: null, progress: null });
+        // (By the chest, facing it, its guardians within stood off down the crypt and stunned a
+        // good while, so the tap's on it and no curse of theirs is the last word, while the camera
+        // comes round behind the player)
+        const within = place.ids.filter((each) => game.battle.actor(each).map === player.map);
 
-        for (const id of place.ids) {
-            Object.assign(game.battle.actor(id), { x: chest.square[0] + 25, path: [], order: null, target: null });
+        Object.assign(player, { x: chest.square[0] - 0.6, y: chest.square[1] + 0.5, facing: Math.PI / 2, path: [], order: null, progress: null, afflictions: [] });
+
+        for (const id of within) {
+            Object.assign(game.battle.actor(id), { y: chest.square[1] + 11.5, path: [], order: null, target: null, attack: null, casting: null, stunnedUntil: game.battle.time + 120000 });
         }
 
-        for (let k = 0; k < 6; k++) {
+        for (let k = 0; k < 50; k++) {
             game.advance(0.1);
         }
 
-        return { id: ruins.id, band: place.ids.map((id) => game.battle.actor(id).wild.creature), chest: game.drops.drawn.get(chest.id)?.object.children[0].name };
+        return { id: ruins.id, within: chest.map === player.map && player.map === building.maps[0], band: place.ids.map((id) => game.battle.actor(id).wild.creature), chest: game.drops.drawn.get(chest.id)?.object.children[0].name };
     });
 
+    expect(held.within).toBe(true);
     expect(held.band[0]).toBe("wightLord");
     expect(held.band.slice(1).every((creature) => creature === "skeleton")).toBe(true);
     expect(held.chest).toBe("chest");
 
-    // (Going again, so it's heard)
-    const chest = await page.evaluate((id) => {
+    // (Going again, so it's heard; tapped where it's seen there and then, before the camera's
+    // moved on)
+    await page.evaluate((id) => {
         const { game, session } = window.pellagos;
         const { object } = game.drops.drawn.get(`chest-${id}`);
 
         game.start();
 
-        return session.view.toScreen(object.position.clone().setY(object.position.y + 0.3));
+        const { x, y } = session.view.toScreen(object.position.clone().setY(object.position.y + 0.3));
+
+        game.tap(x, y);
     }, held.id);
 
-    await page.mouse.click(chest.x, chest.y);
     await expect(page.locator("#banner")).toHaveText("It's locked fast, and its guardians still hold the place.");
 
     // Put to the sword: cleared, the chest open with the player's share
@@ -3438,6 +3462,12 @@ test("a place's outlaws or dead hold it round their leader by a locked chest: ta
         const { game } = window.pellagos;
 
         game.stop();
+
+        // (Every word on the banner kept: the place cleared, and the chest's share there too)
+        const told = [];
+        const banner = document.querySelector("#banner");
+
+        new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(banner, { childList: true });
 
         for (const each of game.host.held.get(id).ids) {
             game.battle.afflict(each, "poison", { by: "player", damage: 1e7 });
@@ -3448,16 +3478,18 @@ test("a place's outlaws or dead hold it round their leader by a locked chest: ta
         }
 
         game.advance(0.1);
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const share = [...game.host.ground.values()].find((dropped) => dropped.from === "chest");
         const drawn = game.drops.drawn.get(share?.id)?.object;
 
         // (Open on a heap of coins: gold3d.js)
-        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: drawn?.children[0].name, coins: (drawn?.getObjectByName("coins")?.count ?? 0) > 300, locked: game.host.ground.has(`chest-${id}`) };
+        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: drawn?.children[0].name, coins: (drawn?.getObjectByName("coins")?.count ?? 0) > 300, locked: game.host.ground.has(`chest-${id}`), told };
     }, held.id);
 
-    expect(cleared).toEqual({ holder: "cleared", open: "chest-open", coins: true, locked: false });
-    await expect(page.locator("#banner")).toHaveText(/^The dead of .+ are laid to rest, for now\.$/);
+    expect({ ...cleared, told: undefined }).toEqual({ holder: "cleared", open: "chest-open", coins: true, locked: false, told: undefined });
+    expect(cleared.told.some((text) => /^The dead of .+ are laid to rest, for now\.$/.test(text)), JSON.stringify(cleared.told)).toBe(true);
+    expect(cleared.told).toContain("The chest's open, your share in it: tap it to take it.");
 });
 
 test("a cave held by outlaws is gone into by its mouth: within, the rock all round, their fire, their chief by the locked chest; and out again the same way", async ({ page }) => {
