@@ -385,7 +385,7 @@ export class Minimap {
      * Draw it: `player` { x, z, facing } (metres, radians), `others` [{ x, z, hostile,
      * targeted }], `destination` [x, z] or null, `look` the way the player's looking over the
      * ground (radians, as `facing`: 0 south, towards +z) or null, and `icons` over the buildings
-     * gone into ([{ kind, x, z }]).
+     * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]).
      */
     draw({ player, others = [], destination = null, look = null, icons = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
@@ -502,7 +502,7 @@ export class Minimap {
             const [x, y] = at(icon.x, icon.z);
 
             if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
-                drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE);
+                drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                 this.icons.push(icon.kind);
             }
         }

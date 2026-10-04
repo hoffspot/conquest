@@ -13,8 +13,8 @@ import { CELL, circle, ladder, m, pole, post, randomFor, wallPoint, weathering }
 
 const WASHES = ["plaster-red", "plaster-white", "reeds", "palm", "stone-lime"];
 
-export function toned(solid, random, eaves = []) {
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: WASHES, tint: [random.range(0.95, 1.04), random.range(0.95, 1.04), random.range(0.93, 1.02)], dirt: 0.4, mottle: ["palm", "thatch-palm", "stone-lime", "glyphs"] });
+export function toned(solid, random, eaves = [], facing = 0) {
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing, washes: WASHES, tint: [random.range(0.95, 1.04), random.range(0.95, 1.04), random.range(0.93, 1.02)], dirt: 0.4, mottle: ["palm", "thatch-palm", "stone-lime", "glyphs"] });
 }
 
 /**
@@ -380,7 +380,7 @@ export function house(piece) {
     const wet = piece.water ?? false;
     const floor = wet ? m(2.8) : m(random.range(1.4, 2));
 
-    toned(solid, random, [floor + m(2.2)]);
+    toned(solid, random, [floor + m(2.2)], piece.facing ?? 0);
 
     if (type === "marsh") {
         const width = Math.min(m(4), D - m(2.6));

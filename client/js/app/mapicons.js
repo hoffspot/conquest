@@ -2,8 +2,11 @@
 // badge, rimmed in the colour of what the building is, with its sign in it: a foaming tankard
 // for a tavern, an anvil for a smithy, a temple's columns under its pediment for a temple,
 // crossed swords behind a shield for an adventurers' guild, crossed keys for a town hall, and a
-// crown for a keep. Drawn on a canvas, from paths on a
-// grid 24 across, centred on 0, 0.
+// crown for a keep. And the places worth finding out in the world (core/places.js; the terrain
+// plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
+// spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
+// standing stones and a camp, each rimmed in the colour of who holds it (PLACE_RIMS). Drawn on a
+// canvas, from paths on a grid 24 across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
 const LOOKS = {
@@ -69,7 +72,162 @@ const LOOKS = {
             ["M-4,3 h8", null, "#8f6ad6", 2],
         ],
     },
+    // The places worth finding
+    castle: {
+        rim: "#c9a24a",
+        parts: [
+            // A tower with its battlements, its door, and a flag over it
+            ["M0,-6 v-5.5", null, "#2a241c", 1.2],
+            ["M0,-11.5 l6.5,1.8 l-6.5,1.8 z", "#d0413a", "#2a241c", 0.8],
+            ["M-6,-2.5 h12 v11.5 h-12 z", "#bdb5a5", "#2a241c", 1],
+            ["M-7.5,-6.5 h3 v4 h-3 z M-1.5,-6.5 h3 v4 h-3 z M4.5,-6.5 h3 v4 h-3 z M-7.5,-3 h15 v1.5 h-15 z", "#bdb5a5", "#2a241c", 0.9],
+            ["M-2.2,9 v-4.2 a2.2,2.2 0 0 1 4.4,0 v4.2 z", "#3a2a1a", null, 0],
+        ],
+    },
+    manor: {
+        rim: "#c9a24a",
+        parts: [
+            // A house's front: its walls and roof, lit windows and a door
+            ["M-8,-0.5 h16 v9.5 h-16 z", "#e2d6b8", "#2a241c", 1],
+            ["M-9.5,-0.5 L0,-8.5 L9.5,-0.5 z", "#8a4f34", "#2a241c", 1],
+            ["M-6.2,2 h3 v3 h-3 z M3.2,2 h3 v3 h-3 z", "#f2c66a", "#2a241c", 0.7],
+            ["M-1.6,9 v-5 h3.2 v5 z", "#4a3020", null, 0],
+        ],
+    },
+    abbey: {
+        rim: "#f2e6c4",
+        parts: [
+            // A church: its nave, its tower with a cross, and a round window
+            ["M-9.5,1.5 L-3.2,-4 L3.2,1.5 z", "#7c6a58", "#2a241c", 0.9],
+            ["M-9,1.5 h12 v7.5 h-12 z", "#e8dfcb", "#2a241c", 1],
+            ["M3,-5 h6 v14 h-6 z", "#e8dfcb", "#2a241c", 1],
+            ["M2.4,-5 L6,-9 L9.6,-5 z", "#7c6a58", "#2a241c", 0.9],
+            ["M6,-11.6 v2.6 M4.8,-10.6 h2.4", null, "#d9a93a", 1.2],
+            ["M-3,4.5 a1.6,1.6 0 1 1 0.01,0 z", "#f2c66a", "#2a241c", 0.6],
+        ],
+    },
+    windmill: {
+        rim: "#c9a24a",
+        parts: [
+            // Its tower and cap, and its four sails
+            ["M-3,-1.5 L3,-1.5 L4.2,9 L-4.2,9 z", "#e2d6b8", "#2a241c", 1],
+            ["M-3.4,-1.5 a3.4,3 0 0 1 6.8,0 z", "#8a4f34", "#2a241c", 0.9],
+            ["M0,-3.5 L-6.8,-9.6 M0,-3.5 L6.8,-9.6 M0,-3.5 L-7.2,3.6 M0,-3.5 L7.2,3.6", null, "#2a241c", 3],
+            ["M0,-3.5 L-6.8,-9.6 M0,-3.5 L6.8,-9.6 M0,-3.5 L-7.2,3.6 M0,-3.5 L7.2,3.6", null, "#e6d8b6", 1.5],
+        ],
+    },
+    watchtower: {
+        rim: "#c9a24a",
+        parts: [
+            // A tall slender tower under a pointed roof, a slit in it
+            ["M-3.6,-4 h7.2 v13 h-7.2 z", "#bdb5a5", "#2a241c", 1],
+            ["M-5.2,-4 L0,-11 L5.2,-4 z", "#5d4a3a", "#2a241c", 1],
+            ["M-0.7,-1 h1.4 v3.4 h-1.4 z M-0.7,4 h1.4 v2.4 h-1.4 z", "#1a1410", null, 0],
+        ],
+    },
+    greatHall: {
+        rim: "#c9a24a",
+        parts: [
+            // A people's great hall: long walls under a long roof, its door
+            ["M-9,0 h18 v8.5 h-18 z", "#cdb48c", "#2a241c", 1],
+            ["M-10.5,0 L-6,-7 L6,-7 L10.5,0 z", "#6b4a2e", "#2a241c", 1],
+            ["M-1.8,8.5 v-4.5 a1.8,1.8 0 0 1 3.6,0 v4.5 z", "#2a1a10", null, 0],
+        ],
+    },
+    spring: {
+        rim: "#8fd0ff",
+        parts: [
+            // A holy pool, ringed in stones, a glint of light over it
+            ["M-8.5,3.5 a8.5,4.2 0 1 0 17,0 a8.5,4.2 0 1 0 -17,0 z", "#9a9488", "#2a241c", 1],
+            ["M-6.5,3.5 a6.5,2.8 0 1 0 13,0 a6.5,2.8 0 1 0 -13,0 z", "#3c7fb8", null, 0],
+            ["M0,-10 l1,2.4 l2.4,1 l-2.4,1 l-1,2.4 l-1,-2.4 l-2.4,-1 l2.4,-1 z", "#dff3ff", null, 0],
+        ],
+    },
+    rock: {
+        rim: "#c9a24a",
+        parts: [
+            // A great rock jutting out over the land, the sun over it
+            ["M5,-7 a3,3 0 1 1 0.01,0 z", "#f2c66a", null, 0],
+            ["M-9.5,8.5 L-6.5,1 L-1,-2.5 L9.5,-4.5 L8,-1.5 L3,0.5 L5,8.5 z", "#b08a5a", "#2a241c", 1],
+        ],
+    },
+    totem: {
+        rim: "#c9a24a",
+        parts: [
+            // A carved pole crowned with horns
+            ["M-2.2,-7 h4.4 v16 h-4.4 z", "#8a5a34", "#2a241c", 1],
+            ["M-2,-6.5 C-5.4,-6.8 -7,-8.4 -6.6,-10.2 M2,-6.5 C5.4,-6.8 7,-8.4 6.6,-10.2", null, "#efe6d0", 1.8],
+            ["M-1.1,-3.6 h0.9 v1 h-0.9 z M0.2,-3.6 h0.9 v1 h-0.9 z M-2.2,1 h4.4 M-2.2,4.5 h4.4", "#1a1410", "#1a1410", 0.8],
+        ],
+    },
+    ruins: {
+        rim: "#9fb4a8",
+        parts: [
+            // Broken columns of an old hall, the spring of an arch, rubble
+            ["M-8,9 v-13 h3.6 v13 z M4.4,9 v-7.5 h3.6 v7.5 z", "#8f9888", "#1e2420", 1],
+            ["M-4.4,-4 c2,-2 4.4,-2.6 6.8,-2.2 l-0.6,2.2 c-2,-0.2 -4,0.4 -6.2,2.4 z", "#8f9888", "#1e2420", 0.9],
+            ["M-2.5,9 l1,-2.4 h3.4 l1.2,2.4 z", "#6f7868", "#1e2420", 0.8],
+        ],
+    },
+    ruinedCastle: {
+        rim: "#9fb4a8",
+        parts: [
+            // A tower broken off jagged at the top, its window dark
+            ["M-6.5,9 v-12 l2,-2.5 l1.8,2.5 l2.2,-4 l2,3 l2,-1.5 l2.5,2.5 v12 z", "#7d8a78", "#1e2420", 1],
+            ["M-1.5,3 v-3 a1.5,1.5 0 0 1 3,0 v3 z", "#141814", null, 0],
+            ["M3,-1 l-1.4,3 l1.2,1.6", null, "#1e2420", 0.8],
+        ],
+    },
+    cave: {
+        rim: "#b8a07a",
+        parts: [
+            // A mound of rock, its dark mouth
+            ["M-10.5,8.5 Q-9,-7.5 0,-9 Q9,-7.5 10.5,8.5 z", "#8a8172", "#1e1a14", 1],
+            ["M-4.6,8.5 v-3.6 a4.6,4.6 0 0 1 9.2,0 v3.6 z", "#120e0a", null, 0],
+        ],
+    },
+    lair: {
+        rim: "#ff7a1a",
+        parts: [
+            // A dragon's claw marks, raked across
+            ["M-6,-8.5 q3.2,8 -1,17 M0,-9.5 q3.2,8.4 -1,18 M6,-8.5 q3.2,8 -1,17", null, "#1a0c06", 3.6],
+            ["M-6,-8.5 q3.2,8 -1,17 M0,-9.5 q3.2,8.4 -1,18 M6,-8.5 q3.2,8 -1,17", null, "#e0502a", 1.9],
+        ],
+    },
+    shrine: {
+        rim: "#f2e6c4",
+        parts: [
+            // A stone altar, a flame burning on it
+            ["M0,1 c-3.4,-3 -1.4,-6.4 0,-9.6 c1.4,3.2 3.4,6.6 0,9.6 z", "#ffb13a", "#7a3a10", 0.7],
+            ["M-7.5,1.5 h15 v2 h-15 z", "#c8c0b0", "#2a241c", 0.9],
+            ["M-5.5,3.5 h11 v5.5 h-11 z", "#b0a898", "#2a241c", 0.9],
+        ],
+    },
+    stones: {
+        rim: "#b8b8a8",
+        parts: [
+            // Two standing stones, a lintel across them
+            ["M-8,9 l0.6,-12 h3.8 l0.4,12 z M3.6,9 l0.4,-12 h3.8 l0.6,12 z", "#a8a89a", "#1e1e1a", 1],
+            ["M-9.2,-6.2 h18.4 v3.2 h-18.4 z", "#a8a89a", "#1e1e1a", 1],
+        ],
+    },
+    camp: {
+        rim: "#d0413a",
+        parts: [
+            // A tent, its door open, its poles crossed over the top
+            ["M-9.5,8.5 L0,-7.5 L9.5,8.5 z", "#c9a46a", "#2a1a0e", 1],
+            ["M0,-7.5 L-3,8.5 L3,8.5 z", "#3a2410", null, 0],
+            ["M-2,-10.5 L2,-5 M2,-10.5 L-2,-5", null, "#2a1a0e", 1.2],
+        ],
+    },
 };
+
+/**
+ * The rim a place's icon has for who holds it (core/places.js HOLDERS): its people's gold, the
+ * outlaws' red, the dead's pale green, a great beast's fiery orange; grey once cleared, until it's
+ * held again.
+ */
+export const PLACE_RIMS = Object.freeze({ friendly: "#e2c25a", bandits: "#d0413a", dead: "#7fe0b8", beast: "#ff7a1a", cleared: "#8a8a8a" });
 
 // The paths, made once (Path2D: only in the browser)
 let paths = null;
@@ -84,10 +242,11 @@ function pathsOf(kind) {
 export const ICON_KINDS = Object.freeze(Object.keys(LOOKS));
 
 /**
- * Draw the icon of a building of `kind` (tavern, blacksmith, church, guild, hall, keep) on a canvas's
- * context, centred at x, y, `size` pixels across.
+ * Draw the icon of a building of `kind` (tavern, blacksmith, church, guild, hall, keep), or of a
+ * place (castle, cave and the rest), on a canvas's context, centred at x, y, `size` pixels across,
+ * rimmed in its own colour or `rim`'s.
  */
-export function drawBuildingIcon(context, kind, x, y, size) {
+export function drawBuildingIcon(context, kind, x, y, size, rim = null) {
     const look = LOOKS[kind];
 
     if (!look) {
@@ -110,7 +269,7 @@ export function drawBuildingIcon(context, kind, x, y, size) {
     context.fillStyle = "#231a14";
     context.fill();
     context.lineWidth = 1.8;
-    context.strokeStyle = look.rim;
+    context.strokeStyle = rim ?? look.rim;
     context.stroke();
 
     context.lineCap = context.lineJoin = "round";

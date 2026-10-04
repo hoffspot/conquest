@@ -10,7 +10,8 @@ import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
-import { MOST_REQUESTS, offerContract, progressOf } from "../client/js/core/standing.js";
+import { holderOf, PLACE_BANDS, placesOf } from "../client/js/core/places.js";
+import { CLEAR_REACH, MOST_REQUESTS, offerContract, progressOf } from "../client/js/core/standing.js";
 import { rumourOfRuler, rumoursAt, tell } from "../client/js/core/war/news.js";
 import { TURN_MS, War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -98,18 +99,21 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         }
     });
 
-    it("puts contracts on the guild's board for anyone: beasts, creatures' parts wanted, a bounty on the holders' enemies, the camp outside", () => {
+    it("puts contracts on the guild's board for anyone: beasts, creatures' parts wanted, a bounty on the holders' enemies, the camp outside, a place near held by outlaws or the dead", () => {
         const war = new War(plan);
         const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
         const giver = { id: "guild/receptionist", name: "Mirabel Wren", title: "" };
         const random = createRandom(2);
         const kinds = () => new Set(Array.from({ length: 60 }, () => offerContract({ war, town: town.id, giver, random })?.kind));
+        // (A place near held by outlaws or the dead: to be cleared)
+        const occupied = placesOf(plan).some((place) => Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= CLEAR_REACH && PLACE_BANDS[holderOf(plan, place, undefined, war.turn)]);
+        const clear = occupied ? ["clear"] : [];
 
-        assert.deepEqual([...kinds()].sort(), ["beasts", "parts"]);
+        assert.deepEqual([...kinds()].sort(), ["beasts", ...clear, "parts"].sort());
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
-        assert.deepEqual([...kinds()].sort(), ["beasts", "camp", "hunt", "parts"]);
+        assert.deepEqual([...kinds()].sort(), ["beasts", "camp", ...clear, "hunt", "parts"].sort());
 
         for (let k = 0; k < 30; k++) {
             const contract = offerContract({ war, town: town.id, giver, random });

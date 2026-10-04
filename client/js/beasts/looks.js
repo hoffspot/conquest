@@ -71,6 +71,7 @@ export const LOOKS = Object.freeze({
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
     },
     bandit: { body: "humanoid", scale: [0.95, 1.05] },
+    banditChief: { body: "humanoid", scale: [1.08, 1.14] },
     bear: {
         body: "quadruped",
         scale: [0.9, 1.12],
@@ -299,10 +300,11 @@ const BRUTES = {
  * cutthroats, dressed as rogues, and cultists wear mages' robes; the others are their kind's.
  */
 export function humanoidLook(id, seed = 1) {
-    // (Bandits: cutthroats, dressed as rogues; cultists in mages' robes, hatless)
-    if (id === "bandit" || id === "cultist") {
+    // (Bandits: cutthroats, dressed as rogues, their chief in a warrior's harness; cultists in
+    // mages' robes, hatless)
+    if (id === "bandit" || id === "banditChief" || id === "cultist") {
         const sex = seed % 4 === 0 ? "f" : "m";
-        const folk = folkLook({ role: "adventurer", look: id === "bandit" ? "rogue" : "mage", sex, seed });
+        const folk = folkLook({ role: "adventurer", look: { bandit: "rogue", banditChief: "warrior", cultist: "mage" }[id], sex, seed });
         const carried = new Set(["sword", "staff", "wand", "wizardHat"]);
 
         return { shape: folk.shape, look: folk.look, equipment: folk.equipment.filter((each) => !carried.has(each)), walk: "natural" };

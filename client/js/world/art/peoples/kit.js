@@ -455,12 +455,49 @@ export function pinnacle(solid, x, y, z, width, height, name, { sides = 4, phase
 }
 
 /**
- * The weathering painted on a people's building (Solid's tone): dirt splashed up the foot of its
- * walls (`dirt`, how dark), shade under its eaves (`eaves`: heights), its washes (`washes`: the
- * names of materials painted or plastered) a little their own colour (`tint`), roofs mottled,
- * and lights (the GLOWS) left their own colour.
+ * How a lived-in building's walls weather (terrain plan M7j-3: kept up, not let go as the ruins
+ * are): damp rising up the foot of a wall, darker and a little brown-green to `damp` (metres) and
+ * gone by `dry`, at most `dark` darker (r, g, b); and low on a wall facing north, where the sun
+ * never dries it, a little green, `green` at most (r, g, b darker by), up to `greenTo` (metres),
+ * gone by `greenGone`, in patches.
  */
-export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], dirt = 0.36, mottle = [] }) {
+export const WEATHERING = Object.freeze({ damp: 0.15, dry: 0.95, dark: [0.26, 0.19, 0.3], green: [0.34, 0.08, 0.45], greenTo: 0.4, greenGone: 1.8 });
+
+/** WEATHERING's heights, for walls to be cut at (Solid's tone bands). */
+export const WEATHERING_BANDS = Object.freeze([m(WEATHERING.damp), m(WEATHERING.dry), m(WEATHERING.greenTo), m(WEATHERING.greenGone)]);
+
+const smoothed = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+
+    return t * t * (3 - 2 * t);
+};
+
+/**
+ * WEATHERING on a wall's corner at (x, y, z) (world pixels, y up from the ground) facing `normal`
+ * (as built; the building turned `cos`, `sin` as it stands): multipliers [r, g, b] (into `out`).
+ */
+export function wallWeather(x, y, z, normal, cos, sin, seed, out = [1, 1, 1]) {
+    const damp = 1 - smoothed(m(WEATHERING.damp), m(WEATHERING.dry), y);
+    // (North is -z)
+    const north = -(normal[2] * cos - normal[0] * sin);
+    const green = north > 0.2 ? ((north - 0.2) / 0.8) * (1 - smoothed(m(WEATHERING.greenTo), m(WEATHERING.greenGone), y)) * smoothed(0.25, 0.75, noise(x - z, y * 0.5, seed + 11, m(1.1), 2)) : 0;
+
+    out[0] = (1 - WEATHERING.dark[0] * damp) * (1 - WEATHERING.green[0] * green);
+    out[1] = (1 - WEATHERING.dark[1] * damp) * (1 - WEATHERING.green[1] * green);
+    out[2] = (1 - WEATHERING.dark[2] * damp) * (1 - WEATHERING.green[2] * green);
+
+    return out;
+}
+
+/**
+ * The weathering painted on a people's building (Solid's tone): dirt splashed up the foot of its
+ * walls (`dirt`, how dark) and damp rising up it, a little green low on a wall facing north (as
+ * it stands, turned `facing`: the piece's; neither on what isn't built to stand, `damp` false: a
+ * tent), shade under its eaves (`eaves`: heights), its washes (`washes`: the names of materials
+ * painted or plastered) a little their own colour (`tint`), roofs mottled, and lights (the
+ * GLOWS) left their own colour.
+ */
+export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], dirt = 0.36, mottle = [], facing = 0, damp = true }) {
     const washed = new Set(washes);
     const mottled = new Set(mottle);
     const smooth = (a, b, x) => {
@@ -470,7 +507,9 @@ export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], di
     };
     // (Where it turns up a wall, for walls to be cut there: Solid's tone bands. The shade under
     // the eaves stops just over them, so a gable's foot isn't shaded all the way up the gable)
-    const bands = [m(1.2), ...eaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
+    const bands = [...(damp ? WEATHERING_BANDS : []), m(1.2), ...eaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
+    const [cos, sin] = [Math.cos(facing), Math.sin(facing)];
+    const low = [1, 1, 1];
 
     return Object.assign((point, normal, own) => {
         if (own.userData?.glow !== undefined) {
@@ -498,6 +537,14 @@ export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], di
             }
 
             k *= 0.93 + 0.07 * noise(x + z, y * 0.3, seed, m(1.5), 2);
+
+            // (Damp up its foot; and, facing north as it stands, green low down)
+            if (damp) {
+                wallWeather(x, y, z, normal, cos, sin, seed, low);
+                r *= low[0];
+                g *= low[1];
+                b *= low[2];
+            }
         } else if (upward < -0.45) {
             k *= 0.55;
         } else if (mottled.has(own.name)) {

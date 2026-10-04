@@ -567,6 +567,50 @@ describe("the buildings (insides.js Interiors)", () => {
     });
 });
 
+describe("the places worth finding gone into (insides.js: a cave, the dragon's lair, a broken watchtower)", () => {
+    it("have their way in among the world's links as they're set down, their floors made when wanted: all in them got to from the way in, their holders' and chest's places marked, a tower's two floors joined by stairs; and are drawn", () => {
+        const world = buildWorld({ seed: 1 });
+        const sites = world.maps.town.sites;
+
+        for (const [kind, floors] of [["cave", 1], ["dragon's lair", 1], ["watchtower", 2]]) {
+            const site = world.plan.sites.find((one) => one.kind === kind && !one.race);
+
+            sites.heartOf(site);
+
+            const building = world.interiors.buildings.get(`site:${site.id}`);
+
+            assert.ok(building && world.links.includes(building.door) && !building.made, kind);
+            assert.deepEqual(building.door.ends[0].squares, sites.set.get(site.id).entrance.front);
+            world.interiors.make(building.key);
+            assert.equal(building.maps.length, floors, kind);
+
+            // (Every floor got to: below from the way in, above from the stairs' top)
+            const maps = building.maps.map((id) => world.maps[id]);
+            const from = [building.door.ends[1].arrive, building.stairs?.ends[1].arrive];
+            const marked = (char) => maps.flatMap((map) => map.marks[char] ?? []);
+
+            maps.forEach((map, k) => {
+                for (const char of ["l", "g", "h"]) {
+                    for (const square of map.marks[char] ?? []) {
+                        assert.ok(reachable(map, from[k], square), `${kind}: ${map.id}'s ${char} at ${square}`);
+                    }
+                }
+            });
+            assert.equal(marked("h").length > 0, true, `${kind}'s chest`);
+            assert.equal(marked("l").length, 1, `${kind}'s chief`);
+            assert.ok(kind === "dragon's lair" || marked("g").length >= 2, `${kind}'s guards`);
+
+            for (const map of maps) {
+                const interior = buildInterior(map);
+
+                assert.ok(interior.object.children.length > 0 && interior.lights.length > 0 === (map.style !== "tower-top"), `${kind}: ${map.id}`);
+                assert.equal(interior.open, map.style === "tower-top", `${map.id} open to the sky`);
+                interior.dispose();
+            }
+        }
+    });
+});
+
 describe("folk made up as they're wanted (characters/folk.js)", () => {
     it("look as their part and sex have them, the same for the same seed, and each their own", () => {
         const parts = [["barkeep", "barkeep", "m"], ["barmaid", "wench", "f"], ["patron", "drinker", "m"], ["patron", "alewife", "f"], ["patron", "greybeard", "m"], ["innkeeper", "innkeeper", "f"], ["madam", "madam", "f"], ["courtesan", "courtesan", "f"], ["smith", "smith", "m"], ["smith", "smith", "f"], ["apprentice", "apprentice", "m"]];

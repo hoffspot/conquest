@@ -21,8 +21,8 @@ import { budLamp, crescent, greatTree, petalRoof, ringDeck, spiralStair, treeCol
 
 const ROOFS = ["leafscale", "leafscale", "leafscale-sage", "leafscale-silver"];
 
-function toned(solid, random, eaves = []) {
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: ["marble", "stone-moon"], tint: [random.range(0.97, 1.03), random.range(0.97, 1.03), random.range(0.97, 1.04)], dirt: 0.25, mottle: ["leafscale", "leafscale-sage", "leafscale-silver"] });
+function toned(solid, random, eaves = [], facing = 0) {
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing, washes: ["marble", "stone-moon"], tint: [random.range(0.97, 1.03), random.range(0.97, 1.03), random.range(0.97, 1.04)], dirt: 0.25, mottle: ["leafscale", "leafscale-sage", "leafscale-silver"] });
 }
 
 // A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round
@@ -290,7 +290,7 @@ export function house(piece) {
     const solid = new Solid();
     const trees = [];
 
-    toned(solid, random, [m(4)]);
+    toned(solid, random, [m(4)], piece.facing ?? 0);
 
     if (type === "trunk") {
         trunkHouse(solid, W / 2, D / 2, { random, wealth, trees });

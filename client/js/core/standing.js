@@ -12,11 +12,13 @@
 //
 // Pure data and a little bookkeeping, no DOM.
 
-import { CREATURES } from "./creatures.js";
+import { CREATURES, tierAt } from "./creatures.js";
+import { holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { PARTS, SPOILS } from "./spoils.js";
 import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { hypot } from "./exact.js";
+import { landAt } from "./worldplan/plan.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
 export const STANDINGS = Object.freeze([
@@ -60,7 +62,13 @@ export const REQUESTS = Object.freeze({
     hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 } } },
     camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, gold: 70 } },
     parts: { title: "Wanted at the guild", rank: 0, turns: 60, reward: { standing: 0, gold: 4, share: 1.6 } },
+    // (A place held by outlaws or the dead put to the sword: more for a bigger place, and more for
+    // each tier of its land's danger)
+    clear: { title: "Put them to the sword", rank: 0, turns: 90, reward: { standing: 0, gold: 30, size: { small: 0, medium: 25, large: 60 }, tier: 9 } },
 });
+
+/** How far from a guild's town (m) the places held by outlaws or the dead it'll offer to have cleared are. */
+export const CLEAR_REACH = 3000;
 
 /**
  * What the guilds want brought in (docs/WILDS.md): the parts of the creatures found anywhere, not
@@ -326,7 +334,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
  * guild's library: spells.js TOMES, as rare as each is): breaking a camp always, a bounty now and
  * then.
  */
-export const GUILD_TOMES = Object.freeze({ camp: 1, hunt: 0.35 });
+export const GUILD_TOMES = Object.freeze({ camp: 1, hunt: 0.35, clear: 0.5 });
 
 // A tome offered with a contract, in words
 const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].label} from its library.`;
@@ -334,7 +342,8 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
 /**
  * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
  * people (no standing needed, and none given: gold): beasts off the roads round it; a bounty on
- * the soldiers of a people at war with those who hold it; the camp outside it broken up. Null if
+ * the soldiers of a people at war with those who hold it; the camp outside it broken up; a place
+ * near held by outlaws or the dead put to the sword, its leader with them (core/places.js). Null if
  * there's nothing on the board they haven't got already.
  * @param {object} options
  * @param {object} options.war - The war (war.js).
@@ -355,7 +364,8 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
     const foes = war.enemiesOf(holders).filter((foe) => !has("hunt", foe));
     const camps = war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && !has("camp", force.id));
     const wanted = WANTED_PARTS.filter((part) => !has("parts", part));
-    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : [])];
+    const occupied = heldNear(war, town).filter(({ place }) => !has("clear", place.id));
+    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : [])];
 
     if (!kinds.length) {
         return null;
@@ -396,9 +406,55 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
 
             return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.${tome ? ` ${fromTheLibrary(tome)}` : ""}`, until: war.turn + turns, reward: { ...pay(reward.gold), ...(tome ? { tome } : {}) } };
         }
+        case "clear": {
+            const { place, holder, tier } = random.pick(occupied);
+            const name = place.name ?? `the ${place.kind}`;
+            const way = `${Math.round(apart(place.at, town.at) / 100) / 10} km ${compass(town.at, place.at)} of ${town.name}`;
+            const tome = random.chance(GUILD_TOMES.clear) ? rollTome(random) : null;
+            const text =
+                holder === "dead"
+                    ? `The dead walk at ${name}, ${way}, and no one will go near it. Lay them to rest, the ${CREATURES[PLACE_BANDS.dead.leader].name.toLowerCase()} that leads them with them.`
+                    : `Outlaws hold ${name}, ${way}, and rob all who pass. Put them to the sword, their chief with them.`;
+
+            return {
+                ...base,
+                key: place.id,
+                target: { place: place.id, holder, at: [...place.at], name, kind: place.kind },
+                text: `${text}${tome ? ` ${fromTheLibrary(tome)}` : ""}`,
+                until: war.turn + turns,
+                reward: { ...pay(reward.gold + reward.size[place.size] + reward.tier * tier), ...(tome ? { tome } : {}) },
+            };
+        }
         default:
             return null;
     }
+}
+
+// The places near a town held by outlaws or the dead (core/places.js), not cleared: { place,
+// holder, tier (its land's danger, as from the town: creatures.js tierAt) }
+function heldNear(war, town) {
+    if (!war.plan?.sites) {
+        return [];
+    }
+
+    return placesOf(war.plan)
+        .filter((place) => apart(place.at, town.at) <= CLEAR_REACH)
+        .map((place) => ({ place, holder: holderOf(war.plan, place, war.places?.[place.id], war.turn) }))
+        .filter(({ holder }) => PLACE_BANDS[holder])
+        .map(({ place, holder }) => ({ place, holder, tier: tierAt(place.at, [town.at], landAt(war.plan, ...place.at).biome) }));
+}
+
+// Which way one place is from another, by the compass (north up the map, as y falls)
+function compass([fx, fy], [tx, ty]) {
+    const [dx, dy] = [tx - fx, ty - fy];
+    const ns = dy < 0 ? "north" : "south";
+    const ew = dx > 0 ? "east" : "west";
+
+    if (Math.abs(dx) > 2.414 * Math.abs(dy)) {
+        return ew;
+    }
+
+    return Math.abs(dy) > 2.414 * Math.abs(dx) ? ns : `${ns}-${ew}`;
 }
 
 // What there is to scout near a town, for a people: enemy camps and armies within a few km, or
@@ -485,6 +541,8 @@ export function progressOf(request) {
         case "rout":
         case "camp":
             return request.there ? "Bring its soldiers down." : `Find the camp outside ${target.name}.`;
+        case "clear":
+            return target.holder === "dead" ? `Lay the dead of ${target.name} to rest, and the one that leads them.` : `Put the outlaws at ${target.name} to the sword, and their chief.`;
         case "escort":
             return request.there ? "Stay with them to the end of the road." : "Find them on the road.";
         case "waylay":

@@ -248,7 +248,8 @@ export class WorldMap {
 
     /**
      * Open it on where the player is (`player` { x, z, facing }: metres, radians), with icons
-     * over `icons` ([{ kind, x, z }]: the buildings they've gone into), marks where their
+     * over `icons` ([{ kind, x, z, rim }]: the buildings they've gone into, and the places worth
+     * finding near where they've been, rimmed in who holds them), marks where their
      * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
      * and the way to it (`way`: [[x, z], ...], or null).
      */
@@ -459,7 +460,7 @@ export class WorldMap {
                 const [x, y] = at(icon.x, icon.z);
 
                 if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
-                    drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE);
+                    drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                     icons.push(icon.kind);
                 }
             }

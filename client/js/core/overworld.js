@@ -117,6 +117,9 @@ const TREE_CLEAR = 2;
 const CLEAR_OF_TOWN = 3;
 const CLEAR_OF_PLACES = 12;
 
+/** How much further than its own flats' reach a camp's pitched if all near it is a place's ground. */
+export const CAMP_FARTHER = 3;
+
 // How many chunks to keep once made (the rest are made again when they're needed)
 const KEEP = 256;
 
@@ -267,7 +270,7 @@ export class Overworld {
         // their clearings growing to their size, where they're set)
         // (Those a trail goes up to facing the way it comes: the trails are made below, before any
         // site is set down)
-        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
+        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site), onSet: (set) => this.#enterSite(set) });
         this.arches = archesOf(plan);
         this.aqueducts = aqueductsOf(plan);
         // (The great lone trees, worked out now as the world's made, not as the first chunk is)
@@ -425,6 +428,20 @@ export class Overworld {
         for (const settlement of this.settlements.laid.values()) {
             this.#enter(settlement);
         }
+
+        for (const set of this.sites.set.values()) {
+            if (set) {
+                this.#enterSite(set);
+            }
+        }
+    }
+
+    // A site that can be gone into (a cave, the dragon's lair, a broken watchtower), added to the
+    // interiors as it's set down
+    #enterSite(set) {
+        if (set.entrance) {
+            this.interiors?.addSite(set);
+        }
     }
 
     // A settlement's buildings that can be gone into, added to the interiors
@@ -573,12 +590,21 @@ export class Overworld {
      */
     campAt(camp) {
         if (!this.campSpots.has(camp.id)) {
+            // (Off the roads, and clear of the settlements, the sites, the arches and the piers,
+            // the camp's own ground with them: further off if all near is theirs, a citadel's)
             const road = (x, y) => this.plan.road[cellAt(y) * CELLS + cellAt(x)] > 0;
+            const taken = (x, y) => road(x, y) || this.clearings.some(({ at, radius }) => hypot(x - at[0], y - at[1]) < radius + CLEAR_OF_PLACES);
+            const near = flatSpot(this.plan, camp.at, { avoid: taken, size: WORLD_SIZE });
 
-            this.campSpots.set(camp.id, flatSpot(this.plan, camp.at, { avoid: road, size: WORLD_SIZE }));
+            this.campSpots.set(camp.id, taken(...near) ? flatSpot(this.plan, camp.at, { avoid: taken, size: WORLD_SIZE, reach: FLATS.reach * CAMP_FARTHER }) : near);
         }
 
         return this.campSpots.get(camp.id);
+    }
+
+    /** Where a camp's pitched if that's been worked out (campAt), else its plan's spot. */
+    campPlacedAt(camp) {
+        return this.campSpots.get(camp.id) ?? camp.at;
     }
 
     // The camps that could be pitched within `margin` of a box (metres), wherever they're pitched

@@ -44,6 +44,7 @@ import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from ".
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 import { lightsMesh, lightsOf } from "./lights.js";
+import { poolMaterial, poolsMesh } from "./windowpools.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 import { lieOf } from "./art/kits/yards.js";
@@ -432,6 +433,7 @@ export class Chunks {
                 }
 
                 job.parts.push(...parts);
+                job.panes.push(...parts.flatMap(({ panes }) => panes));
                 job.built = null;
                 continue;
             }
@@ -542,11 +544,17 @@ export class Chunks {
         const smoke = smokeMesh(job.smoke);
         const cloth = clothMesh(job.cloth);
         const lit = lightsMesh(job.lights);
+        // (And the light their lit windows throw on the ground at night: windowpools.js)
+        const pools = poolsMesh(job.panes, this.groundAt);
 
         drawn.lights = job.lights;
 
         if (lit) {
             drawn.object.add(lit);
+        }
+
+        if (pools) {
+            drawn.object.add(pools);
         }
 
         if (cloth) {
@@ -884,7 +892,7 @@ export class Chunks {
 
             // (Each piece built, then its parts made ready to merge: `built` the one whose parts
             // aren't yet)
-            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], lights: [], built: null, parts: [] };
+            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], lights: [], built: null, parts: [], panes: [] };
             this.building.push(drawn);
         }
 
@@ -950,10 +958,11 @@ export class Chunks {
     }
 }
 
-// Water, a waterfall and its mist, ground wet by water, a bridge, chimney smoke, a banner and a
-// tuft of grass, far under the ground where they're never seen, so that their shaders are made
-// while the game loads (with the rest: Game.build) rather than the first time a river, a fall, a
-// bridge, smoke, a banner or the undergrowth comes into view
+// Water, a waterfall and its mist, ground wet by water, a bridge, chimney smoke, a banner, a tuft
+// of grass and a window's light on the ground, far under the ground where they're never seen, so
+// that their shaders are made while the game loads (with the rest: Game.build) rather than the
+// first time a river, a fall, a bridge, smoke, a banner, the undergrowth or a lit window comes into
+// view
 function primer() {
     const group = new THREE.Group();
     const water = primingWater();
@@ -977,6 +986,9 @@ function primer() {
     // (And a tuft of grass, for the undergrowth's; and a stretch of hedge)
     group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));
     group.add(hedgeMesh([{ axis: 0, at: 0.5, from: 0, to: 2, ends: [true, true], seed: 1 }], [0, 0], () => 0).object);
+
+    // (A window's light on the ground: windowpools.js's, drawn by night only, so made here)
+    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), poolMaterial()));
 
     return group;
 }

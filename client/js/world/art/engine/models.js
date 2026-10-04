@@ -1,5 +1,6 @@
 // Ready-made 3D models (glTF), lit like the rest of the art: KayKit's trees, props and landmark
-// buildings (client/models/kaykit, CC0).
+// buildings (client/models/kaykit, CC0); and, as it is, with its animations, the treasure chest
+// (client/models/jmi, MIT: world/drops3d.js).
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -7,6 +8,19 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 const manager = new THREE.LoadingManager();
 const loader = new GLTFLoader(manager);
 const loaded = new Map();
+const files = new Map();
+
+/**
+ * A glTF file as it is ({ scene, animations }: its materials and animations its own), read once
+ * and shared (copy its scene to use it: scene.clone(true)).
+ */
+export function loadGltf(url) {
+    if (!files.has(url)) {
+        files.set(url, loader.loadAsync(url));
+    }
+
+    return files.get(url);
+}
 
 /**
  * Where to read models' files from: `resolve(url)` gives the URL to load instead (the game's

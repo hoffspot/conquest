@@ -3,7 +3,7 @@
 // (core/sites.js LIE)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
+import { buildWorld, CAMP_FARTHER, CHUNK } from "../client/js/core/overworld.js";
 import { isNeutral, LIE } from "../client/js/core/sites.js";
 import { FLATS, flatSpot } from "../client/js/core/terrain/flats.js";
 import { heightAt } from "../client/js/core/terrain/height.js";
@@ -19,15 +19,20 @@ describe("level ground for what stands on it (terrain/flats.js, sites.js)", () =
         overworld = buildWorld({ seed: 1 }).maps.town;
     });
 
-    it("pitches every camp on the flattest ground near its cell, its pad never far out of the land or into it", () => {
+    it("pitches every camp on the flattest ground near its cell, clear of the places, its pad never far out of the land or into it", () => {
         const { plan } = overworld;
-        let moved = 0;
+        let [moved, farther] = [0, 0];
 
         for (const camp of plan.camps) {
             const at = overworld.campAt(camp);
             const level = overworld.ground.levelOf({ id: `camp ${camp.id}`, at, radius: 10 });
+            const off = Math.hypot(at[0] - camp.at[0], at[1] - camp.at[1]);
 
-            assert.ok(Math.hypot(at[0] - camp.at[0], at[1] - camp.at[1]) <= FLATS.reach + 1e-9, camp.id);
+            // (Near its cell; further only where all near it is a place's ground, a citadel's)
+            assert.ok(off <= FLATS.reach * CAMP_FARTHER + 1e-9, camp.id);
+            farther += off > FLATS.reach + 1e-9 ? 1 : 0;
+            // (Never on a site's, a settlement's, an arch's or a pier's ground)
+            assert.ok(overworld.clearings.every(({ at: [x, y], radius }) => Math.hypot(at[0] - x, at[1] - y) >= radius), `${camp.id} on a place's ground`);
             assert.ok(offLevel(plan, at, 10, level) < 6, `${camp.id}: ${offLevel(plan, at, 10, level).toFixed(1)} m`);
             // (The same whenever it's asked for)
             assert.deepEqual(overworld.campAt(camp), at);
@@ -35,6 +40,7 @@ describe("level ground for what stands on it (terrain/flats.js, sites.js)", () =
         }
 
         assert.ok(moved > 10, `${moved} of ${plan.camps.length} moved`);
+        assert.ok(farther <= 2, `${farther} further`);
     });
 
     it("finds the flattest spot on a slope, and stays put where it's flat already", () => {
