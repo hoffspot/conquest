@@ -76,7 +76,9 @@ files. Read what it wants to do, above all a `git push`.
 
 ## 2. The checks: what CI runs, and how to run them yourself
 
-CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged:
+CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged. A
+pull request's run is cancelled when you push to it again; only its newest commit's run counts.
+`main`'s runs always run to the end.
 
 | CI job | What it runs | Locally |
 | --- | --- | --- |
@@ -198,13 +200,58 @@ git status               # only the files you meant to change
 4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
    failed. Don't push empty commits, or close and reopen the pull request, to set CI going again.
-5. If `main` moves on and your branch conflicts, merge `main` into your branch and fix the
-   conflicts. Don't rebase or force-push a branch someone else has checked out. Run
-   `npm run build:manifest` again if `client/` changed on both sides.
+5. If `main` moves on, bring your branch up to date (section 6).
 6. Answer every review comment: change the code, or say why not.
-7. A maintainer merges it, with a merge commit, once CI is green and it's been reviewed. Don't
-   merge your own pull request unless the owner has said you may. Once it's merged, GitHub Pages
-   publishes the game from `main`.
+7. A maintainer merges it, with a merge commit, once CI is green on a head that's up to date with
+   `main` and it's been reviewed. Don't merge your own pull request unless the owner has said you
+   may. Once it's merged, GitHub Pages publishes the game from `main`.
+
+## 6. Merging cleanly when others are working too
+
+Several people, and their Claude sessions, work on this repository at once. A pull request's CI
+tests it merged into `main` as `main` was when CI ran. If someone else merges first, your green
+tick may no longer be true: the two changes can conflict, or each pass alone and fail together
+(both bump `NET_VERSION` to the same number; both add to the same table).
+
+**Before you merge (or ask for a merge):**
+
+1. Bring the branch up to date: `git fetch origin main && git merge origin/main`. Merge, don't
+   rebase: rebasing rewrites commits other people may have checked out. Never force-push a branch
+   someone else has.
+2. Resolve conflicts as described below, then run the checks again: `npm run build:manifest`,
+   `npm run check`, and the browser tests the change touches.
+3. Push, and wait for CI to go green on that new head.
+4. Merge only if `main` hasn't moved again in the meantime. If it has, go back to step 1.
+
+**GitHub can enforce all of that** once the owner turns it on in the repository's settings. (The
+merge queue, which would do it automatically, is only for repositories owned by an organisation;
+this one belongs to a person.)
+- *Settings → Branches* (or *Rules → Rulesets*), a rule for `main`:
+  - require a pull request before merging;
+  - require these status checks to pass: `test` and `e2e (1 of 8)` to `e2e (8 of 8)`;
+  - require branches to be up to date before merging;
+  - block force pushes and deletion.
+- *Settings → General → Pull Requests*:
+  - allow auto-merge;
+  - always suggest updating pull request branches.
+
+Then the routine is: *Update branch* on the pull request (it merges `main` in), then *Enable
+auto-merge*. GitHub merges the pull request once it's green on that up-to-date head. If `main`
+moves first, update the branch again.
+
+**Conflicts in files no one should merge by hand:**
+
+| File | What to do |
+| --- | --- |
+| `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
+| `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
+| `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
+| `NET_VERSION`, `SNAPSHOT_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
+| `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |
+
+**Claude sessions merging their own pull requests** (only where the owner has said so): bring the
+branch up to date and have CI green on that head, as above. Use auto-merge where it's turned on,
+and merge by hand only when `main` hasn't moved since the green run.
 
 ## Working with Claude Code: what to ask for
 
@@ -233,3 +280,5 @@ A good first message in a session:
 | Browser tests time out locally | Run fewer at once (`--workers=1`), and close other heavy programs: drawing without a GPU is slow |
 | The port's in use | `E2E_PORT=8096` for the tests, `PORT=3000` for `npm start` |
 | `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |
+| A conflict in `manifest.js`, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
+| CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |

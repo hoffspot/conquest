@@ -49,8 +49,13 @@ export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild
  * its people), as ENTRANCES' (`depth` in from its lot's front, as the art builds it: art/peoples,
  * kits/castle.js `tower`), and what's within (`inside`, a kind of insides): each people's
  * watchtower (the orcs' an open deck on poles, none), kept; the elves' tree hall a great hall, as a
- * keep's. Their other places are open to the sky (the pits, the hatchery, the spider shrine), or
- * have no way in at their foot (the sun temple's behind its altar, the ziggurat's at its top).
+ * keep's; the cat folk's sun temple and the lizard folk's ziggurat temples, as an abbey's (their
+ * patrons: SITE_PATRONS). A door up off the ground (`foot`: where its way in begins, as `depth`
+ * and `offset` are) is gone into from the foot of its stair, as a castle's raised keep door
+ * (sites.js entranceAt): the sun temple's in its middle tower's foot, up on its platform behind
+ * its obelisk and altar, from the foot of its broad stair; the ziggurat's a portal at its foot,
+ * beside its great stair. Their other places are open to the sky (the pits, the hatchery, the
+ * spider shrine).
  */
 export const STRUCTURE_DOORS = Object.freeze({
     watchtower: Object.freeze({
@@ -61,7 +66,16 @@ export const STRUCTURE_DOORS = Object.freeze({
         lizard: { inside: "watchtower", depth: 0.3, offset: 0, width: 1.2, height: 2.1, floor: 0 },
     }),
     "tree hall": Object.freeze({ elf: { inside: "keep", depth: 8.1, offset: 0, width: 2, height: 3.2, floor: 0.5 } }),
+    "sun temple": Object.freeze({ cat: { inside: "church", depth: 19.9, offset: 0, width: 2.2, height: 3.4, floor: 2.5, foot: { depth: 0.8, offset: 0 } } }),
+    ziggurat: Object.freeze({ lizard: { inside: "church", depth: 1.6, offset: -2.64, width: 1.6, height: 2.6, floor: 0.3 } }),
 });
+
+/**
+ * Whose temple each of the peoples' own temples out in the land is (lore/gods.js): the sun
+ * temple Aurelia's, the Dawnmother's, a golden sun her sign; the ziggurat Ithriel's, the Veiled
+ * Star's, whose priests read the stars from its top.
+ */
+export const SITE_PATRONS = Object.freeze({ "sun temple": "aurelia", ziggurat: "ithriel" });
 
 /**
  * Which settlement a building's in (a plan place's id, as the war has its towns): where the player
@@ -1196,7 +1210,7 @@ export class Interiors {
             name: site.name ? (site.race ? `${site.name} ${site.kind.replace(/(^| )\w/g, (first) => first.toUpperCase())}` : site.name) : NAMES[entrance.inside],
             piece: { id: site.id, name: entrance.inside },
             tavern: null,
-            patron: null,
+            patron: SITE_PATRONS[site.kind] ?? null,
             place: "site",
             site: site.id,
             siteKind: site.kind,

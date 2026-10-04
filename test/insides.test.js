@@ -17,7 +17,7 @@ const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
+const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -690,6 +690,54 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
         }
 
         assert.deepEqual([...peoples].sort(), ["cat", "darkElf", "elf", "human", "lizard"]);
+    });
+
+    it("the cat folk's sun temple and the lizard folk's ziggurat gone into (M7.5d): the sun temple by the door in its middle tower's foot, up on its platform, from the foot of its broad stair; the ziggurat by the portal at its foot; each a temple as an abbey's, under its patron, its priest and herbalist where they can be got to", () => {
+        const world = buildWorld({ seed: 2 });
+        const sites = world.maps.town.sites;
+        const squares = squaresOf(world.maps.town);
+        const kinds = new Set();
+
+        for (const site of world.plan.sites.filter((one) => one.kind === "sun temple" || one.kind === "ziggurat")) {
+            sites.heartOf(site);
+
+            const set = sites.set.get(site.id);
+            const building = world.interiors.buildings.get(`site:${site.id}`);
+            const { door, front, outside } = set.entrance;
+            const spec = STRUCTURE_DOORS[site.kind][site.race];
+
+            assert.ok(building, site.id);
+            assert.equal(building.kind, "church");
+            assert.equal(building.people, site.race);
+            assert.equal(building.patron, SITE_PATRONS[site.kind]);
+            assert.match(building.name, site.kind === "ziggurat" ? / Ziggurat$/ : / Sun Temple$/);
+            assert.deepEqual(building.door.ends[0].squares, front);
+            assert.ok([...front, outside].every((square) => !squares.blocked(...square)), `${site.id}: the way in clear`);
+
+            // (Where the door is drawn, and how far from where it's gone into: the sun temple's up on
+            // its platform, back past its obelisk and altar from the foot of its stair; the
+            // ziggurat's at its foot)
+            const middle = [(front[0][0] + front[1][0]) / 2 + 0.5, (front[0][1] + front[1][1]) / 2 + 0.5];
+            const off = Math.hypot(door.x - middle[0], door.z - middle[1]);
+
+            assert.equal(door.floor, spec.floor);
+            assert.ok(site.kind === "sun temple" ? off > 17 && off < 21 : off < 1.5, `${site.id}: ${off.toFixed(1)} m from its way in`);
+
+            world.interiors.make(building.key);
+
+            const [nave] = building.maps.map((id) => world.maps[id]);
+
+            assert.equal(nave.patron, SITE_PATRONS[site.kind]);
+            assert.ok(["priest", "herbalist"].every((role) => building.folk.some((one) => one.role === role)), site.id);
+
+            for (const one of building.folk.filter(({ routine }) => !routine?.seated)) {
+                assert.ok(reachable(nave, building.door.ends[1].arrive, one.square), `${site.id}'s ${one.local}`);
+            }
+
+            kinds.add(site.kind);
+        }
+
+        assert.deepEqual([...kinds].sort(), ["sun temple", "ziggurat"]);
     });
 });
 

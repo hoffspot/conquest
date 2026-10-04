@@ -19,6 +19,16 @@ covers:
 
 `test/contribution.test.js` checks the parts a machine can check. The rest is yours.
 
+## Before every merge
+
+Others contribute too, so a green pull request can go stale (contribution.md, section 6):
+
+- Merge `origin/main` into the branch; don't rebase.
+- Regenerate rather than hand-merge `client/js/app/manifest.js` and `package-lock.json`. If both
+  sides bumped a version number, take the higher one and add one.
+- Merge only once CI is green on that up-to-date head and `main` hasn't moved since.
+- Use auto-merge where it's turned on.
+
 ## Before every push
 
 - `npm run build:manifest` if anything under `client/` changed.
