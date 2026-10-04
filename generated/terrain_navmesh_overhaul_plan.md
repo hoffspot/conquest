@@ -3715,3 +3715,41 @@ converted data is to be measured in M8 against today's hm08 data.
     for the same seed; a draw each near, fewer sides further off, the heap alone far off, nothing in
     the shadows; the budget; the shader lit as gold); e2e: the held place's chest open on its coins.
   - **Next:** M7.5b (the places entered and explored: caves, the lair and broken watchtowers first).
+- **2026-10-04, M7.5b-1 built: a cave, the dragon's lair and the broken watchtowers gone into**
+  (§8 *Places worth finding*: "enterable castles and forts with interiors"; docs/GAME.md *Held,
+  in play*). M7.5b is in steps, each playable: **b-1** (this) the caves, the lair and the wild
+  watchtowers; **b-2** the manors, abbeys and the other peoples' halls and temples held by
+  outlaws; **b-3** the castles' courtyards and keeps; **b-4** crypts under the ruins and the
+  ruined castles' keeps.
+  - **The way in** (core/sites.js `entranceAt`, from the layouts' `entry`: core/setpieces/neutral.js):
+    a door as a building's, the squares up to it kept clear of the site's solid parts; added to the
+    world's links as the site's set down (`Sites` `onSet`, overworld.js, insides.js `addSite`).
+  - **The floors** (core/insides.js `caveRooms`, `lairRooms`, `towerRooms`; plans with new marks:
+    "#" rock, "l" the chief's place, "g" a guard's, "h" the chest's, "u" a bedroll, "x" a fire, "j"
+    bones), made as the band's put out (and again for a snapshot's `made`: host.js `#building`
+    sets the site down for a `site:` key).
+  - **Drawn** (world/interiors3d.js `cave`, `lair`, `tower`, `towerTop`): crags of rock from the
+    plan's rock by open ground (blocks turned this way and that, leaning in, cut away in front of
+    the player as walls are), a rock roof (hidden from above), daylight in the mouth and a light
+    in from it, a camp fire ringed with stones, bedrolls, torches on the walls; the lair's bones,
+    ember cracks and heaps of gold; the tower's stairs, rubble, broken parapet, its top open to the
+    sky (view.js `setIndoors`: `open` keeps the sky) over the ground far below.
+  - **Who's within** (host.js `#places`, `#inside`, `#pack`/`#rouse` on a map): the chief and the
+    locked chest at the plan's "l" and "h", as many of the band as it has "g" for (half at most)
+    within, the rest outside. A player within counts as at the place (`#atPlace`): the band's held,
+    the chest's shares are theirs where it stood, the guild's contract's done.
+  - **The dragon's hoard** (host.js `#lairs`, `#opened`; progress.js `LOOT.hoard`): a chest at the
+    back of its lair, locked while it lives; opened when it falls.
+  - **NET_VERSION 33** (bands and chests on the insides' maps).
+  - **Cost:** the cave's floor 2,900 triangles, 8 draws (its crags, rock roof, floor, fire, things);
+    the tower's two floors and the lair as little. What costs within is who's there: each person
+    about 40,000 triangles, as anywhere (M8's).
+  - **Pictures** (sent in the session): the cave's band outside before; in by the cave's mouth,
+    the cave from above, the dragon's lair, a broken watchtower below and its top.
+  - **Tests:** test/places.test.js (the band's chief, guards and chest within a cave or a wild
+    tower; in by the cave's mouth, the band held, put to the sword within, the share where the
+    chest stood; the dragon's hoard locked, opened when it falls; carried on from a snapshot);
+    test/insides.test.js (the way in among the links, all within got to from it, the marks, a
+    tower's stairs, each floor drawn, the top open). e2e: in by a cave's mouth (its band within,
+    its chief by the chest, lit) and out again.
+  - **Next:** M7.5b-2, the manors, abbeys and halls held by outlaws.

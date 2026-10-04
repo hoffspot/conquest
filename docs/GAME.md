@@ -2621,6 +2621,27 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
+- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild): its way
+  in is a door as a building's (`sites.js` `entranceAt`: the mouth, or the tower's door, kept clear
+  of what stands in the way), its floors made the first time they're wanted (`insides.js`
+  `addSite`, the key `site:` and the site's id; `caveRooms`, `lairRooms`, `towerRooms`), drawn as
+  the buildings' insides are (`interiors3d.js`):
+  - **A cave:** a passage in from its mouth (daylight in it) to a chamber, rock all round,
+    earth underfoot; the outlaws' bedrolls and their fire, sacks and a crate, torches on the walls.
+  - **The dragon's lair:** a great cavern of dark rock, the floor scorched, bones about it, embers
+    glowing in its cracks, heaps of gold at the back.
+  - **A broken watchtower:** below, flagstones, old stone walls, the stairs up, rubble, a torch by
+    the door; above, boards, a broken parapet, open to the sky (`open`: the view keeps the sky),
+    its walls falling away to the ground far below.
+  - **Who's within** (`host.js` `#inside`): the band's chief and their locked chest at the back of
+    the cave or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
+    for guarding the way in (its "g", half the band at most), the rest outside; the band's held
+    while a player's within. Put to the sword, the chest's shares lie where it stood, inside, for
+    the players there (in or near it), and the guild's contract is done for them.
+  - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
+    (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
+    gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
+  - Its sound's its own (`sound.js` PLACES: a cave's and the lair's hushed, the tower's open).
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

@@ -625,6 +625,96 @@ export function keepFolkOf(building, hall) {
     return folk;
 }
 
+// --- The places worth finding gone into (core/places.js; sites.js entranceAt) ---
+
+// An outlaws' cave, 16 by 16 metres: a passage in from its mouth (the door, south) to a chamber,
+// their bedrolls and their fire in it, their chief by the chest at the back
+const CAVE = [
+    "################",
+    "#####......#####",
+    "###..........###",
+    "##....l..h....##",
+    "##............##",
+    "#..g........g..#",
+    "#..............#",
+    "#..uu....x.....#",
+    "#..............#",
+    "##..g.......u.##",
+    "###..........###",
+    "#####......#####",
+    "######....######",
+    "#######..#######",
+    "#######..#######",
+    "#######DD#######",
+];
+
+// The dragon's lair, 22 by 18: a great cavern in from its mouth, bones about it, its hoard heaped
+// at the back
+const LAIR = [
+    "######################",
+    "#######........#######",
+    "#####............#####",
+    "####......hh......####",
+    "###.....j.l..j.....###",
+    "##..................##",
+    "##..j...........j...##",
+    "#....................#",
+    "#.........j..........#",
+    "#....................#",
+    "##..g............g..##",
+    "###................###",
+    "####..j.......j...####",
+    "######..........######",
+    "########......########",
+    "#########....#########",
+    "#########....#########",
+    "##########DD##########",
+];
+
+// A broken watchtower's two floors, 9 by 9: below, stairs up along the north wall (as a tavern's,
+// rising east from their foot) and its door in the south wall; above, open to the sky where its
+// top's fallen in, rubble about, its holders' chief by their chest
+const TOWER = [
+    "<SSSSS...",
+    "<SSSSS...",
+    ".........",
+    "..g......",
+    ".........",
+    "......g..",
+    ".........",
+    ".........",
+    "....DD...",
+];
+const TOWER_TOP = [
+    ".SSSSS>..",
+    ".SSSSS>..",
+    ".........",
+    ".........",
+    "..l....#.",
+    ".........",
+    ".h.......",
+    "....#....",
+    ".........",
+];
+
+/** A cave's floor: (insides.js `rooms`) */
+export function caveRooms(building) {
+    return [{ suffix: "cave", style: "cave", name: building.name, rows: CAVE, ground: GROUND.soil, sound: "cave" }];
+}
+
+/** The dragon's lair's floor. */
+export function lairRooms(building) {
+    return [{ suffix: "lair", style: "lair", name: building.name, rows: LAIR, ground: GROUND.soil, sound: "lair" }];
+}
+
+/** A broken watchtower's two floors. */
+export function towerRooms(building) {
+    return [
+        { suffix: "ground", style: "tower", name: building.name, rows: TOWER, ground: GROUND.courtyard, sound: "tower" },
+        { suffix: "top", style: "tower-top", name: `The top of ${building.name}`, rows: TOWER_TOP, ground: GROUND.courtyard, sound: "tower" },
+    ];
+}
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
@@ -633,12 +723,19 @@ const KINDS = Object.freeze({
     guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
     hall: { first: "chamber", rooms: hallRooms, folk: (building, [chamber]) => hallFolkOf(building, chamber) },
     keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall]) => keepFolkOf(building, hall) },
+    // (The places worth finding: no folk of their own, those who hold them the wild's: host.js)
+    cave: { first: "cave", rooms: caveRooms, folk: () => [] },
+    lair: { first: "lair", rooms: lairRooms, folk: () => [] },
+    tower: { first: "ground", rooms: towerRooms, folk: () => [] },
 });
+
+/** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
+export const SITE_INSIDES = Object.freeze(["cave", "lair", "tower"]);
 
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", tower: "the watchtower" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -731,6 +828,62 @@ export class Interiors {
         const back = entrance.facing > 0 ? entrance.facing - Math.PI : entrance.facing + Math.PI;
 
         // (Its inside end is where it'll be once its floors are made)
+        building.door = {
+            id: `${key}/door`,
+            kind: "door",
+            building: key,
+            ends: [
+                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: back, door: entrance.door },
+                { map: inside, squares: [], arrive: null, facing: FACING.s, pending: true },
+            ],
+        };
+        this.buildings.set(key, building);
+        this.byMap.set(inside, building);
+        this.world.links.push(building.door);
+        this.version++;
+
+        return building;
+    }
+
+    /**
+     * Add a place worth finding that can be gone into (sites.js: a site set down with an
+     * `entrance`: a cave, the dragon's lair, a broken watchtower), by the key `site:${its id}`:
+     * its way in among the world's links, its floors made the first time they're wanted, as a
+     * building's. Returns it (null if it has no way in).
+     */
+    addSite({ site, entrance }) {
+        if (!entrance || !KINDS[entrance.inside]) {
+            return null;
+        }
+
+        const key = `site:${site.id}`;
+
+        if (this.buildings.has(key)) {
+            return this.buildings.get(key);
+        }
+
+        const inside = `${key}/${KINDS[entrance.inside].first}`;
+        const [ox, oy] = entrance.outside;
+        const building = {
+            key,
+            kind: entrance.inside,
+            name: site.name ?? NAMES[entrance.inside],
+            piece: { id: site.id, name: entrance.inside },
+            tavern: null,
+            patron: null,
+            place: "site",
+            site: site.id,
+            people: "human",
+            seed: site.seed ?? 1,
+            // (Where it stands in the world, for its way in: the ground before it)
+            at: [ox + 0.5, oy + 0.5],
+            entrance,
+            made: false,
+            maps: [],
+            folk: [],
+        };
+        const back = entrance.facing > 0 ? entrance.facing - Math.PI : entrance.facing + Math.PI;
+
         building.door = {
             id: `${key}/door`,
             kind: "door",

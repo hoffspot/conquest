@@ -270,7 +270,7 @@ export class Overworld {
         // their clearings growing to their size, where they're set)
         // (Those a trail goes up to facing the way it comes: the trails are made below, before any
         // site is set down)
-        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
+        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site), onSet: (set) => this.#enterSite(set) });
         this.arches = archesOf(plan);
         this.aqueducts = aqueductsOf(plan);
         // (The great lone trees, worked out now as the world's made, not as the first chunk is)
@@ -427,6 +427,20 @@ export class Overworld {
 
         for (const settlement of this.settlements.laid.values()) {
             this.#enter(settlement);
+        }
+
+        for (const set of this.sites.set.values()) {
+            if (set) {
+                this.#enterSite(set);
+            }
+        }
+    }
+
+    // A site that can be gone into (a cave, the dragon's lair, a broken watchtower), added to the
+    // interiors as it's set down
+    #enterSite(set) {
+        if (set.entrance) {
+            this.interiors?.addSite(set);
         }
     }
 

@@ -853,10 +853,12 @@ export class View {
      */
     setIndoors(interior) {
         const look = interior ? INDOORS : OUTDOORS;
+        // (A place inside that's open to the sky, a broken tower's top: the sky over it)
+        const open = Boolean(interior?.open);
 
         this.indoors = Boolean(interior);
-        this.scene.background.set(look.background);
-        this.scene.fog.color.set(look.background);
+        this.scene.background.set(open ? OUTDOORS.background : look.background);
+        this.scene.fog.color.set(open ? OUTDOORS.background : look.background);
 
         if (interior) {
             [this.scene.fog.near, this.scene.fog.far] = look.fog;
@@ -871,7 +873,7 @@ export class View {
         this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
-        this.sky.object.visible = !interior;
+        this.sky.object.visible = !interior || open;
         this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 

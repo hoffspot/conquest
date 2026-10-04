@@ -912,10 +912,18 @@ export class Host {
                 this.#spoils(event.id, beast);
 
                 if (beast.lair && beast.master) {
+                    const heart = this.world.maps.town?.sites?.heartOf(this.#siteOf(beast.lair)) ?? this.#siteOf(beast.lair).at;
+                    const lair = this.lairs.get(beast.lair);
+
                     this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
-                    // (The place cleared, a while: core/places.js)
+                    // (The place cleared, a while: core/places.js; its hoard, if it has one in
+                    // it, opened)
                     this.war?.clearPlace(beast.lair);
-                    this.#clearedBy(beast.lair, this.world.maps.town?.sites?.heartOf(this.#siteOf(beast.lair)) ?? this.#siteOf(beast.lair).at);
+                    this.#clearedBy(beast.lair, heart, lair?.maps);
+
+                    if (lair?.hoard && this.ground.has(`chest-${beast.lair}`)) {
+                        this.#opened(beast.lair, "hoard", { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1 });
+                    }
                 }
 
                 if (beast.place) {
@@ -2268,10 +2276,11 @@ export class Host {
         this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", ...orders });
     }
 
-    // Free squares near spots in the world, one each (none taken twice, nor anyone's)
-    #spots() {
-        const squares = squaresOf(this.world.maps.town);
-        const taken = new Set(this.battle.actors.filter((actor) => actor.map === "town").map(({ square: [x, y] }) => squareKey(x, y)));
+    // Free squares near spots in the world (or on a map of a building's), one each (none taken
+    // twice, nor anyone's)
+    #spots(map = "town") {
+        const squares = squaresOf(this.world.maps[map]);
+        const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
 
         return ([x, y]) => {
             const square = nearestFree(squares, [Math.floor(x), Math.floor(y)], { taken, within: 24 });
@@ -2416,11 +2425,11 @@ export class Host {
         }
     }
 
-    // A pack of creatures put out at a place (`count` of `creature` at `tier`), the first its
-    // leader; what they're of (`camp`, `lair`, `place`) and how they keep (`roam`, `temper`,
-    // `guard`): their ids
-    #pack({ creature, tier, count }, [x, y], { master = false, ...more } = {}) {
-        const free = this.#spots();
+    // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
+    // on a building's `map`), the first its leader; what they're of (`camp`, `lair`, `place`) and
+    // how they keep (`roam`, `temper`, `guard`): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", ...more } = {}) {
+        const free = this.#spots(map);
         const pack = `pack-${this.nextWild}`;
         const ids = [];
 
@@ -2428,7 +2437,7 @@ export class Host {
             for (let k = 0; k < count; k++) {
                 const id = `wild-${this.nextWild++}`;
 
-                this.#rouse(id, creature, tier, free([x + (k % 3) - 1, y + Math.floor(k / 3)]), { pack, leader: ids[0] ?? null, master: master && k === 0, ...more });
+                this.#rouse(id, creature, tier, free([x + (k % 3) - 1, y + Math.floor(k / 3)]), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more });
                 ids.push(id);
             }
         } catch {
@@ -2443,7 +2452,7 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, camp = null, lair = null, place = null, roam = null, temper = null, guard = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, roam = null, temper = null, guard = null }) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
 
@@ -2455,6 +2464,7 @@ export class Host {
             weapon: spec.weapon,
             team: WILD,
             square,
+            map,
             ai: "wild",
             hp: Math.round(spec.hp * power),
             speed: spec.speed,
@@ -2549,6 +2559,7 @@ export class Host {
                     }
                 }
 
+                this.ground.delete(`chest-${id}`);
                 this.lairs.delete(id);
             }
         }
@@ -2569,8 +2580,17 @@ export class Host {
             const place = placesOf(this.world.plan).find((each) => each.id === site.id);
             const cleared = this.war && place && holderOf(this.world.plan, place, this.war.places[site.id], this.war.turn) === "cleared";
 
+            // (And, a lair that can be gone into, its hoard at the back of it: a chest, locked while
+            // its master lives)
+            const inside = this.#inside(site);
+            const hoard = inside?.chest ?? null;
+
             if ((this.slain[site.id] ?? -Infinity) <= this.battle.time && !cleared) {
                 ids.push(...this.#pack({ creature: master, tier, count: 1 }, at, { lair: site.id, master: true, roam: 3 }));
+
+                if (hoard) {
+                    this.ground.set(`chest-${site.id}`, { id: `chest-${site.id}`, chest: true, locked: true, for: null, map: hoard.map, square: hoard.square, place: site.id, until: null });
+                }
             }
 
             lair.guards.forEach(([creature, count, guardTier], k) => {
@@ -2579,12 +2599,40 @@ export class Host {
                 ids.push(...this.#pack({ creature, tier: guardTier, count }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
             });
 
-            this.lairs.set(site.id, { ids });
+            this.lairs.set(site.id, { ids, maps: inside?.maps ?? [], hoard });
         }
     }
 
     #siteOf(id) {
         return this.world.plan.sites.find((site) => site.id === id);
+    }
+
+    // A place worth finding that can be gone into (a cave, the dragon's lair, a broken watchtower:
+    // sites.js `entrance`), its floors made: { maps (their ids), leader, chest (where its plan has
+    // them: insides.js "l" and "h", { map, square }), guards (where they stand: "g", a list) }; or
+    // null for a site that can't
+    #inside(site) {
+        const set = this.world.maps.town?.sites?.set.get(site.id);
+        const building = set?.entrance ? this.#building(`site:${site.id}`) : null;
+
+        if (!building) {
+            return null;
+        }
+
+        this.world.interiors.make(building.key);
+
+        const marks = (char) => building.maps.flatMap((id) => (this.world.maps[id].marks[char] ?? []).map((square) => ({ map: id, square: [...square] })));
+
+        return { maps: [...building.maps], leader: marks("l")[0] ?? null, chest: marks("h")[0] ?? null, guards: marks("g") };
+    }
+
+    // The free square in the world nearest a square (or that square, if none's free near)
+    #freeNear(square) {
+        try {
+            return this.#spots()(square);
+        } catch {
+            return square;
+        }
     }
 
     // The places worth finding held by outlaws or the dead (core/places.js), near a player: their
@@ -2626,30 +2674,35 @@ export class Host {
                 continue;
             }
 
-            // (Where it's held: the open ground in its middle, as it's built: sites.js)
+            // (Where it's held: the open ground in its middle, as it's built: sites.js; or, a
+            // place that can be gone into, within: its leader and their chest at its back (a
+            // cave's) or its top (a tower's), as many of the band as it has room for guarding the
+            // way, the rest outside)
             const at = this.world.maps.town?.sites?.heartOf(site) ?? site.at;
+            const inside = this.#inside(site);
             const tier = tierAt(at, homes.map(({ home }) => home), landAt(plan, ...at).biome);
             const count = PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per);
             const ring = PLACE_BANDS.ring[place.size];
-            const ids = this.#pack({ creature: band.leader, tier: tier + PLACE_BANDS.lead, count: 1 }, at, { place: place.id, master: true, roam: 2, temper: "territorial", guard: PLACE_BANDS.guard });
+            const keeps = { place: place.id, temper: "territorial", guard: PLACE_BANDS.guard };
+            const leader = inside?.leader ?? { map: "town", square: at };
+            const ids = this.#pack({ creature: band.leader, tier: tier + PLACE_BANDS.lead, count: 1 }, leader.square, { ...keeps, master: true, roam: 2, map: leader.map });
+            const within = (inside?.guards ?? []).slice(0, Math.ceil(count / 2));
 
-            for (let k = 0; k < count; k++) {
-                const angle = ((k + 0.5) / count) * Math.PI * 2;
+            for (const { map, square } of within) {
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, square, { ...keeps, roam: 3, map }));
+            }
 
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [at[0] + cos(angle) * ring, at[1] + sin(angle) * ring], { place: place.id, roam: 4, temper: "territorial", guard: PLACE_BANDS.guard }));
+            for (let k = 0; k < count - within.length; k++) {
+                const angle = ((k + 0.5) / (count - within.length)) * Math.PI * 2;
+
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [at[0] + cos(angle) * ring, at[1] + sin(angle) * ring], { ...keeps, roam: 4 }));
             }
 
             // (The chest on open ground by the leader: not in a wall)
-            let chest = [Math.floor(at[0] + 1.5), Math.floor(at[1])];
+            const { map, square: chest } = inside?.chest ?? { map: "town", square: this.#freeNear([Math.floor(at[0] + 1.5), Math.floor(at[1])]) };
 
-            try {
-                chest = this.#spots()(chest);
-            } catch {
-                // (None free near: where it was to be)
-            }
-
-            this.held.set(place.id, { ids, leader: ids[0] ?? null, at, tier, holder, chest, race: place.race, cleared: false });
-            this.ground.set(`chest-${place.id}`, { id: `chest-${place.id}`, chest: true, locked: true, for: null, map: "town", square: chest, place: place.id, until: null });
+            this.held.set(place.id, { ids, leader: ids[0] ?? null, at, tier, holder, chest, map, maps: inside?.maps ?? [], race: place.race, cleared: false });
+            this.ground.set(`chest-${place.id}`, { id: `chest-${place.id}`, chest: true, locked: true, for: null, map, square: chest, place: place.id, until: null });
         }
     }
 
@@ -2665,37 +2718,49 @@ export class Host {
 
         held.cleared = true;
         this.war?.clearPlace(id);
-        this.#clearedBy(id, held.at);
+        this.#clearedBy(id, held.at, held.maps);
+        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier });
+        this.#event("cleared", { place: id, holder: held.holder });
+    }
+
+    // A place's chest (`kind`: "chest", or a dragon's "hoard") opened: in its stead, a share of
+    // what's in it for each player at the place (core/progress.js LOOT: the gear in it of the
+    // place's `people`, a human's at the ruins and the caves; more gold the more dangerous its land,
+    // CHEST_GOLD), theirs alone to take, where it stood (`map`, `square`)
+    #opened(id, kind, { at, maps, map, square, people, tier }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (!actor || actor.dead || actor.map !== "town" || hypot(actor.x - held.at[0], actor.y - held.at[1]) > PLACE_BANDS.ring.large + SPOILS_REACH) {
+            if (!actor || actor.dead || !this.#atPlace(actor, at, maps)) {
                 continue;
             }
 
-            // (The gear in it of the place's people, a human's at the ruins and the caves)
-            const bundle = rollLoot("chest", this.random, { people: held.race ?? "human" });
+            const bundle = rollLoot(kind, this.random, { people });
 
-            bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (held.tier - 1)));
+            bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
 
             const ground = `ground-${this.nextGround++}`;
 
-            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: "town", square: [...held.chest], until: this.battle.time + GROUND_MS });
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map, square: [...square], until: this.battle.time + GROUND_MS });
             this.#event("spoils", { id: player.id, ground, from: id, creature: "chest" });
         }
-
-        this.#event("cleared", { place: id, holder: held.holder });
     }
 
-    // A place cleared (`id`, its heart `at`): the guild's contract to clear it done for each player
-    // who was there for it (core/standing.js "clear")
-    #clearedBy(id, at) {
+    // Whether someone's at a place: out in the world, near enough its heart (`at`), or within it
+    // (on one of its `maps`)
+    #atPlace(actor, at, maps = []) {
+        return actor.map === "town" ? hypot(actor.x - at[0], actor.y - at[1]) <= PLACE_BANDS.ring.large + SPOILS_REACH : maps.includes(actor.map);
+    }
+
+    // A place cleared (`id`, its heart `at`, the `maps` within it): the guild's contract to clear
+    // it done for each player who was there for it (core/standing.js "clear")
+    #clearedBy(id, at, maps = []) {
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (!actor || actor.map !== "town" || hypot(actor.x - at[0], actor.y - at[1]) > PLACE_BANDS.ring.large + SPOILS_REACH) {
+            if (!actor || !this.#atPlace(actor, at, maps)) {
                 continue;
             }
 
@@ -4224,9 +4289,14 @@ export class Host {
         }
 
         if (!interiors.buildings.has(key)) {
-            const place = this.world.plan?.places.find(({ id }) => id === key.slice(0, key.indexOf(":")));
+            // (A place worth finding gone into, `site:` its id: set down, its way in with it;
+            // else a settlement's building, the settlement laid out)
+            const site = key.startsWith("site:") ? this.#siteOf(key.slice(5)) : null;
+            const place = site ? null : this.world.plan?.places.find(({ id }) => id === key.slice(0, key.indexOf(":")));
 
-            if (place) {
+            if (site) {
+                this.world.maps?.town?.sites?.heartOf(site);
+            } else if (place) {
                 this.world.maps?.town?.settlements?.of(place);
             }
         }

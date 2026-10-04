@@ -154,6 +154,8 @@ export const LOOT = Object.freeze({
     soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { uniform: true, chance: 0.15 }, { id: "bow", quality: "fine", chance: 0.03 }] },
     // (The chest a place's occupiers guarded, opened once they're put to the sword: core/places.js)
     chest: { gold: [25, 60], items: [{ id: "potion", chance: 0.9 }, { uniform: true, chance: 0.9 }, { uniform: true, chance: 0.5 }, { id: "sword", quality: "fine", chance: 0.2 }, { id: "bow", quality: "fine", chance: 0.15 }] },
+    // (The dragon's hoard in its lair, opened once it's slain: core/host.js #lairs)
+    hoard: { gold: [180, 320], items: [{ id: "potion", chance: 1 }, { id: "potion", chance: 0.6 }, { id: "ring", quality: "fine", chance: 0.8 }, { id: "amulet", quality: "fine", chance: 0.5 }, { id: "sword", quality: "masterwork", chance: 0.35 }, { id: "bow", quality: "masterwork", chance: 0.25 }] },
 });
 
 /** How likely a piece of gear found on a foe is to be of each make. */

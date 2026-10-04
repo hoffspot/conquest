@@ -63,6 +63,16 @@ export const PLAN_KEY = Object.freeze({
     Y: { kind: "throne", blocks: true },
     I: { kind: "pillar", blocks: true },
     r: { kind: "carpet", joins: true },
+    // The places worth finding gone into (a cave, the dragon's lair, a broken watchtower): their
+    // rock; where the chest's put (its hoard), where those who hold the place stand (their
+    // leader, and their guards), outlaws' bedrolls and their fire, and bones
+    "#": { kind: "rock", blocks: true, opaque: true, joins: true },
+    h: { kind: "hoard" },
+    l: { kind: "leader" },
+    g: { kind: "guard" },
+    u: { kind: "bedroll", blocks: true },
+    x: { kind: "campfire", blocks: true },
+    j: { kind: "bones" },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

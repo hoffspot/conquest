@@ -38,7 +38,10 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * A neutral site laid out (its `kind`, its `seed`): { size ([w, h] plots), parts (what the art
  * builds: each { part, ... } in metres from its north-west corner), solid ([[x0, y0, x1, y1]]
  * metres: what no one walks through), heart ([x, y] metres: open ground in its middle), castle
- * (for a ruined castle: its castle.js pieces, ruined) }; or null if the kind isn't one.
+ * (for a ruined castle: its castle.js pieces, ruined), entry (where it's gone into, if it can be:
+ * { x, y (metres: the middle of its way in, on the line of its face), width, height, inside (what
+ * it's like within: insides.js's kinds) }, facing out the way the site does) }; or null if the
+ * kind isn't one.
  */
 export function layoutNeutral({ kind, seed, form = null }) {
     const size = NEUTRAL[kind];
@@ -113,7 +116,8 @@ const LAYOUTS = {
             ];
             const solid = [box(cx, cy, reach * 2 + 0.4, reach * 2 + 0.4), box(cx - 1.6, cy + reach + 0.6, 0.6, 0.6), box(cx + 1.6, cy + reach + 0.6, 0.6, 0.6)];
 
-            return { parts, solid, heart: [cx, cy + reach + 2], pad: { at: [cx, cy], radius: pit.radius, raise: -pit.drop, ease: pit.ease } };
+            // (Gone into down its steps, from the pit's front edge)
+            return { parts, solid, heart: [cx, cy + reach + 2], pad: { at: [cx, cy], radius: pit.radius, raise: -pit.drop, ease: pit.ease }, entry: { x: cx, y: cy + reach + 0.2, width: 2.2, height: 2.6, inside: "cave" } };
         }
 
         const back = 10.5;
@@ -131,7 +135,7 @@ const LAYOUTS = {
 
         // (Where it's cut into the hill: the face's line, and how high it stands over the floor dug
         // in front of it: sites.js levels that floor)
-        return { parts, solid, heart: [cx, back + 2.6], cut: { x: cx, y: back, face: tall + 1.4 } };
+        return { parts, solid, heart: [cx, back + 2.6], cut: { x: cx, y: back, face: tall + 1.4 }, entry: { x: cx, y: back + 0.4, width: mouth, height: tall, inside: "cave" } };
     },
 
     // An old hall's walls, broken off unevenly, its door in front and a breach in a side; the
@@ -300,17 +304,19 @@ const LAYOUTS = {
             [width - 8.5, 8, width - 0.5, depth - 8],
         ];
 
-        return { parts, solid, heart: [cx, cy], cut: { x: cx, y: 12, face: 8 } };
+        return { parts, solid, heart: [cx, cy], cut: { x: cx, y: 12, face: 8 }, entry: { x: cx, y: 12.4, width: 7, height: 6, inside: "lair" } };
     },
 
     // A watchtower no one keeps: its top fallen in, a heap at its foot
     watchtower(random, width, depth) {
         const [cx, cy] = [width / 2, depth / 2 - 1];
 
+        // (Gone into by the dark doorway at its foot, on its south side)
         return {
             parts: [{ part: "brokenTower", x: cx, y: cy, r: 3.2, h: random.range(6.5, 9.5), seed: random.seed() }],
             solid: [box(cx, cy, 7.2, 7.2)],
             heart: [cx, depth - 1.5],
+            entry: { x: cx, y: cy + 3.6, width: 1.1, height: 2.1, inside: "tower" },
         };
     },
 };

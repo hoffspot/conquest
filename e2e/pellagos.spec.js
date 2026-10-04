@@ -3456,6 +3456,63 @@ test("a place's outlaws or dead hold it round their leader by a locked chest: ta
     await expect(page.locator("#banner")).toHaveText(/^The dead of .+ are laid to rest, for now\.$/);
 });
 
+test("a cave held by outlaws is gone into by its mouth: within, the rock all round, their fire, their chief by the locked chest; and out again the same way", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const within = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const [cave] = game.placeIcons()
+            .filter(({ kind }) => kind === "cave")
+            .sort((a, b) => Math.hypot(a.x - player.x, a.z - player.y) - Math.hypot(b.x - player.x, b.z - player.y));
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 80) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
+        Object.assign(player, { x: cave.x + 30, y: cave.z, path: [], order: null, progress: null });
+        await settle(8);
+
+        // In by its mouth
+        const building = game.world.interiors.buildings.get(`site:${cave.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map !== "town");
+        await until(() => game.interiors.get(player.map)?.object.visible, 120);
+
+        const held = game.host.held.get(cave.id);
+        const inside = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, chief: game.battle.actor(held.leader).map, chest: game.drops.drawn.get(`chest-${cave.id}`)?.object.children[0].name ?? null };
+
+        // And out again
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map === "town");
+
+        return { ...inside, cave: building.maps[0], out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
+    });
+
+    expect(within).toEqual({ map: within.cave, drawn: true, lit: within.lit, chief: within.cave, chest: "chest", cave: within.cave, out: "town", by: true });
+    expect(within.lit).toBeGreaterThan(1);
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
