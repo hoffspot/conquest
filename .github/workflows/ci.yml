@@ -1,12 +1,21 @@
 name: CI
 
 # Pull requests, and main when they're merged (a branch's pushes are tested once, in its pull
-# request, not twice)
+# request, not twice). A pull request's run tests it merged into main as main is then; with
+# others merging too, main may move on after, so a pull request is merged only once it's green
+# brought up to date with main (contribution.md, "Merging cleanly")
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+# A pull request's run is let go of when it's pushed to again (only its newest head matters, and
+# GitHub runs 20 jobs at a time across everyone's); main's each run alone to the end (a group of
+# their own, run_id)
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Lint and the unit tests
