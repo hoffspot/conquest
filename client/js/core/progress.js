@@ -3,8 +3,9 @@
 // And from all of it, a player's might, which brings the war on (war/war.js setMight).
 //
 // A skill grows by what it's used for: landing blows up close (blade), from afar (marksman),
-// stunning (hexes), taking blows (endurance), buying and selling (trade), talking (talk), and
-// leading followers (command, from M9). Each rank up its tree makes it stronger, and some bring a
+// stunning (hexes), taking blows (endurance), slipping them (evasion: and a share of every skill
+// of the body's growth), buying and selling (trade), talking (talk), and leading followers
+// (command, from M9). Each rank up its tree makes it stronger, and some bring a
 // new ability: a power strike, an aimed shot, a hold.
 //
 // Magic's schools (core/spells.js SCHOOLS: Healing, Fire, Earth, Air, Water) grow by the spells
@@ -40,14 +41,17 @@ export const RANKS = Object.freeze([
  * a rank brings (by rank).
  *
  * The bonuses: melee, ranged (the share more damage their blows do), heal (more healed), stun
- * (longer stuns), hp, stamina (more of each), armor (the share of each blow taken off), haggle
- * (the share off what's bought, and on what's sold), persuade (M4, M7), followers (M9).
+ * (longer stuns), hp, stamina (more of each), armor (the share of each blow taken off), dodge (the
+ * chance of slipping a blow or a shot, not magic: one in twenty from the start, one in four at
+ * the most), haggle (the share off what's bought, and on what's sold), persuade (M4, M7),
+ * followers (M9).
  */
 export const TREES = Object.freeze({
     blade: { name: "Blade", grows: "landing blows up close", fighting: true, bonus: { melee: [0, 0.1, 0.2, 0.3, 0.45, 0.6], hp: [0, 0, 0, 10, 15, 20] }, abilities: { 2: "powerStrike" } },
     marksman: { name: "Marksman", grows: "landing shots from afar", fighting: true, bonus: { ranged: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: { 2: "aimedShot" } },
     hexes: { name: "Hexes", grows: "stunning your foes", fighting: true, bonus: { stun: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "hold" } },
     endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: {} },
+    evasion: { name: "Evasion", grows: "fighting with the body and slipping blows", fighting: false, bonus: { dodge: [0.05, 0.09, 0.13, 0.17, 0.21, 0.25] }, abilities: {} },
     trade: { name: "Trade", grows: "buying and selling", fighting: false, bonus: { haggle: [0, 0.05, 0.1, 0.15, 0.2, 0.25] }, abilities: {} },
     talk: { name: "Talk", grows: "talking with people", fighting: false, bonus: { persuade: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: {} },
     command: { name: "Command", grows: "leading your followers", fighting: false, bonus: { followers: [0, 1, 2, 3, 4, 6] }, abilities: {} },
@@ -608,9 +612,9 @@ export class Progress {
         return ups;
     }
 
-    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, haggle, persuade, followers }. */
+    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haggle, persuade, followers }. */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, haggle: 0, persuade: 0, followers: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, haggle: 0, persuade: 0, followers: 0 };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);

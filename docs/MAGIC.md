@@ -183,7 +183,7 @@ above, are the guild's to sell, never found or given.)
 | Surge | uncommon | oneself | 500 ms | 60 s | blows and arrows 30% stronger, everything hurts 15% more, two minutes |
 | Pacify | uncommon | an enemy | 800 ms | 15 s | no longer hostile to you, till you strike it |
 | Vampirism | uncommon | an enemy | 700 ms | 6 s | draws their life into you: 6–10, growing to 24–34 |
-| Dodge | uncommon | oneself | 500 ms | 30 s | a chance to slip every blow and spell, five minutes: one in ten, growing to one in four |
+| Dodge | uncommon | oneself | 500 ms | 30 s | a chance to slip every blow and spell, five minutes: one in ten, growing to one in four; added to the player's own knack for slipping blows (Evasion: docs/WAR.md) |
 | Poison | common | an enemy | 500 ms | 5 s | poisons them: 2 a time, growing to 7 |
 | Light | common (10 gold at every adventurers' guild) | oneself | 500 ms | 3 s | a globe of light over their shoulder, fifteen minutes: the dark round them as bright as day; cast again to put it out |
 

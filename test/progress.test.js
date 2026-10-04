@@ -40,6 +40,15 @@ describe("growing stronger (progress.js)", () => {
         assert.deepEqual(progress.abilities(), []);
     });
 
+    it("slips one blow or shot in twenty from the start (Evasion), more as it grows, one in four at its height", () => {
+        const progress = new Progress();
+
+        assert.equal(progress.bonuses().dodge, 0.05);
+        assert.ok(TREES.evasion.bonus.dodge.every((share, rank, all) => rank === 0 || share > all[rank - 1]));
+        progress.gain("evasion", RANKS.at(-1).xp);
+        assert.equal(progress.bonuses().dodge, 0.25);
+    });
+
     it("grows a skill by its use, rank by rank, each rank's title and ability told as it comes", () => {
         const progress = new Progress();
 

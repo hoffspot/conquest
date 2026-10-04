@@ -878,7 +878,6 @@ function motionTab() {
                 element("button", { type: "button", class: "button", onclick: () => draw(false) }, "Put away"),
                 element("button", { type: "button", class: "button", onclick: attack }, "Attack"),
                 element("button", { type: "button", class: "button", onclick: () => actions.react(fight.reaction, { from: 0 }) }, "Be hit"),
-                element("button", { type: "button", class: "button", onclick: () => actions.dodge({ from: 0 }) }, "Dodge"),
                 element("button", { type: "button", class: "button", onclick: () => actions.die({ from: 0 }) }, "Fall"),
                 element("button", { type: "button", class: "button", onclick: () => actions.revive() }, "Get up"))),
         group("Resting",

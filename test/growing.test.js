@@ -88,6 +88,34 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.deepEqual(progress.pack.filter(Boolean).map(({ id, quality }) => ({ id, quality })), loot.items);
     });
 
+    it("grows Evasion by a share of every skill of the body's use and by each blow slipped, the player slipping more as it does", () => {
+        assert.equal(hosted().battle.actor(HOST_PLAYER).dodge, 0.05, "one blow in twenty from the start");
+
+        // (Well on: a blow in six slipped, so the fight slips a few)
+        const host = hosted({ skills: { evasion: RANKS[3].xp } });
+        const player = host.battle.actor(HOST_PLAYER);
+        const orc = host.battle.actor("orc");
+        const { progress } = host.players.get(HOST_PLAYER);
+
+        assert.equal(player.dodge, 0.17);
+
+        Object.assign(player, { hp: 5000, maxHp: 5000 });
+        Object.assign(orc, { hp: 5000, maxHp: 5000 });
+        put(orc, "town", [player.square[0] + 1, player.square[1]]);
+        host.command(HOST_PLAYER, { type: "engage", target: "orc" });
+
+        const events = run(host, 30000);
+        const slipped = events.filter(({ type, id }) => type === "dodged" && id === HOST_PLAYER).length;
+        const bodily = progress.skills.blade + progress.skills.marksman + progress.skills.endurance;
+
+        assert.ok(slipped > 0, "slipped some of the orc's blows");
+        assert.ok(Math.abs(progress.skills.evasion - RANKS[3].xp - (bodily * 0.3 + slipped * 20)) < 1, `${progress.skills.evasion} from ${bodily} and ${slipped} slipped`);
+
+        // (Grown all the way: one blow in four)
+        progress.gain("evasion", RANKS.at(-1).xp);
+        assert.equal(progress.bonuses().dodge, 0.25);
+    });
+
     it("makes the player stronger as they rank up: blows, hit points, armour, and the weapon and gear they carry", () => {
         const host = hosted({ skills: { blade: 800, endurance: 2000 }, gear: { mainHand: { id: "hammer", quality: "masterwork" }, chest: { id: "mail", quality: "common" } } });
         const player = host.battle.actor(HOST_PLAYER);
