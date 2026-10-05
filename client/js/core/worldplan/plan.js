@@ -9,10 +9,11 @@
 import { BIOMES, RACE, RACES } from "./races.js";
 import { campTier, ROAD, SETTLEMENTS, settleLand, startTown } from "./settle.js";
 import { CELL, CELLS, cellIndex, shapeLand, WATER, WORLD_SIZE } from "./terrain.js";
+import { watersOf } from "../terrain/waters.js";
 import { hypot } from "../exact.js";
 
 export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES } from "./races.js";
-export { campTier, ROAD, SETTLEMENTS } from "./settle.js";
+export { BUILT, campTier, REACH, ROAD, SETTLEMENTS } from "./settle.js";
 export { CELL, CELLS, WATER, WORLD_SIZE } from "./terrain.js";
 
 /** How big a chunk of the world is when it's built (metres a side), and how many a side. */
@@ -73,7 +74,7 @@ export function layOutWorld(seed) {
     const land = shapeLand(seed);
     const settled = settleLand(land, seed);
 
-    return {
+    const plan = {
         seed,
         size: WORLD_SIZE,
         cell: CELL,
@@ -94,6 +95,11 @@ export function layOutWorld(seed) {
         sites: settled.sites,
         camps: settled.camps,
     };
+
+    // (Its waters those worked out as it was settled: the same land, not worked out again)
+    watersOf(plan, settled.waters);
+
+    return plan;
 }
 
 /** The cell a point (metres) is in: [x, y], or null outside the world. */

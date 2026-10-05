@@ -2,7 +2,9 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
+import { stillWaterAt } from "../client/js/core/terrain/height.js";
+import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
 import { createRandom } from "../client/js/core/random.js";
 
@@ -166,11 +168,41 @@ describe("the world plan (worldplan/plan.js)", () => {
                     assert.match(place.name, /^[A-Z][a-z]+$/);
                     assert.deepEqual(place.at, [(place.cell[0] + 0.5) * CELL, (place.cell[1] + 0.5) * CELL]);
 
+                    // (Apart as their kinds keep; or, one moved out of water, clear of where the
+                    // other reaches and a cell between)
                     for (const other of plan.places.filter((p) => p !== place && (p.race === place.race || p.kind === "hamlet" || p.kind === "farmstead" || place.kind === "hamlet" || place.kind === "farmstead"))) {
-                        assert.ok(distance(place.cell, other.cell) >= (SETTLEMENTS[place.kind].apart + SETTLEMENTS[other.kind].apart) / 2 - 1e-9, `${place.name} and ${other.name} apart`);
+                        const d = distance(place.cell, other.cell);
+
+                        assert.ok(d >= (SETTLEMENTS[place.kind].apart + SETTLEMENTS[other.kind].apart) / 2 - 1e-9 || d >= (REACH[place.kind] + REACH[other.kind]) / CELL + 1 - 1e-9, `${place.name} and ${other.name} apart`);
                     }
                 }
             });
+        }
+    });
+
+    it("builds no settlement's houses, walls or yards over a river or a stream, a lake or the sea", () => {
+        for (const [seed, plan] of plans) {
+            const waters = watersOf(plan);
+
+            for (const place of plan.places) {
+                const reach = BUILT[place.kind];
+
+                // (Looked at every 10 m, a little closer than the plan looks, but for its edge: any
+                // river within 7 m of a point, or still water on it)
+                for (let y = -reach; y <= reach; y += 10) {
+                    for (let x = -reach; x <= reach; x += 10) {
+                        if (x * x + y * y > (reach - 6) ** 2) {
+                            continue;
+                        }
+
+                        const [px, py] = [place.at[0] + x, place.at[1] + y];
+                        const river = waters.river(px, py, 10);
+
+                        assert.ok(!(river && river.gap <= 7), `seed ${seed}: ${place.id} over a river at ${px}, ${py}`);
+                        assert.equal(stillWaterAt(plan, px, py), null, `seed ${seed}: ${place.id} in still water at ${px}, ${py}`);
+                    }
+                }
+            }
         }
     });
 
@@ -307,21 +339,23 @@ describe("the world plan (worldplan/plan.js)", () => {
             assert.equal(town.race, race.id);
             assert.equal(town.guild, true);
             assert.equal(landAt(plan, ...town.at).race, race.id);
-
-            for (const other of plan.places.filter((place) => place.race === race.id && place.kind === "town")) {
-                assert.ok(distance(town.at, capital.at) <= distance(other.at, capital.at));
-            }
+            // (The nearest as they were laid out, marked so: the same town still if the capital or
+            // a town's since been moved out of water)
+            assert.equal(town.start, true);
+            assert.deepEqual(plan.places.filter((place) => place.race === race.id && place.start), [town]);
+            assert.ok(distance(town.at, capital.at) < 2000, `${town.id} near ${capital.id}`);
         }
 
         assert.throws(() => startFor(plan, "dwarf"));
     });
 
     it("has a guild branch in every capital, city, town and village, each with open ground round it for the guild's work", () => {
-        const plan = plans.get(3);
-        const branches = guilds(plan);
+        const branches = guilds(plans.get(3));
 
-        assert.equal(branches.length, plan.places.filter(({ kind }) => kind !== "hamlet" && kind !== "farmstead").length);
+        assert.equal(branches.length, plans.get(3).places.filter(({ kind }) => kind !== "hamlet" && kind !== "farmstead").length);
 
+        // (Round a branch with room enough: the elves' start in the first world)
+        const plan = plans.get(1);
         const branch = startFor(plan, "elf");
         const spots = openGround(plan, branch, 7, 6);
 

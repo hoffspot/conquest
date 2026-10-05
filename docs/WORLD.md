@@ -134,7 +134,31 @@ woods, meadow or marsh break the lands up.
 
 - Each is built on flat, dry land in their territory, better by a river or lake. They aren't built
   on beaches, mountains, marsh or volcanic ground.
-- Two settlements keep at least the average of their "apart" from each other.
+- Two settlements keep at least the average of their "apart" from each other (but for a place
+  moved out of water, below).
+- **None stands in water.** Last of all, once the roads, sites, camps, hamlets and farmsteads are
+  laid out, each place whose houses, walls and yards (as far as they reach from its middle, every
+  people's: 140 m for a capital, 110 m for a city, 76 m for a town, 52 m for a village, 32 m for
+  a hamlet, 28 m for a farmstead: `BUILT`) would stand over a river or a stream, however narrow,
+  a lake or the sea, as the land's waters are drawn, is moved (`keepOutOfWater`). The ground is
+  looked at every 12 m wherever any of the land's water is within two cells. The place goes to
+  the nearest cell of its people's land good to build on, no more than 24 cells off
+  (`MOVE_MOST`), where none of it would, as far from the other places as places are laid out if
+  there's such a cell within 8 cells (`MOVE_KEEPING`), 5 cells from the sites and clear of the
+  camps. Where there's no such cell, it may come nearer the
+  others, but only so far as to stay clear of where they reach (`REACH`, a place's streets out to
+  its edge, and a cell between); and where there's none of that either, it goes to the nearest
+  that's least in water, if that's less than where it was. A lake's or the sea's water is looked
+  for at each point and half the way to the points round it. The roads and tracks to each place
+  moved are laid again in the order all the roads were laid, each over those laid before it, so
+  they run as they would have; the others are kept where they were. So only the places in water
+  move: about 20 to 30 of a world's
+  180, most by a cell or two (32 to 100 m), none in the three worlds checked by more than 302 m.
+  Nothing else moves: the sites, camps, hamlets and farmsteads are laid out where they would be
+  anyway. This adds about 0.35 s to laying out a world, and 0.25 s to building one (the
+  rivers' courses it works out are the plan's own, not worked out again: `watersOf(plan, made)`). (Before, 9 to 12 places in a world stood
+  over water. A river kept its channel under a town while the town's squares were open street
+  over it, so the town was cut in two on the navigation mesh.)
 - Each is named in its people's tongue, from its starts, middles and ends. A name is never used
   twice in a world, and names with a part said twice ("Ingingwick") or three vowels together are
   passed over.
@@ -217,7 +241,9 @@ at the far side of the world.
 ## Starting, and the adventurers' guild (`plan.js`)
 
 - **Where a player starts** (`startFor(plan, people)`): a player picks their people and starts in
-  their lands, in the town nearest their capital. It has a guild branch.
+  their lands, in the town nearest their capital as the places are laid out (marked `start`
+  before any place is moved out of water, so it's the same town whether or not the capital or a
+  town has been moved since). It has a guild branch.
 - **Branches** (`guilds(plan)`): every capital, city, town and village has a branch of the
   adventurers' guild, about 95 in a world. Players will be able to travel quickly between branches.
 - **Districts** (`guildFor(plan, x, z)`): each branch's district is the land nearer to it than to
@@ -280,6 +306,16 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   Each people's settlements are laid out and built their own way (`layoutTown({ people })`:
   GAME.md, *Towns*), the start town too: a cat folk's start is a cat folk's town. A lizard
   folk's lagoon is the world's water, its plank walks drawn as bridges.
+  A settlement's main streets run out through its fields to its edge. Where one crosses a river
+  there (none is left under its houses: *Who lives where*), it has a bridge of its own
+  (`#streetBridges`). The bridge is found along the street and on past its end, 10 m past any
+  river it would run into there (`STREETS_ON`, but no more than 80 m: `STREETS_FAR`), so it reaches
+  the far bank, as a road's bridges are found, and is made as a road's: of stone on a town's and
+  bigger places' streets, of stone or timber on a village's and smaller places'. There's none
+  where a road's bridge crosses there already. These bridges are drawn, walked over and in the
+  navigation mesh as a road's are, and found as the settlement's laid out, so a chunk is the same
+  whichever chunks were made first. Any other square of its streets over the land's water is the
+  water's: waded where the land's would be, else not walked.
 - **Each people's castle, special places and watchtowers** (`core/sites.js`, `Sites`): the
   plan's castle for each people, their three buildings of their own (the cat folk's sun temple,
   pride rock and watering hole; the orcs' war totem, skull pit and fighting pit; the lizard
@@ -760,9 +796,18 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   - the overworld's *solid* squares (what's built or stands there: the town's, the settlements'
     and the places' buildings, walls and stalls, the wild's features; not water, cliffs or
     trees), merged into rectangles, each a box 3 m over the ground under it whose top is no
-    floor;
+    floor, and the ground under them no floor either (before, the ground inside every building
+    was an island of mesh of its own, which a point just by a wall could be found on);
   - trees as their trunks (0.4 m across at size 1; a great lone oak's 2.4 m);
-  - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`).
+  - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`): the roads', the
+    settlements' streets' and the citadels';
+  - the plank walks over the lizard folk's lagoons, as decks at their planks' height, 0.16 m over
+    the ground (`WALK_TOP`; before, they were only the ground under them, walked as a ford or
+    not at all).
+
+  Each square's two triangles split from its north-west corner to its south-east, as the ground's
+  drawn and stood on (`terrain/ground.js between`; before, the other way, so on a slope the mesh
+  stood up to a few centimetres off the ground).
 - **Recast's settings** (`settings.js`, `bake.js`): voxels 0.5 m across and 0.25 m high; a walker
   0.5 m round and 2 m tall who steps up 0.75 m; polygons of up to six sides, each keeping its
   ground's kind (`AREA`), which costs a way through it: roads and decks ¾ of a metre each, steep
@@ -874,8 +919,11 @@ water beside it, and steps across a mountain stream running too fast to wade.
     in range;
   - camps are never weaker further from the start: every start has tier-1 camps near it and
     tier 5 or more far off.
-- **Starts and guilds:** each people's start is their town nearest their capital, and a guild's
-  open ground lies in its district, clear of what's there.
+- **Starts and guilds:** each people's start is their town nearest their capital (as laid out,
+  and marked so), and a guild's open ground lies in its district, clear of what's there.
+- **Settlements out of water:** none's houses, walls or yards stand over a river or a stream, a
+  lake or the sea (each looked at every 10 m on seeds 1 to 3); every two keep apart as their kinds
+  do, or, one moved out of water, clear of where the other reaches.
 
 `e2e/world-map.spec.js` opens the world map in a browser:
 

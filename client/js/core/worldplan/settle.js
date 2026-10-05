@@ -10,6 +10,8 @@ import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
+import { stillWaterAt } from "../terrain/height.js";
+import { runningIn, watersOf } from "../terrain/waters.js";
 import { cos, hypot, pow, sin } from "../exact.js";
 
 /**
@@ -34,6 +36,25 @@ const FARMLAND = new Set(["farmland", "meadow", "savannah", "heath"]);
 
 // How far (cells) capitals, cities and towns keep from water
 const DRY = 2;
+
+// How far (metres) from its middle each kind of place's houses, walls and yards reach, every
+// people's (as setpieces/town.js lays them out, a few metres more), where none's let stand in water;
+// how far apart its ground's looked at for water; and how near (metres) a river's, a lake's, the
+// sea's or a stream's cell must be for the ground in a cell to be looked at
+export const BUILT = Object.freeze({ capital: 140, city: 110, town: 76, village: 52, hamlet: 32, farmstead: 28 });
+// How far (metres) from its middle each kind of place reaches at most, its streets out to its edge
+// (no place moved out of water to where it would reach into another's)
+export const REACH = Object.freeze({ capital: 190, city: 148, town: 96, village: 66, hamlet: 42, farmstead: 36 });
+const WET_EVERY = 12;
+const WET_NEAR = 2 * CELL;
+
+// Where round each point looked at for water a lake or the sea is looked for too (metres)
+const STILL_ROUND = Object.freeze([[0, 0], [-WET_EVERY / 2, 0], [WET_EVERY / 2, 0], [0, -WET_EVERY / 2], [0, WET_EVERY / 2]]);
+
+// How far (cells) a place that would stand in water is moved at most; and how far, at most, to
+// keep as far from the others as places are laid out
+const MOVE_MOST = 24;
+const MOVE_KEEPING = 8;
 
 /** The plan's `road` layer: none, a track (to a village), a road. */
 export const ROAD = Object.freeze({ none: 0, track: 1, road: 2 });
@@ -578,7 +599,169 @@ export function settleLand(land, seed) {
 
     hamlets(land, road, roads, places, sites, camps, createRandom(seed * 29 + 3), used, route);
 
-    return { places, road, roads, sites, camps };
+    // (Each people's start chosen as they're laid out, before any's moved: startTown)
+    for (const { id } of RACES) {
+        startTown(places, id).start = true;
+    }
+
+    // (Any place that would stand in water moved out of it, last of all, so everything else is
+    // laid out where it would be anyway; and its roads laid again to where it's gone)
+    const view = { water: land.water, flow: land.flow, height: land.height, level: land.level, biome: land.biome, volcano: land.volcano, seed };
+
+    keepOutOfWater(land, { places, sites, camps, road, roads }, route, wetness(view));
+
+    // (And the land's waters, as far as they've been worked out, for the plan to take on: the same
+    // land)
+    return { places, road, roads, sites, camps, waters: watersOf(view) };
+}
+
+// How much of a place of a kind at a point (metres) would stand in water: how many of its points
+// looked at (every WET_EVERY metres, as far as BUILT) are over a river or stream, a lake or the
+// sea, as the land's waters are drawn (`plan`: the land as it's laid out, and its seed); 0 where
+// none's near enough to look, and no more counted than `most`
+function wetness(plan) {
+    const running = runningIn(plan);
+    const waters = watersOf(plan);
+    // (Each cell with any of the land's water in it or within WET_NEAR: only there's the ground
+    // looked at)
+    const near = new Uint8Array(CELLS * CELLS);
+    const d = Math.ceil(WET_NEAR / CELL);
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        if (plan.water[k] || running[k]) {
+            const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
+
+            for (let y = Math.max(0, j - d); y <= Math.min(CELLS - 1, j + d); y++) {
+                near.fill(1, y * CELLS + Math.max(0, i - d), y * CELLS + Math.min(CELLS - 1, i + d) + 1);
+            }
+        }
+    }
+
+    return ([mx, my], kind, most = Infinity) => {
+        const reach = BUILT[kind];
+        let wet = 0;
+
+        for (let y = -reach; y <= reach && wet < most; y += WET_EVERY) {
+            for (let x = -reach; x <= reach && wet < most; x += WET_EVERY) {
+                const k = cellIndex(Math.floor((mx + x) / CELL), Math.floor((my + y) / CELL));
+
+                if (x * x + y * y > reach * reach || k < 0 || !near[k]) {
+                    continue;
+                }
+
+                // (A river or a stream, however narrow, within as far as any point of the ground is
+                // from the nearest looked at; a lake or the sea there, or half the way to the
+                // points looked at round it)
+                const river = waters.river(mx + x, my + y, WET_EVERY);
+
+                if ((river && river.gap <= WET_EVERY * 0.71) || STILL_ROUND.some(([u, v]) => stillWaterAt(plan, mx + x + u, my + y + v) !== null)) {
+                    wet++;
+                }
+            }
+        }
+
+        return wet;
+    };
+}
+
+// Each place that would stand in water (`wet`: wetness's) moved to the nearest land of its people
+// good to build on that's clear of it, no more than MOVE_MOST cells off, as far from the other
+// places as they're laid out if there's such within MOVE_KEEPING (or, where there's none, only
+// clear of where they reach: REACH; and
+// where there's none of that, the nearest that's least in it, if less than where it is), and clear
+// of the sites and the camps; and the roads and tracks to it laid again to where it's gone
+function keepOutOfWater(land, { places, sites, camps, road, roads }, route, wet) {
+    const moved = new Set();
+
+    for (const place of places) {
+        const now = wet(place.at, place.kind);
+
+        if (!now) {
+            continue;
+        }
+
+        const r = RACES.findIndex(({ id }) => id === place.race) + 1;
+        const small = place.kind === "hamlet" || place.kind === "farmstead";
+        // (As far from the others as places are laid out: from its own people's, and a hamlet's
+        // or a farmstead's from everyone's, the average of their kinds' "apart"; or, `near`, only
+        // clear of where the others reach, and a cell between)
+        const clear = (other, cell, near) => {
+            const reach = (REACH[place.kind] + REACH[other.kind]) / CELL + 1;
+            const kept = small || other.race === place.race || other.kind === "hamlet" || other.kind === "farmstead" ? (SETTLEMENTS[place.kind].apart + SETTLEMENTS[other.kind].apart) / 2 : 0;
+
+            return apart(other.cell, cell) >= (near ? reach : Math.max(reach, kept));
+        };
+        const fits = (x, y, near) => {
+            const at = centre(x, y);
+
+            return places.every((other) => other === place || clear(other, [x, y], near)) && sites.every((site) => apart(site.cell, [x, y]) >= SITE_CLEAR) && camps.every((camp) => apart(camp.at, at) >= SETTLEMENTS[place.kind].radius + CAMP_CLEAR);
+        };
+        const cells = [];
+        const [px, py] = place.cell;
+
+        for (let y = Math.max(0, py - MOVE_MOST); y <= Math.min(CELLS - 1, py + MOVE_MOST); y++) {
+            for (let x = Math.max(0, px - MOVE_MOST); x <= Math.min(CELLS - 1, px + MOVE_MOST); x++) {
+                const k = cellIndex(x, y);
+
+                if (land.territory[k] === r && land.cost[k] < 46 && !land.water[k] && buildable(land, x, y) > 0.3) {
+                    cells.push({ x, y, far: apart(place.cell, [x, y]) });
+                }
+            }
+        }
+
+        // (The nearest dry as far from the others as places are laid out, within MOVE_KEEPING; or,
+        // failing that, the nearest dry or least wet only clear of where they reach)
+        cells.sort((a, b) => a.far - b.far);
+
+        let [to, least] = [cells.find(({ x, y, far }) => far <= MOVE_KEEPING && fits(x, y, false) && !wet(centre(x, y), place.kind, 1)), now];
+
+        to = to ? [to.x, to.y] : null;
+
+        for (const { x, y } of to ? [] : cells) {
+            if (!fits(x, y, true)) {
+                continue;
+            }
+
+            const there = wet(centre(x, y), place.kind, least);
+
+            if (there < least) {
+                [to, least] = [[x, y], there];
+            }
+
+            if (!least) {
+                break;
+            }
+        }
+
+        if (to) {
+            place.cell = to;
+            place.at = centre(...to);
+            moved.add(place.id);
+        }
+    }
+
+    if (!moved.size) {
+        return;
+    }
+
+    // (Its roads laid again, in the order they were all laid, each over those laid before it as
+    // they now are; the others where they were)
+    const byId = new Map(places.map((place) => [place.id, place]));
+
+    road.fill(ROAD.none);
+
+    for (const each of roads) {
+        if (moved.has(each.from) || moved.has(each.to)) {
+            each.cells = route(road, byId.get(each.from).cell, byId.get(each.to).cell) ?? [];
+            each.bridges = each.cells.filter(([x, y]) => land.water[cellIndex(x, y)] === WATER.river);
+        }
+
+        for (const [x, y] of each.cells) {
+            const k = cellIndex(x, y);
+
+            road[k] = Math.max(road[k], each.kind === "track" ? ROAD.track : ROAD.road);
+        }
+    }
 }
 
 // The small places, settled last, each people's through their lands: hamlets on dry land clear of
@@ -665,8 +848,17 @@ export function campTier(camp, from) {
     return Math.min(TIERS, 1 + Math.floor(Math.max(0, apart(camp.at, from) - TIER_FROM) / TIER_EVERY));
 }
 
-/** Where a player of a people starts: of their towns, the one nearest their capital. */
+/**
+ * Where a player of a people starts: of their towns, the one nearest their capital, as they were
+ * laid out (marked `start`, before any was moved out of water: settleLand).
+ */
 export function startTown(places, raceId) {
+    const marked = places.find((place) => place.race === raceId && place.start);
+
+    if (marked) {
+        return marked;
+    }
+
     const capital = places.find((place) => place.race === raceId && place.kind === "capital");
     const towns = places.filter((place) => place.race === raceId && place.kind === "town");
 

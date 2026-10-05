@@ -629,6 +629,41 @@ describe("the settlements out in the world (settlements.js)", () => {
         assert.equal(again.town.yards.length, town.yards.length);
     });
 
+    it("cross the rivers out through their fields on bridges of their own, and stand nothing of theirs over the land's water", () => {
+        // (Seed 1's elves' capital and a dark elves' city: a main street of each out over a river)
+        for (const id of ["elf-capital-1", "darkElf-city-2"]) {
+            const place = overworld.settlements.places.find((each) => each.id === id);
+            const own = overworld.settlements.of(place);
+            const { at, town } = own;
+            let [bridged, wet] = [0, 0];
+
+            assert.ok(own.bridges.length > 0, `${id}: a bridge of its own`);
+            assert.ok(own.bridges.every((bridge) => overworld.bridgesNear(Math.floor(bridge.a[0] / CHUNK), Math.floor(bridge.a[1] / CHUNK)).includes(bridge)), "drawn and walked as the roads' are");
+
+            for (let j = 0; j < town.height; j++) {
+                for (let i = 0; i < town.width; i++) {
+                    const [x, y] = [at[0] + i, at[1] + j];
+
+                    if (!overworld.settlements.squareAt(own, x, y) || !overworld.landAt(x, y).water) {
+                        continue;
+                    }
+
+                    const chunk = overworld.chunkAt(x, y);
+                    const k = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+
+                    // (Nothing built over the water; a street over it is a bridge's, or the water's,
+                    // waded or not as the land's is)
+                    assert.equal(town.blocked[j][i], 0, `${id}: built over water at ${x}, ${y}`);
+                    assert.ok(chunk.bridge[k] || chunk.water[k], `${id}: a street over water at ${x}, ${y}`);
+                    bridged += chunk.bridge[k];
+                    wet++;
+                }
+            }
+
+            assert.ok(wet > 0 && bridged >= wet * 0.9, `${id}: ${bridged} of ${wet} squares over water bridged`);
+        }
+    });
+
     it("carry the plan's roads on from their streets' ends", () => {
         const lines = new Set([...overworld.roads.values()].flat().map((segment) => segment[5]).filter((line) => line.ends[village.id]));
         const exits = settlement.town.exits.map(([x, y]) => [x + settlement.at[0], y + settlement.at[1]]);

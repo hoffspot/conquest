@@ -114,6 +114,55 @@ describe("navigation meshes (navigation.js)", () => {
         assert.ok(Math.abs(across[1][2] - town.deckOf(BRIDGE, 0.5)) < 0.6, "up on the deck");
     });
 
+    it("finds a settlement's ways in from every way out of it, over its streets' bridges, and walks nowhere inside its buildings", () => {
+        const navigation = new Navigation(recast, town);
+        // (The elves' capital, a main street of its out over a river on a bridge of its own: found
+        // by looking)
+        const settlement = town.settlements.of(town.settlements.places.find(({ id }) => id === "elf-capital-1"));
+        const { at, town: layout } = settlement;
+        const market = [at[0] + layout.market.centre[0], at[1] + layout.market.centre[1]];
+
+        assert.ok(settlement.bridges.length > 0, "a bridge of its own");
+
+        for (const [x, y] of layout.exits) {
+            const way = navigation.path([at[0] + x, at[1] + y], market);
+
+            assert.ok(Math.hypot(way.at(-1)[0] - market[0], way.at(-1)[1] - market[1]) < 2, `in from ${at[0] + x}, ${at[1] + y}`);
+        }
+
+        // The ground inside its buildings (two squares and more in from their walls) isn't walked
+        let inside = 0;
+
+        for (let j = 2; j < layout.height - 2; j += 3) {
+            for (let i = 2; i < layout.width - 2; i += 3) {
+                if ([-2, -1, 0, 1, 2].every((dj) => [-2, -1, 0, 1, 2].every((di) => layout.blocked[j + dj][i + di])) && inside++ < 200) {
+                    assert.equal(navigation.walkable(at[0] + i + 0.5, at[1] + j + 0.5), false, `inside at ${at[0] + i}, ${at[1] + j}`);
+                }
+            }
+        }
+
+        assert.ok(inside > 100, `${inside} squares inside`);
+        navigation.dispose();
+    });
+
+    it("walks the plank walks over a lizard folk's lagoon", () => {
+        const navigation = new Navigation(recast, town);
+        const settlement = town.settlements.of(town.settlements.places.find(({ id }) => id === "lizard-city-1"));
+        const { at, town: layout } = settlement;
+
+        assert.ok(layout.walks.length > 0);
+
+        for (const { a, b } of layout.walks) {
+            const [x, y] = [at[0] + (a[0] + b[0]) / 2, at[1] + (a[1] + b[1]) / 2];
+            const found = navigation.nearest([x, y]);
+
+            assert.ok(found && Math.hypot(found[0] - x, found[1] - y) < 0.05, `on the walk at ${x.toFixed(1)}, ${y.toFixed(1)}`);
+            assert.ok(Math.abs(found[2] - town.ground.heightAt(x, y) - 0.16) < 0.3, "on its planks");
+        }
+
+        navigation.dispose();
+    });
+
     it("wades across a ford, straight over, but never into the river's deep water beside it", () => {
         const navigation = new Navigation(recast, town);
         const ford = town.waters.river(...FORD, 0);
