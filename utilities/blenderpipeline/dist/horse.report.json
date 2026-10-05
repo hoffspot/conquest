@@ -1,0 +1,388 @@
+{
+  "name": "horse",
+  "config": "examples/horse.json",
+  "source": "examples/mesh2motion/rigs/rig-horse.blend",
+  "glb": "dist/horse.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "5.1.29"
+  },
+  "kilobytes": 550.4,
+  "compression": "meshopt",
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 1,
+    "vertices": 2146,
+    "triangles": 3414,
+    "skinned": true,
+    "joints": 53,
+    "influences": 4,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "Mat_Standard.001",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [
+        "baseColor"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 0,
+      "metallic": 0
+    }
+  ],
+  "textures": [
+    {
+      "name": "color-palette",
+      "mimeType": "image/webp",
+      "width": 499,
+      "height": 500,
+      "kilobytes": 4.7,
+      "gpuMegabytes": 1.27
+    }
+  ],
+  "clips": [
+    {
+      "name": "Death",
+      "seconds": 1.4,
+      "channels": 159,
+      "keyframes": 1190,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "hips",
+        "distance": 0.9125,
+        "speed": 0.6518,
+        "direction": [
+          0.9998,
+          0.0212
+        ]
+      },
+      "from": "animation-horse-death.blend"
+    },
+    {
+      "name": "Eating",
+      "seconds": 2.6667,
+      "channels": 159,
+      "keyframes": 1119,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-eating.blend"
+    },
+    {
+      "name": "Get Up",
+      "seconds": 2.6667,
+      "channels": 159,
+      "keyframes": 2193,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "hips",
+        "distance": 0.673,
+        "speed": 0.2524,
+        "direction": [
+          -0.9971,
+          0.0755
+        ]
+      },
+      "from": "animation-horse-lay-to-idle.blend"
+    },
+    {
+      "name": "Headbutt",
+      "seconds": 1,
+      "channels": 159,
+      "keyframes": 1002,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-headbut.blend"
+    },
+    {
+      "name": "Idle",
+      "seconds": 2.6667,
+      "channels": 159,
+      "keyframes": 774,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-idle.blend"
+    },
+    {
+      "name": "Kick",
+      "seconds": 1.3,
+      "channels": 159,
+      "keyframes": 1219,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-kick.blend"
+    },
+    {
+      "name": "Rear",
+      "seconds": 2.9333,
+      "channels": 159,
+      "keyframes": 2093,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-rear.blend"
+    },
+    {
+      "name": "Run",
+      "seconds": 0.4333,
+      "channels": 159,
+      "keyframes": 697,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-run.blend"
+    },
+    {
+      "name": "Sleep",
+      "seconds": 2,
+      "channels": 159,
+      "keyframes": 370,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-sleep.blend"
+    },
+    {
+      "name": "Trot",
+      "seconds": 0.7,
+      "channels": 159,
+      "keyframes": 885,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-trot.blend"
+    },
+    {
+      "name": "Turn_Left",
+      "seconds": 4.6667,
+      "channels": 159,
+      "keyframes": 3367,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-turn-left.blend"
+    },
+    {
+      "name": "Turn_Right",
+      "seconds": 4.6667,
+      "channels": 159,
+      "keyframes": 3367,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-turn-right.blend"
+    },
+    {
+      "name": "Walk",
+      "seconds": 0.9667,
+      "channels": 159,
+      "keyframes": 1144,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-horse-walk.blend"
+    }
+  ],
+  "scale": 1,
+  "bounds": {
+    "rest": {
+      "min": [
+        -0.3208,
+        -0.0005,
+        -1.7636
+      ],
+      "max": [
+        0.3208,
+        2.034,
+        1.503
+      ],
+      "size": [
+        0.6417,
+        2.0345,
+        3.2666
+      ]
+    },
+    "animated": {
+      "min": [
+        -1.5052,
+        -0.184,
+        -1.7051
+      ],
+      "max": [
+        1.7615,
+        2.7953,
+        1.6994
+      ],
+      "size": [
+        3.2667,
+        2.9794,
+        3.4045
+      ]
+    },
+    "radius": 2.8067
+  },
+  "lods": [],
+  "exported": {
+    "objects": [
+      {
+        "name": "Horse",
+        "vertices": 1709,
+        "faces": 1742,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      }
+    ],
+    "armature": {
+      "name": "Armature",
+      "bones": 66,
+      "deformBones": 56,
+      "exported": 53
+    },
+    "fps": 30,
+    "baking": [
+      {
+        "object": "Horse",
+        "baked": false,
+        "materials": [
+          "Mat_Standard.001"
+        ],
+        "udim": false,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [
+      "KHR_materials_clearcoat",
+      "KHR_materials_ior",
+      "KHR_materials_specular"
+    ],
+    "texturesOfOneColourMadeFactors": 0
+  },
+  "budgets": [
+    {
+      "budget": "triangles",
+      "limit": 5000,
+      "value": 3414,
+      "ok": true
+    },
+    {
+      "budget": "joints",
+      "limit": 64,
+      "value": 53,
+      "ok": true
+    },
+    {
+      "budget": "drawCalls",
+      "limit": 1,
+      "value": 1,
+      "ok": true
+    },
+    {
+      "budget": "kilobytes",
+      "limit": 768,
+      "value": 550.4,
+      "ok": true
+    }
+  ],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 1,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 1,
+      "messages": []
+    }
+  },
+  "notes": [
+    "not exported: shape_circle, shape_cube, shape_platform",
+    "bones flagged to deform that move nothing, left out: ribcage_front_leaf, ribcage_leaf, tail_leaf"
+  ],
+  "warnings": [
+    "rig-horse.blend was saved by Blender 5.1.29, newer than this one (4.5.14 LTS): check the result"
+  ]
+}

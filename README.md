@@ -650,6 +650,8 @@ e2e/                    Playwright browser tests, and how long each took (durati
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
                         build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js,
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests)
+utilities/blenderpipeline/  Turns .blend files into game-ready GLB models, animations and all
+                        (its own README.md, dependencies and tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
@@ -659,6 +661,25 @@ docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how 
 docs/MAGIC.md           Magic: the schools, wands, tomes, wonders, the spellbook, and the spells' looks
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
+
+### Models from Blender
+
+`utilities/blenderpipeline/` turns `.blend` files (a rigged and animated creature bought for the
+game, say) into GLB files ready for it. It exports the mesh, its deforming bones and every
+animation, and bakes materials glTF can't carry (UDIM tiles, procedural shaders) onto one
+texture atlas. It sizes the result in metres, takes clips' travel out to play them in place,
+compresses and validates it, and reports on it. It has its own dependencies and tests, which
+aren't part of CI (Blender is a large download):
+
+```sh
+cd utilities/blenderpipeline
+npm ci && npm run setup      # setup: Blender as a Python module (needs Python 3.11)
+npm run build                # its examples into dist/
+npm test && npm run test:browser
+```
+
+Its [README.md](utilities/blenderpipeline/README.md) says how to use it, and how to keep a bought
+asset out of this public repository.
 
 ## Credits and license
 
@@ -676,6 +697,11 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
   The character lab's idle, walk, run, sword attack and death clips are Quaternius's Universal
   Animation Library as packed by Mesh2Motion (<https://github.com/Mesh2Motion/mesh2motion-app>),
   CC0 (`client/characters/animations/mesh2motion.glb`, made by `npm run build:clips`).
+- The Blender pipeline's test models and animations are Mesh2Motion's source art
+  (<https://github.com/Mesh2Motion/mesh2motion-assets>), CC0
+  (`utilities/blenderpipeline/examples/mesh2motion/LICENSE`). The pipeline runs Blender (as a
+  tool; none of it is part of the game), glTF-Transform and meshoptimizer (MIT licenses) and the
+  Khronos glTF Validator (Apache 2.0).
 - Town layouts after Watabou's Medieval Fantasy City Generator
   (<https://github.com/watabou/TownGeneratorOS>); castle pieces after Castle Builder by Jon
   Rubashkin (<https://github.com/JonRubashkin/Castle-Builder>).
@@ -688,6 +714,11 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
+- Meshes simplified for characters seen from afar, and models read that were compressed for the
+  game: [meshoptimizer](https://github.com/zeux/meshoptimizer) by Arseny Kapoulkine, its simplifier
+  (`client/vendor/meshoptimizer-1.3.0/`) and its decoder (Three.js's copy,
+  `client/vendor/three-r186/addons/libs/`), MIT license (`LICENSE.md` and
+  `meshopt_decoder.LICENSE.md` there).
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT

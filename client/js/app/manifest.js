@@ -11,6 +11,7 @@ export const MANIFEST = Object.freeze([
         files: [
             ["vendor/meshoptimizer-1.3.0/meshopt_simplifier.min.js", 53692],
             ["vendor/three-r186/addons/environments/RoomEnvironment.js", 2145],
+            ["vendor/three-r186/addons/libs/meshopt_decoder.module.js", 26667],
             ["vendor/three-r186/addons/loaders/GLTFLoader.js", 45403],
             ["vendor/three-r186/addons/utils/BufferGeometryUtils.js", 13537],
             ["vendor/three-r186/addons/utils/SkeletonUtils.js", 4123],
@@ -186,7 +187,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/engine/atlas.js", 39308],
             ["js/world/art/engine/leafcards.js", 1745],
             ["js/world/art/engine/materials.js", 4856],
-            ["js/world/art/engine/models.js", 3208],
+            ["js/world/art/engine/models.js", 3441],
             ["js/world/art/engine/paint-worker.js", 416],
             ["js/world/art/engine/painters.js", 56939],
             ["js/world/art/engine/solid.js", 54764],

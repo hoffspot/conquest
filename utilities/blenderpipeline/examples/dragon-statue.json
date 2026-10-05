@@ -1,0 +1,9 @@
+{
+    "source": "mesh2motion/3d-models/model-dragon.blend",
+    "out": "../dist",
+    "size": { "longest": 3 },
+    "origin": "feet",
+    "textures": { "maxSize": 256, "format": "jpeg", "quality": 85 },
+    "compress": "quantize",
+    "budgets": { "triangles": 4000, "drawCalls": 1, "textureSize": 256, "kilobytes": 200 }
+}

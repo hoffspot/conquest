@@ -1,0 +1,269 @@
+{
+  "name": "dragon",
+  "config": "examples/dragon.json",
+  "source": "examples/mesh2motion/rigs/rig-dragon.blend",
+  "glb": "dist/dragon.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "5.1.29"
+  },
+  "kilobytes": 301.9,
+  "compression": "meshopt",
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 1,
+    "vertices": 2905,
+    "triangles": 3498,
+    "skinned": true,
+    "joints": 90,
+    "influences": 4,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "DragonMaterial.001",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [
+        "baseColor"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 0
+    }
+  ],
+  "textures": [
+    {
+      "name": "DragonTexture",
+      "mimeType": "image/webp",
+      "width": 512,
+      "height": 512,
+      "kilobytes": 12.8,
+      "gpuMegabytes": 1.33
+    }
+  ],
+  "clips": [
+    {
+      "name": "Crawling",
+      "seconds": 1.3333,
+      "channels": 270,
+      "keyframes": 1663,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-dragon-walk.blend"
+    },
+    {
+      "name": "Flying",
+      "seconds": 0.75,
+      "channels": 270,
+      "keyframes": 1261,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-dragon-fly-flap.blend"
+    },
+    {
+      "name": "Gliding",
+      "seconds": 2,
+      "channels": 270,
+      "keyframes": 1497,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-dragon-fly-glide.blend"
+    },
+    {
+      "name": "Idling",
+      "seconds": 2,
+      "channels": 270,
+      "keyframes": 1464,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "animation-dragon-idle.blend"
+    }
+  ],
+  "scale": 1.50536,
+  "bounds": {
+    "rest": {
+      "min": [
+        -6.0208,
+        -0.003,
+        -5.93
+      ],
+      "max": [
+        6.0208,
+        1.9676,
+        3.07
+      ],
+      "size": [
+        12.0416,
+        1.9706,
+        9
+      ]
+    },
+    "animated": {
+      "min": [
+        -6.2233,
+        -3.2213,
+        -5.8669
+      ],
+      "max": [
+        6.2064,
+        5.9945,
+        3.1195
+      ],
+      "size": [
+        12.4296,
+        9.2158,
+        8.9865
+      ]
+    },
+    "radius": 6.805
+  },
+  "lods": [
+    {
+      "file": "dist/dragon.lod1.glb",
+      "ratio": 0.35,
+      "error": 0.02,
+      "triangles": 1220,
+      "vertices": 1352,
+      "kilobytes": 280.6
+    }
+  ],
+  "exported": {
+    "objects": [
+      {
+        "name": "Dragon",
+        "vertices": 1783,
+        "faces": 3498,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      }
+    ],
+    "armature": {
+      "name": "Armature",
+      "bones": 111,
+      "deformBones": 100,
+      "exported": 90
+    },
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Dragon",
+        "baked": false,
+        "materials": [
+          "DragonMaterial.001"
+        ],
+        "udim": false,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 0
+  },
+  "budgets": [
+    {
+      "budget": "triangles",
+      "limit": 20000,
+      "value": 3498,
+      "ok": true
+    },
+    {
+      "budget": "joints",
+      "limit": 128,
+      "value": 90,
+      "ok": true
+    },
+    {
+      "budget": "drawCalls",
+      "limit": 1,
+      "value": 1,
+      "ok": true
+    },
+    {
+      "budget": "textureSize",
+      "limit": 1024,
+      "value": 512,
+      "ok": true
+    },
+    {
+      "budget": "kilobytes",
+      "limit": 1024,
+      "value": 301.9,
+      "ok": true
+    },
+    {
+      "budget": "clips",
+      "limit": [
+        "Idling",
+        "Crawling",
+        "Flying",
+        "Gliding"
+      ],
+      "value": "all there",
+      "ok": true
+    }
+  ],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    }
+  },
+  "notes": [
+    "not exported: shape_circle, shape_cube, shape_platform, shape_sphere",
+    "bones flagged to deform that move nothing, left out: DRV_root, front_toes_tip_l, front_toes_tip_r, stomach_tip, wing_feather_1_tip_l, wing_feather_1_tip_r, wing_feather_2_tip_l, wing_feather_2_tip_r, wing_feather_3_tip_l, wing_feather_3_tip_r"
+  ],
+  "warnings": [
+    "rig-dragon.blend was saved by Blender 5.1.29, newer than this one (4.5.14 LTS): check the result"
+  ]
+}

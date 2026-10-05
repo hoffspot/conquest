@@ -1,0 +1,10 @@
+# Blender's Python module (npm run setup)
+.venv/
+__pycache__/
+# Blender's backups of .blend files
+*.blend1
+# Each build's work (build.js --keep)
+dist/.work/
+# Assets that aren't to be shared (bought ones, under a licence that says so): their sources,
+# configs and what's built from them
+private/
