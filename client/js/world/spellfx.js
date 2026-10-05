@@ -33,6 +33,8 @@ const WATER = { glow: [0xe8f8ff, 0x3a9ae8], deep: 0x1a5ab8, bright: 0xbfeaff };
 const HEAL = { glow: [0xdcffe0, 0x28d05a], deep: 0x2fd46a, bright: 0xe9fff0, gold: [0xfffbe0, 0xffc84a] };
 const HEX = { glow: [0xe8d8ff, 0x8a4dff], deep: 0x8a4dff, bright: 0xe8d8ff };
 const PALETTES = { fire: FIRE, earth: EARTH, air: AIR, water: WATER, healing: HEAL };
+// A Scroll of Safety's circle (underfoot), and the motes off it
+const SAFETY = { colour: 0x4aa8ff, bright: 0xdff2ff, glow: [0xeaf6ff, 0x3a8ae8] };
 
 // A few ready-made
 const FLAMES = p(FIRE.glow, { count: 18, size: [0.16, 0.34], speed: [0.8, 2.2], life: [0.35, 0.7], gravity: -3, spread: 1.6, grow: 0.4 });
@@ -713,6 +715,89 @@ export class SpellFx {
     }
 
     /**
+     * A circle of runes turning on the ground under someone (`feet`: a function giving where they
+     * stand, followed as they go; nothing given, gone), its diameter going from `from` to `to`
+     * metres over its `life` (seconds: growing eases in, shrinking eases out), a second ring of
+     * runes inside it turning the other way, a soft glow under both and motes rising off its rim.
+     * Returns it ({ object, end(): gone at once }).
+     */
+    underfoot(feet, { from = 0, to = 2, life = 3, colour = SAFETY.colour, bright = SAFETY.bright, glow = SAFETY.glow, spin = 1.4 } = {}) {
+        const group = new THREE.Group();
+        const outer = new THREE.Mesh(this.geometries.disc, this.#vivid(colour, { map: this.#texture("runes"), opacity: 0.95, boost: 2.4 }));
+        const inner = new THREE.Mesh(this.geometries.disc, this.#vivid(bright, { map: this.#texture("runeband"), opacity: 0.85, boost: 2 }));
+        const halo = new THREE.Mesh(this.geometries.disc, this.#additive(colour, { map: this.#texture("glow"), opacity: 0.4 }));
+        const growing = to >= from;
+        let [turn, motes] = [Math.random() * Math.PI * 2, 0];
+
+        group.name = "underfoot";
+        outer.renderOrder = ORDER.ring;
+        inner.renderOrder = ORDER.ring;
+        halo.renderOrder = ORDER.glow;
+        inner.position.y = 0.004;
+        halo.position.y = -0.006;
+        group.add(halo, outer, inner);
+
+        const shown = { done: false };
+
+        this.#show(group, life, (t, dt) => {
+            const at = shown.done ? null : feet();
+
+            group.visible = Boolean(at);
+
+            if (!at) {
+                return;
+            }
+
+            // (Lying on the ground where they stand, as it slopes there)
+            const eased = growing ? 1 - (1 - t) ** 2 : t * t;
+            const radius = Math.max(0.001, (from + (to - from) * eased) / 2);
+
+            lieOn(this.groundAt, at.x, at.z, Math.min(Math.max(radius, 0.5), 3), group.quaternion);
+            group.position.set(at.x, at.y + 0.05, at.z);
+            group.scale.set(radius, 1, radius);
+            turn += spin * dt;
+            outer.rotation.y = turn;
+            inner.rotation.y = -turn * 1.6;
+            halo.scale.setScalar(1.35);
+
+            // (Coming in quickly as it grows from nothing; going as it shrinks to nothing)
+            const fade = growing ? Math.min(1, t * 10) : Math.min(1, (1 - t) * 6);
+
+            outer.material.opacity = 0.95 * fade;
+            inner.material.opacity = 0.85 * fade;
+            halo.material.opacity = 0.4 * fade;
+
+            // (Motes rising off its rim, more the bigger it is)
+            motes -= dt;
+
+            if (motes <= 0 && radius > 0.15) {
+                const angle = Math.random() * Math.PI * 2;
+
+                motes = 0.05 / Math.min(1, radius);
+                this.spray(p(glow, { count: 2, size: [0.04, 0.08], speed: [0.3, 0.9], life: [0.5, 0.9], gravity: -1.4, spread: 0.6, swirl: 3 }), new THREE.Vector3(at.x + Math.cos(angle) * radius, at.y + 0.1, at.z + Math.sin(angle) * radius));
+            }
+        });
+
+        return {
+            object: group,
+            end: () => {
+                shown.done = true;
+                group.visible = false;
+                this.#end(group);
+            },
+        };
+    }
+
+    // Something showing ended now (gone at the next update)
+    #end(object) {
+        const shown = this.running.find((one) => one.object === object);
+
+        if (shown) {
+            shown.age = shown.life;
+        }
+    }
+
+    /**
      * Darken and redden the sky a while (the greatest spells': how much, 0 to 1, for `seconds`,
      * coming on over its first `rise` seconds and going over its last `fall`): darkness() says how
      * much it is now, for the view (view.js setOmen).
@@ -1229,6 +1314,16 @@ export class SpellFx {
     appear(at, how) {
         const { colour, glow } = APPEARING[how] ?? APPEARING.teleport;
 
+        // (Read home from a Scroll of Safety: a slim shaft of its light and its motes; the circle
+        // under them is the game's: underfoot)
+        if (how === "safety") {
+            this.pillar(at, { colour, radius: 0.45, height: 4, life: 0.7, rise: 0.12, opacity: 0.6 });
+            this.spray(p(glow, { count: 40, size: [0.05, 0.1], speed: [0.6, 1.6], life: [0.5, 1], gravity: -1.2, spread: 2, swirl: 10 }), above(at, 0.8));
+            this.flash(above(at, 1), { colour, intensity: 14, distance: 8, life: 0.4, size: 2 });
+
+            return;
+        }
+
         if (how === "over" || how === "lost") {
             this.spray(p([0xffffff, colour], { count: 30, size: [0.05, 0.1], speed: [0.6, 1.6], life: [0.5, 0.9], gravity: -1, spread: 2, swirl: 8 }), above(at, 0.8));
             this.spray({ ...SMOKE, count: 6 }, above(at, 0.5));
@@ -1545,6 +1640,7 @@ const APPEARING = {
     called: { colour: 0x9a4aff, glow: [0xf0d8ff, 0x6a2ab8] },
     walk: { colour: 0x7a5acd, glow: [0xe8e0ff, 0x5a3a9a] },
     recall: { colour: 0xffe08a, glow: [0xfffbe0, 0xf2c040] },
+    safety: { colour: SAFETY.colour, glow: SAFETY.glow },
     risen: { colour: 0x3aaa4a, glow: [0xb8ff9a, 0x0a2a10] },
     over: { colour: 0x9a4aff },
     lost: { colour: 0x9a4aff },

@@ -265,6 +265,13 @@ export const BOUGHT = Object.freeze({
     blessing: { boon: { id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000 } },
 });
 
+/**
+ * A Scroll of Safety (progress.js ITEMS scrollOfSafety): read for `ms`, and the reader carried
+ * to the market square of the town they started in (the world's `spawns.player`), their company
+ * left behind as by any magic that carries them; fallen before then, and it's lost.
+ */
+export const SAFETY = Object.freeze({ ms: 3000 });
+
 /** The skills' experience for each thing done, besides the damage done or taken, or healed. */
 const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5, evasion: 0.3, dodged: 20 });
 
@@ -313,6 +320,7 @@ export const REFUSALS = Object.freeze({
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
     boosted: "One's still working: only one at a time.",
+    reading: "You're reading one already.",
     known: "You know that spell already.",
     unexplored: "You haven't been there.",
     unsummoned: "No one's calling you.",
@@ -551,6 +559,8 @@ export class Host {
             readyAt: {},
             discarded: null,
             offers: {},
+            // A Scroll of Safety being read ({ until }: SAFETY), or none
+            safety: null,
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -933,6 +943,13 @@ export class Host {
             }
         }
 
+        // Scrolls of Safety read through, and their readers carried home (fallen first: lost)
+        for (const player of this.players.values()) {
+            if (player.safety) {
+                this.#safety(player, events);
+            }
+        }
+
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
         // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
         // players', a good while; a place's band, the place cleared once the last falls, after all
@@ -1150,7 +1167,7 @@ export class Host {
             summonings: structuredClone([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -1257,8 +1274,8 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded } of snapshot.players) {
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), offers: {} });
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety } of snapshot.players) {
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {} });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -2018,9 +2035,13 @@ export class Host {
             return refuse("unafflicted");
         }
 
-        // (A boon in a bottle, a Stamina Boost: one at a time)
+        // (A boon in a bottle, a Stamina Boost: one at a time; and a Scroll of Safety)
         if (use.boon && player.boons.some(({ id }) => id === use.boon.id)) {
             return refuse("boosted");
+        }
+
+        if (use.safety && player.safety) {
+            return refuse("reading");
         }
 
         const item = player.progress.take(index, 1);
@@ -2033,6 +2054,11 @@ export class Host {
             player.boons = [...player.boons, { ...use.boon, until: this.battle.time + use.boon.ms }];
             this.#outfit(player);
             this.#event("boon", { id: player.id, boon: use.boon.id, label: use.boon.label, change: "on" });
+        }
+
+        if (use.safety) {
+            player.safety = { until: this.battle.time + SAFETY.ms };
+            this.#event("safety", { id: player.id, change: "reading", ms: SAFETY.ms });
         }
 
         this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
@@ -3582,6 +3608,32 @@ export class Host {
         }
 
         return Boolean(there);
+    }
+
+    // A Scroll of Safety being read: lost if the reader's fallen (in this step or before: the
+    // death goes on as any does); read through, and they're carried to the market square of the
+    // town they started in
+    #safety(player, events) {
+        const actor = this.battle.actor(player.id);
+
+        if (!actor || actor.dead || events.some(({ type, id }) => type === "death" && id === player.id)) {
+            player.safety = null;
+            this.#event("safety", { id: player.id, change: "lost", why: "fell" });
+
+            return;
+        }
+
+        if (player.safety.until > this.battle.time) {
+            return;
+        }
+
+        const square = this.world.spawns?.player;
+
+        player.safety = null;
+
+        if (!square || !this.#carry(player, "town", [...square], "safety")) {
+            this.#event("safety", { id: player.id, change: "lost", why: "nowhere" });
+        }
     }
 
     // Those with a player, lost when they're carried off by magic: their followers gone back to

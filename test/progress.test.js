@@ -151,7 +151,7 @@ describe("growing stronger (progress.js)", () => {
         // its tomes; the common of each kind before the fine)
         assert.deepEqual(
             [...new Set(wares("guild").sort(shopOrder).map(({ id }) => WARE_KINDS[wareKind(id)]))],
-            ["Weapons", "Clothes and armour", "Jewellery", "Food, drink and draughts", "Tomes"],
+            ["Weapons", "Clothes and armour", "Jewellery", "Food, drink and draughts", "Tomes and scrolls"],
         );
         assert.deepEqual(
             wares("guild").sort(shopOrder).filter(({ id }) => wareKind(id) === "weapon").map(({ id, quality }) => `${quality} ${id}`),

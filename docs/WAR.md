@@ -522,8 +522,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - the priest: healing draughts;
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
     buy?", which she answers: the spoils of the wild and tomes, which no one else takes, and gear):
-    wands, grimoires, wizards' hats, jewellery, draughts and cures, the Stamina Boost potion
-    (below), and the tomes that open the elements' schools, up to fine;
+    wands, grimoires, wizards' hats, jewellery, draughts and cures, the Stamina Boost potion and
+    the Scroll of Safety (below), and the tomes that open the elements' schools, up to fine;
   - down in a people's castle's undercroft (GAME.md *Places worth finding*, *The undercroft*):
     its smith as a town's; its quartermaster ("Show me what's on the racks."): the castle's arms,
     shields and armour and the pieces of its people's uniform, up to legendary, the only shop
@@ -549,6 +549,18 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   are: `staminaTimes`, host.js `#outfit`); when it wears off, both are halved again. Only one at
   a time: drinking another while one's working is refused ("One's still working: only one at a
   time."), and the potion's kept. On the plate, an orange draught with a bolt of lightning.
+- **The Scroll of Safety** (25 gold, at the adventurers' guild; shown with the tomes, under
+  "Tomes and scrolls"): read from the pack (or its wheel), it carries the player to the market
+  square of the town they started in, three seconds after they begin (`SAFETY`, host.js
+  `#safety`: to the world's `spawns.player`, the middle of the market place). As it's read a
+  circle of runes turns on the ground under them, growing from nothing to two metres across
+  (spellfx.js `underfoot`, following them if they move); they're carried, and in the market square
+  the circle turns under them three seconds more, shrinking away to nothing (a slim shaft of its
+  blue light where they leave and where they come). Whoever was with them is left behind, as by
+  any magic that carries them. Struck down before the three seconds are up, it's lost: the circle
+  goes at once, they aren't carried, and they fall and get up as anyone does. Only one at a time
+  ("You're reading one already."). It's played out by the host, so all who play together see it
+  (`player.safety`, kept in snapshots; `NET_VERSION` 45).
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
 - **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape
@@ -586,7 +598,7 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
   - **Trading** with a shopkeeper, Buy and Sell tabs run across its top, and it opens on Buy:
     the shop's wares under their kinds (weapons, shields and the off hand, clothes and armour,
-    jewellery, food, drink and draughts, tomes: core/progress.js `WARE_KINDS`), the commoner made
+    jewellery, food, drink and draughts, tomes and scrolls: core/progress.js `WARE_KINDS`), the commoner made
     first, then by name, each with its price and a button to buy it (greyed past the gold to
     hand). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
     to sell it (asked how many, of a stack); what that shop won't buy (`buys`: tomes and the

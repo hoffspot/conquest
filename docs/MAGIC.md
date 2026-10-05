@@ -341,7 +341,10 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
 - **What lies on the ground** glows there for as long as it lasts, leaving its mark.
 - **Arriving and leaving by magic**: a column of light where a player's carried to (violet for
   Teleport and summoning, gold for Word of Recall); a companion comes in a circle of runes (the
-  risen dead in cracked earth) and goes in a puff.
+  risen dead in cracked earth) and goes in a puff. A Scroll of Safety (WAR.md) turns a blue
+  circle of runes under its reader, growing to two metres across as it's read, and shrinking away
+  under them in the market square they're carried to (`underfoot`: a ring of runes, a second ring
+  inside it turning the other way, a soft glow and motes rising off its rim).
 - **Reflect** flashes silver from whoever turned the blow to whoever it's turned on.
 
 Its fire, its flashes and its fireballs in flight each light what's round them, a light of their

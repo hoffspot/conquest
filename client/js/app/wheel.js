@@ -65,7 +65,7 @@ const goesOn = (action, wheel) => action?.on === wheel || (action?.on === "any" 
 export const forFriends = (spell) => ["any", "friend"].includes(SPELLS[spell]?.target);
 
 /** The things to use a wheel shows by a shorter name than their own (core/progress.js ITEMS). */
-const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale" };
+const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale", scrollOfSafety: "Safety" };
 
 /**
  * What's in a slice (an ACTIONS key, or "item:" and a thing to use): { label, spell, ability,

@@ -3351,6 +3351,109 @@ test("what lingers after a creature's blow shows on the player's plate, and its 
     expect(await page.evaluate(() => window.pellagos.game.progress.count("antidote"))).toBe(1);
 });
 
+test("a Scroll of Safety read from the pack: a circle of runes grows under the player for three seconds, then they're in their home town's market square, the circle shrinking away there; struck down first, it's lost", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (Out of town, a way from its square, the orc out of the way)
+    const square = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = game.world.spawns.player;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.host.players.get(game.me).progress.stow({ id: "scrollOfSafety" }, 2);
+        game.host.battle.place(game.me, "town", [x + 40, y + 10]);
+        game.advance(0.5, { render: false });
+
+        return [x + 0.5, y + 0.5];
+    });
+    const away = () => page.evaluate(([x, y]) => Math.hypot(window.pellagos.game.battle.actor("player").x - x, window.pellagos.game.battle.actor("player").y - y), square);
+    // (The circles under anyone: how wide each is, metres)
+    const circles = () => page.evaluate(() => window.pellagos.game.spellFx.running.filter(({ object }) => object.name === "underfoot" && object.visible).map(({ object }) => object.scale.x * 2));
+    const pack = page.locator(".pack");
+    // (The pack opened while the game's listening, the world stopped again while it's used; and
+    // left open after)
+    const read = async () => {
+        if (await pack.isHidden()) {
+            await page.evaluate(() => window.pellagos.game.start());
+            await page.keyboard.press("i");
+            await expect(pack).toBeVisible();
+            await page.evaluate(() => window.pellagos.game.stop());
+        }
+
+        await pack.locator('.carried .pack-cell[data-item="scrollOfSafety"]').click();
+        await expect(pack.locator(".pack-about")).toContainText("the market square of the town you started in");
+        await pack.locator(".pack-about").getByRole("button", { name: /^Read/ }).click();
+        expect(await playUntil(page, () => document.querySelector("#banner")?.textContent.includes("You read the Scroll of Safety"), { seconds: 1 })).toBe(true);
+    };
+    const play = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds, { render: false }), seconds);
+
+    expect(await away()).toBeGreaterThan(30);
+    await read();
+
+    // Growing under them as they read, to two metres across
+    const [early] = await circles();
+
+    await play(1.5);
+
+    const [later] = await circles();
+
+    expect(early).toBeLessThan(later);
+    expect(later).toBeLessThan(2);
+    expect(await away()).toBeGreaterThan(30);
+
+    // Three seconds on: in the market square, the circle under them there, shrinking away
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const [x, y] = game.world.spawns.player;
+
+                return Math.hypot(game.battle.actor("player").x - x - 0.5, game.battle.actor("player").y - y - 0.5) < 3;
+            },
+            { seconds: 2 },
+        ),
+    ).toBe(true);
+    expect(await page.evaluate(() => document.querySelector("#banner").textContent)).toContain("Safe: the market square of");
+
+    // (Shown there once they're placed there: a step after they're carried)
+    await play(0.2);
+
+    const [arrived] = await circles();
+
+    await play(1.5);
+
+    const [shrinking] = await circles();
+
+    expect(shrinking).toBeLessThan(arrived);
+    await play(2);
+    expect(await circles()).toEqual([]);
+
+    // Read again out of town, and struck down before it's read through: the circle gone at once,
+    // and they lie where they fell
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = game.world.spawns.player;
+
+        game.host.battle.place(game.me, "town", [x + 40, y + 10]);
+        game.advance(0.5, { render: false });
+    });
+    await read();
+    expect((await circles()).length).toBe(1);
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.battle.actor(game.me).hp = 1;
+        game.battle.afflict(game.me, "poison", { power: 5 });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actor("player").dead, { seconds: 3 })).toBe(true);
+    expect(await circles()).toEqual([]);
+    await play(1.5);
+    expect(await away()).toBeGreaterThan(30);
+    expect(await page.evaluate(() => window.pellagos.game.progress.count("scrollOfSafety"))).toBe(0);
+});
+
 test("the pack stacks things alike: dragged together, split by how many, held for a thing's wheel; thrown away and taken back; dropped on the ground, and picked up", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
     test.setTimeout(180000);

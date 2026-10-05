@@ -93,6 +93,16 @@ export const ITEMS = Object.freeze({
         use: { boon: { id: "staminaBoost", label: "Stamina Boost", staminaTimes: 2, ms: 5 * 60000 } },
         price: 20,
     },
+    // A scroll read to be carried home: to the market square of the town the player started in,
+    // three seconds after it's begun (host.js #safety), unless they fall first; sold at the
+    // adventurers' guild
+    scrollOfSafety: {
+        label: "Scroll of Safety",
+        about: "Read it to be carried to the market square of the town you started in, three seconds after you begin. Fall before then and it's lost.",
+        scroll: true,
+        use: { safety: true },
+        price: 25,
+    },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
@@ -123,21 +133,21 @@ export const SHOPS = Object.freeze({
     watch: { items: ["sword", "hammer", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", "staminaBoost", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
 });
 
 /**
  * The kinds of thing a shop's wares are shown under, in turn (the pack's Buy tab: app/pack.js):
  * weapons, what's held in the off hand, what's worn, jewellery, things to eat, drink and cure
- * with, tomes, and the spoils of the wild.
+ * with, tomes and scrolls, and the spoils of the wild.
  */
-export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", supplies: "Food, drink and draughts", tome: "Tomes", spoils: "Spoils of the wild" });
+export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", supplies: "Food, drink and draughts", tome: "Tomes and scrolls", spoils: "Spoils of the wild" });
 
 /** Which of WARE_KINDS a thing is (its id). */
 export function wareKind(id) {
     const def = ITEMS[id];
 
-    return !def ? "supplies" : def.tome ? "tome" : def.part ? "spoils" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
+    return !def ? "supplies" : def.tome || def.scroll ? "tome" : def.part ? "spoils" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
 }
 
 /**

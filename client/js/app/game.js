@@ -39,7 +39,7 @@ import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
+import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -312,7 +312,7 @@ function aboutOf({ id, quality }) {
         return `Cures what's ${label.toLowerCase()} at once. (${about})`;
     }
 
-    if (use?.boon) {
+    if (use?.boon || use?.safety) {
         return ITEMS[id].about;
     }
 
@@ -407,7 +407,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -618,6 +618,11 @@ export class Game {
 
         // What lingering things the player's been told the cure for already (their kinds)
         this.curesTold = new Set();
+
+        // Scrolls of Safety being read (by the reader's id: { until (the battle's time), ms,
+        // circle (spellfx.js underfoot) }), and those carried home by one, not yet arrived
+        this.reading = new Map();
+        this.homeward = new Set();
 
         /** What's to happen a little later (the game's clock, s): [{ at, then }]. */
         this.later = [];
@@ -3258,6 +3263,65 @@ export class Game {
 
     // Someone's slept (at an inn, or by a camp's fire): if the world's time passed, everyone's
     // woken with them, the screen up from black, told how long; if only they rested, just them
+    // A Scroll of Safety read (its circle growing under the reader as they read it), or lost
+    // (they fell first, or there was nowhere to take them: the circle gone at once)
+    #safety({ id, change, ms = SAFETY.ms, why = null }) {
+        this.reading.get(id)?.circle?.end();
+        this.reading.delete(id);
+
+        if (change === "reading") {
+            this.reading.set(id, { until: this.battle.time + ms, ms, circle: this.#safetyCircle(id, { from: 0, to: 2, life: ms / 1000 }) });
+        }
+
+        if (id === this.me) {
+            const said = change === "reading" ? "You read the Scroll of Safety…" : why === "nowhere" ? "The scroll's light fades: there's nowhere for it to take you." : null;
+
+            if (said) {
+                this.hud.message(said, change === "reading" ? ms / 1000 : 3);
+            }
+        }
+    }
+
+    // A Scroll of Safety's circle turning under someone, `from` to `to` metres across over `life`
+    // seconds, following them while they're on the map shown (spellfx.js underfoot)
+    #safetyCircle(id, { from, to, life }) {
+        const avatar = this.avatars.get(id);
+
+        if (!avatar || life <= 0) {
+            return null;
+        }
+
+        return this.spellFx.underfoot(() => (this.battle.actor(id)?.map === this.mapId && this.avatars.get(id) === avatar ? avatar.object.position : null), { from, to, life });
+    }
+
+    // Someone come somewhere (through a door, or carried by magic): read home by a Scroll of
+    // Safety, its light there and its circle under them, shrinking away; or still reading one, and
+    // the player gone to another map (what was showing on the last gone with it), its circle
+    // under them again, as far grown as it was
+    #safetyCrossed(id) {
+        const avatar = this.avatars.get(id);
+
+        if (this.homeward.delete(id)) {
+            if (avatar && this.battle.actor(id)?.map === this.mapId) {
+                this.spellFx.appear(avatar.object.position.clone(), "safety");
+            }
+
+            this.#safetyCircle(id, { from: 2, to: 0, life: SAFETY.ms / 1000 });
+
+            return;
+        }
+
+        const reading = this.reading.get(id);
+
+        if (reading && id === this.me) {
+            const left = Math.max(0, reading.until - this.battle.time) / 1000;
+            const read = 1 - left / (reading.ms / 1000);
+
+            reading.circle?.end();
+            reading.circle = this.#safetyCircle(id, { from: 2 * (1 - (1 - read) ** 2), to: 2, life: left });
+        }
+    }
+
     #slept({ id, where, passed, until = null }) {
         const mine = id === this.me;
 
@@ -3917,7 +3981,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
@@ -4624,6 +4688,8 @@ export class Game {
                         this.sound?.setListener(avatar.object.position.x, avatar.object.position.z);
                     }
 
+                    this.#safetyCrossed(event.id);
+
                     // A door opening and banging shut, heard on the player's side of it
                     if (event.kind === "door" && (event.to === this.mapId || event.from === this.mapId)) {
                         this.sound?.play("door", { at: event.to === this.mapId ? avatar.object.position : was });
@@ -4767,6 +4833,9 @@ export class Game {
             case "slept":
                 this.#slept(event);
                 break;
+            case "safety":
+                this.#safety(event);
+                break;
             case "boon":
                 // (A Stamina Boost drunk, or a boon worn off)
                 if (event.id === this.me) {
@@ -4866,7 +4935,20 @@ export class Game {
                 this.#summons(event);
                 break;
             case "carried":
-                if (event.map === this.mapId) {
+                // (Read home by a Scroll of Safety: its circle gone from where they were, a burst
+                // of its light there, and it under them where they come to: #safetyCrossed)
+                if (event.why === "safety") {
+                    this.reading.get(event.id)?.circle?.end();
+                    this.reading.delete(event.id);
+                    this.homeward.add(event.id);
+
+                    if (event.from?.map === this.mapId) {
+                        const [ox, oz] = this.originOf(event.from.map);
+                        const [x, z] = [ox + event.from.x, oz + event.from.y];
+
+                        this.spellFx.appear(new THREE.Vector3(x, this.#groundOn(event.from.map, x, z), z), "safety");
+                    }
+                } else if (event.map === this.mapId) {
                     const [ox, oz] = this.originOf(event.map);
 
                     const [x, z] = [ox + event.square[0] + 0.5, oz + event.square[1] + 0.5];
@@ -4875,7 +4957,7 @@ export class Game {
                 }
 
                 if (event.id === this.me) {
-                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side." }[event.why] ?? "", 3);
+                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.` }[event.why] ?? "", 3);
                 }
 
                 break;
