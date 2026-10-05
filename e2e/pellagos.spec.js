@@ -1172,10 +1172,11 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.kinds).toBe(true);
 
     // Out here, the wild's creatures put off, the player makes camp (Make camp, at the top of their
-    // own wheel's other side): asleep to the evening, woken by their tent and its fire, and told
+    // own wheel's other side), asked how long (so many hours, till sundown or the morning): asleep
+    // till sundown, woken by their tent and its fire, and told
     const camped = await page.evaluate(async () => {
         const { game } = window.pellagos;
-        const { elapsedOf, timeOfDay, DAY } = await import("/js/core/daytime.js");
+        const { elapsedOf, timeOfDay, SUNDOWN } = await import("/js/core/daytime.js");
 
         game.stop();
 
@@ -1193,13 +1194,16 @@ test("walks out of the town into the world, drawn round the player as they go, w
         };
 
         const result = game.act(game.wheels.self[1].n, "self");
+        const asked = [...document.querySelectorAll(".choice button")].map((button) => button.textContent);
 
+        [...document.querySelectorAll(".choice button")].find((button) => button.textContent.startsWith("Until sundown")).click();
         game.advance(0.2);
         game.hud.message = message;
 
         return {
             result,
-            woken: timeOfDay(elapsedOf(game.host.war)) - DAY.sets,
+            asked,
+            woken: timeOfDay(elapsedOf(game.host.war)) - SUNDOWN,
             passed: elapsedOf(game.host.war) > before,
             drawn: game.camps.camps.has("rest-player"),
             said,
@@ -1208,12 +1212,13 @@ test("walks out of the town into the world, drawn round the player as they go, w
     });
 
     expect(camped.result).toEqual({ ok: true });
+    expect(camped.asked).toEqual(["−", "+", "Sleep 8 hours", expect.stringMatching(/^Until sundown \(/), expect.stringMatching(/^Until morning \(/), "Cancel"]);
     expect(camped.passed).toBe(true);
     expect(camped.woken).toBeGreaterThanOrEqual(0);
     expect(camped.woken).toBeLessThan(1000);
     expect(camped.drawn).toBe(true);
     expect(camped.lit).toBeGreaterThan(0);
-    expect(camped.said.some((text) => /^You sleep by the fire till evening/.test(text)), JSON.stringify(camped.said)).toBe(true);
+    expect(camped.said.some((text) => /^You sleep by the fire till sundown/.test(text)), JSON.stringify(camped.said)).toBe(true);
 
     // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
     // trees and creatures) reads no more textures than an iPhone lets one read
@@ -2695,6 +2700,68 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await expect(journal).toBeVisible();
     await expect(journal.locator(".journal-regard.grudge")).toContainText(["The Orcs bear you"]);
     await page.keyboard.press("Escape");
+});
+
+test("where the player is is kept whenever the game stops (paused, the page closed or hidden), and the next time they carry on there", async ({ page }) => {
+    // (Played three times: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+        return page.evaluate(() => {
+            const player = window.pellagos.game.battle.actor("player");
+
+            return { x: player.x, y: player.y, facing: player.facing, map: player.map, spawn: player.spawn };
+        });
+    };
+    // (Walked a way off down the street, the world stopped)
+    const walk = (by) =>
+        page.evaluate((by) => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            game.battle.command("player", { type: "move", to: [player.square[0] + by, player.square[1]] });
+
+            for (let k = 0; k < 100 && (player.path.length || player.order); k++) {
+                game.advance(0.1, { render: false });
+            }
+
+            return { x: player.x, y: player.y, facing: player.facing };
+        }, by);
+    const kept = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.place"))?.place ?? null);
+
+    const first = await continued();
+    const walked = await walk(10);
+
+    expect(Math.hypot(walked.x - first.x, walked.y - first.y)).toBeGreaterThan(5);
+
+    // Paused (the menu): kept as it is
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("player"), { path: [], order: null });
+        game.start();
+    });
+    await page.locator("#menubutton").click();
+    await expect(page.locator("#menu")).toBeVisible();
+    expect(await kept()).toEqual(walked);
+
+    // The next time: there, getting up at home still if they fall
+    const second = await continued();
+
+    expect(second).toEqual({ ...walked, map: "town", spawn: first.spawn });
+
+    // Closed (left for the title page) without pausing: kept as the page goes
+    const again = await walk(-6);
+
+    expect(again.x).not.toBe(walked.x);
+    expect(await continued()).toMatchObject(again);
 });
 
 test("an adventurer at the guild, hired for gold, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {

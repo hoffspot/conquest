@@ -1917,6 +1917,27 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     opacity: 0.8;
 }
 
+/* Making camp: how many hours, − and + either side of them */
+.camp-hours {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.camp-step {
+    width: 44px;
+    min-width: 44px;
+    padding: 6px 0;
+    font-size: 1.2rem;
+}
+
+.camp-count {
+    min-width: 6.5em;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+}
+
 @keyframes ail-pulse {
     50% {
         transform: scale(1.08);

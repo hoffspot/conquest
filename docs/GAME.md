@@ -884,10 +884,19 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   slept in; or out in the world, **Make camp** (an action for a wheel, at the top of the player's
   own wheel's other side to start with, or a quick action) pitches their people's tent behind
   them and builds a fire a step in front, and they sleep by it. Not in a settlement ("find an
-  inn"), indoors, in a fight, or with anything hostile within 40 m. Either way they wake mended,
-  their stamina full, at the next sunrise or sunset at least five minutes off (the screen coming
-  up from black, told how long they slept), the war's turns meanwhile all played as they would
-  have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
+  inn"), indoors, in a fight, or with anything hostile within 40 m (said at once, before
+  anything's asked: host.js `campRefusal`). Making camp asks how long (hud.js `chooseCamp`):
+  - **so many hours** of the world's (− and +, an hour to a day, eight to start with, then the last
+    chosen; an hour is two and a half minutes of play: daytime.js `HOUR`);
+  - **until sundown**: a second past sunset, when it's dark enough for the night's creatures to
+    come out (daytime.js `SUNDOWN`; light.js `torchesLit`);
+  - **until morning**: sunrise, when the night's over and its creatures go to ground;
+  - each of the last two with how many hours off it is; or Cancel.
+
+  A room at an inn is slept in to the next sunrise or sunset at least five minutes off. Either
+  way they wake mended, their stamina full (the screen coming up from black, told how long they
+  slept: "You sleep by the fire for 8 hours, 20 minutes gone."), the war's turns meanwhile all
+  played as they would have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
   camp's does (seen as by day within 14 m). In a world shared with others only the host passes
   the time, everyone woken with them; anyone else who sleeps just rests.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
@@ -3198,7 +3207,16 @@ still drawn; a piece of a settlement that fails to build is left out, the rest b
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
 weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
-`pellagos.settings`; what the character's found of the world, in `pellagos.explored`. A save of another
+`pellagos.settings`; what the character's found of the world, in `pellagos.explored`.
+
+**Where they were** is kept in `pellagos.place` (save.js `savePlace`: `{ x, y, facing }`, metres out
+in the world) whenever the game stops: paused (the menu), quit to the title, the page hidden (another
+app on a phone, another tab) or closed (`pagehide`), and every turn of the war (a minute of play)
+besides, should it stop some other way. Inside a building, it's the step outside its door; down,
+it's where they'll get up. The next time, they carry on there (game.js `place`; the land's built
+round it as it loads), facing as they were, or on the nearest square that can be stood on within
+eight; if none can, where the world puts them. They still get up at home if they fall. A world
+joined to someone else's keeps nothing of this: it's theirs. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
 
