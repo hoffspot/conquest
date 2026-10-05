@@ -20,6 +20,7 @@
     "vendor:meshopt": "node scripts/vendor-meshopt.js",
     "build:manifest": "node scripts/build-manifest.js",
     "build:characters": "node scripts/build-characters.js",
+    "build:vitruvian": "node scripts/build-vitruvian.js",
     "build:music": "node scripts/build-music.js",
     "build:clips": "node scripts/build-clips.js",
     "build:footprints": "node scripts/build-footprints.js",
@@ -37,6 +38,7 @@
     "esbuild": "0.28.2",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
+    "jpeg-js": "^0.4.4",
     "meshoptimizer": "^1.3.0",
     "three": "0.186.0"
   }

@@ -4337,3 +4337,35 @@ converted data is to be measured in M8 against today's hm08 data.
   - **After:** no gaps along the streets over the lagoons; 3.2 m lanes 2.65 m of mesh, alleys 2.4;
     lamp posts' holes about a metre across; a way between every two market props near each other.
   - **Next:** the Vitruvian body (§10).
+- **2026-10-05, the Vitruvian body, first part: its data, in the character lab** (§10;
+  docs/CHARACTERS.md *The Vitruvian body*). `npm run build:vitruvian` makes CharMorph's
+  Vitruvian (CC0) into the same kind of data as MakeHuman's body (`client/characters/vitruvian.*`);
+  the lab shows it at `character-lab.html?body=vitruvian`. The game still uses MakeHuman's.
+  - **No Blender:** `char.blend`'s texture coordinates and materials are read by a small reader
+    of Blender's own file layout (`scripts/lib/blend.js`), and the morphs, weights and joints from
+    NumPy's files (`scripts/lib/npy.js`). (The risk in §14 is met that way.)
+  - **Mesh:** the skin brought down to 28,000 triangles (from 52,544) with meshoptimizer, keeping
+    its texture coordinates, its four UDIM tiles side by side in one square; its own eyes,
+    MakeHuman's eyelashes on them; its Mixamo weights, the same 52 bones in the same order. 1.9 MB
+    gzipped (MakeHuman's 1.4 MB).
+  - **Size:** scaled to MakeHuman's default body's height (it was 5% taller: the hero 1.90 m to
+    1.81 m, as on MakeHuman's).
+  - **Shapes:** every slider's carried over, rather than mapped onto Vitruvian's own morphs (step
+    2 of the plan), so every people's look and soldier works on it at once: MakeHuman's default
+    body laid over Vitruvian's bone by bone, each Vitruvian vertex taking the change at the nearest
+    point facing its way (half within 5 mm, 99% within 3.2 cm), turned as the bones there are but
+    not stretched, and the base set so the sliders as they start give Vitruvian's own body.
+  - **The neck** (the user: the top of the shirt wasn't right): MakeHuman's neck bone starts half
+    way up the neck, Vitruvian's at its foot, so a shirt cut 3 cm under the neck joint fell to the
+    collarbones. The manifest's `landmarks.neck` (0.425 of the way up Vitruvian's neck bone) is
+    where garments measure the neck from; MakeHuman's body is laid over Vitruvian's with its neck
+    bone starting there too. Stretching the changes as the bones are had shortened the hero's neck
+    2 cm; turned only, its neck runs from shoulders to chin at MakeHuman's heights.
+  - **Masks:** MakeHuman's (lips, nails, eyelids...) carried into Vitruvian's texture layout texel
+    by texel.
+  - **Tests:** `test/vitruvian.test.js`: bones, weights, parts, shapes and masks; as tall as
+    MakeHuman's body in four presets; the neck measured where MakeHuman's is, and a shirt up it as
+    high, front and back.
+  - **Next:** the game on Vitruvian (its lower-detail body, the motion check's baseline, the
+    clips' bake), its own skin textures, the lips and mouth (the lip mask sits a little low), the
+    face's measures, blinks and expressions.

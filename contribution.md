@@ -113,7 +113,8 @@ always be green.
 | `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
-| `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
+| `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
+| `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
 | `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests, guards' sway, flinches and dodges (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
 | `npm run build:footprints` | After changing how a prop or a yard's fence looks (`client/js/world/art/kits/props.js`, `peoples/props.js`, `kits/yards.js`): measures what each stands on into `client/js/core/setpieces/outlines.js`, which the navigation mesh walks round. `test/footprints.test.js` fails until you do. Then `npm run build:manifest` |
@@ -324,6 +325,7 @@ moves first, update the branch again.
 | `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
 | `client/js/characters/clip-keys.js` | Generated: take the side whose `scripts/bake-clips.js` list you keep, then `npm run build:clips -- --from=...` (above) if both changed it, and `npm run build:manifest`. A clip rest's `hitAt` and `duration` in `client/js/core/roles.js` are its clip's `hit` and `seconds` there. |
 | `client/js/core/setpieces/outlines.js` | Generated: take either side, then `npm run build:footprints` on the merged code, and `npm run build:manifest`. |
+| `client/characters/vitruvian.json`, `vitruvian.bin`, `vitruvian/masks/*.png` | Generated together: take one side's three, never a mix, then `npm run build:vitruvian -- --from=...` (above) if both sides changed what it's made from (`scripts/build-vitruvian.js` or the MakeHuman body), and `npm run build:manifest`. |
 | `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
