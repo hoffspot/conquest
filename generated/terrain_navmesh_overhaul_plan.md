@@ -276,14 +276,14 @@ TerrainChunk {
 
   | Setting | Value |
   |---|---|
-  | `cs` (cell size) | 0.5 |
-  | `ch` (cell height) | 0.25 |
-  | `walkableSlopeAngle` | 38 |
-  | `walkableClimb` | 0.5 m (2 voxels) |
-  | `walkableHeight` | 2 m (8 voxels) |
-  | `walkableRadius` | 0.5 m (1 voxel; BODY is 0.3 m, rounded up) |
-  | `tileSize` | 64 voxels |
-  | `borderSize` | walkableRadius + 3 voxels |
+  | `cs` (cell size) | 0.25 (0.5 until the 2026-10-05 rework below) |
+  | `ch` (cell height) | 0.125 (0.25) |
+  | `walkableSlopeAngle` | 38 (by the ground triangles' areas) |
+  | `walkableClimb` | 0.75 m (6 voxels) |
+  | `walkableHeight` | 2 m (16 voxels) |
+  | `walkableRadius` | 0.25 m (1 voxel; BODY is 0.3 m; it was 0.5 m, a half-metre voxel) |
+  | `tileSize` | 128 voxels |
+  | `borderSize` | walkableRadius + 3 voxels (1 m) |
   | `maxTiles` | 1,024 loaded (4,096 polygons each) |
 
 - **Inputs** for a tile, with its border (about 2 m):
@@ -4317,3 +4317,23 @@ converted data is to be measured in M8 against today's hm08 data.
     every flinch way and each dodge on every body; the lab has a Dodge button.
   - **Next:** deaths and falls with their legs (`Death_A`..`D`, `Hit_Knockback`: a stance system
     so the feet can step where a clip steps); then the Vitruvian body (§10).
+- **2026-10-05, the navigation mesh made from what's drawn** (docs/WORLD.md *Navigation meshes*).
+  A player's pictures of a lizard town: the plank walks' mesh a strip down their middles, broken on
+  side walks; and a market's lamps, stalls and well each in a hole too big, holes meeting.
+  - **The audit:** the lagoon's water was solid, a 3 m box on every square no walk's middle was
+    over, eating into the planks a square at a time (3.2 m lanes 1.55 m of mesh, 45 gaps along the
+    streets over the water, three breaks: 238 m, 99 m and 28 m round); a prop took every square of
+    the middle half of its plots, each a box (a lamp post 2 m square, a hole 3 to 4 m across);
+    boxes on the voxels' lines took a voxel more on two sides; and half-metre voxels kept walkers
+    half a metre from every edge, and lost as much again to the voxel at each.
+  - **Built:** `solid` is where something built stands (a layout's `standing`); the lagoon's water
+    walked by no one, `heightAt` the deck's out to its edges over any of its squares; props (by
+    outlines measured from the art: `npm run build:footprints`), yard fences and the start town's
+    trees as drawn, their ground marked unwalkable before the radius is taken off, a yard closed
+    along the back of its house; boxes a centimetre in; voxels 0.25 m, the walker kept 0.25 m off
+    (Recast about 8 ms a tile in a town, from 3); `heightAt` a bridge's deck on the squares next
+    to those under it too (a stone bridge's ramps over the banks); the debug view's band where a
+    body reaches. `NET_VERSION` 50.
+  - **After:** no gaps along the streets over the lagoons; 3.2 m lanes 2.65 m of mesh, alleys 2.4;
+    lamp posts' holes about a metre across; a way between every two market props near each other.
+  - **Next:** the Vitruvian body (§10).

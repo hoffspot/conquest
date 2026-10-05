@@ -151,11 +151,12 @@ const ATTEMPTS = 20;
  * those its fences stand on, blocked), bed ([u0, v0, u1, v1]: its bed, metres across from its left
  * side and in from its back, or null), line (whether a washing line could be strung across its
  * back: YARD_LINE) }]),
- * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
- * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
- * walks over it: [{ a, b ([x, y]: its ends), half (half its width), layer (which is drawn over
- * which where they overlap: WALK_LAYERS, the last a square of deck across a bend, filling its
- * outside) }]) }.
+ * ground, blocked, opaque, standing (rows of squares: GROUND kinds, 1 where no one can go, 1 where
+ * nothing behind can be seen, 1 where a building stands: blocked squares that aren't are a prop's,
+ * a tree's, a fence's or the lagoon's), water (rows of squares, 1 for water, or null for none),
+ * walks (the plank walks over it: [{ a, b ([x, y]: its ends), half (half its width), layer (which
+ * is drawn over which where they overlap: WALK_LAYERS, the last a square of deck across a bend,
+ * filling its outside) }]) }.
  */
 export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
@@ -912,15 +913,19 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     }
 
     // Every square's walls: the squares inside each piece (a prop the middle half of its plots, a
-    // tree the four round its trunk)
+    // tree the four round its trunk); and those a building stands on (a house's, a landmark's, a
+    // wall's: `standing`), where the navigation mesh has a box, rather than walking round what's
+    // drawn there (a prop's or a tree's: core/navigation/tiles.js)
     const blocked = Array.from({ length: height }, () => new Uint8Array(width));
     const opaque = Array.from({ length: height }, () => new Uint8Array(width));
+    const standing = Array.from({ length: height }, () => new Uint8Array(width));
 
     for (const piece of pieces) {
-        const block = (i, j, hides) => {
+        const block = (i, j, hides, stands = false) => {
             if (inside(i, j)) {
                 blocked[j][i] = 1;
                 opaque[j][i] = hides ? 1 : 0;
+                standing[j][i] = stands ? 1 : standing[j][i];
             }
         };
 
@@ -931,7 +936,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         } else if (piece.kind === "prop") {
             eachSquare(frame(piece.x, piece.y, (piece.w * PLOT) / 2, (piece.h * PLOT) / 2, piece.facing), 0, (i, j) => block(i, j, false));
         } else {
-            eachSquare(frame(piece.x, piece.y, piece.w * PLOT, piece.h * PLOT, piece.facing), -INSET, (i, j) => block(i, j, true));
+            eachSquare(frame(piece.x, piece.y, piece.w * PLOT, piece.h * PLOT, piece.facing), -INSET, (i, j) => block(i, j, true, true));
         }
     }
 
@@ -1002,6 +1007,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         ground,
         blocked,
         opaque,
+        standing,
         water,
         walks,
     };

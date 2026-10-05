@@ -1613,7 +1613,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     stakes or posts and rails, the elves' clipped hedges, the dark elves' black stone kerbs with
     iron bars, the cat folk's mud walls, the lizard folk's reed screens, the orcs' sharpened
     stakes, each its own height. They're in everyone's way, as a wall is (the squares along them
-    `blocked`, half a metre at a time, so the navigation meshes go round them), though not in
+    `blocked`, half a metre at a time, and the navigation mesh walking round each run as it's
+    drawn, as thick as its people's fences, and closed along the back of its house:
+    WORLD.md's *Navigation meshes*), though not in
     anyone's sight. A yard is gone into by its **gateway** (`YARD_FENCE`): 1.6 m across,
     somewhere along the longest run of its back's fence if that's 2.6 m or more, or else of a
     side's, its gate swung open into the yard between stout gateposts (the humans' a barred gate

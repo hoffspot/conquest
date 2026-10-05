@@ -6,6 +6,8 @@ import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { LAGOON } from "../client/js/core/lagoons.js";
+import { propOutlines } from "../client/js/core/setpieces/standing.js";
+import { onWalk, WALK_LAYERS } from "../client/js/core/setpieces/town.js";
 import { WADE } from "../client/js/core/terrain/waters.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { parseGrid } from "./helpers.js";
@@ -21,6 +23,24 @@ const FORD = [3112.5, 4374.5];
 const STREAM = [1526.5, 4051.5];
 
 const length = (path) => path.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - path[i][0], y - path[i][1]), 0);
+
+// (Whether a point's inside a convex outline ([[x, y], ...]), and how far apart two are: the
+// nearest any corner of one comes to an edge of the other)
+const within = (outline, [x, y]) => {
+    const sides = outline.map(([ax, ay], k) => {
+        const [bx, by] = outline[(k + 1) % outline.length];
+
+        return Math.sign((bx - ax) * (y - ay) - (by - ay) * (x - ax));
+    });
+
+    return sides.every((side) => side >= 0) || sides.every((side) => side <= 0);
+};
+const toEdge = ([x, y], [ax, ay], [bx, by]) => {
+    const t = Math.min(1, Math.max(0, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1)));
+
+    return Math.hypot(x - ax - (bx - ax) * t, y - ay - (by - ay) * t);
+};
+const apart = (p, q) => Math.min(...[[p, q], [q, p]].flatMap(([a, b]) => a.flatMap((corner) => b.map((start, k) => toEdge(corner, start, b[(k + 1) % b.length])))));
 const same = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 
 describe("navigation meshes (navigation.js)", () => {
@@ -70,6 +90,23 @@ describe("navigation meshes (navigation.js)", () => {
 
         assert.ok(areas.includes(AREA.road) && areas.includes(AREA.ground));
         assert.ok(positions.every((value, i) => i % 3 !== 1 || value < town.ground.heightAt(positions[i - 1], positions[i + 1]) + 1), "on the ground, not on a roof");
+
+        // Its outer edges for the debug view's band (against a wall or a drop, not another tile's
+        // mesh), each with which way is out of it: a step out from nearly every one is off the mesh
+        const { edges, sides } = navigation.polygons(tx, ty);
+        let off = 0;
+
+        assert.equal(edges.length, sides.length * 8);
+        assert.ok(sides.length > 50, `${sides.length} edges`);
+
+        for (let e = 0; e < sides.length; e++) {
+            const [ax, , az, bx, , bz, nx, nz] = edges.subarray(e * 8, e * 8 + 8);
+
+            assert.ok(Math.abs(Math.hypot(nx, nz) - 1) < 1e-6 && Math.abs(nx * (bx - ax) + nz * (bz - az)) < 1e-3, "across the edge");
+            off += navigation.walkable((ax + bx) / 2 + nx * 0.2, (az + bz) / 2 + nz * 0.2) ? 0 : 1;
+        }
+
+        assert.ok(off > sides.length * 0.9, `${off} of ${sides.length} edges have nothing just beyond them`);
     });
 
     it("finds ways round buildings and over bridges, and keeps out of deep water", () => {
@@ -192,6 +229,161 @@ describe("navigation meshes (navigation.js)", () => {
         navigation.dispose();
     });
 
+    it("walks a lagoon's plank walks out to a body's width from their edges, and every street over it without a break", () => {
+        // (Three of seed 1's lizard folk's places, each with a walk the mesh came apart on when
+        // the lagoon's water was boxed in, a square at a time: by the box in a lane's shallow
+        // bend, 238 m round, 99 m and 28 m)
+        const navigation = new Navigation(recast, town);
+        let sections = 0;
+
+        for (const id of ["lizard-city-1", "lizard-town-3", "lizard-town-4"]) {
+            const { at, town: layout } = town.settlements.of(town.settlements.places.find((place) => place.id === id));
+            const level = town.heightAt(at[0] + layout.market.centre[0], at[1] + layout.market.centre[1]);
+            const walks = layout.walks.map(({ a, b, ...walk }) => ({ ...walk, a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]] }));
+            const wet = (x, y) => layout.water[Math.floor(y - at[1])]?.[Math.floor(x - at[0])] === 1;
+
+            // Across the middle of each run of planks over open water (none other's over it, the
+            // lagoon all round): the mesh as wide as its deck, but for a little more than the
+            // walker's radius each side; and its deck's height out to its edges
+            for (const walk of walks.filter(({ layer }) => layer < WALK_LAYERS - 1)) {
+                const { a, b, half } = walk;
+                const long = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                const [ux, uy] = [(b[0] - a[0]) / long, (b[1] - a[1]) / long];
+                const [mx, my] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+                const across = (s) => [mx - uy * s, my + ux * s];
+                const others = walks.filter((other) => other !== walk);
+                let open = true;
+
+                for (let s = -half - 0.75; s <= half + 0.75 && open; s += 0.25) {
+                    open = wet(...across(s)) && !onWalk(others, ...across(s));
+                }
+
+                if (!open) {
+                    continue;
+                }
+
+                const reach = (side) => {
+                    let s = 0;
+
+                    while (s < half + 1 && navigation.walkable(...across(side * (s + 0.05)))) {
+                        s += 0.05;
+                    }
+
+                    return s;
+                };
+
+                assert.ok(reach(-1) + reach(1) >= 2 * half - 1, `${id}: ${(reach(-1) + reach(1)).toFixed(2)} m of mesh across a deck ${(2 * half).toFixed(2)} m wide at ${mx.toFixed(1)}, ${my.toFixed(1)}`);
+                sections++;
+
+                for (const side of [-1, 1]) {
+                    const edge = across(side * (half - 0.3));
+
+                    assert.ok(Math.abs(town.heightAt(...edge) - level) < 1e-6, `${id}: on the deck at its edge, ${edge.map((v) => v.toFixed(1))}`);
+                }
+            }
+
+            // Along each street's middle where it's over the walks: on the mesh all the way, but
+            // where it ends at a door (not between two stretches of mesh)
+            for (const { points } of layout.streets) {
+                const over = [];
+
+                for (let k = 1; k < points.length; k++) {
+                    const [p, q] = [points[k - 1], points[k]];
+                    const run = Math.hypot(q[0] - p[0], q[1] - p[1]);
+
+                    for (let d = 0; d < run; d += 0.25) {
+                        const [x, y] = [at[0] + p[0] + ((q[0] - p[0]) * d) / run, at[1] + p[1] + ((q[1] - p[1]) * d) / run];
+
+                        if (wet(x, y) && onWalk(walks, x, y)) {
+                            over.push([x, y, navigation.walkable(x, y)]);
+                        }
+                    }
+                }
+
+                const [first, last] = [over.findIndex(([, , on]) => on), over.findLastIndex(([, , on]) => on)];
+                const off = over.slice(Math.max(0, first), last + 1).filter(([, , on]) => !on);
+
+                assert.equal(off.length, 0, `${id}: off the mesh between stretches of it at ${off.slice(0, 3).map(([x, y]) => `${x.toFixed(1)}, ${y.toFixed(1)}`).join("; ")}`);
+            }
+        }
+
+        assert.ok(sections > 40, `${sections} decks across`);
+        navigation.dispose();
+    });
+
+    it("walks round a market's props as they're drawn: a lamp post's foot, not two metres round it, and between any two a body could pass", () => {
+        // (Where a lamp post took a hole 3 to 4 metres across in the mesh, and a stall and a lamp
+        // three metres apart left none between them: the lizard folk's and the humans')
+        const navigation = new Navigation(recast, town);
+        let pairs = 0;
+
+        for (const id of ["lizard-town-1", "lizard-city-1", "human-city-1"]) {
+            const { at, town: layout } = town.settlements.of(town.settlements.places.find((place) => place.id === id));
+            const props = layout.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ piece, x: at[0] + piece.x, y: at[1] + piece.y, outlines: propOutlines(piece, at) }));
+            const inside = (point) => props.some(({ outlines }) => outlines.some((outline) => within(outline, point)));
+
+            for (const { piece, x, y, outlines } of props) {
+                // (Nothing walked on what's drawn)
+                for (const outline of outlines) {
+                    const middle = [outline.reduce((sum, [px]) => sum + px, 0) / outline.length, outline.reduce((sum, [, py]) => sum + py, 0) / outline.length];
+
+                    assert.equal(navigation.walkable(...middle), false, `${id}: on its ${piece.name} at ${middle.map((v) => v.toFixed(1))}`);
+                }
+
+                // (A lamp post walked round within a metre of its middle)
+                if (piece.name === "lamppost") {
+                    const round = Array.from({ length: 8 }, (_, k) => [x + Math.cos((k * Math.PI) / 4) * 0.9, y + Math.sin((k * Math.PI) / 4) * 0.9]);
+
+                    assert.ok(round.filter((point) => navigation.walkable(...point)).length >= 6, `${id}: round the lamp post at ${x.toFixed(1)}, ${y.toFixed(1)}`);
+                }
+            }
+
+            // Between any two near enough each other for it to have been closed, a body's width
+            // and more apart: some of the mesh on the line between their middles
+            for (const [k, p] of props.entries()) {
+                for (const q of props.slice(k + 1)) {
+                    const gap = Math.min(...p.outlines.flatMap((one) => q.outlines.map((other) => apart(one, other))));
+
+                    if (Math.hypot(p.x - q.x, p.y - q.y) > 9 || gap < 1.1) {
+                        continue;
+                    }
+
+                    const between = Array.from({ length: 41 }, (_, t) => [p.x + ((q.x - p.x) * t) / 40, p.y + ((q.y - p.y) * t) / 40]).filter((point) => !inside(point));
+
+                    assert.ok(between.some((point) => navigation.walkable(...point)), `${id}: between its ${p.piece.name} and ${q.piece.name} (${gap.toFixed(2)} m apart)`);
+                    pairs++;
+                }
+            }
+        }
+
+        assert.ok(pairs > 10, `${pairs} pairs`);
+        navigation.dispose();
+    });
+
+    it("takes the lagoon's water, a prop's and a tree's squares for nowhere solid: only what's built, boxed, is", () => {
+        const { at, town: layout } = town.settlements.of(town.settlements.places.find(({ id }) => id === "lizard-town-1"));
+        const solid = (i, j) => {
+            const chunk = town.chunkAt(at[0] + i, at[1] + j);
+
+            return chunk.solid[(at[1] + j - chunk.y0) * CHUNK + (at[0] + i - chunk.x0)] === 1;
+        };
+        const counts = { water: 0, standing: 0 };
+
+        for (let j = 0; j < layout.height; j++) {
+            for (let i = 0; i < layout.width; i++) {
+                if (layout.blocked[j][i] && !layout.standing[j][i]) {
+                    assert.equal(solid(i, j), false, `${at[0] + i}, ${at[1] + j}`);
+                    counts.water += layout.water[j][i];
+                } else if (layout.blocked[j][i]) {
+                    assert.equal(solid(i, j), true, `${at[0] + i}, ${at[1] + j}`);
+                    counts.standing++;
+                }
+            }
+        }
+
+        assert.ok(counts.water > 100 && counts.standing > 300, JSON.stringify(counts));
+    });
+
     it("wades across a ford, straight over, but never into the river's deep water beside it", () => {
         const navigation = new Navigation(recast, town);
         const ford = town.waters.river(...FORD, 0);
@@ -245,9 +437,10 @@ describe("navigation meshes (navigation.js)", () => {
     });
 
     it("climbs ground as steep as 37 degrees, dearer from 30, but not a cliff", () => {
-        // (A world of one slope rising along x, nothing on it: Recast's ledge filter takes a
-        // climb's height to be the most the ground can rise from one voxel to the next but one, so
-        // with a climb of half a metre ground steeper than 27 degrees was never walked at all)
+        // (A world of one slope rising along x, nothing on it: how steep is walked is the ground's
+        // triangles', not Recast's ledge filter's, which takes ground rising more than a climb from
+        // one voxel to the next but one for a ledge: in half-metre voxels with a climb of half a
+        // metre, ground steeper than 27 degrees was never walked at all)
         const chunk = { x0: 0, y0: 0, ground: new Uint8Array(CHUNK * CHUNK), water: new Uint8Array(CHUNK * CHUNK), solid: new Uint8Array(CHUNK * CHUNK), trees: [] };
         const slope = (degrees) => {
             const rise = Math.tan((degrees * Math.PI) / 180);
