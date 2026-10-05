@@ -717,10 +717,15 @@ describe("the bars over the others (hud.js)", () => {
 });
 
 describe("the loader (loader.js)", () => {
-    // A network that sends each file in chunks (as a stream)
+    // A network that sends each file in chunks (as a stream), whatever the query (as GitHub Pages
+    // does), noting what was asked for
+    const asked = [];
+
     function network(files) {
         return async (url) => {
             const bytes = files[new URL(url).pathname.slice(1)];
+
+            asked.push(url);
 
             if (!bytes) {
                 return new Response("missing", { status: 404 });
@@ -742,12 +747,14 @@ describe("the loader (loader.js)", () => {
 
     const manifest = [
         { id: "code", label: "Game code", detail: "", files: [["js/a.js", 2500], ["js/b.js", 1200]] },
-        { id: "body", label: "Body", detail: "", files: [["characters/human.bin", 4000]] },
+        { id: "body", label: "Body", detail: "", files: [["characters/human.bin", 4000, "0123456789"]] },
     ];
     const files = { "js/a.js": new Uint8Array(2500), "js/b.js": new Uint8Array(1200), "characters/human.bin": new Uint8Array(4000).fill(7) };
 
     it("counts every byte as it arrives, group by group, to the manifest's total", async () => {
         const saved = globalThis.fetch;
+
+        asked.length = 0;
 
         globalThis.fetch = network(files);
 
@@ -763,7 +770,10 @@ describe("the loader (loader.js)", () => {
             assert.ok(seen.every((loaded, k) => k === 0 || loaded >= seen[k - 1]), "never goes backwards");
             assert.deepEqual(loader.groups.map(({ loaded, done }) => [loaded, done]), [[3700, 2], [4000, 1]]);
 
-            // Data is kept to be handed out; code isn't (the page imports it)
+            // Data is fetched by its hash; code by its name
+            assert.deepEqual(asked.toSorted(), ["https://example.org/characters/human.bin?h=0123456789", "https://example.org/js/a.js", "https://example.org/js/b.js"]);
+
+            // Data is kept to be handed out by its name; code isn't (the page imports it)
             const body = await (await loader.loadFile("https://example.org/characters/human.bin")).arrayBuffer();
 
             assert.equal(body.byteLength, 4000);

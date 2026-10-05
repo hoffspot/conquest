@@ -6,10 +6,11 @@
 //
 //     npm install && npm run vendor:three
 //
-// then update the import map in client/index.html and CACHE_NAME in client/sw.js, and delete the
-// old vendor folder. Add-ons (the glTF loader, and meshoptimizer's decoder for the models it reads
-// compressed) are copied to addons/ and imported as three/addons/. Run it too after changing which
-// add-ons are copied (ADDONS), then npm run build:manifest.
+// then update the import map in client/index.html and the shell's version (SHELL) in client/sw.js,
+// so browsers let go of their copy of the old one, and delete the old vendor folder. Add-ons (the
+// glTF loader, and meshoptimizer's decoder for the models it reads compressed) are copied to
+// addons/ and imported as three/addons/. Run it too after changing which add-ons are copied
+// (ADDONS), then npm run build:manifest.
 
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";

@@ -101,9 +101,21 @@ export function setUpInstall({ button, hint }) {
 /**
  * Cache the game for offline play (only possible on https or localhost). When an update's service
  * worker takes over, index.html reloads the page.
+ *
+ * @param {object} [release] - What this page's release keeps (catalog.js, releaseOf), told to the
+ *     service worker once it's running, and again to any update's that takes over, so it keeps
+ *     those files and can let go of what no release in use lists.
  */
-export function registerServiceWorker() {
+export function registerServiceWorker(release) {
     if ("serviceWorker" in navigator && window.isSecureContext) {
+        // (With when the page started, so the worker can tell which release is the newest)
+        const tell = () => navigator.serviceWorker.ready.then((registration) => registration.active?.postMessage({ ...release, started: performance.timeOrigin }));
+
         navigator.serviceWorker.register("sw.js").catch((error) => console.warn("Service worker not registered:", error));
+
+        if (release) {
+            tell();
+            navigator.serviceWorker.addEventListener("controllerchange", tell);
+        }
     }
 }
