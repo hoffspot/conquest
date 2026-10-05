@@ -6,6 +6,8 @@ import { catalog, catalogSource, manifestGroups, manifestSource, releaseOf } fro
 import { ASSETS } from "../client/js/app/assets.js";
 import { releaseOf as releaseTold } from "../client/js/app/catalog.js";
 import { MANIFEST } from "../client/js/app/manifest.js";
+import { GAME_BODY } from "../client/js/characters/body.js";
+import { readHumanFiles } from "../scripts/lib/human-data.js";
 
 // The most the game may download before it starts. Raising it is a choice to make in review: a
 // heavy model goes in the catalog (client/models/assets.json), downloaded as it's wanted
@@ -37,8 +39,10 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "navigation", "code", "body", "skin", "fonts", "models"]);
 
         const paths = MANIFEST.flatMap(({ files }) => files.map(([path]) => path));
+        // (The game's body and every mask it names: body.js GAME_BODY)
+        const body = [`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`, ...readHumanFiles().manifest.masks.map((file) => `characters/${file}`)];
 
-        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", "characters/human.bin", "characters/masks/lips.jpg", "fonts/UnifrakturMaguntia.woff2", "models/jmi/chest.glb"]) {
+        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2", "models/jmi/chest.glb"]) {
             assert.ok(paths.includes(needed), needed);
         }
 

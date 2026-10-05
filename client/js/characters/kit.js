@@ -1,7 +1,7 @@
 // Everything characters are made from, loaded once and shared: the body (body.js) and the skin
 // painter's map of the body's texture (skin.js).
 
-import { HumanData, HUMAN_URL, loadHumanFiles } from "./body.js";
+import { GAME_BODY, HumanData, HUMAN_URL, loadHumanFiles } from "./body.js";
 import { loadMasks, SkinAtlas } from "./skin.js";
 import { Lods } from "./lod.js";
 import { Skins } from "./skins.js";
@@ -16,9 +16,9 @@ import { Skins } from "./skins.js";
  * once `ready` resolves; nothing that paints a skin is to be made before then. Characters seen from
  * afar are drawn with fewer triangles, made there too (`lods`: lod.js).
  *
- * `body`: which body (body.js BODIES).
+ * `body`: which body (body.js BODIES; the game's, GAME_BODY, else).
  */
-export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false, body = "human" } = {}) {
+export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false, body = GAME_BODY } = {}) {
     const files = await loadHumanFiles(base, fetch, body);
     const human = new HumanData(files.manifest, files.data);
     const masks = await loadMasks(base, textureSize, fetch, files.manifest.masks);
