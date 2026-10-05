@@ -15,9 +15,9 @@ import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { SPELLS } from "../core/spells.js";
 import { WEAPONS } from "../core/weapons.js";
 import { Actions, ATTACKS, DODGES, DRAWS, REACTIONS } from "./actions.js";
-import { Character, hanging, placed } from "./character.js";
+import { Character, hanging, placed, slung } from "./character.js";
 import { CLIP_KEYS } from "./clip-keys.js";
-import { EQUIPMENT, socketOn } from "./equipment.js";
+import { EQUIPMENT, SLING, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
 import { buildItem } from "./items.js";
 import { Walker, WALK_STYLES } from "./locomotion.js";
@@ -94,9 +94,11 @@ export function dress(human, look, { sheathed = true } = {}) {
     const character = { human, rig, object, positions, normals, joints, height, holds: {}, items: [], equipment: new Map() };
     const ids = look.equipment.filter((id) => EQUIPMENT[id]?.kind === "item");
 
-    for (const method of ["sheathe", "sheathPose", "settle", "hang"]) {
+    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle", "hang"]) {
         character[method] = Character.prototype[method].bind(character);
     }
+
+    Object.defineProperty(character, "slings", Object.getOwnPropertyDescriptor(Character.prototype, "slings"));
 
     ids.forEach((id) => character.equipment.set(EQUIPMENT[id].slot, id));
 
@@ -121,6 +123,8 @@ export function dress(human, look, { sheathed = true } = {}) {
 
             model.add(look);
             Object.assign(model.userData, { home, socket: part.socket, sway: item.sway ?? 0, hand: /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null, hangs: part === item ? hanging(item, look) : null });
+            // (A shield that's slung on the back while the weapons are put away, over whatever else is on the back)
+            model.userData.sling = part === item && item.sling ? slung(socketOn(character, SLING.socket), look, { over: character.equipment.has("back") }) : null;
             model.name = id;
 
             const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
@@ -753,7 +757,8 @@ export function motions() {
             });
         });
 
-        // Drawing it and putting it away (on guard while armed, off guard once putting it away, as in the game)
+        // Drawing it and putting it away (on guard while armed, off guard once putting it away, as in the game;
+        // a shield slung on the back taken off it first and slung after, in turn: as long as it all takes)
         for (const on of DRAWS[guard]?.draw ? [true, false] : []) {
             const how = DRAWS[guard][on ? "draw" : "sheathe"];
 
@@ -761,7 +766,7 @@ export function motions() {
                 id: `${on ? "draw" : "sheathe"}/${weapon}`,
                 group: "draw",
                 look: (body) => soldier(body, weapon),
-                seconds: how.duration + 0.2,
+                seconds: how.duration + DRAWS.sling[on ? "draw" : "sheathe"].duration + 0.2,
                 speed: 0,
                 sheathed: on,
                 start: (dressed) => {

@@ -101,6 +101,26 @@ const SHEATHS = {
 const ROUND_SHIELDS = new Set(["orc", "lizard"]);
 
 /**
+ * A shield slung on the back while the weapons are put away (an item's `sling`: Character.sling,
+ * the left hand taking it over the left shoulder, actions.js DRAWS.sling), hung from its strap
+ * across the chest (`garment`): its back to the upper back, the middle of its top `top` metres
+ * above the back's socket (about the shoulders) and `off` off the skin, leaning out at the bottom
+ * (`lean`, radians) clear of the buttocks; `over` further off over what else is on the back (a
+ * quiver, a pack). Between the arm and the back it swings round the left side, out of the body's
+ * way: out to the left and forward from the arm, and round from behind onto the back (`swing`,
+ * metres to the left, up and forward: how far it heads off each way at each end). Each
+ * shield says whether it can be slung: round and kite shields, and the
+ * elves' leaf, were carried so on the march, by their strap (the guige); not the cat folk's
+ * (hide on a stick, carried by the stick, with no strap to sling it by), nor the dark elves'
+ * long kite (spikes round its rim, that would gash the arms swinging past them, and it'd reach
+ * past the backs of the knees), nor a tower shield, were there one. A new shield says too.
+ */
+export const SLING = Object.freeze({ socket: "back", top: 0.23, off: 0.065, lean: 0.2, over: 0.1, garment: "baldric", swing: { arm: [0.7, -0.25, 0.2], back: [0.5, 0.05, -0.55] } });
+
+// The peoples whose shields can be slung (SLING)
+const SLUNG_SHIELDS = new Set(["human", "elf", "orc", "lizard"]);
+
+/**
  * Items: slot, model (items.js), socket, an extra turn in the socket (Euler angles, radians: a
  * hilt or haft lies across the fist diagonally, along the palm's crease from the index finger's
  * knuckle to the heel of the hand, so a blade leans towards the fingers; a wand is pinched,
@@ -132,8 +152,8 @@ export const ITEMS = Object.freeze({
     grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book, sheath: SHEATHS.grimoire },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow, sheath: SHEATHS.bow },
-    roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftFist", hold: HOLDS.shield, grips: true },
-    kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
+    roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
+    kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
     orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
     wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"] },
@@ -142,7 +162,7 @@ export const ITEMS = Object.freeze({
     // Each people's helm and shield, in their colours (liveries.js: their soldiers' uniform)
     ...Object.fromEntries(Object.keys(LIVERIES).flatMap((people) => [
         [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"] }],
-        [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: ROUND_SHIELDS.has(people) ? "leftFist" : "leftForearm", hold: HOLDS.shield, grips: true }],
+        [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: ROUND_SHIELDS.has(people) ? "leftFist" : "leftForearm", hold: HOLDS.shield, grips: true, sling: SLUNG_SHIELDS.has(people) }],
     ])),
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.35], offset: [-0.03, 0.02, -0.085] },

@@ -6,11 +6,11 @@ import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { Actions, ATTACKS, DODGES, DRAWS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
-import { Character, placed } from "../client/js/characters/character.js";
+import { Character, placed, slung } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
-import { ITEMS, socketOn } from "../client/js/characters/equipment.js";
+import { ITEMS, SLING, socketOn } from "../client/js/characters/equipment.js";
 import { buildItem } from "../client/js/characters/items.js";
 import { limitRotation, Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
@@ -51,15 +51,19 @@ function fighter(shape, held = [], { phase = 0 } = {}) {
 
     character.equipment = new Map();
 
-    for (const method of ["sheathe", "sheathPose", "settle"]) {
+    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle"]) {
         character[method] = Character.prototype[method].bind(character);
     }
+
+    Object.defineProperty(character, "slings", Object.getOwnPropertyDescriptor(Character.prototype, "slings"));
 
     for (const id of held) {
         const item = ITEMS[id];
         const socket = socketOn(character, item.socket);
         const model = buildItem(item.model, socket.fit);
 
+        // (A shield that's slung on the back, where it goes: measured as it is, before it's put on the arm)
+        model.userData.sling = item.sling ? slung(socketOn(character, SLING.socket), model) : null;
         model.name = id;
         model.position.copy(socket.position);
         model.quaternion.copy(socket.quaternion);
@@ -500,6 +504,78 @@ describe("drawing weapons and putting them away (actions.js DRAWS, Character.she
         assert.equal(hammer.parent.name, "Spine2");
         assert.ok(character.sheathed);
     });
+
+    it("says of every shield whether it's slung on the back: round, kite and leaf shields, not hide on a stick or a spiked long kite", () => {
+        const shields = Object.entries(ITEMS).filter(([, item]) => item.slot === "offHand" && /^left(Forearm|Fist)$/.test(item.socket));
+
+        assert.ok(shields.length >= 8);
+
+        for (const [id, item] of shields) {
+            assert.equal(typeof item.sling, "boolean", `${id}: a new shield says`);
+        }
+
+        assert.deepEqual(shields.filter(([, item]) => !item.sling).map(([id]) => id).sort(), ["shield.cat", "shield.darkElf"]);
+    });
+
+    it("takes a slung shield off the back before drawing the sword, and slings it there again after putting the sword away", () => {
+        const { character, walker, actions } = fighter(undefined, ["sword", "kiteShield"]);
+        const [sword, shield] = character.items;
+        const { home, sling } = shield.userData;
+
+        character.sheathe(true);
+        walker.update(0);
+        assert.equal(shield.parent.name, sling.bone, "slung");
+        assert.ok(character.slung);
+
+        // Drawn: the shield onto the arm first, then the sword
+        const took = actions.draw("sword", true);
+
+        assert.ok(Math.abs(took - DRAWS.sling.draw.duration - DRAWS.sword.draw.duration) < 1e-9);
+        walker.update(DRAWS.sling.draw.hitAt + 0.05);
+        assert.equal(shield.parent.name, home.bone, "on the arm");
+        assert.equal(sword.parent.name, "Hips", "the sword not yet");
+
+        for (let t = DRAWS.sling.draw.hitAt + 0.05; t < took + 0.1; t += 0.1) {
+            walker.update(0.1);
+        }
+
+        assert.equal(sword.parent.name, "RightHand");
+        assert.equal(actions.attack, null);
+        assert.ok(!character.sheathed && !character.slung);
+
+        // Put away: the sword first, then the shield onto the back
+        const away = actions.draw("sword", false);
+
+        walker.update(DRAWS.sword.sheathe.hitAt + 0.05);
+        assert.equal(sword.parent.name, "Hips");
+        assert.equal(shield.parent.name, home.bone, "the shield not yet");
+
+        for (let t = DRAWS.sword.sheathe.hitAt + 0.05; t < away + 0.1; t += 0.05) {
+            walker.update(0.05);
+        }
+
+        assert.equal(shield.parent.name, sling.bone, "slung again");
+        assert.ok(character.sheathed && character.slung);
+
+        // Something else done meanwhile: all of it at once
+        actions.draw("sword", true);
+        walker.update(0.1);
+        actions.startAttack("sword", { hitAt: 0.4, duration: 0.8 });
+        assert.equal(shield.parent.name, home.bone);
+        assert.equal(sword.parent.name, "RightHand");
+    });
+
+    it("keeps a shield that can't be slung on the arm, drawing only the sword", () => {
+        const { character, walker, actions } = fighter(undefined, ["sword", "shield.darkElf"]);
+        const shield = character.items[1];
+
+        character.sheathe(true);
+        walker.update(0);
+        assert.equal(shield.userData.sling, null);
+        assert.equal(shield.parent.name, shield.userData.home.bone);
+        assert.ok(!character.slung);
+        assert.equal(actions.draw("sword", true), DRAWS.sword.draw.duration);
+    });
 });
 
 describe("variety (variety.js)", () => {
@@ -894,7 +970,7 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
 
     // What each action is done holding (casting, a sword in the other hand, on guard), and what
     // each role carries resting (the player, a sword)
-    const HELD = { sword: ["sword"], staff: ["staff"], wand: ["wand"], grimoire: ["grimoire"], hammer: ["warHammer"], bow: ["bow"], punch: ["spikedGauntlets", "spikedGauntletLeft"], cleaver: ["cleaver"], castHeal: ["sword"], castStun: ["sword"], toast: ["tankard"], serve: ["tankard"], pour: [], forge: ["smithHammer", "tongs"], heat: ["smithHammer", "tongs"], quench: ["smithHammer", "tongs"], pump: [], crank: [] };
+    const HELD = { sword: ["sword"], staff: ["staff"], wand: ["wand"], grimoire: ["grimoire"], hammer: ["warHammer"], bow: ["bow"], sling: ["sword", "kiteShield"], punch: ["spikedGauntlets", "spikedGauntletLeft"], cleaver: ["cleaver"], castHeal: ["sword"], castStun: ["sword"], toast: ["tankard"], serve: ["tankard"], pour: [], forge: ["smithHammer", "tongs"], heat: ["smithHammer", "tongs"], quench: ["smithHammer", "tongs"], pump: [], crank: [] };
     const GUARDED = { castHeal: "sword", castStun: "sword" };
     const CARRIED = { barmaid: ["tankard"], patron: ["tankard"], adventurer: ["sword"], smith: ["smithHammer", "tongs"] };
 

@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { Rig } from "./rig.js";
-import { EQUIPMENT, limbThickness, socketOn } from "./equipment.js";
+import { EQUIPMENT, limbThickness, SLING, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
@@ -192,6 +192,38 @@ export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0
 }
 
 /**
+ * Where a shield's slung on the back (equipment.js SLING), its `look` built, on the back's
+ * `socket`: its back to the upper back, the middle of its top at the shoulders, leaning out at
+ * the bottom; `over` further off the back (over a quiver or a pack). { bone, position, quaternion }.
+ */
+export function slung(socket, look, { over = false } = {}) {
+    const box = new THREE.Box3().setFromObject(look);
+    // (Its face, out along its x, turned to face back; its up leaning in at the top)
+    const { quaternion } = placed(socket, { point: [0, Math.cos(SLING.lean), Math.sin(SLING.lean)], edge: [1, 0, 0] });
+    const top = new THREE.Vector3(box.min.x, box.max.y, (box.min.z + box.max.z) / 2).applyQuaternion(quaternion);
+    const position = new THREE.Vector3(0, SLING.top, -SLING.off - (over ? SLING.over : 0)).applyQuaternion(socket.quaternion).add(socket.position).sub(top);
+
+    return { bone: socket.bone, position, quaternion };
+}
+
+// Hermite easing from 0 at `a` to 1 at `b`
+const smoothstep = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+
+    return t * t * (3 - 2 * t);
+};
+
+// Which ways a shield heads off from where it was and comes into where it's going, swinging round
+// between the arm and the back (`slinging`: onto the back; equipment.js SLING `swing`, in the
+// frame of the character's `object`), in the frame of the bone it's going to: { from, to }
+function swingOf(bone, object, slinging) {
+    const turn = bone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(object.getWorldQuaternion(new THREE.Quaternion()));
+    const [arm, back] = [SLING.swing.arm, SLING.swing.back].map((way) => new THREE.Vector3(...way).applyQuaternion(turn));
+
+    return slinging ? { from: arm, to: back } : { from: back, to: arm };
+}
+
+/**
  * What a blade hung from the belt (`item`, its `look` built) needs to swing clear of the leg
  * (Character.hang): its side, how far it reaches down from its grip, and how it's swung; or null.
  */
@@ -264,8 +296,9 @@ export class Character {
         /** Per side ("Left", "Right"): the arm pose for what that hand carries, if anything. */
         this.holds = {};
 
-        /** Whether its weapons are put away (sheathe). */
+        /** Whether its weapons are put away (sheathe), and its shield slung on its back (sling). */
         this.sheathed = false;
+        this.slung = false;
         this.hairHidden = false;
 
         // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail)
@@ -362,16 +395,16 @@ export class Character {
             this.torch = null;
         }
 
-        this.#offHandShown();
+        this.showOffHand();
 
         return this.torch;
     }
 
-    // What's carried in the left hand shown, unless a torch is carried instead
-    #offHandShown() {
+    /** What's carried in the left hand shown, unless a torch is carried instead (a shield slung on the back, shown there). */
+    showOffHand() {
         for (const item of this.items) {
             if (EQUIPMENT[item.name]?.slot === "offHand") {
-                item.visible = !this.torch;
+                item.visible = !this.torch || (this.slung && Boolean(item.userData.sling));
             }
         }
     }
@@ -443,7 +476,7 @@ export class Character {
                 itemIds.push(id);
 
                 // (And what it needs worn: gauntlets under spikes, a belt or strap to hang from)
-                for (const garment of [entry.garment, entry.sheath?.garment]) {
+                for (const garment of [entry.garment, entry.sheath?.garment, entry.sling ? SLING.garment : null]) {
                     if (garment && !garmentIds.includes(garment)) {
                         garmentIds.push(garment);
                     }
@@ -646,12 +679,16 @@ export class Character {
                     }
                 }
 
+                // (A shield that's slung on the back while the weapons are put away: over whatever
+                // else is on the back)
+                model.userData.sling = part === item && item.sling ? slung(socketOn(this, SLING.socket), look, { over: this.equipment.has("back") }) : null;
+
                 this.items.push(model);
             }
         }
 
         // (A torch carried still in place of what's in the left hand)
-        this.#offHandShown();
+        this.showOffHand();
 
         // Each weapon in hand or put away, as it was
         this.sheathe(this.sheathed);
@@ -665,27 +702,59 @@ export class Character {
         }
     }
 
+    /** Whether it has a shield that's slung on its back while its weapons are put away (equipment.js SLING). */
+    get slings() {
+        return this.items.some((model) => model.userData.sling);
+    }
+
     /**
      * Put its weapons away (`on`: each in its sheath, equipment.js SHEATHS: a sword in its
-     * scabbard, a staff on the back; worn gauntlets stay on, the hands opening) or in hand. The
-     * hands' holds follow.
+     * scabbard, a staff on the back; worn gauntlets stay on, the hands opening) or in hand, and a
+     * shield that's slung so slung on the back or taken off it with them (`shield`; else left as
+     * it is: sling). The hands' holds follow.
      */
-    sheathe(on = true, { settle = 0 } = {}) {
+    sheathe(on = true, { settle = 0, shield = true } = {}) {
         this.sheathed = on;
+
+        // (A shield that isn't slung, held as it is)
+        if (shield) {
+            this.slung = on && this.slings;
+        }
+
+        this.arrange(settle);
+    }
+
+    /** Sling a shield on the back (`on`, equipment.js SLING) or take it off onto the arm. */
+    sling(on = true, { settle = 0 } = {}) {
+        this.slung = on && this.slings;
+        this.arrange(settle);
+    }
+
+    /**
+     * Each item where it is now, weapons in hand or put away and a shield on the arm or slung
+     * (settling there over `settle` seconds, from where it was), and the hands' holds as they
+     * hold them (sheathe, sling).
+     */
+    arrange(settle = 0) {
+        const on = this.sheathed;
+
         this.holds = {};
 
         for (const model of this.items) {
-            const { home, sheath, looks } = model.userData;
+            const { home, sheath, sling, looks } = model.userData;
 
             if (home && !model.userData.holder) {
-                const place = on && sheath ? sheath : home;
+                const place = on && sheath ? sheath : this.slung && sling ? sling : home;
                 const bone = this.rig.bone(place.bone);
 
                 // (Taken by the hand or let go of into its sheath, it settles there from where it
-                // was, over `settle` seconds, as fingers close round it)
-                if (settle > 0 && sheath && model.parent && model.parent !== bone) {
+                // was, over `settle` seconds, as fingers close round it; one settling there
+                // already, left to)
+                if (model.userData.settling?.place === place) {
+                    continue;
+                } else if (settle > 0 && (sheath || sling) && model.parent && model.parent !== bone) {
                     bone.attach(model);
-                    model.userData.settling = { from: model.position.clone(), turn: model.quaternion.clone(), place, left: settle, length: settle };
+                    model.userData.settling = { from: model.position.clone(), turn: model.quaternion.clone(), place, left: settle, length: settle, swing: sling ? swingOf(bone, this.object, place === sling) : null };
                 } else {
                     bone.add(model);
                     model.position.copy(place.position);
@@ -703,7 +772,7 @@ export class Character {
         for (const id of this.equipment.values()) {
             const item = EQUIPMENT[id];
 
-            if (item.kind !== "item" || (on && item.sheath)) {
+            if (item.kind !== "item" || (on && item.sheath) || (this.slung && item.sling)) {
                 continue;
             }
 
@@ -725,13 +794,16 @@ export class Character {
             const socket = item?.sheath?.worn ? item.socket : item?.sheath?.socket;
 
             if (socket === "leftHip" || socket === "rightHip" || socket === "leftHand" || socket === "rightHand") {
-                this.clearing[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
+                this.clearing[socket.startsWith("left") ? "Left" : "Right"] = item.sheath?.hangs ? HILT_CLEARING : HIP_CLEARING;
             }
 
             if (socket === "leftHip" || socket === "rightHip") {
                 this.hung[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
             }
         }
+
+        // (A shield slung on the back shown there, torch or no)
+        this.showOffHand();
     }
 
     /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe). */
@@ -755,7 +827,17 @@ export class Character {
                 const eased = t * t * (3 - 2 * t);
 
                 model.position.lerpVectors(settling.from, settling.place.position, eased);
-                model.quaternion.slerpQuaternions(settling.turn, settling.place.quaternion, eased);
+
+                // (A shield swung round the left side on its way to or from the back, heading off
+                // out of the body's way and coming in round it: a curve through its ends with
+                // those ways out of them; turned round only once it's out there)
+                if (settling.swing) {
+                    const { from, to } = settling.swing;
+
+                    model.position.addScaledVector(from, 3 * eased * (1 - eased) ** 2).addScaledVector(to, 3 * eased ** 2 * (1 - eased));
+                }
+
+                model.quaternion.slerpQuaternions(settling.turn, settling.place.quaternion, settling.swing ? smoothstep(0.3, 0.7, t) : eased);
 
                 if (settling.left === 0) {
                     model.userData.settling = null;
@@ -1522,6 +1604,8 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _hangInverse = new THREE.Matrix4();
 const _segment = new THREE.Line3();
 
-// How far out (degrees) an arm swinging free is held to clear what hangs at its hip
+// How far out (degrees) an arm swinging free is held to clear what hangs at its hip (and further
+// past a blade's hilt, hung from the belt, forward of the hip: a sword's, a cleaver's)
 const HIP_CLEARING = 10;
+const HILT_CLEARING = 24;
 

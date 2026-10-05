@@ -79,7 +79,7 @@ describe("what's worn and carried kept out of the body (equipment.js, items.js, 
         assert.deepEqual(worst, []);
     });
 
-    it("holds a shield up before the body on guard, through every blow, cast and flinch, and carries it at the side through a sentry's rests", () => {
+    it("holds a shield up before the body on guard, through every blow, cast and flinch, and slings it on the back (or carries it at the side) through a sentry's rests", () => {
         // (One of each people's shield-bearers: the two sexes' builds are near alike)
         const shielded = SOLDIERS.filter(({ sex, look }) => sex === "f" && look.equipment.some((id) => /^left(Forearm|Fist)$/.test(EQUIPMENT[id]?.socket)));
         const worst = [];
@@ -168,13 +168,14 @@ describe("what's worn and carried kept out of the body (equipment.js, items.js, 
 
             for (const on of [true, false]) {
                 const fighting = on ? dressed(look) : onGuard(look, weapon);
-                const how = DRAWS[guard][on ? "draw" : "sheathe"];
-
                 fighting.character.sheathe(on);
-                fighting.actions.draw(guard, on);
+
+                // (A shield slung on the back too, in turn: DRAWS.sling)
+                const took = fighting.actions.draw(guard, on);
+
                 // (On guard while armed, off guard once putting it away, as in the game)
                 fighting.actions.setGuard(on);
-                worst.push(...through(`${people} ${weapon} ${sex}`, fighting, how.duration, { every: 0.05 }, on ? "drawing" : "putting away"));
+                worst.push(...through(`${people} ${weapon} ${sex}`, fighting, took, { every: 0.05 }, on ? "drawing" : "putting away"));
             }
         }
 
