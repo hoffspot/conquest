@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Blender pipeline viewer</title>
+        <link rel="icon" href="data:," />
+        <style>
+            :root {
+                color-scheme: dark;
+                font: 14px/1.4 system-ui, sans-serif;
+            }
+
+            body {
+                margin: 0;
+                display: grid;
+                grid-template-columns: 1fr 300px;
+                height: 100vh;
+                background: #15171a;
+                color: #e4e6ea;
+            }
+
+            canvas {
+                display: block;
+                width: 100%;
+                height: 100%;
+            }
+
+            aside {
+                overflow-y: auto;
+                padding: 12px 14px;
+                border-left: 1px solid #2c3036;
+            }
+
+            h2 {
+                margin: 14px 0 6px;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: #8b929c;
+            }
+
+            select,
+            button {
+                font: inherit;
+                color: inherit;
+                background: #23272d;
+                border: 1px solid #3a3f47;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+
+            select {
+                width: 100%;
+            }
+
+            #clips button {
+                display: block;
+                width: 100%;
+                margin: 0 0 4px;
+                text-align: left;
+            }
+
+            #clips button[aria-pressed="true"] {
+                background: #31507a;
+                border-color: #4b74ad;
+            }
+
+            #stats {
+                white-space: pre-wrap;
+                font: 12px/1.45 ui-monospace, monospace;
+                color: #b9bec6;
+            }
+
+            label {
+                display: block;
+                margin: 4px 0;
+            }
+
+            @media (max-width: 700px) {
+                body {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: 55vh 1fr;
+                }
+
+                aside {
+                    border-left: 0;
+                    border-top: 1px solid #2c3036;
+                }
+            }
+        </style>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "/node_modules/three/build/three.module.js",
+                    "three/addons/": "/node_modules/three/examples/jsm/"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <canvas id="view"></canvas>
+        <aside>
+            <h2>Model</h2>
+            <select id="models"></select>
+            <h2>Clips</h2>
+            <div id="clips"></div>
+            <label><input id="skeleton" type="checkbox" /> Show the skeleton</label>
+            <label>Speed <input id="speed" type="range" min="0" max="2" step="0.05" value="1" /></label>
+            <h2>What it is</h2>
+            <div id="stats"></div>
+        </aside>
+        <script type="module" src="viewer.js"></script>
+    </body>
+</html>

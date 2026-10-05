@@ -1,0 +1,16 @@
+{
+    "source": "mesh2motion/rigs/rig-dragon.blend",
+    "out": "../dist",
+    "actions": [
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-idle.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-walk.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-fly-flap.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-fly-glide.blend" }
+    ],
+    "clips": {
+        "rename": { "Idle": "Idling", "Walk": "Crawling", "Fly Flap": "Flying", "Fly Glide": "Gliding" }
+    },
+    "size": { "length": 9 },
+    "lods": [{ "ratio": 0.35, "error": 0.02 }],
+    "budgets": { "triangles": 20000, "joints": 128, "drawCalls": 1, "textureSize": 1024, "kilobytes": 1024, "clips": ["Idling", "Crawling", "Flying", "Gliding"] }
+}

@@ -1,0 +1,24 @@
+{
+    "source": "mesh2motion/rigs/rig-horse.blend",
+    "out": "../dist",
+    "actions": [
+        { "from": "mesh2motion/rigs/horse/animation-horse-death.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-eating.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-headbut.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-idle.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-kick.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-lay-to-idle.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-rear.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-run.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-sleep.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-trot.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-turn-left.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-turn-right.blend" },
+        { "from": "mesh2motion/rigs/horse/animation-horse-walk.blend" }
+    ],
+    "clips": {
+        "rename": { "Head_But": "Headbutt", "lay_to_idle": "Get Up" }
+    },
+    "keepBones": ["head_leaf"],
+    "budgets": { "triangles": 5000, "joints": 64, "drawCalls": 1, "kilobytes": 768 }
+}

@@ -1,0 +1,185 @@
+{
+  "name": "dragon-statue",
+  "config": "examples/dragon-statue.json",
+  "source": "examples/mesh2motion/3d-models/model-dragon.blend",
+  "glb": "dist/dragon-statue.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "5.1.29"
+  },
+  "kilobytes": 86.6,
+  "compression": "quantize",
+  "extensionsRequired": [
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 1,
+    "vertices": 2900,
+    "triangles": 3498,
+    "skinned": false,
+    "joints": 0,
+    "influences": 0,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "DragonMaterial",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [
+        "baseColor"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 0
+    }
+  ],
+  "textures": [
+    {
+      "name": "DragonTexture",
+      "mimeType": "image/jpeg",
+      "width": 256,
+      "height": 256,
+      "kilobytes": 8,
+      "gpuMegabytes": 0.33
+    }
+  ],
+  "clips": [],
+  "scale": 0.375039,
+  "bounds": {
+    "rest": {
+      "min": [
+        -1.5,
+        0,
+        -1.1211
+      ],
+      "max": [
+        1.5,
+        0.4909,
+        1.1211
+      ],
+      "size": [
+        3,
+        0.4909,
+        2.2422
+      ]
+    },
+    "animated": {
+      "min": [
+        -1.5,
+        0,
+        -1.1211
+      ],
+      "max": [
+        1.5,
+        0.4909,
+        1.1211
+      ],
+      "size": [
+        3,
+        0.4909,
+        2.2422
+      ]
+    },
+    "radius": 1.6565
+  },
+  "lods": [],
+  "exported": {
+    "objects": [
+      {
+        "name": "Dragon",
+        "vertices": 929,
+        "faces": 928,
+        "modifiers": [
+          "MIRROR"
+        ]
+      }
+    ],
+    "armature": null,
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Dragon",
+        "baked": false,
+        "materials": [
+          "DragonMaterial"
+        ],
+        "udim": false,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [
+      {
+        "image": "DragonTexture",
+        "from": [
+          512,
+          512
+        ],
+        "to": [
+          256,
+          256
+        ]
+      }
+    ],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 0
+  },
+  "budgets": [
+    {
+      "budget": "triangles",
+      "limit": 4000,
+      "value": 3498,
+      "ok": true
+    },
+    {
+      "budget": "drawCalls",
+      "limit": 1,
+      "value": 1,
+      "ok": true
+    },
+    {
+      "budget": "textureSize",
+      "limit": 256,
+      "value": 256,
+      "ok": true
+    },
+    {
+      "budget": "kilobytes",
+      "limit": 200,
+      "value": 86.6,
+      "ok": true
+    }
+  ],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    }
+  },
+  "notes": [
+    "actions not exported: Material.001Action (animates no bone)",
+    "textures shrunk to 256 px: DragonTexture"
+  ],
+  "warnings": [
+    "model-dragon.blend was saved by Blender 5.1.29, newer than this one (4.5.14 LTS): check the result"
+  ]
+}

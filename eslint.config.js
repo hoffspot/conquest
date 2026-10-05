@@ -3,8 +3,8 @@ import globals from "globals";
 
 export default [
     {
-        // client/vendor holds third-party code (Three.js)
-        ignores: ["node_modules/", "test-results/", "playwright-report/", "client/vendor/"],
+        // client/vendor holds third-party code (Three.js); a utility's .venv holds Python's (Blender's)
+        ignores: ["node_modules/", "test-results/", "playwright-report/", "client/vendor/", "utilities/*/.venv/", "utilities/*/test-results/", "utilities/*/playwright-report/"],
     },
     js.configs.recommended,
     {
@@ -38,14 +38,15 @@ export default [
         },
     },
     {
-        files: ["server/**/*.js", "scripts/**/*.js", "test/**/*.js", "e2e/**/*.js", "*.config.js"],
+        files: ["server/**/*.js", "scripts/**/*.js", "test/**/*.js", "e2e/**/*.js", "*.config.js", "utilities/**/*.js"],
         languageOptions: {
             globals: globals.node,
         },
     },
     {
-        // End-to-end tests also contain functions that run inside the browser page
-        files: ["e2e/**/*.js"],
+        // End-to-end tests also contain functions that run inside the browser page, and the
+        // utilities' viewers run in it
+        files: ["e2e/**/*.js", "utilities/**/*.spec.js", "utilities/*/viewer/viewer.js"],
         languageOptions: {
             globals: globals.browser,
         },

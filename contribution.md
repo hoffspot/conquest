@@ -11,7 +11,7 @@ you in every session).
 > built, tested, checked or merged updates this document in the same pull request. That includes:
 > `package.json`'s scripts or Node version; anything in `.github/workflows/`;
 > `playwright.config.js`, `eslint.config.js`, `e2e/fixtures.js` or how the browser tests are split;
-> `scripts/`; the rules for the version numbers; the branch, review and merge conventions; what
+> `scripts/`; the tools in `utilities/` and their checks; the rules for the version numbers; the branch, review and merge conventions; what
 > an environment needs to run the checks; and the repository's settings on GitHub (section 6,
 > *The repository's settings*). A pull request that changes the pipeline without updating this
 > file isn't ready to merge.
@@ -173,6 +173,30 @@ npm run check:motion -- --update          # keep this run's failures as the new 
 - **When something got better** (`better:` lines), run it with `--update` and commit the smaller
   baseline, so the improvement is kept.
 
+### The tools in `utilities/`
+
+`utilities/blenderpipeline/` turns `.blend` files into GLB models for the game, with their
+animations (its `README.md`). It's a project of its own, with its own `package.json`, lockfile
+and tests. The game's `npm ci` doesn't install it, and CI doesn't run its tests, because it needs
+Blender (a large download). CI's `npm run lint` does lint its JavaScript (`eslint.config.js`).
+When you change anything in it, run its checks there:
+
+```sh
+cd utilities/blenderpipeline
+npm ci
+npm run setup          # once: Blender as a Python module, in .venv (Python 3.11; about 1 GB)
+npm run build          # rebuild the examples into dist/, and commit dist/
+npm test               # unit tests, and every example built with Blender: fit, and as dist/ has it
+CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB played in Three.js
+```
+
+- `npm run setup` needs Python 3.11 and the Python package index (PyPI), which the cloud
+  environments' default network access lets through. Or set `BLENDER` to a Blender 4.2 or later.
+- `npm test` fails if `dist/` isn't what the sources build: after changing the pipeline or an
+  example, `npm run build` and commit `dist/`.
+- Bought assets never go in the repository, built or not: `utilities/blenderpipeline/private/`
+  is ignored by git for them (section 3, *Assets*).
+
 ## 3. Making a change
 
 1. **Start from the latest `main`**, on a branch named for the change
@@ -222,7 +246,9 @@ npm run check:motion -- --update          # keep this run's failures as the new 
    and this file for the pipeline (the standing rule).
 8. **Assets:** only your own work, or CC0, MIT and similarly permissive assets, each with its
    licence file and a credit in `README.md`'s *Credits and license*. Nothing with a licence that
-   restricts use. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
+   restricts use. That goes for the tools' test assets in `utilities/` too. A bought model, and
+   anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
+   which git ignores. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 
 ## 4. Before you push
@@ -234,6 +260,7 @@ npm run build:manifest   # if anything under client/ changed
 npm run check            # lint + unit tests, as CI's test job runs them
 npm run check:motion     # if characters' motions, bodies or what they hold changed
 npx playwright test ...  # the browser tests your change touches (above)
+# if anything under utilities/blenderpipeline/ changed, its own checks there (section 2)
 git status               # only the files you meant to change
 ```
 
@@ -355,6 +382,8 @@ A good first message in a session:
 | --- | --- |
 | `manifest.test.js` fails: "is up to date" | `npm run build:manifest`, and commit `client/js/app/manifest.js` |
 | `contribution.test.js` fails | You changed the pipeline: update this file (the standing rule) |
+| The Blender pipeline's `npm test` says `dist/` differs | `npm run build` in `utilities/blenderpipeline`, and commit `dist/` |
+| The Blender pipeline says "No Blender to run" | `npm run setup` there (it needs Python 3.11), or set `BLENDER` to a Blender 4.2 or later |
 | Browser tests can't find Chromium | `npx playwright install chromium`, or set `CHROMIUM_PATH` to a Chromium or Chrome |
 | Browser tests time out locally | Run fewer at once (`--workers=1`), and close other heavy programs: drawing without a GPU is slow |
 | The port's in use | `E2E_PORT=8096` for the tests, `PORT=3000` for `npm start` |

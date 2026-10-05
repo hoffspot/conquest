@@ -13,6 +13,7 @@ covers:
 - `.github/workflows/`;
 - `playwright.config.js`, `eslint.config.js`, `e2e/fixtures.js` or the browser tests' split;
 - `scripts/`;
+- the tools in `utilities/` and their checks;
 - the version numbers' rules;
 - branch, review and merge conventions;
 - what an environment needs to run the checks;
@@ -49,6 +50,8 @@ Others contribute too, so a green pull request can go stale (contribution.md, se
 - `npm run check` (lint and unit tests).
 - `npm run check:motion` if characters' motions, bodies or what they hold changed.
 - The browser tests the change touches.
+- If anything under `utilities/blenderpipeline/` changed, its own checks there (contribution.md,
+  section 2, *The tools in `utilities/`*).
 - `git add` files by name only.
 - Never skip, disable or loosen a test to get CI green.
 - Don't run Prettier or any other formatter. The code uses four-space indents and ESLint is the

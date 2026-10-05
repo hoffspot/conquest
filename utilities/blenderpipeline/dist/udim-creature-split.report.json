@@ -1,0 +1,233 @@
+{
+  "name": "udim-creature-split",
+  "config": "examples/udim-creature-split.json",
+  "source": "fixtures/udim-creature/udim-creature.blend",
+  "glb": "dist/udim-creature-split.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "4.5.92"
+  },
+  "kilobytes": 13.9,
+  "compression": "quantize",
+  "extensionsRequired": [
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "KHR_materials_emissive_strength",
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 6,
+    "vertices": 192,
+    "triangles": 94,
+    "skinned": true,
+    "joints": 5,
+    "influences": 4,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "Skin.1001",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        0.716,
+        0.021,
+        0.021,
+        1
+      ],
+      "roughness": 0.6,
+      "metallic": 0
+    },
+    {
+      "name": "Skin.1002",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        0.021,
+        0.578,
+        0.045,
+        1
+      ],
+      "roughness": 0.6,
+      "metallic": 0
+    },
+    {
+      "name": "Skin.1003",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        0.032,
+        0.08,
+        0.791,
+        1
+      ],
+      "roughness": 0.6,
+      "metallic": 0
+    },
+    {
+      "name": "Skin.1004",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        0.791,
+        0.578,
+        0.013,
+        1
+      ],
+      "roughness": 0.6,
+      "metallic": 0
+    },
+    {
+      "name": "Horn",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 0.3,
+      "metallic": 0.8
+    },
+    {
+      "name": "Eye",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [],
+      "baseColor": [
+        1,
+        0.75,
+        0.1,
+        1
+      ],
+      "roughness": 0.2,
+      "metallic": 0
+    }
+  ],
+  "textures": [],
+  "clips": [
+    {
+      "name": "Idle",
+      "seconds": 2,
+      "channels": 15,
+      "keyframes": 112,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null
+    }
+  ],
+  "scale": 1,
+  "bounds": {
+    "rest": {
+      "min": [
+        -0.235,
+        0.1,
+        -0.975
+      ],
+      "max": [
+        0.235,
+        0.8,
+        0.975
+      ],
+      "size": [
+        0.47,
+        0.7,
+        1.95
+      ]
+    },
+    "animated": {
+      "min": [
+        -0.235,
+        -0.0154,
+        -0.975
+      ],
+      "max": [
+        0.235,
+        0.8746,
+        1.0046
+      ],
+      "size": [
+        0.47,
+        0.89,
+        1.9796
+      ]
+    },
+    "radius": 1.1378
+  },
+  "lods": [],
+  "exported": {
+    "objects": [
+      {
+        "name": "Body",
+        "vertices": 61,
+        "faces": 49,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      }
+    ],
+    "armature": {
+      "name": "Rig",
+      "bones": 6,
+      "deformBones": 5,
+      "exported": 5
+    },
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Body",
+        "baked": false,
+        "materials": [
+          "Skin",
+          "Horn",
+          "Eye"
+        ],
+        "udim": true,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 4
+  },
+  "budgets": [],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 4,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 4,
+      "messages": []
+    }
+  },
+  "notes": [
+    "not exported: Camera, Collider, Light, WGT_root",
+    "actions not exported: Crawl (left out), Look (left out), Rear (left out)",
+    "tangents exported, for the normal maps",
+    "UDIM tiles exported as their own files are (udim: split): textures kept in their own format, and the tiles at their own size"
+  ],
+  "warnings": [
+    "Horn: Base Color comes from a VALTORGB, which glTF can't carry, and it isn't baked (textures.bake: never): it won't look the same"
+  ]
+}

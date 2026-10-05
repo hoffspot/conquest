@@ -1,0 +1,7 @@
+{
+    "source": "../fixtures/udim-creature/udim-creature.blend",
+    "out": "../dist",
+    "clips": { "include": ["Idle"] },
+    "textures": { "udim": "split", "bake": "never" },
+    "compress": "quantize"
+}

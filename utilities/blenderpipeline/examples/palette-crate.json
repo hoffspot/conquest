@@ -1,0 +1,6 @@
+{
+    "source": "../fixtures/palette-crate/palette-crate.blend",
+    "out": "../dist",
+    "origin": "feet",
+    "budgets": { "drawCalls": 1 }
+}
