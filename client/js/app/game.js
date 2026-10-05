@@ -5784,9 +5784,10 @@ export class Game {
     /**
      * Try an action (app/wheel.js: an ACTIONS key, or "item:" and a thing to use) on a target:
      * "self" (the player) or an enemy's id. Returns the battle's answer: { ok } or { ok: false,
-     * reason }, saying why not to the player.
+     * reason }, saying why not to the player, and telling `refused` (the slot it was chosen from,
+     * flashed refused), once the host's answered.
      */
-    act(action, target) {
+    act(action, target, { refused = null } = {}) {
         this.#wake();
 
         const { spell, order, ability, item } = actionOf(action) ?? {};
@@ -5817,6 +5818,7 @@ export class Game {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason], 1.4);
                 this.sound?.play("denied");
+                refused?.();
             }
         };
 
@@ -6084,7 +6086,7 @@ export class Game {
         open.done = true;
         this.wheel.mark(direction, "chosen");
         this.wheel.hide({ after: 180 });
-        this.act(action, open.target);
+        this.act(action, open.target, { refused: () => this.wheel.mark(direction, "refused") });
     }
 
     /**
@@ -6223,7 +6225,7 @@ export class Game {
 
         this.quickBar?.mark(slot, "chosen");
 
-        return this.act(key, offensive(key) ? target.id : "self");
+        return this.act(key, offensive(key) ? target.id : "self", { refused: () => this.quickBar?.mark(slot, "refused") });
     }
 
     /**

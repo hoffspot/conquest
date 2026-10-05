@@ -1847,7 +1847,10 @@ export class Battle {
         }
     }
 
-    /** Can `actor` attack `target` from where they stand (on the same map, within reach, and seen for ranged)? */
+    /**
+     * Can `actor` attack `target` from where they stand (on the same map, within reach, and seen
+     * for ranged: looked for as far as the shot reaches, a bow's past where anyone looks round)?
+     */
     #reachable(actor, target) {
         if (actor.map !== target.map) {
             return false;
@@ -1855,7 +1858,23 @@ export class Battle {
 
         const attack = chooseAttack(actor.arms, actor.square, target.square);
 
-        return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
+        return attack !== null && (attack.kind === "melee" || this.canSee(actor, target, Math.max(SIGHT, attack.reach)));
+    }
+
+    /**
+     * Why `actorId` couldn't shoot `targetId` from where they stand, with what they hold ("range":
+     * further than it reaches, or elsewhere; "sight": not seen), or null if they could: for a
+     * shot made stronger (an aimed shot), refused before it's ready again.
+     */
+    shotAt(actorId, targetId) {
+        const [actor, target] = [this.actor(actorId), this.actor(targetId)];
+        const reach = Math.max(0, ...actor.arms.filter(({ kind }) => kind === "ranged").map(({ reach }) => reach));
+
+        if (!target || target.map !== actor.map || distanceBetween(actor.square, target.square) > reach) {
+            return "range";
+        }
+
+        return this.canSee(actor, target, Math.max(SIGHT, reach)) ? null : "sight";
     }
 
     // Is someone within a guard's leash of its post, or of the round it walks (always, for those

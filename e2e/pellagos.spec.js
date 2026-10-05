@@ -4646,6 +4646,50 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#menuoptions")).toBeVisible();
 });
 
+test("a spell tapped on a foe out of reach says so, flashes its slot red and starts nothing cooling down", async ({ page }) => {
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+
+    // The orc set on, further off than any spell reaches (and kept there)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 24, player.square[1]];
+
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.command("player", { type: "engage", target: "orc" });
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(slot(1).locator(".quick-label")).toHaveText("Stun");
+
+    // Stun tapped: refused, said why, its slot flashed red, not lit
+    await slot(1).click();
+    await expect(slot(1)).toHaveClass(/refused/);
+    await expect(page.locator("#banner")).toHaveText("Out of reach");
+
+    const after = await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        return { stun: battle.cooldown("player", "stun"), vigor: battle.cooldown("player", "vigor"), casting: battle.actor("player").casting, stunned: battle.actor("orc").stunnedUntil > battle.time };
+    });
+
+    expect(after).toEqual({ stun: 0, vigor: 0, casting: null, stunned: false });
+
+    // (Nothing sweeps over the slots: none is cooling down)
+    await page.evaluate(() => window.pellagos.game.advance(0.2));
+    await expect(slot(1)).not.toHaveClass(/cooling/);
+    await expect(slot(0)).not.toHaveClass(/cooling/);
+});
+
 test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

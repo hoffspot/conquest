@@ -497,7 +497,9 @@ draws anything.
   (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (walking away calls off an attack that hasn't landed yet).
-  Told to fight someone, they walk until that enemy is within reach, then attack.
+  Told to fight someone, they walk until that enemy is within reach, then attack. A shot needs
+  its target in sight, looked for as far as it reaches: a bow's 18 m, past the 12 m anyone looks
+  round for enemies, so an archer told to fight someone shoots from 18 m.
 - **The orc.** It patrols between its two points, waiting a moment at each end. When it sees the
   player (within 12 squares, in sight) it chases them, finding a new path at most every 0.5 s as
   they move, and attacks whenever they're within reach. If it loses sight of them for 3 seconds it
@@ -565,7 +567,7 @@ would be one line in weapons.js):
 | Wand | bolt | 7 m | 2–6 | 300 | 620 | 1000 | 150 | arcane |
 | Grimoire | fireball | 7 m | 4–9 | 720 | 1100 | 1800 | 250 | fire |
 | War hammer | smash | melee | 6–12 | 640 | 1100 | 1700 | 450 | crush |
-| Bow | arrow | 9 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
+| Bow | arrow | 18 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
 | Spiked gauntlets | punch | melee | 2–5 | 170 | 420 | 600 | 80 | punch |
 | Spiked boots | kick | melee | 3–7 | 360 | 760 | 1050 | 220 | kick |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
@@ -3100,8 +3102,11 @@ are put in the page once, where every icon finds them (`useDefs`).
 
 While a slice is cooling down (a spell's own cooldown, or a blow's own twelve seconds), it's
 greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
-at a greyed slice, an empty one or one that can't be used flashes it red and is refused. The
-game plays on while it's open; a second finger (a pinch) closes it.
+at a greyed slice, an empty one or one that can't be used flashes it red and is refused. One the
+game turns down once chosen (a spell or an aimed shot out of reach or out of sight: "Out of
+reach", "Can't see it") flashes red too, not lit as chosen, as does the quick action's slot, and
+nothing starts cooling down. The game plays on while it's open; a second finger (a pinch) closes
+it.
 
 ## The screens (main.js)
 

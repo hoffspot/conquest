@@ -2099,6 +2099,14 @@ export class Host {
             return refuse("target");
         }
 
+        // (A shot from afar at someone too far off, or not seen: refused, and still ready, as a
+        // spell out of reach is)
+        const unshot = foe && ability.blow === "ranged" ? this.battle.shotAt(actor.id, foe.id) : null;
+
+        if (unshot) {
+            return refuse(unshot);
+        }
+
         this.battle.empower(actor.id, ability.blow, ability.factor);
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
