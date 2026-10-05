@@ -19,7 +19,7 @@ import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURV
 import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
-import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
+import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton } from "../client/js/characters/drapes.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
 import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
@@ -1329,23 +1329,165 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
         }
     });
 
-    it("swings with the thighs and shins below the hips, each side with its own", () => {
+    it("swings with the legs below the hips: its sides with their own shins at the hem, its front and back with its own bones", () => {
         const { geometry } = buildDrape(f, "skirt", measures);
         const index = geometry.attributes.skinIndex.array;
         const weight = geometry.attributes.skinWeight.array;
         const position = geometry.attributes.position;
-        const bone = (name) => f.rig.index.get(name);
+        const bone = (name) => (DRAPE_BONES.includes(name) ? f.rig.bones.length + DRAPE_BONES.indexOf(name) : f.rig.index.get(name));
         const on = (i, name) => [0, 1, 2, 3].reduce((sum, k) => sum + (index[i * 4 + k] === bone(name) ? weight[i * 4 + k] : 0), 0);
         const hem = Math.min(...Array.from({ length: position.count }, (_, i) => position.getY(i)));
 
         for (let i = 0; i < position.count; i++) {
-            if (Math.abs(position.getY(i) - hem) < 1e-4 && Math.abs(position.getX(i)) > 0.1) {
-                const side = position.getX(i) > 0 ? "Left" : "Right";
+            if (Math.abs(position.getY(i) - hem) < 1e-4) {
+                const [x, z] = [position.getX(i), position.getZ(i)];
+                const side = x > 0 ? "Left" : "Right";
+                const way = z > 0 ? "front" : "back";
 
-                assert.ok(on(i, `${side}Leg`) > 0.5, "the hem's sides follow their shins");
-                assert.ok(on(i, "Hips") < 0.2);
+                // (All on the shins at the hem: its sides' own, its front's and back's)
+                assert.ok(on(i, `${side}Leg`) + on(i, `${way}Shin`) > 0.99, "the hem follows the shins");
+                assert.equal(on(i, "Hips"), 0);
+
+                // (Half and half at 45° round)
+                if (Math.abs(x) > Math.abs(z)) {
+                    assert.ok(on(i, `${side}Leg`) > 0.5 - 1e-6, "the hem's sides follow their own shins");
+                } else {
+                    assert.ok(on(i, `${way}Shin`) > 0.5 - 1e-6, "the hem's front and back follow their own");
+                }
             }
         }
+    });
+
+    // How far the legs and boots come out through a drape (metres, the furthest each moment) as a
+    // body in it walks or runs a stride (skinned as three.js does, with its own bones swung: a leg
+    // is out through it where, followed from its hip joint to joint, it crosses the cloth an odd
+    // number of times; how far, to the cloth's nearest point)
+    const through = (shape, id, speed) => {
+        const body = figure(shape);
+        const built = buildDrape(body, id, measureBody(body));
+        const skeleton = drapeSkeleton(body.rig, built.profile);
+        const walker = new Walker(body);
+        const { geometry } = built;
+        const position = geometry.attributes.position;
+        const top = position.getY(3 * built.columns);
+        const hem = position.getY((built.rings - 1) * built.columns);
+        const LEGS = /^(Left|Right)(UpLeg|Leg|Foot|ToeBase)$/;
+        const legs = [];
+
+        body.robed = DRAPES[id].length >= 0.9;
+
+        for (let v = 0; v < human.vertexCount; v += 7) {
+            const heaviest = [0, 1, 2, 3].reduce((best, k) => (human.skinWeights[v * 4 + k] > human.skinWeights[v * 4 + best] ? k : best), 0);
+            const match = human.bones[human.skinIndices[v * 4 + heaviest]].name.match(LEGS);
+            const y = body.positions[v * 3 + 1];
+
+            if (human.partOf[v] === 0 && match && y < top && y > hem - 0.02) {
+                // (A boot's leather over the foot and shin)
+                const rest = new THREE.Vector3().fromArray(body.positions, v * 3).addScaledVector(new THREE.Vector3().fromArray(body.normals, v * 3), 0.008);
+
+                legs.push({ rest, bones: [0, 1, 2, 3].map((k) => human.skinIndices[v * 4 + k]), weights: [0, 1, 2, 3].map((k) => human.skinWeights[v * 4 + k] / 255), path: ["UpLeg", "Leg", "Foot", "ToeBase"].slice(0, ["UpLeg", "Leg", "Foot", "ToeBase"].indexOf(match[2]) + 1).map((name) => `${match[1]}${name}`) });
+            }
+        }
+
+        const skin = (matrices, rest, bones, weights) => bones.reduce((sum, b, k) => (weights[k] > 0 ? sum.addScaledVector(rest.clone().applyMatrix4(matrices[b]), weights[k]) : sum), new THREE.Vector3());
+        const cloth = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+        const caster = new THREE.Raycaster();
+        const triangle = new THREE.Triangle();
+        const worst = [];
+
+        cloth.geometry.setIndex(geometry.index);
+
+        for (let frame = 0; frame < 66; frame++) {
+            walker.update(1 / 30, { speed });
+            body.object.updateMatrixWorld(true);
+
+            if (frame < 30) {
+                continue;
+            }
+
+            skeleton.swing();
+
+            const matrices = (each) => each.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, each.boneInverses[i]));
+            const [onBody, onCloth] = [matrices(body.rig.skeleton), matrices(skeleton)];
+            const points = Array.from({ length: position.count }, (_, i) => skin(onCloth, new THREE.Vector3().fromBufferAttribute(position, i), [0, 1, 2, 3].map((k) => geometry.attributes.skinIndex.getComponent(i, k)), [0, 1, 2, 3].map((k) => geometry.attributes.skinWeight.getComponent(i, k))));
+
+            cloth.geometry.setAttribute("position", new THREE.Float32BufferAttribute(points.flatMap((p) => p.toArray()), 3));
+            cloth.geometry.computeBoundingSphere();
+
+            let out = 0;
+
+            for (const leg of legs) {
+                const point = skin(onBody, leg.rest, leg.bones, leg.weights);
+                const path = [...leg.path.map((name) => body.rig.bone(name).getWorldPosition(new THREE.Vector3())), point];
+                let crossings = 0;
+
+                for (let k = 0; k + 1 < path.length; k++) {
+                    const along = new THREE.Vector3().subVectors(path[k + 1], path[k]);
+
+                    if (along.length() > 1e-4) {
+                        caster.set(path[k], along.clone().normalize());
+                        caster.far = along.length();
+                        crossings += caster.intersectObject(cloth, false).length;
+                    }
+                }
+
+                if (crossings % 2 === 1) {
+                    let near = Infinity;
+
+                    for (let k = 0; k < geometry.index.count; k += 3) {
+                        triangle.set(...[0, 1, 2].map((c) => points[geometry.index.getX(k + c)]));
+                        near = Math.min(near, triangle.closestPointToPoint(point, new THREE.Vector3()).distanceTo(point));
+                    }
+
+                    out = Math.max(out, near);
+                }
+            }
+
+            worst.push(out);
+        }
+
+        return { most: Math.max(...worst), mean: worst.reduce((sum, d) => sum + d, 0) / worst.length };
+    };
+
+    it("keeps the legs and boots in a long skirt walking: its front taken along by the leg striding out, its back by the heel behind", () => {
+        const priestess = { macro: { gender: 0, muscle: 0.4, weight: 0.6, height: 0.55, bust: 0.6 } };
+        const priest = { macro: { gender: 1, muscle: 0.45, weight: 0.7, height: 0.6 }, details: { belly: 0.5 } };
+
+        // (On main the alb let a shin or boot out 6 to 10 cm, 4 to 6 cm through every stride)
+        for (const [shape, id, most] of [[priestess, "albSkirt", 0.01], [FOLK.wench.shape, "gown", 0.01], [priest, "albSkirt", 0.03]]) {
+            const { most: out } = through(shape, id, NATURAL_SPEED);
+
+            assert.ok(out < most, `${id}: out ${(out * 100).toFixed(1)} cm`);
+        }
+    });
+
+    it("keeps them mostly in running, the heels kicked up behind less in a robe to the ankles", () => {
+        // (On main 7 to 14 cm out running, on average, up to 24 cm)
+        const { most, mean } = through(FOLK.wench.shape, "gown", 4);
+
+        assert.ok(mean < 0.025 && most < 0.04, `out ${(mean * 100).toFixed(1)} cm on average, ${(most * 100).toFixed(1)} at most`);
+
+        // (The knee bent less as the heel kicks up behind: a run's 122° held to 85°)
+        const knee = (robed) => {
+            const body = figure(FOLK.wench.shape);
+            const walker = new Walker(body);
+            let most = 0;
+
+            body.robed = robed;
+
+            for (let frame = 0; frame < 60; frame++) {
+                walker.update(1 / 30, { speed: 4 });
+                body.object.updateMatrixWorld(true);
+
+                const [hip, knee, ankle] = ["LeftUpLeg", "LeftLeg", "LeftFoot"].map((name) => body.rig.bone(name).getWorldPosition(new THREE.Vector3()));
+
+                most = Math.max(most, new THREE.Vector3().subVectors(knee, hip).angleTo(new THREE.Vector3().subVectors(ankle, knee)) * (180 / Math.PI));
+            }
+
+            return most;
+        };
+
+        assert.ok(knee(false) > 110 && knee(true) < 90, `${knee(false).toFixed(0)}° and ${knee(true).toFixed(0)}° robed`);
     });
 });
 

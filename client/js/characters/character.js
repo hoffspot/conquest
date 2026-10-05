@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, limbThickness, SLING, socketOn } from "./equipment.js";
-import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
+import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME } from "./items.js";
@@ -28,6 +28,10 @@ export const LOOK_DEFAULTS = Object.freeze({
 
 // The parts of the base mesh, in the order they're drawn (with a material each)
 const DRAWN = ["body", "eyes", "lashes"];
+
+// A skirt or robe hanging this far down (drapes.js `length`: 1 to the ankles) or further all the
+// way round has its wearer running with their heels kept low (Character.robed)
+const ROBED = 0.9;
 
 // How many pictures of outfits (or of eyes) no one is wearing just now are kept, for the next to
 // wear one
@@ -455,6 +459,11 @@ export class Character {
         for (const mesh of this.garments) {
             mesh.geometry.dispose();
             mesh.removeFromParent();
+
+            // (A drape's own skeleton's bone texture)
+            if (mesh.skeleton !== this.rig.skeleton) {
+                mesh.skeleton.dispose();
+            }
         }
 
         for (const item of this.items) {
@@ -592,18 +601,24 @@ export class Character {
 
         this.setHidden(hidden);
 
-        // Skirts, gowns and aprons, hanging over what's under them
+        // Skirts, gowns and aprons, hanging over what's under them. (In one to the ankles, it runs
+        // with its heels kept low: Walker)
+        this.robed = drapeIds.some((id) => !DRAPES[id].cape && (DRAPES[id].arc ?? 1) >= 1 && DRAPES[id].length >= ROBED);
+
         for (const id of drapeIds) {
             yield;
 
-            const { geometry } = buildDrape(this, id, measures);
+            const { geometry, profile } = buildDrape(this, id, measures);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;
             mesh.userData.drape = true;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+
+            // (A skirt's front and back swung by bones of its own, as the legs go: a cloak's
+            // hangs from the body's)
+            mesh.bind(profile ? drapeSkeleton(this.rig, profile) : this.rig.skeleton, new THREE.Matrix4());
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
@@ -1687,6 +1702,10 @@ export class Character {
 
         for (const mesh of this.garments) {
             mesh.geometry.dispose();
+
+            if (mesh.skeleton !== this.rig.skeleton) {
+                mesh.skeleton.dispose();
+            }
         }
 
         for (const item of this.items) {

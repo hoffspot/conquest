@@ -7,8 +7,11 @@
 // An apron is a drape that only goes part of the way round, at the front.
 //
 // It's skinned to the skeleton like the body: its waist to the lower back and pelvis, then more
-// and more to the thighs down to the knees, and below them to the shins, each side to its own; so
-// the hem swings as the legs walk, and sitting, it lies over the lap and falls down the shins.
+// and more to the thighs down to the knees, and below them to the shins; so the hem swings as the
+// legs walk, and sitting, it lies over the lap and falls down the shins. Each side goes with its
+// own leg, but its front with whichever leg is further forward and its back with whichever is
+// further back (two bones of the drape's own for each, swung as those legs are: drapeSkeleton),
+// so a leg striding out takes the cloth before it along, never coming through it.
 
 import * as THREE from "three";
 import { LIVERIES } from "./liveries.js";
@@ -49,10 +52,25 @@ const EASE = { waist: 0.012, hips: 0.03 };
 // How deep its pleats are, as a share of its radius, at the hem
 const PLEAT_DEPTH = 0.045;
 
-// At the knees, this share of its weight is on the thighs (the rest on the pelvis); at the hem,
-// this share on the shins (the rest on the thighs)
+// A cloak's share of its weight on the thighs at the knees (the rest on the pelvis), and on the
+// shins at its hem (the rest on the thighs)
 const ON_THIGHS = 0.9;
 const ON_SHINS = 0.75;
+
+// How far down from the hips to the knees a skirt is all on the thighs (from all on the pelvis at
+// the hips: so a thigh swinging forward takes the cloth over it along), and from the knees to the
+// hem all on the shins (from all on the thighs at the knees: so a shin bending back takes the
+// cloth down its calf with it)
+const THIGH_REACH = 0.5;
+const SHIN_REACH = 0.3;
+
+/**
+ * A drape's own bones, after the body's in its skeleton (drapeSkeleton): for its front, a thigh
+ * swung forward about the middle of the hips as far as the knee furthest forward has swung, and
+ * from where that puts the knees a shin swung as far as the shin furthest forward; for its back,
+ * the same, back.
+ */
+export const DRAPE_BONES = Object.freeze(["frontThigh", "frontShin", "backThigh", "backShin"]);
 
 const smoothstep = (edge0, edge1, x) => {
     const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -183,12 +201,23 @@ export function buildDrape(character, id, measures) {
         right: rig.index.get("RightUpLeg"),
         leftShin: rig.index.get("LeftLeg"),
         rightShin: rig.index.get("RightLeg"),
+        ...Object.fromEntries(DRAPE_BONES.map((name, k) => [name, rig.bones.length + k])),
     };
     const kneeY = rig.heads[bones.leftShin].y;
     const positions = [];
     const colours = [];
     const skinIndex = [];
     const skinWeight = [];
+
+    // (Round it, how much goes with the front or back's bones, and how much with its side's leg)
+    const legsAt = (angle) => {
+        const [ahead, aside] = [Math.cos(angle), Math.sin(angle)];
+
+        return [
+            [ahead >= 0 ? bones.frontThigh : bones.backThigh, ahead >= 0 ? bones.frontShin : bones.backShin, ahead * ahead],
+            [aside >= 0 ? bones.left : bones.right, aside >= 0 ? bones.leftShin : bones.rightShin, aside * aside],
+        ];
+    };
 
     rings.forEach(([y, t, radius], r) => {
         for (let c = 0; c < columns; c++) {
@@ -202,26 +231,26 @@ export function buildDrape(character, id, measures) {
             positions.push(x, y, z);
             colours.push(shade, shade, shade);
 
-            // The waist bends with the lower back; below the hips, more and more with the thighs
-            // down to the knees, then the shins, each side with its own
-            const left = smoothstep(-0.35, 0.35, Math.sin(angle));
+            // The waist bends with the lower back; below the hips, more and more with the legs
+            // down to the knees (its sides with their own, its front and back with the legs
+            // furthest that way), then the shins
+            const [[alongThigh, alongShin, along], [asideThigh, asideShin, aside]] = legsAt(angle);
 
             if (r === 0) {
                 skinIndex.push(bones.spine, bones.hips, 0, 0);
                 skinWeight.push(0.4, 0.6, 0, 0);
             } else if (y >= kneeY) {
-                const legs = ON_THIGHS * smoothstep(hipsY, kneeY, y);
+                // (Taken up quickly below the hips, where a thigh driving forward first meets it)
+                const down = Math.min(1, Math.max(0, (hipsY - y) / ((hipsY - kneeY) * THIGH_REACH)));
+                const legs = 1 - (1 - down) ** 2;
 
-                skinIndex.push(bones.hips, bones.left, bones.right, 0);
-                skinWeight.push(1 - legs, legs * left, legs * (1 - left), 0);
+                skinIndex.push(bones.hips, alongThigh, asideThigh, 0);
+                skinWeight.push(1 - legs, legs * along, legs * aside, 0);
             } else {
-                const onShins = ON_SHINS * smoothstep(kneeY, hemY, y);
-                const [thighs, shins] = [ON_THIGHS * (1 - onShins), ON_THIGHS * onShins];
+                const onShins = smoothstep(kneeY, kneeY - (kneeY - hemY) * SHIN_REACH, y);
 
-                // (The other side's share goes to its thigh: four bones at most)
-
-                skinIndex.push(bones.hips, left >= 0.5 ? bones.left : bones.right, left >= 0.5 ? bones.leftShin : bones.rightShin, left >= 0.5 ? bones.right : bones.left);
-                skinWeight.push(1 - ON_THIGHS, thighs * Math.max(left, 1 - left), shins * Math.max(left, 1 - left), (thighs + shins) * Math.min(left, 1 - left));
+                skinIndex.push(alongThigh, alongShin, asideThigh, asideShin);
+                skinWeight.push(along * (1 - onShins), along * onShins, aside * (1 - onShins), aside * onShins);
             }
         }
     });
@@ -247,7 +276,27 @@ export function buildDrape(character, id, measures) {
     geometry.setIndex(index);
     geometry.computeVertexNormals();
 
-    return { geometry, drape, rings: rings.length, columns };
+    // (How far it reaches forward, back and to the sides ring by ring below the hips, as it
+    // rests: how far a leg in it can go before it comes out: drapeSkeleton)
+    const profile = [];
+
+    rings.forEach(([y, t], r) => {
+        if (t > 0) {
+            const ring = { y, middle: hips.middle.z, front: 0, back: 0, wide: 0 };
+
+            for (let c = 0; c < columns; c++) {
+                const [x, , z] = positions.slice((r * columns + c) * 3, (r * columns + c) * 3 + 3);
+
+                ring.front = Math.max(ring.front, z - hips.middle.z);
+                ring.back = Math.max(ring.back, hips.middle.z - z);
+                ring.wide = Math.max(ring.wide, Math.abs(x - hips.middle.x));
+            }
+
+            profile.push(ring);
+        }
+    });
+
+    return { geometry, drape, rings: rings.length, columns, profile };
 }
 
 
@@ -401,6 +450,180 @@ function buildCape(character, id, measures) {
     geometry.computeVertexNormals();
 
     return { geometry, drape, rings: rings.length, columns };
+}
+
+const _hips = new THREE.Vector3();
+const _knees = new THREE.Vector3();
+const _from = new THREE.Vector3();
+const _to = new THREE.Vector3();
+const _scale = new THREE.Vector3();
+const _pelvis = new THREE.Quaternion();
+const _back = new THREE.Quaternion();
+const _turn = new THREE.Quaternion();
+const _axis = new THREE.Vector3(1, 0, 0);
+const _at = Array.from({ length: 8 }, () => new THREE.Vector3());
+const _feet = Array.from({ length: 6 }, () => new THREE.Vector3());
+const LEG_BONES = ["LeftUpLeg", "RightUpLeg", "LeftLeg", "RightLeg", "LeftFoot", "RightFoot", "LeftToeBase", "RightToeBase"];
+
+// What of each leg keeps a drape's cloth off it, and how far (metres: its flesh and a boot's
+// leather round where it's measured): the knee, halfway down the shin, the ankle, the back of the
+// heel, and the tips of the toes
+const CLEAR = { knee: 0.07, shin: 0.075, ankle: 0.06, heel: 0.035, toes: 0.035 };
+
+// The furthest a drape's front or back swings to keep the legs in (radians from where it hangs;
+// a thigh swings it as far as it goes)
+const SWING = 1;
+
+// How far forward a line from one point to another leans (radians, from straight down; in the
+// pelvis's frame, `back` its turn undone), and how long it is in that plane (into `out`)
+const lean = (from, to, back = null, out = null) => {
+    _to.subVectors(to, from);
+
+    if (back) {
+        _to.applyQuaternion(back);
+    }
+
+    if (out) {
+        out.length = Math.hypot(_to.y, _to.z);
+    }
+
+    return Math.atan2(_to.z, -_to.y);
+};
+
+/**
+ * The skeleton a drape hangs from: the body's bones, and after them its own (DRAPE_BONES), swung
+ * each time it's drawn (as three.js updates a skeleton before drawing what it moves) as the legs
+ * are then. Its front's thigh is swung forward about the middle of the hips as far as the thigh
+ * swung furthest forward from where it rests (in the pelvis's frame); its shin, from where that
+ * puts the middle of the knees, hangs straight down unless a leg below the knee (halfway down its
+ * shin, its ankle, heel or toes: CLEAR) would come out through the cloth's front (`profile`, from
+ * buildDrape: where it is at the legs ring by ring, as it rests), when it's swung forward just as
+ * far as keeps it in. Its back's the same, back. `swing()` does it without drawing.
+ */
+export function drapeSkeleton(rig, profile = []) {
+    const own = DRAPE_BONES.map((name) => Object.assign(new THREE.Bone(), { name: `drape ${name}` }));
+    const inverses = own.map(() => new THREE.Matrix4());
+    const skeleton = new THREE.Skeleton([...rig.bones, ...own], [...rig.skeleton.boneInverses, ...inverses]);
+    const legs = LEG_BONES.map((name) => rig.index.get(name));
+    const hips = rig.index.get("Hips");
+    const rest = legs.map((i) => rig.heads[i]);
+    const middle = { hips: new THREE.Vector3().addVectors(rest[0], rest[1]).multiplyScalar(0.5), knees: new THREE.Vector3().addVectors(rest[2], rest[3]).multiplyScalar(0.5) };
+    const scale = (rest[0].y - rest[4].y) / 0.85;
+
+    // (Where the heels and toes' tips are, as they rest, from their bones)
+    const heels = [0, 1].map((side) => new THREE.Vector3(rest[4 + side].x, rest[4 + side].y * 0.35, rest[4 + side].z - 0.07 * scale));
+    const tips = [0, 1].map((side) => rig.tails[legs[6 + side]]);
+
+    // The cloth's front (`way` 1) or back (-1) as it rests, `aside` metres to the side of the
+    // middle: at what lean from `centre` (the middle of the hips or of the knees, as they rest) it
+    // is `far` from it, below it (each ring's round as if it were an ellipse; null if it doesn't
+    // reach that far round, or has no front or back there: an apron's)
+    const clothAt = (way, aside, far, centre) => {
+        let last = null;
+
+        for (const ring of profile) {
+            if (ring.y >= centre.y) {
+                continue;
+            }
+
+            const reach = way > 0 ? ring.front : ring.back;
+            const round = 1 - (aside / ring.wide) ** 2;
+
+            if (reach < 0.02 || round <= 0) {
+                return last?.angle ?? null;
+            }
+
+            const out = {};
+            const angle = lean(centre, _to.set(0, ring.y, ring.middle + way * reach * Math.sqrt(round)), null, out);
+
+            if (out.length >= far) {
+                return last ? last.angle + ((angle - last.angle) * (far - last.far)) / (out.length - last.far) : angle;
+            }
+
+            last = { far: out.length, angle };
+        }
+
+        return last?.angle ?? null;
+    };
+
+    const update = skeleton.update.bind(skeleton);
+    const measured = {};
+    const keeping = [0, 1].flatMap((side) => [
+        [_feet[side * 3], CLEAR.shin],
+        [_at[4 + side], CLEAR.ankle],
+        [_feet[side * 3 + 1], CLEAR.heel],
+        [_feet[side * 3 + 2], CLEAR.toes],
+    ]);
+
+    // How far the cloth's front (`way` 1) or back must swing about `pivot` (where `centre` is as it
+    // rests) to keep in each of the legs below it, the knees too (`knees`), each that far inside
+    // it (CLEAR): the furthest (`pick`; forward or back, from where it hangs), or null if none's
+    // in its reach
+    const keep = (pivot, centre, pick, way, knees) => {
+        let swung = null;
+
+        for (const [point, clear] of knees ? [...keeping, [_at[2], CLEAR.knee], [_at[3], CLEAR.knee]] : keeping) {
+            const angle = lean(pivot, point, _back, measured);
+            const at = clothAt(way, Math.abs(_to.x) / _scale.x, measured.length / _scale.x, centre);
+
+            // (Not what's above where it swings from, a heel kicked up behind: it hangs below)
+            if (at !== null && measured.length > 1e-3 && Math.abs(angle) < Math.PI / 2) {
+                swung = pick(swung ?? -way * Infinity, angle - at + (way * clear) / measured.length);
+            }
+        }
+
+        return swung === null ? null : Math.max(-SWING, Math.min(SWING, swung));
+    };
+
+    skeleton.swing = () => {
+        _hips.copy(middle.hips);
+        _knees.copy(middle.knees);
+        inverses[0].makeTranslation(-_hips.x, -_hips.y, -_hips.z);
+        inverses[2].copy(inverses[0]);
+        inverses[1].makeTranslation(-_knees.x, -_knees.y, -_knees.z);
+        inverses[3].copy(inverses[1]);
+        _knees.sub(_hips);
+
+        // (Where they are, and which way the pelvis faces)
+        legs.forEach((i, k) => _at[k].setFromMatrixPosition(rig.bones[i].matrixWorld));
+        rig.bones[hips].matrixWorld.decompose(_from, _pelvis, _scale);
+        _back.copy(_pelvis).invert();
+
+        // What of the legs below the knees keeps the cloth off: halfway down each shin, its
+        // ankle, heel and toes' tips
+        for (const side of [0, 1]) {
+            const foot = rig.bones[legs[4 + side]].matrixWorld;
+
+            _feet[side * 3].lerpVectors(_at[2 + side], _at[4 + side], 0.5);
+            _feet[side * 3 + 1].subVectors(heels[side], rest[4 + side]).applyMatrix4(foot);
+            _feet[side * 3 + 2].subVectors(tips[side], rest[6 + side]).applyMatrix4(rig.bones[legs[6 + side]].matrixWorld);
+        }
+
+        // How far each thigh has swung forward from where it rests
+        const thighs = [0, 1].map((side) => lean(_at[side], _at[2 + side], _back) - lean(rest[side], rest[2 + side]));
+
+        _hips.addVectors(_at[0], _at[1]).multiplyScalar(0.5);
+
+        for (const [thigh, shin, pick, way] of [[own[0], own[1], Math.max, 1], [own[2], own[3], Math.min, -1]]) {
+            // (About the hips, as far as the thigh swung furthest that way, or further if the
+            // legs need it to keep them in; then from where that puts the knees, straight down or
+            // further if the legs below them need it)
+            const swung = pick(...thighs, keep(_hips, middle.hips, pick, way, true) ?? -way * Infinity);
+
+            _turn.setFromAxisAngle(_axis, -swung).premultiply(_pelvis);
+            thigh.matrixWorld.compose(_hips, _turn, _scale);
+            _from.copy(_knees).multiply(_scale).applyQuaternion(_turn).add(_hips);
+            _turn.setFromAxisAngle(_axis, -pick(0, keep(_from, middle.knees, pick, way, false) ?? 0)).premultiply(_pelvis);
+            shin.matrixWorld.compose(_from, _turn, _scale);
+        }
+    };
+
+    skeleton.update = () => {
+        skeleton.swing();
+        update();
+    };
+
+    return skeleton;
 }
 
 /** A drape's material: its colour, shaded in its pleats, both sides of the cloth drawn. */

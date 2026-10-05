@@ -229,7 +229,8 @@ export async function guild(piece) {
     const v0 = Math.min(level.height - boardHeight - m(0.3), m(0.9));
 
     nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3552", dark: "#0e1a2a" }), "board guild", plan.frame ?? "timber");
-    hangingSign(solid, face, middle + m(2.2), m(3.1), emblemSignTexture({ name: "Adventurers' Guild", emblem: "shield", tint: 2 }), "sign guild");
+    // (Its sign beyond the banner on that side, not through it)
+    hangingSign(solid, face, middle + m(2.9), m(3.1), emblemSignTexture({ name: "Adventurers' Guild", emblem: "shield", tint: 2 }), "sign guild");
 
     // Banners in the guild's blue and gold, hanging from poles either side of the door
     for (const side of [-1, 1]) {
@@ -303,9 +304,10 @@ export async function church(piece) {
     // The door in its portal, and the patron's sign by it
     door(solid, way.x, way.z + 0.4, { width: 1.6, height: 2.6, floor: way.floor, frame: "iron" });
 
-    const front = { origin: [0, 0, way.z + 0.4], across: [1, 0, 0], out: [0, 0, 1], length: width };
+    const front = { origin: [0, 0, sign.z], across: [1, 0, 0], out: [0, 0, 1], length: width };
 
-    hangingSign(solid, front, sign.u, sign.top, emblemSignTexture({ name: `${patron.name} ${patron.title}`, emblem: GOD_EMBLEMS[piece.patron] ?? "sun", tint: 2 + Object.keys(GODS).indexOf(piece.patron) }), `sign ${patron.name}`);
+    // (On a shorter bracket than most, out from a buttress's face over the street)
+    hangingSign(solid, front, sign.u, sign.top, emblemSignTexture({ name: `${patron.name} ${patron.title}`, emblem: GOD_EMBLEMS[piece.patron] ?? "sun", tint: 2 + Object.keys(GODS).indexOf(piece.patron) }), `sign ${patron.name}`, { reach: 1 });
 
     return solid.toObject();
 }
@@ -629,7 +631,8 @@ export async function keep(piece) {
         (solid.cloth ??= []).push({ at: [mid + side * m(3.2), height * 0.72, z1 + m(0.06)], out: [0, 0, 1], width: m(1.1), drop: height * 0.72 - m(3.4), kind: "wall", look: "human" });
     }
 
-    const face = { origin: [x0, 0, z1 + m(0.25)], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 };
+    // (Its sign by the door, from the wall beside the doorway's surround)
+    const face = { origin: [x0, 0, z1], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 };
 
     hangingSign(solid, face, mid - x0 + m(1.9), m(4.6), emblemSignTexture({ name: "The Keep", emblem: "crown", tint: seedOf(piece) % 6 }), "sign keep");
 

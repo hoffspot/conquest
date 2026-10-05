@@ -41,7 +41,8 @@ const FLOOR = 0.6;
  * A church's body (its patron's sign, its door and the sun on its spire are landmarks.js's): into
  * `solid`, its lot `width` by `depth` (world pixels), its grade and build from the piece (`grade`
  * and `gothic`, as core gives them: pieces.js churchOf). Returns where its door
- * is ({ x, z: its leaf's face, floor }), where its patron's sign hangs ({ u: along the front, top }),
+ * is ({ x, z: its leaf's face, floor }), where its patron's sign hangs ({ u: along the front, top,
+ * z: the face it hangs from }),
  * and the top of its spire ([x, y, z]: the Six's sun stands on it).
  */
 export function churchBody(solid, piece, width, depth) {
@@ -56,8 +57,17 @@ export function churchBody(solid, piece, width, depth) {
 
     portal(solid, middle, front, { gothic, wide: grade === "minster" ? 2.6 : 2.2 });
 
-    return { door: { x: middle, z: front, floor: FLOOR }, sign: { u: middle + m(grade === "minster" ? 2.6 : 2.0), top: m(3.3) }, apex };
+    // (The sign hangs from the tower's wall beside the portal, a minster's; or, a parish church's
+    // or a town's, from the face of the buttress up the tower's corner there, which stands where
+    // it would otherwise hang)
+    const sign = grade === "minster" ? { u: middle + m(2.6), top: m(3.3), z: front } : { u: middle + m(own.tower / 2 - TOWER_BUTTRESS.inset), top: m(3.3), z: front + m(TOWER_BUTTRESS.depths[0]) };
+
+    return { door: { x: middle, z: front, floor: FLOOR }, sign, apex };
 }
+
+// The buttresses up the front corners of a parish church's or a town's tower: how far in from
+// the corner, and how far out each stage stands
+const TOWER_BUTTRESS = Object.freeze({ inset: 0.4, depths: [0.6, 0.4] });
 
 // A parish church or a town's: a west tower over the door, the nave behind it (over aisles in a
 // town), an apse at the east end. Returns its spire's top
@@ -141,8 +151,8 @@ function basilica(solid, own, width, front, { gothic, arch }) {
     solid.box(tx0 - m(0.2), top - m(0.4), tz0 - m(0.2), tx1 + m(0.2), top, front + m(0.2), warm);
 
     // (Square buttresses up the tower's west corners)
-    for (const [x, z, way] of [[tx0, front - m(0.4), [-1, 0]], [tx1, front - m(0.4), [1, 0]], [tx0 + m(0.4), front, [0, 1]], [tx1 - m(0.4), front, [0, 1]]]) {
-        buttress(solid, [x, z], way, { width: 0.7, depths: [0.6, 0.4], heights: [own.top * 0.35, own.top * 0.62], base: 0, cap: gothic });
+    for (const [x, z, way] of [[tx0, front - m(0.4), [-1, 0]], [tx1, front - m(0.4), [1, 0]], [tx0 + m(TOWER_BUTTRESS.inset), front, [0, 1]], [tx1 - m(TOWER_BUTTRESS.inset), front, [0, 1]]]) {
+        buttress(solid, [x, z], way, { width: 0.7, depths: TOWER_BUTTRESS.depths, heights: [own.top * 0.35, own.top * 0.62], base: 0, cap: gothic });
     }
 
     if (gothic) {

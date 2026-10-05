@@ -59,6 +59,10 @@ const LOWEST = 0.1;
 const LEVELS = [0, 0.25, 0.5, 0.75, 1, 1.3];
 const POINTS = 32;
 
+// Running in a robe to the ankles (Character.robed), the knee bent past this (degrees) only this
+// share as far again: the heel kicked up behind to about 85° rather than 122°, inside the robe
+const ROBED_KNEE = Object.freeze({ from: 60, share: 0.4 });
+
 // How fast feet shuffle back under a character turning on the spot (metres a second)
 const SHUFFLE = 0.8;
 
@@ -443,7 +447,9 @@ export class Walker {
         rig.setAngles("Head", { flex: headFlex - style.headForward * 1.6, turn: headTurn * 0.6, bend: headBend * 0.5 });
 
         // Legs, from the gait curves (stance width sets how far the thighs come in; running, the
-        // feet land nearly in a line)
+        // feet land nearly in a line; in a robe to the ankles, its heels not kicked up behind as
+        // high: Character.robed)
+        const robed = (knee) => (this.character.robed && knee > ROBED_KNEE.from ? ROBED_KNEE.from + (knee - ROBED_KNEE.from) * ROBED_KNEE.share : knee);
         const inward = Math.atan2((this.hipWidth - mix(style.stanceWidth, RUN_STANCE_WIDTH)) / 2, this.legLength) * (180 / Math.PI);
 
         SIDES.forEach((side, i) => {
@@ -455,7 +461,7 @@ export class Walker {
                 abduct: -mix(s, 1.2) * curveAt(CURVES.hipAdduction, phase) - inward,
                 rotate: -style.toeOut * 0.5 * walk,
             });
-            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), running(RUN_CURVES.kneeFlexion, phase)) + crouch * 1.6 });
+            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), robed(running(RUN_CURVES.kneeFlexion, phase))) + crouch * 1.6 });
             rig.setAngles(`${side}Foot`, { flex: mix(s * curveAt(CURVES.ankleDorsiflexion, phase), running(RUN_CURVES.ankleDorsiflexion, phase)) + crouch * 0.6, rotate: style.toeOut * 0.5 * walk, invert: inward * 0.6 });
 
             // Arms swing against the legs (pumping, running), or carry what's in the hand

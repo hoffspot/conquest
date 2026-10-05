@@ -379,10 +379,29 @@ cloth round the body:
   deeper towards the hem and shaded darker in their folds.
 - **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
   under it.
-- **Skinned** like the body: the waist to the lower back and pelvis; below the hips, more and
-  more to the thighs (up to 90% at the knees), each side to its own, the front and back shared;
-  below the knees, more and more to the shins. So the hem swings as the legs walk, and sitting,
-  it lies over the lap and falls down the shins.
+- **Skinned** like the body: the waist to the lower back and pelvis; below the hips, quickly
+  onto the legs (all on them halfway down to the knees), then below the knees onto the shins (all
+  on them a third of the way to the hem). Its sides go with their own legs; its front and back
+  with four bones of its own (`DRAPE_BONES`, after the body's in its own skeleton:
+  `drapeSkeleton`, swung each time it's drawn, as three.js updates a skeleton before drawing what
+  it moves):
+  - **Above the knees**, its front swings forward about the middle of the hips as far as the
+    thigh swung furthest forward from where it rests (in the pelvis's frame), and its back as far
+    back as the one swung furthest back; further if a leg below needs it to keep inside.
+  - **Below the knees**, from where that puts the middle of the knees, it hangs straight down,
+    or swings just as far as keeps the legs inside it with a boot's leather and a little flesh to
+    spare: halfway down each shin (7.5 cm), the ankles (6 cm), the backs of the heels and the
+    tips of the toes (3.5 cm), measured against the cloth where it rests at each leg's place
+    across the body (the drape's `profile`, ring by ring), never more than a radian, and never
+    for a heel kicked up above the knees.
+  - So a leg striding out takes the cloth before it along and a heel behind pushes the back out,
+    rather than coming through them; sitting, it lies over the lap and falls down the shins.
+    Walking, the legs and boots stay in an alb, a gown or a kirtle (at most 0.6 cm out on slim
+    and average bodies, 2.4 cm a bigger man's toe at a heel strike; on main 4 to 10 cm, out
+    through every stride). Running, 1.5 to 2.3 cm on average (7 to 14 cm on main).
+- **Running in a robe** to the ankles or further all the way round (`Character.robed`), the
+  heels aren't kicked up behind as high: the knee bent past 60° only 40% as far again (to about
+  85° rather than 122°), as someone running in a long robe does.
 
 The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron
 (the smith and apprentice a leather one, longer and stiffer; a temple's priest and acolyte an
