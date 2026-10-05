@@ -131,7 +131,7 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
 
     // The way up to the doors of the buildings that can be gone into; the tavern's door, and the
     // floors it leads to
-    openEntrances(town.pieces, blocked, opaque);
+    openEntrances(town.pieces, blocked, opaque, 0, town);
 
     const tavern = tavernOf(town);
     const floors = tavernFloors();

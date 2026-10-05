@@ -29,6 +29,8 @@ import { LONE_TREES, loneTreesNear, loneTreesOf, nearLone } from "./lonetrees.js
 import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
+import { LAGOON, lagoonDepths, lagoonReach } from "./lagoons.js";
+import { PEOPLE_TOWNS } from "./setpieces/town.js";
 import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
@@ -300,6 +302,10 @@ export class Overworld {
         ];
         // (The camps' own, where each is pitched: found as the world near it is made, campsNear)
         this.campSpots = new Map();
+        // (The lizard folk's lagoons, by the town's or the place's pad id, each worked out once:
+        // #lagoonOf; and the plank walks over them whose middles are in each chunk, by its key)
+        this.lagoons = new Map();
+        this.walked = new Map();
         // The other settlements, laid out as the world near them is made (their roads then joined
         // to their streets' ends: roads to them wait for that, `waiting`, by place)
         this.waiting = new Map();
@@ -337,6 +343,7 @@ export class Overworld {
             padsNear: (cx, cy) => this.#padsNear(cx, cy),
             roadsNear: (cx, cy) => this.#roadsIn(cx, cy).filter((segment) => !segment[6]).map((segment) => ({ line: segment[5], k: segment[7], half: ROAD_HALF[segment[4]] })),
             settledNear: (cx, cy) => this.#padsNear(cx, cy, { settled: true }),
+            sunkNear: (cx, cy) => this.#lagoonsNear(cx, cy),
         });
 
         const read = (layer, off) => (x, y) => {
@@ -535,6 +542,21 @@ export class Overworld {
             }
         }
 
+        // (Or a plank walk over a lagoon: its deck level, as the town's ground round it)
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+            for (let nx = cx - 1; nx <= cx + 1; nx++) {
+                for (const { a, b, half, level } of nx >= 0 && ny >= 0 && nx < CHUNKS && ny < CHUNKS ? this.#walksIn(nx, ny) : []) {
+                    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+                    const length = hypot(dx, dy);
+                    const along = ((x - a[0]) * dx + (y - a[1]) * dy) / length;
+
+                    if (along >= -0.5 && along <= length + 0.5 && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + 0.5) {
+                        return level;
+                    }
+                }
+            }
+        }
+
         return null;
     }
 
@@ -591,11 +613,12 @@ export class Overworld {
      * lake's or the sea's wherever it's wet enough for that to stand, else the nearest river's
      * (within 24 m: `river`, if it's been looked for already), else the lake's or the sea's near,
      * else the ground's (where water's drawn, it's drawn at this). So a lake or the sea beside a
-     * river higher up is never drawn at the river's height.
+     * river higher up is never drawn at the river's height. A citadel's moat is at its own level,
+     * and a lizard folk's lagoon LAGOON.below the town's ground round it (lagoons.js).
      */
     surfaceAt(x, y, river = this.waters.river(x, y, 24)) {
-        // (A citadel's moat, at its own level)
-        const moat = this.sites.moatLevelAt(x, y);
+        // (A citadel's moat, at its own level; a lagoon, under the town's ground round it)
+        const moat = this.sites.moatLevelAt(x, y) ?? this.#lagoonSurfaceAt(x, y);
 
         if (moat !== null) {
             return moat;
@@ -713,6 +736,114 @@ export class Overworld {
         return pads;
     }
 
+    // The pad (terrain/ground.js) a settlement's laid out on, as #padsNear has it: the town's, if
+    // it's the town (null), or a place's
+    #padOf(place = null) {
+        if (!place) {
+            const { at, width, height } = this.stamp;
+
+            return { id: "town", x0: at[0], y0: at[1], x1: at[0] + width, y1: at[1] + height, tilt: this.start?.race !== "lizard" };
+        }
+
+        const { at: [sx, sy], size } = squareOf(place);
+
+        return { id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size, tilt: place.race !== "lizard" };
+    }
+
+    // The lagoon (lagoons.js) of the town (null) or a place laid out, or null if it hasn't one: its
+    // corner (metres), its corners each way, how deep its bed's dug at each, the squares its
+    // surface lies over, and (once asked for: `level`) the town's ground round it, as its pad's
+    // levelled, its walks' decks laid at that. Worked out once.
+    #lagoonOf(place = null) {
+        const pad = this.#padOf(place);
+
+        if (!this.lagoons.has(pad.id)) {
+            const { at, town } = place ? this.settlements.of(place) : { at: this.stamp.at, town: { water: this.stamp.water } };
+            const depths = lagoonDepths(town.water);
+
+            this.lagoons.set(
+                pad.id,
+                depths && {
+                    x0: at[0],
+                    y0: at[1],
+                    width: town.water[0].length,
+                    height: town.water.length,
+                    across: town.water[0].length + 1,
+                    down: town.water.length + 1,
+                    depths,
+                    near: lagoonReach(town.water),
+                    pad,
+                },
+            );
+        }
+
+        return this.lagoons.get(pad.id);
+    }
+
+    // The town's ground round a lagoon (metres: its pad's level)
+    #levelOf(lagoon) {
+        lagoon.level ??= this.ground.levelOf(lagoon.pad);
+
+        return lagoon.level;
+    }
+
+    // The lagoons near a chunk: the town's, and those of the places near it whose people have them
+    // (laid out now, if they weren't), each reaching into it
+    #lagoonsNear(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const meets = (lagoon) => lagoon && lagoon.x0 + lagoon.across - 1 >= x0 && lagoon.x0 <= x0 + CHUNK && lagoon.y0 + lagoon.down - 1 >= y0 && lagoon.y0 <= y0 + CHUNK;
+        const lagoons = this.stamp.water ? [this.#lagoonOf()] : [];
+
+        for (const place of this.settlements.near(cx, cy)) {
+            if (PEOPLE_TOWNS[place.race]?.water) {
+                lagoons.push(this.#lagoonOf(place));
+            }
+        }
+
+        return lagoons.filter(meets);
+    }
+
+    // The surface of a lagoon's water at a point (metres: LAGOON.below the town's ground round
+    // it), where it's within LAGOON.reach of its water; else null
+    #lagoonSurfaceAt(x, y) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+
+        if (cx < 0 || cy < 0 || cx >= CHUNKS || cy >= CHUNKS) {
+            return null;
+        }
+
+        for (const lagoon of this.#lagoonsNear(cx, cy)) {
+            const [i, j] = [Math.floor(x - lagoon.x0), Math.floor(y - lagoon.y0)];
+
+            if (i >= 0 && j >= 0 && i < lagoon.width && j < lagoon.height && lagoon.near[j * lagoon.width + i]) {
+                return this.#levelOf(lagoon) - LAGOON.below;
+            }
+        }
+
+        return null;
+    }
+
+    // The plank walks over the lagoons whose middles are in a chunk (the town's, and each
+    // settlement's near it, laid out first), each with its deck's height (`level`: the town's
+    // ground round its lagoon). The same whichever chunks were made before.
+    #walksIn(cx, cy) {
+        const key = cy * CHUNKS + cx;
+
+        if (!this.walked.has(key)) {
+            const inChunk = ({ a, b }) => Math.floor((a[0] + b[0]) / 2 / CHUNK) === cx && Math.floor((a[1] + b[1]) / 2 / CHUNK) === cy;
+            const town = (this.stamp.walks ?? []).filter(inChunk);
+            const level = town.length ? this.#levelOf(this.#lagoonOf()) : 0;
+
+            this.settlements.settle(cx, cy);
+            this.walked.set(key, [
+                ...town.map((walk) => ({ ...walk, level })),
+                ...this.settlements.walksIn(cx, cy).map(({ place, ...walk }) => ({ ...walk, level: this.#levelOf(this.#lagoonOf(place)) })),
+            ]);
+        }
+
+        return this.walked.get(key);
+    }
+
     // --- Making a chunk ---
 
     #make(cx, cy) {
@@ -748,6 +879,8 @@ export class Overworld {
                     opaque[k] = stamp.opaque[ty][tx];
                     ground[k] = stamp.ground[ty][tx];
                     water[k] = stamp.water?.[ty]?.[tx] ? WET.still : WET.none;
+                    // (Over its lagoon, where it's walked, a plank walk's deck)
+                    bridge[k] = water[k] && !blocked[k] ? 1 : 0;
                     built[k] = 1;
                     solid[k] = blocked[k];
                     town = true;
@@ -762,6 +895,7 @@ export class Overworld {
                     opaque[k] = own.opaque;
                     ground[k] = own.ground;
                     water[k] = own.water ? WET.still : WET.none;
+                    bridge[k] = own.water && !own.blocked ? 1 : 0;
                     built[k] = 1;
                     solid[k] = blocked[k];
 
@@ -861,7 +995,7 @@ export class Overworld {
         const inChunk = ({ a, b }) => Math.floor((a[0] + b[0]) / 2 / CHUNK) === cx && Math.floor((a[1] + b[1]) / 2 / CHUNK) === cy;
         const bridges = [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy)].filter(inChunk);
         // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
-        const walks = [...(stamp?.walks ?? []).filter(inChunk), ...this.settlements.walksIn(cx, cy)];
+        const walks = this.#walksIn(cx, cy);
         const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, crops, heights, slopes, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
@@ -1019,17 +1153,15 @@ export class Overworld {
 
     /**
      * The plank walks reaching into a box (metres): the town's and the settlements' near it,
-     * [{ a, b, half }] (see chunk).
+     * [{ a, b, half, level }] (see chunk: `level` the height of its deck, under its planks' top).
      */
     walksNear(x0, y0, x1, y1) {
         const meets = ({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half <= x1 && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half <= y1;
-        const walks = (this.stamp?.walks ?? []).filter(meets);
+        const walks = [];
 
         for (let cy = Math.max(0, Math.floor(y0 / CHUNK) - 1); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK) + 1); cy++) {
             for (let cx = Math.max(0, Math.floor(x0 / CHUNK) - 1); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK) + 1); cx++) {
-                // (Those near laid out first, so it's the same whichever chunks were made before)
-                this.settlements.settle(cx, cy);
-                walks.push(...this.settlements.walksIn(cx, cy).filter(meets));
+                walks.push(...this.#walksIn(cx, cy).filter(meets));
             }
         }
 
@@ -1563,7 +1695,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const start = startFor(plan, race);
     const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
-    const walks = town.town.walks.map(({ a, b, half }) => ({ a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]], half }));
+    const walks = town.town.walks.map(({ a, b, ...walk }) => ({ ...walk, a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]] }));
     const yards = town.town.yards.map((yard) => ({ ...yard, x: yard.x + town.origin + at[0], y: yard.y + town.origin + at[1] }));
     const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, water: town.town.water, walks, yards, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });

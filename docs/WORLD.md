@@ -305,7 +305,12 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   unblocked (`settlement.yards`).
   Each people's settlements are laid out and built their own way (`layoutTown({ people })`:
   GAME.md, *Towns*), the start town too: a cat folk's start is a cat folk's town. A lizard
-  folk's lagoon is the world's water, its plank walks drawn as bridges.
+  folk's lagoon is the world's water (its squares `WET.still`), its bed dug down below the town's
+  ground (`Ground`'s `sunkNear`: `#lagoonsNear`, `core/lagoons.js lagoonDepths`), its surface 0.25 m
+  below it (`surfaceAt`, out to 3 squares round its water: `lagoonReach`), and its plank walks
+  drawn as bridges, their decks as high as the town's ground (`#walksIn`: each walk's `level`, its
+  settlement's pad's), their squares bridges' (`heightAt` stands anyone on one on its deck).
+  GAME.md, *The lizard folk's lagoon*.
   A settlement's main streets run out through its fields to its edge. Where one crosses a river
   there (none is left under its houses: *Who lives where*), it has a bridge of its own
   (`#streetBridges`). The bridge is found along the street and on past its end, 10 m past any
@@ -802,8 +807,10 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`): the roads', the
     settlements' streets' and the citadels';
   - the plank walks over the lizard folk's lagoons, as decks at their planks' height, 0.16 m over
-    the ground (`WALK_TOP`; before, they were only the ground under them, walked as a ford or
-    not at all).
+    their decks, as high as the town's ground (`WALK_TOP`, `level`; before, they were only the
+    ground under them, walked as a ford or not at all), the squares across their bends with
+    them, so a walk turning sharply over the water is walked round its bend (without them, the
+    mesh there, trimmed half a metre from each edge, comes apart at a sharp bend).
 
   Each square's two triangles split from its north-west corner to its south-east, as the ground's
   drawn and stood on (`terrain/ground.js between`; before, the other way, so on a slope the mesh
@@ -849,7 +856,9 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
-buildings, not through, and straight over a bridge, high on its deck; deep water not walked; the
+buildings, not through, and straight over a bridge, high on its deck; every plank walk over a
+lizard city's lagoon reached from its market, on its planks as high as the town's ground, the
+lagoon's water a little below and its bed dug down under them; deep water not walked; the
 same ways whatever order tiles came in; baking and finding ways within their budgets; the
 longest unused tiles let go of; and a map of squares' own mesh, through a doorway a square wide,
 a body's width from walls. `test/overworld.test.js` walks a way out of the town along the roads,

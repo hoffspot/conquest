@@ -199,13 +199,43 @@ cat folk's houses stand in lots of their own, with walled compounds out past the
 orcs' settlements are ring forts, four straight ways crossing at a big market with a ring road
 round them, their longhouses on long lots; the lizard folk's houses stand on stilts over a
 lagoon, a ragged band of water round the middle over a bed of mud, with plank walks on stilts
-along the streets over it; the elves' ways wind among trees (a tree tried every 45 square metres
+along the streets over it (below, *The lizard folk's lagoon*); the elves' ways wind among trees (a tree tried every 45 square metres
 of open ground); the dark elves' is an orb web, seven spokes and three rings round a big market,
 their houses packed close. None has a windmill: their towns, cities and capitals raise their own
 special places instead (up to three, by size). From a size of their own each is walled in their
 way, a gatehouse across each main street where it leaves. The cat folk's, orcs' and lizard folk's
 markets and main streets are trodden earth, as their roads are, not cobbled; their trees are mostly their own
 (`homeTree`: three in five). The humans' layouts are just as they were.
+
+**The lizard folk's lagoon** (`look.water`: from 0.46 to 0.84 of the radius, ragged), laid out to
+be walked:
+- **Crossed three ways at least:** a lizard folk's settlement has three main streets at least,
+  however few roads come in (`WATER_WAYS`: the rest out to its edge in the widest gaps between
+  them), so its rings of lanes are laid and the lagoon's crossed on walks from every side. Before,
+  a city with one road in had one street, its houses scattered over the water with no way to them.
+- **The walks:** each street's straight runs over the water, as wide as the street, a metre onto
+  the bank at each end; where a street turns more than 15° over it (`WALK_TURN`), a square of deck
+  across the bend fills its outside, so the way round it is as wide as the walk. Each is laid at a
+  `layer` of its own (`WALK_LAYERS`): a main street's over a lane's over an alley's, every other run
+  of a street's over the next, the squares across the bends under all, so where they overlap one's
+  drawn, not both. A street's square over the water that no walk covers (the outside of a gentle
+  bend) is blocked, as the rest of the water is.
+- **Nothing to be gone to over open water:** no outbuilding behind the houses stands in it, and no
+  yard; what's gone into (a tavern, a church, a smithy, a guild, the town hall) and a people's own
+  places open onto dry land or a walk (the squares before the middle of their front), and their
+  ways in are never cleared over the water (`openEntrances`' `water`, `walks`). Houses on stilts
+  stand in it along the walks, as they did.
+- **Only where it's two squares across:** a square of it on its own, or a strip a square wide,
+  would lie as high as its banks (below), so it's land.
+
+In the world (`core/lagoons.js`), the lagoon's bed is dug down below the town's ground, 0.5 m a
+metre out from the nearest dry square, 1.1 m at most (`LAGOON`: never so steep it'd be a cliff); its
+water lies 0.25 m below the town's ground (`below`), drawn level out under its banks, as deep as
+the bed's below it; the walks' decks are as high as the town's ground (each walk's `level`), on
+stilts down into the bed; and a house on stilts over it stands on the bed, its stilts in the water
+(`town3d.js grounded`: no stone foundation, as a house on a slope has). Before, the lagoon lay at
+the ground's own height: drawn with no depth, it looked like a band of dry mud, the walks lying on
+it.
 
 Every piece is a rectangle turned to face some way (`facing`, as characters face): its middle,
 its size in plots as the art kits build it, and `footprint(piece)` its corners. A town is 20 to
@@ -3335,7 +3365,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   every street joined to the market and every way out, every house turned to face its street
   (at over 40 angles) with its front walked up to from the market, no building on another or on
   a street, each blocking the squares under it and hiding what's behind it (props not), main
-  streets leaving the ways asked; the exact sums matching Math's; and castle layouts.
+  streets leaving the ways asked; the lizard folk's lagoon crossed three ways at least whatever
+  roads come in, every square of it walked on under a walk, no outbuilding in it, and every door
+  that's gone into reached from the market; the exact sums matching Math's; and castle layouts.
 - `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds,
   what hides what's behind it (houses, landmarks, trees) and what can be seen over (props), and
   the battle: walking open ground in a straight line (facing one way the whole way, never more

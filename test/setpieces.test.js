@@ -3,9 +3,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { layoutCastle } from "../client/js/core/setpieces/castle.js";
 import { atan2, cos, exp, hypot, log, pow, sin, sqrt } from "../client/js/core/exact.js";
-import { GROUND, pieceCatalog, PLOT } from "../client/js/core/setpieces/pieces.js";
+import { ENTERED, GROUND, pieceCatalog, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { Plan } from "../client/js/core/setpieces/plan.js";
-import { footprint, layoutTown, PEOPLE_TOWNS, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
+import { footprint, layoutTown, onWalk, PEOPLE_TOWNS, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
+import { ENTRANCES, entranceOf, openEntrances } from "../client/js/core/insides.js";
 
 const SEEDS = Array.from({ length: 30 }, (_, index) => index * 7919 + 3);
 const KEYS = new Set(pieceCatalog().map((piece) => piece.key));
@@ -405,6 +406,62 @@ describe("town layouts (town.js)", () => {
                         assert.equal(town.water, null);
                         assert.deepEqual(town.walks, []);
                     }
+                }
+            }
+        }
+    });
+
+    it("lays the lizard folk's lagoon out to be walked: crossed three ways at least, every street over it on a walk, every door reached, no yard or outbuilding in it", () => {
+        // (The squares under a piece: those whose middles are in it)
+        const wetUnder = (town, piece) => {
+            const corners = footprint(piece);
+            const [xs, ys] = [corners.map(([x]) => x), corners.map(([, y]) => y)];
+
+            for (let y = Math.floor(Math.min(...ys)); y <= Math.max(...ys); y++) {
+                for (let x = Math.floor(Math.min(...xs)); x <= Math.max(...xs); x++) {
+                    if (town.water[y]?.[x] && inPolygon(corners, x + 0.5, y + 0.5)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        for (const kind of KINDS) {
+            for (const [seed, exits] of [[3, null], [11, [0.4]], [17, [1.2, 2.2]]]) {
+                const where = `lizard ${kind} ${seed}`;
+                const town = layoutTown({ kind, seed, people: "lizard", exits });
+
+                // Three main streets at least, however few roads come in, each over the lagoon on a walk
+                assert.ok(town.streets.filter(({ main }) => main).length >= 3, `${where}: ways over the lagoon`);
+
+                // No square over the water walked on but under a walk: a bend's outside is filled
+                for (let y = 0; y < town.height; y++) {
+                    for (let x = 0; x < town.width; x++) {
+                        if (town.water[y][x] && !town.blocked[y][x]) {
+                            assert.ok(onWalk(town.walks, x + 0.5, y + 0.5), `${where}: open water at ${x}, ${y}`);
+                        }
+                    }
+                }
+
+                // Outbuildings behind the houses never stand in it (where no walk comes); houses on
+                // stilts in it do, as a farmstead's barns and sheds, laid along its streets as they are
+                for (const piece of kind === "farmstead" ? [] : town.pieces.filter(({ back }) => back)) {
+                    assert.ok(!wetUnder(town, piece), `${where}: ${piece.key} in the water`);
+                }
+
+                // Every door that's gone into opens onto land or a walk, reached from the market
+                const blocked = town.blocked.map((row) => Uint8Array.from(row));
+
+                openEntrances(town.pieces, blocked, town.opaque.map((row) => Uint8Array.from(row)), 0, town);
+
+                const reached = walk({ ...town, blocked }, market({ ...town, blocked }));
+
+                for (const piece of town.pieces.filter(({ kind: k, name }) => k === "landmark" && ENTERED.includes(name) && ENTRANCES[name])) {
+                    const [x, y] = entranceOf(piece).outside;
+
+                    assert.ok(reached(x, y), `${where}: the ${piece.name}'s door at ${x}, ${y}`);
                 }
             }
         }
