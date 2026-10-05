@@ -112,7 +112,7 @@ always be green.
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
 | `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
-| `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
+| `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
 | `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
@@ -238,6 +238,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds.
    - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
      set aside, not misread.
+   - The caches' versions (the `-v2` in `client/sw.js`): never for a release. Data is kept by the
+     hash of its bytes, so a changed model, body or image needs nothing. Change the shell's
+     (`SHELL`) only to let go of code no release uses any more, such as an old Three.js's
+     folder; the others only when how they're laid out changes. Changing one lets go of all it
+     holds, and nothing else.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
    rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
    screen. Never skip, disable or loosen a test to get CI green: fix the cause.
@@ -252,6 +257,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
    which git ignores. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
+9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
+   a budget, `BOOT_BUDGET` in `test/manifest.test.js` (12 MB), and raising it is a choice to make
+   in review. A model the game can start without goes in `client/models/assets.json`: each with
+   its `tier` (`near`, fetched when it's predicted to be wanted soon, or `demand`, only once it's
+   needed) and its `files` (`path`s under `client/`, its lower-detail copy first), and whatever
+   else `generated/asset_streaming_plan.md` (section 2) says it needs. Then `npm run build:manifest`.
 
 ## 4. Before you push
 
@@ -349,7 +360,7 @@ moves first, update the branch again.
 
 | File | What to do |
 | --- | --- |
-| `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
+| `client/js/app/manifest.js`, `client/js/app/assets.js` | Take either side, then `npm run build:manifest`. They're generated from everything under `client/` and from `client/models/assets.json` (which is merged by hand: keep both sides' models). |
 | `client/js/characters/clip-keys.js` | Generated: take the side whose `scripts/bake-clips.js` list you keep, then `npm run build:clips -- --from=...` (above) if both changed it, and `npm run build:manifest`. A clip rest's `hitAt` and `duration` in `client/js/core/roles.js` are its clip's `hit` and `seconds` there. |
 | `client/js/core/setpieces/outlines.js` | Generated: take either side, then `npm run build:footprints` on the merged code, and `npm run build:manifest`. |
 | `client/characters/vitruvian.json`, `vitruvian.bin`, `vitruvian/masks/*.png` | Generated together: take one side's three, never a mix, then `npm run build:vitruvian -- --from=...` (above) if both sides changed what it's made from (`scripts/build-vitruvian.js` or the MakeHuman body), and `npm run build:manifest`. |
@@ -384,7 +395,8 @@ A good first message in a session:
 
 | What you see | What to do |
 | --- | --- |
-| `manifest.test.js` fails: "is up to date" | `npm run build:manifest`, and commit `client/js/app/manifest.js` |
+| `manifest.test.js` fails: "is up to date" | `npm run build:manifest`, and commit `client/js/app/manifest.js` and `client/js/app/assets.js` |
+| `manifest.test.js` fails: "within its budget" | What's downloaded before the game starts has grown past `BOOT_BUDGET`. Move a heavy model to the catalog (section 3, rule 9), or raise the budget and say why in the pull request |
 | `contribution.test.js` fails | You changed the pipeline: update this file (the standing rule) |
 | The Blender pipeline's `npm test` says `dist/` differs | `npm run build` in `utilities/blenderpipeline`, and commit `dist/` |
 | The Blender pipeline says "No Blender to run" | `npm run setup` there (it needs Python 3.11), or set `BLENDER` to a Blender 4.2 or later |
@@ -392,7 +404,7 @@ A good first message in a session:
 | Browser tests time out locally | Run fewer at once (`--workers=1`), and close other heavy programs: drawing without a GPU is slow |
 | The port's in use | `E2E_PORT=8096` for the tests, `PORT=3000` for `npm start` |
 | `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |
-| A conflict in `manifest.js`, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
+| A conflict in `manifest.js`, `assets.js`, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
 | The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
 | A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |

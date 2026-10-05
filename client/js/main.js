@@ -16,6 +16,8 @@
 // ?play goes straight into a game with a random character (with ?weapon=, ?seed=, ?people= and
 // ?quality=). ?join=CODE opens the title's Join a world with the code in it.
 
+import { ASSETS } from "./app/assets.js";
+import { releaseOf } from "./app/catalog.js";
 import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
@@ -1172,7 +1174,7 @@ function showAdapted() {
 
 async function start() {
     debug.show(settings.debug);
-    registerServiceWorker();
+    registerServiceWorker(releaseOf(MANIFEST, ASSETS, document.baseURI));
 
     // (Anything that fails with no one to catch it: told in the console, and, while a game's
     // being got ready, on the loading screen)

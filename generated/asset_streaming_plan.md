@@ -61,37 +61,47 @@ changed, deletes what was removed, and downloads nothing twice.
 
 A second generated module beside the manifest, `client/js/app/assets.js`. It's made from a
 hand-written list, `client/models/assets.json`, by `npm run build:manifest`, and checked up to date
-by the manifest's test.
+by the manifest's test. (Built in A1, empty until A3 adds the first model.)
 
 ```js
 export const ASSETS = Object.freeze({
-    // (A hash of everything below: it changes exactly when an asset does)
+    // (A hash of the addresses of every file kept by hash, the manifest's data and these: it
+    // changes exactly when one of them does)
     release: "6c1e09a2b4",
     models: {
         dragon: {
-            tier: "near",
+            tier: "near",                              // or "demand": only once it's needed
             stand: "beast:dragon",                     // drawn till it's here (beasts/looks.js)
             when: { sites: ["dragon's lair"], within: 1500 },
             files: [
-                { lod: 1, path: "models/beasts/dragon.lod1.glb", hash: "3f2a9c1e5b", bytes: 287331, sri: "sha256-..." },
-                { lod: 0, path: "models/beasts/dragon.glb", hash: "9ab01c77d2", bytes: 1203040, sri: "sha256-..." },
+                { lod: 1, path: "models/beasts/dragon.lod1.glb", hash: "3f2a9c1e5b", bytes: 287331 },
+                { lod: 0, path: "models/beasts/dragon.glb", hash: "9ab01c77d2", bytes: 1203040 },
             ],
         },
     },
 });
 ```
 
-- **Hashes.** SHA-256 of the file's bytes: the first 10 hex digits name it in URLs and caches, and
-  the whole of it, base64 (`sri`), checks it arrived whole (§5.3).
+`assets.json` holds the same without `hash` and `bytes`, which `npm run build:manifest` adds. It
+checks each model has a tier and files, and that each file is there.
+
+- **Hashes.** The first 10 hex digits of the SHA-256 of the file's bytes. They name it in URLs and
+  caches, and check it arrived whole (§5.3). (No `sri` as well: against a corrupt or mismatched
+  download 40 bits are plenty, and nothing guards against the server itself, which serves the
+  code too.)
 - **URLs** are the file's path with its hash, `models/beasts/dragon.glb?h=9ab01c77d2`. The file
   keeps its name in the repository and on the server; the query makes each version a different
   URL to every cache. That needs no build step to rename files, and GitHub Pages ignores the query.
 - **Sizes** let the downloader plan, and show players how much an optional download is.
 - **`when`** is how the near tier is predicted (§4): sites in the world plan, the lands a creature
   lives in, or `start` for something wanted soon after any start.
-- **The boot budget.** The manifest's test also asserts the boot download stays under a set size
-  (for instance 12 MB), and that no catalog file is in it. Growth is then a deliberate change to
-  the budget, made in review.
+- **The manifest's data has hashes too:** the body, its skin and the chest (the groups the loader
+  keeps). The loader fetches them by `?h=` and hands them out by their names, so nothing that
+  reads them changes. Code and fonts are asked for by name (the page imports them, and the CSS
+  names the fonts), so they have none.
+- **The boot budget.** The manifest's test asserts the boot download stays within
+  `BOOT_BUDGET` (12 MB; 9.2 MB in A1), and that no catalog file is in it. Growth is then a
+  deliberate change to the budget, made in review (contribution.md, section 3, rule 9).
 
 ---
 
@@ -211,18 +221,24 @@ touched.
 
 Cache Storage, through the service worker, as now. It holds whole responses, serves them when
 offline, and works in every browser the game supports, iOS Safari included. What the service
-worker needs to know of each entry is kept in one small JSON response in the same cache: its
-asset, size, the releases listing it, and when it was last used. That avoids a second store, and
-an IndexedDB dependency in the worker.
+worker needs to know is kept in one small JSON response in a cache of its own: the releases
+heard of and the files each keeps by hash, the newest, each open page's release, and when each
+kept file was last used. That avoids a second store, and an IndexedDB dependency in the worker.
 
 | Cache | What | How it's served |
 | --- | --- | --- |
-| `pellagos-shell-v2` | Pages and code | Network-first, as now |
-| `pellagos-assets-v2` | The catalog's files, keyed by URL with `?h=` | Cache-first, kept until collected (§5.4) |
-| `pellagos-boot-v2` | The manifest's images, music and the chest | Cache-first by `?h=` once the manifest has hashes too (§6) |
+| `pellagos-shell-v2` | Pages, code and files without a hash | Code and pages network-first, as before. Images and models without a hash from the copy, then checked in the background at most once a minute; the music's recordings (named by their content) never checked |
+| `pellagos-boot-v2` | The manifest's data by `?h=`: the body, its skin, the chest | Cache-first, never checked; collected (§5.4) but never to make room |
+| `pellagos-assets-v2` | The catalog's files by `?h=` | Cache-first, never checked; collected, and let go of to make room |
+| `pellagos-state-v2` | What the worker knows (`sw-state.json`) | Not served |
 
-The `-v2` is the cache layout's version. It's bumped only when the layout changes, never for a
-release.
+A file downloaded whole goes to `assets` if a release heard of lists it as the catalog's, and to
+`boot` otherwise. A request with a `Range` header (A2's downloader) goes straight to the server:
+the downloader puts the whole file together, checks it and keeps it itself.
+
+Each name's `-v2` is a version: changing one lets go of all that cache holds, and nothing else.
+It's never changed for a release. The shell's is changed to let go of code no release uses any
+more (an old Three.js's folder); the others only when how they're laid out changes.
 
 ### 5.2 Why no expiry by time
 
@@ -232,31 +248,43 @@ headers we can't set, not matter. Expiry is about what's no longer listed, and a
 
 ### 5.3 Integrity
 
-- Downloaded in chunks, a file is checked whole with `crypto.subtle.digest` against its `sri`
-  before it's cached or used.
-- On a mismatch (a release published midway through a download, or a corrupt chunk) it's neither
-  cached nor used. The game fetches the catalog again (code is network-first) and requeues it.
-- Whole-file downloads pass `integrity: sri` to `fetch()`, which checks it itself.
+- **Downloaded whole through the worker** (the loader's files): the page gets it as it arrives
+  (the body is split: one half to the page, one to be checked), and the worker keeps it only once
+  `crypto.subtle.digest` of the whole matches its hash. On a mismatch (a release published while
+  a page was loading, so the server has another version) it's handed on, as before A1, but not
+  kept, and asked for again the next time.
+- **Downloaded in chunks** (A2's downloader): checked whole the same way before it's kept or
+  used. On a mismatch it's neither: the game fetches the catalog again (code is network-first)
+  and requeues it.
 
 ### 5.4 Expiry: what's kept, and for how long
 
-An entry is **live** while any catalog in use lists its hash:
-- the newest release's catalog;
-- the catalog of each tab still open on an older release. Each page tells the service worker its
-  release on start (`postMessage`), and the worker knows which of its clients are still open.
+An entry is **live** while any release in use lists its address:
+- the newest release: that of the page started last. Each page tells the worker its release on
+  starting (`postMessage`: the addresses it keeps, and `performance.timeOrigin`), and again when
+  an update's worker takes over. A page started later has newer code, fetched network-first; a
+  page open a while, telling its release again, doesn't make it the newest;
+- that of each page still open (`clients.matchAll`, uncontrolled pages too).
 
-Collection runs when the service worker activates, when a page reports a release the worker
-hasn't seen, and when the cache is over budget.
+Until a page has told its release, nothing is collected. A file kept or used in the last ten
+minutes isn't collected either, whatever the releases say: its page may not have told its
+release yet (the loader starts downloading before the message gets there).
+
+Collection runs when the service worker activates, and whenever a page tells its release (once
+a page load). Releases and pages no longer in use are forgotten then too.
 
 1. **Replaced in a release:** the new version is downloaded when it's next wanted, not all at once
-   on release day. The old version is deleted once the new one is cached, so a player offline
-   still has a model, and also once no tab on the old release is open.
-2. **Removed in a release:** deleted once no open tab's catalog lists it.
+   on release day. The old version is deleted once no page on the old release is open. (Keeping
+   it until the new one is cached, for a player offline, waits for A3: until then nothing could
+   use an older version of a file.)
+2. **Removed in a release:** deleted once no open page's release lists it.
 3. **Unchanged:** same hash, same entry. Nothing is downloaded again, whatever else the release
    changed.
-4. **Over budget:** the budget is the least of the player's setting and half of what the browser
-   offers (`navigator.storage.estimate()`: its quota less what's used). The least recently used
-   entries go first; pinned (§4) and **now** last.
+4. **Over budget:** the budget is the least of the player's setting (A4) and half of what the
+   browser would let the game keep for them (`navigator.storage.estimate()`: its quota, less
+   what's used besides the catalog's files). The least recently used entries go first; pinned
+   (§4) and **now** last (A3). Only the catalog's files: never what a release in use needs to
+   start.
 5. **Gone without asking:** the browser may evict anything, at any time. Nothing trusts the JSON
    record alone: a `caches.match` miss is a miss, and the stand-in shows while it's fetched again.
 
@@ -273,9 +301,12 @@ hasn't seen, and when the cache is over budget.
 
 ### 5.6 Moving from today's cache
 
-On activating, the new service worker takes the boot files that are still current out of
-`pellagos-v1` (`cache.put` under their new keys), so nobody downloads them again. Then it deletes
-`pellagos-v1`, as `activate` already deletes old caches by prefix.
+On activating, the new service worker copies what `pellagos-v1` holds into the shell, then deletes
+`pellagos-v1`, as `activate` already deletes old caches by prefix. It can't tell then which files
+are still current: no page has told it its release yet. So when a file is first asked for by its
+hash, a copy saved by name is looked for in the shell, and taken on (kept under its hash, and the
+copy by name deleted) if its bytes match. Nobody downloads an unchanged file again, and code
+already copied serves a player offline straight after the update.
 
 ---
 
@@ -283,9 +314,11 @@ On activating, the new service worker takes the boot files that are still curren
 
 - It stays under the budget the test enforces (§2). Heavy models go in the catalog, never the
   manifest.
-- The manifest gets hashes too, so its images, music and the chest are keyed by `?h=` in
-  `pellagos-boot-v2`. Then `CACHE_NAME` never needs bumping for an asset again, and the comment in
-  `sw.js` saying when to bump it goes.
+- The manifest's data has hashes too, so the body, its skin and the chest are kept by `?h=` in
+  `pellagos-boot-v2`. Images (named by the page and its CSS) and the music's recordings aren't
+  in the manifest: images are checked in the background, and the recordings are named by their
+  content already (§5.1). So no cache's version needs changing for an asset again, and the comment
+  in `sw.js` saying when to change it went.
 - The loader keeps downloading 16 at once: before the title there's no game to protect.
 
 ---
@@ -294,7 +327,7 @@ On activating, the new service worker takes the boot files that are still curren
 
 - **GitHub Pages:** nothing to configure. The `?h=` keys and the service worker do what headers
   would. Range requests are checked in A2 (§3.2).
-- **`npm start`** (`server/static.js`):
+- **`npm start`** (`server/static.js`), in A2:
   - byte ranges: `Accept-Ranges`, `206` and `Content-Range`;
   - `Cache-Control: public, max-age=31536000, immutable` for any `?h=` request (it's one version
     forever);
@@ -311,8 +344,8 @@ Each is shippable alone, and the game is no worse after each.
 
 | | Milestone | What lands |
 | --- | --- | --- |
-| **A1** | The catalog and the cache | `assets.json` and the generated `assets.js` (hashes, sizes, `sri`); the boot budget test; the service worker's `-v2` caches, `?h=` keys, collection (§5.4) and the move from `pellagos-v1`. The chest moves to `?h=`. No lazy loading yet |
-| **A2** | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
+| **A1** (done) | The catalog and the cache | `assets.json` and the generated `assets.js` (hashes, sizes); hashes for the manifest's data too; the boot budget test; the service worker's `-v2` caches, `?h=` keys checked before they're kept, collection (§5.4) and the move from `pellagos-v1`. The body, its skin and the chest move to `?h=`. No lazy loading yet |
+| **A2** | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support and `immutable` for `?h=` in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
 | **A3** | The first model on demand | The pipeline's dragon (lower-detail copy and full) in the catalog. Prediction from lairs (§4); the stand-in swap (§3.6); `useWorkers`; compiling ahead |
 | **A4** | Players' choices | **Extra models** under Game options; storage used, **Download all now**, **Clear**; `persist()` |
 | **A5** | Quality variants | The pipeline builds texture variants (512, 1024, 2048); the catalog lists them; the device and Visual quality pick. KTX2 textures to be weighed after |
@@ -343,6 +376,14 @@ Each is shippable alone, and the game is no worse after each.
   downloading, the joined game's steps in hand stay within `PLAYOUT.most`, and no `late` passes.
   The same test with the controller turned off should fail, which is how we know it's measuring.
 
+**In A1:** `test/sw.test.js` runs the worker with stand-ins for the caches, pages and network: a
+file kept by hash once checked and never asked for again, a mismatch handed on but not kept, a
+release replacing, removing and keeping files with an old page open and then closed, the newest
+release, making room, the move from `pellagos-v1`; and collection as a pure function
+(`toLetGo`). `test/manifest.test.js` checks the hashes, the catalog and the budget.
+`e2e/caching.spec.js` does it in Chromium: the data kept by hash and not downloaded again, an
+older release's copy let go of, and the game started offline.
+
 **Measured before choosing the numbers (§3.3):** on a phone over 4G and over Wi-Fi with a
 bufferbloated router, the round trip and playout while downloading at full speed, and then paced.
 
@@ -364,3 +405,20 @@ bufferbloated router, the round trip and playout while downloading at full speed
 
 - **2026-10-05.** First version: the paradigm (models are dressing; tiers; one polite downloader;
   content-addressed caching collected by the catalogs in use), from the audit in §1.
+- **2026-10-05. A1 landed:** the catalog (empty until A3), hashes for the manifest's data, the boot
+  budget (12 MB), the service worker's `-v2` caches, collection and the move from `pellagos-v1`.
+  Changed from the first version:
+  - No `sri`: the hash is the SHA-256's first 10 hex digits, enough to check a download, and the
+    worker checks a file against it before keeping it, so `fetch(integrity)` isn't needed (§2, §5.3).
+  - A fourth cache, `state`, holds what the worker knows; which of `boot` and `assets` a file goes
+    to is decided by the releases heard of (§5.1).
+  - The newest release is that of the page started last, not the last heard of, as pages tell
+    theirs again when an update's worker takes over. A file kept in the last ten minutes isn't
+    collected, since the loader's downloads can reach the worker before its page's release does
+    (§5.4).
+  - Keeping a replaced file until its new version is cached waits for A3, which can use it (§5.4).
+  - The move from `pellagos-v1` takes copies on by their bytes when they're first asked for by
+    hash, since the worker doesn't know the hashes when it activates (§5.6).
+  - Images and the music's recordings were never in the manifest: images are checked in the
+    background now, and the recordings are named by their content (§5.1, §6).
+  - `immutable` for `?h=` in `server/static.js` goes with A2's range support (§7).

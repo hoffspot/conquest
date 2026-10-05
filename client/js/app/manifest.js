@@ -1,7 +1,7 @@
 // Made by scripts/build-manifest.js (npm run build:manifest), don't edit: every file the game
 // downloads before it starts, in groups, with each file's size in bytes (paths from the page), so
-// the loading screen can show exactly how far it has got. test/manifest.test.js checks it's up to
-// date.
+// the loading screen can show exactly how far it has got. Data files have a hash of their bytes
+// too, and are fetched as path?h=hash. test/manifest.test.js checks it's up to date.
 
 export const MANIFEST = Object.freeze([
     {
@@ -297,8 +297,8 @@ export const MANIFEST = Object.freeze([
         label: "Body and shapes",
         detail: "MakeHuman base mesh, skeleton and sliders",
         files: [
-            ["characters/human.bin", 1516649],
-            ["characters/human.json", 137383],
+            ["characters/human.bin", 1516649, "3f2dc11c86"],
+            ["characters/human.json", 137383, "4b9a81db10"],
         ],
     },
     {
@@ -306,13 +306,13 @@ export const MANIFEST = Object.freeze([
         label: "Skin details",
         detail: "MakeHuman masks",
         files: [
-            ["characters/masks/aureolae.jpg", 17232],
-            ["characters/masks/crotch.jpg", 24810],
-            ["characters/masks/ears.jpg", 18900],
-            ["characters/masks/eyelids.jpg", 22684],
-            ["characters/masks/fingernails.jpg", 18321],
-            ["characters/masks/lips.jpg", 20552],
-            ["characters/masks/toenails.jpg", 17589],
+            ["characters/masks/aureolae.jpg", 17232, "bc69ca4c39"],
+            ["characters/masks/crotch.jpg", 24810, "f1a16efda1"],
+            ["characters/masks/ears.jpg", 18900, "8c1becd388"],
+            ["characters/masks/eyelids.jpg", 22684, "2b6f41d6c5"],
+            ["characters/masks/fingernails.jpg", 18321, "0828222964"],
+            ["characters/masks/lips.jpg", 20552, "572630c2b4"],
+            ["characters/masks/toenails.jpg", 17589, "029404d4ef"],
         ],
     },
     {
@@ -328,7 +328,7 @@ export const MANIFEST = Object.freeze([
         label: "Things in the world",
         detail: "A treasure chest (JMI 3D Toolkit)",
         files: [
-            ["models/jmi/chest.glb", 178404],
+            ["models/jmi/chest.glb", 178404, "7bdf812b68"],
         ],
     },
 ]);

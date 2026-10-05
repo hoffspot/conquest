@@ -1,25 +1,26 @@
 // Downloads everything the game needs before it starts (manifest.js), reading each file as it
 // arrives so the loading screen shows how far it has really got: byte by byte, group by group.
 //
-// Data files (the body, masks, models) are kept in memory and handed out from there: loadFile()
-// is a stand-in for fetch(), and urlOf() gives a blob URL for Three.js's loaders. Code is only
-// downloaded, into the browser's cache, for the page to import straight after.
+// Data files (the body, masks, models: those listed with a hash) are fetched by their hash
+// (path?h=hash, which the service worker keeps for good), kept in memory and handed out from
+// there by their names: loadFile() is a stand-in for fetch(), and urlOf() gives a blob URL for
+// Three.js's loaders. Code is only downloaded, into the browser's cache, for the page to import
+// straight after.
 //
 // No Three.js here: this runs before it has downloaded.
+
+import { hashed } from "./catalog.js";
 
 // How many files to download at once, whatever the site's served by: over HTTP/2 or 3, as many
 // as that in one round trip; over HTTP/1.1 the browser keeps to 6 at a time itself, the rest
 // waiting their turn, so asking for more costs nothing there (measured: 3.0 s at 16, 3.3 at 6)
 const AT_ONCE = 16;
 
-// Groups whose files are kept (the rest are code, which the page imports from the cache)
-const KEPT = new Set(["body", "skin", "models"]);
-
 const TYPES = { json: "application/json", bin: "application/octet-stream", jpg: "image/jpeg", png: "image/png", gltf: "model/gltf+json" };
 
 export class Loader {
     /**
-     * @param {Array} manifest - Groups of files: [{ id, label, detail, files: [[path, bytes]] }].
+     * @param {Array} manifest - Groups of files: [{ id, label, detail, files: [[path, bytes, hash?]] }].
      * @param {object} [options]
      * @param {string} [options.base] - What the paths are relative to (the page).
      */
@@ -43,7 +44,7 @@ export class Loader {
      * `total`, `current` and each group's `loaded`, `total`, `done` (files) and `time` (ms).
      */
     async load(onProgress = () => {}) {
-        const queue = this.groups.flatMap((group) => group.files.map(([path, bytes]) => ({ group, path, bytes })));
+        const queue = this.groups.flatMap((group) => group.files.map(([path, bytes, hash]) => ({ group, path, bytes, hash })));
         const started = performance.now();
         const next = async () => {
             while (queue.length) {
@@ -57,19 +58,20 @@ export class Loader {
         onProgress(this);
     }
 
-    async #download({ group, path, bytes }, onProgress) {
+    async #download({ group, path, bytes, hash }, onProgress) {
         const url = this.resolve(path);
 
         group.started ||= performance.now();
         this.current = path;
 
-        const response = await fetch(url);
+        const response = await fetch(hash ? this.resolve(hashed(path, hash)) : url);
 
         if (!response.ok) {
             throw new Error(`Couldn't download ${path} (${response.status})`);
         }
 
-        const keep = KEPT.has(group.id);
+        // (Data is kept, by its name; code isn't: the page imports it from the cache)
+        const keep = Boolean(hash);
         const chunks = [];
         let received = 0;
 

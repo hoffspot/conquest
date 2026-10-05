@@ -3194,6 +3194,11 @@ it.
    modified" for those that haven't, the game's own server (`npm start`) too. With 100 ms added to
    every reply (a phone's 4G), to the title screen on a repeat visit: 8.7 to 9.1 s before, 6.1 to
    6.2 now over HTTP/2; 10.8 to 11.5 before, 7.7 to 7.8 now over HTTP/1.1.
+   The data (the body, its skin, the chest) is fetched by the hash of its bytes (`path?h=hash`,
+   the hashes in the manifest), which the service worker keeps for good and never checks again:
+   a release that changes a file changes its address. It keeps a copy only once its bytes match
+   the hash, and lets go of what no release in use lists: the newest's, and that of each page
+   still open on an older one (generated/asset_streaming_plan.md, section 5).
 2. **The title.** Continue with the saved character, or make a new one (which asks before
    replacing a saved one), join a world someone else has opened (its code: docs/WAR.md M11), and
    the debug mode switch.
