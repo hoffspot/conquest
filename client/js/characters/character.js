@@ -1607,5 +1607,5 @@ const _segment = new THREE.Line3();
 // How far out (degrees) an arm swinging free is held to clear what hangs at its hip (and further
 // past a blade's hilt, hung from the belt, forward of the hip: a sword's, a cleaver's)
 const HIP_CLEARING = 10;
-const HILT_CLEARING = 24;
+const HILT_CLEARING = 28;
 

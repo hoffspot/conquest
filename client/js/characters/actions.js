@@ -933,10 +933,10 @@ const ADVENTURER_RESTS = [
         [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
     variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
         // A hand shading the eyes, looking into the distance one way, then the other
-        [0.5, { left: { at: [-0.3, 0.38, 0.42], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, Head: { flex: -4 } }],
+        [0.5, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, Head: { flex: -4 } }],
         [0.8, { ...spine({ turn: 14 }), Head: { turn: 26, flex: -4 } }],
         [1.2, { ...spine({ turn: -14 }), Head: { turn: -26, flex: -4 } }],
-        [1.55, { left: { at: [-0.3, 0.38, 0.42], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
+        [1.55, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
     variant("rolling the shoulders", { ...spine({}), LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: 0 } },
         // The shoulders rolled up and back, and the neck stretched one way and the other
         [0.4, { LeftShoulder: { elevate: 22, protract: 14 }, RightShoulder: { elevate: 22, protract: 14 } }],
@@ -1041,6 +1041,11 @@ const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", keys: [...BARKE
 // Shifting the weight with the left hand free: the thumb brought to the belt from in front, over
 // the hilt, and hooked in it a little forward of where it is unarmed, the upper arm kept off a
 // shield slung on the back
+// Looking about, a hand shading the eyes, a little lower and further forward, clear of a helm's
+// brim or horns
+const UNDER_THE_HELM = [-0.3, 0.36, 0.44];
+const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: { ...pose.left, at: UNDER_THE_HELM } }]) };
+
 const BELT_HOOK = [-0.2, -0.62, 0.28];
 const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? OVER_THE_HILT.left : { ...pose.left, at: BELT_HOOK } }]) };
 
@@ -1239,7 +1244,7 @@ const KEYED_RESTS = {
     ruler: [renamed(WORSHIPPER[4], "hands on the knees"), renamed(WORSHIPPER[2], "gazing over the hall"), renamed(PATRON[4], "looking about the hall"), renamed(WORSHIPPER[1], "brooding"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
     steward: [renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[1], PRIEST_RESTS[2]],
     councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
-    sentry: [ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, PRIEST_RESTS[4]],
+    sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, PRIEST_RESTS[4]],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars

@@ -457,7 +457,7 @@ gauntlets. It can hide things: a helmet hides the hair above its rim. It can als
 is carried when walking: a shield at the side, its face out (or slung on the back, below), a
 staff or war hammer upright, a sword or wand lowered, a grimoire open on the palm, fists clenched,
 with less arm swing and a gripping fist. An arm swinging free is held 10° further out when
-something hangs at its hip (a wand in the belt) or its hand wears spiked knuckles, and 24° past a
+something hangs at its hip (a wand in the belt) or its hand wears spiked knuckles, and 28° past a
 sword's or cleaver's hilt hung forward of the hip, so it swings past them, not through them
 (`Character.clearing`); an arm carrying something, 5° further out from what hangs at its hip only
 (`Character.hung`).
@@ -987,7 +987,9 @@ With the left arm free, a sentry's rests bring the hand round a sword's or cleav
 left hip, not through it: folding the arms, the hand comes up in front of the hilt first, and goes
 down the same way (`ARMED_FOLDED`); shifting the weight, the thumb is brought to the belt from in
 front and above the hilt, and hooked in it a little further forward, the upper arm off the shield
-on the back (`ARMED_SHIFTING`).
+on the back (`ARMED_SHIFTING`); looking about, the hand shading the eyes is a little lower and
+further forward, clear of a helm's brim or an orc's horns (`HELMED_LOOKING`). Other folk's rests
+keep their own ways.
 
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
 when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,
