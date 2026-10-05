@@ -438,6 +438,9 @@ shape:
 - the upper back, for packs, quivers and slung guns
 - inside the lower lip, for tusks
 - the outside of each hip, on the belt, for what hangs from it
+- round the front of each hip on the belt (a frog), for a sword or cleaver hung canted there:
+  35° round from the side unless its sheath says (the sword 50°, the cleaver 28°), fitted to the
+  body (below, *Hung at the hip*)
 - over the tips of the toes, round the back of each heel, and down the front of each shin (on
   the skin, placed from the foot's and shin's own vertices), for spiked boots' iron
 
@@ -457,10 +460,10 @@ gauntlets. It can hide things: a helmet hides the hair above its rim. It can als
 is carried when walking: a shield at the side, its face out (or slung on the back, below), a
 staff or war hammer upright, a sword or wand lowered, a grimoire open on the palm, fists clenched,
 with less arm swing and a gripping fist. An arm swinging free is held 10° further out when
-something hangs at its hip (a wand in the belt) or its hand wears spiked knuckles, and 28° past a
-sword's or cleaver's hilt hung forward of the hip, so it swings past them, not through them
-(`Character.clearing`); an arm carrying something, 5° further out from what hangs at its hip only
-(`Character.hung`).
+something hangs at its hip (a wand in the belt), its hand wears spiked knuckles, or a sword or
+cleaver hangs canted there (the hilt held back off the forearm by the scabbard swinging aside,
+below), so it swings past them, not through them (`Character.clearing`); an arm carrying
+something, 5° further out from what hangs at its hip only (`Character.hung`).
 
 **Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
 `skullOf`: how far the head reaches behind and before its middle at each height, and how high):
@@ -495,8 +498,8 @@ own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
 
 | Weapon | Put away |
 | --- | --- |
-| Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog at the belt, the hilt forward of the hip and up, where the right hand crossing in front of the belly takes it, the blade down and back behind the thigh |
-| Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt, the grip forward, the blade down and back behind the thigh, its edge forward |
+| Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog on the belt round the front of the hip, close in, canted 45° (the hilt forward and up, where the right hand crossing in front of the belly takes it, the blade down and back behind the thigh) |
+| Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt round the front of the hip, canted as the sword is, the grip forward, the blade down and back behind the thigh, its edge forward |
 | Wand | Tucked in the belt at the right hip, the tip down and a little back, clear of the thigh |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
 | Staff, war hammer | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's head side-on |
@@ -532,14 +535,47 @@ it swings round the left side, out of the body's way: out to the left and forwar
 round from behind onto the back (`SLING.swing`: a curve through those two ways), turning only in
 the middle of the move, so it never passes through the body.
 
-**Swinging clear of the legs** (`Character.hang`, `hangs` in `SHEATHS`). A sword or cleaver hung
-from the belt swings about its grip, back or forward and out from the body, as little as keeps its
-blade clear of that side's thigh and shin (each a tapering capsule as thick as the leg is there,
-6 cm to spare), as a leg kicks a scabbard aside; it goes at once where the leg pushes it, the
-swing nearest how it hung, and falls back to hang straight again when the leg's gone by, never
-into it. Its scabbard swings with it, drawn or not. Seated, the seat pushes it back to the side
-of the hip and a little out and down (`seated`), clear of a forearm resting on the thigh. It's
-done each frame once the legs are posed (`Actions.place`).
+**Hung at the hip** (`Character.hang`, `hangs` in `SHEATHS`, `fitHanging`), as the reference
+pictures of a sword on a frog show it: tight to the hip, canted, and moving with the walk.
+- **Fitted to the body.** Once, as it's put on, its frog is stood off the hip sideways only as far
+  as keeps the scabbard 1.2 cm off the skin and the hilt 4.5 cm off it (marks every 3 cm along
+  every edge of the sword and scabbard, against the body's skin); a frog that would stand off more
+  than 5 cm is tried further back round the hip, 10° at a time, to 20° from the side, where the
+  hip's narrower. So a thin elf's sword hangs as close as a broad orc's.
+- **Turning with the hips.** It hangs from the hips' bone, so it turns as they turn walking and
+  running.
+- **Swinging clear of the legs.** It swings about its frog (10 cm down from the grip), back or
+  forward and out from the body, as little as keeps the blade and its edge clear of that side's
+  thigh and shin (each a tapering capsule as thick as the leg is there), measured at five points
+  down the blade, each kept as clear as it is standing, or 6 cm if that's less, as a leg kicks a
+  scabbard aside. It goes at once where the leg pushes it, the swing nearest how it hung, and
+  falls back to hang as it was at about a radian a second, never into the leg. It swings forward
+  no more than 5° and back no more than 60°, clear of the lower back. A thigh raised past 25° (60°
+  at the most) shoves the frog out along the belt as far as 8 cm, as a knee coming up does.
+- **Clear of the arm.** Once the arms are posed (`armPush`), its hilt and the blade below the frog
+  (to 40 cm down it) are kept 4.5 cm off that side's forearm and hand: swung further, or its frog
+  shoved out along the belt 2, 4 or 6 cm, if that's what it takes, so an arm swinging past it
+  stays down at the side, not held out, and a hand going behind the back passes over it. If
+  nothing keeps it so far off without going into the leg, and the arm's in it, it's moved the
+  least that takes it out of the arm, or as far out as it'll go.
+- Its scabbard swings with it, drawn or not. Seated, the seat pushes it back to the side of the
+  hip and a little out and down (`seated`), clear of a forearm resting on the thigh. It's done
+  each frame once the legs are posed (`Actions.place`).
+
+**A hand on the pommel** (`Actions.#restOnPommel`, `Character.pommelOf`, `Character.held`).
+Walking or running with a sword or cleaver hung at the left hip, put away, and nothing in the
+left hand or on its arm (a shield slung on the back), doing nothing else, the left hand rests on
+its pommel to steady it, as in the reference pictures: the palm over the end of the hilt, the
+fingers cupped forward and down over it, the elbow out and back. It's there as soon as the walk
+sets off (a quarter of the way into it, over a quarter of a second) and let fall to the side
+again over an eighth of a second standing still, or for anything else (a blow, a fall, a draw).
+Held, the blade's tipped back 5° and out 5°, and its frog drawn 5 cm out from the hip, so the
+crossguard clears the thigh as it comes up running; it isn't pushed aside by that arm. (Running,
+as the hips turn, the pommel can go a little past where the tallest bodies' shoulders let the arm
+reach, and the hand comes off it by up to 4 cm for a moment, rather than strain the shoulder.) A hand's key can rest it there too
+(`pommel`, 0 to 1: how far the hand's gone from where `at` says to the pommel; with nothing
+hanging there, it stays where `at` says): an adventurer shifting the weight rests the left hand on the pommel armed,
+the thumb in the belt unarmed.
 
 **Slots:** head, face, neck, under top, shirt, chest, armour, forearms, hands, waist, underwear,
 legs, apron, shins, feet, back, main hand and off hand. One piece per slot.
@@ -966,7 +1002,7 @@ a flourish:
 
 | Weapon | Drawn | Put away |
 | --- | --- | --- |
-| Sword | Across in front of the belly to the hilt at the left hip, the elbow forward and out, the body turned into it and the other hand at the scabbard's throat; swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth (the other hand at its throat, the body turning into it) and slid home |
+| Sword | Across in front of the belly to the hilt at the left hip, the elbow forward and out, the body turned into it and the other hand at the scabbard's throat; drawn forward along the scabbard, clear of the belly, swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth (the other hand at its throat, the body and hips turning into it) and slid home |
 | Wand | Snatched from the belt, flicked up, its tip twirled round in a circle and held up a moment | A last twirl, tucked back in the belt |
 | Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand and hung back at the hip |
 | Staff | Up over the right shoulder, the elbow leading up and forward, to the staff by the ear (the other hand pushing its lower end up from behind the hip), pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder, the elbow forward as the hand comes away |
@@ -988,7 +1024,9 @@ left hip, not through it: folding the arms, the hand comes up in front of the hi
 down the same way (`ARMED_FOLDED`); shifting the weight, the thumb is brought to the belt from in
 front and above the hilt, and hooked in it a little further forward, the upper arm off the shield
 on the back (`ARMED_SHIFTING`); looking about, the hand shading the eyes is a little lower and
-further forward, clear of a helm's brim or an orc's horns (`HELMED_LOOKING`). Other folk's rests
+further forward, clear of a helm's brim or an orc's horns (`HELMED_LOOKING`); clasping the hands
+behind, the left hand comes up to the waist first, over the scabbard, the elbow out to the side
+clear of the shield on the back, and goes behind from there (`ARMED_CLASPED`). Other folk's rests
 keep their own ways.
 
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
@@ -1091,7 +1129,7 @@ as the barkeep does, at the counter.
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |
 | | a yawn | a hand to the mouth, the head back, the shoulders up |
-| | shifting the weight | from one foot to the other, a thumb in the belt (the hand brought to it from the front, over a sword's hilt) |
+| | shifting the weight | from one foot to the other, a thumb in the belt, or, a sword or cleaver at the left hip, the left hand on its pommel |
 
 And from the animators' clips (`CLIP_RESTS`; *Clips in the game*, below), after each class's own
 (which rest the rules pick changed with them: `NET_VERSION` 41):
