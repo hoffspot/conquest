@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { Actions, ATTACKS } from "../client/js/characters/actions.js";
-import { HumanData } from "../client/js/characters/body.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { CLIPS } from "../scripts/build-clips.js";
@@ -17,7 +15,7 @@ import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/f
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
-import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
+import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton } from "../client/js/characters/drapes.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
@@ -27,14 +25,16 @@ import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointAngles, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
 import { paintEye, paintSkin, SKIN_ROUGHNESS, SkinAtlas } from "../client/js/characters/skin.js";
 import { HAIR_SHINE, HairMaterial, SKIN_WRAP, SkinMaterial } from "../client/js/characters/surfaces.js";
+import { readHumanData, readHumanFiles } from "../scripts/lib/human-data.js";
 
 // The real body data the build script makes (client/characters)
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const { manifest } = readHumanFiles();
+const human = readHumanData();
+const humanData = human;
 
 /** The parts of a Character the engine's modules use, without its textures (which need a DOM). */
-function figure(shape = {}) {
+function figure(shape = {}, human = humanData) {
     const { positions, joints } = human.shape(shape);
     const rig = new Rig(human.bones);
     const object = new THREE.Group();
@@ -358,6 +358,38 @@ describe("joints (rig.js)", () => {
         const reached = new THREE.Vector3().setFromMatrixPosition(f.rig.bone("LeftFoot").matrixWorld);
 
         assert.ok(reached.distanceTo(target) < 0.002, `${reached.distanceTo(target)}`);
+    });
+
+    it("bends a knee only about its hinge, keeping how it rests turned in, on both bodies", () => {
+        // (Vitruvian's women's knees rest turned in 5°: pushed straight as they bent, they swung
+        // 4.6° sideways, a joint a knee hasn't got)
+        for (const body of ["human", "vitruvian"]) {
+            const f = figure({ macro: { gender: 0 } }, readHumanData(body));
+
+            for (const [up, forward, side] of [[0.15, 0.2, 0], [0.3, 0.1, 0.05], [0.05, -0.1, -0.04]]) {
+                f.rig.reset();
+                f.rig.apply();
+                f.object.updateMatrixWorld(true);
+
+                for (const s of ["Left", "Right"]) {
+                    const ankle = new THREE.Vector3().setFromMatrixPosition(f.rig.bone(`${s}Foot`).matrixWorld);
+                    const target = ankle.clone().add(new THREE.Vector3(s === "Left" ? side : -side, up, forward));
+
+                    f.rig.reach(`${s}UpLeg`, `${s}Leg`, `${s}Foot`, target, { pole: KNEE });
+                    f.object.updateMatrixWorld(true);
+
+                    const reached = new THREE.Vector3().setFromMatrixPosition(f.rig.bone(`${s}Foot`).matrixWorld);
+                    const b = f.rig.index.get(`${s}Leg`);
+                    const knee = f.rig.frames[f.human.bones[b].parent].clone().invert().multiply(f.rig.bones[b].quaternion).multiply(f.rig.frames[b]);
+                    const { flex } = jointAngles("Leg", s === "Left" ? 1 : -1, knee);
+                    const sideways = knee.angleTo(limitRotation("Leg", s === "Left" ? 1 : -1, knee.clone())) / DEG;
+
+                    assert.ok(reached.distanceTo(target) < 0.001, `${body} ${s}: ${reached.distanceTo(target)} m off`);
+                    assert.ok(flex > 10, `${body} ${s}: bent ${flex.toFixed(1)}°`);
+                    assert.ok(sideways < 0.1, `${body} ${s}: ${sideways.toFixed(2)}° outside the knee's movements`);
+                }
+            }
+        }
     });
 });
 

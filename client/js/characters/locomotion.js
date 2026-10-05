@@ -715,15 +715,26 @@ export class Walker {
 
         // (Planted only where a fall's clip plants it, a foot its hip can't keep it at within its
         // range is let go of, the hip held to its range: it goes with the body as it falls, and
-        // is planted again where it's got to)
+        // is planted again where it's got to. Not through the ground as it's let go of, the body
+        // sinking onto it: lifted out, the knee bent to it, as a swinging foot's kept clear)
         if (this.stepped && foot.planted && this.#holdHip(side) > HIP_GIVE) {
+            const under = -this.#lowest(i);
+
             foot.planted = false;
+
+            if (under > 0) {
+                _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
+                _target.y += under;
+                object.worldToLocal(_target);
+                this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+            }
         }
 
-        // Standing, crouched lower than the ankle bends: up onto the ball of the foot, the heel
-        // lifted, rather than the shin bent further over it (a few times: the shin tips as the
-        // ankle rises)
-        if (foot.planted && s === 0 && free === 0) {
+        // Standing, crouched lower than the ankle bends, or walking, the body come further over
+        // the foot than it bends (late in stance, on the ball): up onto the ball of the foot, the
+        // heel lifted, rather than the shin bent further over it (a few times: the shin tips as
+        // the ankle rises)
+        if (foot.planted && free === 0 && (s === 0 || foot.pivot === "ball")) {
             for (let k = 0; k < RISES && this.#rise(side, i); k++) {
                 // (Again, from where the last lift left the shin)
             }

@@ -336,6 +336,9 @@ const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _delta = new THREE.Quaternion();
+const _hingeCross = new THREE.Vector3();
+const _hingeEnd = new THREE.Quaternion();
+const _hingeTwist = new THREE.Quaternion();
 const _was = new THREE.Quaternion();
 const _now = new THREE.Quaternion();
 const _identity = new THREE.Quaternion();
@@ -564,10 +567,16 @@ export class Rig {
      * Bend a limb (three bones: say LeftUpLeg, LeftLeg, LeftFoot) so its end reaches `target` (a
      * point in the rig's space), keeping the middle joint on the side it was bending to, or, given
      * `pole` (a direction in the upper bone's anatomical frame: forward, (0, 0, 1), for a knee),
-     * bending it that way, however near straight the limb was. The end bone keeps its orientation
-     * in the world. Call after apply() and updateMatrixWorld().
+     * bending it that way, however near straight the limb was, about its own hinge (#reachHinged).
+     * The end bone keeps its orientation in the world. Call after apply() and updateMatrixWorld().
      */
     reach(upperName, lowerName, endName, target, { pole = null } = {}) {
+        if (pole) {
+            this.#reachHinged(upperName, lowerName, endName, target, pole);
+
+            return;
+        }
+
         const upper = this.bone(upperName);
         const lower = this.bone(lowerName);
         const end = this.bone(endName);
@@ -590,22 +599,10 @@ export class Rig {
 
         toTarget.normalize();
 
-        // The bend direction: the way the joint bends (the pole, turned with the upper bone), or
-        // where the middle joint is now, away from the line to the target. (Where the middle
-        // joint is can be almost on that line, when the limb's nearly straight or the target has
-        // moved across it, and then which side it's on flickers from frame to frame)
-        const bendDirection = new THREE.Vector3();
+        // The bend direction: where the middle joint is now, away from the line to the target
+        const bendDirection = new THREE.Vector3().copy(_b).sub(_a);
 
-        if (pole) {
-            const turned = upper.getWorldQuaternion(new THREE.Quaternion()).multiply(this.frames[this.index.get(upperName)]);
-
-            if (space) {
-                turned.premultiply(space.getWorldQuaternion(new THREE.Quaternion()).invert());
-            }
-
-            bendDirection.copy(pole).applyQuaternion(turned);
-            bendDirection.addScaledVector(toTarget, -bendDirection.dot(toTarget));
-        }
+        bendDirection.addScaledVector(toTarget, -bendDirection.dot(toTarget));
 
         if (bendDirection.lengthSq() < 1e-6) {
             bendDirection.copy(_b).sub(_a);
@@ -873,6 +870,111 @@ export class Rig {
     }
 
     /** Turn a bone so a direction (in the rig's space) becomes another. */
+    /**
+     * reach() given a pole: the middle joint bends about its hinge (across the limb, square to the
+     * pole: a knee's about its anatomical x) and only about it, so the limb keeps the bend it rests
+     * with across that (a knee that rests turned in a little, as women's do, stays so, rather than
+     * being pushed out straight and swinging sideways as it bends: a joint a knee hasn't got). The
+     * hinge's angle is the one that makes the limb as long as the way to the target, and the upper
+     * bone turns the whole limb onto it, the pole (square to the limb) the way the upper bone's
+     * pole, turned as it is, points (square to the way to the target). Then the end bone keeps its
+     * orientation in the world, and as much of its twist as is past its joint's range the middle
+     * joint takes, within its own (a bent knee turns the shin a little, as it can: the foot stays
+     * where it is, the shin turning about itself).
+     */
+    #reachHinged(upperName, lowerName, endName, target, pole) {
+        const u = this.index.get(upperName);
+        const l = this.index.get(lowerName);
+        const e = this.index.get(endName);
+        const upper = this.bones[u];
+        const lower = this.bones[l];
+        const end = this.bones[e];
+        const space = this.root.parent;
+        const spaceRotation = space ? space.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+        const endWorld = end.getWorldQuaternion(new THREE.Quaternion());
+        const frame = this.frames[u];
+        const inverse = frame.clone().invert();
+        // The limb at rest in the upper bone's anatomical frame: the upper bone, the lower
+        const thigh = this.heads[l].clone().sub(this.heads[u]).applyQuaternion(inverse);
+        const shin = this.heads[e].clone().sub(this.heads[l]).applyQuaternion(inverse);
+        const hinge = new THREE.Vector3(0, 1, 0).cross(pole).normalize();
+
+        // The hinge's angle: |thigh + R(angle) shin| = the way to the target, R turning about the
+        // hinge. thigh · R shin = along + across cos(angle - at)
+        const along = thigh.dot(hinge) * shin.dot(hinge);
+        const thighAcross = thigh.clone().addScaledVector(hinge, -thigh.dot(hinge));
+        const shinAcross = shin.clone().addScaledVector(hinge, -shin.dot(hinge));
+        const cosine = thighAcross.dot(shinAcross);
+        const sine = _hingeCross.crossVectors(shinAcross, thighAcross).dot(hinge);
+        const across = Math.hypot(cosine, sine);
+        const at = Math.atan2(sine, cosine);
+        const toTarget = _target.copy(target);
+
+        _a.setFromMatrixPosition(upper.matrixWorld);
+        toTarget.sub(space ? space.worldToLocal(_a) : _a);
+
+        const wanted = ((toTarget.length() ** 2 - thigh.lengthSq() - shin.lengthSq()) / 2 - along) / across;
+        const angle = at + Math.acos(Math.min(1, Math.max(-1, wanted)));
+        const bend = new THREE.Quaternion().setFromAxisAngle(hinge, angle);
+
+        // The limb, and its pole square to it, in the upper bone's frame; and where they go in the
+        // rig's space: along the way to the target, and the upper bone's pole as it's turned now
+        // (square to that way). (Nearly along it, the limb's turned onto it as little as it can)
+        const limb = shin.clone().applyQuaternion(bend).add(thigh).normalize();
+        const turned = upper.getWorldQuaternion(new THREE.Quaternion()).multiply(frame).premultiply(spaceRotation.clone().invert());
+        const way = toTarget.normalize();
+        const facing = pole.clone().applyQuaternion(turned);
+
+        facing.addScaledVector(way, -facing.dot(way));
+
+        if (facing.lengthSq() > 1e-6) {
+            const side = pole.clone().addScaledVector(limb, -pole.dot(limb)).normalize();
+
+            turned.copy(frameYZ(way, facing)).multiply(frameYZ(limb, side).invert());
+        } else {
+            turned.premultiply(_delta.setFromUnitVectors(limb.applyQuaternion(turned), way));
+        }
+
+        // The bones: the upper's world turn from its frame's; the lower's from the bend
+        upper.parent.getWorldQuaternion(_parentWorld);
+        upper.quaternion.copy(_parentWorld.invert()).multiply(spaceRotation).multiply(turned).multiply(inverse);
+        upper.updateMatrixWorld(true);
+
+        const lowerInverse = this.frames[l].clone().invert();
+        const keepEnd = () => {
+            lower.quaternion.copy(frame).multiply(bend).multiply(lowerInverse);
+            lower.updateMatrixWorld(true);
+            end.parent.getWorldQuaternion(_parentWorld);
+            end.quaternion.copy(_parentWorld.invert().multiply(endWorld));
+            end.updateMatrixWorld(true);
+        };
+
+        keepEnd();
+
+        // The end's twist past its range, taken by the middle joint within its own (about the
+        // lower bone's own line: the end stays where it is)
+        const endJoint = SPLIT[this.joints[e].kind]?.twist;
+        const middleJoint = SPLIT[this.joints[l].kind]?.twist;
+
+        if (endJoint && middleJoint) {
+            const s = this.joints[e].side;
+            const endTurn = _hingeEnd.copy(lowerInverse).multiply(end.quaternion).multiply(this.frames[e]);
+            const axis = axisFor(endJoint.axis, s).clone();
+            const twist = splitRotation(endTurn, axis, _vector) / DEG;
+            const past = twist - Math.min(endJoint.range[1], Math.max(endJoint.range[0], twist));
+            const most = Math.min(-middleJoint.range[0], middleJoint.range[1]);
+            const taken = Math.max(-most, Math.min(most, past));
+
+            // (About the lower bone's own line, the way the end's twist turns)
+            if (Math.abs(taken) > 0.01) {
+                const line = shin.clone().normalize();
+
+                bend.multiply(_hingeTwist.setFromAxisAngle(line.multiplyScalar(Math.sign(line.dot(axis)) || 1), taken * DEG));
+                keepEnd();
+            }
+        }
+    }
+
     #turn(bone, from, to) {
         const space = this.root.parent;
         const spaceRotation = space ? space.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();

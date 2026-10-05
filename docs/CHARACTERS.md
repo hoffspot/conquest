@@ -115,6 +115,9 @@ A second body, CharMorph's [Vitruvian](https://github.com/Upliner/CharMorph-Vitr
 on its way in (the terrain plan's M8). It's a newer, finer body than MakeHuman's: 37,436
 vertices, sculpted muscles and a face with a real mouth and eyelids, and 4K textures. For now it's
 in the character lab only: `character-lab.html?body=vitruvian`. The game still uses MakeHuman's.
+Which body the game uses is `body.js`'s `GAME_BODY`: the kit, the lab (unless `?body=` says), the
+download list, the motion check and its baseline, the clips' bake and the character tests all
+take it from there (Node reads it with `scripts/lib/human-data.js`).
 
 `npm run build:vitruvian -- --from=../charmorph-vitruvian` makes it into the same kind of data as
 MakeHuman's body, so every slider, garment, hairstyle, people's look and animation works on it
@@ -163,6 +166,15 @@ as it is:
 tall as MakeHuman's body in every preset; that a shirt comes as high up its neck; that its face's
 landmarks are where MakeHuman's are in face coordinates, in every preset; that the face sliders
 move its face as they move MakeHuman's; and that tusks find its lower lip.
+
+Before the game switches to it, its motion check (`npm run check:motion -- --data vitruvian`)
+should come out no worse than MakeHuman's. The first run had 4,937 joints past their range against
+MakeHuman's 718: nearly all knees, pushed straight as they bent (now bent about their hinge, for
+both bodies: Foot locking, below), and ankles bending further over the foot walking (now the heel
+lifts): now 734 (MakeHuman's 580). What's left comes from its build: its hip joints are higher (12.6 cm above the crotch,
+MakeHuman's 9.5) and its legs about 4 cm longer, so seated rests put a foot in the ground; and its
+shoulders are 2 cm narrower with a shorter upper arm, so forearms come nearer the chest, most
+holding a staff or hammer (two-handed, which aren't moved out of the torso).
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
 motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
@@ -697,7 +709,8 @@ standing, arms at the sides, palms facing the thighs.
     second.
 - **Foot locking.** A planted foot stays where it landed, pivoting on its heel early in stance and
   its ball late in stance. Two-bone IK bends the leg to keep it there, the knee always bending
-  forward (the thigh's anatomical forward, turned with it, is the IK's pole). A leg is never
+  forward (the thigh's anatomical forward, turned with it, is the IK's pole) and only about its
+  own hinge (`Rig.reach`, below). A leg is never
   asked to reach more than 98.5% of its length: a planted foot that would need it slides along
   with the body instead. The swinging foot eases back (and, however long it's in the air, soon
   stops making up for how far it slid), and toes bend to stay flat as the heel lifts. The tests
@@ -708,10 +721,28 @@ standing, arms at the sides, palms facing the thighs.
     far from where the gait put it (running, turning, starting off), the line from the hip to
     the foot passed right by the knee, so which side the knee was on flickered: for a frame it
     swung 20 cm or more to the side, or bent backwards, bowing the leg.
+  - It then put the knee in the plane of the hip, the foot and the pole. A knee that rests turned
+    in a little (as women's do: MakeHuman's 1.6°, Vitruvian's 5°) was pushed straight as it bent,
+    a swing sideways that a knee hasn't got. On the Vitruvian body that was 4.6° past the knee's
+    range in every bent-kneed motion (3,640 of the motion check's failures). Now the knee bends
+    about its hinge (across the leg, square to the pole) and the leg keeps the shape it rests
+    with: the hinge's angle is the one that makes the leg as long as the way to the foot, and the
+    thigh turns the whole leg onto it, its forward where the thigh's forward, turned as it is,
+    points. A planted foot turned further than the ankle twists (falling, kneeling) has the rest
+    taken by the knee, up to its 10°, the shin turning about its own line (as the old IK's
+    turning the shin had done, by chance: without it, the dead falls' ankles went 6–8° further
+    past their range).
+- **Heel off.** Late in stance, on the ball of the foot, as the body comes further over the foot
+  than the ankle bends (19°, of its 20°), the heel lifts rather than the shin bending further
+  over it, as it does standing and crouching. (Measured from the hip-to-ankle line, MakeHuman's
+  shin, leaning 3.5° at rest, had read that much less; Vitruvian's, straight, read 24.5° in its
+  walk.)
 - **Falling** (actions.js), the feet are planted only where the fall's clip plants them, never
   shuffled under the body (the overlay says `STEPPED`); a foot whose hip can't hold it there
   within the hip's range is let go of (the hip held to its range), and planted again where it's
-  got to.
+  got to. As it's let go of, the body sinking onto it, it's lifted out of the ground (the knee
+  bent to it), as a swinging foot is kept clear: held to the hip's range it was left up to 1.7 cm
+  in the ground for that frame.
 - **Standing over planted feet.** Standing still, anything layered over the walk (a rest's weight
   shifted, a blow's lunge, a cast) leans the body over the feet; it doesn't step them:
   - The feet shuffle round under the body only as it turns (to face someone): towards where each
@@ -1569,8 +1600,12 @@ straight. These aren't modelled yet.
   (flexion 150 but extension 0). This is like FABRIK's quadrant cones
   ([Aristidou & Lasenby 2011](https://www.andreasaristidou.com/publications/papers/FABRIK.pdf)).
   The twist has its own range.
-- **IK.** Analytic two-bone IK (law of cosines, with the bend kept in its plane, or towards a pole
-  given in the upper bone's anatomical frame: forward, for knees) for legs. Arms search the
+- **IK.** Analytic two-bone IK for legs: given a pole in the upper bone's anatomical frame
+  (forward, for knees), the middle joint turns only about its hinge (across the limb, square to
+  the pole), at the angle that makes the limb as long as the way to the target; the upper bone
+  turns the whole limb onto it, the pole where its own, turned, points; and the end's twist past
+  its range is taken by the middle joint within its own. Else the law of cosines, the bend kept
+  in its plane. Arms search the
   elbow's swivel round the shoulder-to-wrist line for the least strained, most natural way
   (`Rig.reachArm`, above), as arm IK solvers for animation do: the swivel angle is the arm's one
   free degree of freedom once the hand is placed.

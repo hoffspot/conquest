@@ -22,8 +22,11 @@ export const HUMAN_URL = new URL("../../characters/", import.meta.url);
  */
 export const BODIES = Object.freeze(["human", "vitruvian"]);
 
+/** The body the game's characters are made from (and the motion check's, the tests' and the clips' bake). */
+export const GAME_BODY = "human";
+
 /** Download and unpack a body (`body`.json and `body`.bin from `base`, with `fetch`). */
-export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = "human") {
+export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = GAME_BODY) {
     const { manifest, data } = await loadHumanFiles(base, fetch, body);
 
     return new HumanData(manifest, data);
@@ -33,7 +36,7 @@ export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.b
  * A body's files as they are, unpacked: { manifest (`body`.json), data (`body`.bin) }, for a
  * HumanData to be made from here or elsewhere (a worker: skins.js).
  */
-export async function loadHumanFiles(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = "human") {
+export async function loadHumanFiles(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = GAME_BODY) {
     const [manifest, packed] = await Promise.all([
         fetch(new URL(`${body}.json`, base).href).then((response) => checked(response).json()),
         fetch(new URL(`${body}.bin`, base).href).then((response) => checked(response).arrayBuffer()),

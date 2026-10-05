@@ -1,13 +1,10 @@
 // Attacks, flinches and falls (client/js/characters/actions.js), on the real body
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { Actions, ATTACKS, DODGES, DRAWS, FALLS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed, slung } from "../client/js/characters/character.js";
-import { HumanData } from "../client/js/characters/body.js";
 import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
@@ -22,10 +19,10 @@ import { Avatar, POSING, posingEvery } from "../client/js/world/avatar.js";
 import { folkLook } from "../client/js/characters/folk.js";
 import { BODIES, dress, FRAME } from "../client/js/characters/motioncheck.js";
 import { soldierLook } from "../client/js/characters/soldiers.js";
+import { readHumanData } from "../scripts/lib/human-data.js";
 
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const human = readHumanData();
 
 // The parts of a Character the actions use (no meshes or textures, which need a DOM)
 function figure(shape = {}) {
