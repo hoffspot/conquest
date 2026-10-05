@@ -16,13 +16,16 @@
 //     its eyes. The eyelashes are MakeHuman's, set on its eyes (Vitruvian has none of its own).
 //   - the Mixamo skeleton (Vitruvian's own rig: the same 52 bones), each vertex's four strongest
 //     bone weights, and where every joint is (Vitruvian's: averages of vertices)
-//   - every shape the sliders blend (MakeHuman's: macro.js, details.js), carried over from the
-//     MakeHuman body (client/characters/human.*) onto this one: MakeHuman's body is posed and
-//     sized onto Vitruvian's bone by bone, each Vitruvian vertex takes the change of the point
-//     of it nearest (turned as the bones there are), and the base is set so that the sliders as
-//     they start give Vitruvian's own body. So every slider, every people's look and every soldier's build work on it at once.
-//   - MakeHuman's masks for painting skin (lips, nails...), carried over the same way into this
-//     body's texture layout.
+//   - every shape the sliders blend (MakeHuman's: macro.js, details.js), so every slider, every
+//     people's look and every soldier's build work on it at once, and the base set so that the
+//     sliders as they start give Vitruvian's own body. The body's sex, muscle, weight and bust
+//     are Vitruvian's own shapes (OWN_SHAPES), its bones moving as MakeHuman's do. The rest, and
+//     the head, are carried over from the MakeHuman body (client/characters/human.*):
+//     MakeHuman's body is posed and sized onto Vitruvian's bone by bone and fitted onto its skin
+//     (fitOnto), and each Vitruvian vertex takes the change of the point of it nearest (turned as
+//     the bones there are); the face's by the face map.
+//   - masks for painting skin: its lips and areolae its own, MakeHuman's others (nails,
+//     eyelids...) carried over the same way into this body's texture layout.
 //   - where garments measure the neck from, as MakeHuman's joints are in different places
 //     (landmarks: garments.js measureBody).
 
@@ -64,9 +67,70 @@ const DETAIL_CUTOFF = 0.00005;
 const REACH = 0.08;
 const FACING = 0.2;
 
+// How far round a nipple MakeHuman's skin is moved with it, to bring it onto Vitruvian's (metres:
+// a breast's size), and how stiffly MakeHuman's skin is fitted onto Vitruvian's, round by round
+// (fitOnto: from as a whole to point by point)
+const NIPPLE_REACH = 0.07;
+const STIFFNESS = [30, 10, 3, 1, 0.3];
+
+// Which of Vitruvian's own shapes (its morphs/L2) make the body's flesh for each slider shape
+// (MakeHuman's, by name: macro.js) and how much of each: its sex; its muscle and weight, as a sex
+// has them (MakeHuman's "universal" shapes; the average ones are none); its bust. Its heritage and
+// height are its bones only (Vitruvian's heritages are its face's, and the head keeps MakeHuman's).
+// The amounts are set by eye against MakeHuman's body (the lab's presets, the motion check's
+// extremes).
+const OWN_SHAPES = {
+    sex: { female: { Gender_Female: 1 }, male: { Gender_Male: 1 } },
+    muscle: {
+        female: { minmuscle: { BodyType_EndoMorph: 0.5 }, maxmuscle: { BodyType_Muscular: 0.6 } },
+        male: { minmuscle: { BodyType_EndoMorph: 0.5 }, maxmuscle: { BodyType_Muscular: 1, Shoulders_ShoulderTrapeziusSize: 0.6, Arms_BicepSize: 0.6, Arms_TricepSize: 0.6, Arms_Forearm_Girth: 0.5 } },
+    },
+    weight: {
+        female: { minweight: { BodyType_Emaciated: 0.7 }, maxweight: { BodyType_Fat: 0.25 } },
+        male: { minweight: { BodyType_Emaciated: 0.7 }, maxweight: { BodyType_Fat: 0.25 } },
+    },
+    bust: { mincup: { Chest_FemaleFlatChested: 0.45 }, maxcup: { Chest_Breast_Size: 0.85 } },
+};
+
+/** A slider shape's own shapes ({ Vitruvian's shape: how much }), or null for those carried over from MakeHuman's (its details'). */
+export function ownShape(name) {
+    const sum = (...parts) => {
+        const total = {};
+
+        for (const part of parts) {
+            for (const [morph, amount] of Object.entries(part ?? {})) {
+                total[morph] = (total[morph] ?? 0) + amount;
+            }
+        }
+
+        return total;
+    };
+    let match = name.match(/^macrodetails\/(african|asian|caucasian)-(female|male)-young$/);
+
+    if (match) {
+        return sum(OWN_SHAPES.sex[match[2]]);
+    }
+
+    match = name.match(/^macrodetails\/universal-(female|male)-young-(\w+muscle)-(\w+weight)$/);
+
+    if (match) {
+        return sum(OWN_SHAPES.muscle[match[1]][match[2]], OWN_SHAPES.weight[match[1]][match[3]]);
+    }
+
+    if (name.startsWith("macrodetails/height/")) {
+        return {};
+    }
+
+    match = name.match(/^breast\/female-young-\w+-\w+-(mincup|maxcup)-averagefirmness$/);
+
+    return match ? sum(OWN_SHAPES.bust[match[1]]) : null;
+}
+
 // The masks for painting skin, as MakeHuman's (build-characters.js), and how big they're made
 const MASKS = ["lips", "ears", "eyelids", "aureolae", "fingernails", "toenails", "crotch"];
 const MASK_SIZE = 1024;
+// How soft the areolae's edges are (metres either side of their rims)
+const AREOLA_EDGE = 0.002;
 
 // Blender's z up, facing -y, to ours: y up, facing +z
 const toOurs = (x, y, z) => [x, z, -y];
@@ -135,7 +199,13 @@ export function loadVitruvian(from) {
         jointEnds.set(strip(name.replace(/^joint_/, "")), list.map(([v, w]) => [v, w / total]));
     });
 
-    return { count, positions, corners, uvs, materials, lips, faceCount: mesh.totpoly, weights: byBone, jointEnds };
+    // Its nipples: the vertices its own shape for them moves
+    const nipples = new Set(readNpz(path.join(from, "morphs/L2/Chest_Nipple_Potrusion.npz")).idx.data);
+    // And its areolae: how far its own shape for their size moves each vertex (most at their rims)
+    const areolaShape = readNpz(path.join(from, "morphs/L2/Chest_Areola_Radius.npz"));
+    const areolae = new Map(Array.from(areolaShape.idx.data, (v, k) => [v, Math.hypot(...areolaShape.delta.data.slice(k * 3, k * 3 + 3))]));
+
+    return { count, positions, corners, uvs, materials, lips, nipples, areolae, faceCount: mesh.totpoly, weights: byBone, jointEnds };
 }
 
 /** The MakeHuman body as the engine has it (client/characters/human.*), and every shape's change. */
@@ -496,6 +566,106 @@ export function vertexNormals(positions, triangles) {
 }
 
 
+// Each side's nipple (-1 right, 1 left): the middle of the points (`positions` per vertex) as much
+// as they are nipple (`amounts`, 0 to 1; those over a half)
+function nippleCentres(positions, amounts) {
+    return new Map([-1, 1].map((side) => {
+        const sum = [0, 0, 0];
+        let total = 0;
+
+        amounts.forEach((amount, v) => {
+            if (amount > 0.5 && Math.sign(positions[v * 3]) === side) {
+                for (let k = 0; k < 3; k++) {
+                    sum[k] += amount * positions[v * 3 + k];
+                }
+
+                total += amount;
+            }
+        });
+
+        return [side, sum.map((value) => value / total)];
+    }));
+}
+
+/**
+ * A body's skin (`points` per vertex, `triangles`) fitted onto another's (`onto`, `ontoTriangles`),
+ * so the two lie on each other: first moved so each pin's point (`from`) is on the other's (`to`),
+ * the skin within about `radius` of it going with it; then, round by round, each point drawn to
+ * the nearest of the other skin facing its way, the draws smoothed over the skin less each round
+ * (STIFFNESS: how much a point keeps with its neighbours against its draw), so it fits as a whole
+ * before point by point. Gives the fitted points (the others' unmoved).
+ */
+export function fitOnto(points, triangles, onto, ontoTriangles, pins = []) {
+    const fitted = Float64Array.from(points);
+    const vertices = [...new Set(triangles)];
+    const neighbours = new Map(vertices.map((v) => [v, new Set()]));
+
+    for (let t = 0; t < triangles.length; t += 3) {
+        for (let k = 0; k < 3; k++) {
+            neighbours.get(triangles[t + k]).add(triangles[t + (k + 1) % 3]).add(triangles[t + (k + 2) % 3]);
+        }
+    }
+
+    for (const { from, to, radius } of pins) {
+        const move = sub(to, from);
+
+        for (const v of vertices) {
+            const share = Math.exp(-((length(sub([points[v * 3], points[v * 3 + 1], points[v * 3 + 2]], from)) / radius) ** 2));
+
+            for (let k = 0; k < 3; k++) {
+                fitted[v * 3 + k] += share * move[k];
+            }
+        }
+    }
+
+    const ontoNormals = triangleNormals(onto, ontoTriangles);
+    const draw = new Float64Array(points.length);
+    const drawn = new Uint8Array(points.length / 3);
+    const moves = new Float64Array(points.length);
+
+    for (const stiffness of STIFFNESS) {
+        const normals = vertexNormals(fitted, triangles);
+        const near = nearestPoints(onto, ontoTriangles, ontoNormals, Float64Array.from(vertices.flatMap((v) => [...fitted.subarray(v * 3, v * 3 + 3)])), Float64Array.from(vertices.flatMap((v) => [...normals.subarray(v * 3, v * 3 + 3)])), { reach: 0.05 });
+
+        vertices.forEach((v, i) => {
+            drawn[v] = near[i] ? 1 : 0;
+
+            for (let k = 0; k < 3; k++) {
+                const to = near[i] ? near[i].weights.reduce((sum, w, c) => sum + w * onto[ontoTriangles[near[i].triangle * 3 + c] * 3 + k], 0) : 0;
+
+                draw[v * 3 + k] = near[i] ? to - fitted[v * 3 + k] : 0;
+                moves[v * 3 + k] = draw[v * 3 + k];
+            }
+        });
+
+        // Smoothed (Gauss-Seidel on (drawn + stiffness L) move = drawn draw)
+        for (let pass = 0; pass < 200; pass++) {
+            for (const v of vertices) {
+                const around = neighbours.get(v);
+                const weight = drawn[v] + stiffness * around.size;
+
+                for (let k = 0; k < 3; k++) {
+                    let sum = drawn[v] * draw[v * 3 + k];
+
+                    for (const u of around) {
+                        sum += stiffness * moves[u * 3 + k];
+                    }
+
+                    moves[v * 3 + k] = sum / weight;
+                }
+            }
+        }
+
+        for (const v of vertices) {
+            for (let k = 0; k < 3; k++) {
+                fitted[v * 3 + k] += moves[v * 3 + k];
+            }
+        }
+    }
+
+    return fitted;
+}
+
 // A PNG of one 8-bit channel (`size` square), for the masks
 function grayPng(pixels, size) {
     const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -711,7 +881,9 @@ async function main() {
     const skin = Uint32Array.from(faceTriangles.body.flatMap(([f, ...ks]) => ks.map((k) => cornerRender(f, k))));
     const renderPositions = Float32Array.from(render.flatMap(({ v }) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]));
     const renderUVs = Float32Array.from(render.flatMap(({ uv }) => uv));
-    const [simplified, error] = MeshoptSimplifier.simplifyWithAttributes(skin, renderPositions, 3, renderUVs, 2, [0.5, 0.5], null, SKIN_TRIANGLES * 3, 0.05, ["LockBorder"]);
+    // (Its areolae and nipples kept whole: small and round, they'd be left a few flat facets)
+    const locked = Uint8Array.from(render, ({ v }) => (vitruvian.areolae.has(v) || vitruvian.nipples.has(v) ? 1 : 0));
+    const [simplified, error] = MeshoptSimplifier.simplifyWithAttributes(skin, renderPositions, 3, renderUVs, 2, [0.5, 0.5], locked, SKIN_TRIANGLES * 3, 0.05, ["LockBorder"]);
 
     console.log(`skin: ${skin.length / 3} triangles to ${simplified.length / 3} (error ${(error * 100).toFixed(2)}% of its size)`);
 
@@ -755,7 +927,16 @@ async function main() {
     const humanSource = (part) => Uint32Array.from(human.renderIndices(part), (r) => human.renderSource[r]);
     const humanSkin = humanSource("body");
     const humanEyes = humanSource("eyes");
-    const vitruvianNormals = vertexNormals(vitruvian.positions, faceTriangles.body.flatMap(([f, ...ks]) => ks.map((k) => vitruvian.corners[f * 4 + k])));
+    const vitruvianSkin = Uint32Array.from(faceTriangles.body.flatMap(([f, ...ks]) => ks.map((k) => vitruvian.corners[f * 4 + k])));
+    const vitruvianNormals = vertexNormals(vitruvian.positions, vitruvianSkin);
+    // MakeHuman's skin laid over Vitruvian's is only near it (half within 5 mm, a tenth further
+    // than 16 mm), so the nearest point of it to a Vitruvian point jumps about: the shapes' changes
+    // carried from it came out creased, a breast's off its nipple, a thumb's off the thumb. So it's
+    // first fitted onto Vitruvian's skin (fitOnto), its nipples onto Vitruvian's.
+    const humanNipples = nippleCentres(laid, maskOnVertices(human, path.join(root, "client/characters/masks/aureolae.jpg")));
+    const vitruvianNipples = nippleCentres(vitruvian.positions, Float32Array.from({ length: vitruvian.count }, (_, v) => (vitruvian.nipples.has(v) ? 1 : 0)));
+    console.log(`nipples: MakeHuman's laid ${[-1, 1].map((side) => (length(sub(humanNipples.get(side), vitruvianNipples.get(side))) * 1000).toFixed(1)).join(" and ")} mm from Vitruvian's`);
+    const fitted = fitOnto(laid, humanSkin, vitruvian.positions, vitruvianSkin, [-1, 1].map((side) => ({ from: humanNipples.get(side), to: vitruvianNipples.get(side), radius: NIPPLE_REACH })));
     const jointVertices = [...new Set(jointEnds.flatMap((ends) => (ends.parentTail === undefined ? ends.map(([v]) => v) : [])))];
 
     // The face: where Vitruvian's head is on MakeHuman's in face coordinates (face.js), from the
@@ -798,21 +979,21 @@ async function main() {
 
         return new Map(vertices.map((v, i) => [v, near[i] ?? anyWay[missed.indexOf(i)]]));
     };
-    const placeOn = (vertices, triangles, normals) => {
+    const placeOn = (vertices, over, triangles, normals) => {
         const points = Float64Array.from(vertices.flatMap((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]));
         const facings = normals ? Float64Array.from(vertices.flatMap((v) => [...normals.subarray(v * 3, v * 3 + 3)])) : null;
-        const near = nearestPoints(laid, triangles, normals ? triangleNormals(laid, triangles) : null, points, facings);
+        const near = nearestPoints(over, triangles, normals ? triangleNormals(over, triangles) : null, points, facings);
         const missed = vertices.filter((_, i) => !near[i]);
-        const anyWay = missed.length ? nearestPoints(laid, triangles, null, Float64Array.from(missed.flatMap((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)])), null, { reach: 0.3 }) : [];
+        const anyWay = missed.length ? nearestPoints(over, triangles, null, Float64Array.from(missed.flatMap((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)])), null, { reach: 0.3 }) : [];
 
         return new Map(vertices.map((v, i) => [v, near[i] ?? anyWay[missed.indexOf(v)]]));
     };
-    const onSkin = placeOn([...new Set([...sources.filter(({ kind }) => kind === "vitruvian").map(({ v }) => v).filter((v) => !eyeVertices.includes(v)), ...jointVertices])], humanSkin, vitruvianNormals);
-    const onEyes = placeOn(eyeVertices, humanEyes, null);
+    const onSkin = placeOn([...new Set([...sources.filter(({ kind }) => kind === "vitruvian").map(({ v }) => v).filter((v) => !eyeVertices.includes(v)), ...jointVertices])], fitted, humanSkin, vitruvianNormals);
+    const onEyes = placeOn(eyeVertices, laid, humanEyes, null);
     const distances = [...onSkin.values()].map(({ distance }) => distance).sort((x, y) => x - y);
     const within = (share) => (distances[Math.floor(share * (distances.length - 1))] * 1000).toFixed(1);
 
-    console.log(`laid over each other: half the skin within ${within(0.5)} mm of MakeHuman's, 90% within ${within(0.9)} mm, 99% within ${within(0.99)} mm`);
+    console.log(`fitted over each other: half the skin within ${within(0.5)} mm of MakeHuman's, 90% within ${within(0.9)} mm, 99% within ${within(0.99)} mm`);
     const onFace = placeOnFace([...onSkin.keys()].filter((v) => headShare[v] > 0));
     const placement = (triangles, { triangle, weights }) => {
         const corners = [0, 1, 2].map((k) => triangles[triangle * 3 + k]);
@@ -874,31 +1055,162 @@ async function main() {
 
         return moves;
     };
+    // The eyelashes are set on Vitruvian's eyes: moved from MakeHuman's laid over it by how far its
+    // eyes' middles are from MakeHuman's
+    const eyeCentre = (list, side) => {
+        const on = list.filter((p) => Math.sign(p[0]) === side);
+
+        return [0, 1, 2].map((k) => on.reduce((sum, p) => sum + p[k], 0) / on.length);
+    };
+    const humanEyeVertices = [...new Set(humanEyes)];
+    const eyeOffsets = new Map([-1, 1].map((side) => [side, sub(
+        eyeCentre(eyeVertices.map((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]), side),
+        eyeCentre(humanEyeVertices.map((h) => [...laid.subarray(h * 3, h * 3 + 3)]), side),
+    )]));
     const carried = new Map(shapeNames.map((name) => {
         const { deltas } = shapes.get(name);
 
         return [name, { deltas: Float64Array.from(sources.flatMap((entry) => changeAt(deltas, entry))), joints: jointChanges(deltas) }];
     }));
 
+    // The sliders' own shapes (OWN_SHAPES: sex, muscle, weight, bust, heritage): their flesh is
+    // Vitruvian's own shapes', their bones MakeHuman's (each moves the joints as MakeHuman's shape
+    // carried over does, and Vitruvian's skin goes with its bones). MakeHuman's carried over,
+    // however well fitted, came out creased and lumpy where its flesh isn't laid out as
+    // Vitruvian's (a breast, a muscle); Vitruvian's own shapes were made for its mesh. The bones
+    // stay MakeHuman's so that heights, limbs' lengths and so every motion are as they were.
+    const ownWeights = new Map();
+
+    for (const [name, list] of vitruvian.weights) {
+        for (const [v, weight] of list) {
+            if (!ownWeights.has(v)) {
+                ownWeights.set(v, []);
+            }
+
+            ownWeights.get(v).push([boneIndex.get(name), weight]);
+        }
+    }
+
+    // Each kept Vitruvian vertex's move as the joints move by `joints` (its skin with its bones)
+    const skeletal = (joints) => {
+        const maps = boneMaps(vitruvianJoints, Float64Array.from(vitruvianJoints, (value, k) => value + joints[k]), bones.length);
+        const moves = new Float64Array(count * 3);
+
+        sources.forEach((entry, i) => {
+            if (entry.kind !== "vitruvian") {
+                return;
+            }
+
+            const p = [...vitruvian.positions.subarray(entry.v * 3, entry.v * 3 + 3)];
+            const list = ownWeights.get(entry.v) ?? [];
+            const total = list.reduce((sum, [, weight]) => sum + weight, 0) || 1;
+
+            for (const [b, weight] of list) {
+                const { matrix, from: head, to } = maps[b];
+                const local = apply(matrix, sub(p, head));
+
+                for (let k = 0; k < 3; k++) {
+                    moves[i * 3 + k] += (weight / total) * (to[k] + local[k] - p[k]);
+                }
+            }
+        });
+
+        return moves;
+    };
+    // A shape of Vitruvian's own: its flesh at the kept vertices (its move less its bones' part)
+    const flesh = new Map();
+    const ownFlesh = (name) => {
+        if (!flesh.has(name)) {
+            const { idx, delta } = readNpz(path.join(from, `morphs/L2/${name}.npz`));
+            const moves = new Map();
+
+            idx.data.forEach((v, k) => {
+                moves.set(v, toOurs(delta.data[k * 3], delta.data[k * 3 + 1], delta.data[k * 3 + 2]).map((value) => value * scale));
+            });
+
+            const joints = new Float64Array(jointEnds.length * 3);
+
+            jointEnds.forEach((ends, k) => {
+                if (ends.parentTail === undefined) {
+                    for (const [v, w] of ends) {
+                        const move = moves.get(v) ?? [0, 0, 0];
+
+                        for (let a = 0; a < 3; a++) {
+                            joints[k * 3 + a] += w * move[a];
+                        }
+                    }
+                } else {
+                    joints.set(joints.subarray((ends.parentTail * 2 + 1) * 3, (ends.parentTail * 2 + 2) * 3), k * 3);
+                }
+            });
+
+            const bonesPart = skeletal(joints);
+
+            flesh.set(name, Float64Array.from(sources.flatMap((entry, i) => [0, 1, 2].map((k) => (entry.kind === "vitruvian" ? (moves.get(entry.v)?.[k] ?? 0) - bonesPart[i * 3 + k] : 0)))));
+        }
+
+        return flesh.get(name);
+    };
+
+    // (The head keeps MakeHuman's shapes carried over, as its face's are: what's worn on it, hair,
+    // helmets, beards, tusks, is fitted to those; the neck goes from one to the other as it's the
+    // head's)
+    const bodyShare = sources.map((entry) => (entry.kind === "vitruvian" && !eyeVertices.includes(entry.v) ? 1 - headShare[entry.v] : 0));
+
+    for (const name of shapeNames) {
+        const own = ownShape(name);
+
+        if (own) {
+            const { deltas, joints } = carried.get(name);
+            const body = skeletal(joints);
+
+            for (const [morph, amount] of Object.entries(own)) {
+                ownFlesh(morph).forEach((value, j) => {
+                    body[j] += amount * value;
+                });
+            }
+
+            deltas.forEach((value, j) => {
+                const share = bodyShare[Math.floor(j / 3)];
+
+                deltas[j] = share * body[j] + (1 - share) * value;
+            });
+        }
+    }
+
+    console.log(`own shapes: ${shapeNames.filter(ownShape).length} of the sliders' shapes from ${flesh.size} of Vitruvian's`);
+
+    // The eyelashes (MakeHuman's) move as the eyelids under them do, whatever the shape
+    const lashes = sources.map((entry, i) => [entry, i]).filter(([entry]) => entry.kind === "human");
+    const lidSources = sources.map((entry, i) => [entry, i]).filter(([entry]) => entry.kind === "vitruvian" && headShare[entry.v] > 0.5 && !eyeVertices.includes(entry.v));
+
+    const lashLids = lashes.map(([entry, i]) => {
+        const p = [...laid.subarray(entry.v * 3, entry.v * 3 + 3)];
+        const offset = eyeOffsets.get(Math.sign(p[0]) || 1);
+        const at = [0, 1, 2].map((k) => p[k] + offset[k]);
+        const nearest = lidSources.map(([lid, j]) => [j, length(sub(at, [...vitruvian.positions.subarray(lid.v * 3, lid.v * 3 + 3)]))]).sort((a, b) => a[1] - b[1]).slice(0, 4);
+        const total = nearest.reduce((sum, [, d]) => sum + 1 / (d + 1e-4), 0);
+
+        return [i, nearest.map(([j, d]) => [j, 1 / (d + 1e-4) / total])];
+    });
+
+    for (const { deltas } of carried.values()) {
+        for (const [i, lids] of lashLids) {
+            for (let k = 0; k < 3; k++) {
+                deltas[i * 3 + k] = lids.reduce((sum, [j, w]) => sum + w * deltas[j * 3 + k], 0);
+            }
+        }
+    }
+
     // The base: Vitruvian's own body (and the eyelashes set on its eyes), less the default shapes,
     // so the sliders as they start give Vitruvian's body
     const base = new Float64Array(count * 3);
-    const eyeCentre = (positions, list, side) => {
-        const on = list.filter((p) => Math.sign(p[0]) === side);
-
-        return [0, 1, 2].map((k) => on.reduce((sum, p) => sum + p[k], 0) / on.length);
-    };
-    const humanEyeVertices = [...new Set(humanEyes)];
-    const offsets = new Map([-1, 1].map((side) => [side, sub(
-        eyeCentre(vitruvian.positions, eyeVertices.map((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]), side),
-        eyeCentre(laid, humanEyeVertices.map((h) => [...laid.subarray(h * 3, h * 3 + 3)]), side),
-    )]));
 
     sources.forEach((entry, i) => {
         const p = entry.kind === "human" ? [...laid.subarray(entry.v * 3, entry.v * 3 + 3)] : [...vitruvian.positions.subarray(entry.v * 3, entry.v * 3 + 3)];
 
         if (entry.kind === "human") {
-            const offset = offsets.get(Math.sign(p[0]) || 1);
+            const offset = eyeOffsets.get(Math.sign(p[0]) || 1);
 
             p[0] += offset[0];
             p[1] += offset[1];
@@ -1161,7 +1473,24 @@ async function main() {
     console.log(`face: ${JSON.stringify(manifest.landmarks.face)} (MakeHuman's: ${JSON.stringify(theirs)}; Vitruvian's: ${JSON.stringify(ours)})`);
     console.log(`vitruvian.bin: ${(packed.length / 1024).toFixed(0)} KB (${(packer.length / 1024).toFixed(0)} KB unpacked)`);
 
-    writeMasks({ target, human, laid, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace });
+    // Vitruvian's areolae, for their mask: round its nipples, as far out as its own shape for
+    // their size moves them most
+    const areolae = [-1, 1].map((side) => {
+        const centre = vitruvianNipples.get(side);
+        let [sum, total] = [0, 0];
+
+        for (const [v, amount] of vitruvian.areolae) {
+            if (Math.sign(vitruvian.positions[v * 3]) === side) {
+                sum += amount ** 2 * length(sub([...vitruvian.positions.subarray(v * 3, v * 3 + 3)], centre));
+                total += amount ** 2;
+            }
+        }
+
+        return { centre, radius: sum / total };
+    });
+
+    console.log(`areolae: ${areolae.map(({ radius }) => (radius * 1000).toFixed(1)).join(" and ")} mm across from their nipples`);
+    writeMasks({ target, human, laid: fitted, areolae, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace });
 }
 
 // How much each of the MakeHuman body's vertices is in one of its masks (a JPEG in its texture
@@ -1185,7 +1514,7 @@ function maskOnVertices(human, file) {
 // MakeHuman's (client/characters/masks) carried over, each texel of the skin's taking the mask at
 // the nearest point of MakeHuman's body: on the head, where it is on MakeHuman's face (by the face
 // map: toHumanFace), and elsewhere on MakeHuman's body laid over it
-function writeMasks({ target, human, laid, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace }) {
+function writeMasks({ target, human, laid, areolae, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace }) {
     const size = MASK_SIZE;
     const texels = [];
     const onHead = [];
@@ -1232,6 +1561,23 @@ function writeMasks({ target, human, laid, humanDefault, humanSkin, vitruvian, s
     for (const name of MASKS) {
         if (name === "lips") {
             writeFileSync(path.join(target, "vitruvian/masks/lips.png"), grayPng(lips, size));
+            continue;
+        }
+
+        // Its areolae: its own, round its nipples (MakeHuman's would be where its are)
+        if (name === "aureolae") {
+            const pixels = new Uint8Array(size * size);
+
+            at.forEach((texel, i) => {
+                if (texel >= 0) {
+                    const inside = Math.max(...areolae.map(({ centre, radius }) => (radius + AREOLA_EDGE - length(sub(texels[texel], centre))) / (2 * AREOLA_EDGE)));
+                    const t = Math.min(1, Math.max(0, inside));
+
+                    pixels[i] = Math.round(255 * t * t * (3 - 2 * t));
+                }
+            });
+
+            writeFileSync(path.join(target, "vitruvian/masks/aureolae.png"), grayPng(pixels, size));
             continue;
         }
 

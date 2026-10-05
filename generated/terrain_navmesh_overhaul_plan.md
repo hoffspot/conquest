@@ -4424,3 +4424,38 @@ converted data is to be measured in M8 against today's hm08 data.
     character tests (`scripts/lib/human-data.js` in Node). The contact sheet's filmstrip takes
     `&data=` and `&view=front|side`.
   - **Next:** Vitruvian's seated rests and forearms, then the game switched to it.
+- **2026-10-05, Vitruvian's own shapes, and seated feet on the floor** (§10; docs/CHARACTERS.md
+  *The Vitruvian body*, *Sitting*). The user: why is the chest not rendered correctly on
+  Vitruvian? Then: can we go with Vitruvian's defaults, and recalculate what depends on the body?
+  - **The cause:** the sliders' shapes were MakeHuman's, carried over from its body laid over
+    Vitruvian's by the bones, which only lies near it (half the skin within 4.7 mm, a tenth
+    further than 16 mm): MakeHuman's nipples were 4.5 cm from Vitruvian's, so a woman's breasts
+    grew off them, lumpy and creased; men's chests were creased; a thumb's change went onto the
+    thumb beside it; and the carried areola mask came out all but empty.
+  - **Fitted:** MakeHuman's body is now fitted onto Vitruvian's skin before anything is carried
+    over (`fitOnto`): its nipples moved onto Vitruvian's, then drawn onto the nearest of its skin
+    round by round, stiffly first. Half the skin within 0.7 mm, 90% within 2.8 mm.
+  - **Vitruvian's own shapes for the body's flesh** (step 2 of the plan): sex, muscle, weight and
+    bust are its own morphs (`OWN_SHAPES`: `Gender_Female`/`Male`, `BodyType_Muscular` with a
+    man's traps and arms, `EndoMorph`, `Fat`, `Emaciated`, `Chest_Breast_Size`,
+    `FemaleFlatChested`), made for its mesh. Fitted with Vitruvian's morphs vertex by vertex,
+    MakeHuman's flesh was at most half explained, so the amounts are set by eye. The bones still
+    move as MakeHuman's shapes move them (Vitruvian's skin going with them), so heights, limbs'
+    lengths and every motion are as they were; every preset, people's look and soldier works.
+  - **The head keeps MakeHuman's shapes** (by the face map): hair, helmets, beards, tusks and cat
+    folk's ears are fitted to them. With Vitruvian's own sex shapes on the head, the hero's crown
+    rose 9 mm and the orc's mouth moved in face coordinates. Moving the faces over too would mean
+    refitting all of those.
+  - **Its areolae** painted from its own nipples and areola shape (12 mm), and kept whole through
+    the mesh's simplification (they'd been left a few flat facets). The eyelashes move as the
+    eyelids under them do.
+  - **Seated feet:** sitting, a foot the pose puts into the floor is brought onto it, the shin
+    swung forward about the knee (`SEATED`). Lifting it straight up raised the knees into the
+    table and the tankard.
+  - **The numbers** (failing pairs): Vitruvian's, before → after: joints 734 → 715, held things in
+    the body 757 → 660, forearms in the torso 1,396 → 1,332, feet in the ground 97 → 128 (34
+    newly, 0.6–0.9 cm, falls and walks), sliding 742 → 753, grips 156 → 152. MakeHuman's, with
+    seated feet on the floor: feet in the ground 666 → 126 (540 pairs better, none worse), the
+    rest as they were; its baseline brought down.
+  - **Next:** the rest of what depends on the body, on Vitruvian (the clips' bake, poses where its
+    check is worse, garments, its baseline), then the game switched to it.

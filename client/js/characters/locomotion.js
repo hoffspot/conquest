@@ -32,6 +32,14 @@ import { jointAngles, limitRotation } from "./rig.js";
  */
 export const STEPPED = "stepped";
 
+/**
+ * What an overlay (Walker.overlay) says while the body sits (Actions.setSeated): the feet are
+ * where the sitting legs put them, not planted, but not through the floor: a foot the pose puts
+ * into it is lifted onto it (a longer leg's knee higher), as people of every height sit on the
+ * same bench.
+ */
+export const SEATED = "seated";
+
 /** How a character walks (all angles in degrees). */
 export const WALK_STYLES = Object.freeze({
     natural: { lean: 2, crouch: 0, armSpread: 7, armForward: 6, elbow: 0, stanceWidth: 0.12, toeOut: 6, swagger: 1, sway: 0.025, headForward: 0, fingers: 20 },
@@ -99,6 +107,10 @@ const RUN_LOWEST = RUN_STANCE * 0.45;
 
 const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
+const _knee = new THREE.Vector3();
+const _shin = new THREE.Vector3();
+const _ahead = new THREE.Vector3();
+const _across = new THREE.Vector3();
 const _hip = new THREE.Vector3();
 const _reach = new THREE.Vector3();
 const _hips = new THREE.Vector3();
@@ -316,12 +328,16 @@ export class Walker {
         this.character.object.updateMatrixWorld(true);
 
         // Standing, a body leaning over its planted feet bends its knees as far as keeps them there
-        if (planted && s === 0) {
+        if (planted && planted !== SEATED && s === 0) {
             this.#give();
         }
 
-        if (!planted) {
+        if (!planted || planted === SEATED) {
             this.release();
+
+            if (planted === SEATED) {
+                SIDES.forEach((side, i) => this.#onFloor(side, i));
+            }
 
             // (Sitting, the hands still reach: raising a tankard)
             this.afterPose?.(dt);
@@ -741,9 +757,36 @@ export class Walker {
         }
     }
 
-    // Lift a planted foot's heel (turning it about the ball, which stays where it is) as far as
-    // keeps its ankle within DORSIFLEXION, the leg reached again to the ankle there. Whether it
-    // was lifted
+    // Sitting: a foot the pose puts into the floor brought onto it forward, the shin swung forward
+    // about the knee (the thigh level on the seat, as it was: a long-legged body's feet further out
+    // in front of it), the foot turned as it was; straight up, if it can't reach it so
+    #onFloor(side, i) {
+        const under = -this.#lowest(i);
+
+        if (!(under > 0)) {
+            return;
+        }
+
+        const object = this.character.object;
+        const knee = _knee.setFromMatrixPosition(this.rig.bone(`${side}Leg`).matrixWorld);
+        const shin = _shin.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld).sub(knee);
+        const forward = _ahead.set(0, 0, 1).applyQuaternion(object.getWorldQuaternion(_footTurn)).setY(0).normalize();
+        const across = _across.crossVectors(UP, forward);
+        const down = shin.y + under;
+        const aside = shin.dot(across);
+        const out = shin.lengthSq() - down * down - aside * aside;
+
+        if (out > 0 && shin.dot(forward) < Math.sqrt(out)) {
+            shin.copy(across).multiplyScalar(aside).addScaledVector(forward, Math.sqrt(out)).setY(down);
+        } else {
+            shin.y += under;
+        }
+
+        _target.copy(knee).add(shin);
+        object.worldToLocal(_target);
+        this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+    }
+
     // Hold a hip (`side`'s) within its range, the leg below going with it; returns how far past
     // its range it was (degrees)
     #holdHip(side) {
@@ -767,6 +810,9 @@ export class Walker {
         return over;
     }
 
+    // Lift a planted foot's heel (turning it about the ball, which stays where it is) as far as
+    // keeps its ankle within DORSIFLEXION, the leg reached again to the ankle there. Whether it
+    // was lifted
     #rise(side, i) {
         const rig = this.rig;
         const b = rig.index.get(`${side}Foot`);
