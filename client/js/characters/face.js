@@ -25,6 +25,12 @@ export const EAR = [0.085, 0, -0.087];
 /**
  * A body's face frame from its vertex positions: { middle (between the eyes), eyeX (half the eye
  * separation), scale (to the base mesh) }. `toFace(point)` gives face coordinates.
+ *
+ * A body whose head isn't proportioned as MakeHuman's (Vitruvian's: its eyes wider apart, its
+ * mouth lower) has a map in its manifest's landmarks.face (scripts/build-vitruvian.js faceMap):
+ * its head's size over its eyes' spacing, to MakeHuman's (the scale is multiplied by it), and
+ * where its chin, lips, nose and crown, and the back of its skull, are in MakeHuman's face
+ * coordinates (heights and depths brought onto MakeHuman's piece by piece, straight between them).
  */
 export function faceFrame(human, positions) {
     const eyes = [[0, 0, 0, 0], [0, 0, 0, 0]];
@@ -43,7 +49,10 @@ export function faceFrame(human, positions) {
     const [left, right] = eyes.map(([x, y, z, n]) => [x / n, y / n, z / n]);
     const middle = [0, 1, 2].map((k) => (left[k] + right[k]) / 2);
     const eyeX = Math.abs(left[0] - right[0]) / 2;
-    const scale = (2 * eyeX) / BASE_EYE_SEPARATION;
+    const map = human.landmarks?.face;
+    const scale = ((2 * eyeX) / BASE_EYE_SEPARATION) * (map?.size ?? 1);
+    const [up, down] = map ? [(y) => along(map.y, y, 0, 1), (y) => along(map.y, y, 1, 0)] : [(y) => y, (y) => y];
+    const [ahead, back] = map ? [(z) => along(map.z, z, 0, 1), (z) => along(map.z, z, 1, 0)] : [(z) => z, (z) => z];
 
     return {
         middle,
@@ -51,10 +60,25 @@ export function faceFrame(human, positions) {
         scale,
         eyes: [left, right],
         /** A point in face coordinates, scaled to the base mesh's head. */
-        toFace: (x, y, z) => [(x - middle[0]) / scale, (y - middle[1]) / scale, (z - middle[2]) / scale],
+        toFace: (x, y, z) => [(x - middle[0]) / scale, up((y - middle[1]) / scale), ahead((z - middle[2]) / scale)],
         /** Face coordinates (of the base mesh's head) back to a point. */
-        fromFace: (x, y, z) => [middle[0] + x * scale, middle[1] + y * scale, middle[2] + z * scale],
+        fromFace: (x, y, z) => [middle[0] + x * scale, middle[1] + down(y) * scale, middle[2] + back(z) * scale],
     };
+}
+
+// A value through a piecewise-straight map (`knots`: rising [from, to] pairs, read from column
+// `from` to column `to`), carried on straight past its ends
+function along(knots, value, from, to) {
+    const last = knots.length - 1;
+    let k = 1;
+
+    while (k < last && value > knots[k][from]) {
+        k++;
+    }
+
+    const [a, b] = [knots[k - 1], knots[k]];
+
+    return a[to] + ((value - a[from]) * (b[to] - a[to])) / (b[from] - a[from]);
 }
 
 /** How far above the hairline a point is (face coordinates), in metres: positive on the scalp. */

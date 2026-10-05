@@ -134,21 +134,39 @@ as it is:
     same way (half of them within 5 mm, 99% within 3.2 cm).
   - The change is turned as the bones there are, but not stretched: the bodies are as tall and
     alike, and only their joints are put in different places, so a change is as big on either.
+  - The face is matched by the face map (below), not by the body laid over it: each vertex of
+    the head takes the change at the point where it is on MakeHuman's face (the lips' on its
+    lips, the chin's on its chin), as much as it's the Head bone's, and the rest from the body
+    laid over it, so the neck has no seam.
   - The base is set so that the sliders as they start give Vitruvian's own body.
 - **The neck.** MakeHuman's neck bone starts half way up the neck, and Vitruvian's at its foot.
   Garments measure the neck from MakeHuman's joint, so the manifest says where that is on
   Vitruvian's neck bone (`landmarks.neck`: 0.425 of the way up it), and `measureBody` measures
   from there. Without it a shirt's top fell to the collarbones. MakeHuman's body is also laid
   over Vitruvian's with its neck bone starting there.
-- **Masks.** MakeHuman's masks for painting the skin (lips, nails, eyelids...) are carried over
-  into Vitruvian's texture layout, texel by texel, from the nearest point of MakeHuman's body.
+- **The face.** Face coordinates (`face.js`) are measured from between the eyes, and scaled by
+  the eyes' spacing. The skin's features (cheeks, nose, under the eyes, brows, beard, hairline,
+  ears), hair, helmets, cat folk's ears and tusks are all placed in them, as on MakeHuman's head.
+  Vitruvian's eyes are further apart for its head's size (6.4 cm to MakeHuman's 5.8), so its
+  skull was 8% small in face coordinates. The build measures both heads alike (`faceLandmarks`:
+  the lips by each one's lip mask, the nose's tip, the chin, the crown, the back of the skull,
+  how far out the ears reach), and the manifest's `landmarks.face` brings Vitruvian's head onto
+  MakeHuman's face coordinates: its size (0.925 of its eyes' spacing), then its heights and
+  depths, piece by piece between those landmarks. Its features then sit within 2 mm of
+  MakeHuman's.
+- **Masks.** Its lips are painted from its own lip mask (`ColLipMask` in `char.blend`, over all
+  its triangles). MakeHuman's other masks for painting the skin (nails, eyelids, ears...) are
+  carried over into Vitruvian's texture layout, texel by texel, from the nearest point of
+  MakeHuman's body: on the head, where it is on MakeHuman's face, by the face map.
 
 `test/vitruvian.test.js` checks the data: the bones, weights, parts and shapes; that it stands as
-tall as MakeHuman's body in every preset; and that a shirt comes as high up its neck.
+tall as MakeHuman's body in every preset; that a shirt comes as high up its neck; that its face's
+landmarks are where MakeHuman's are in face coordinates, in every preset; that the face sliders
+move its face as they move MakeHuman's; and that tusks find its lower lip.
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
-motion check's baseline), its own skin textures, the lips and the inside of the mouth, the face's
-measures (`face.js`), and blinking and expressions.
+motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
+expressions.
 
 ### Skin, eyes and hair
 
