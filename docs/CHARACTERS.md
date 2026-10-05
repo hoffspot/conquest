@@ -40,7 +40,7 @@ to them.
 | File | What it does |
 |---|---|
 | `scripts/build-characters.js` | Prepares MakeHuman's body (CC0) at build time into `client/characters/human.bin` (1.4 MB, gzip) and `human.json` |
-| `scripts/build-vitruvian.js` | Prepares CharMorph's Vitruvian body (CC0) the same way, into `vitruvian.bin` (1.9 MB, gzip), `vitruvian.json` and `vitruvian/masks/`, with MakeHuman's shapes carried over onto it. It reads Blender's and NumPy's files itself (`scripts/lib/blend.js`, `npy.js`) |
+| `scripts/build-vitruvian.js` | Prepares CharMorph's Vitruvian body (CC0) the same way, into `vitruvian.bin` (1.9 MB, gzip), `vitruvian.json` and `vitruvian/masks/`, its sliders' flesh its own shapes and MakeHuman's carried over. It reads Blender's and NumPy's files itself (`scripts/lib/blend.js`, `npy.js`) |
 | `body.js` | Loads that, and shapes the body: blends the slider shapes into the mesh and moves every joint the same way |
 | `macro.js`, `details.js` | The sliders: which of MakeHuman's shapes each one blends |
 | `pack.js` | The data file's compact encoding (shared by the build and the browser) |
@@ -124,23 +124,50 @@ MakeHuman's body, so every slider, garment, hairstyle, people's look and animati
 as it is:
 
 - **Mesh.** Its skin is brought down to 28,000 triangles (meshoptimizer, keeping its texture
-  coordinates), the hero's budget. Its four texture tiles (head, torso, arms, legs) are laid
+  coordinates), the hero's budget. Its areolae and nipples are kept whole: brought down with the
+  rest, they were left a few flat facets. Its four texture tiles (head, torso, arms, legs) are laid
   side by side in one square. Its eyes are its own; its eyelashes are MakeHuman's, set on its
-  eyes, as it has none. The mouth's inside, irises and tear lines are left out for now.
+  eyes, as it has none, and moved as the eyelids under them move in every shape. The mouth's
+  inside, irises and tear lines are left out for now.
 - **Bones.** Its own Mixamo rig and weights: the same 52 bones as MakeHuman's, in the same order.
 - **Size.** It's scaled to the height of MakeHuman's default body (it's 5% taller), so the game's
   measures, doorways and animations fit it.
-- **Shapes.** Every slider's shapes are carried over from MakeHuman's body:
-  - MakeHuman's default body is laid over Vitruvian's, bone by bone: each bone turned to lie
-    along Vitruvian's, and stretched to its length.
-  - Each Vitruvian vertex takes the change at the nearest point of that body that faces the
-    same way (half of them within 5 mm, 99% within 3.2 cm).
-  - The change is turned as the bones there are, but not stretched: the bodies are as tall and
-    alike, and only their joints are put in different places, so a change is as big on either.
-  - The face is matched by the face map (below), not by the body laid over it: each vertex of
-    the head takes the change at the point where it is on MakeHuman's face (the lips' on its
-    lips, the chin's on its chin), as much as it's the Head bone's, and the rest from the body
-    laid over it, so the neck has no seam.
+- **Shapes.** The sliders are MakeHuman's (`macro.js`, `details.js`), so every preset, people's
+  look and soldier's build works on it. Its default is Vitruvian's own body.
+  - **The body's flesh is Vitruvian's own shapes** (`OWN_SHAPES` in the build), made for its mesh:
+    | Slider | Vitruvian's own shapes |
+    | --- | --- |
+    | Sex | `Gender_Female` / `Gender_Male`, wholly |
+    | Muscle, most | `BodyType_Muscular` (a woman 0.6; a man 1, with its traps, biceps, triceps and forearms) |
+    | Muscle, least | `BodyType_EndoMorph` 0.5 |
+    | Weight, most / least | `BodyType_Fat` 0.25 / `BodyType_Emaciated` 0.7 |
+    | Bust, largest / smallest | `Chest_Breast_Size` 0.85 / `Chest_FemaleFlatChested` 0.45 |
+  - **The bones move as MakeHuman's.** Each shape moves the joints as MakeHuman's shape carried
+    over does, and Vitruvian's skin goes with its bones (its own weights). A Vitruvian shape's own
+    move of the bones is taken out of its flesh. So heights, limbs' lengths, and with them every
+    motion, are as they were. Height and heritage are bones only.
+  - **Why.** MakeHuman's shapes carried over came out creased and lumpy where its flesh isn't laid
+    out as Vitruvian's: a woman's breasts landed 4.5 cm off its nipples, men's chests were creased,
+    a thumb's change went onto the thumb beside it. Fitted together (below), the creases were
+    fewer but still there, and MakeHuman's flesh can't be matched to Vitruvian's vertex by vertex:
+    fitted with Vitruvian's own shapes, at most half of it is explained.
+  - **The head keeps MakeHuman's shapes,** carried over feature by feature by the face map
+    (below): what's worn on it (hair, helmets, beards, tusks, cat folk's ears) is fitted to those.
+    The neck goes from one to the other as much as it's the Head bone's. The detail sliders (face,
+    ears, torso's measures) are MakeHuman's carried over, all of them.
+  - **Carried over:** MakeHuman's default body is laid over Vitruvian's, bone by bone (each bone
+    turned to lie along Vitruvian's, and stretched to its length). Then it's **fitted onto
+    Vitruvian's skin** (`fitOnto`): moved so its nipples are on Vitruvian's (they were 4.5 cm
+    apart), then drawn onto the nearest of Vitruvian's skin round by round, the draws smoothed
+    less each round (`STIFFNESS`), so it fits as a whole before point by point. Laid over each
+    other, half the skin was within 4.7 mm and a tenth further than 16 mm; fitted, half is
+    within 0.7 mm and 90% within 2.8 mm. Each Vitruvian vertex takes the change at the nearest
+    point of the fitted body that faces the same way, turned as the bones there are (not
+    stretched: the bodies are as tall and alike).
+  - The face is matched by the face map (below), not by the body: each vertex of the head takes
+    the change at the point where it is on MakeHuman's face (the lips' on its lips, the chin's
+    on its chin), as much as it's the Head bone's, and the rest from the body, so the neck has
+    no seam.
   - The base is set so that the sliders as they start give Vitruvian's own body.
 - **The neck.** MakeHuman's neck bone starts half way up the neck, and Vitruvian's at its foot.
   Garments measure the neck from MakeHuman's joint, so the manifest says where that is on
@@ -158,9 +185,12 @@ as it is:
   depths, piece by piece between those landmarks. Its features then sit within 2 mm of
   MakeHuman's.
 - **Masks.** Its lips are painted from its own lip mask (`ColLipMask` in `char.blend`, over all
-  its triangles). MakeHuman's other masks for painting the skin (nails, eyelids, ears...) are
-  carried over into Vitruvian's texture layout, texel by texel, from the nearest point of
-  MakeHuman's body: on the head, where it is on MakeHuman's face, by the face map.
+  its triangles), and its areolae from its own: round its nipples (where its own shape for them
+  moves), as far out as its own shape for their size moves them most (12 mm). MakeHuman's other
+  masks for painting the skin (nails, eyelids, ears...) are carried over into Vitruvian's
+  texture layout, texel by texel, from the nearest point of MakeHuman's body fitted onto it: on
+  the head, where it is on MakeHuman's face, by the face map. (Carried over, the areolae's had
+  come out all but empty: MakeHuman's were 4.5 cm from Vitruvian's nipples.)
 
 `test/vitruvian.test.js` checks the data: the bones, weights, parts and shapes; that it stands as
 tall as MakeHuman's body in every preset; that a shirt comes as high up its neck; that its face's
@@ -1205,7 +1235,11 @@ Mesh2Motion's clips: "Clips in the game", below):
 - **Sitting** (`setSeated`): the thighs level (hips flexed 88°), the knees bent square, the feet
   flat, leaning a little over the table, the free arm resting on it; the pelvis lowered onto a
   45 cm bench (the hip joints 10 cm above it) and back from the middle of the square, so the
-  knees go under the table. The feet aren't kept planted, but the hands still reach.
+  knees go under the table. The feet aren't kept planted, but the hands still reach. A foot the
+  pose puts into the floor is brought onto it (`SEATED`, `Walker`'s `#onFloor`): the shin swung
+  forward about the knee, the thigh left level on the seat, so a long-legged body's feet are
+  further out in front of it, as people of every height sit on the same bench. (Lifting the foot
+  straight up instead raised the knees into the table and the tankard.)
 - **A toast**: a tankard (held upright by its handle, the forearm level) raised high in front,
   shaken, then brought to the mouth and tipped, the head back, and down again.
 - **Serving**: leaning over a table to set a tankard down on it.
@@ -1456,8 +1490,8 @@ where they're planted, *Movement*):
 | Rest: *a cheer* (clip) | 2, 3.1° | none | none |
 | Rests: the clerk's, reeve's and adventurer's five keyed | 0 to 30, up to 4.0° | 0 to 5, up to 9.6 cm | none |
 
-(Seated, every rest's feet are as far into the floor on the tallest 18 bodies as the bench puts
-them, clip or keyed: the seat's height isn't fitted to the body yet.)
+(Seated, every rest's feet had been as far into the floor on the tallest 18 bodies as the bench
+put them, clip or keyed. Now they're brought onto it, the shin swung forward: Sitting, above.)
 
 ### Performance
 
