@@ -150,7 +150,8 @@ describe("weapons (weapons.js)", () => {
 
     it("picks an attack that reaches: ranged weapons out to their range", () => {
         assert.equal(chooseAttack("bow", [0, 0], [9, 0])?.id, "arrow");
-        assert.equal(chooseAttack("bow", [0, 0], [9, 3]), null);
+        assert.equal(chooseAttack("bow", [0, 0], [18, 0])?.id, "arrow");
+        assert.equal(chooseAttack("bow", [0, 0], [18, 3]), null);
         assert.equal(chooseAttack("wand", [0, 0], [4, 5])?.id, "bolt");
         assert.equal(chooseAttack("sword", [0, 0], [2, 0]), null);
     });
@@ -264,7 +265,8 @@ describe("the battle (battle.js)", () => {
     it("puts its weapon away a while after the fight, once no enemy's in sight or after it", () => {
         const battle = new Battle(open(20, 10), { seed: 4 });
 
-        battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 5] });
+        // (A wand: the orc in sight, but too far off to be shot at)
+        battle.add({ id: "player", kind: "player", weapon: "wand", team: "hero", square: [2, 5] });
         battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [14, 5], ai: "patrol", patrol: [[14, 5], [14, 5]] });
         run(battle, 1000);
         assert.ok(battle.actor("player").armed);
@@ -461,6 +463,33 @@ describe("the battle (battle.js)", () => {
         assert.ok(hit, "the arrow hits");
         assert.equal(hit.reaction, "pierce");
         assert.ok(hit.time - shot.time >= (8 / WEAPONS.bow.attacks[0].projectile.speed) * 1000 - STEP_MS, "after flying 8 metres");
+    });
+
+    it("shoots with a bow from 18 metres, past where anyone looks round for enemies, without closing in", () => {
+        assert.equal(WEAPONS.bow.attacks[0].reach, 18);
+
+        const battle = new Battle(open(30, 5), { seed: 5 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 2] });
+
+        battle.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [2 + SIGHT + 5, 2] });
+        assert.equal(battle.canSee(player, battle.actor("dummy")), false, "(further than anyone looks round)");
+        battle.command("player", { type: "engage", target: "dummy" });
+
+        const events = run(battle, 3000);
+
+        assert.ok(events.some((event) => event.type === "projectile" && event.id === "player" && event.target === "dummy"), "shot");
+        assert.deepEqual(player.square, [2, 2], "from where it stood");
+        assert.equal(battle.shotAt("player", "dummy"), null);
+
+        // (Further than it reaches: walked closer first)
+        const far = new Battle(open(30, 5), { seed: 5 });
+        const walker = far.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 2] });
+
+        far.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [22, 2] });
+        assert.equal(far.shotAt("player", "dummy"), "range");
+        far.command("player", { type: "engage", target: "dummy" });
+        run(far, 3000);
+        assert.ok(walker.square[0] >= 4, `closed in (at ${walker.square})`);
     });
 
     it("doesn't shoot through walls", () => {

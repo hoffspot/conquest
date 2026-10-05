@@ -297,6 +297,40 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "mendWounds" }), { ok: true });
     });
 
+    it("refuses an aimed shot or a spell at an enemy out of reach, saying so, with nothing spent and nothing cooling down", () => {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon: "bow" }, progress: { gear: { mainHand: { id: "bow" } }, skills: { marksman: 300 }, schools: { healing: 99 } } });
+        host.populate();
+
+        const player = host.battle.actor(HOST_PLAYER);
+        const orc = host.battle.actor("orc");
+        const progress = host.players.get(HOST_PLAYER).progress;
+
+        assert.ok(progress.abilities().includes("aimedShot") && progress.knows("stun") && progress.knows("vigor"));
+
+        // Further than a bow reaches (18 m), and than a spell does (16 to 18)
+        put(orc, player.map, [player.square[0] + 21, player.square[1]]);
+
+        for (const command of [{ type: "ability", ability: "aimedShot", target: "orc" }, { type: "cast", spell: "stun", target: "orc" }, { type: "cast", spell: "vigor", target: "orc" }]) {
+            assert.deepEqual(host.command(HOST_PLAYER, command), { ok: false, reason: "range" }, JSON.stringify(command));
+        }
+
+        // (Still ready, every one of them: none started cooling down, nothing made stronger)
+        assert.equal(player.empowered ?? null, null);
+        assert.equal(host.players.get(HOST_PLAYER).readyAt.aimedShot ?? 0, 0);
+
+        for (const spell of ["stun", "vigor"]) {
+            assert.equal(host.battle.cooldown(HOST_PLAYER, spell), 0, spell);
+        }
+
+        // Near enough: the shot made stronger, and ready again only after a while
+        put(orc, player.map, [player.square[0] + 1, player.square[1]]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "aimedShot", target: "orc" }), { ok: true });
+        assert.deepEqual(player.empowered, { blow: "ranged", factor: 2 });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "aimedShot", target: "orc" }), { ok: false, reason: "cooldown" });
+    });
+
     it("pays for what's bought by talking, and does it: ale fills stamina, a blessing's a boon for a while", () => {
         const host = hosted({ gold: 12 });
         const barkeep = atTheBar(host);

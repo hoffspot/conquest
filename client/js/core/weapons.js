@@ -82,9 +82,9 @@ export const WEAPONS = Object.freeze({
     bow: {
         label: "Bow",
         school: "Ranged",
-        about: "A yew longbow and a quiver of arrows. Shoots from 9 metres.",
+        about: "A yew longbow and a quiver of arrows. Shoots from 18 metres.",
         equipment: ["bow", "quiver"],
-        attacks: [ranged({ id: "arrow", reach: 9, damage: [3, 7], hitAt: 660, duration: 1000, interval: 1400, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 22 } })],
+        attacks: [ranged({ id: "arrow", reach: 18, damage: [3, 7], hitAt: 660, duration: 1000, interval: 1400, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 22 } })],
     },
     gauntlets: {
         label: "Spiked gauntlets",
