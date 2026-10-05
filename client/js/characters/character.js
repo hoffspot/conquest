@@ -749,7 +749,7 @@ export class Character {
         for (const model of this.items) {
             const { home, sheath, sling, looks } = model.userData;
 
-            if (home && !model.userData.holder) {
+            if (home && !model.userData.holder && !model.userData.dropped) {
                 const place = on && sheath ? sheath : this.slung && sling ? sling : home;
                 const bone = this.rig.bone(place.bone);
 
@@ -778,7 +778,7 @@ export class Character {
         for (const id of this.equipment.values()) {
             const item = EQUIPMENT[id];
 
-            if (item.kind !== "item" || (on && item.sheath) || (this.slung && item.sling)) {
+            if (item.kind !== "item" || (on && item.sheath) || (this.slung && item.sling) || this.items.some((model) => model.name === id && model.userData.dropped)) {
                 continue;
             }
 
@@ -812,12 +812,77 @@ export class Character {
         this.showOffHand();
     }
 
-    /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe). */
+    /**
+     * Let go of what's held in a hand or on its arm (`side`: "Left" or "Right"), falling down
+     * dead: each falls from where it is to the ground (the character's feet's level), out to the
+     * side clear of where the body lies (along the line from its pelvis to its head), turned over
+     * onto its broadest side, and lies there; the hand opens. What's worn (gauntlets), put away
+     * or slung on the back stays. pickUp takes it all back.
+     */
+    drop(side) {
+        const hips = this.object.worldToLocal(this.rig.bone("Hips").getWorldPosition(new THREE.Vector3()));
+        const head = this.object.worldToLocal(this.rig.bone("Head").getWorldPosition(new THREE.Vector3()));
+        const along = head.sub(hips).setY(0);
+
+        // (Lying more or less any way while it's still up: across its left and right, then)
+        if (along.lengthSq() < 0.09) {
+            along.set(0, 0, 1);
+        }
+
+        along.normalize();
+
+        for (const model of this.items) {
+            const item = EQUIPMENT[model.name];
+            const bone = model.parent?.name ?? "";
+
+            if (model.userData.dropped || model.userData.holder || !item?.grips || item.sheath?.worn || !bone.startsWith(side) || !/Hand|ForeArm/.test(bone)) {
+                continue;
+            }
+
+            this.object.attach(model);
+            model.userData.settling = null;
+            model.userData.dropped = droppedFrom(model, hips, along);
+        }
+
+        delete this.holds[side];
+    }
+
+    /**
+     * Take back what's been dropped (alive again), each where it goes now; and what hangs at the
+     * hips hanging as it does standing again, not swung as lying left it.
+     */
+    pickUp() {
+        for (const model of this.items) {
+            const hangs = model.userData.hangs;
+
+            if (hangs) {
+                [hangs.angle, hangs.out, hangs.time] = [0, 0, null];
+            }
+        }
+
+        if (this.items.some((model) => model.userData.dropped)) {
+            this.items.forEach((model) => (model.userData.dropped = null));
+            this.arrange();
+        }
+    }
+
+    /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe), and anything dropped falling. */
     settle(dt) {
         this.swayed = (this.swayed ?? 0) + dt;
 
         for (const model of this.items) {
             const settling = model.userData.settling;
+            const dropped = model.userData.dropped;
+
+            // (Dropped: falling faster and faster, turning over as it goes, till it lies there)
+            if (dropped && dropped.time < dropped.fall) {
+                dropped.time = Math.min(dropped.fall, dropped.time + dt);
+
+                const u = dropped.time / dropped.fall;
+
+                model.position.copy(dropped.from).addScaledVector(dropped.out, u).setY(dropped.from.y + (dropped.y - dropped.from.y) * u * u);
+                model.quaternion.slerpQuaternions(dropped.turn, dropped.to, smoothstep(0, 1, u));
+            }
 
             // (A tail swaying from side to side, and a little up and down)
             if (model.userData.sway) {
@@ -1660,6 +1725,64 @@ function known(id) {
 
 const _sway = new THREE.Quaternion();
 const _swayAngles = new THREE.Euler();
+
+// How fast what's dropped falls (m/s²)
+const GRAVITY = 9.8;
+const _corner = new THREE.Vector3();
+const _thin = new THREE.Vector3();
+const _over = new THREE.Quaternion();
+
+// (What's dropped lands at least this far out to the side of the line the body lies along, m)
+const DROP_CLEAR = 0.4;
+
+/**
+ * Where something let go of (on the character's object, as it is now) falls to and how: from
+ * where it is, out to the side of the line the body lies along (from `hips`, `along`, in the
+ * object's frame) at least DROP_CLEAR beyond its own breadth, turned over onto its broadest side
+ * (its thinnest way up or down, as is nearer), its lowest corner on the ground; and how long it
+ * takes falling ({ from, out, turn, to, y, fall, time }).
+ */
+function droppedFrom(model, hips, along) {
+    if (!model.userData.box) {
+        model.updateWorldMatrix(true, true);
+
+        const inverse = model.matrixWorld.clone().invert();
+        const box = new THREE.Box3();
+
+        model.traverse((mesh) => {
+            if (mesh.isMesh && mesh.visible) {
+                mesh.geometry.computeBoundingBox();
+                box.union(mesh.geometry.boundingBox.clone().applyMatrix4(inverse.clone().multiply(mesh.matrixWorld)));
+            }
+        });
+        model.userData.box = box;
+    }
+
+    const box = model.userData.box;
+    const size = box.getSize(_corner);
+    const thinnest = size.x <= size.y && size.x <= size.z ? 0 : size.y <= size.z ? 1 : 2;
+
+    _thin.set(0, 0, 0).setComponent(thinnest, 1).applyQuaternion(model.quaternion);
+
+    const to = _over.setFromUnitVectors(_thin, new THREE.Vector3(0, Math.sign(_thin.y) || 1, 0)).multiply(model.quaternion).clone();
+    let lowest = Infinity;
+
+    for (let k = 0; k < 8; k++) {
+        _corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).applyQuaternion(to);
+        lowest = Math.min(lowest, _corner.y);
+    }
+
+    const y = 0.004 - lowest;
+
+    // (Out to the side it's on, as far as clears the body, by its middle and half its breadth)
+    const middle = box.getCenter(new THREE.Vector3()).applyQuaternion(to).add(model.position).sub(hips).setY(0);
+    const across = new THREE.Vector3(along.z, 0, -along.x);
+    const aside = middle.dot(across);
+    const breadth = Math.max(size.x, size.y, size.z) * 0.5;
+    const out = across.multiplyScalar(Math.sign(aside) * Math.max(0, DROP_CLEAR + breadth * 0.5 - Math.abs(aside)) || 0);
+
+    return { from: model.position.clone(), out, turn: model.quaternion.clone(), to, y, fall: Math.max(0.12, Math.sqrt((2 * Math.max(0, model.position.y - y)) / GRAVITY)), time: 0 };
+}
 
 // Swing a blade hung at the hip (`model`, its `hangs`: Character.hang, on `character`) about
 // its frog as little as keeps its hilt (its pommel, grip and crossguard's arms) HANG_ARM_CLEAR

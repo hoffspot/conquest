@@ -30,7 +30,8 @@ import * as THREE from "three";
 import { HumanData } from "../client/js/characters/body.js";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, retarget } from "../client/js/characters/bvh.js";
 import { ITEMS, socketOn } from "../client/js/characters/equipment.js";
-import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
+import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
+import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
 import { jointAngles, limitRotation, Rig } from "../client/js/characters/rig.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -108,9 +109,28 @@ export const BAKES = [
 //  - for flinches and parries: knocked off the feet (Hit_Knockback), a crouched block (Defend) and
 //    a sword block stepping into it (Sword_Block): their legs are the motion.
 
+/**
+ * The falls, played whole (actions.js FALLS): the body, legs and arms as the clip has them, the
+ * pelvis turned and moved as far as it goes, each foot planted where it stands while the clip's
+ * is and stepping where the clip's steps, and the body kept as high off the ground as the clip's
+ * (grounding.js). { name, from (as BAKES'), crop } (crop: [from, to] seconds, only that part).
+ */
+export const FALLS = [
+    // Struck down from in front: staggering back a step, sitting down hard and falling back
+    { name: "deathBack", from: [["base", "Death_D"]] },
+    // Sinking: a step forward, down onto the knees, and over onto the face
+    { name: "deathFront", from: [["addon", "Death_A"]] },
+    // Knocked off the feet, thrown back onto the ground (the clip's last frame is its first
+    // again, standing: left out)
+    { name: "knockedDown", from: [["base", "Hit_Knockback"]], crop: [0, 0.7] },
+    // Getting up off the back: the knees drawn up, rolled up to sit, onto a knee and up
+    { name: "gettingUp", from: [["base", "LayToIdle"]] },
+];
+
 // Each key value's tolerance, by what it is: a key's left out if the curve through the others
-// passes this near it (degrees; arm lengths; unit vectors; metres; a foot's freedom)
-const KEEP = { angle: 3, at: 0.025, vector: 0.08, offset: 0.01, free: 0.2 };
+// passes this near it (degrees; arm lengths; unit vectors; metres; a foot's freedom; a turn's
+// quaternion)
+const KEEP = { angle: 3, at: 0.025, vector: 0.08, offset: 0.01, free: 0.2, quaternion: 0.01 };
 // (A loop's moves are small, a sway: kept this much closer)
 const LOOP_KEEP = 0.25;
 
@@ -462,6 +482,10 @@ function flatten(pose) {
     for (const [joint, value] of Object.entries(pose)) {
         if (joint === "offset") {
             value.forEach((x, k) => out.push([`offset.${k}`, x, "offset"]));
+        } else if (joint === "turn") {
+            value.forEach((x, k) => out.push([`turn.${k}`, x, "quaternion"]));
+        } else if (joint === "low") {
+            out.push(["low", value, "offset"]);
         } else if (joint === "free") {
             Object.entries(value).forEach(([side, x]) => out.push([`free.${side}`, x, "free"]));
         } else if (SIDES.includes(joint)) {
@@ -506,7 +530,7 @@ function reduce(times, poses, must, keep = 1) {
     const kept = new Set(must);
 
     poses.forEach((pose, f) => {
-        if (f > 0 && SIDES.some((side) => pose[side].shape !== poses[f - 1][side].shape)) {
+        if (f > 0 && SIDES.some((side) => pose[side]?.shape !== poses[f - 1][side]?.shape)) {
             kept.add(f);
         }
     });
@@ -617,43 +641,296 @@ export async function bake(from, { from: clips, hold, hit = null, crop = null, m
     };
 }
 
-/** Bake every one of `bakes`, with the clips from `from`: { name: baked }. */
-export async function bakeAll(from, bakes = BAKES) {
+// A fall's joints, as the clip has them: the body's, both legs' (but the toes, which the walker
+// keeps on the ground) and both arms' (the pelvis's turn kept as a quaternion: it lies down, past
+// any angle a standing pelvis turns through)
+const FALL_JOINTS = [...BODY.filter((name) => name !== "Hips"), ...LEGS.filter((name) => !name.endsWith("ToeBase")), ...["Arm", "ForeArm", "Hand"].flatMap((part) => [`Left${part}`, `Right${part}`])];
+// (A body this low, as a share of how high its pelvis is standing, is down: on its knees or the
+// ground, its feet no longer standing on the ground; and its chest this near the lowest it goes
+// has landed)
+const DOWN = 0.66;
+const LANDED = 0.05;
+// (How long a foot that's been moved to stand where ours stand takes to go back to where the
+// clip's goes, once it's free: s)
+const FADE = 0.3;
+// (And how far past its range a planted foot may turn its hip before it's let go of: degrees)
+const STRAIN = 6;
+// (And how far over the ground the reference body's lowest point can be and still be on it, m)
+const OVER = 0.04;
+
+// Which of a clip's own feet (its skeleton's, `poses` as `sequence` gives them, frames `first` to
+// `last`) are off its floor or moving, frame by frame (1 free, 0 planted; left, right): their
+// ankles or balls higher than at rest, or their ankles going along
+function clipFeet(poses, first, last, frameTime) {
+    const index = new Map(poses.names.map((name, j) => [name, j]));
+    const rest = poses.rest.positions;
+    const frames = poses.poses.slice(first, last + 1);
+    const free = frames.map(() => [0, 0]);
+
+    ["l", "r"].forEach((s, i) => {
+        const [ankle, ball] = [index.get(`foot_${s}`), index.get(`ball_${s}`)];
+
+        frames.forEach(({ positions }, f) => {
+            const [before, after] = [frames[Math.max(0, f - 1)].positions[ankle], frames[Math.min(frames.length - 1, f + 1)].positions[ankle]];
+            const speed = Math.hypot(after.x - before.x, after.z - before.z) / (frameTime * (Math.min(frames.length - 1, f + 1) - Math.max(0, f - 1)));
+            const lifted = Math.min(positions[ankle].y - rest[ankle].y, positions[ball].y - rest[ball].y);
+
+            free[f][i] = lifted > LIFTED || speed > STEPPING ? 1 : 0;
+        });
+
+        // (Not for a frame or two: that's only a wobble)
+        for (let f = 1; f < frames.length - 1; f++) {
+            if (free[f][i] && !free[f - 1][i] && !free[f + 1][i]) {
+                free[f][i] = 0;
+            }
+        }
+    });
+
+    return free;
+}
+
+/**
+ * Bake a fall (a FALLS entry) on the reference body: { source, seconds, lands (when it hits the
+ * ground: its chest nearly as low as it goes; 0 if it doesn't go down), channels, keys } (each
+ * key its time in seconds and its values in the channels' order: each joint's angles, the
+ * pelvis's turn and offset, each foot let go of the ground, and how high its lowest point is).
+ */
+export async function bakeFall(from, { from: clips, crop = null }, body = referenceBody()) {
+    const poses = await sequence(from, clips);
+    const clip = retarget(poses, body.character.rig, { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH, limit: false });
+    const { character } = body;
+    const { rig, object, positions, human } = character;
+    const frameTime = clip.frameTime;
+    const [first, last] = crop ? crop.map((t) => Math.round(t / frameTime)) : [0, clip.frames.length - 1];
+    const frames = clip.frames.slice(first, last + 1);
+    const points = groundPoints(human);
+    const standingHips = rig.heads[0].y;
+    let ground = null;
+    let turn = null;
+
+    // Each frame posed as the clip has it, every joint within its range, the ground where the
+    // body's lowest point is at its start; and the ankles put where `ankles` says ([left, right]
+    // Vector3s in the world, or nulls: where they are), the legs bent to reach them
+    const place = (frame, ankles = null) => {
+        const strain = [0, 0];
+
+        rig.reset();
+        frame.rotations.forEach((rotation, b) => {
+            if (rotation) {
+                const { kind, side } = rig.joints[b];
+
+                rig.rotations[b].copy(rotation);
+                limitRotation(kind, side, rig.rotations[b]);
+            }
+        });
+        rig.offset.set(frame.side, frame.height, frame.forward);
+        rig.apply();
+        object.updateMatrixWorld(true);
+        ground ??= lowestPoint(rig, positions, points);
+        rig.offset.y -= ground;
+        rig.apply();
+        object.updateMatrixWorld(true);
+
+        if (ankles?.some(Boolean)) {
+            ["Left", "Right"].forEach((Side, i) => {
+                if (!ankles[i]) {
+                    return;
+                }
+
+                rig.reach(`${Side}UpLeg`, `${Side}Leg`, `${Side}Foot`, object.worldToLocal(ankles[i].clone()), { pole: KNEE });
+
+                // (Back into joint rotations, each within its range: how far the hip was past its)
+                for (const part of ["UpLeg", "Leg", "Foot"]) {
+                    const b = rig.index.get(`${Side}${part}`);
+                    const { kind, side } = rig.joints[b];
+
+                    rig.rotations[b].copy(rig.frames[rig.definition[b].parent]).invert().multiply(rig.bones[b].quaternion).multiply(rig.frames[b]);
+
+                    const wanted = rig.rotations[b].clone();
+
+                    limitRotation(kind, side, rig.rotations[b]);
+
+                    if (part === "UpLeg") {
+                        strain[i] = (wanted.angleTo(rig.rotations[b]) * 180) / Math.PI;
+                    }
+                }
+            });
+            rig.apply();
+            object.updateMatrixWorld(true);
+        }
+
+        return { hips: rig.bone("Hips").getWorldPosition(new THREE.Vector3()).y, ankles: ["LeftFoot", "RightFoot"].map((name) => rig.bone(name).getWorldPosition(new THREE.Vector3())), strain };
+    };
+
+    // Each foot planted while the clip's own (its skeleton's, not ours: ours, on another body, can
+    // come off the ground where the clip's stands on it) stands still on its floor, and the body's
+    // up on them
+    const unmoved = frames.map((frame) => place(frame));
+    const down = unmoved.map(({ hips }) => hips < standingHips * DOWN);
+    const free = clipFeet(poses, first, last, frameTime).map((feet, f) => feet.map((foot) => (down[f] ? 1 : foot)));
+
+    // Standing, its legs bent to stand where ours stand, not where the clip's do (an animator's
+    // figure stands wide, ours under the body): from where it stands (its start, or if it starts
+    // down, its end), each planted foot kept where ours stands, where it was set down; once it's
+    // free (stepping, or down) going where the clip's goes, from as far as it was from it over
+    // FADE seconds
+    const anchor = down[0] ? frames.length - 1 : 0;
+    const stands = standing(body);
+    const order = anchor === 0 ? frames.map((_, f) => f) : frames.map((_, f) => frames.length - 1 - f);
+    const fitted = () => {
+        const ankles = frames.map(() => [null, null]);
+
+        for (const i of [0, 1]) {
+            let lock = new THREE.Vector3(stands[i].at.x, unmoved[anchor].ankles[i].y, stands[i].at.z);
+            let [off, share, last] = [null, 0, lock];
+
+            for (const f of order) {
+                const clip = unmoved[f].ankles[i];
+
+                if (!free[f][i]) {
+                    // (Set down where it's got to)
+                    lock ??= last.clone();
+                    ankles[f][i] = lock.clone().setY(clip.y);
+                } else {
+                    // (Off: from where it was, going where the clip's goes)
+                    if (lock) {
+                        [off, share, lock] = [last.clone().sub(clip).setY(0), 1, null];
+                    }
+
+                    share = Math.max(0, share - frameTime / FADE);
+                    ankles[f][i] = share > 0 ? clip.clone().addScaledVector(off, share) : null;
+                }
+
+                last = ankles[f][i] ?? clip;
+            }
+        }
+
+        return ankles;
+    };
+
+    // (A foot that can't be kept where it was set down without its hip turned past its range, as
+    // the body sinks onto it, is let go of: it goes with the body, as a falling body's feet do)
+    const tried = fitted();
+
+    frames.forEach((frame, f) => {
+        const { strain } = place(frame, tried[f]);
+
+        strain.forEach((over, i) => {
+            if (over > STRAIN) {
+                free[f][i] = 1;
+            }
+        });
+    });
+
+    const ankles = fitted();
+
+    const measured = frames.map((frame, f) => {
+        place(frame, ankles[f]);
+
+        const pose = {};
+
+        for (const name of FALL_JOINTS) {
+            const b = rig.index.get(name);
+            const { kind, side } = rig.joints[b];
+
+            pose[name] = Object.fromEntries(Object.entries(jointAngles(kind, side, rig.rotations[b])).map(([angle, value]) => [angle, round(value, 1)]));
+        }
+
+        // (Its turn the same way round as the frame before's, so the keys go smoothly between)
+        const q = rig.rotations[0].clone();
+
+        if (turn && q.dot(turn) < 0) {
+            q.set(-q.x, -q.y, -q.z, -q.w);
+        }
+
+        turn = q;
+        pose.turn = q.toArray().map((x) => round(x, 4));
+        pose.offset = vector(rig.offset, 3);
+        pose.low = round(Math.max(0, lowestPoint(rig, positions, points)), 3);
+
+        const chest = rig.bone("Spine2").getWorldPosition(new THREE.Vector3()).y;
+
+        return { pose, chest };
+    });
+
+    // (And while one's planted, the body's lowest point on the ground; where it's down, or off its
+    // feet, a little over it as the clip's is: not that little, which is only how the bodies differ)
+    measured.forEach(({ pose }, f) => {
+        pose.free = { left: free[f][0], right: free[f][1] };
+        pose.low = !down[f] && (!free[f][0] || !free[f][1]) ? 0 : round(Math.max(0, pose.low - OVER), 3);
+    });
+
+    const keyed = measured.map(({ pose }) => pose);
+    const times = keyed.map((_, f) => f * frameTime);
+    const lowest = Math.min(...measured.map(({ chest }) => chest));
+    const goes = down.some(Boolean) && !down[0];
+    const lands = goes ? times[measured.findIndex(({ chest }) => chest <= lowest + LANDED)] : 0;
+    const keys = reduce(times, keyed, [0, keyed.length - 1]);
+    const channels = flatten(keyed[0]).map(([channel]) => channel);
+    const places = (channel) => (channel.startsWith("turn") ? 4 : channel.startsWith("offset") || channel === "low" ? 3 : 1);
+
+    return {
+        source: clips.map(([, name]) => name).join(" + ") + (crop ? ` (${crop[0]} to ${crop[1]} s)` : ""),
+        seconds: round(times.at(-1), 3),
+        lands: round(lands, 3),
+        channels,
+        keys: keys.map((f) => [round(times[f], 3), ...flatten(keyed[f]).map(([channel, value]) => round(value, places(channel)))]),
+    };
+}
+
+/** Bake every one of `bakes`, with the clips from `from`: { name: baked }; and the falls (FALLS), `falls`. */
+export async function bakeAll(from, bakes = BAKES, falls = FALLS) {
     const body = referenceBody();
     const out = {};
+    const fallen = {};
 
     for (const each of bakes) {
         out[each.name] = await bake(from, each, body);
     }
 
-    return out;
+    for (const each of falls) {
+        fallen[each.name] = await bakeFall(from, each, body);
+    }
+
+    return { clips: out, falls: fallen };
 }
 
-/** The module the bakes are written to. */
-export function keysModule(baked, { height }) {
+/** The module the bakes are written to: the clips (`clips`) and the falls (`falls`), bakeAll's. */
+export function keysModule({ clips, falls }, { height }) {
     const lines = [
         "// Generated by scripts/bake-clips.js (npm run build:clips) from Mesh2Motion's human animations",
         "// (mesh2motion.org, CC0 1.0; the clips are Quaternius's Universal Animation Library): each a",
         "// clip's key poses for actions.js, timed 1 at the blow and 2 at its end, as `channels` (a joint's",
         "// angle, a hand's place or turn, the pelvis's offset, a foot let go of the ground) and each key's",
-        "// time and values in their order. Don't edit by hand: bake again.",
+        "// time and values in their order; and the falls, played whole, each key's time in seconds. Don't",
+        "// edit by hand: bake again.",
         "",
         "/** How tall the body they were baked on is (m): the pelvis's offset is for a body this tall. */",
         `export const CLIP_HEIGHT = ${round(height, 3)};`,
         "",
-        "export const CLIP_KEYS = Object.freeze({",
     ];
+    const write = (name, baked, fields) => {
+        lines.push(`    ${name}: {`, ...fields.map((field) => `        ${field}: ${JSON.stringify(baked[field])},`), "        keys: [");
 
-    for (const [name, { source: from, seconds, hit, channels, keys }] of Object.entries(baked)) {
-        lines.push(`    ${name}: {`, `        source: ${JSON.stringify(from)},`, `        seconds: ${seconds},`, `        hit: ${hit},`, `        channels: ${JSON.stringify(channels)},`, "        keys: [");
-
-        for (const key of keys) {
+        for (const key of baked.keys) {
             lines.push(`            ${JSON.stringify(key)},`);
         }
 
         lines.push("        ],", "    },");
-    }
+    };
 
+    lines.push("export const CLIP_KEYS = Object.freeze({");
+    Object.entries(clips).forEach(([name, baked]) => write(name, baked, ["source", "seconds", "hit", "channels"]));
+    lines.push("});", "");
+    lines.push(
+        "/**",
+        " * The falls (actions.js FALLS): each joint's angles, the pelvis's turn (a quaternion) and offset,",
+        " * each foot let go of the ground (`free`) and how high the body's lowest point is (`low`), at",
+        " * each key's time (seconds); `lands`, when it hits the ground.",
+        " */",
+        "export const FALL_KEYS = Object.freeze({",
+    );
+    Object.entries(falls).forEach(([name, baked]) => write(name, baked, ["source", "seconds", "lands", "channels"]));
     lines.push("});", "");
 
     return lines.join("\n");

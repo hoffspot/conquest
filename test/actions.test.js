@@ -4,10 +4,11 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
-import { Actions, ATTACKS, DODGES, DRAWS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, DODGES, DRAWS, FALLS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed, slung } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
+import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { ITEMS, SLING, socketOn } from "../client/js/characters/equipment.js";
@@ -819,23 +820,151 @@ describe("reactions and falls (actions.js)", () => {
         assert.ok(Math.sign(turned[0]) !== Math.sign(turned[1]), "opposite ways for opposite sides");
     });
 
-    it("falls down and lies on the ground, then gets up", () => {
+    // Where a body's lowest point is, and each arm's, off the ground (metres), as it's posed now
+    const lowest = (character) => {
+        const arms = [new THREE.Vector3(), new THREE.Vector3()];
+
+        character.object.updateMatrixWorld(true);
+
+        return { body: lowestPoint(character.rig, character.positions, groundPoints(human), arms), arms: arms.map(({ y }) => y) };
+    };
+
+    it("falls dead back, or onto its knees and over onto its face, whole, and lies on the ground whatever its build; then gets up", () => {
+        for (const shape of [{}, { macro: { gender: 0, height: 0.15, muscle: 0.3, weight: 0.3 } }, PRESETS.orc.shape]) {
+            for (const [clip, mirror, ahead] of [["deathBack", false, -1], ["deathBack", true, -1], ["deathFront", false, 1], ["deathFront", true, 1]]) {
+                const { character, walker, actions } = fighter(shape);
+                const lands = actions.die({ from: 0, way: { clip, mirror } });
+                let [standing, down] = [0, Infinity];
+
+                for (let t = 0; t < FALLS[clip].seconds + 0.5; t += 1 / 30) {
+                    walker.update(1 / 30);
+
+                    // (The body never in the ground, nor an arm, as it goes down: but for a sole,
+                    // by up to three centimetres, as a heel lifts standing on its planted foot or a
+                    // foot's let go of as the body sinks onto it)
+                    const low = lowest(character);
+
+                    assert.ok(low.body > -0.03 && Math.min(...low.arms) > -0.02, `${clip}: ${low.body.toFixed(3)}, arms ${low.arms.map((y) => y.toFixed(3))} at ${t.toFixed(2)} s`);
+                    standing = t < 0.1 ? Math.max(standing, world("Hips", character).y) : standing;
+                    down = Math.min(down, world("Spine2", character).y);
+                }
+
+                const what = `${clip}${mirror ? " mirrored" : ""} (${JSON.stringify(shape.macro ?? {})})`;
+
+                assert.ok(lands > 0.5 && lands < FALLS[clip].seconds, what);
+                assert.ok(world("Hips", character).y < standing * 0.3 && world("Head", character).y < 0.35, `${what}: lying, hips at ${world("Hips", character).y.toFixed(2)}, head at ${world("Head", character).y.toFixed(2)}`);
+                assert.ok(lowest(character).body < 0.01, `${what}: on the ground, not over it`);
+                assert.ok(Math.sign(world("Head", character).z) === ahead && Math.abs(world("Head", character).z) > 0.5, `${what}: head at ${world("Head", character).z.toFixed(2)}`);
+                assert.ok(world("Spine2", character).y < down + 0.06, `${what}: lying still`);
+
+                actions.revive();
+                walker.release();
+                walker.update(0.05);
+                assert.ok(world("Head", character).y > character.height * 0.85);
+            }
+        }
+    });
+
+    it("falls back from a blow in front, either way, and forward from one behind, turned towards it", () => {
         const { character, walker, actions } = fighter();
+        const ways = new Set();
 
-        actions.die({ from: 0 });
+        for (let k = 0; k < 12; k++) {
+            actions.revive();
+            actions.die({ from: 0 });
+            ways.add(actions.fall.parts[0].clip === FALLS.deathBack ? "back" : "front");
+        }
 
-        for (let t = 0; t < 2; t += 0.05) {
+        assert.deepEqual([...ways].sort(), ["back", "front"]);
+
+        actions.revive();
+        actions.die({ from: Math.PI, way: { mirror: false } });
+        assert.equal(actions.fall.parts[0].clip, FALLS.deathFront, "forward, from behind");
+
+        for (let t = 0; t < 4.8; t += 0.05) {
             walker.update(0.05);
         }
 
-        assert.ok(world("Head", character).y < 0.35, `head at ${world("Head", character).y.toFixed(2)}`);
-        assert.ok(world("Hips", character).y < 0.3);
-        assert.ok(world("Head", character).z < -0.8, "fallen backwards, away from the blow");
+        assert.ok(world("Head", character).z > 0.5, "onto its face, away from the blow behind");
+    });
+
+    it("keeps each foot where it stands while the clip's stands, steps where it steps, and is knocked off its feet and up again by when it's let up", () => {
+        const { character, walker, actions } = fighter();
+
+        for (let t = 0; t < 1; t += 0.05) {
+            walker.update(0.05);
+        }
+
+        // (Sinking to its knees, the feet planted where they were, never sliding)
+        const planted = walker.feet.map(({ lock }) => lock.clone());
+
+        actions.die({ from: 0, way: { clip: "deathFront", mirror: false } });
+
+        for (let t = 0; t < 1.8; t += 1 / 30) {
+            walker.update(1 / 30);
+            walker.feet.forEach((foot, i) => {
+                assert.ok(foot.planted && foot.lock.distanceTo(planted[i]) < 0.005, `foot ${i} at ${t.toFixed(2)} s`);
+                assert.ok(Math.abs(walker.footHeight(i)) < 0.01);
+            });
+        }
+
+        // Knocked down: thrown onto its back, and up again, the feet planted under it, by when
+        // it's let up (if that's not too soon: then a little after)
+        for (const seconds of [1.5, 2.5, 0.9]) {
+            actions.revive();
+            walker.release();
+
+            for (let t = 0; t < 0.5; t += 0.05) {
+                walker.update(0.05);
+            }
+
+            const standing = world("Hips", character).y;
+
+            actions.knockdown({ from: 0, seconds });
+
+            let lowestHips = Infinity;
+            let t = 0;
+
+            for (; actions.fall; t += 1 / 30) {
+                walker.update(1 / 30);
+                lowestHips = Math.min(lowestHips, world("Hips", character).y);
+                assert.ok(lowest(character).body > -0.01, `in the ground at ${t.toFixed(2)} s`);
+            }
+
+            assert.ok(lowestHips < 0.3, `thrown down: ${lowestHips.toFixed(2)}`);
+            assert.ok(t <= Math.max(seconds, FALLS.knockedDown.lands + 0.15 + FALLS.gettingUp.seconds / 1.6) + 0.05, `up by ${t.toFixed(2)} s for ${seconds}`);
+            assert.ok(world("Hips", character).y > standing - 0.08, "standing again");
+            assert.ok(walker.feet.every((foot) => foot.planted), "on its feet");
+        }
+    });
+
+    it("lets go of what's in its hands dying, each lying on the ground beside it, and takes it back alive", () => {
+        const { character, walker, actions } = fighter({}, ["sword", "roundShield"]);
+
+        for (const method of ["drop", "pickUp"]) {
+            character[method] = Character.prototype[method].bind(character);
+        }
+
+        actions.die({ from: 0, way: { clip: "deathBack", mirror: false } });
+
+        for (let t = 0; t < 3; t += 1 / 30) {
+            walker.update(1 / 30);
+        }
+
+        for (const id of ["sword", "roundShield"]) {
+            const model = character.items.find((item) => item.name === id);
+            const box = new THREE.Box3().setFromObject(model);
+
+            assert.equal(model.parent, character.object, `${id} let go of`);
+            assert.ok(box.min.y > -0.005 && box.min.y < 0.02, `${id} on the ground: ${box.min.y.toFixed(3)}`);
+            assert.ok(box.max.y - box.min.y < 0.12, `${id} lying flat: ${(box.max.y - box.min.y).toFixed(3)} high`);
+        }
+
+        assert.ok(!character.holds.Right && !character.holds.Left, "the hands open");
 
         actions.revive();
-        walker.release();
-        walker.update(0.05);
-        assert.ok(world("Head", character).y > character.height * 0.85);
+        assert.equal(character.items.find((item) => item.name === "sword").parent.name, "RightHand");
+        assert.ok(character.holds.Right?.grips);
     });
 });
 

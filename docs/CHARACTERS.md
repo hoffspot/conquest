@@ -629,6 +629,10 @@ standing, arms at the sides, palms facing the thighs.
     far from where the gait put it (running, turning, starting off), the line from the hip to
     the foot passed right by the knee, so which side the knee was on flickered: for a frame it
     swung 20 cm or more to the side, or bent backwards, bowing the leg.
+- **Falling** (actions.js), the feet are planted only where the fall's clip plants them, never
+  shuffled under the body (the overlay says `STEPPED`); a foot whose hip can't hold it there
+  within the hip's range is let go of (the hip held to its range), and planted again where it's
+  got to.
 - **Standing over planted feet.** Standing still, anything layered over the walk (a rest's weight
   shifted, a blow's lunge, a cast) leans the body over the feet; it doesn't step them:
   - The feet shuffle round under the body only as it turns (to face someone): towards where each
@@ -875,14 +879,15 @@ that hand's forearm), and it's in only if it's behind that skin, not off to one 
 `motion` job) goes further. It plays every motion, a frame at a time at 30 frames a second, on 30
 bodies: each people's (humans, elves, dark elves, cat folk, lizard folk, orcs) at the five ends of
 their builds (the thinnest, shortest and bulkiest women, the bulkiest and tallest men), each
-holding and wearing what they would. That's 245 motions:
+holding and wearing what they would. That's 280 motions:
 
 - standing, setting off, walking and running;
 - each weapon's guard (still for two seconds, a sway's loop; walking; running) and its every
   blow;
 - each spell's casts, and drawing and putting away each weapon;
 - every flinch, every way (keyed and the clips'), slipping a blow each way (aside to the left
-  and right, and back), falling dead and knocked down;
+  and right, and back), falling dead each way (back, back mirrored, forward, and forward from
+  behind) and knocked down (for a second and a half, and for under a second);
 - the folk's acts (toasting, serving, pouring, forging, blessing, stamping, reading and the rest)
   and every rest of every role.
 
@@ -932,6 +937,16 @@ Thirty pairs came out a little worse. Most are the war hammer going onto the bac
 2.7 cm further into the back as it's hoisted there, and 4.5 cm into the hips on two bodies as it's
 drawn), which is to be carried head-up on the shoulder instead; the rest are worse by about a
 centimetre or two degrees.
+
+M8d-4 (2026-10-05) gave the deaths and the knockdown their legs (Falling, below), and the falls
+are checked six ways instead of three (dead either way, forward and from behind; knocked down and
+knocked down briefly). The baseline was kept again, and nothing but the falls changed. Their feet
+had swung into the ground as the body went down, up to 56 cm (2,774 cm on 90 pairs); they're now
+at most 2.9 cm into it (174 cm on 120 pairs, twice the falls). What's past a limit now is mostly
+the clips' own: an ankle up to 17° past its range as the backward fall's first step pushes off, a
+wrist 5° past as the knockdown breaks its fall on a hand, a foot sliding up to 13 cm as the body
+gets back up over it, and held things in the body as it lands (up to 8 cm, mostly a dark elf's
+shield on the arm; a sword up to 6 cm in the thigh, the rest about 2 cm).
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
@@ -1029,9 +1044,51 @@ behind, the left hand comes up to the waist first, over the scabbard, the elbow 
 clear of the shield on the back, and goes behind from there (`ARMED_CLASPED`). Other folk's rests
 keep their own ways.
 
-**Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
-when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,
-arms flung out, and lies flat. The feet aren't kept planted while falling.
+**Falling** (`die`, `knockdown`) is played whole, as an animator's clip has it: every joint, the
+legs and arms too, and the pelvis turned and moved as far as it goes (FALLS, baked from
+Mesh2Motion's clips: "Clips in the game", below):
+
+| Fall | Mesh2Motion's | Length | Lands | What happens |
+| --- | --- | --- | --- | --- |
+| Struck down from in front (`deathBack`) | `Death_D` | 2.2 s | 1.3 s | Staggers back, sits down hard, rolls back and lies flat |
+| Sinking, or struck down from behind (`deathFront`) | `Death_A` | 4.5 s | 3.7 s | Sways, sinks onto the knees, then over onto the face |
+| Knocked off the feet (`knockedDown`) | `Hit_Knockback` (its first 0.7 s) | 0.7 s | 0.3 s | Thrown up and back onto the back |
+| Getting up (`gettingUp`) | `LayToIdle` | 1.5 s | | Knees drawn up, rolled up to sit, onto a knee and up |
+
+- **Which.** From in front, either death, never the same twice running; from behind, forward
+  onto the face, away from the blow. Either may be mirrored, left for right. The whole of it is
+  turned towards where the blow came from (as far as 45°) as it falls. A knockdown always throws
+  the body onto its back.
+- **The feet.** Each stays planted where it stands while the clip's foot stands still on its
+  floor (the clip's own skeleton's, not ours: ours, on another body, comes off the ground where
+  the clip's stands on it), and steps where the clip's steps: its leg is the clip's while it's
+  free, and it's planted again wherever it comes down (`Walker.freed`; the overlay says `STEPPED`,
+  so the walker doesn't shuffle them round under the body as it turns). Once the body's down,
+  its pelvis under two thirds of its standing height, the legs are the clip's. A foot its hip
+  can't hold within the hip's range (sinking onto feet set close together) is let go of, and goes
+  with the body, the hip held to its range.
+- **Our stance, not the clip's.** An animator's figure stands with its feet 60 cm apart; ours
+  stand under the body. So the bake bends the clip's legs to stand where ours stand: from where it
+  stands (its start; or getting up, its end), each planted foot kept where ours is, and once it's
+  free going over to where the clip's goes, over 0.3 s. Getting up ends with the feet under the
+  body, where the walk takes over.
+- **On the ground.** The body's lowest point (its skin's, found from 600 of its vertices, the
+  feet's four times as closely: `grounding.js`) is kept as high off the ground as the clip's
+  body's was, as it falls and as it lies, so a body of any build lies on the ground, not in it or
+  over it. Its arms aren't counted (fitted to another body, an arm the clip lays on the ground can
+  go through it): an arm still in the ground is turned up at the shoulder till it's out.
+- **What's held.** Dying, what's in each hand or on its arm is let go of as the hand comes within
+  40 cm of the ground, or as the body hits it: it falls to the ground, out to the side clear of
+  where the body lies, turned over onto its broadest side, and lies there (`Character.drop`); the
+  hand opens. Worn gauntlets, a sheathed blade and a shield slung on the back stay. Alive again,
+  everything's taken back (`pickUp`), and a blade hung at the hip hangs as it does standing.
+- **Knocked down and up again.** It lies a moment (0.15 s at least), then gets up as soon as
+  it's let up, as much as 1.6 times as quickly as the clip if need be; let up sooner than that
+  (some knockdowns last under a second), it's up a little after. It eases into the walk over the
+  last 0.3 s.
+- **Timed by where it lands.** `die` and `knockdown` say how long until the body hits the ground
+  (its chest nearly as low as it goes): the game times the thud, the blood pooling under them,
+  their shadow fading and how long they lie before sinking from then.
 
 **The tavern's folk** have a few more:
 
@@ -1188,7 +1245,8 @@ The lab plays these whole, as the clip has them.
 
 **Clips in the game** (`scripts/bake-clips.js`, run by `npm run build:clips` too): a clip that's
 to be one of the game's ways of doing something is baked into key poses, the same keys every
-other action is made of (`client/js/characters/clip-keys.js`: 17 clips, 250 keys, 82 KB), so its
+other action is made of (`client/js/characters/clip-keys.js`: 17 clips, 250 keys, and 4 falls,
+135 keys, 127 KB), so its
 arms are reached within their ranges, what's held is kept out of the body, and the motion check
 measures it as it does any other:
 
@@ -1215,6 +1273,16 @@ measures it as it does any other:
    through them needs to come within 3°, 2.5 cm (as arm lengths) or a little of every value. A
    loop (`loop`: a guard's sway) is timed evenly, key 1 halfway, and kept four times closer to
    the clip, its movements being small.
+
+A fall (`FALLS` in bake-clips.js, `FALL_KEYS` in clip-keys.js) is baked whole instead: every
+joint's angles but the toes' (the walker keeps those on the ground) and the hands' fingers, each
+within its range; the pelvis's turn as a quaternion (lying down, it turns further than angles
+for a standing pelvis go) and its offset as far as it moves; each foot let go of the ground
+(`free`, from the clip's own feet, and once the body's down); how high the body's lowest point is
+(`low`: on the ground while a foot's planted; down or off its feet, as the clip's, but for the
+4 cm the bodies differ by); and when it lands. The legs are bent to stand where ours stand
+(Falling, above). Its keys are timed in seconds, the curve through them within 3°, 1 cm or 0.01 of
+a quaternion of every value.
 
 `clipped(name, clip)` in actions.js makes a way from one: easing out from key 1.6, its pelvis's
 offset scaled to the body's height, and a hand kept as the research has it (`hands`) where the
@@ -1246,7 +1314,13 @@ at the hip). What was tried, on all 30 of the motion check's bodies:
 | `Hit_Chest` | Flinch: the staff's, bow's and kick's other way | Kept | Added from its first pose, the hands left as they were |
 | `Hit_Head` | Flinch: the punch's other way | Kept | Likewise |
 | `Dodge_left` (mirrored for the right), `Dodge_back` | Slipping a blow (Evasion, the Dodge spell) | Kept | Its lean at 65%; the feet planted (the clips step out of the way) |
-| `Hit_Knockback`, `Defend`, `Sword_Block` | Flinch, a parry | Left out | Their legs are the motion: a fall, a crouch and a step (for the deaths and falls with their legs, to come) |
+| `Death_D` | Falling dead back | Kept | Played whole, the legs too (Falling, above) |
+| `Death_A` | Falling dead forward | Kept | Likewise |
+| `Hit_Knockback` (its first 0.7 s), `LayToIdle` | Knocked down and up again | Kept | Likewise; the clip's last frame is its first again, standing: cut |
+| `Death_B`, `Death_C` | Falling dead | Left out | A flying dive forward; a backflip, the legs over the head |
+| `Hit_Knockback_RM` | Knocked down | Left out | Thrown a metre back: the battle doesn't move the body |
+| `Zombie_Rise`, `Land_Three_Point`, `Kneeling Tired` | Getting up | Left out | A shambling zombie's; a superhero's landing; a kneeling loop |
+| `Defend`, `Sword_Block` | A parry | Left out | Their legs are the motion: a crouch and a step |
 | `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
 | `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |
 | `Greeting`, `Cheering_Two_Hands`, `Victory Fist Pump` | Rest | Left out | Clean; the keyed wave and the adventurer's two clip rests cover them |

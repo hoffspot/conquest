@@ -834,8 +834,17 @@ export function motions() {
         });
     }
 
-    for (const [name, fall] of [["dead", (actions) => actions.die({ from: 0 })], ["dead-from-behind", (actions) => actions.die({ from: Math.PI })], ["knocked-down", (actions) => actions.knockdown({ from: 0, seconds: 1.5 })]]) {
-        list.push({ id: `fall/${name}`, group: "fall", look: (body) => soldier(body, first(body)), seconds: 3, speed: 0, sheathed: true, start: ({ actions }) => fall(actions) });
+    // (Each way down, and knocked down for as long as the battle does and for less than getting
+    // up takes; each till it lies still or is up again)
+    for (const [name, seconds, fall] of [
+        ["dead", 3, (actions) => actions.die({ from: 0, way: { clip: "deathBack", mirror: false } })],
+        ["dead-mirrored", 3, (actions) => actions.die({ from: 0, way: { clip: "deathBack", mirror: true } })],
+        ["dead-forward", 5, (actions) => actions.die({ from: 0, way: { clip: "deathFront", mirror: false } })],
+        ["dead-from-behind", 5, (actions) => actions.die({ from: Math.PI, way: { mirror: true } })],
+        ["knocked-down", 2.5, (actions) => actions.knockdown({ from: 0, seconds: 1.5, mirror: false })],
+        ["knocked-down-briefly", 2.5, (actions) => actions.knockdown({ from: 0, seconds: 0.9, mirror: true })],
+    ]) {
+        list.push({ id: `fall/${name}`, group: "fall", look: (body) => soldier(body, first(body)), seconds, speed: 0, sheathed: true, start: ({ actions }) => fall(actions) });
     }
 
     for (const [act, { hitAt, duration, by }] of Object.entries(ACT_TIMES)) {
