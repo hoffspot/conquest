@@ -49,7 +49,7 @@ import { Variety } from "../core/variety.js";
 import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
 import { ITEMS, socketOn } from "./equipment.js";
 import { groundPoints, lowestPoint } from "./grounding.js";
-import { STEPPED } from "./locomotion.js";
+import { SEATED, STEPPED } from "./locomotion.js";
 import { blendRotation, jointRotation } from "./rig.js";
 
 const DEG = Math.PI / 180;
@@ -2623,7 +2623,8 @@ export class Actions {
     /**
      * Layer the actions over the pose the walk has set (rig.rotations and rig.offset), `walking`
      * as far into its stride as the walk is (Walker.amount: 0 standing). Returns false while
-     * the feet aren't to be kept planted (down on the ground, or off it); STEPPED while they're
+     * the feet aren't to be kept planted (down on the ground, or off it); SEATED sitting (the feet
+     * where the legs put them, kept out of the floor); STEPPED while they're
      * planted only where a fall's clip plants them (Walker.freed: the others free), not shuffled
      * under the body.
      */
@@ -2745,8 +2746,8 @@ export class Actions {
             return this.#fall(this.time - this.fall.start);
         }
 
-        // (Sitting, the feet stay where the legs put them)
-        return !this.seated;
+        // (Sitting, the feet are where the legs put them, on the floor: Walker, SEATED)
+        return this.seated ? SEATED : true;
     }
 
     // Walking or running with a blade hung at the left hip, put away, and nothing in the left hand
