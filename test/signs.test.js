@@ -1,8 +1,9 @@
 // The signs on the buildings (kits/landmarks.js and each people's builders, peoples/*.js): every
 // name board on a wall and every sign hanging out from one, of every people's taverns, temples,
 // smithies, guilds, halls and keeps, seen from the street with nothing of its own building in
-// front of it (a chimney stack, a lamp, a brazier, beam ends, a gable, a bracket's stay), and its
-// picture never in the same place as its frame's face (where the two flicker)
+// front of it (a chimney stack, a lamp, a brazier, beam ends, a gable, a bracket's stay), its
+// picture never in the same place as its frame's face (where the two flicker), and a sign hanging
+// out from a wall hanging from it clear of anything else
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -142,6 +143,61 @@ function sightOf(object, sign) {
     return { views: Object.fromEntries(Object.entries(views).map(([view, [hidden, all]]) => [view, hidden / all])), flush };
 }
 
+/**
+ * How a sign hanging out from a wall hangs (null for a board on a wall): how far its board's
+ * edge nearest the wall is from the first thing behind it, seen from the street along the board
+ * at half its height (metres: its bracket's reach in front of the wall, or less than nothing if
+ * the board's edge is inside something standing out from it); and the nearest anything else of
+ * its building is to either face of the board, within 0.3 m (or null).
+ */
+function hangingOf(object, sign) {
+    if (!sign.twoFaced) {
+        return null;
+    }
+
+    const others = [];
+
+    object.traverse((mesh) => mesh.isMesh && !isSign(mesh) && others.push(mesh));
+
+    const middle = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
+    const centre = sign.box.getCenter(new THREE.Vector3());
+    const normal = sign.normals[0];
+    const out = new THREE.Vector3(-normal.z, 0, normal.x);
+
+    if (out.dot(new THREE.Vector3().subVectors(centre, middle)) < 0) {
+        out.negate();
+    }
+
+    const points = sign.triangles.flat();
+    const near = Math.min(...points.map((point) => point.dot(out)));
+    const far = Math.max(...points.map((point) => point.dot(out)));
+
+    // (From in front of it, back along the board's own line at half its height)
+    caster.set(centre.clone().addScaledVector(out, far - centre.dot(out) + 2 * M), out.clone().negate());
+    caster.far = 20 * M;
+
+    const behind = caster.intersectObjects(others, false)[0];
+    const gap = behind ? (near - behind.point.dot(out)) / M : Infinity;
+    let beside = null;
+
+    for (const way of [1, -1]) {
+        for (const share of [0.25, 0.5, 0.75]) {
+            const point = centre.clone().addScaledVector(out, (near + (far - near) * share) - centre.dot(out));
+
+            caster.set(point.addScaledVector(normal, way * 0.01), normal.clone().multiplyScalar(way));
+            caster.far = 0.3 * M;
+
+            const hit = caster.intersectObjects(others, false)[0];
+
+            if (hit) {
+                beside = Math.min(beside ?? Infinity, hit.distance / M);
+            }
+        }
+    }
+
+    return { gap, beside };
+}
+
 async function built(piece) {
     const object = await builderOf(piece)(piece);
 
@@ -169,6 +225,15 @@ function assertClear(object, label) {
         }
 
         assert.equal(flush, 0, `${label}, ${sign.name}: its picture in its frame's face at ${flush} points`);
+
+        // Hanging out from its wall: from its bracket, a hand's breadth or two off the wall (not in
+        // a buttress or pier standing out from it, nor hung out in the air), nothing beside it
+        const hanging = hangingOf(object, sign);
+
+        if (hanging) {
+            assert.ok(hanging.gap > 0.2 && hanging.gap < 0.45, `${label}, ${sign.name}: its board ${hanging.gap.toFixed(2)} m off what's behind it`);
+            assert.equal(hanging.beside, null, `${label}, ${sign.name}: something ${hanging.beside?.toFixed(2)} m beside its board`);
+        }
     }
 
     return signs.length;
@@ -194,6 +259,16 @@ describe("the signs on the buildings (kits/landmarks.js, peoples/*.js)", () => {
         const keep = layoutTown({ seed: 1, kind: "capital" }).pieces.find(({ name }) => name === "keep");
 
         assert.ok(assertClear(await built(keep), "keep") > 0);
+    });
+
+    it("hang every church's patron's sign clear of its tower and buttresses, every grade of church, Romanesque or Gothic", async () => {
+        const church = layoutTown({ seed: 1, kind: "city" }).pieces.find(({ name }) => name === "church");
+
+        // (A parish church's and a town's hung where the buttress up the tower's corner stood, its
+        // board's first 22 cm inside it)
+        for (const [grade, gothic] of [["parish", false], ["parish", true], ["church", false], ["church", true], ["minster", true]]) {
+            assert.equal(assertClear(await built({ ...church, grade, gothic }), `${grade}${gothic ? ", Gothic" : ""}`), 1);
+        }
     });
 
     it("never have a chimney stack up the front across a town hall's name board, its gable to the street", async () => {

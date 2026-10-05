@@ -2177,7 +2177,10 @@ facing south; each is turned about its middle to face the way the layout says:
   wall, from 30° and 55° along the street): nothing of the building stands before them, its
   lamps, braziers and beam ends beside or below them, a hanging sign's stay tied up to the wall
   above its bracket (or propping it from below, short of the sign), never across it, and each
-  picture a little in front of its frame's face, never in it:
+  picture a little in front of its frame's face, never in it. A hanging sign hangs from what's
+  behind it, its board 20 to 45 cm off it (its bracket's reach in front of the wall: not inside a
+  buttress or pier standing out from the wall, nor hung out in the air), with nothing within 30 cm
+  either side of the board; every church's, of every grade, Romanesque or Gothic, is looked at:
   - **Taverns**, built as the houses are (timber-framed, stone or brick, as the tavern's seed
     says), one storey or two, with a wide door in the middle of the front. The tavern's name is
     painted in gold blackletter (UnifrakturMaguntia, kits/signs.js, loaded as a web font) on a
@@ -2189,8 +2192,9 @@ facing south; each is turned about its middle to face the way the layout says:
     bench outside. *Wenches and Ale* is stone below and a jettied, timber-framed floor above,
     its sign a barmaid in a red bodice raising two foaming tankards.
   - **The adventurers' guild**: a two-storey hall of stone, timber or brick, 16 by 12 metres,
-    its name on a blue board, its crest (a shield over crossed swords) hanging by the door,
-    blue banners with gold either side, and a board of notices outside.
+    its name on a blue board, blue banners with gold either side of the door, its crest (a
+    shield over crossed swords) hanging beyond the right-hand banner, and a board of notices
+    outside.
   - **The town hall**: the house it was, in its street's look (a cottage's made timber, for a
     storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
     dark red board over it, the sign of the town's keys by the door, and a lantern either side.
@@ -2217,7 +2221,9 @@ facing south; each is turned about its middle to face the way the layout says:
     two steps in a portal of warm stone, round-arched or pointed under a steep gable), on a socle
     of dark stone; the Six's gilded sun of six rays on the spire (a minster's on the spire over
     its ridge), and the patron's sign by the door (the patron's emblem: Aurelia's sun, Brannoc's
-    stag, Ithriel's star, Morvaine's lantern, Seliane's rose, Dunmar's anvil). The building lab
+    stag, Ithriel's star, Morvaine's lantern, Seliane's rose, Dunmar's anvil), hung from the face
+    of the buttress up the tower's corner beside the portal (a minster's from its tower's wall
+    there). The building lab
     shows one of each. From afar a church stands as tall as it's built, a minster with its two
     towers (`world/far/shapes.js` `FAR_CHURCHES`).
   - **The smithy**: a stone workshop with an open shed over the forge, anvil and quenching
