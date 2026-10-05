@@ -97,6 +97,13 @@ export const SHEATHE_AFTER_MS = 10000;
 export const SIGHT = 12;
 
 /**
+ * How long (ms) a creature holding a place gone into (`wild.wary`) waits, turned to them, before it
+ * does anything on first seeing someone come in, unless they strike it first: so no one's set on
+ * as they step through the door. Again once it's let them go.
+ */
+export const WARY_MS = 2000;
+
+/**
  * Each kind of character: hit points, walking speed (m/s), chasing speed, and how long (ms) until
  * it comes back after dying (a soldier never does: its town's garrison is one the fewer).
  */
@@ -450,9 +457,10 @@ export class Battle {
             blockedSince: null,
             patrolIndex: patrol && patrol.length > 1 ? 1 : 0,
             waitUntil: 0,
-            // (One of the wild's creatures: { creature, tier, temper, guard, roam, leash, leader }:
-            // #wild)
+            // (One of the wild's creatures: { creature, tier, temper, guard, roam, leash, leader,
+            // wary }: #wild; and, wary, till when it waits on first seeing someone)
             wild,
+            waryUntil: 0,
         };
 
         this.actors.push(actor);
@@ -1732,6 +1740,12 @@ export class Battle {
         const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
 
         if (seen) {
+            // (Holding a place gone into, set on no one: a moment's pause on first seeing them,
+            // unless they've struck it)
+            if (wild.wary && actor.target === null && !provoked(seen)) {
+                actor.waryUntil = this.time + WARY_MS;
+            }
+
             actor.target = seen.id;
             actor.lastSeen = this.time;
         } else if (actor.target !== null) {
@@ -1742,10 +1756,20 @@ export class Battle {
                 actor.path = [];
                 actor.pathGoal = null;
                 actor.waitUntil = 0;
+                actor.waryUntil = 0;
             }
         }
 
         const target = actor.target === null ? null : this.actor(actor.target);
+
+        // (Waiting: turned to them, standing where it is, nothing done)
+        if (target && this.time < actor.waryUntil) {
+            actor.path = [];
+            actor.pathGoal = null;
+            actor.facing = atan2(target.x - actor.x, target.y - actor.y);
+
+            return;
+        }
 
         if (target) {
             actor.walkPace = actor.chaseSpeed;
@@ -2911,6 +2935,9 @@ export class Battle {
     // guard turns on whoever did it), calm towards them no longer (Pacify), and hold it against
     // them a while, as do those of their own who saw
     #provoke(attacker, target, { turn = true } = {}) {
+        // (Struck while it waited, holding a place: it fights back at once)
+        target.waryUntil = 0;
+
         if (turn && (target.ai === "patrol" || target.ai === "wild")) {
             target.target = attacker.id;
             target.lastSeen = this.time;

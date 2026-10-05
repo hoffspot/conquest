@@ -1071,6 +1071,69 @@ export function heldWithin(kind, map) {
     };
 }
 
+/**
+ * How far (rings of squares) those holding a place gone into stand from where anyone comes in (a
+ * door's or a stair's arriving square): past a party's followers round whoever came in (two
+ * rings) and a summoned one behind them (two more), and a step more, so no one's within a blow of
+ * them as they come in.
+ */
+export const WAY_IN_CLEAR = 5;
+
+/**
+ * Where those holding a floor of a place gone into stand (`posts`, [x, y] each, its leader first),
+ * kept clear of its ways in (`entries`, the squares anyone arrives on: WAY_IN_CLEAR rings): each
+ * post far enough off kept, and each one too near moved to the far side, as near the leader as
+ * there's room, or as far from the ways in as the floor allows. Free squares only, none the same,
+ * none a door's or a stair's; the same squares every time for the same floor.
+ */
+export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}) {
+    if (!entries.length) {
+        return posts;
+    }
+
+    const ways = new Set(["D", "<", ">"].flatMap((char) => (map.marks[char] ?? []).map(([x, y]) => y * map.width + x)));
+    const rings = ([x, y], [u, v]) => Math.max(Math.abs(x - u), Math.abs(y - v));
+    const from = (square) => Math.min(...entries.map((entry) => rings(square, entry)));
+    const free = [];
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (!map.blocked[y][x] && !ways.has(y * map.width + x)) {
+                free.push([x, y]);
+            }
+        }
+    }
+
+    const taken = new Set();
+    const placed = [];
+
+    for (const post of posts) {
+        const key = post ? post[1] * map.width + post[0] : -1;
+        let at = post && !taken.has(key) && from(post) >= clear ? post : null;
+
+        if (!at) {
+            // (As far as the floor allows, up to clear; of those, the nearest the leader, or for
+            // the leader the furthest of all; then the first along the rows)
+            const open = free.filter(([x, y]) => !taken.has(y * map.width + x));
+            const reach = Math.max(...open.map((square) => Math.min(clear, from(square))));
+            const [lead] = placed;
+
+            at = open
+                .filter((square) => Math.min(clear, from(square)) === reach)
+                .map((square) => ({ square, rank: lead ? rings(square, lead) : -from(square) }))
+                .sort((a, b) => a.rank - b.rank || a.square[1] - b.square[1] || a.square[0] - b.square[0])[0]?.square ?? null;
+        }
+
+        if (at) {
+            taken.add(at[1] * map.width + at[0]);
+        }
+
+        placed.push(at);
+    }
+
+    return placed;
+}
+
 // --- The buildings ---
 
 // What a building's called that has no name of its own

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS, WARY_MS } from "../client/js/core/battle.js";
 import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
@@ -978,5 +978,61 @@ describe("the battle (battle.js)", () => {
         assert.ok(orc.square[0] <= world.patrol[0][0] + 2, "the orc keeps to its patrol");
         assert.ok(!player.dead);
         assert.ok(elapsed < 1500, `a minute of battle took ${elapsed.toFixed(0)} ms`);
+    });
+});
+
+describe("those holding a place gone into (battle.js WARY_MS)", () => {
+    // A snake holding a room (`wary`), seven squares from a player who's just come in, standing
+    const room = ({ wary = true } = {}) => {
+        const battle = new Battle(open(20, 7), { seed: 7 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 3] });
+        const snake = battle.add({ id: "snake", kind: "beast", weapon: "snake", team: "wild", square: [9, 3], ai: "wild", hp: 500, wild: { creature: "snake", tier: 1, temper: "aggressive", guard: 10, roam: 0, leash: 30, pack: "s", leader: null, menace: true, wary } });
+
+        return { battle, player, snake };
+    };
+    const moved = (snake) => Math.hypot(snake.x - 9.5, snake.y - 3.5);
+
+    it("waits two seconds on first seeing someone, turned to them, doing nothing; then comes on", () => {
+        const { battle, snake } = room();
+        const waiting = run(battle, WARY_MS - 2 * STEP_MS);
+
+        assert.equal(snake.target, "player", "seen");
+        assert.ok(moved(snake) < 0.01, `stood still (moved ${moved(snake)})`);
+        assert.ok(!waiting.some((event) => (event.type === "attack" || event.type === "hit") && (event.id === "snake" || event.by === "snake")));
+        assert.ok(Math.abs(Math.sin(snake.facing) + 1) < 0.01, `turned to them (${snake.facing})`);
+
+        const after = run(battle, 6000);
+
+        assert.ok(moved(snake) > 0.5, "then comes on (to within its spit)");
+        assert.ok(after.some((event) => event.type === "attack" && event.id === "snake"), "and attacks");
+
+        // (Not out in the open: at once)
+        const { battle: open, snake: free } = room({ wary: false });
+
+        run(open, 1000);
+        assert.ok(moved(free) > 0.5, "out in the open, it comes on at once");
+    });
+
+    it("fights back at once if struck while it waits, and waits again once it's let them go", () => {
+        const { battle, player, snake } = room();
+
+        run(battle, 200);
+        assert.ok(battle.time < snake.waryUntil);
+        assert.deepEqual(battle.cast("player", "hurt", "snake"), { ok: true });
+        run(battle, 900);
+        assert.equal(snake.waryUntil, 0);
+        assert.ok(moved(snake) > 0.3, `struck at ${battle.time} ms: it comes on at once (moved ${moved(snake)})`);
+
+        // Gone (out of the room), long enough to be let go; back in sight: it waits again
+        const there = battle.time;
+
+        Object.assign(player, { map: "elsewhere" });
+        run(battle, 5000);
+        assert.equal(snake.target, null, "let go");
+        Object.assign(player, { map: "town", square: [snake.square[0] - 6, snake.square[1]], x: snake.square[0] - 5.5, y: snake.y, path: [] });
+        snake.foes = {};
+        run(battle, 300);
+        assert.equal(snake.target, "player");
+        assert.ok(snake.waryUntil > there + 5000, "waiting again");
     });
 });

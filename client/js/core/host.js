@@ -25,7 +25,7 @@ import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
-import { heldWithin, townOf } from "./insides.js";
+import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
@@ -2535,7 +2535,10 @@ export class Host {
             for (let k = 0; k < count; k++) {
                 const id = `wild-${this.nextWild++}`;
 
-                this.#rouse(id, creature, tier, free([x + (k % 3) - 1, y + Math.floor(k / 3)]), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more });
+                // (One alone at its post: right there; a pack round it, three abreast)
+                const at = count === 1 ? [x, y] : [x + (k % 3) - 1, y + Math.floor(k / 3)];
+
+                this.#rouse(id, creature, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more });
                 ids.push(id);
             }
         } catch {
@@ -2569,7 +2572,9 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight) },
+            // (One holding a place gone into, `wary`: a moment's pause on first seeing someone come
+            // in, battle.js WARY_MS)
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town" },
         });
     }
 
@@ -2725,8 +2730,8 @@ export class Host {
     // the humans' abbeys and manors: sites.js `entrance`), its floors made: { maps (their ids),
     // leader, chest (where its plan has them: insides.js "l" and "h", { map, square }), guards
     // (where they stand: "g", a list) }, or, for an abbey's temple and a manor's keep, by their
-    // altar and thrones and up from their door (insides.js heldWithin); or null for a site that
-    // can't be gone into
+    // altar and thrones and up from their door (insides.js heldWithin); all of them clear of where
+    // anyone comes in (insides.js clearOfWaysIn); or null for a site that can't be gone into
     #inside(site) {
         const set = this.world.maps.town?.sites?.set.get(site.id);
         const building = set?.entrance ? this.#building(`site:${site.id}`) : null;
@@ -2741,13 +2746,22 @@ export class Host {
         const [first] = building.maps;
         const held = marks("l").length ? null : heldWithin(building.kind, this.world.maps[first]);
         const on = (square) => (square ? { map: first, square } : null);
+        const leader = marks("l")[0] ?? on(held?.leader);
+        const guards = held ? held.guards.map(on).filter(Boolean) : marks("g");
 
-        return {
-            maps: [...building.maps],
-            leader: marks("l")[0] ?? on(held?.leader),
-            chest: marks("h")[0] ?? on(held?.chest),
-            guards: held ? held.guards.map(on).filter(Boolean) : marks("g"),
-        };
+        // (All of them, its leader too, kept clear of where anyone comes in, its door and its
+        // stairs, each floor's: on its far side, so no one's set on as they step in)
+        const ways = [building.door?.ends[1], ...(building.stairs?.ends ?? [])].filter((end) => end?.arrive);
+        const posts = [leader, ...guards].filter(Boolean);
+
+        for (const id of building.maps) {
+            const here = posts.filter((post) => post.map === id);
+            const clear = clearOfWaysIn(this.world.maps[id], ways.filter((end) => end.map === id).map((end) => end.arrive), here.map((post) => post.square));
+
+            here.forEach((post, k) => (post.square = clear[k] ?? post.square));
+        }
+
+        return { maps: [...building.maps], leader, chest: marks("h")[0] ?? on(held?.chest), guards };
     }
 
     // The free square in the world nearest a square (or that square, if none's free near)
