@@ -33,14 +33,17 @@ const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
 export function measureBody(character) {
     const { human, rig, positions } = character;
     const head = (name) => rig.heads[rig.index.get(name)];
+    // (Half way up the neck, where MakeHuman's neck bone starts: up Vitruvian's, which starts at
+    // the neck's foot)
+    const neck = head("Neck").clone().lerp(head("Head"), human.landmarks?.neck ?? 0);
     const landmarks = {
-        neck: head("Neck").y,
+        neck: neck.y,
         chest: head("Spine2").y,
         waist: head("Spine").y,
         hips: head("Hips").y,
         crotch: head("LeftUpLeg").y - 0.07 * (character.height / 1.7),
         armpit: head("LeftArm").y - 0.08 * (character.height / 1.7),
-        neckZ: head("Neck").z,
+        neckZ: neck.z,
         ankle: head("LeftFoot").y,
         balls: [head("LeftToeBase"), head("RightToeBase")],
         height: character.height,

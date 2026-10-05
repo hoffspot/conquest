@@ -44,6 +44,30 @@ test("builds a dressed, armed human and walks them", async ({ page }) => {
     expect(moved).toBeGreaterThan(1);
 });
 
+test("builds the hero on the Vitruvian body, as tall as on MakeHuman's", async ({ page }) => {
+    await openLab(page, "/character-lab.html?body=vitruvian");
+
+    const hero = await page.evaluate(() => {
+        const { character } = window.lab;
+
+        return {
+            vertices: character.human.vertexCount,
+            neck: character.human.landmarks.neck,
+            garments: character.garments.length,
+            items: character.items.map((item) => item.name),
+            height: character.height,
+        };
+    });
+
+    // (Vitruvian's own vertices, not MakeHuman's 13,774, dressed and armed as the hero is)
+    expect(hero.vertices).toBeGreaterThan(15000);
+    expect(hero.neck).toBeGreaterThan(0.2);
+    expect(hero.garments).toBeGreaterThan(4);
+    expect(hero.items).toEqual(expect.arrayContaining(["sword", "roundShield"]));
+    expect(hero.height).toBeGreaterThan(1.78);
+    expect(hero.height).toBeLessThan(1.84);
+});
+
 test("switches to the orc, changes gear and looks", async ({ page }) => {
     await openLab(page);
 

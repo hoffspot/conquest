@@ -73,14 +73,18 @@ export const EYE_DEFAULTS = Object.freeze({ iris: "#6a4a2c", sclera: "#f1ede6", 
 
 const MASKS = ["lips", "ears", "eyelids", "aureolae", "fingernails", "toenails", "crotch"];
 
-/** Load MakeHuman's masks (client/characters/masks/*.jpg), as one channel each at `size`. */
-export async function loadMasks(base, size, fetch = globalThis.fetch.bind(globalThis)) {
+/**
+ * Load MakeHuman's masks, as one channel each at `size`: from `paths` (the body's manifest's:
+ * the MakeHuman body's client/characters/masks/*.jpg; another body's, carried over into its
+ * texture layout), in MASKS' order.
+ */
+export async function loadMasks(base, size, fetch = globalThis.fetch.bind(globalThis), paths = MASKS.map((name) => `masks/${name}.jpg`)) {
     const masks = {};
     const canvas = new OffscreenCanvas(size, size);
     const context = canvas.getContext("2d", { willReadFrequently: true });
 
-    await Promise.all(MASKS.map(async (name) => {
-        const blob = await (await fetch(new URL(`masks/${name}.jpg`, base).href)).blob();
+    await Promise.all(MASKS.map(async (name, k) => {
+        const blob = await (await fetch(new URL(paths[k], base).href)).blob();
         const bitmap = await createImageBitmap(blob);
 
         masks[name] = bitmap;

@@ -7,6 +7,7 @@
     "building-lab.spec.js › pitches every people's war camp, each of its own tents round a fire": 5.6,
     "building-lab.spec.js › works out the fields seen from afar on the GPU just as the rules do, metre by metre": 10,
     "character-lab.spec.js › builds a dressed, armed human and walks them": 10.3,
+    "character-lab.spec.js › builds the hero on the Vitruvian body, as tall as on MakeHuman's": 9.5,
     "character-lab.spec.js › dresses each people's soldiers and officials, their garments drawn all at once as in the game": 23.9,
     "character-lab.spec.js › fits a phone screen": 11.6,
     "character-lab.spec.js › plays a motion capture clip": 11.2,
