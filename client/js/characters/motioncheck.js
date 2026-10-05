@@ -94,7 +94,7 @@ export function dress(human, look, { sheathed = true } = {}) {
     const character = { human, rig, object, positions, normals, joints, height, holds: {}, items: [], equipment: new Map() };
     const ids = look.equipment.filter((id) => EQUIPMENT[id]?.kind === "item");
 
-    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle", "hang"]) {
+    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle", "hang", "pommelOf"]) {
         character[method] = Character.prototype[method].bind(character);
     }
 
@@ -130,7 +130,7 @@ export function dress(human, look, { sheathed = true } = {}) {
             const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
 
             if (sheath) {
-                const place = placed(socketOn(character, sheath.socket), sheath);
+                const place = placed(socketOn(character, sheath.socket, sheath), sheath);
 
                 model.userData.sheath = place;
 

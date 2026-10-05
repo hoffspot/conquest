@@ -18,6 +18,9 @@ import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.j
 import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { Avatar, POSING, posingEvery } from "../client/js/world/avatar.js";
+import { folkLook } from "../client/js/characters/folk.js";
+import { BODIES, dress, FRAME } from "../client/js/characters/motioncheck.js";
+import { soldierLook } from "../client/js/characters/soldiers.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
 const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
@@ -575,6 +578,119 @@ describe("drawing weapons and putting them away (actions.js DRAWS, Character.she
         assert.equal(shield.parent.name, shield.userData.home.bone);
         assert.ok(!character.slung);
         assert.equal(actions.draw("sword", true), DRAWS.sword.draw.duration);
+    });
+});
+
+describe("a blade hung at the hip (equipment.js SHEATHS, Character.hang, Actions: the hand on its pommel)", () => {
+    // A soldier of `body`'s build carrying `weapon`, the shield slung (or not, `shield`)
+    const soldier = (body, weapon = "sword", { shield = true } = {}) => {
+        const look = soldierLook({ people: body.people, weapon, sex: body.sex, seed: 11 });
+        const shape = structuredClone(look.shape);
+
+        Object.assign(shape.macro, body.macro);
+
+        if (body.belly !== null) {
+            shape.details = { ...shape.details, belly: body.belly };
+        }
+
+        return dress(human, { ...look, shape, equipment: look.equipment.filter((id) => shield || !/shield/i.test(id)) });
+    };
+    const blade = (character) => character.items.find((model) => model.userData.hangs);
+    // (Where the left hand grips, in the world)
+    const grip = (character) => character.rig.bone("LeftHand").localToWorld(socketOn(character, "leftHand").position.clone());
+    const walk = (walker, speed, seconds) => {
+        for (let t = 0; t < seconds; t += FRAME) {
+            walker.update(FRAME, { speed });
+        }
+    };
+
+    it("hangs a sword or cleaver from its frog round the front of the hip, canted 45° down and back past the thigh, as tight to every body as it can be", () => {
+        for (const body of BODIES) {
+            for (const weapon of ["sword", "cleaver"]) {
+                const { character, walker } = soldier(body, weapon);
+                const model = blade(character);
+
+                walker.update(FRAME, { speed: 0 });
+
+                const hips = character.rig.bone("Hips");
+                const turn = hips.getWorldQuaternion(new THREE.Quaternion());
+                const along = new THREE.Vector3(0, 1, 0).applyQuaternion(turn.clone().multiply(model.quaternion));
+                const frame = turn.clone().invert();
+                const [down, back] = [-along.clone().applyQuaternion(frame).y, -along.clone().applyQuaternion(frame).z];
+                const cant = (Math.atan2(back, down) * 180) / Math.PI;
+                const hilt = character.pommelOf("Left").position.applyQuaternion(frame);
+                const side = world("LeftUpLeg", character).applyQuaternion(frame);
+
+                assert.ok(cant > 38 && cant < 55, `${body.id} ${weapon}: canted ${cant.toFixed(0)}°`);
+                assert.ok(hilt.z > side.z + 0.08, `${body.id} ${weapon}: the hilt forward of the hip`);
+                assert.ok(model.userData.hangs.stand <= 0.06, `${body.id} ${weapon}: off the belt ${(model.userData.hangs.stand * 100).toFixed(1)} cm`);
+            }
+        }
+    });
+
+    it("rests the left hand on the pommel walking and running, the blade held back off the legs, and lets it fall to the side standing", () => {
+        for (const body of BODIES.filter(({ people }) => people === "human")) {
+            const { character, walker } = soldier(body);
+            const hangs = blade(character).userData.hangs;
+
+            for (const speed of [1.3, 3.5]) {
+                walk(walker, speed, 1.5);
+                assert.ok(character.held > 0.99, `${body.id} at ${speed} m/s: holding it`);
+                assert.ok(hangs.angle >= (4 * Math.PI) / 180, `${body.id} at ${speed} m/s: tipped back`);
+
+                // (On it through a stride: running, the tallest's shoulder lets the hand come off
+                // it a little for a moment as the hips turn)
+                const off = [];
+
+                for (let t = 0; t < 1; t += FRAME) {
+                    walker.update(FRAME, { speed });
+                    off.push(grip(character).distanceTo(character.pommelOf("Left").position));
+                }
+
+                assert.ok(off.reduce((sum, d) => sum + d, 0) / off.length < 0.025, `${body.id} at ${speed} m/s: the hand on the pommel`);
+                assert.ok(Math.max(...off) < 0.045, `${body.id} at ${speed} m/s: the hand never far off it`);
+            }
+
+            // (Slowing to a stop from a run takes a second and a half)
+            walk(walker, 0, 2.5);
+            assert.ok(character.held < 0.01, `${body.id}: let go standing`);
+            assert.ok(grip(character).distanceTo(character.pommelOf("Left").position) > 0.15, `${body.id}: the hand fallen to the side`);
+        }
+    });
+
+    it("keeps the hand off it with a shield on the arm, or the sword drawn", () => {
+        const [body] = BODIES;
+        const shielded = soldier({ ...body, people: "darkElf" });
+
+        walk(shielded.walker, 1.3, 1.5);
+        assert.ok(!shielded.character.slung && shielded.character.held === 0, "a dark elf's shield stays on the arm");
+
+        const drawn = soldier(body);
+
+        drawn.character.sheathe(false);
+        walk(drawn.walker, 1.3, 1.5);
+        assert.equal(drawn.character.held, 0, "nothing to hold in the scabbard");
+    });
+
+    it("rests the hand on the pommel shifting the weight, armed; without a blade at the hip, the thumb in the belt", () => {
+        const variant = ROLES.adventurer.rests.findIndex(({ name }) => name === "shifting the weight");
+
+        for (const [calling, armed] of [["warrior", true], ["mage", false]]) {
+            const { character, walker, actions } = dress(human, folkLook({ role: "adventurer", look: calling, sex: "m", seed: 5 }));
+
+            actions.rest("adventurer", { variant });
+            walk(walker, 0, 1);
+
+            const pommel = character.pommelOf?.("Left");
+
+            assert.equal(Boolean(pommel), armed, `${calling}: a blade at the hip`);
+
+            if (armed) {
+                assert.ok(grip(character).distanceTo(pommel.position) < 0.03, `${calling}: the hand on the pommel`);
+            } else {
+                assert.ok(grip(character).distanceTo(world("Hips", character)) < 0.35, `${calling}: the hand at the belt`);
+            }
+        }
     });
 });
 

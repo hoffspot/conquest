@@ -188,6 +188,7 @@ export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0
         bone: socket.bone,
         position: new THREE.Vector3(...at).applyQuaternion(socket.quaternion).add(socket.position),
         quaternion: socket.quaternion.clone().multiply(turn),
+        out: socket.out?.clone().applyQuaternion(socket.quaternion) ?? null,
     };
 }
 
@@ -225,14 +226,17 @@ function swingOf(bone, object, slinging) {
 
 /**
  * What a blade hung from the belt (`item`, its `look` built) needs to swing clear of the leg
- * (Character.hang): its side, how far it reaches down from its grip, and how it's swung; or null.
+ * (Character.hang): its side, how far it reaches down from its grip and up to the end of its hilt
+ * (`pommel`), and how it's swung; or null.
  */
 export function hanging(item, look) {
     if (!item.sheath?.hangs) {
         return null;
     }
 
-    return { side: item.sheath.socket.startsWith("left") ? "Left" : "Right", length: new THREE.Box3().setFromObject(look).max.y, seated: new THREE.Vector3(...(item.sheath.seated ?? [0, 0, 0])), angle: 0, out: 0, time: null, holder: null, radius: null };
+    const box = new THREE.Box3().setFromObject(look);
+
+    return { side: item.sheath.socket.startsWith("left") ? "Left" : "Right", length: box.max.y, pommel: box.min.y, seated: new THREE.Vector3(...(item.sheath.seated ?? [0, 0, 0])), angle: 0, out: 0, time: null, holder: null, radius: null, stand: 0, width: 0, clear: null, hilt: [], arm: null, nearest: null, at: null };
 }
 
 export class Character {
@@ -298,6 +302,8 @@ export class Character {
 
         /** Whether its weapons are put away (sheathe), and its shield slung on its back (sling). */
         this.sheathed = false;
+        /** How far a hand on the pommel of what hangs at its hip holds it (0 to 1: Actions, Character.hang). */
+        this.held = 0;
         this.slung = false;
         this.hairHidden = false;
 
@@ -647,7 +653,7 @@ export class Character {
                 const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
 
                 if (sheath) {
-                    const at = socketOn(this, sheath.socket);
+                    const at = socketOn(this, sheath.socket, sheath);
                     const place = placed(at, sheath);
 
                     model.userData.sheath = place;
@@ -793,11 +799,11 @@ export class Character {
             const item = EQUIPMENT[id]?.kind === "item" ? EQUIPMENT[id] : null;
             const socket = item?.sheath?.worn ? item.socket : item?.sheath?.socket;
 
-            if (socket === "leftHip" || socket === "rightHip" || socket === "leftHand" || socket === "rightHand") {
+            if (/^(left|right)(Hip|Frog|Hand)$/.test(socket ?? "")) {
                 this.clearing[socket.startsWith("left") ? "Left" : "Right"] = item.sheath?.hangs ? HILT_CLEARING : HIP_CLEARING;
             }
 
-            if (socket === "leftHip" || socket === "rightHip") {
+            if (/^(left|right)(Hip|Frog)$/.test(socket ?? "")) {
                 this.hung[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
             }
         }
@@ -848,16 +854,25 @@ export class Character {
 
     /**
      * Swing what hangs from the belt at a hip (a sheathed sword or cleaver, and its scabbard, drawn
-     * or not) about its grip, back or forward as little as keeps it clear of that side's thigh and
-     * shin, as a leg pushes a scabbard hung from its frog; and let it fall back to hang as it was
-     * when the leg's gone by, not at once; and, `seated`, where the seat pushes it. With the legs
-     * posed for the frame (Actions.place), at `time` (seconds, any clock).
+     * or not) about its frog, back (or a little forward) and out as little as keeps it as clear of
+     * that side's thigh and shin as it hangs standing (or HANG_CLEAR, if that's less), as a leg
+     * pushes a scabbard; and let it fall back to hang as it was when the leg's gone by, not at
+     * once; held by a hand on its pommel (`held`), tipped further back, clear of the legs; and,
+     * `seated`, where the seat pushes it. With the legs posed for the frame (Actions.place), at
+     * `time` (seconds, any clock).
      */
-    hang(time, seated = false) {
+    hang(time, seated = false, { arms = false } = {}) {
         for (const model of this.items) {
             const hangs = model.userData.hangs;
 
-            if (!hangs) {
+            if (!hangs || (arms && (hangs.clear === null || (hangs.side === "Left" && (this.held ?? 0) > 0.5)))) {
+                continue;
+            }
+
+            // (Once the arms are where they go this frame, the hilt pushed aside by that side's
+            // forearm and hand if they've come into it: armPush)
+            if (arms) {
+                armPush(this, model, hangs);
                 continue;
             }
 
@@ -870,78 +885,148 @@ export class Character {
             // (The thigh thicker at the hip than the knee, the calf than the ankle)
             hangs.radius ??= [`${hangs.side}UpLeg`, `${hangs.side}Leg`].map((bone, k) => HANG_THICK.map((between) => limbThickness(this, bone, k ? `${hangs.side}Foot` : `${hangs.side}Leg`, between)));
 
-            const leg = [`${hangs.side}UpLeg`, `${hangs.side}Leg`, `${hangs.side}Foot`].map((name, i) => this.rig.bone(name).getWorldPosition(_legJoints[i]));
-            const across = this.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(this.rig.bone("RightUpLeg").getWorldPosition(_hangFrom)).normalize();
-            const at = _hangAt.copy(place.position).addScaledVector(hangs.seated, seated ? 1 : 0);
-            const grip = hips.localToWorld(_hangFrom.copy(at));
-            const down = _hangDown.set(0, 1, 0).applyQuaternion(hips.getWorldQuaternion(_hangTurn).multiply(place.quaternion));
-
-            const forward = _hangForward.crossVectors(across, _up);
+            const names = [`${hangs.side}UpLeg`, `${hangs.side}Leg`, `${hangs.side}Foot`];
             // (Out from the body: the left hip's to the left)
             const outward = hangs.side === "Left" ? 1 : -1;
 
-            // How near (metres, less the limb's thickness) the blade swung `back` and `out` comes to
-            // the leg
-            const nearest = (back, out) => {
+            // How much clearer of the leg (its joints `leg`; metres, less the limb's thickness) than
+            // it's kept (`hangs.clear`) the blade hung from `pivot` along `down`, its edge `edge`,
+            // swung `back` and `out`, is all the way down, its back and its edge (below 0, the leg's
+            // pushing it); and, given `each`, how near it comes to the leg at each place
+            const nearest = (back, out, { pivot, down, edge, leg, across, forward }, each = null) => {
                 const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+                const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
                 let least = Infinity;
 
-                for (const share of HANG_SAMPLES) {
-                    const point = _hangPoint.copy(grip).addScaledVector(along, hangs.length * share);
+                HANG_SAMPLES.forEach((share, i) => {
+                    for (let j = 0; j < 2; j++) {
+                        const point = _hangPoint.copy(pivot).addScaledVector(along, hangs.length * share - HANG_PIVOT).addScaledVector(sideways, j * hangs.width);
+                        let near = Infinity;
 
-                    for (let k = 0; k < 2; k++) {
-                        const [top, bottom] = hangs.radius[k];
-                        const on = _segment.set(leg[k], leg[k + 1]).closestPointToPointParameter(point, true);
+                        for (let k = 0; k < 2; k++) {
+                            const [top, bottom] = hangs.radius[k];
+                            const on = _segment.set(leg[k], leg[k + 1]).closestPointToPointParameter(point, true);
 
-                        least = Math.min(least, _segment.at(on, _hangOn).distanceTo(point) - (top + (bottom - top) * on));
+                            near = Math.min(near, _segment.at(on, _hangOn).distanceTo(point) - (top + (bottom - top) * on));
+                        }
+
+                        least = Math.min(least, near - (hangs.clear?.[2 * i + j] ?? 0));
+
+                        if (each) {
+                            each[2 * i + j] = near;
+                        }
                     }
-                }
+                });
 
                 return least;
             };
 
+            hangs.nearest = nearest;
+
+            // (Where its frog hangs it, as tight to the body as it can be, and how clear of the
+            // leg that keeps it: fitHanging)
+            if (hangs.clear === null) {
+                fitHanging(this, model, hangs, place, names, nearest);
+            }
+
+            const leg = names.map((name, i) => this.rig.bone(name).getWorldPosition(_legJoints[i]));
+            const across = this.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(this.rig.bone("RightUpLeg").getWorldPosition(_hangFrom)).normalize();
+            const at = _hangAt.copy(place.position).addScaledVector(hangs.seated, seated ? 1 : 0);
+            const down = _hangDown.set(0, 1, 0).applyQuaternion(hips.getWorldQuaternion(_hangTurn).multiply(place.quaternion));
+            const edge = _hangEdge.set(0, 0, 1).applyQuaternion(_hangTurn);
+            // (Where it hangs left alone: from its frog, or held by its pommel, tipped back and
+            // drawn out from the body a little)
+            const held = hangs.side === "Left" ? this.held ?? 0 : 0;
+            // (And shoved out along the belt by the thigh as it comes up in front, past HANG_LIFT)
+            const thigh = _hangLift.copy(leg[1]).sub(leg[0]);
+            const turn = hips.getWorldQuaternion(_hangBack);
+            const raised = Math.atan2(thigh.dot(_hangAxis.set(0, 0, 1).applyQuaternion(turn)), -thigh.dot(_hangAxis.set(0, 1, 0).applyQuaternion(turn)));
+            const shoved = smoothstep(HANG_LIFT.from, HANG_LIFT.to, raised) * HANG_LIFT.off;
+            const [backHeld, outHeld, off] = [held * HANG_HELD.back, held * HANG_HELD.out, place.out ? Math.max(held * HANG_HELD.off, shoved) : 0];
+            // (It swings about the frog, at the scabbard's mouth)
+            // (Where it hangs from, as the seat and a hand on it have it: armPush too)
+            hangs.at = (hangs.at ?? new THREE.Vector3()).copy(at).addScaledVector(place.out ?? _hangPoint.set(0, 0, 0), off);
+
+            const pivot = hips.localToWorld(_hangFrom.copy(hangs.at)).addScaledVector(down, HANG_PIVOT);
+            const forward = _hangForward.crossVectors(across, _up);
+            const posed = { pivot, down, edge, leg, across, forward };
+
             // The swing clear of the leg nearest how it hangs now (pushed no further than it must
-            // be), and the one nearest hanging straight (where it falls back to); or, if none is
-            // clear, the most clear
+            // be), and the one nearest hanging as it's left (where it falls back to); or, if none
+            // is clear, the most clear
             let [pushed, resting, best, most] = [null, null, null, -Infinity];
 
             for (const out of HANG_OUT) {
                 for (const back of HANG_ANGLES) {
-                    const clear = nearest(back, out);
+                    const clear = nearest(back, out, posed);
                     const moved = Math.abs(back - hangs.angle) + Math.abs(out - hangs.out);
-                    const hanging = Math.abs(back) + Math.abs(out) * 1.5;
+                    const hanging = Math.abs(back - backHeld) + Math.abs(out - outHeld) * 1.5;
 
                     if (clear > most) {
                         [best, most] = [[back, out], clear];
                     }
 
-                    if (clear >= HANG_CLEAR) {
+                    if (clear >= HANG_PUSH) {
                         pushed = !pushed || moved < pushed[2] ? [back, out, moved] : pushed;
+                    }
+
+                    if (clear >= 0) {
                         resting = !resting || hanging < resting[2] ? [back, out, hanging] : resting;
                     }
                 }
             }
 
-            // Pushed at once by the leg it's in; falling back slowly, never into it
-            if (nearest(hangs.angle, hangs.out) < HANG_CLEAR || dt === 0) {
+            // Pushed at once by the leg it's in; falling back slowly (or taken there by the hand
+            // holding it), never into it
+            if (nearest(hangs.angle, hangs.out, posed) < 0 || dt === 0) {
                 [hangs.angle, hangs.out] = pushed ?? best;
             } else {
-                const [back, out] = resting ?? [0, 0];
+                const [back, out] = resting ?? [backHeld, outHeld];
                 const step = HANG_FALL * dt;
                 const next = [hangs.angle + Math.sign(back - hangs.angle) * Math.min(Math.abs(back - hangs.angle), step), hangs.out + Math.sign(out - hangs.out) * Math.min(Math.abs(out - hangs.out), step)];
 
-                [hangs.angle, hangs.out] = nearest(...next) >= HANG_CLEAR ? next : [hangs.angle, hangs.out];
+                [hangs.angle, hangs.out] = nearest(...next, posed) >= 0 ? next : [hangs.angle, hangs.out];
             }
 
-            // (Turned about the hip's own across, then its forward, in the hip's frame)
+            // (Turned about the hip's own across, then its forward, in the hip's frame, about the
+            // frog)
             const local = _hangInverse.copy(hips.matrixWorld).invert();
             const swing = _hangTurn.setFromAxisAngle(forward.transformDirection(local), hangs.out * outward).multiply(_hangBack.setFromAxisAngle(across.transformDirection(local), hangs.angle));
+            const frog = _hangDown.set(0, HANG_PIVOT, 0).applyQuaternion(place.quaternion);
 
             for (const hung of [sheathed ? model : null, hangs.holder]) {
-                hung?.position.copy(at);
+                hung?.position.copy(at).add(frog).sub(_hangPoint.copy(frog).applyQuaternion(swing));
+
+                if (off > 0) {
+                    hung?.position.addScaledVector(place.out, off);
+                }
                 hung?.quaternion.copy(swing).multiply(place.quaternion);
             }
         }
+    }
+
+    /**
+     * Where a hand resting on the pommel of the blade hung at that side's hip (`side`: "Left" or
+     * "Right") holds it, as it hangs now, in the world: { position (the middle of the hand's grip,
+     * round the end of the hilt), point (along the hilt, to its end), forward (the body's way) };
+     * or null (none hangs there, sheathed).
+     */
+    pommelOf(side) {
+        const model = this.sheathed ? this.items.find((item) => item.userData.hangs?.side === side && !item.userData.settling) : null;
+
+        if (!model) {
+            return null;
+        }
+
+        const hangs = model.userData.hangs;
+        const hips = this.rig.bone(model.userData.sheath.bone);
+        const turn = hips.getWorldQuaternion(new THREE.Quaternion()).multiply(model.quaternion);
+
+        return {
+            position: hips.localToWorld(new THREE.Vector3(0, hangs.pommel + POMMEL_GRIP, 0).applyQuaternion(model.quaternion).add(model.position)),
+            point: new THREE.Vector3(0, -1, 0).applyQuaternion(turn),
+            forward: new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.getWorldQuaternion(new THREE.Quaternion())),
+        };
     }
 
     /**
@@ -1576,19 +1661,288 @@ function known(id) {
 const _sway = new THREE.Quaternion();
 const _swayAngles = new THREE.Euler();
 
-// A blade hung from the belt (Character.hang): the swings about its grip tried (radians: forward,
-// below 0, to back; and out from the body, as a leg kicks a scabbard aside), where along it is
-// kept clear of the leg, by how much (metres), and how fast it falls back to hang as it was
-// (radians a second)
-const HANG_ANGLES = Array.from({ length: 26 }, (_, k) => ((k * 5 - 45) * Math.PI) / 180);
-const HANG_OUT = [0, 10, 20, 30, 40].map((degrees) => (degrees * Math.PI) / 180);
+// Swing a blade hung at the hip (`model`, its `hangs`: Character.hang, on `character`) about
+// its frog as little as keeps its hilt (its pommel, grip and crossguard's arms) HANG_ARM_CLEAR
+// off that side's forearm and hand, posed as they are now, and its blade as clear of the leg as
+// hang keeps it
+function armPush(character, model, hangs) {
+    const place = model.userData.sheath;
+    const hips = character.rig.bone(place.bone);
+    const Side = hangs.side;
+    const outward = Side === "Left" ? 1 : -1;
+    const turn = hips.getWorldQuaternion(_hangTurn).multiply(place.quaternion);
+    const down = _hangDown.set(0, 1, 0).applyQuaternion(turn);
+    const edge = _hangEdge.set(0, 0, 1).applyQuaternion(turn);
+    const pivot = hips.localToWorld(_hangFrom.copy(hangs.at)).addScaledVector(down, HANG_PIVOT);
+    const start = pivot.clone();
+    // (Out from the hip, in the world: the frog shoved that way along the belt, if need be)
+    const away = (place.out ?? _armOut.set(outward, 0, 0)).clone().transformDirection(hips.matrixWorld);
+    const across = character.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(character.rig.bone("RightUpLeg").getWorldPosition(_hangAt)).normalize();
+    const forward = _hangForward.crossVectors(across, _up);
+    const arm = [`${Side}ForeArm`, `${Side}Hand`, `${Side}HandMiddle1`].map((name, i) => character.rig.bone(name).getWorldPosition(_armJoints[i]));
+
+    hangs.arm ??= limbThickness(character, `${Side}ForeArm`, `${Side}Hand`);
+
+    // How far (metres, less the arm's thickness) the hilt, swung `back` and `out`, keeps off the arm
+    const off = (back, out) => {
+        const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+        const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+        let least = Infinity;
+
+        for (const [y, z] of hangs.hilt) {
+            const point = _hangPoint.copy(pivot).addScaledVector(along, y - HANG_PIVOT).addScaledVector(sideways, z);
+
+            for (let k = 0; k < 2; k++) {
+                const on = _segment.set(arm[k], arm[k + 1]).closestPointToPointParameter(point, true);
+
+                least = Math.min(least, _segment.at(on, _hangOn).distanceTo(point) - hangs.arm);
+            }
+        }
+
+        return least;
+    };
+
+    const now = off(hangs.angle, hangs.out);
+
+    if (now >= HANG_ARM_CLEAR) {
+        return;
+    }
+
+    // (The swing that clears it nearest how it hangs, not into the leg, as hang measures it; the
+    // frog shoved out along the belt as little as lets one. If none clears it so far and the arm's
+    // in it, the nearest that takes it out of the arm, or failing that the furthest out of it)
+    const legs = [`${Side}UpLeg`, `${Side}Leg`, `${Side}Foot`].map((name, i) => character.rig.bone(name).getWorldPosition(_legJoints[i]));
+    let [best, freed, most] = [null, null, null];
+
+    for (const shove of HANG_ARM_SHOVE) {
+        pivot.copy(start).addScaledVector(away, shove);
+
+        for (const out of HANG_OUT) {
+            for (const back of HANG_ANGLES) {
+                const moved = Math.abs(back - hangs.angle) + Math.abs(out - hangs.out);
+                const clear = off(back, out);
+                const kept = clear >= HANG_ARM_CLEAR ? best : clear >= 0 ? freed : null;
+
+                if ((kept ? moved >= kept[2] : clear < 0 && most && clear <= most[4]) || hangs.nearest(back, out, { pivot, down, edge, leg: legs, across, forward }) < 0) {
+                    continue;
+                }
+
+                if (clear >= HANG_ARM_CLEAR) {
+                    best = [back, out, moved, shove];
+                } else if (clear >= 0) {
+                    freed = [back, out, moved, shove];
+                } else {
+                    most = [back, out, moved, shove, clear];
+                }
+            }
+        }
+
+        if (best) {
+            break;
+        }
+    }
+
+    best ??= now >= 0 ? null : (freed ?? (most && most[4] > now + HANG_ARM_GAIN ? most : null));
+
+    if (!best) {
+        return;
+    }
+
+    [hangs.angle, hangs.out] = best;
+    hangs.at.addScaledVector(place.out ?? _armOut.set(outward, 0, 0), best[3]);
+
+    const local = _hangInverse.copy(hips.matrixWorld).invert();
+    const swing = _hangTurn.setFromAxisAngle(forward.transformDirection(local), hangs.out * outward).multiply(_hangBack.setFromAxisAngle(across.transformDirection(local), hangs.angle));
+    const frog = _hangDown.set(0, HANG_PIVOT, 0).applyQuaternion(place.quaternion);
+    const sheathed = character.sheathed && !model.userData.settling;
+
+    for (const hung of [sheathed ? model : null, hangs.holder]) {
+        hung?.position.copy(hangs.at).add(frog).sub(_hangPoint.copy(frog).applyQuaternion(swing));
+        hung?.quaternion.copy(swing).multiply(place.quaternion);
+        hung?.updateMatrixWorld(true);
+    }
+}
+
+/**
+ * Where a blade hung from the belt (`model`, its `hangs`: Character.hang, on `character`) hangs
+ * from its frog (`place`, moved there): stood off the belt (the way off the body there,
+ * `place.out`) as little as keeps the blade and its scabbard HANG_SKIN off the skin of the body
+ * standing as it's made (facing +z, its joints `rig.heads`), pommel to tip, the hilt HANG_HILT_SKIN;
+ * the frog where its sheath says round the front of the hip, or, if that's further off the belt
+ * than HANG_SNUG (a belly in the way of the hilt), back towards the side until it isn't (or as
+ * near as any); and how clear of the leg (`names`: its joints; `nearest`, as hang measures it)
+ * that keeps it at each place down it, which the leg's pushing it further than is kept there (or
+ * HANG_CLEAR, if that's less).
+ */
+function fitHanging(character, model, hangs, place, names, nearest) {
+    const { human, positions, rig } = character;
+    const rest = (name) => rig.heads[rig.index.get(name)];
+    const hips = rest("Hips");
+    const sheath = EQUIPMENT[model.name]?.sheath;
+    // (The blade's and scabbard's points, in its own frame: along every edge of them, every few
+    // centimetres, a long scabbard's too; the hilt's, above the scabbard's mouth, apart; and how
+    // far its edge is from its back, down the blade: Character.hang)
+    const [marks, hilt] = [[], []];
+    let width = 0;
+
+    for (const hung of [model, hangs.holder]) {
+        const inverse = hung?.matrixWorld.clone().invert();
+
+        hung?.traverse((part) => {
+            const position = part.isMesh ? part.geometry.attributes.position : null;
+            const index = position ? part.geometry.index : null;
+            const to = position ? inverse.clone().multiply(part.matrixWorld) : null;
+            const corner = (i) => new THREE.Vector3().fromBufferAttribute(position, index ? index.getX(i) : i).applyMatrix4(to);
+
+            for (let t = 0; position && t + 2 < (index?.count ?? position.count); t += 3) {
+                for (let k = 0; k < 3; k++) {
+                    const [from, end] = [corner(t + k), corner(t + ((k + 1) % 3))];
+                    const steps = Math.max(1, Math.ceil(from.distanceTo(end) / HANG_EVERY));
+
+                    for (let n = 0; n < steps; n++) {
+                        const mark = from.clone().lerp(end, n / steps);
+
+                        width = mark.y > HANG_PIVOT + HANG_HILT ? Math.max(width, mark.z) : width;
+                        (mark.y < HANG_PIVOT ? hilt : marks).push(mark);
+                    }
+                }
+            }
+        });
+    }
+
+    const vertex = new THREE.Vector3();
+    // (Stood off the hip straight out from its side)
+    const out = new THREE.Vector3(hangs.side === "Left" ? 1 : -1, 0, 0);
+    // How far off the belt, out from the hip, a frog `at` (a place) must stand
+    const standing = (at) => {
+        const [blade, top] = [marks, hilt].map((points) => points.map((mark) => mark.clone().applyQuaternion(at.quaternion).add(at.position).add(hips)));
+        // (The skin they could come near, in cells of HANG_CELL)
+        const box = new THREE.Box3().setFromPoints([...blade, ...top]).expandByScalar(HANG_HILT_SKIN);
+
+        box.max.x += out.x > 0 ? HANG_STAND : 0;
+        box.min.x -= out.x < 0 ? HANG_STAND : 0;
+
+        const cells = new Map();
+        const cellOf = (x, y, z) => `${Math.floor(x / HANG_CELL)} ${Math.floor(y / HANG_CELL)} ${Math.floor(z / HANG_CELL)}`;
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0 && box.containsPoint(vertex.fromArray(positions, v * 3))) {
+                const key = cellOf(vertex.x, vertex.y, vertex.z);
+
+                cells.set(key, [...(cells.get(key) ?? []), vertex.clone()]);
+            }
+        }
+
+        const clearOf = (points, near, off) =>
+            points.every((mark) => {
+                const point = vertex.copy(mark).addScaledVector(out, off);
+                const [i, j, k] = [point.x, point.y, point.z].map((c) => Math.floor(c / HANG_CELL));
+
+                for (let di = -1; di <= 1; di++) {
+                    for (let dj = -1; dj <= 1; dj++) {
+                        for (let dk = -1; dk <= 1; dk++) {
+                            for (const there of cells.get(`${i + di} ${j + dj} ${k + dk}`) ?? []) {
+                                if (there.distanceToSquared(point) < near * near) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            });
+        let stand = 0;
+
+        // (The hilt first: it's what a belly's in the way of)
+        while (stand < HANG_STAND && !(clearOf(top, HANG_HILT_SKIN, stand) && clearOf(blade, HANG_SKIN, stand))) {
+            stand += HANG_STAND_STEP;
+        }
+
+        return { at, out, stand };
+    };
+    let best = standing(place);
+
+    for (let round = (sheath?.round ?? 0) - HANG_ROUND; sheath?.round && best.stand > HANG_SNUG && round >= HANG_ROUND_LEAST; round -= HANG_ROUND) {
+        const tried = standing(placed(socketOn(character, sheath.socket, { round }), sheath));
+
+        best = tried.stand < best.stand ? tried : best;
+    }
+
+    place.position.copy(best.at.position).addScaledVector(best.out, best.stand);
+    place.quaternion.copy(best.at.quaternion);
+    place.out = best.out;
+
+    const across = rest("LeftUpLeg").clone().sub(rest("RightUpLeg")).normalize();
+    const down = new THREE.Vector3(0, 1, 0).applyQuaternion(place.quaternion);
+    const pivot = hips.clone().add(place.position).addScaledVector(down, HANG_PIVOT);
+    const each = [];
+
+    // (The hilt's: its pommel, the middle of its grip, and its crossguard's arms, as [y, z]: armPush)
+    const pommel = hilt.reduce((low, mark) => (mark.y < low.y ? mark : low), hilt[0] ?? new THREE.Vector3(0, hangs.pommel, 0));
+    const guard = hilt.reduce((wide, mark) => (Math.abs(mark.z) > Math.abs(wide.z) ? mark : wide), pommel);
+
+    hangs.hilt = [
+        [pommel.y, 0],
+        [(pommel.y + guard.y) / 2, 0],
+        [guard.y, Math.abs(guard.z)],
+        [guard.y, -Math.abs(guard.z)],
+        // (and the blade or scabbard below the frog, where a hand comes up past it, or a forearm
+        // reaching behind the back crosses it swung back)
+        ...[1.6, 2.4, 3.2, 4].flatMap((below) => [[HANG_PIVOT * below, width], [HANG_PIVOT * below, -width]]),
+    ];
+    hangs.width = width;
+    nearest(0, 0, { pivot, down, edge: new THREE.Vector3(0, 0, 1).applyQuaternion(place.quaternion), leg: names.map(rest), across, forward: new THREE.Vector3().crossVectors(across, _up) }, each);
+    hangs.stand = best.stand;
+    hangs.clear = each.map((near) => Math.min(HANG_CLEAR, near - HANG_GIVE));
+}
+
+// A blade hung from the belt (Character.hang): where it swings about (its frog, at the scabbard's
+// mouth: metres down the blade from the middle of its grip); how far its frog may stand off the
+// belt, to keep it off the hips and thigh (metres, fitHanging), in steps of so much, by how much
+// (metres from the blade's and scabbard's points to the skin's: what's worn over the skin, and a
+// little), looking at every so many of their points; how much further back and out a hand on its
+// pommel holds it (radians), and how far out from the body (metres: off the front of the thigh as
+// it comes up running, the crossguard's forward arm); the swings about the frog tried (radians: forward, below 0, a
+// little, to back, the most; and out, as a leg kicks a scabbard aside), where along it it's kept
+// clear of the leg, by how much at most (metres: as much as it's clear standing, a little less,
+// `HANG_GIVE`, if that's less), and how fast it falls back to hang as it was (radians a second)
+const HANG_PIVOT = 0.1;
+const HANG_HILT = 0.05;
+const HANG_STAND = 0.1;
+const HANG_STAND_STEP = 0.005;
+// (And, the frog stood off further than HANG_SNUG where its sheath says, how far back round the
+// hip towards its side it's tried instead, in steps of so many degrees, and no further than so
+// far round from the side)
+const HANG_SNUG = 0.05;
+const HANG_ROUND = 10;
+const HANG_ROUND_LEAST = 20;
+const HANG_SKIN = 0.012;
+const HANG_HILT_SKIN = 0.045;
+const HANG_EVERY = 0.03;
+const HANG_CELL = 0.03;
+const HANG_HELD = { back: (5 * Math.PI) / 180, out: (5 * Math.PI) / 180, off: 0.05 };
+const HANG_ANGLES = Array.from({ length: 14 }, (_, k) => ((k * 5 - 5) * Math.PI) / 180);
+const HANG_OUT = [0, 5, 10, 20, 30, 40].map((degrees) => (degrees * Math.PI) / 180);
 const HANG_SAMPLES = [0.3, 0.5, 0.7, 0.85, 1];
 const HANG_CLEAR = 0.06;
+const HANG_GIVE = 0.005;
+// (And its hilt kept so far off that side's forearm and hand, metres, the frog shoved out along
+// the belt by so much at most if that's what it takes: armPush)
+const HANG_ARM_CLEAR = 0.045;
+const HANG_ARM_SHOVE = [0, 0.02, 0.04, 0.06];
+// (And, no swing keeping it so far off and the arm in it, taken as far out of the arm as it'll
+// go if that's so much further)
+const HANG_ARM_GAIN = 0.005;
+const HANG_PUSH = 0.015;
+const HANG_LIFT = { from: (25 * Math.PI) / 180, to: (60 * Math.PI) / 180, off: 0.08 };
+// How far in from the end of a hilt (metres) the middle of a hand resting on it grips it
+const POMMEL_GRIP = 0.025;
 const HANG_THICK = [
     [0, 0.3],
     [0.6, 0.9],
 ];
-const HANG_FALL = 2.5;
+const HANG_FALL = 1;
 const _legJoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
 const _across = new THREE.Vector3();
 const _hangFrom = new THREE.Vector3();
@@ -1600,6 +1954,12 @@ const _hangOn = new THREE.Vector3();
 const _hangTurn = new THREE.Quaternion();
 const _hangBack = new THREE.Quaternion();
 const _hangForward = new THREE.Vector3();
+const _hangLift = new THREE.Vector3();
+const _hangAxis = new THREE.Vector3();
+const _hangEdge = new THREE.Vector3();
+const _hangSide = new THREE.Vector3();
+const _armJoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const _armOut = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _hangInverse = new THREE.Matrix4();
 const _segment = new THREE.Line3();
@@ -1607,5 +1967,5 @@ const _segment = new THREE.Line3();
 // How far out (degrees) an arm swinging free is held to clear what hangs at its hip (and further
 // past a blade's hilt, hung from the belt, forward of the hip: a sword's, a cleaver's)
 const HIP_CLEARING = 10;
-const HILT_CLEARING = 28;
+const HILT_CLEARING = 10;
 

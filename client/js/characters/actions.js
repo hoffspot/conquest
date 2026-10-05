@@ -951,13 +951,13 @@ const ADVENTURER_RESTS = [
         [1.5, { left: { at: [-0.1, -0.3, 0.2] }, ...spine({ flex: 2 }), Head: { flex: 4 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } }]),
     variant("shifting the weight", { ...spine({}), Hips: { obliquity: 0 }, offset: [0, 0, 0] },
         // From one foot to the other, a thumb in the belt (the hand brought to it from the front,
-        // over a sword's hilt there)
-        [0.25, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed" } }],
-        [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
-        [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
-        [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }],
+        // over a sword's hilt there), or, a blade hung at that hip, the hand resting on its pommel
+        [0.25, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed", pommel: 1 } }],
+        [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed", pommel: 1 }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
+        [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed", pommel: 1 }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
+        [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed", pommel: 1 }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }],
         // (And out of it forward again before it's let fall)
-        [1.75, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed" }, Hips: { obliquity: 0 }, ...spine({}), offset: [0, 0, 0] }]),
+        [1.75, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed", pommel: 1 }, Hips: { obliquity: 0 }, ...spine({}), offset: [0, 0, 0] }]),
 ];
 
 // The priest's rests (some of them the acolyte's too)
@@ -1046,8 +1046,14 @@ const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", keys: [...BARKE
 const UNDER_THE_HELM = [-0.3, 0.36, 0.44];
 const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: { ...pose.left, at: UNDER_THE_HELM } }]) };
 
+// Hands clasped behind with a sword or cleaver at the left hip: the left hand brought up to the
+// waist first, over the scabbard, the elbow out to the side, clear of a shield slung on the back,
+// and back behind it, and let down the same way
+const OVER_THE_SCABBARD = { left: { at: [-0.24, -0.56, -0.08], palm: [-0.3, 0, -0.95], towards: [-0.2, -0.9, -0.3], elbow: [0.9, -0.3, 0], shape: "relaxed" } };
+const ARMED_CLASPED = { ...PRIEST_RESTS[4], keys: [...PRIEST_RESTS[4].keys.slice(0, 1), [0.25, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(1, -1), [1.88, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(-1)] };
+
 const BELT_HOOK = [-0.2, -0.62, 0.28];
-const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? OVER_THE_HILT.left : { ...pose.left, at: BELT_HOOK } }]) };
+const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? { ...OVER_THE_HILT.left, pommel: 0 } : { ...pose.left, at: BELT_HOOK, pommel: 0 } }]) };
 
 const BASE_RESTS = {
     barkeep: BARKEEP_RESTS,
@@ -1244,7 +1250,7 @@ const KEYED_RESTS = {
     ruler: [renamed(WORSHIPPER[4], "hands on the knees"), renamed(WORSHIPPER[2], "gazing over the hall"), renamed(PATRON[4], "looking about the hall"), renamed(WORSHIPPER[1], "brooding"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
     steward: [renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[1], PRIEST_RESTS[2]],
     councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
-    sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, PRIEST_RESTS[4]],
+    sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, ARMED_CLASPED],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars
@@ -1315,7 +1321,9 @@ export const DRAWS = Object.freeze({
                 // scabbard's throat...
                 [0.55, { right: { at: [0.25, -0.45, 0.6], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 20 }) }],
                 [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 6 }), Hips: { turn: 8 } }],
-                // ...drawn up and out across the body in one sweep...
+                // ...drawn up and out across the body in one sweep, first forward along the
+                // scabbard, clear of the belly...
+                [1.06, { right: { at: [0.28, -0.4, 0.85] } }],
                 [1.14, { right: { at: [0.01, 0.25, 0.6], point: [0.5, 0.45, 0.74], edge: [-0.3, 0.9, -0.3] }, left: REACH_OUT, ...spine({ turn: -12 }), Hips: { turn: -4 } }],
                 // ...raised in a salute before the face, then twirled round at the wrist, the
                 // point sweeping down and back past the right side and up again...
@@ -1339,8 +1347,8 @@ export const DRAWS = Object.freeze({
                 // ...then the point round to the scabbard's mouth (the other hand at its throat,
                 // guiding it in), the hilt kept out clear of the waist, and slid home
                 [0.8, { right: { at: [0.38, -0.4, 0.75], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 18 }) }],
-                [0.9, { right: { at: [0.45, -0.55, 0.6], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 26, flex: 2 }), Hips: { turn: 3 } }],
-                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 4 }), Hips: { turn: 5 } }],
+                [0.9, { right: { at: [0.45, -0.55, 0.6], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 26, flex: 2 }), Hips: { turn: 6 } }],
+                [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 4 }), Hips: { turn: 10 } }],
                 // (The hand let go, falling to the side)
                 [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
                 [2, EASY],
@@ -1878,6 +1886,7 @@ function compile(rawKeys, { settle = null, scaled = false } = {}) {
                 ...("pronate" in value ? ["pronate"] : []),
                 ...("chest" in value ? ["chest"] : []),
                 ...("sheath" in value ? ["sheath"] : []),
+                ...("pommel" in value ? ["pommel"] : []),
                 ...(value.wrist ? ["wristFlex", "wristDeviate"] : []),
             ];
         }
@@ -1912,6 +1921,7 @@ function compile(rawKeys, { settle = null, scaled = false } = {}) {
                 case "pronate":
                 case "chest":
                 case "sheath":
+                case "pommel":
                     return value[name];
                 case "reach":
                     return 1;
@@ -1958,8 +1968,8 @@ function compile(rawKeys, { settle = null, scaled = false } = {}) {
                 const after = given.find((g) => g > k);
 
                 if (before === undefined || after === undefined) {
-                    // (A hand's reached, and reaching for a sheath, only between keys that say)
-                    row[n] = names[n] === "reach" || names[n] === "sheath" ? 0 : (values[before ?? after]?.[n] ?? 0);
+                    // (A hand's reached, and reaching for a sheath or a pommel, only between keys that say)
+                    row[n] = names[n] === "reach" || names[n] === "sheath" || names[n] === "pommel" ? 0 : (values[before ?? after]?.[n] ?? 0);
                 } else {
                     const u = (times[k] - times[before]) / (times[after] - times[before]);
 
@@ -2033,6 +2043,21 @@ export const GUARD_SWAYS = {
     punch: { clip: "fightIdle", hands: 0, body: 0 },
     kick: { clip: "fightIdle", hands: 0, body: 0 },
 };
+// A hand resting on the pommel of a blade hung at the hip (Actions.#restOnPommel): how far into
+// setting off walking (Walker.amount) it's gone there, how fast it goes there and is let go (a
+// share a second), the elbow out and back (as the hand's given, x to the left), the fingers
+// cupped over the end of the hilt, and how far down over it they point (along the hilt)
+const POMMEL_WALK = 0.25;
+const POMMEL_EASE = [4, 8];
+const POMMEL = { pommel: 1, elbow: [0.9, -0.3, -0.3] };
+const POMMEL_FINGERS = [
+    ...["Index", "Middle", "Ring", "Pinky"].flatMap((finger) => [34, 42, 26].map((flex, k) => [`LeftHand${finger}${k + 1}`, { flex: flex * { Index: 0.92, Middle: 1, Ring: 1.05, Pinky: 1.1 }[finger] }])),
+    ["LeftHandThumb1", { flex: 25, oppose: 20 }],
+    ["LeftHandThumb2", { flex: 15 }],
+    ["LeftHandThumb3", { flex: 10 }],
+];
+const POMMEL_OVER = 0.6;
+
 // How many even steps round its loop a sway's sampled at, and how far into setting off walking
 // (Walker.amount) it's eased out
 const SWAY_STEPS = 12;
@@ -2288,6 +2313,12 @@ export class Actions {
          * there (`weight`, 0 to 1); null, not on it (for checking poses: characters/motioncheck.js).
          */
         this.haft = { right: null, left: null };
+
+        /**
+         * How far the left hand's gone to rest on the pommel of a blade hung at the left hip
+         * (0 to 1), walking or running with it put away: steadying it (Character.held).
+         */
+        this.pommel = 0;
     }
 
     /** Sit down (on a bench) or stand. */
@@ -2630,6 +2661,8 @@ export class Actions {
             }
         }
 
+        this.#restOnPommel(dt, walking);
+
         // (Knocked down and up again: done)
         if (this.fall?.up && this.time - this.fall.start >= this.fall.up) {
             this.fall = null;
@@ -2644,6 +2677,33 @@ export class Actions {
 
         // (Sitting, the feet stay where the legs put them)
         return !this.seated;
+    }
+
+    // Walking or running with a blade hung at the left hip, put away, and nothing in the left hand
+    // or on its arm (a shield slung on the back, not carried), doing nothing else: the left hand
+    // rests on its pommel, steadying it, the fingers over the end of the hilt and the elbow out
+    // and back, as soon as the walk sets off; standing, it's let fall to the side again
+    // (Character.held, as Actions.place finds it: the blade held tips back, clear of the legs)
+    #restOnPommel(dt, walking) {
+        const character = this.character;
+        const wanted = character.sheathed && !character.holds?.Left && !this.attack && !this.reactions.length && !this.dodging && !this.fall && !this.seated && character.items?.some((model) => model.userData.hangs?.side === "Left") ? smooth(0, POMMEL_WALK, walking) : 0;
+        const rate = wanted > this.pommel ? POMMEL_EASE[0] : POMMEL_EASE[1];
+
+        this.pommel += Math.sign(wanted - this.pommel) * Math.min(Math.abs(wanted - this.pommel), dt * rate);
+
+        const share = smooth(0, 1, this.pommel);
+
+        if (share > 0.001) {
+            this.reaching.unshift({ hands: { left: POMMEL }, weight: share });
+
+            for (const [joint, angles] of POMMEL_FINGERS) {
+                const index = this.rig.index.get(joint);
+                const { kind, side } = this.rig.joints[index];
+
+                jointRotation(kind, side, angles, _rotation);
+                blendRotation(kind, side, this.rig.rotations[index], _rotation, share, this.rig.rotations[index]);
+            }
+        }
     }
 
     // Sit: the legs bent over the seat, the pelvis lowered onto it
@@ -2669,6 +2729,10 @@ export class Actions {
     place() {
         const reached = new Set();
 
+        // (How far the left hand's on the pommel of what hangs at that hip, as the arms will be
+        // reached this frame, blended as they are: walking, or a rest's keys. Held, it's tipped
+        // back, and the arm's let reach it)
+        this.character.held = this.reaching.reduce((held, { hands, weight }) => (hands.left ? held + (Math.min(1, hands.left.pommel ?? 0) - held) * weight * (hands.left.reach ?? 1) : held), 0);
         // (What hangs at the hips swung clear of the legs as they're posed now, or the seat)
         this.character.hang?.(this.time, this.seated);
         // (What's held is kept out of the body as the arm's reached the last time this frame:
@@ -2776,6 +2840,9 @@ export class Actions {
                 this.turned[side] = null;
             }
         }
+
+        // (And what hangs at the hips pushed aside by the arms, as they've been reached)
+        this.character.hang?.(this.time, this.seated, { arms: true });
     }
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
@@ -2832,7 +2899,7 @@ export class Actions {
                 names.forEach((channel, n) => {
                     if (channel === "reach") {
                         hand.reach = Math.min(1, Math.max(0, value(n)));
-                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent" || channel === "chest" || channel === "sheath" || channel === "onto") {
+                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent" || channel === "chest" || channel === "sheath" || channel === "pommel" || channel === "onto") {
                         hand[channel] = value(n);
                     } else if (channel === "wristFlex" || channel === "wristDeviate") {
                         hand.wrist ??= { flex: 0, deviate: 0 };
@@ -3484,6 +3551,7 @@ export class Actions {
         let position;
         let point = null;
         let edge = null;
+        let pommel = null;
 
         this.#frame(hand, _frame);
 
@@ -3505,8 +3573,18 @@ export class Actions {
             if (last) {
                 this.haft[side] = { wanted: position.clone(), held: null, weight };
             }
+        } else if (hand.pommel > 0.001 && !hand.at && !this.character.pommelOf?.(Side)) {
+            // (Nothing hangs at that hip to rest the hand on)
+            return null;
         } else {
-            position = this.#place(side, hand.at, _frame);
+            // (Resting on the pommel of what hangs at that hip, as it hangs now, as far as
+            // `pommel` says: Character.pommelOf)
+            pommel = hand.pommel > 0.001 ? this.character.pommelOf?.(Side) ?? null : null;
+            position = hand.at ? this.#place(side, hand.at, _frame) : pommel.position.clone();
+
+            if (pommel) {
+                position.lerp(pommel.position, Math.min(1, hand.pommel));
+            }
 
             // (Moved out of the torso: place())
             if (shift) {
@@ -3583,6 +3661,14 @@ export class Actions {
         } else if (hand.palm) {
             // (The palm faces across the hand's anatomical frame: the left's to its right, the right's to its left)
             aim = { axis: new THREE.Vector3(side === "left" ? -1 : 1, 0, 0), toward: new THREE.Vector3().fromArray(hand.palm).normalize().applyQuaternion(_frame) };
+        }
+
+        // (On a pommel: the palm over the end of the hilt, the fingers forward and down over it)
+        if (pommel) {
+            const resting = palmFrame(side, pommel.point.clone().negate(), pommel.forward.clone().addScaledVector(pommel.point, POMMEL_OVER));
+
+            wanted = wanted ? wanted.slerp(resting, Math.min(1, hand.pommel)) : resting;
+            aim = null;
         }
 
         const saved = [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`].map((name) => rig.bone(name).quaternion.clone());

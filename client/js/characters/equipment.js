@@ -73,14 +73,18 @@ const HOLDS = {
  * Worn weapons (`worn`: spiked gauntlets) stay on, the hands just open.
  */
 const SHEATHS = {
-    // (At the left hip, hung from its frog a little off it, the hilt forward of the hip and up at
-    // the belt, where the right hand crossing in front of the belly takes it, the blade down and
-    // back behind the thigh, swinging back as the leg pushes it: Character.hang; seated, pushed
-    // back by the seat to the side of the hip, `seated`)
-    sword: { socket: "leftHip", at: [0.045, -0.03, 0.17], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt", hangs: true, seated: [0.04, -0.02, -0.12] },
-    // (At the left hip too, as a messer was worn: hung from a ring on the belt, the grip forward,
-    // the blade down behind the thigh, its edge forward, swinging as the sword's does)
-    cleaver: { socket: "leftHip", at: [0.045, -0.03, 0.15], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], garment: "belt", hangs: true, seated: [0.04, -0.02, -0.1] },
+    // (At the left hip, hung from its frog on the belt round the front of the hip, the scabbard's
+    // mouth against the belt just under it, canted as a sword's worn: the hilt up and forward
+    // across the front of the hip, in from the arm hanging beside it, where the right hand
+    // crossing in front of the belly takes it; the blade down and back at 45°, leaning out a
+    // little, past the thigh to behind the calf; the frog as far off the belt as keeps it off that
+    // body, swung back as the leg pushes it and held further back by a hand on its pommel:
+    // Character.hang; seated, pushed back by the seat to the side of the hip, `seated`)
+    sword: { socket: "leftFrog", round: 50, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], holder: "scabbard", garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
+    // (At the left hip too, as a messer was worn: hung from a ring on the belt round the front of
+    // the hip, the grip forward, the blade down and back past the thigh, its edge forward, hung
+    // and swung as the sword is)
+    cleaver: { socket: "leftFrog", round: 28, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
     // (Tucked in the belt at the right hip, the tip down)
     wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
@@ -96,6 +100,10 @@ const SHEATHS = {
     bow: { socket: "back", at: [0.15, 0.22, -0.08], point: [-0.28, -0.96, -0.06], edge: [0, 0, 1], garment: "baldric" },
     worn: { worn: true },
 };
+
+// How far round the front of the hip from its side (degrees) a scabbard's frog hangs it on the
+// belt (socketOn: "leftFrog"; a sheath's own `round`, else this)
+const FROG_ROUND = 35;
 
 // The peoples whose shields are round, held by a grip behind the boss (items.js)
 const ROUND_SHIELDS = new Set(["orc", "lizard"]);
@@ -192,7 +200,7 @@ export const EQUIPMENT = Object.freeze(Object.fromEntries([
  * Where a socket is on a character's (rest-pose) body: { bone (name), position and quaternion
  * (in the bone's space), fit (sizes items need: headRadius, scale) }.
  */
-export function socketOn(character, socket) {
+export function socketOn(character, socket, { round = null } = {}) {
     const { rig, human, positions } = character;
     const head = (name) => rig.heads[rig.index.get(name)];
     const frame = (name) => rig.frames[rig.index.get(name)];
@@ -228,10 +236,15 @@ export function socketOn(character, socket) {
             return { bone, position, quaternion, fit };
         }
         case "leftHip":
-        case "rightHip": {
-            // On the outside of the hip, on the belt (garments.js: a hand's breadth below the
-            // waist), for things hung from it
-            const left = socket === "leftHip";
+        case "rightHip":
+        case "leftFrog":
+        case "rightFrog": {
+            // On the belt (garments.js: a hand's breadth below the waist), for things hung from
+            // it: on the outside of the hip, or (a scabbard's frog) round the front of the hip from
+            // there (FROG_ROUND); as far out that way as the trunk's skin there goes, and the belt
+            const left = socket.startsWith("left");
+            const turned = socket.endsWith("Frog") ? ((round ?? FROG_ROUND) * Math.PI) / 180 : 0;
+            const [outX, outZ] = [(left ? 1 : -1) * Math.cos(turned), Math.sin(turned)];
             const belt = head("Spine").y - 0.048 * (character.height / 1.7);
             const trunk = new Set(["Hips", "Spine", "LeftUpLeg", "RightUpLeg"].map((name) => rig.index.get(name)));
             let best = null;
@@ -241,17 +254,19 @@ export function socketOn(character, socket) {
 
                 // (The trunk's skin, not the hands hanging beside it)
                 if (human.partOf[v] === 0 && trunk.has(human.skinIndices[v * 4]) && Math.abs(y - belt) < 0.02) {
-                    const x = positions[v * 3] * (left ? 1 : -1);
+                    const [x, z] = [positions[v * 3], positions[v * 3 + 2]];
+                    const out = x * outX + z * outZ;
 
-                    if (!best || x > best.x) {
-                        best = { x, z: positions[v * 3 + 2] };
+                    if (!best || out > best.out) {
+                        best = { out, x, z };
                     }
                 }
             }
 
-            const position = new THREE.Vector3((left ? 1 : -1) * (best.x + 0.014), belt, best.z).sub(head("Hips"));
+            const position = new THREE.Vector3(best.x + outX * 0.014, belt, best.z + outZ * 0.014).sub(head("Hips"));
 
-            return { bone: "Hips", position, quaternion: new THREE.Quaternion(), fit };
+            // (`out`: the way off the body there, along the ground)
+            return { bone: "Hips", position, quaternion: new THREE.Quaternion(), fit, out: new THREE.Vector3(outX, 0, outZ) };
         }
         case "rightToe":
         case "leftToe":

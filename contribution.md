@@ -199,6 +199,12 @@ npm run check:motion -- --update          # keep this run's failures as the new 
      for one that isn't (a tower shield, one with spikes round its rim, one carried by a stick).
      The reasons for each are kept beside `SLING` and in `docs/CHARACTERS.md`. A test fails if
      a shield doesn't say.
+   - A new blade hung at the hip (`SHEATHS`, `hangs: true`) goes on a frog (`leftFrog`), with
+     `round` (degrees round the front of the hip) if 35° doesn't suit it. It's fitted to each
+     body and canted 45°, and the left hand rests on its pommel walking. A test checks the cant
+     and the fit on every motion-check body. A rest whose left hand passes that hip must bring it
+     over the hilt and scabbard, not through them (the sentry's `ARMED_*` rests). Or it can rest
+     the hand on the pommel with `pommel: 1` in its keys.
 4. **Bump a version number when you change what it guards:**
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another
