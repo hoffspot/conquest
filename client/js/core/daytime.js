@@ -30,6 +30,15 @@ export const DAY = Object.freeze({
     start: 18 * MINUTE,
 });
 
+/** An hour of the world's day (ms of play: the day's 24 of them, two and a half minutes each). */
+export const HOUR = DAY.length / 24;
+
+/**
+ * When the night's creatures come out (ms from midnight): a second past sunset, as it's dark
+ * enough for them (light.js torchesLit); they go to ground at sunrise (DAY.rises).
+ */
+export const SUNDOWN = DAY.sets + 1000;
+
 /** How many days the moon takes to turn through its phases. */
 export const MOON_DAYS = 8;
 
@@ -47,6 +56,16 @@ export function untilWaking(elapsed, least = 0) {
     const time = timeOfDay(elapsed);
 
     return [DAY.rises, DAY.sets, DAY.rises + DAY.length, DAY.sets + DAY.length].map((wake) => wake - time).find((wait) => wait >= least);
+}
+
+/**
+ * How long (ms of play) till it's next a time of day (`at`, ms from midnight) when the world's
+ * been going `elapsed` ms: a whole day if it's that time now.
+ */
+export function untilTime(elapsed, at) {
+    const wait = (((at - timeOfDay(elapsed)) % DAY.length) + DAY.length) % DAY.length;
+
+    return wait || DAY.length;
 }
 
 /** The time of day (ms from midnight) when the world's been going `elapsed` ms. */

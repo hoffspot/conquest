@@ -7,8 +7,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { WILD } from "../client/js/core/creatures.js";
-import { DAY, elapsedOf, timeOfDay, untilWaking } from "../client/js/core/daytime.js";
-import { HOST_PLAYER, Host, REFUSALS, REST } from "../client/js/core/host.js";
+import { DAY, elapsedOf, HOUR, SUNDOWN, timeOfDay, untilWaking } from "../client/js/core/daytime.js";
+import { CAMP_HOURS, campFor, HOST_PLAYER, Host, REFUSALS, REST } from "../client/js/core/host.js";
+import { torchesLit } from "../client/js/core/light.js";
 import { Hosting, Joining } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -98,6 +99,53 @@ describe("passing the time (core/daytime.js, core/host.js)", () => {
         }
 
         assert.equal(host.campfires.length, 0);
+    });
+
+    it("camps as long as the player chooses: so many hours, till sundown (the night's creatures out) or till the morning (the night over)", () => {
+        // (An hour of the world's: two and a half minutes of play)
+        assert.equal(HOUR, 2.5 * MINUTE);
+        assert.equal(campFor(at(30 * MINUTE), { hours: 6 }), 6 * HOUR);
+        assert.equal(campFor(at(30 * MINUTE), "sundown"), SUNDOWN - 30 * MINUTE);
+        assert.equal(campFor(at(30 * MINUTE), "morning"), DAY.length - 30 * MINUTE + DAY.rises);
+        assert.equal(campFor(at(0), "sundown"), SUNDOWN, "at midnight: the next evening's");
+        assert.equal(campFor(at(SUNDOWN), "sundown"), DAY.length, "at sundown: the next day's");
+
+        for (const wrong of [{ hours: 0 }, { hours: CAMP_HOURS.most + 1 }, { hours: 2.5 }, "noon", {}]) {
+            assert.equal(campFor(0, wrong), null, JSON.stringify(wrong));
+        }
+
+        // (Sundown is when the dark's come for the night's creatures; the morning, when it's gone)
+        assert.equal(torchesLit(at(SUNDOWN)), true);
+        assert.equal(torchesLit(at(SUNDOWN - 1001)), false);
+        assert.equal(torchesLit(at(DAY.rises)), false);
+        assert.equal(torchesLit(at(DAY.rises - 1)), true);
+
+        const { host, me, outside } = hosted();
+
+        outside(me);
+
+        for (const [until, woken] of [
+            ["sundown", SUNDOWN],
+            ["morning", DAY.rises],
+            [{ hours: 3 }, (DAY.rises + 3 * HOUR) % DAY.length],
+        ]) {
+            host.events = [];
+            assert.deepEqual(host.command(HOST_PLAYER, { type: "camp", until }), { ok: true });
+            assert.equal(timeOfDay(elapsedOf(host.war)), woken, JSON.stringify(until));
+            assert.ok(host.events.some(({ type, where, until: chosen }) => type === "slept" && where === "camp" && JSON.stringify(chosen) === JSON.stringify(until)));
+        }
+
+        // (Asked how long it can't be: refused, and no time passed)
+        const turn = host.war.turn;
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "camp", until: { hours: 99 } }), { ok: false, reason: "howLong" });
+        assert.equal(host.war.turn, turn);
+        assert.equal(typeof REFUSALS.howLong, "string");
+
+        // (Whether a camp can be made, asked before asking how long)
+        assert.equal(host.campRefusal(HOST_PLAYER), null);
+        me.map = "taproom";
+        assert.equal(host.campRefusal(HOST_PLAYER), "outdoors");
     });
 
     it("won't make camp in a settlement, indoors, in a fight or with anything hostile near", () => {

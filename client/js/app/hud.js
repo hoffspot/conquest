@@ -396,6 +396,58 @@ export class Hud {
         return asked;
     }
 
+    /**
+     * Ask how long to camp, in a panel as `choose` asks: so many of the world's hours (− and +,
+     * `least` to `most`, starting at `hours`), till sundown, or till the morning (each with how
+     * many hours off it is: `sundown`, `morning`). `onChoose` hears { hours }, "sundown" or
+     * "morning", or nothing (cancelled). Returns a way to withdraw it.
+     */
+    chooseCamp({ hours = 8, least = 1, most = 24, sundown, morning }, onChoose) {
+        const off = (wait) => (wait < 1 ? "within the hour" : `about ${Math.round(wait)} h`);
+        const asked = this.choose("Make camp", [{ label: `Until sundown (${off(sundown)})`, value: "sundown" }, { label: `Until morning (${off(morning)})`, value: "morning" }], onChoose);
+        const buttons = asked.panel.querySelector(".choice-options");
+        const row = element("div", "camp-hours");
+        const less = element("button", "button camp-step", "−");
+        const more = element("button", "button camp-step", "+");
+        const count = element("span", "camp-count");
+        const sleep = element("button", "button choice-option camp-sleep");
+        let chosen = Math.max(least, Math.min(most, hours));
+        const show = () => {
+            count.textContent = `${chosen} hour${chosen === 1 ? "" : "s"}`;
+            sleep.textContent = `Sleep ${chosen} hour${chosen === 1 ? "" : "s"}`;
+            less.disabled = chosen <= least;
+            more.disabled = chosen >= most;
+        };
+
+        for (const [button, by, label] of [
+            [less, -1, "An hour less"],
+            [more, 1, "An hour more"],
+        ]) {
+            button.type = "button";
+            button.setAttribute("aria-label", label);
+            button.addEventListener("click", () => {
+                chosen = Math.max(least, Math.min(most, chosen + by));
+                show();
+            });
+        }
+
+        sleep.type = "button";
+        sleep.addEventListener("click", () => {
+            asked.panel.remove();
+
+            if (this.choice === asked) {
+                this.choice = null;
+            }
+
+            onChoose({ hours: chosen });
+        });
+        row.append(less, count, more);
+        buttons.prepend(row, sleep);
+        show();
+
+        return asked;
+    }
+
     /** Remove every floating bar and number. */
     clear() {
         this.floaters.replaceChildren();

@@ -29,7 +29,7 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
-import { DAY, daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.js";
+import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
@@ -39,7 +39,7 @@ import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
+import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -3233,7 +3233,7 @@ export class Game {
 
     // Someone's slept (at an inn, or by a camp's fire): if the world's time passed, everyone's
     // woken with them, the screen up from black, told how long; if only they rested, just them
-    #slept({ id, where, passed }) {
+    #slept({ id, where, passed, until = null }) {
         const mine = id === this.me;
 
         if (!passed && !mine) {
@@ -3253,7 +3253,11 @@ export class Game {
         const who = mine ? "You sleep" : `${this.battle.actor(id)?.name ?? "Your host"} sleeps`;
         const how = where === "camp" ? " by the fire" : "";
 
-        this.hud.message(passed ? `${who}${how} till ${morning ? "the sun's up" : "evening"}, ${Math.round(passed / 60000)} minutes gone.` : `You rest${how}: the time's the host's to pass.`, 3.5);
+        // (As long as was chosen, making camp: so many hours, till sundown or the morning)
+        const hours = until?.hours;
+        const long = hours ? ` for ${hours} hour${hours === 1 ? "" : "s"}` : ` till ${until === "sundown" ? "sundown" : until === "morning" || morning ? "the sun's up" : "evening"}`;
+
+        this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : `You rest${how}: the time's the host's to pass.`, 3.5);
         this.onWar?.(this.host.war);
     }
 
@@ -5664,6 +5668,11 @@ export class Game {
             return this.#chooseSummons(spell);
         }
 
+        // (Making camp: how long, asked once it's somewhere a camp can be made)
+        if (order === "camp") {
+            return this.#chooseCamp();
+        }
+
         const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : null;
 
         const heard = (result) => {
@@ -5732,6 +5741,40 @@ export class Game {
     }
 
     // Summon: a creature of these parts, or another player (chosen), then cast
+    // How long to camp, asked (once a camp can be made here): so many hours (the last chosen to
+    // start with), till sundown (when the night's creatures come out) or till the morning
+    #chooseCamp() {
+        const why = this.host.campRefusal(this.me);
+
+        if (why) {
+            this.hud.message(REFUSALS[why], 1.4);
+            this.sound?.play("denied");
+
+            return { ok: false, reason: why };
+        }
+
+        const elapsed = elapsedOf(this.host.war);
+
+        this.hud.chooseCamp({ hours: this.campHours ?? 8, least: CAMP_HOURS.least, most: CAMP_HOURS.most, sundown: campFor(elapsed, "sundown") / HOUR, morning: campFor(elapsed, "morning") / HOUR }, (until) => {
+            if (until === undefined) {
+                return;
+            }
+
+            if (until.hours) {
+                this.campHours = until.hours;
+            }
+
+            this.#command({ type: "camp", until }, (result) => {
+                if (!result.ok) {
+                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.4);
+                    this.sound?.play("denied");
+                }
+            });
+        });
+
+        return { ok: true };
+    }
+
     #chooseSummons(spell) {
         const why = this.#unready(spell);
 

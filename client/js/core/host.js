@@ -15,7 +15,7 @@
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
-import { elapsedOf, untilWaking } from "./daytime.js";
+import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFree, rollGear } from "./gear.js";
@@ -160,6 +160,31 @@ export const WILDS = Object.freeze({ count: 8, night: 2, about: 60, from: 30, to
 export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 60000 });
 
 /**
+ * How long a camp's slept by, as the player chooses (host.js `#camp`'s `until`): so many of the
+ * world's hours (`least` to `most`), or till sundown (when the night's creatures come out:
+ * daytime.js SUNDOWN), or till the morning (sunrise, the night over); a camp made with none chosen
+ * is slept by to the next sunrise or sunset, as an inn's room is.
+ */
+export const CAMP_HOURS = Object.freeze({ least: 1, most: 24 });
+
+/** How long (ms of play) a camp's slept by when the world's been going `elapsed` ms, as `until` has it (CAMP_HOURS); or null if `until`'s no such thing. */
+export function campFor(elapsed, until) {
+    if (until === "sundown") {
+        return untilTime(elapsed, SUNDOWN);
+    }
+
+    if (until === "morning") {
+        return untilTime(elapsed, DAY.rises);
+    }
+
+    if (Number.isInteger(until?.hours) && until.hours >= CAMP_HOURS.least && until.hours <= CAMP_HOURS.most) {
+        return until.hours * HOUR;
+    }
+
+    return null;
+}
+
+/**
  * How near (m) a player has to be to a creature when it falls to find their own bundle on it (its
  * spoils: spoils.js).
  */
@@ -293,6 +318,7 @@ export const REFUSALS = Object.freeze({
     unsummoned: "No one's calling you.",
     outdoors: "There's nowhere to camp in here.",
     settlement: "No camping in town: find an inn.",
+    howLong: "Camp for an hour to a day, or till sundown or the morning.",
     hostiles: "Not with enemies about.",
     fighting: "Not in the middle of a fight.",
 });
@@ -784,7 +810,7 @@ export class Host {
             case "effect":
                 return this.#effect(player, actor, command.effect);
             case "camp":
-                return this.#camp(player, actor);
+                return this.#camp(player, actor, command.until ?? null);
             case "trade":
                 return this.#trade(player, actor, command.with);
             case "offer":
@@ -3742,27 +3768,47 @@ export class Host {
     // Camping out in the world: not in a settlement, a fight, or with anything hostile near
     // (REST.clear); a fire built a step in front of them and their tent behind them, slept by
     // (#sleep), burning a while after (REST.burns)
-    #camp(player, actor) {
-        if (actor.dead) {
-            return refuse("dead");
+    /**
+     * Why a player (by id) can't make camp just now (a REFUSALS key: in a settlement, indoors, in a
+     * fight, with something hostile near), or null if they can: asked before they're asked how long.
+     */
+    campRefusal(id) {
+        const actor = this.battle.actor(id);
+
+        if (!actor || actor.dead) {
+            return "dead";
         }
 
         if (actor.map !== "town") {
-            return refuse("outdoors");
+            return "outdoors";
         }
 
         const plan = this.world.plan;
 
         if (plan && !clearOfSettlements(plan, [actor.x, actor.y], 0)) {
-            return refuse("settlement");
+            return "settlement";
         }
 
         if (actor.target !== null || actor.attack || this.battle.actors.some((other) => other.target === actor.id && !other.dead)) {
-            return refuse("fighting");
+            return "fighting";
         }
 
         if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < REST.clear)) {
-            return refuse("hostiles");
+            return "hostiles";
+        }
+
+        return null;
+    }
+
+    #camp(player, actor, until = null) {
+        if (until !== null && campFor(0, until) === null) {
+            return refuse("howLong");
+        }
+
+        const why = this.campRefusal(actor.id);
+
+        if (why) {
+            return refuse(why);
         }
 
         const [dx, dy] = [sin(actor.facing), cos(actor.facing)];
@@ -3777,23 +3823,25 @@ export class Host {
 
         this.campfires = [...this.campfires.filter(({ player: whose }) => whose !== actor.id), camp];
         this.battle.mend(actor.id, { hp: actor.maxHp, stamina: actor.maxStamina });
-        this.#sleep(player, actor, "camp");
+        this.#sleep(player, actor, "camp", until);
 
         return OK;
     }
 
     // A player asleep (at an inn, or by their camp's fire): if they're the world's host, its time
-    // passed to the next sunrise or sunset at least REST.least off (the war's turns meanwhile all
-    // played, as they would have been), and everyone told (each woken); anyone else just rests
-    #sleep(player, actor, where) {
+    // passed (as long as they chose to camp: CAMP_HOURS; else to the next sunrise or sunset at
+    // least REST.least off; the war's turns meanwhile all played, as they would have been), and
+    // everyone told (each woken); anyone else just rests
+    #sleep(player, actor, where, until = null) {
         const host = player.id === HOST_PLAYER;
-        const passed = host && this.war ? untilWaking(elapsedOf(this.war), REST.least) : 0;
+        const elapsed = elapsedOf(this.war);
+        const passed = host && this.war ? (until !== null ? campFor(elapsed, until) : untilWaking(elapsed, REST.least)) : 0;
 
         if (passed) {
             this.#warOn(passed);
         }
 
-        this.#event("slept", { id: actor.id, where, passed });
+        this.#event("slept", { id: actor.id, where, passed, ...(until !== null ? { until } : {}) });
     }
 
     // --- Standing in their people (core/standing.js) ---

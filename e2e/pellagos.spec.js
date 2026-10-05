@@ -1172,10 +1172,11 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.kinds).toBe(true);
 
     // Out here, the wild's creatures put off, the player makes camp (Make camp, at the top of their
-    // own wheel's other side): asleep to the evening, woken by their tent and its fire, and told
+    // own wheel's other side), asked how long (so many hours, till sundown or the morning): asleep
+    // till sundown, woken by their tent and its fire, and told
     const camped = await page.evaluate(async () => {
         const { game } = window.pellagos;
-        const { elapsedOf, timeOfDay, DAY } = await import("/js/core/daytime.js");
+        const { elapsedOf, timeOfDay, SUNDOWN } = await import("/js/core/daytime.js");
 
         game.stop();
 
@@ -1193,13 +1194,16 @@ test("walks out of the town into the world, drawn round the player as they go, w
         };
 
         const result = game.act(game.wheels.self[1].n, "self");
+        const asked = [...document.querySelectorAll(".choice button")].map((button) => button.textContent);
 
+        [...document.querySelectorAll(".choice button")].find((button) => button.textContent.startsWith("Until sundown")).click();
         game.advance(0.2);
         game.hud.message = message;
 
         return {
             result,
-            woken: timeOfDay(elapsedOf(game.host.war)) - DAY.sets,
+            asked,
+            woken: timeOfDay(elapsedOf(game.host.war)) - SUNDOWN,
             passed: elapsedOf(game.host.war) > before,
             drawn: game.camps.camps.has("rest-player"),
             said,
@@ -1208,12 +1212,13 @@ test("walks out of the town into the world, drawn round the player as they go, w
     });
 
     expect(camped.result).toEqual({ ok: true });
+    expect(camped.asked).toEqual(["−", "+", "Sleep 8 hours", expect.stringMatching(/^Until sundown \(/), expect.stringMatching(/^Until morning \(/), "Cancel"]);
     expect(camped.passed).toBe(true);
     expect(camped.woken).toBeGreaterThanOrEqual(0);
     expect(camped.woken).toBeLessThan(1000);
     expect(camped.drawn).toBe(true);
     expect(camped.lit).toBeGreaterThan(0);
-    expect(camped.said.some((text) => /^You sleep by the fire till evening/.test(text)), JSON.stringify(camped.said)).toBe(true);
+    expect(camped.said.some((text) => /^You sleep by the fire till sundown/.test(text)), JSON.stringify(camped.said)).toBe(true);
 
     // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
     // trees and creatures) reads no more textures than an iPhone lets one read

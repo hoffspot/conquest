@@ -884,10 +884,19 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   slept in; or out in the world, **Make camp** (an action for a wheel, at the top of the player's
   own wheel's other side to start with, or a quick action) pitches their people's tent behind
   them and builds a fire a step in front, and they sleep by it. Not in a settlement ("find an
-  inn"), indoors, in a fight, or with anything hostile within 40 m. Either way they wake mended,
-  their stamina full, at the next sunrise or sunset at least five minutes off (the screen coming
-  up from black, told how long they slept), the war's turns meanwhile all played as they would
-  have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
+  inn"), indoors, in a fight, or with anything hostile within 40 m (said at once, before
+  anything's asked: host.js `campRefusal`). Making camp asks how long (hud.js `chooseCamp`):
+  - **so many hours** of the world's (− and +, an hour to a day, eight to start with, then the last
+    chosen; an hour is two and a half minutes of play: daytime.js `HOUR`);
+  - **until sundown**: a second past sunset, when it's dark enough for the night's creatures to
+    come out (daytime.js `SUNDOWN`; light.js `torchesLit`);
+  - **until morning**: sunrise, when the night's over and its creatures go to ground;
+  - each of the last two with how many hours off it is; or Cancel.
+
+  A room at an inn is slept in to the next sunrise or sunset at least five minutes off. Either
+  way they wake mended, their stamina full (the screen coming up from black, told how long they
+  slept: "You sleep by the fire for 8 hours, 20 minutes gone."), the war's turns meanwhile all
+  played as they would have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
   camp's does (seen as by day within 14 m). In a world shared with others only the host passes
   the time, everyone woken with them; anyone else who sleeps just rests.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
