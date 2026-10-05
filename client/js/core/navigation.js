@@ -438,7 +438,10 @@ export class Navigation {
 
     /**
      * A tile's polygons, to draw (the debug view): { positions (Float32Array: x, height, y each,
-     * three a triangle), areas (Uint8Array: AREA, one a triangle) }, or null if it has none.
+     * three a triangle), areas (Uint8Array: AREA, one a triangle), edges (Float32Array: each edge
+     * of the mesh against a wall or a drop, rather than more of it, as its ends (x, height, y
+     * each) and which way is out of it (x, y): eight a side), sides (Uint8Array: each edge's
+     * polygon's AREA) }, or null if it has none.
      */
     polygons(tx, ty) {
         const tile = this.tiles.get(key(tx, ty));
@@ -451,6 +454,8 @@ export class Navigation {
         const header = mesh.header();
         const positions = [];
         const areas = [];
+        const edges = [];
+        const sides = [];
 
         // (Each polygon's detail triangles, at the ground's height: their corners the polygon's
         // own first, then the detail mesh's)
@@ -476,9 +481,31 @@ export class Navigation {
                 positions.push(...corner(mesh.detailTris(at)), ...corner(mesh.detailTris(at + 1)), ...corner(mesh.detailTris(at + 2)));
                 areas.push(poly.areaAndType() & 0x3f);
             }
+
+            // (Its edges with nothing beyond: neither another polygon of the tile's, nor one of
+            // the next tile's over its side, DT_EXT_LINK; out of it away from its middle)
+            const corners = Array.from({ length: own }, (_, v) => corner(v));
+            const [mx, mz] = [corners.reduce((sum, [x]) => sum + x, 0) / own, corners.reduce((sum, [, , z]) => sum + z, 0) / own];
+
+            for (let v = 0; v < own; v++) {
+                if (poly.neis(v) !== 0) {
+                    continue;
+                }
+
+                const [a, b] = [corners[v], corners[(v + 1) % own]];
+                const length = hypot(b[0] - a[0], b[2] - a[2]) || 1;
+                let [nx, nz] = [(b[2] - a[2]) / length, -(b[0] - a[0]) / length];
+
+                if (nx * ((a[0] + b[0]) / 2 - mx) + nz * ((a[2] + b[2]) / 2 - mz) < 0) {
+                    [nx, nz] = [-nx, -nz];
+                }
+
+                edges.push(...a, ...b, nx, nz);
+                sides.push(poly.areaAndType() & 0x3f);
+            }
         }
 
-        return { positions: Float32Array.from(positions), areas: Uint8Array.from(areas) };
+        return { positions: Float32Array.from(positions), areas: Uint8Array.from(areas), edges: Float32Array.from(edges), sides: Uint8Array.from(sides) };
     }
 }
 

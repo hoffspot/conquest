@@ -45,6 +45,7 @@ import { rounded, wayOver } from "./terrain/ways.js";
 import { FLATS, flatSpot } from "./terrain/flats.js";
 import { metresOf } from "./terrain/curve.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
+import { fenceOutlines, propOutlines } from "./setpieces/standing.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { hypot } from "./exact.js";
@@ -116,6 +117,14 @@ export const BRIDGE = Object.freeze({
 // river there; but no further than STREETS_FAR
 const STREETS_ON = BRIDGE.stone.banks + 2;
 const STREETS_FAR = 80;
+
+// How far past a bridge's ends and edges its deck's height is given (metres): its approaches, and
+// a step off it, stood on as it
+const DECK_GROW = 0.5;
+
+// How far what stands about a settlement's open ground reaches from its middle (metres): a yard's
+// fences, at its widest
+const STANDING_REACH = 12;
 
 // Trees: tried every TREE_GRID metres (and a random way in); how far (squares) they keep from
 // roads and water; how far (metres) from the town, and from the edges of the settlements, sites
@@ -265,8 +274,9 @@ export class Overworld {
      * @param {object} options
      * @param {object} options.plan - The world plan (worldplan/plan.js planWorld).
      * @param {object} options.stamp - The town set into it: { at: [x, y] (its north-west square),
-     *   width, height, blocked, opaque, ground (its rows), yards (layoutTown's, in the world's
-     *   metres) }.
+     *   width, height, blocked, opaque, ground, standing (its rows), yards (layoutTown's, in the
+     *   world's metres), trunks ([{ x, y }]: its trees'), props (its pieces that are: both in the
+     *   world's metres) }.
      * @param {object} options.start - The plan's settlement the town stands for.
      */
     constructor({ plan, stamp, start }) {
@@ -395,7 +405,8 @@ export class Overworld {
      * north-west square), blocked, opaque, ground, water (WET), bridge (Uint8Array, a square
      * each: under a bridge's deck), solid (blocked by what's built or stands there: the town's,
      * a settlement's or a place's buildings and walls, a feature; not water, a cliff or a tree,
-     * whose trunk stands at its point), trees ([{ x, y (a trunk's point, where four squares meet),
+     * whose trunk stands at its point), built (in the town, a settlement or a place, its own
+     * squares'), trees ([{ x, y (a trunk's point, where four squares meet),
      * variant, size, turn }]), bridges (those whose middles are in it: [{ a, b ([x, y] metres:
      * its deck's ends, along the road), half (its deck's half-width) }]), walks (the plank walks
      * over a settlement's lagoon whose middles are in it, the same way), town (whether the town's
@@ -508,15 +519,20 @@ export class Overworld {
 
     /**
      * How high the ground stands at a point (metres): levelled where it's built on and along the
-     * roads; on a bridge, its deck (terrain/ground.js).
+     * roads; on a bridge, its deck (terrain/ground.js); over a lagoon, the deck of a plank walk
+     * over it, out to its edges (walked to them: navigation/tiles.js), not only on the squares
+     * whose middles it's over; and a bridge's too, on a square next to one under it (a deck
+     * running across the squares reaches over corners of some whose middles it doesn't: a stone
+     * bridge's ramps, up over the banks, as the mesh has them).
      */
     heightAt(x, y) {
         const [px, py] = [Math.floor(x), Math.floor(y)];
 
         const chunk = inside(px, py) ? this.chunkAt(px, py) : null;
+        const k = chunk ? (py - chunk.y0) * CHUNK + (px - chunk.x0) : -1;
 
-        if (chunk?.bridge[(py - chunk.y0) * CHUNK + (px - chunk.x0)]) {
-            const deck = this.#deckAt(x, y);
+        if (chunk?.bridge[k] || (chunk?.water[k] && chunk.built[k]) || (chunk && this.#byBridge(px, py, chunk))) {
+            const deck = this.#deckAt(x, y, chunk.bridge[k] ? DECK_GROW : 0);
 
             if (deck !== null) {
                 return deck;
@@ -526,32 +542,47 @@ export class Overworld {
         return this.ground.heightAt(x, y);
     }
 
-    // A bridge's deck's height at a point on it (or a citadel's deck's), or null if the point's on
-    // none
-    #deckAt(x, y) {
-        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+    // Whether any of the eight squares round a square (in `chunk`) is under a bridge's deck
+    #byBridge(px, py, chunk) {
+        for (let y = py - 1; y <= py + 1; y++) {
+            for (let x = px - 1; x <= px + 1; x++) {
+                const own = x >= chunk.x0 && y >= chunk.y0 && x < chunk.x0 + CHUNK && y < chunk.y0 + CHUNK ? chunk : inside(x, y) ? this.chunkAt(x, y) : null;
 
-        for (const bridge of [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy), ...this.sites.decksNear(cx, cy)]) {
-            const { a, b, half } = bridge;
+                if (own?.bridge[(y - own.y0) * CHUNK + (x - own.x0)]) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // A bridge's deck's height at a point on it (or a citadel's deck's), or a plank walk's, or
+    // null if the point's on none; on it means within `grow` metres of its ends and its edges
+    #deckAt(x, y, grow = DECK_GROW) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+        const on = ({ a, b, half }) => {
             const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
             const length = hypot(dx, dy);
             const along = ((x - a[0]) * dx + (y - a[1]) * dy) / length;
 
-            if (along >= -0.5 && along <= length + 0.5 && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + 0.5) {
-                return this.deckOf(bridge, along / length);
+            return along >= -grow && along <= length + grow && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + grow ? along / length : null;
+        };
+
+        for (const bridge of [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy), ...this.sites.decksNear(cx, cy)]) {
+            const t = on(bridge);
+
+            if (t !== null) {
+                return this.deckOf(bridge, t);
             }
         }
 
         // (Or a plank walk over a lagoon: its deck level, as the town's ground round it)
         for (let ny = cy - 1; ny <= cy + 1; ny++) {
             for (let nx = cx - 1; nx <= cx + 1; nx++) {
-                for (const { a, b, half, level } of nx >= 0 && ny >= 0 && nx < CHUNKS && ny < CHUNKS ? this.#walksIn(nx, ny) : []) {
-                    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
-                    const length = hypot(dx, dy);
-                    const along = ((x - a[0]) * dx + (y - a[1]) * dy) / length;
-
-                    if (along >= -0.5 && along <= length + 0.5 && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + 0.5) {
-                        return level;
+                for (const walk of nx >= 0 && ny >= 0 && nx < CHUNKS && ny < CHUNKS ? this.#walksIn(nx, ny) : []) {
+                    if (on(walk) !== null) {
+                        return walk.level;
                     }
                 }
             }
@@ -882,7 +913,9 @@ export class Overworld {
                     // (Over its lagoon, where it's walked, a plank walk's deck)
                     bridge[k] = water[k] && !blocked[k] ? 1 : 0;
                     built[k] = 1;
-                    solid[k] = blocked[k];
+                    // (Solid where a building stands: a prop, a tree, a fence or the lagoon's
+                    // water is walked round as it's drawn, by the navigation mesh)
+                    solid[k] = blocked[k] && stamp.standing[ty][tx] ? 1 : 0;
                     town = true;
                     continue;
                 }
@@ -897,7 +930,7 @@ export class Overworld {
                     water[k] = own.water ? WET.still : WET.none;
                     bridge[k] = own.water && !own.blocked ? 1 : 0;
                     built[k] = 1;
-                    solid[k] = blocked[k];
+                    solid[k] = blocked[k] && own.standing ? 1 : 0;
 
                     // (Its streets over the land's water, out through its fields: under one of
                     // its bridges, its planks, or a stone one's cobbles, as a road's bridge; and
@@ -996,7 +1029,7 @@ export class Overworld {
         const bridges = [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy)].filter(inChunk);
         // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
         const walks = this.#walksIn(cx, cy);
-        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, crops, heights, slopes, trees: [], bridges, walks, town };
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, built, crops, heights, slopes, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
@@ -1149,6 +1182,52 @@ export class Overworld {
         const own = (this.stamp?.yards ?? []).filter(({ x, y }) => x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK);
 
         return [...own, ...this.settlements.yardsIn(cx, cy)];
+    }
+
+    /**
+     * What stands about the town's and the settlements' open ground in a box (metres), walked round
+     * as it's drawn (navigation/tiles.js), not by the squares it blocks: their props' outlines and
+     * their yards' fences (setpieces/standing.js), each [[x, y], ...] in the world's metres: those
+     * of the settlements laid out, as every one reaching into the box is once its chunks are made.
+     */
+    standingNear(x0, y0, x1, y1) {
+        const meets = (points) => points.some(([x]) => x >= x0) && points.some(([x]) => x <= x1) && points.some(([, y]) => y >= y0) && points.some(([, y]) => y <= y1);
+        const shapes = [];
+        const add = (piece, yard) => {
+            for (const points of yard ? fenceOutlines(yard) : propOutlines(piece)) {
+                if (meets(points)) {
+                    shapes.push(points);
+                }
+            }
+        };
+
+        for (const piece of this.stamp.props ?? []) {
+            add(piece);
+        }
+
+        for (const yard of this.stamp.yards ?? []) {
+            add(null, yard);
+        }
+
+        // (A settlement's, whose middles are in the chunks round the box: its widest's reach a
+        // few metres from theirs)
+        const reach = STANDING_REACH;
+
+        for (let cy = Math.max(0, Math.floor((y0 - reach) / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor((y1 + reach) / CHUNK)); cy++) {
+            for (let cx = Math.max(0, Math.floor((x0 - reach) / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor((x1 + reach) / CHUNK)); cx++) {
+                for (const piece of this.settlements.piecesIn(cx, cy)) {
+                    if (piece.kind === "prop") {
+                        add(piece);
+                    }
+                }
+
+                for (const yard of this.settlements.yardsIn(cx, cy)) {
+                    add(null, yard);
+                }
+            }
+        }
+
+        return shapes;
     }
 
     /**
@@ -1697,7 +1776,11 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
     const walks = town.town.walks.map(({ a, b, ...walk }) => ({ ...walk, a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]] }));
     const yards = town.town.yards.map((yard) => ({ ...yard, x: yard.x + town.origin + at[0], y: yard.y + town.origin + at[1] }));
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, water: town.town.water, walks, yards, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
+    // (Its trees' trunks, in the fields and in the town: where the navigation mesh walks round them)
+    const trunks = [...town.trees, ...town.town.pieces.filter(({ kind }) => kind === "tree")].map(({ x, y }) => ({ x: x + town.origin + at[0], y: y + town.origin + at[1] }));
+    // (And its props, walked round as they're drawn: setpieces/standing.js)
+    const props = town.town.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
     const move = ([x, y]) => [x + at[0], y + at[1]];
     const tavern = town.tavern && {
