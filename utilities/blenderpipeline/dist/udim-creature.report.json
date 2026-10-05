@@ -1,0 +1,346 @@
+{
+  "name": "udim-creature",
+  "config": "examples/udim-creature.json",
+  "source": "fixtures/udim-creature/udim-creature.blend",
+  "glb": "dist/udim-creature.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "4.5.92"
+  },
+  "kilobytes": 77.2,
+  "compression": "meshopt",
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 1,
+    "vertices": 192,
+    "triangles": 94,
+    "skinned": true,
+    "joints": 5,
+    "influences": 4,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "Body_baked",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [
+        "baseColor",
+        "metallicRoughness",
+        "normal",
+        "occlusion",
+        "emissive"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 1
+    }
+  ],
+  "textures": [
+    {
+      "name": "Body_emission",
+      "mimeType": "image/webp",
+      "width": 512,
+      "height": 512,
+      "kilobytes": 0.8,
+      "gpuMegabytes": 1.33
+    },
+    {
+      "name": "Body_normal",
+      "mimeType": "image/webp",
+      "width": 512,
+      "height": 512,
+      "kilobytes": 25,
+      "gpuMegabytes": 1.33
+    },
+    {
+      "name": "Body_orm",
+      "mimeType": "image/webp",
+      "width": 512,
+      "height": 512,
+      "kilobytes": 23.2,
+      "gpuMegabytes": 1.33
+    },
+    {
+      "name": "Body_basecolor",
+      "mimeType": "image/webp",
+      "width": 512,
+      "height": 512,
+      "kilobytes": 9.7,
+      "gpuMegabytes": 1.33
+    }
+  ],
+  "clips": [
+    {
+      "name": "Crawl",
+      "seconds": 1,
+      "channels": 15,
+      "keyframes": 96,
+      "loops": true,
+      "inPlace": true,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 2.3077,
+        "speed": 2.3077,
+        "direction": [
+          0,
+          1
+        ]
+      },
+      "from": null
+    },
+    {
+      "name": "Idle",
+      "seconds": 2,
+      "channels": 15,
+      "keyframes": 112,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null
+    },
+    {
+      "name": "Rearing",
+      "seconds": 1.5,
+      "channels": 15,
+      "keyframes": 74,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null
+    },
+    {
+      "name": "Roaring",
+      "seconds": 1.25,
+      "channels": 15,
+      "keyframes": 83,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "udim-creature-extra.blend"
+    }
+  ],
+  "scale": 1.538462,
+  "bounds": {
+    "rest": {
+      "min": [
+        -0.3615,
+        0,
+        -1.5
+      ],
+      "max": [
+        0.3615,
+        1.0769,
+        1.5
+      ],
+      "size": [
+        0.7231,
+        1.0769,
+        3
+      ]
+    },
+    "animated": {
+      "min": [
+        -0.5144,
+        -0.1775,
+        -1.5082
+      ],
+      "max": [
+        0.5144,
+        1.6133,
+        1.5539
+      ],
+      "size": [
+        1.0287,
+        1.7908,
+        3.0621
+      ]
+    },
+    "radius": 1.8228
+  },
+  "lods": [],
+  "exported": {
+    "objects": [
+      {
+        "name": "Body",
+        "vertices": 61,
+        "faces": 49,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      }
+    ],
+    "armature": {
+      "name": "Rig",
+      "bones": 6,
+      "deformBones": 5,
+      "exported": 5
+    },
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Body",
+        "baked": true,
+        "reasons": [
+          "Skin has UDIM tiles",
+          "Horn: Base Color comes from a VALTORGB",
+          "3 materials (merged into one)"
+        ],
+        "material": "Body_baked",
+        "atlas": 512,
+        "scale": 1,
+        "groups": [
+          {
+            "material": "Skin.001",
+            "tile": 1001,
+            "faces": 6,
+            "pixels": [
+              48,
+              64
+            ]
+          },
+          {
+            "material": "Skin.001",
+            "tile": 1002,
+            "faces": 6,
+            "pixels": [
+              48,
+              64
+            ]
+          },
+          {
+            "material": "Skin.001",
+            "tile": 1003,
+            "faces": 6,
+            "pixels": [
+              48,
+              64
+            ]
+          },
+          {
+            "material": "Skin.001",
+            "tile": 1004,
+            "faces": 6,
+            "pixels": [
+              48,
+              64
+            ]
+          },
+          {
+            "material": "Horn.001",
+            "tile": null,
+            "faces": 13,
+            "pixels": [
+              502,
+              246
+            ]
+          },
+          {
+            "material": "Eye.001",
+            "tile": null,
+            "faces": 12,
+            "pixels": [
+              16,
+              16
+            ]
+          }
+        ],
+        "textures": {
+          "basecolor": 512,
+          "orm": 512,
+          "normal": 512,
+          "emission": 512
+        },
+        "constants": {},
+        "alphaMode": "OPAQUE",
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 0
+  },
+  "budgets": [
+    {
+      "budget": "drawCalls",
+      "limit": 1,
+      "value": 1,
+      "ok": true
+    },
+    {
+      "budget": "textureSize",
+      "limit": 512,
+      "value": 512,
+      "ok": true
+    },
+    {
+      "budget": "joints",
+      "limit": 5,
+      "value": 5,
+      "ok": true
+    },
+    {
+      "budget": "clips",
+      "limit": [
+        "Idle",
+        "Crawl",
+        "Rearing",
+        "Roaring"
+      ],
+      "value": "all there",
+      "ok": true
+    }
+  ],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    }
+  },
+  "notes": [
+    "not exported: Camera, Collider, Light, WGT_root",
+    "actions not exported: Look (left out)",
+    "tangents exported, for the normal maps"
+  ],
+  "warnings": []
+}

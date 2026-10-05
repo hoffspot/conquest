@@ -1,0 +1,155 @@
+{
+  "name": "palette-crate",
+  "config": "examples/palette-crate.json",
+  "source": "fixtures/palette-crate/palette-crate.blend",
+  "glb": "dist/palette-crate.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": "4.5.92"
+  },
+  "kilobytes": 3.2,
+  "compression": "meshopt",
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
+  ],
+  "meshes": {
+    "drawCalls": 1,
+    "vertices": 120,
+    "triangles": 60,
+    "skinned": false,
+    "joints": 0,
+    "influences": 0,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "Wood",
+      "alphaMode": "OPAQUE",
+      "doubleSided": true,
+      "textures": [
+        "baseColor"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 0.5,
+      "metallic": 0
+    }
+  ],
+  "textures": [
+    {
+      "name": "palette",
+      "mimeType": "image/webp",
+      "width": 2,
+      "height": 1,
+      "kilobytes": 0.1,
+      "gpuMegabytes": 0
+    }
+  ],
+  "clips": [],
+  "scale": 1,
+  "bounds": {
+    "rest": {
+      "min": [
+        -0.45,
+        0,
+        -0.45
+      ],
+      "max": [
+        0.45,
+        0.84,
+        0.45
+      ],
+      "size": [
+        0.9,
+        0.84,
+        0.9
+      ]
+    },
+    "animated": {
+      "min": [
+        -0.45,
+        0,
+        -0.45
+      ],
+      "max": [
+        0.45,
+        0.84,
+        0.45
+      ],
+      "size": [
+        0.9,
+        0.84,
+        0.9
+      ]
+    },
+    "radius": 1.0539
+  },
+  "lods": [],
+  "exported": {
+    "objects": [
+      {
+        "name": "Crate",
+        "vertices": 40,
+        "faces": 30,
+        "modifiers": []
+      }
+    ],
+    "armature": null,
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Crate",
+        "baked": false,
+        "materials": [
+          "Wood",
+          "Iron"
+        ],
+        "udim": false,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 0
+  },
+  "budgets": [
+    {
+      "budget": "drawCalls",
+      "limit": 1,
+      "value": 1,
+      "ok": true
+    }
+  ],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    }
+  },
+  "notes": [
+    "Crate's materials aren't merged: Wood, Iron map faces to points on their textures (a palette), which baking can't sample"
+  ],
+  "warnings": []
+}
