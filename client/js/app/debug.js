@@ -6,6 +6,8 @@
 //    frame, where the browser can say: world/gputimer.js) and device
 //  - the battle: its time, characters, orders and projectiles
 //  - how long each group of files took to download, and each part of the world to build
+//  - the downloader (app/fetcher.js): its rate, the queueing it sees, what it's fetching and what's
+//    queued, and why it's quiet
 // and controls to see what things cost: quality, render scale, shadows, and the squares
 // characters walk on (with their paths).
 //
@@ -60,6 +62,21 @@ export function netLine({ remote, hosting }, per) {
     return null;
 }
 
+/**
+ * The downloader, from its status (Fetcher.status): what it's fetching (and how far it's got) or
+ * idle; its rate, and what the link's carried; the queueing delay it sees over the least round
+ * trip; how many files are queued, fetched and given up on; and why it's quiet or thrifty.
+ */
+export function downloadLine({ rate, throughput, base, queueing, together, current, queued, quiet, thrifty, done, failed, fetched }) {
+    const kb = (bytes) => `${Math.round(bytes / 1024)} KB/s`;
+    const doing = current ? `${current.path.split("/").pop()} ${Math.floor((100 * current.received) / current.bytes)}%` : "idle";
+    const link = throughput === null ? "" : ` of ${kb(throughput)}`;
+    const delay = base === null ? "" : `  queueing ${Math.round(queueing)} ms over ${Math.round(base)}`;
+    const why = [...(quiet.length ? [`quiet: ${quiet.join(", ")}`] : []), ...(thrifty ? ["saving data"] : [])];
+
+    return `Downloads ${doing}  ${kb(rate)}${link} ${together ? "together" : "alone"}${delay}  ${queued} queued, ${done} done${failed ? `, ${failed} failed` : ""} (${formatBytes(fetched)})${why.length ? `  ${why.join("; ")}` : ""}`;
+}
+
 export class Debug {
     /**
      * @param {HTMLElement} root - The #debug overlay.
@@ -73,6 +90,7 @@ export class Debug {
         this.settings = settings;
         this.onChange = onChange;
         this.loader = null;
+        this.fetcher = null;
         this.view = null;
         this.game = null;
         this.builds = {};
@@ -112,10 +130,14 @@ export class Debug {
         }
     }
 
-    /** What to report on (any can be null): the loader, the view, the game, build timings. */
-    watch({ loader, view, game, builds } = {}) {
+    /** What to report on (any can be null): the loader, the downloader, the view, the game, build timings. */
+    watch({ loader, fetcher, view, game, builds } = {}) {
         if (loader !== undefined) {
             this.loader = loader;
+        }
+
+        if (fetcher !== undefined) {
+            this.fetcher = fetcher;
         }
 
         if (view !== undefined) {
@@ -203,6 +225,10 @@ export class Debug {
             for (const group of loader.groups) {
                 lines.push(`  ${group.label}: ${formatBytes(group.total)}${group.time ? `, ${Math.round(group.time)} ms` : ""}`);
             }
+        }
+
+        if (this.fetcher) {
+            lines.push(downloadLine(this.fetcher.status));
         }
 
         const builds = Object.entries({ ...this.builds, ...(game?.timings ?? {}) });

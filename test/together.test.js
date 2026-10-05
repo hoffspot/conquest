@@ -129,6 +129,22 @@ describe("playing together over the relay (together.js)", () => {
         close();
     });
 
+    it("times round trips to the relay over the host's own link, when asked (for the downloader) and with its pings", async () => {
+        const { world, close } = await together();
+        const times = [];
+
+        world.link.onRtt = (ms) => times.push(ms);
+        world.link.measure();
+        await until(() => times.length >= 1);
+        assert.ok(times[0] >= 0 && times[0] < 1000, `${times[0]} ms`);
+
+        const heard = times.length;
+
+        world.link.measure();
+        await until(() => times.length > heard);
+        close();
+    });
+
     it("comes back on a new link after closing its own saying it's only reconnecting (the relay saying so back)", async () => {
         const { host, joined, heard, play, close } = await together();
 

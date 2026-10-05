@@ -3309,7 +3309,12 @@ switched off (in the game, under the minimap). It folds away to just the frame r
 - the battle: its time, how many steps each frame ran, projectiles in flight, and each character's
   place, hit points, stamina and what it's doing (with its speed, running);
 - how much was downloaded and how long each group took, and how long each part of the world took
-  to build.
+  to build;
+- the downloader (app/fetcher.js, which fetches the models the game downloads only as they're
+  wanted, in the background): what it's fetching and how far it's got, its rate and what the link
+  has carried, alone or together, the queueing delay it sees (the round trip over the least lately),
+  how many files are queued, done and failed, and why it's holding off (the game starting, a player
+  joining, the link coming back) or fetching only what's needed (saving data).
 
 Its controls change the quality level, the render scale (drawing fewer pixels), whether the sun
 casts shadows, and show the squares characters walk on (blocked ones red) with everyone's path

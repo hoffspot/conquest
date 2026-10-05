@@ -126,32 +126,49 @@ player's link faster, and help nothing that's waited for.
 
 ### 3.2 Pacing: small requests, spaced out
 
-- **Range requests**, 128–256 KB each (`Range: bytes=a-b`), with a token bucket deciding when the
-  next may go. Between chunks nothing is in flight, so the game's messages never queue behind more
-  than one chunk.
-- **Where ranges aren't served** (a 200 instead of a 206: `npm start` today), it reads the response
-  stream slowly. A reader paused between reads stops TCP's receive window opening, and the sender
-  slows to match. It's less exact, since the browser buffers some ahead, but still bounded.
-  `server/static.js` gets range support in milestone A2, and GitHub Pages's is to be checked then.
+- **Range requests** (`Range: bytes=a-b`), each spaced after the last by its size over the rate.
+  Between chunks nothing is in flight, so the game's messages never queue behind more than one
+  chunk. (Built in A2: `app/fetcher.js`.)
+- **How big:** playing alone, 256 KB. Playing together, what the link carries in 60 ms, from 32 KB
+  to 256 KB (32 KB until a part has come). A chunk sent at once queues at the player's bottleneck,
+  so on a 500 KB/s link 256 KB would hold the game's messages back half a second; sized by the
+  link, a chunk holds them back about 60 ms at most. (First planned as 128–256 KB whatever the link.)
+- **Where ranges aren't served** (a 200 instead of a 206), it reads the response stream slowly. A
+  reader paused between reads stops TCP's receive window opening, and the sender slows to match.
+  It's less exact, since the browser buffers some ahead, but still bounded. `server/static.js`
+  serves ranges since A2. GitHub Pages (Fastly) serves them for files it doesn't compress, models
+  among them; the slow read covers any that don't.
 - `fetch(url, { priority: "low" })` where the browser honours it: a hint, not relied on.
+- The service worker passes a request with a `Range` header straight to the server. The downloader
+  looks in the caches first, so it never asks for a part of a file that's kept.
 
 ### 3.3 The controller: backing off when the game's messages slow
 
 Delay-based, as LEDBAT (RFC 6817) is: a download yields as soon as the round trip grows, before
 anything is lost.
 
-- **Measured:** the round trip to the relay. Playing together, it's measured as now (ping and
-  pong). While a download runs, every 2 s, playing alone too, since the relay is the same machine's
-  link. Also the joined game's playout: how many steps it keeps in hand, and how late messages come
-  (`Joining.pace`).
-- **Base:** the least round trip seen over the last minute. **Queueing:** the round trip now, less
-  the base.
+- **Measured, playing together:**
+  - joined: the game's own ping to the host and back, every second (`Joining.onPong`, each as
+    heard, not smoothed). It crosses the joined player's link and the host's, so it sees a queue
+    at either. And the playout: the steps it means to keep in hand (`delay`) growing, as the host's
+    messages come more unevenly, counts as over the target ("strained");
+  - hosting: a ping to the relay over the host's own link (`RelayLink.measure`, `onRtt`), every 2 s
+    while a download runs, and with the link's own pings every 4 s.
+- **Playing alone** nothing's measured: no game's messages are at stake, and opening a link to the
+  relay only to time it isn't worth it. The rate keeps to its share of what the link carries.
+  (First planned as measured alone too.)
+- **Base:** the least round trip seen over the last minute. **Queueing:** the least of the last 3
+  round trips, less the base: LEDBAT's filter. A page busy for a moment answers one ping late, and
+  a single late answer isn't a queue. (A2: on CI's machines, two worlds drawn in software at once,
+  a joined game's round trip swings between 220 and 670 ms with nothing downloading.)
 - **The rule, each chunk:**
   - queueing over the target (30 ms to start with), or the playout's steps in hand growing: halve
     the rate, and wait out one round trip before the next chunk;
   - queueing under half the target: add 32 KB/s;
   - never over half the throughput measured on the last chunks while playing together, nor over
-    80% playing alone.
+    80% playing alone. A chunk's throughput is its bytes over the time from asking to its last
+    byte, round trip included: on the low side, which is the safe side playing together;
+  - never under 16 KB/s.
 - **Starting rates:** 128 KB/s playing together, 1 MB/s alone. A 300 KB lower-detail dragon takes
   2–3 s; the full 1.2 MB about 10 s while playing together.
 - Each number is a constant to tune by measurement (§9), not by guesswork.
@@ -159,12 +176,17 @@ anything is lost.
 ### 3.4 Quiet times: when it doesn't download at all
 
 - While this game is joining a world, from the click to the `welcome` and its snapshot, and until
-  the playout settles (its steps in hand back to `PLAYOUT.least`, 5 s at least).
-- While this game is the host and someone joins: from the `peer` notice until the joiner's first
-  `ping` is answered, since the snapshot goes up the host's link.
-- When the relay link drops or comes back (`away`, `back`, `rejoin`), and on `state` (the world
-  sent again).
-- For the first 10 s after the game starts, while shaders compile and the world is first built.
+  the playout settles (its steps in hand within one of what it means to keep), 5 s at least and
+  30 s at most. A game that can't keep up with the host may never settle, and it mustn't go
+  without its models for good. (A2: on CI's machines, it never did.)
+- While this game is the host and someone comes or goes: 5 s, while the snapshot goes up the
+  host's link. (First planned as until the joiner's first ping is answered; the host isn't told of
+  that, and 5 s covers it.)
+- While the relay link is down (this game's, or the host's: `lost`, `away`), and for 5 s after it's
+  back; and for 5 s after `state` (the world sent again).
+- While the world's first built, and for 10 s after the game starts, while shaders compile.
+- Holds have names (`hold`, `release`), shown in debug mode; leaving a world played together
+  releases its own.
 
 ### 3.5 The device and the player
 
@@ -327,11 +349,13 @@ already copied serves a player offline straight after the update.
 
 - **GitHub Pages:** nothing to configure. The `?h=` keys and the service worker do what headers
   would. Range requests are checked in A2 (§3.2).
-- **`npm start`** (`server/static.js`), in A2:
-  - byte ranges: `Accept-Ranges`, `206` and `Content-Range`;
-  - `Cache-Control: public, max-age=31536000, immutable` for any `?h=` request (it's one version
-    forever);
-  - the rest as now.
+- **`npm start`** (`server/static.js`), since A2:
+  - byte ranges: `Accept-Ranges`, `206` and `Content-Range` (one part; `416` past the end;
+    `If-Range` by date);
+  - `Cache-Control: public, max-age=31536000, immutable` for a `?h=` request whose hash is the
+    file's (it's one version forever). The hash is worked out once for each version of the file;
+    a wrong one is served as anything else is;
+  - the rest as before.
 - **The relay and the models on one machine** share its upstream. A game hosted for many players
   should serve its models from Pages or a CDN. An `ASSETS_BASE` setting in the catalog moves where
   they're fetched from, without moving the relay.
@@ -345,7 +369,7 @@ Each is shippable alone, and the game is no worse after each.
 | | Milestone | What lands |
 | --- | --- | --- |
 | **A1** (done) | The catalog and the cache | `assets.json` and the generated `assets.js` (hashes, sizes); hashes for the manifest's data too; the boot budget test; the service worker's `-v2` caches, `?h=` keys checked before they're kept, collection (§5.4) and the move from `pellagos-v1`. The body, its skin and the chest move to `?h=`. No lazy loading yet |
-| **A2** | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support and `immutable` for `?h=` in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
+| **A2** (done) | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support and `immutable` for `?h=` (when the hash is the file's) in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
 | **A3** | The first model on demand | The pipeline's dragon (lower-detail copy and full) in the catalog. Prediction from lairs (§4); the stand-in swap (§3.6); `useWorkers`; compiling ahead |
 | **A4** | Players' choices | **Extra models** under Game options; storage used, **Download all now**, **Clear**; `persist()` |
 | **A5** | Quality variants | The pipeline builds texture variants (512, 1024, 2048); the catalog lists them; the device and Visual quality pick. KTX2 textures to be weighed after |
@@ -384,6 +408,24 @@ release, making room, the move from `pellagos-v1`; and collection as a pure func
 `e2e/caching.spec.js` does it in Chromium: the data kept by hash and not downloaded again, an
 older release's copy let go of, and the game started offline.
 
+**In A2:** `test/fetcher.test.js` runs the controller as a pure function (rates from series of
+round trips: its start, backing off and waiting a round trip, the filter, recovering, its caps,
+part sizes, spacing) and the downloader on a fake clock, network and caches (parts, keeping,
+from what's kept, pacing together, pre-empting and resuming, raising, dropping and resuming,
+quiet times, backing off as round trips grow, probing, the slow read, a mismatched hash, missing
+and unreachable files, saving data), and the debug line. `test/server.test.js` checks ranges and
+`immutable`; `test/netplay.test.js` and `test/together.test.js` the round trips heard.
+`e2e/downloads.spec.js` downloads a 1.9 MB file in parts in Chromium, through the real server and
+service worker, kept and then had from the cache.
+
+**Playing together under a download, in Chromium** (A2, tried before writing the test). Chromium's
+network emulation (DevTools Protocol, 200 KB/s, 40 ms) does slow the WebSocket's messages too: an
+unpaced 1.9 MB download once took the joined game's round trip to 1029 ms. But on CI's machines
+the round trip swings between 220 and 670 ms with nothing downloading, and the joined game keeps
+the most steps it may (6) throughout, so whether a download harms the game can't be told apart
+from the machine being busy. The test stays planned for a machine with a GPU, or as measurements
+on real devices (below). It's not a CI test.
+
 **Measured before choosing the numbers (§3.3):** on a phone over 4G and over Wi-Fi with a
 bufferbloated router, the round trip and playout while downloading at full speed, and then paced.
 
@@ -391,7 +433,8 @@ bufferbloated router, the round trip and playout while downloading at full speed
 
 ## 10. Open questions
 
-- The controller's target (30 ms) and chunk size (128–256 KB) are first guesses: measured in A2.
+- The controller's target (30 ms), filter (3 round trips) and chunk sizes (60 ms of the link,
+  32–256 KB) are first guesses, still to be measured on real devices (§9): CI's machines can't.
 - Background Fetch (Chromium only) for **Download all now**, so it carries on with the page
   closed. Worth it? Only after A4.
 - Whether a host should hint models to joined players before spawning (it would need a message, and
@@ -422,3 +465,17 @@ bufferbloated router, the round trip and playout while downloading at full speed
   - Images and the music's recordings were never in the manifest: images are checked in the
     background now, and the recordings are named by their content (§5.1, §6).
   - `immutable` for `?h=` in `server/static.js` goes with A2's range support (§7).
+- **2026-10-05. A2 landed:** the downloader (`app/fetcher.js`), ranges and `immutable` in
+  `server/static.js`, round trips heard from the joined game and from the host's relay link, and
+  the debug line. Changed from the plan, each said where it's described:
+  - Chunks sized by the link while playing together (60 ms of it, 32–256 KB), not 128–256 KB (§3.2).
+  - Nothing measured playing alone; the joined game's round trip is to the host, not the relay;
+    the host's is to the relay, timed every 2 s while downloading (§3.3).
+  - Queueing is the least of the last 3 round trips over the base, as LEDBAT filters it: on CI's
+    machines a single round trip is as often the page busy as the link (§3.3).
+  - The joining quiet time ends after 30 s whatever the playout says; the host's is 5 s from
+    someone coming or going (§3.4).
+  - `immutable` only when the hash asked for is the file's, so a file changed since the manifest
+    was made isn't kept by browsers under the old one (§7).
+  - The Playwright test of playing together under a download isn't a CI test: measured in
+    Chromium, CI's machines are too busy to tell a download's harm apart (§9).

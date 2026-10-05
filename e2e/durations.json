@@ -15,6 +15,7 @@
     "character-lab.spec.js › shows the other peoples: elves' ears, cat folk's ears, tail and fur, lizard folk's scales and tail": 27.9,
     "character-lab.spec.js › sizes a woman's bust, and not a man's": 15.7,
     "character-lab.spec.js › switches to the orc, changes gear and looks": 26.3,
+    "downloads.spec.js › downloads a file a part at a time, checks it and keeps it, has it from there the next time, and says so in debug mode": 6.1,
     "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops": 14.3,
     "pellagos.spec.js › a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been": 63.9,
     "pellagos.spec.js › a spell tapped on a foe out of reach says so, flashes its slot red and starts nothing cooling down": 25,
