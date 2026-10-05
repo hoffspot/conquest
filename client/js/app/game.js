@@ -51,7 +51,7 @@ import { ADJECTIVES } from "../core/war/peoples.js";
 import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
-import { squaresOf } from "../core/grid.js";
+import { nearestFree, squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
@@ -467,8 +467,11 @@ export class Game {
      * @param {Array} [options.pin] - Where the player's pinned on the world map ([x, z] metres, as
      *     kept: save.js loadPin), or null.
      * @param {Function} [options.onPin] - Hears it whenever it's dropped or taken away (to keep it).
+     * @param {object} [options.place] - Where the player was out in the world when the game last
+     *     stopped ({ x, y, facing }: save.js loadPlace), to carry on there; or null (where the
+     *     world puts them: by their home town's tavern).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -506,7 +509,28 @@ export class Game {
         this.together = null;
 
         if (!remote) {
-            this.host.join({ id: me, hero, talks, explored, progress, standing, followers });
+            // (Where they were when it last stopped, if it's somewhere that can be stood on still:
+            // else the nearest square that can, near it; else where the world puts them)
+            let square;
+
+            try {
+                square = place ? nearestFree(world.maps?.town ?? world, [Math.floor(place.x), Math.floor(place.y)], { within: 8 }) : undefined;
+            } catch {
+                place = null;
+            }
+
+            this.host.join({ id: me, hero, talks, explored, progress, standing, followers, ...(square ? { square } : {}) });
+
+            const actor = place ? this.host.battle.actor(me) : null;
+
+            if (actor && actor.square[0] === Math.floor(place.x) && actor.square[1] === Math.floor(place.y)) {
+                Object.assign(actor, { x: place.x, y: place.y, facing: place.facing });
+            }
+
+            // (Getting up at home still, if they fall)
+            if (actor && world.spawns?.player) {
+                actor.spawn = [...world.spawns.player];
+            }
         }
 
         this.onFollowers = onFollowers;
@@ -903,8 +927,9 @@ export class Game {
         report("Laying the land");
 
         if (outside) {
-            // The world round where the player starts, a chunk at a time (then more as they go)
-            const [x, y] = world.spawns.player;
+            // The world round where the player starts (or carries on), a chunk at a time (then
+            // more as they go)
+            const [x, y] = this.battle.actor(this.me)?.map === "town" ? this.battle.actor(this.me).square : world.spawns.player;
 
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs });
             this.chunks.setSpacing(view.quality.ground);
@@ -3503,6 +3528,32 @@ export class Game {
         if (this.pack?.open) {
             this.#showPack();
         }
+    }
+
+    /**
+     * Where the player is, to carry on from when the game next starts (save.js savePlace): { x, y,
+     * facing } out in the world, or outside the door of the building they're in, or where they'll
+     * get up if they're down; null if it's someone else's world.
+     */
+    place() {
+        const actor = this.battle.actor(this.me);
+
+        if (!actor || this.remote) {
+            return null;
+        }
+
+        if (actor.dead) {
+            return actor.spawnMap === "town" && actor.spawn ? { x: actor.spawn[0] + 0.5, y: actor.spawn[1] + 0.5, facing: actor.facing } : null;
+        }
+
+        if (actor.map === "town") {
+            return { x: actor.x, y: actor.y, facing: actor.facing };
+        }
+
+        const entrance = this.world.interiors?.of(actor.map)?.entrance;
+        const outside = entrance?.outside ?? this.world.tavern?.outside;
+
+        return outside ? { x: outside[0] + 0.5, y: outside[1] + 0.5, facing: entrance?.facing ?? actor.facing } : null;
     }
 
     // Where the player is in the world ([x, y] metres): out in it, or at the door of the building they're in

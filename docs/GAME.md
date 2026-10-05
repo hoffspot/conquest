@@ -3207,7 +3207,16 @@ still drawn; a piece of a settlement that fails to build is left out, the rest b
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
 weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
-`pellagos.settings`; what the character's found of the world, in `pellagos.explored`. A save of another
+`pellagos.settings`; what the character's found of the world, in `pellagos.explored`.
+
+**Where they were** is kept in `pellagos.place` (save.js `savePlace`: `{ x, y, facing }`, metres out
+in the world) whenever the game stops: paused (the menu), quit to the title, the page hidden (another
+app on a phone, another tab) or closed (`pagehide`), and every turn of the war (a minute of play)
+besides, should it stop some other way. Inside a building, it's the step outside its door; down,
+it's where they'll get up. The next time, they carry on there (game.js `place`; the land's built
+round it as it loads), facing as they were, or on the nearest square that can be stood on within
+eight; if none can, where the world puts them. They still get up at home if they fall. A world
+joined to someone else's keeps nothing of this: it's theirs. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
 

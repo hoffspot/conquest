@@ -10,7 +10,7 @@ import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, painting
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadPin, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, savePin, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -219,6 +219,23 @@ describe("saving (save.js)", () => {
         assert.deepEqual(readWheels(loadWheels(save)), wheels);
         assert.equal(loadWheels({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(saveWheels({ seed: 1 }, wheels), false);
+    });
+
+    it("keeps where a saved game's character was when it last stopped, to carry on there; not for another game", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-10-05T10:00:00.000Z" };
+
+        assert.equal(loadPlace(save), null);
+        assert.equal(savePlace(save, { x: 3190.25, y: 4892.75, facing: 1.5 }), true);
+        assert.deepEqual(loadPlace(save), { x: 3190.25, y: 4892.75, facing: 1.5 });
+        assert.equal(loadPlace({ ...save, seed: 13 }), null);
+        assert.equal(loadPlace({ ...save, created: "2026-10-06T10:00:00.000Z" }), null);
+
+        // (Nothing kept for a game that isn't saved, or for nowhere)
+        assert.equal(savePlace({ seed: 1 }, { x: 1, y: 2, facing: 0 }), false);
+        assert.equal(savePlace(save, null), false);
+        assert.deepEqual(loadPlace(save), { x: 3190.25, y: 4892.75, facing: 1.5 });
     });
 
     it("keeps where a saved game's character has pinned on the world map, and that they've taken it away; not for another", () => {

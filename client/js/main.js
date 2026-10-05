@@ -20,7 +20,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadFollowers, loadPin, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, savePin, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { loadExplored, loadFollowers, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -355,11 +355,18 @@ async function playing(save) {
         wheels: loadWheels(save),
         onWheels: (wheels) => saveWheels(save, wheels),
         war: loadWorld(save),
-        onWar: (war) => saveWorld(save, war.snapshot()),
+        // (Kept each of the war's turns, a minute of play: and where the player is with it)
+        onWar: (war) => {
+            saveWorld(save, war.snapshot());
+            keepPlace();
+        },
         onWorldMap: openWorldMap,
         pin: loadPin(save),
         onPin: (pin) => savePin(save, pin),
+        place: loadPlace(save),
     });
+
+    state.keepPlace = () => savePlace(save, game.place());
 
     state.worldMap?.dispose();
     state.worldMap = null;
@@ -381,7 +388,18 @@ async function playing(save) {
     underway(game);
 }
 
+// Where the player is kept, to carry on there next time (save.js savePlace): whenever the game
+// stops, paused or quit, the page hidden (another app, on a phone) or closed, and each of the
+// war's turns besides
+function keepPlace() {
+    if (state.game && !state.game.remote) {
+        state.keepPlace?.();
+    }
+}
+
 function pause() {
+    keepPlace();
+
     if (!state.game?.running || $("#menu").open) {
         return;
     }
@@ -636,6 +654,7 @@ $("#worldmap").addEventListener("cancel", (event) => {
 window.addEventListener("resize", () => $("#worldmap").open && state.worldMap?.redraw());
 
 function quit() {
+    keepPlace();
     closeWorldMap();
     $("#menu").close();
     $("#invite").close();
@@ -1020,6 +1039,9 @@ for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
 for (const type of ["pageshow", "focus"]) {
     window.addEventListener(type, () => state.session?.sound.wake());
 }
+
+// Closed, or left for another page: where the player is kept (as hidden, below)
+window.addEventListener("pagehide", keepPlace);
 
 // Pause when the page is hidden (switching apps on a phone), and silence it; a world open to
 // others can't move on while it's hidden, and those in it are told so

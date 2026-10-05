@@ -1,7 +1,8 @@
 // What the game keeps between visits, in the browser's local storage: the player's character
 // (and the seed of the world it lives in), what the folk in it remember of them and what they've
 // learnt talking (core/dialogue.js), what they've found of the world (core/explored.js: the
-// buildings gone into, the chunks set foot in), and settings (the game options, debug mode,
+// buildings gone into, the chunks set foot in), where they were when the game last stopped, and
+// settings (the game options, debug mode,
 // drawing quality). Kept apart from the character: the world's own state, the war between its
 // peoples (core/war/war.js), as it's got to (docs/WAR.md: a world's save is its host's).
 //
@@ -21,6 +22,7 @@ const STANDING_KEY = "pellagos.standing";
 const FOLLOWERS_KEY = "pellagos.followers";
 const WHEELS_KEY = "pellagos.wheels";
 const PIN_KEY = "pellagos.pin";
+const PLACE_KEY = "pellagos.place";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -223,6 +225,23 @@ export function loadPin(save) {
 /** Keep where the character's pinned on the world map (or that they've none: null), in a saved game. */
 export function savePin(save, pin) {
     return save?.created ? write(PIN_KEY, { created: save.created, seed: save.seed, pin }) : false;
+}
+
+/**
+ * Where the character was in a saved game's world when it last stopped ({ x, y, facing }: metres
+ * out in the world, radians), or null (none kept, or another game's): where it carries on.
+ */
+export function loadPlace(save) {
+    const kept = read(PLACE_KEY);
+    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+    const place = ours ? kept.place : null;
+
+    return place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
+}
+
+/** Keep where the character is in a saved game's world ({ x, y, facing }), to carry on there. */
+export function savePlace(save, place) {
+    return save?.created && place ? write(PLACE_KEY, { created: save.created, seed: save.seed, place: { x: place.x, y: place.y, facing: place.facing } }) : false;
 }
 
 /**

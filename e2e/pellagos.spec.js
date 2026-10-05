@@ -2702,6 +2702,68 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await page.keyboard.press("Escape");
 });
 
+test("where the player is is kept whenever the game stops (paused, the page closed or hidden), and the next time they carry on there", async ({ page }) => {
+    // (Played three times: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+        return page.evaluate(() => {
+            const player = window.pellagos.game.battle.actor("player");
+
+            return { x: player.x, y: player.y, facing: player.facing, map: player.map, spawn: player.spawn };
+        });
+    };
+    // (Walked a way off down the street, the world stopped)
+    const walk = (by) =>
+        page.evaluate((by) => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            game.battle.command("player", { type: "move", to: [player.square[0] + by, player.square[1]] });
+
+            for (let k = 0; k < 100 && (player.path.length || player.order); k++) {
+                game.advance(0.1, { render: false });
+            }
+
+            return { x: player.x, y: player.y, facing: player.facing };
+        }, by);
+    const kept = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.place"))?.place ?? null);
+
+    const first = await continued();
+    const walked = await walk(10);
+
+    expect(Math.hypot(walked.x - first.x, walked.y - first.y)).toBeGreaterThan(5);
+
+    // Paused (the menu): kept as it is
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("player"), { path: [], order: null });
+        game.start();
+    });
+    await page.locator("#menubutton").click();
+    await expect(page.locator("#menu")).toBeVisible();
+    expect(await kept()).toEqual(walked);
+
+    // The next time: there, getting up at home still if they fall
+    const second = await continued();
+
+    expect(second).toEqual({ ...walked, map: "town", spawn: first.spawn });
+
+    // Closed (left for the title page) without pausing: kept as the page goes
+    const again = await walk(-6);
+
+    expect(again.x).not.toBe(walked.x);
+    expect(await continued()).toMatchObject(again);
+});
+
 test("an adventurer at the guild, hired for gold, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
