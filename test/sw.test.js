@@ -357,6 +357,17 @@ describe("service worker", () => {
         assert.deepEqual(worker.requests.map(({ url }) => url), [full(chest)]);
     });
 
+    it("keeps by hash what the cache before it saved by hash (asked for by the new release's pages before it took over), if the bytes are right", async () => {
+        const body = address(["/characters/human.bin", "the body"]);
+        const chest = address(["/models/jmi/chest.glb", "a chest"]);
+        const worker = loadServiceWorker({ stored: { "pellagos-v1": { [body]: "the body", [chest]: "a different chest" } } });
+
+        await worker.activate();
+
+        assert.deepEqual(worker.kept(BOOT), [full(body)]);
+        assert.deepEqual(worker.kept(SHELL), []);
+    });
+
     it("clears out old copies: its own older versions and the game it replaced", async () => {
         const worker = loadServiceWorker({ stored: { "pellagos-v0": {}, "pellagos-v1": {}, [SHELL]: {}, "last-colony-v2": {}, "another-site-v1": {} } });
 

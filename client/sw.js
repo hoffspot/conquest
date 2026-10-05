@@ -32,8 +32,10 @@
 // server, at most once a minute, so a change shows the next time they're asked for. The music's
 // recordings are named by what's in them (scripts/build-music.js), so they're never checked.
 //
-// The caches' names end in the version of how they're laid out (-v2): it changes only when that
-// does, never for a release (generated/asset_streaming_plan.md, section 5).
+// Each cache's name ends in a version (-v2): changing one lets go of all it holds, and nothing
+// else. Never for a release: the shell's is changed to let go of code no release uses any more (an
+// old Three.js's folder: scripts/vendor-three.js), the others only when how they're laid out
+// changes (generated/asset_streaming_plan.md, section 5).
 
 const CACHE_PREFIX = "pellagos-";
 
@@ -404,7 +406,9 @@ async function room(optional) {
 }
 
 // The cache before these kept everything by name: its copies go to the shell, from where those
-// now known by their hash are taken on as they're next asked for (takeOn)
+// now known by their hash are taken on as they're next asked for (takeOn). Those it saved by hash
+// (the new release's pages asking for them before this worker took over) are kept by it, if their
+// bytes are the files they say they are.
 async function takeOver() {
     if (!(await caches.keys()).includes(OLD_CACHE)) {
         return;
@@ -414,8 +418,15 @@ async function takeOver() {
 
     for (const request of await old.keys()) {
         const response = await old.match(request);
+        const hash = new URL(request.url).searchParams.get("h");
 
-        if (response && !(await shell.match(request))) {
+        if (!response) {
+            continue;
+        }
+
+        if (hash && HASH.test(hash)) {
+            await keep(request.url, hash, await response.arrayBuffer(), response.headers);
+        } else if (!(await shell.match(request))) {
             await shell.put(request, response);
         }
     }
