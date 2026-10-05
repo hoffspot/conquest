@@ -115,7 +115,7 @@ export class Settlements {
             this.given.delete(place.id);
 
             // (The way up to the doors of its buildings that can be gone into, cleared)
-            openEntrances(town.pieces, town.blocked, town.opaque);
+            openEntrances(town.pieces, town.blocked, town.opaque, 0, town);
 
             // (Its yards, but for any reaching out past its edge over the world's water, a bridge
             // or a road: not there, their fences not standing in anyone's way)
@@ -179,7 +179,7 @@ export class Settlements {
 
     /**
      * The plank walks over the lagoons of the settlements laid out near a chunk whose middles are
-     * in it, in the world's metres: [{ a, b, half }] (layoutTown's walks).
+     * in it, in the world's metres: [{ a, b, half, layer, place }] (layoutTown's walks, and whose they are).
      */
     walksIn(cx, cy) {
         const found = [];
@@ -187,11 +187,11 @@ export class Settlements {
         for (const place of this.near(cx, cy)) {
             const settlement = this.laid.get(place.id);
 
-            for (const { a, b, half } of settlement?.town.walks ?? []) {
+            for (const { a, b, half, layer } of settlement?.town.walks ?? []) {
                 const [ax, ay, bx, by] = [a[0] + settlement.at[0], a[1] + settlement.at[1], b[0] + settlement.at[0], b[1] + settlement.at[1]];
 
                 if (Math.floor((ax + bx) / 2 / CHUNK) === cx && Math.floor((ay + by) / 2 / CHUNK) === cy) {
-                    found.push({ a: [ax, ay], b: [bx, by], half });
+                    found.push({ a: [ax, ay], b: [bx, by], half, layer, place });
                 }
             }
         }

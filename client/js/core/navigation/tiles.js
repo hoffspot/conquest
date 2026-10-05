@@ -14,7 +14,8 @@
 //    OBSTACLE high; trees as their trunks. Their faces are areas of none, so nothing can be stood
 //    on them (a roof is no floor), and so is the ground under them (nothing's walked inside them).
 //  - Bridges: their decks, a strip of quads along each, at its height; and the plank walks over
-//    the lizard folk's lagoons, at their planks'.
+//    the lizard folk's lagoons, at their planks' (the town's ground round the lagoon, its bed dug
+//    down below them).
 
 import { hypot } from "../exact.js";
 import { WET } from "../overworld.js";
@@ -182,9 +183,10 @@ export function tileInput(world, tx, ty) {
         strip(bridge, (t) => world.deckOf(bridge, t));
     }
 
-    // The plank walks over a lagoon (the lizard folk's): their planks, WALK_TOP over the ground
+    // The plank walks over a lagoon (the lizard folk's): their planks, WALK_TOP over their decks
+    // (the town's ground round the lagoon; or, if a walk doesn't say, the ground under it)
     for (const walk of world.walksNear?.(x0, y0, x0 + size, y0 + size) ?? []) {
-        strip(walk, (t, px, py) => world.ground.heightAt(px, py) + WALK_TOP);
+        strip(walk, (t, px, py) => (walk.level ?? world.ground.heightAt(px, py)) + WALK_TOP);
     }
 
     let [low, high] = [Infinity, -Infinity];

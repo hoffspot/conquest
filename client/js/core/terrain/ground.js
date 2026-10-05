@@ -94,12 +94,17 @@ export class Ground {
      * @param {Function} [options.settledNear] - The pads of the settlements reaching into a chunk
      *     (cx, cy), padsNear's: those the roads come to, which they climb to gently. Asking must
      *     settle nothing else, nor change anything.
+     * @param {Function} [options.sunkNear] - What's dug down into the ground reaching into a chunk
+     *     (cx, cy), once it's levelled (the lizard folk's lagoons: lagoons.js): [{ x0, y0 (its
+     *     north-west corner, metres, whole), across, down (its corners each way), depths (metres
+     *     down at each corner, row by row) }]: the same whenever asked.
      */
-    constructor(plan, { padsNear = () => [], roadsNear = () => [], settledNear = () => [] } = {}) {
+    constructor(plan, { padsNear = () => [], roadsNear = () => [], settledNear = () => [], sunkNear = () => [] } = {}) {
         this.plan = plan;
         this.padsNear = padsNear;
         this.roadsNear = roadsNear;
         this.settledNear = settledNear;
+        this.sunkNear = sunkNear;
         this.natural = new Map();
         this.chunks = new Map();
         this.levels = new Map();
@@ -191,6 +196,19 @@ export class Ground {
                     // (But water keeps its channel and its lakes: bridges cross it)
                     if (height !== land && waterAt(this.plan, x, y, land) === null) {
                         heights[k] = height;
+                    }
+                }
+            }
+        }
+
+        // What's dug into it: a lagoon's bed, below the town's ground round it
+        for (const { x0: sx, y0: sy, across, down, depths } of this.sunkNear(cx, cy)) {
+            for (let j = Math.max(0, sy - y0); j < Math.min(CORNERS, sy + down - y0); j++) {
+                for (let i = Math.max(0, sx - x0); i < Math.min(CORNERS, sx + across - x0); i++) {
+                    const depth = depths[(y0 + j - sy) * across + (x0 + i - sx)];
+
+                    if (depth > 0) {
+                        heights[j * CORNERS + i] = round(heights[j * CORNERS + i] - depth);
                     }
                 }
             }

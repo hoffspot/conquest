@@ -5,6 +5,7 @@ import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { LAGOON } from "../client/js/core/lagoons.js";
 import { WADE } from "../client/js/core/terrain/waters.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { parseGrid } from "./helpers.js";
@@ -145,20 +146,48 @@ describe("navigation meshes (navigation.js)", () => {
         navigation.dispose();
     });
 
-    it("walks the plank walks over a lizard folk's lagoon", () => {
+    it("walks every plank walk over a lizard folk's lagoon, from the market, on its planks over the water", () => {
         const navigation = new Navigation(recast, town);
         const settlement = town.settlements.of(town.settlements.places.find(({ id }) => id === "lizard-city-1"));
         const { at, town: layout } = settlement;
+        const market = [at[0] + layout.market.centre[0], at[1] + layout.market.centre[1]];
+        // (The town's ground round the lagoon: the deck's under its planks, level with it)
+        const level = town.heightAt(...market);
 
         assert.ok(layout.walks.length > 0);
 
         for (const { a, b } of layout.walks) {
             const [x, y] = [at[0] + (a[0] + b[0]) / 2, at[1] + (a[1] + b[1]) / 2];
             const found = navigation.nearest([x, y]);
+            const there = navigation.path(market, [x, y]).at(-1);
 
-            assert.ok(found && Math.hypot(found[0] - x, found[1] - y) < 0.05, `on the walk at ${x.toFixed(1)}, ${y.toFixed(1)}`);
-            assert.ok(Math.abs(found[2] - town.ground.heightAt(x, y) - 0.16) < 0.3, "on its planks");
+            // (On the mesh, within half one of its voxels)
+            assert.ok(found && Math.hypot(found[0] - x, found[1] - y) < 0.25, `on the walk at ${x.toFixed(1)}, ${y.toFixed(1)}`);
+            assert.ok(Math.abs(found[2] - level - 0.16) < 0.3, "on its planks");
+            assert.ok(Math.hypot(there[0] - x, there[1] - y) < 1, `reached from the market at ${x.toFixed(1)}, ${y.toFixed(1)}`);
+
+            // (Over the water: the lagoon's bed dug down below, its water under the planks)
+            if (layout.water[Math.floor(y - at[1])][Math.floor(x - at[0])]) {
+                assert.ok(Math.abs(town.heightAt(x, y) - level) < 1e-6, "its deck the town's ground");
+                assert.ok(Math.abs(town.surfaceAt(x, y) - (level - LAGOON.below)) < 1e-6, "the water a little below");
+            }
         }
+
+        // The lagoon's bed, dug down from its banks: a way out from them, as deep as it's dug (a
+        // square at its edge may lie as high as its banks across the middle, its deep corner off the
+        // diagonal its ground's split along)
+        const deep = [];
+
+        for (let y = 0; y < layout.height; y += 2) {
+            for (let x = 0; x < layout.width; x += 2) {
+                if (layout.water[y][x] && layout.blocked[y][x]) {
+                    deep.push(level - town.ground.heightAt(at[0] + x + 0.5, at[1] + y + 0.5));
+                }
+            }
+        }
+
+        assert.ok(deep.every((depth) => depth >= 0 && depth <= LAGOON.deep + 0.01), "dug down, no deeper than it's dug");
+        assert.ok(deep.filter((depth) => depth > LAGOON.deep - 0.01).length > deep.length / 2, "most of it at its deepest");
 
         navigation.dispose();
     });

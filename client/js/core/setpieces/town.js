@@ -68,6 +68,14 @@ export const PEOPLE_TOWNS = Object.freeze({
 const STEP = 6;
 const BEND = 0.45;
 
+// How many ways out a town over a lagoon has at least (main streets, each crossing it on a walk),
+// and how far a street over it turns (radians) before a square of deck fills the bend's outside
+const WATER_WAYS = 3;
+const WALK_TURN = 0.26;
+
+/** How many layers a lagoon's plank walks are laid at (walks' `layer`: 0 the topmost, its last the squares across their bends). */
+export const WALK_LAYERS = 7;
+
 // How much of the middle is cobbled (a share of the radius)
 const COBBLED = 0.55;
 
@@ -145,7 +153,9 @@ const ATTEMPTS = 20;
  * back: YARD_LINE) }]),
  * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
  * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
- * walks over it: [{ a, b ([x, y]: its ends), half (half its width) }]) }.
+ * walks over it: [{ a, b ([x, y]: its ends), half (half its width), layer (which is drawn over
+ * which where they overlap: WALK_LAYERS, the last a square of deck across a bend, filling its
+ * outside) }]) }.
  */
 export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
@@ -296,7 +306,10 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
     // The ways out: those asked for (those closer together than 50 degrees made one), or three or
     // four round
-    const ways = look.ways === "cross" ? crossWays(exits, random) : look.ways === "web" ? webWays(exits, random, Math.min(look.spokes, 4 + Math.floor(spec.radius / 20))) : wayOut(exits, random);
+    // (Over a lagoon, at least WATER_WAYS of them, so it's crossed on plank walks that many ways
+    // and the lanes ring it: more where the roads in are fewer, in the widest gaps between them)
+    const asked = look.ways === "cross" ? crossWays(exits, random) : look.ways === "web" ? webWays(exits, random, Math.min(look.spokes, 4 + Math.floor(spec.radius / 20))) : wayOut(exits, random);
+    const ways = look.water ? atLeast(asked, WATER_WAYS) : asked;
 
     // Main streets from the middle to the edge, each bending as it goes
     const streets = ways.map((angle) => ({ points: mainStreet(centre, angle, width, height, random, seed, look.bend ?? BEND), width: spec.main, main: true }));
@@ -378,15 +391,49 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
                 if (r > from + wobble && r < to + wobble) {
                     water[j][i] = 1;
+                }
+            }
+        }
 
+        // (Only where it's two squares across at least, every way: a square of it on its own, or a
+        // strip a square wide, would lie as high as the banks round it, its bed dug nowhere:
+        // lagoons.js)
+        const wide = (i, j) => water[j]?.[i] && water[j]?.[i + 1] && water[j + 1]?.[i] && water[j + 1]?.[i + 1];
+        const kept = water.map((row, j) => row.map((wet, i) => (wet && (wide(i - 1, j - 1) || wide(i, j - 1) || wide(i - 1, j) || wide(i, j)) ? 1 : 0)));
+
+        for (let j = 0; j < height; j++) {
+            water[j].set(kept[j]);
+
+            for (let i = 0; i < width; i++) {
+                if (water[j][i]) {
                     ground[j][i] = use[j * width + i] === USE.street ? GROUND.planks : GROUND.soil;
                 }
             }
         }
 
         // (The walks: each street's straight runs over the water, a metre onto the bank at each
-        // end, as wide as the street)
-        for (const { points, width: across } of streets) {
+        // end, as wide as the street; and where a street turns over the water by more than
+        // WALK_TURN, a square of deck across the bend, along the way between, so its outside's
+        // filled. Each laid at a `layer` of its own where they overlap: a main street's over a
+        // lane's over an alley's, every other run of a street's over the next, and every one over
+        // the squares across its bends)
+        for (const { points, width: across, main } of streets) {
+            const rank = main ? 0 : across < spec.lane ? 2 : 1;
+
+            for (let k = 1; k < points.length - 1; k++) {
+                const [[px, py], [x, y], [nx, ny]] = [points[k - 1], points[k], points[k + 1]];
+                const [into, out] = [length(x - px, y - py), length(nx - x, ny - y)];
+                const [inx, iny, outx, outy] = [(x - px) / into, (y - py) / into, (nx - x) / out, (ny - y) / out];
+                const [bx, by] = [inx + outx, iny + outy];
+                const half = across / 2;
+
+                if (water[Math.floor(y)]?.[Math.floor(x)] === 1 && inx * outx + iny * outy < cos(WALK_TURN) && length(bx, by) > 1e-6) {
+                    const [ux, uy] = [bx / length(bx, by), by / length(bx, by)];
+
+                    walks.push({ a: [x - ux * half, y - uy * half], b: [x + ux * half, y + uy * half], half, layer: WALK_LAYERS - 1 });
+                }
+            }
+
             for (let k = 1; k < points.length; k++) {
                 const [a, b] = [points[k - 1], points[k]];
                 const steps = Math.max(1, Math.ceil(length(b[0] - a[0], b[1] - a[1])));
@@ -404,7 +451,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
                     if (run && (!wet || s === steps)) {
                         const extra = 1 / steps;
 
-                        walks.push({ a: at(Math.max(0, run[0] - extra)), b: at(Math.min(1, run[1] + extra)), half: across / 2 });
+                        walks.push({ a: at(Math.max(0, run[0] - extra)), b: at(Math.min(1, run[1] + extra)), half: across / 2, layer: rank * 2 + (k % 2) });
                         run = null;
                     }
                 }
@@ -415,10 +462,25 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     // Can a rectangle go here: every square under it (grown by `grow`) on the layout, and none of
     // them one of `not`?
     const fits = (rect, grow, not) => eachSquare(rect, grow, (i, j) => inside(i, j) && !not.includes(use[j * width + i]));
+    // (Is a rectangle clear of the lagoon: none of the squares under it water? A back building or
+    // a yard is never over it, where no walk comes)
+    const dry = (rect) => !water || eachSquare(rect, 0, (i, j) => !water[j]?.[i]);
     const mark = (rect, grow, what) => eachSquare(rect, grow, (i, j) => {
         use[j * width + i] = what;
     });
     const building = (rect) => fits(rect, NEIGHBOUR, [USE.building, USE.thing]) && fits(rect, CLEAR, [USE.street]) && fits(rect, 0, [USE.yard]);
+    // (What's gone into, or a people's own place, opens onto dry land or a walk: the squares before
+    // the middle of its front, where its door is, never the lagoon's but under a walk)
+    const opens = (rect) =>
+        !water ||
+        [0.6, 1.5].every((out) =>
+            [-0.8, 0, 0.8].every((across) => {
+                const [i, j] = [rect.x + rect.az[0] * (rect.d / 2 + out) + rect.ax[0] * across, rect.y + rect.az[1] * (rect.d / 2 + out) + rect.ax[1] * across].map(Math.floor);
+
+                return !water[j]?.[i] || onWalk(walks, i + 0.5, j + 0.5);
+            }),
+        );
+    const landmark = (rect) => building(rect) && opens(rect);
     const fitsOn = (rect, grow, on) => eachSquare(rect, grow, (i, j) => inside(i, j) && on.includes(use[j * width + i]));
 
     // What's placed, as a piece: its size in plots, as the art kits build it
@@ -493,13 +555,13 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
             for (const shift of [0, 2, -2, 4, -4, 6, -6].filter((shift) => Math.abs(shift) <= slide)) {
                 const rect = frontOn(edge, w, d, shift);
 
-                if (!placed && building(rect)) {
+                if (!placed && landmark(rect)) {
                     placed = rect;
                 }
             }
         }
 
-        placed ??= firstAlong(streets.filter(({ main }) => main), random, [w, d], { from: reach, to: radius * (other ? 0.9 : 0.6) }, building);
+        placed ??= firstAlong(streets.filter(({ main }) => main), random, [w, d], { from: reach, to: radius * (other ? 0.9 : 0.6) }, landmark);
 
         if (placed) {
             mark(placed, 0, USE.building);
@@ -624,7 +686,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
         for (const name of names) {
             const [w, d] = PEOPLE_PLACES[people][name].map((plots) => plots * PLOT);
-            const rect = placed < wanted ? firstAlong(random.shuffle(streets.filter(({ main }) => main)), random, [w, d], { from: reach * 1.2, to: radius * 0.9 }, building) : null;
+            const rect = placed < wanted ? firstAlong(random.shuffle(streets.filter(({ main }) => main)), random, [w, d], { from: reach * 1.2, to: radius * 0.9 }, landmark) : null;
 
             if (rect) {
                 mark(rect, 0, USE.building);
@@ -700,7 +762,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         const back = rect.d / 2 + NEIGHBOUR + deep / 2;
         const behind = frame(rect.x - rect.az[0] * back, rect.y - rect.az[1] * back, rect.w, deep, rect.facing);
 
-        if (!fits(behind, 0, [USE.street, USE.building, USE.yard, USE.thing])) {
+        if (!fits(behind, 0, [USE.street, USE.building, USE.yard, USE.thing]) || !dry(behind)) {
             return;
         }
 
@@ -807,7 +869,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
         const rect = frame(x, y, random.range(...BACK_SIZE[0]), random.range(...BACK_SIZE[1]), heading(x, y));
 
-        if (fits(rect, BACK_APART, [USE.building, USE.thing]) && fits(rect, BACK_FROM_STREETS, [USE.street]) && fits(rect, 0, [USE.yard])) {
+        if (fits(rect, BACK_APART, [USE.building, USE.thing]) && fits(rect, BACK_FROM_STREETS, [USE.street]) && fits(rect, 0, [USE.yard]) && dry(rect)) {
             const style = styleOf();
             const variant = random.int(0, HOUSE_VARIANTS - 1);
 
@@ -874,10 +936,11 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     }
 
     // (Nothing stands on a street: a street square under a piece's edge is left open; no one
-    // walks on water)
+    // walks on water, but on the walks over it: a street's square over it that no walk's over, at
+    // the outside of a bend, isn't walked on either)
     for (let j = 0; j < height; j++) {
         for (let i = 0; i < width; i++) {
-            if (use[j * width + i] === USE.street) {
+            if (use[j * width + i] === USE.street && (!water?.[j][i] || onWalk(walks, i + 0.5, j + 0.5))) {
                 blocked[j][i] = 0;
                 opaque[j][i] = 0;
             } else if (water?.[j][i]) {
@@ -897,7 +960,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     if (spec.seat) {
         const near = radius * 0.6;
         const seat = houses
-            .filter(({ back, x, y }) => !back && length(x - centre[0], y - centre[1]) <= near)
+            .filter(({ back, x, y, w, h, facing }) => !back && length(x - centre[0], y - centre[1]) <= near && opens(frame(x, y, w * PLOT, h * PLOT, facing)))
             .reduce((best, house) => {
                 const [size, bestSize] = [house.w * house.h, best ? best.w * best.h : -1];
 
@@ -942,6 +1005,17 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         water,
         walks,
     };
+}
+
+/** Is a point ([x, y], metres) on one of a layout's walks ({ a, b, half }): along it and within its half-width? */
+export function onWalk(walks, x, y) {
+    return walks.some(({ a, b, half }) => {
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const long = length(dx, dy);
+        const along = ((x - a[0]) * dx + (y - a[1]) * dy) / long;
+
+        return along >= 0 && along <= long && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / long <= half;
+    });
 }
 
 // Is a point in a rectangle (frame's)?
@@ -1207,6 +1281,25 @@ function wayOut(exits, random) {
     const start = random.next() * TAU;
 
     return Array.from({ length: count }, (_, k) => start + (TAU * k) / count + random.range(-0.25, 0.25));
+}
+
+// The ways out (angles) and more, `count` in all: each more in the widest gap left between them,
+// those in a gap spread evenly across it
+function atLeast(ways, count) {
+    if (ways.length >= count || !ways.length) {
+        return ways;
+    }
+
+    const sorted = ways.map((angle) => angle - TAU * Math.floor(angle / TAU)).sort((a, b) => a - b);
+    const gaps = sorted.map((angle, k) => ({ from: angle, span: (k + 1 < sorted.length ? sorted[k + 1] : sorted[0] + TAU) - angle, more: 0 }));
+
+    for (let n = ways.length; n < count; n++) {
+        const widest = gaps.reduce((best, gap) => (gap.span / (gap.more + 1) > best.span / (best.more + 1) ? gap : best));
+
+        widest.more++;
+    }
+
+    return [...ways, ...gaps.flatMap(({ from, span, more }) => Array.from({ length: more }, (_, k) => from + (span * (k + 1)) / (more + 1)))];
 }
 
 // A main street from the middle, heading out at an angle and bending as it goes, to the layout's

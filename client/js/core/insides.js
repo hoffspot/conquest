@@ -25,6 +25,7 @@ import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
+import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
 
 /**
@@ -165,9 +166,10 @@ export function entranceOf(piece, origin = 0, spec = ENTRANCES[piece.name]) {
 /**
  * Clear the way up to the door of every building of a layout's that can be gone into (its
  * squares not blocked, nor hiding what's behind them), in `blocked` and `opaque` ([y][x]: the
- * layout's own, or copies), its pieces placed from `origin`.
+ * layout's own, or copies), its pieces placed from `origin`; but none of its lagoon's squares
+ * (`water`: the layout's rows) that none of its plank walks (`walks`) is over.
  */
-export function openEntrances(pieces, blocked, opaque, origin = 0) {
+export function openEntrances(pieces, blocked, opaque, origin = 0, { water = null, walks = [] } = {}) {
     for (const piece of pieces) {
         if (piece.kind !== "landmark" || !ENTERED.includes(piece.name) || !ENTRANCES[piece.name]) {
             continue;
@@ -178,7 +180,7 @@ export function openEntrances(pieces, blocked, opaque, origin = 0) {
         for (const [x, y] of entranceOf(piece, origin).clear) {
             const [i, j] = [x - ox, y - oy];
 
-            if (blocked[j]?.[i] !== undefined) {
+            if (blocked[j]?.[i] !== undefined && !(water?.[j]?.[i] && !onWalk(walks, i + 0.5, j + 0.5))) {
                 blocked[j][i] = 0;
                 opaque[j][i] = 0;
             }

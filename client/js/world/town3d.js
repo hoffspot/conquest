@@ -317,7 +317,8 @@ export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
 /**
  * How high a piece stands (metres): its own `base` if it has one (a citadel's part, on its ward's
  * terrace); else the ground under its middle (`groundAt(x, y)`, metres, from
- * `origin`); or, for what's built on ground that rises or falls more than FOUNDATION.from across
+ * `origin`); a house on stilts over a lagoon (`water`), the lowest of its ground, the lagoon's bed
+ * under it; or, for what's built on ground that rises or falls more than FOUNDATION.from across
  * it (a settlement lying with a slope), its highest corner's, a foundation added to it (as the
  * art kits built it, before it's placed: of its people's stone, or the cat folk's mud brick) from
  * there down past its lowest corner, under all of it but its eaves.
@@ -337,6 +338,11 @@ export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
 
     const heights = footprint(piece).map(([x, y]) => groundAt(ox + x, oz + y));
     const [low, high] = [Math.min(middle, ...heights), Math.max(middle, ...heights)];
+
+    // (A house on stilts over a lagoon stands on its bed, its stilts going down into the water)
+    if (piece.water) {
+        return low;
+    }
 
     if (high - low < FOUNDATION.from) {
         return middle;

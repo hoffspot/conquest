@@ -93,6 +93,9 @@ export const SPACING = Object.freeze([1, 1, 2]);
 /** Bridges' decks: how high their tops are over the ground (metres: those on them stand there), and how thick. */
 export const DECK = Object.freeze({ top: 0.16, depth: 0.14 });
 
+// How far below the one over it each layer of a lagoon's plank walks is drawn (metres: setpieces/town.js WALK_LAYERS)
+const WALK_LAYER = 0.003;
+
 // Their rails: how high (over the deck), how thick, their posts' thickness, and about how far
 // apart the posts are (metres)
 const RAIL = Object.freeze({ height: 0.95, thick: 0.1, post: 0.14, every: 1.8 });
@@ -762,8 +765,11 @@ export class Chunks {
             groundAt: under,
             surfaceOf: ({ a, b }) => this.overworld.waters?.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20)?.surface ?? Math.min(under(...a), under(...b)) - 1,
         });
-        // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
-        const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
+        // (The plank walks over a settlement's lagoon: decks on stilts, no rails, as high as the
+        // town's ground round it, its bed dug down below them; each a hair below the walks laid
+        // over it, so where they overlap the one on top's drawn, not both)
+        const walkDeck = (walk, t) => (walk.level ?? this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t)) - (walk.layer ?? 0) * WALK_LAYER;
+        const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: walkDeck, groundAt: under }) : null;
 
         for (const part of [water, falls, bridges, stone, walks]) {
             if (part) {
@@ -1103,7 +1109,7 @@ export function lagoonOf(water, walks, [ox, oz] = [0, 0]) {
     }
 
     const group = new THREE.Group();
-    const decks = bridgesOf({ bridges: walks.map(({ a, b, half }) => ({ a: [ox + a[0], oz + a[1]], b: [ox + b[0], oz + b[1]], half })) }, { rails: false });
+    const decks = bridgesOf({ bridges: walks.map(({ a, b, ...walk }) => ({ ...walk, a: [ox + a[0], oz + a[1]], b: [ox + b[0], oz + b[1]] })) }, { rails: false, deck: (walk) => -(walk.layer ?? 0) * WALK_LAYER });
 
     group.name = "lagoon";
     group.add(waterSheet(data, [ox, oz, width, height]));
@@ -1142,7 +1148,7 @@ function box(x0, y0, z0, x1, y1, z1, metres = 2.8, segments = 1) {
 // bank to bank along the road, rising and falling as `deck(bridge, t)` has it (its height, metres,
 // `t` of the way from its end `a` to `b`), a dark beam along each edge, a rail on posts along each
 // side and piers down to the ground under it (`groundAt`); or, without `rails`, a plank walk:
-// stilts under its edges instead; or null
+// stilts under its edges instead, down into the lagoon's bed under it; or null
 function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } = {}) {
     const parts = { planks: [], "planks-dark": [], timber: [] };
     const { top, depth } = DECK;
@@ -1155,6 +1161,7 @@ function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } =
         const posts = Math.max(2, Math.round(length / every) + 1);
         const own = { planks: [], "planks-dark": [], timber: [] };
         const segments = Math.max(1, Math.ceil(length));
+        const [dx, dz] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
 
         // (Built along x from 0, across z, level; then each point raised to the deck's height
         // there, and turned to lie along the road)
@@ -1163,7 +1170,9 @@ function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } =
         for (const side of [-1, 1]) {
             const [inner, outer] = side > 0 ? [half - thick, half + 0.02] : [-half - 0.02, -half + thick];
 
-            own["planks-dark"].push(box(0, top - 0.4, inner, length, top + 0.03, outer, 1.4, segments));
+            // (A bridge's stand proud of its deck; a walk's are under its planks, so none shows across
+            // another's where they overlap)
+            own["planks-dark"].push(box(0, top - 0.4, inner, length, rails ? top + 0.03 : top - 0.005, outer, 1.4, segments));
 
             if (rails) {
                 own.timber.push(box(0, top + height - thick, inner, length, top + height, outer, 1, segments));
@@ -1172,8 +1181,12 @@ function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } =
 
             for (let k = 0; k < posts; k++) {
                 const x = 0.1 + ((length - 0.2 - post) * k) / (posts - 1);
+                // (A walk's stilt reaches down into the bed under it, however deep, as it's raised
+                // to the deck's height with the rest)
+                const z = side * (half - post / 2);
+                const bed = rails ? 0 : groundAt(a[0] + dx * (x + post / 2) - dz * z, a[1] + dz * (x + post / 2) + dx * z) - 0.3 - deck(bridge, (x + post / 2) / length);
 
-                own.timber.push(box(x, rails ? top - 0.4 : -0.6, side > 0 ? half - post : -half, x + post, rails ? top + height + 0.06 : top - depth, side > 0 ? half : -half + post, 1));
+                own.timber.push(box(x, rails ? top - 0.4 : Math.min(-0.6, bed), side > 0 ? half - post : -half, x + post, rails ? top + height + 0.06 : top - depth, side > 0 ? half : -half + post, 1));
             }
         }
 
@@ -1191,7 +1204,6 @@ function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } =
 
         // (Piers: under each edge a third and two thirds of the way over, from the deck's beams
         // down into the ground under them)
-        const [dx, dz] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
 
         for (const t of rails && length > 4 ? [1 / 3, 2 / 3] : []) {
             for (const side of [-1, 1]) {
