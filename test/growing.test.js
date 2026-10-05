@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS, UNMASKED_MS } from "../client/js/core/battle.js";
-import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, UNDO_MS } from "../client/js/core/host.js";
+import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, SAFETY, UNDO_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { PACK_SIZE, priceOf, RANKS, SHOPS, wareKind } from "../client/js/core/progress.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -362,6 +362,61 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.equal(player.stamina, 50);
         assert.deepEqual(use(), { ok: true });
         assert.equal(player.maxStamina, 100);
+    });
+
+    it("sells a Scroll of Safety at the adventurers' guild: read, its reader's carried to the market square of the town they started in three seconds on; fallen first, it's lost", () => {
+        assert.ok(SHOPS.guild.items.includes("scrollOfSafety"));
+        assert.equal(wareKind("scrollOfSafety"), "tome");
+        assert.equal(priceOf({ id: "scrollOfSafety" }), 25);
+
+        const host = hosted({ pack: [{ id: "scrollOfSafety", count: 2 }] });
+        const player = host.battle.actor(HOST_PLAYER);
+        const { progress } = host.players.get(HOST_PLAYER);
+        const use = () => host.command(HOST_PLAYER, { type: "use", item: "scrollOfSafety" });
+        const square = host.world.spawns.player;
+        const fromSquare = () => Math.hypot(player.x - (square[0] + 0.5), player.y - (square[1] + 0.5));
+        const safety = (events) => events.filter(({ type }) => type === "safety").map(({ change, why }) => (why ? [change, why] : [change]));
+
+        // Out of the town, a long way from its square
+        assert.ok(host.battle.place(HOST_PLAYER, "town", [square[0] + 120, square[1] + 40]));
+        run(host, STEP_MS);
+        assert.ok(fromSquare() > 100);
+
+        // Read: a moment to read it, and no other read meanwhile
+        assert.deepEqual(use(), { ok: true });
+        assert.equal(progress.pack[0].count, 1);
+        assert.deepEqual(use(), { ok: false, reason: "reading" });
+        assert.equal(progress.pack[0].count, 1);
+
+        let events = run(host, SAFETY.ms - 4 * STEP_MS);
+
+        assert.deepEqual(safety(events), [["reading"]]);
+        assert.ok(fromSquare() > 100, "(not yet)");
+
+        // Three seconds on: in the market square
+        events = run(host, 8 * STEP_MS);
+        assert.deepEqual(
+            events.filter(({ type }) => type === "carried").map(({ why, map }) => [why, map]),
+            [["safety", "town"]],
+        );
+        assert.ok(fromSquare() < 3, `${fromSquare()} m from the square`);
+        assert.equal(host.players.get(HOST_PLAYER).safety, null);
+
+        // Read again out of town, and struck down before it's read through: lost, and they lie
+        // where they fell
+        assert.ok(host.battle.place(HOST_PLAYER, "town", [square[0] + 120, square[1] + 40]));
+        run(host, STEP_MS);
+        assert.deepEqual(use(), { ok: true });
+        assert.ok(!progress.pack.some((stack) => stack?.id === "scrollOfSafety"));
+        player.hp = 1;
+        host.battle.afflict(HOST_PLAYER, "poison", { power: 5 });
+        events = run(host, SAFETY.ms + 10 * STEP_MS);
+
+        assert.ok(events.some(({ type, id }) => type === "death" && id === HOST_PLAYER));
+        assert.deepEqual(safety(events), [["reading"], ["lost", "fell"]]);
+        assert.ok(!events.some(({ type }) => type === "carried"));
+        assert.ok(player.dead && fromSquare() > 100);
+        assert.equal(host.players.get(HOST_PLAYER).safety, null);
     });
 
     it("moves stacks about the pack, splits them, and throws them away, to be taken back a moment after", () => {

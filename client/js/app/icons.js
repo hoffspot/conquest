@@ -124,6 +124,16 @@ const ACTION_DEFS = `
     <stop offset="0.5" stop-color="#ffd24a" stop-opacity="0.4"/>
     <stop offset="1" stop-color="#e0a020" stop-opacity="0"/>
 </radialGradient>
+<linearGradient id="icon-parchment" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#d8bd84"/>
+    <stop offset="0.45" stop-color="#f6e9c6"/>
+    <stop offset="1" stop-color="#cfae6e"/>
+</linearGradient>
+<radialGradient id="icon-safety-glow">
+    <stop offset="0" stop-color="#eaf6ff" stop-opacity="0.95"/>
+    <stop offset="0.55" stop-color="#4aa8ff" stop-opacity="0.45"/>
+    <stop offset="1" stop-color="#3a8ae8" stop-opacity="0"/>
+</radialGradient>
 <filter id="icon-glow" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="1.6" result="blur"/>
     <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -163,6 +173,19 @@ const STAMINA_BOOST = `
         <rect x="-5.5" y="-20" width="11" height="7" rx="1.8" fill="#e0b040" stroke="#6a4a0a" stroke-width="1"/>
         <path d="M2,-2 L-5,8 L0,8 L-3,17 L6,5 L1,5 L4,-2 Z" fill="#fffbe0" stroke="#8a4a04" stroke-width="1" stroke-linejoin="round"/>
         <ellipse cx="-7" cy="1" rx="2.2" ry="4" fill="#ffffff" opacity="0.5" transform="rotate(25 -7 1)"/>`;
+
+// A Scroll of Safety: a sheet of parchment between its two rolls, a blue circle of runes on
+// it, glowing, and a red seal hanging from it
+const SCROLL_OF_SAFETY = `
+        <rect x="-12" y="-15" width="24" height="30" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.1"/>
+        <rect x="-15" y="-20" width="30" height="7" rx="3.5" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.2"/>
+        <rect x="-15" y="13" width="30" height="7" rx="3.5" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.2"/>
+        <circle r="10" fill="url(#icon-safety-glow)"/>
+        <circle r="7.5" fill="none" stroke="#2a78d8" stroke-width="1.5"/>
+        <circle r="4.6" fill="none" stroke="#2a78d8" stroke-width="0.9" stroke-dasharray="1.6 1.2"/>
+        <path d="${star(0, 0, 4.4, 1.6, 5, 0)}" fill="#3a8ae8"/>
+        <path d="M6,14 L4,22 L7,20.5 L9,23 L9,14 Z" fill="#b8202a" stroke="#5a0a10" stroke-width="0.8"/>
+        <circle cx="7.5" cy="16" r="3" fill="#c8303a" stroke="#5a0a10" stroke-width="0.9"/>`;
 
 /** Each action's icon: SVG drawn round 0, 0, about 44 across (the spells' own: spellicons.js). */
 export const ICONS = Object.freeze({
@@ -384,6 +407,7 @@ export const ICONS = Object.freeze({
         <path d="${star(0, 4, 12, 6, 6)}" fill="url(#icon-stun-star)" stroke="#8a5a10" stroke-width="1.1" stroke-linejoin="round"/>
         <circle cy="4" r="3" fill="#fffbe6"/>`,
     staminaBoost: STAMINA_BOOST,
+    scrollOfSafety: SCROLL_OF_SAFETY,
     sharpening: `
         <rect x="-9" y="-3.3" width="18" height="6.6" rx="2" transform="translate(8 5) rotate(28)" fill="#80888f" stroke="#2f363b" stroke-width="1.1"/>
         <path d="M-7,-1 L7,-1" transform="translate(8 5) rotate(28)" stroke="#a8b0b6" stroke-width="1"/>
@@ -832,6 +856,7 @@ export const ITEM_ICONS = Object.freeze({
 
     // The cures (core/afflictions.js CURES): draughts of their colours, a salve, a bandage
     staminaBoost: STAMINA_BOOST,
+    scrollOfSafety: SCROLL_OF_SAFETY,
     antidote: draught("poison"),
     cureDisease: draught("disease"),
     invigorate: draught("wither"),
