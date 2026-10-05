@@ -15,11 +15,13 @@ import { Skins } from "./skins.js";
  * skins painted there too (`skins`: skins.js): the kit comes back without its atlas, which it has
  * once `ready` resolves; nothing that paints a skin is to be made before then. Characters seen from
  * afar are drawn with fewer triangles, made there too (`lods`: lod.js).
+ *
+ * `body`: which body (body.js BODIES).
  */
-export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false } = {}) {
-    const files = await loadHumanFiles(base, fetch);
+export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false, body = "human" } = {}) {
+    const files = await loadHumanFiles(base, fetch, body);
     const human = new HumanData(files.manifest, files.data);
-    const masks = await loadMasks(base, textureSize, fetch);
+    const masks = await loadMasks(base, textureSize, fetch, files.manifest.masks);
 
     if (!elsewhere) {
         const atlas = new SkinAtlas(human, masks, textureSize);

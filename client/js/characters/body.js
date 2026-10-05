@@ -1,6 +1,7 @@
 // The human body every character is made from: MakeHuman's base mesh and skeleton (prepared by
-// scripts/build-characters.js into client/characters/human.json and human.bin), shaped by the body
-// and face sliders.
+// scripts/build-characters.js into client/characters/human.json and human.bin), or CharMorph's
+// Vitruvian (scripts/build-vitruvian.js: vitruvian.json and vitruvian.bin), shaped by the body and
+// face sliders.
 //
 // Shaping blends the sliders' precomputed shapes into new vertex positions, and moves every joint
 // the same way, so the skeleton always fits the body. Everything is in metres, y up, facing +z,
@@ -15,21 +16,27 @@ import { decodeSection } from "./pack.js";
 /** Where the prepared body lives, next to the game's pages. */
 export const HUMAN_URL = new URL("../../characters/", import.meta.url);
 
-/** Download and unpack the body (human.json and human.bin from `base`, with `fetch`). */
-export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis)) {
-    const { manifest, data } = await loadHumanFiles(base, fetch);
+/**
+ * The bodies there are: MakeHuman's ("human": scripts/build-characters.js) and CharMorph's
+ * Vitruvian ("vitruvian": scripts/build-vitruvian.js), the same shapes and skeleton on each.
+ */
+export const BODIES = Object.freeze(["human", "vitruvian"]);
+
+/** Download and unpack a body (`body`.json and `body`.bin from `base`, with `fetch`). */
+export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = "human") {
+    const { manifest, data } = await loadHumanFiles(base, fetch, body);
 
     return new HumanData(manifest, data);
 }
 
 /**
- * The body's files as they are, unpacked: { manifest (human.json), data (human.bin) }, for a
+ * A body's files as they are, unpacked: { manifest (`body`.json), data (`body`.bin) }, for a
  * HumanData to be made from here or elsewhere (a worker: skins.js).
  */
-export async function loadHumanFiles(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis)) {
+export async function loadHumanFiles(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = "human") {
     const [manifest, packed] = await Promise.all([
-        fetch(new URL("human.json", base).href).then((response) => checked(response).json()),
-        fetch(new URL("human.bin", base).href).then((response) => checked(response).arrayBuffer()),
+        fetch(new URL(`${body}.json`, base).href).then((response) => checked(response).json()),
+        fetch(new URL(`${body}.bin`, base).href).then((response) => checked(response).arrayBuffer()),
     ]);
 
     return { manifest, data: await gunzip(packed) };
@@ -75,6 +82,9 @@ export class HumanData {
         this.macroIndex = new Map(manifest.macro.names.map((name, i) => [name, i]));
         this.coefficients = manifest.macro.coefficients;
         this.deltaUnit = manifest.deltaUnit;
+        // Where garments measure from, where a body's joints aren't where MakeHuman's are: the
+        // neck's, as a fraction of the way up the neck bone (0: its head, as MakeHuman's)
+        this.landmarks = { neck: 0, ...manifest.landmarks };
         this.details = new Map(manifest.details.map((detail) => [detail.name, {
             vertices: decodeSection(buffer, detail.vertices),
             deltas: decodeSection(buffer, detail.deltas),

@@ -40,6 +40,7 @@ to them.
 | File | What it does |
 |---|---|
 | `scripts/build-characters.js` | Prepares MakeHuman's body (CC0) at build time into `client/characters/human.bin` (1.4 MB, gzip) and `human.json` |
+| `scripts/build-vitruvian.js` | Prepares CharMorph's Vitruvian body (CC0) the same way, into `vitruvian.bin` (1.9 MB, gzip), `vitruvian.json` and `vitruvian/masks/`, with MakeHuman's shapes carried over onto it. It reads Blender's and NumPy's files itself (`scripts/lib/blend.js`, `npy.js`) |
 | `body.js` | Loads that, and shapes the body: blends the slider shapes into the mesh and moves every joint the same way |
 | `macro.js`, `details.js` | The sliders: which of MakeHuman's shapes each one blends |
 | `pack.js` | The data file's compact encoding (shared by the build and the browser) |
@@ -107,6 +108,47 @@ Because it shares the skeleton, every animation, piece of equipment and hairstyl
 to -0.9), curving hips (0.15 to 0.28: much above 0.5, the hips bulge out at the sides like
 saddlebags), round buttocks (0.4 to 0.55) and busts from full to fuller (0.65 to 1), on slim,
 fairly toned bodies, each a different height, heritage, face and hair.
+
+### The Vitruvian body
+
+A second body, CharMorph's [Vitruvian](https://github.com/Upliner/CharMorph-Vitruvian) (CC0), is
+on its way in (the terrain plan's M8). It's a newer, finer body than MakeHuman's: 37,436
+vertices, sculpted muscles and a face with a real mouth and eyelids, and 4K textures. For now it's
+in the character lab only: `character-lab.html?body=vitruvian`. The game still uses MakeHuman's.
+
+`npm run build:vitruvian -- --from=../charmorph-vitruvian` makes it into the same kind of data as
+MakeHuman's body, so every slider, garment, hairstyle, people's look and animation works on it
+as it is:
+
+- **Mesh.** Its skin is brought down to 28,000 triangles (meshoptimizer, keeping its texture
+  coordinates), the hero's budget. Its four texture tiles (head, torso, arms, legs) are laid
+  side by side in one square. Its eyes are its own; its eyelashes are MakeHuman's, set on its
+  eyes, as it has none. The mouth's inside, irises and tear lines are left out for now.
+- **Bones.** Its own Mixamo rig and weights: the same 52 bones as MakeHuman's, in the same order.
+- **Size.** It's scaled to the height of MakeHuman's default body (it's 5% taller), so the game's
+  measures, doorways and animations fit it.
+- **Shapes.** Every slider's shapes are carried over from MakeHuman's body:
+  - MakeHuman's default body is laid over Vitruvian's, bone by bone: each bone turned to lie
+    along Vitruvian's, and stretched to its length.
+  - Each Vitruvian vertex takes the change at the nearest point of that body that faces the
+    same way (half of them within 5 mm, 99% within 3.2 cm).
+  - The change is turned as the bones there are, but not stretched: the bodies are as tall and
+    alike, and only their joints are put in different places, so a change is as big on either.
+  - The base is set so that the sliders as they start give Vitruvian's own body.
+- **The neck.** MakeHuman's neck bone starts half way up the neck, and Vitruvian's at its foot.
+  Garments measure the neck from MakeHuman's joint, so the manifest says where that is on
+  Vitruvian's neck bone (`landmarks.neck`: 0.425 of the way up it), and `measureBody` measures
+  from there. Without it a shirt's top fell to the collarbones. MakeHuman's body is also laid
+  over Vitruvian's with its neck bone starting there.
+- **Masks.** MakeHuman's masks for painting the skin (lips, nails, eyelids...) are carried over
+  into Vitruvian's texture layout, texel by texel, from the nearest point of MakeHuman's body.
+
+`test/vitruvian.test.js` checks the data: the bones, weights, parts and shapes; that it stands as
+tall as MakeHuman's body in every preset; and that a shirt comes as high up its neck.
+
+Still to come: the game switched to it (with its lower-detail body for far characters, and the
+motion check's baseline), its own skin textures, the lips and the inside of the mouth, the face's
+measures (`face.js`), and blinking and expressions.
 
 ### Skin, eyes and hair
 
@@ -1616,6 +1658,7 @@ sources.
 | Asset | Where | Licence |
 |---|---|---|
 | MakeHuman base mesh, targets, rigs and weights | [makehuman](https://github.com/makehumancommunity/makehuman), [mpfb2](https://github.com/makehumancommunity/mpfb2) | CC0 (used here) |
+| CharMorph's Vitruvian body (mesh, rig, weights, textures) | [CharMorph-Vitruvian](https://github.com/Upliner/CharMorph-Vitruvian) | CC0 (the second body, in the lab) |
 | MakeHuman's animations and poses | makehuman `data/animations` | CC0 (the walk and zombie walk are used here) |
 | MakeHuman clothes, hair and proxies | MakeHuman's file servers (not on GitHub any more) | Mostly CC0 or CC-BY |
 | CMU motion capture (2,548 BVH clips) | GitHub mirrors, e.g. [CMU-MoCap-10-14](https://github.com/AtelierCircle/CMU-MoCap-10-14) | Free to use |
