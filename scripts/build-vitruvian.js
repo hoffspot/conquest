@@ -34,6 +34,7 @@ import jpeg from "jpeg-js";
 import { MeshoptSimplifier } from "meshoptimizer";
 import { HumanData } from "../client/js/characters/body.js";
 import { allDetailTargetNames } from "../client/js/characters/details.js";
+import { faceFrame } from "../client/js/characters/face.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { Packer } from "../client/js/characters/pack.js";
 import { symmetricEigen } from "./build-characters.js";
@@ -70,13 +71,18 @@ const MASK_SIZE = 1024;
 // Blender's z up, facing -y, to ours: y up, facing +z
 const toOurs = (x, y, z) => [x, z, -y];
 
-/** Vitruvian as CharMorph keeps it: the mesh, its materials and texture coordinates, rig and weights. */
+/**
+ * Vitruvian as CharMorph keeps it: the mesh, its materials and texture coordinates, its lips (how
+ * much each vertex is lip), rig and weights.
+ */
 export function loadVitruvian(from) {
     const blend = readBlend(path.join(from, "char.blend"));
     const [mesh] = meshes(blend).filter(({ name }) => name === "cm_vitruvian");
     const corners = new Int32Array(meshLayer(blend, mesh, "ldata", ".corner_vert"));
     const uvs = new Float32Array(meshLayer(blend, mesh, "ldata", "VitruvianUV.UDIM"));
     const materials = new Int32Array(meshLayer(blend, mesh, "pdata", "material_index"));
+    // (Its lips, a colour on each face's corners: red, 0 to 255)
+    const lipColours = new Uint8Array(meshLayer(blend, mesh, "ldata", "ColLipMask"));
     const faces = readNpy(path.join(from, "faces.npy"));
     const base = readNpy(path.join(from, "morphs/L1/Default.npy")).data;
     const count = base.length / 3;
@@ -90,6 +96,13 @@ export function loadVitruvian(from) {
     for (let v = 0; v < count; v++) {
         positions.set(toOurs(base[v * 3], base[v * 3 + 1], base[v * 3 + 2]), v * 3);
     }
+
+    // How much each vertex is lip, 0 to 1 (the most of its corners')
+    const lips = new Float32Array(count);
+
+    corners.forEach((v, l) => {
+        lips[v] = Math.max(lips[v], lipColours[l * 4] / 255);
+    });
 
     const weights = readNpz(path.join(from, "weights/mixamo.npz"));
     const joints = readNpz(path.join(from, "joints/Mixamo.npz"));
@@ -122,7 +135,7 @@ export function loadVitruvian(from) {
         jointEnds.set(strip(name.replace(/^joint_/, "")), list.map(([v, w]) => [v, w / total]));
     });
 
-    return { count, positions, corners, uvs, materials, faceCount: mesh.totpoly, weights: byBone, jointEnds };
+    return { count, positions, corners, uvs, materials, lips, faceCount: mesh.totpoly, weights: byBone, jointEnds };
 }
 
 /** The MakeHuman body as the engine has it (client/characters/human.*), and every shape's change. */
@@ -163,6 +176,85 @@ export function loadMakeHuman() {
     };
 
     return { manifest, human, macro, detail };
+}
+
+// --- The face ---
+
+/**
+ * Where a head's features are in its face frame (face.js faceFrame's: from between the eyes, in
+ * MakeHuman's base mesh's metres by the eyes' spacing), from the skin's points there (`points`:
+ * [x, y, z] each) and how much each is lip (`lips`): { lips, nose, chin ([y, z] each: the lips'
+ * middle, the nose's tip, the chin's most forward point), top (of the head), back (of the
+ * skull), ear (how far out the ears reach) }. MakeHuman's head and Vitruvian's are measured
+ * alike, so one can be fitted to the other.
+ */
+export function faceLandmarks(points, lips) {
+    const [sum, weight] = points.reduce(([at, total], p, i) => (lips[i] > 0.25 ? [[at[0] + lips[i] * p[1], at[1] + lips[i] * p[2]], total + lips[i]] : [at, total]), [[0, 0], 0]);
+    const lipsAt = [sum[0] / weight, sum[1] / weight];
+    const middle = points.filter((p) => Math.abs(p[0]) < 0.006);
+    const foremost = (list) => list.reduce((best, p) => (p[2] > best[2] ? p : best));
+    const nose = foremost(middle.filter((p) => p[1] < 0 && p[1] > lipsAt[0] + 0.012));
+    const chin = foremost(middle.filter((p) => p[1] < lipsAt[0] - 0.025 && p[1] > lipsAt[0] - 0.08));
+    const crown = points.filter((p) => Math.abs(p[0]) < 0.03 && p[1] > 0);
+    const skull = points.filter((p) => Math.abs(p[0]) < 0.03 && p[1] > -0.03);
+    const sides = points.filter((p) => Math.abs(p[1]) < 0.03 && p[2] < -0.03 && p[2] > -0.15);
+
+    return {
+        lips: lipsAt,
+        nose: [nose[1], nose[2]],
+        chin: [chin[1], chin[2]],
+        top: Math.max(...crown.map((p) => p[1])),
+        back: Math.min(...skull.map((p) => p[2])),
+        ear: Math.max(...sides.map((p) => Math.abs(p[0]))),
+    };
+}
+
+/**
+ * A body's face's landmarks (faceLandmarks) in a face frame (face.js faceFrame), from the
+ * positions of some of its skin's vertices and how much each vertex is lip.
+ */
+export function faceOn(frame, positions, vertices, lips) {
+    const [points, weights] = [[], []];
+
+    for (const v of vertices) {
+        const p = frame.toFace(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]);
+
+        if (Math.abs(p[0]) < 0.12 && Math.abs(p[1]) < 0.2 && p[2] > -0.25) {
+            points.push(p);
+            weights.push(lips[v]);
+        }
+    }
+
+    return faceLandmarks(points, weights);
+}
+
+/**
+ * How one head's face coordinates are brought onto another's (face.js faceFrame, from a body's
+ * landmarks.face), from their faceLandmarks: { size (the head's size over its eyes' spacing, to
+ * the other's: the frame's scale is multiplied by it), y and z ([ours, theirs] pairs, rising, for
+ * piecewise-straight maps, after the size: chin, lips, nose, eyes, top; and the skull's back, eyes,
+ * nose) }.
+ */
+export function faceMap(ours, theirs) {
+    const size = (ours.top / theirs.top + ours.back / theirs.back + ours.ear / theirs.ear) / 3;
+    const at = (value) => Math.round((value / size) * 1e5) / 1e5;
+    const map = {
+        size: Math.round(size * 1e5) / 1e5,
+        y: [[at(ours.chin[0]), theirs.chin[0]], [at(ours.lips[0]), theirs.lips[0]], [at(ours.nose[0]), theirs.nose[0]], [0, 0], [at(ours.top), theirs.top]],
+        z: [[at(ours.back), theirs.back], [0, 0], [at(ours.nose[1]), theirs.nose[1]]],
+    };
+
+    for (const knots of [map.y, map.z]) {
+        knots.forEach((knot, k) => {
+            knot[1] = Math.round(knot[1] * 1e5) / 1e5;
+
+            if (k > 0 && !(knot[0] > knots[k - 1][0] && knot[1] > knots[k - 1][1])) {
+                throw new Error(`The face's map isn't rising: ${JSON.stringify(knots)}`);
+            }
+        });
+    }
+
+    return map;
 }
 
 // --- Small vector helpers ---
@@ -665,6 +757,47 @@ async function main() {
     const humanEyes = humanSource("eyes");
     const vitruvianNormals = vertexNormals(vitruvian.positions, faceTriangles.body.flatMap(([f, ...ks]) => ks.map((k) => vitruvian.corners[f * 4 + k])));
     const jointVertices = [...new Set(jointEnds.flatMap((ends) => (ends.parentTail === undefined ? ends.map(([v]) => v) : [])))];
+
+    // The face: where Vitruvian's head is on MakeHuman's in face coordinates (face.js), from the
+    // same features measured on each (faceLandmarks), so its face takes MakeHuman's face's changes
+    // where they fall on it (the lips' on its lips, the chin's on its chin), rather than from a
+    // head laid over it by its bones. The more a vertex is the Head bone's, the more it takes them
+    // so; the rest, and the masks below the head, from the body laid over it.
+    const humanLips = maskOnVertices(human, path.join(root, "client/characters/masks/lips.jpg"));
+    const eyeCorners = faceTriangles.eyes.flatMap(([f, ...ks]) => ks.map((k) => vitruvian.corners[f * 4 + k]));
+    const asBody = (face) => ({ renderIndices: () => eyeCorners.keys(), renderSource: eyeCorners, landmarks: { face } });
+    const skinVertices = [...new Set(faceTriangles.body.flatMap(([f, ...ks]) => ks.map((k) => vitruvian.corners[f * 4 + k])))];
+    const humanFrame = faceFrame(human, humanDefault);
+    const humanFace = faceOn(humanFrame, humanDefault, [...new Set(humanSkin)], humanLips);
+    const earlyFace = faceOn(faceFrame(asBody(undefined), vitruvian.positions), vitruvian.positions, skinVertices, vitruvian.lips);
+    const vitruvianFrame = faceFrame(asBody(faceMap(earlyFace, humanFace)), vitruvian.positions);
+    // (Turned as the head is, not scaled: a change there is the head's moving with the body, as
+    // much as its shape)
+    const faceTurn = maps[boneIndex.get("Head")].turn;
+    const headShare = new Float64Array(vitruvian.count);
+    const totalWeight = new Float64Array(vitruvian.count);
+
+    for (const [name, list] of vitruvian.weights) {
+        for (const [v, weight] of list) {
+            totalWeight[v] += weight;
+            headShare[v] += name === "Head" ? weight : 0;
+        }
+    }
+
+    headShare.forEach((share, v) => {
+        headShare[v] = totalWeight[v] > 0 ? share / totalWeight[v] : 0;
+    });
+
+    const toHumanFace = (p) => humanFrame.fromFace(...vitruvianFrame.toFace(...p));
+    const onHumanFace = (v) => toHumanFace(vitruvian.positions.subarray(v * 3, v * 3 + 3));
+    const placeOnFace = (vertices) => {
+        const points = Float64Array.from(vertices.flatMap(onHumanFace));
+        const near = nearestPoints(humanDefault, humanSkin, triangleNormals(humanDefault, humanSkin), points, Float64Array.from(vertices.flatMap((v) => [...vitruvianNormals.subarray(v * 3, v * 3 + 3)])));
+        const missed = vertices.map((v, i) => (near[i] ? -1 : i)).filter((i) => i >= 0);
+        const anyWay = missed.length ? nearestPoints(humanDefault, humanSkin, null, Float64Array.from(missed.flatMap((i) => [...points.subarray(i * 3, i * 3 + 3)])), null, { reach: 0.3 }) : [];
+
+        return new Map(vertices.map((v, i) => [v, near[i] ?? anyWay[missed.indexOf(i)]]));
+    };
     const placeOn = (vertices, triangles, normals) => {
         const points = Float64Array.from(vertices.flatMap((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]));
         const facings = normals ? Float64Array.from(vertices.flatMap((v) => [...normals.subarray(v * 3, v * 3 + 3)])) : null;
@@ -680,15 +813,22 @@ async function main() {
     const within = (share) => (distances[Math.floor(share * (distances.length - 1))] * 1000).toFixed(1);
 
     console.log(`laid over each other: half the skin within ${within(0.5)} mm of MakeHuman's, 90% within ${within(0.9)} mm, 99% within ${within(0.99)} mm`);
-    const placed = new Map([...onSkin, ...onEyes].map(([v, { triangle, weights }]) => {
-        const triangles = eyeVertices.includes(v) ? humanEyes : humanSkin;
+    const onFace = placeOnFace([...onSkin.keys()].filter((v) => headShare[v] > 0));
+    const placement = (triangles, { triangle, weights }) => {
         const corners = [0, 1, 2].map((k) => triangles[triangle * 3 + k]);
         const bonesThere = new Map();
 
         corners.forEach((h, k) => humanBones(h).forEach((b, i) => bonesThere.set(b, (bonesThere.get(b) ?? 0) + weights[k] * humanWeights(h)[i])));
 
-        return [v, { corners, weights, matrix: blendedTurn(maps, [...bonesThere.keys()], [...bonesThere.values()]) }];
-    }));
+        return { corners, weights, matrix: blendedTurn(maps, [...bonesThere.keys()], [...bonesThere.values()]) };
+    };
+    const placed = new Map([
+        ...[...onEyes].map(([v, near]) => [v, [{ share: 1, ...placement(humanEyes, near) }]]),
+        ...[...onSkin].map(([v, near]) => [v, [
+            { share: 1 - headShare[v], ...placement(humanSkin, near) },
+            ...(onFace.has(v) ? [{ share: headShare[v], corners: [0, 1, 2].map((k) => humanSkin[onFace.get(v).triangle * 3 + k]), weights: onFace.get(v).weights, matrix: faceTurn }] : []),
+        ].filter(({ share }) => share > 0)]),
+    ]);
 
     // A shape's change at a kept vertex, or a Vitruvian vertex
     const changeAt = (deltas, entry) => {
@@ -698,16 +838,23 @@ async function main() {
             return apply(blendedTurn(maps, humanBones(entry.v), weights), [deltas[entry.v * 3], deltas[entry.v * 3 + 1], deltas[entry.v * 3 + 2]]);
         }
 
-        const { corners, weights, matrix } = placed.get(entry.v);
-        const d = [0, 0, 0];
+        const change = [0, 0, 0];
 
-        corners.forEach((h, k) => {
-            d[0] += weights[k] * deltas[h * 3];
-            d[1] += weights[k] * deltas[h * 3 + 1];
-            d[2] += weights[k] * deltas[h * 3 + 2];
-        });
+        for (const { share, corners, weights, matrix } of placed.get(entry.v)) {
+            const d = [0, 0, 0];
 
-        return apply(matrix, d);
+            corners.forEach((h, k) => {
+                d[0] += weights[k] * deltas[h * 3];
+                d[1] += weights[k] * deltas[h * 3 + 1];
+                d[2] += weights[k] * deltas[h * 3 + 2];
+            });
+
+            apply(matrix, d).forEach((value, axis) => {
+                change[axis] += share * value;
+            });
+        }
+
+        return change;
     };
     const jointChanges = (deltas) => {
         const at = new Map(jointVertices.map((v) => [v, changeAt(deltas, { kind: "vitruvian", v })]));
@@ -986,7 +1133,24 @@ async function main() {
         landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4 },
         masks: MASKS.map((name) => `vitruvian/masks/${name}.png`),
     };
-    const packed = gzipSync(packer.toBytes(), { level: 9 });
+    const bytes = packer.toBytes();
+
+    // The face: Vitruvian's head brought onto MakeHuman's face coordinates, where the skin's
+    // features, hair, helmets and tusks are placed (face.js), by the same features measured on
+    // each (their lips by each one's own lip mask: MakeHuman's masks/lips.jpg, Vitruvian's
+    // ColLipMask)
+    const made = new HumanData(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    const measureFace = (data, lips) => {
+        const { positions } = data.shape({});
+
+        return faceOn(faceFrame(data, positions), positions, [...Array(data.vertexCount).keys()].filter((v) => data.partOf[v] === 0), lips);
+    };
+    const ours = measureFace(made, Float32Array.from(sources, ({ kind, v }) => (kind === "vitruvian" ? vitruvian.lips[v] : 0)));
+    const theirs = measureFace(human, humanLips);
+
+    manifest.landmarks.face = faceMap(ours, theirs);
+
+    const packed = gzipSync(bytes, { level: 9 });
 
     writeFileSync(path.join(target, "vitruvian.bin"), packed);
     writeFileSync(path.join(target, "vitruvian.json"), `${JSON.stringify(manifest)}\n`);
@@ -994,44 +1158,70 @@ async function main() {
     console.log(`${count} vertices (${renderSource.length} to draw), ${indices.length / 3} triangles, ${bones.length} bones`);
     console.log(`${n} macro shapes in ${components.length} components (worst error ${(worst * 1000).toFixed(2)} mm); ${details.length} detail and bust shapes`);
     console.log(`scaled by ${scale.toFixed(4)} to ${heightOf(vitruvian.positions, vitruvian.count).toFixed(3)} m; neck landmark ${neckFraction.toFixed(3)} of the way up the neck bone`);
+    console.log(`face: ${JSON.stringify(manifest.landmarks.face)} (MakeHuman's: ${JSON.stringify(theirs)}; Vitruvian's: ${JSON.stringify(ours)})`);
     console.log(`vitruvian.bin: ${(packed.length / 1024).toFixed(0)} KB (${(packer.length / 1024).toFixed(0)} KB unpacked)`);
 
-    writeMasks({ target, human, laid, humanSkin, vitruvian, simplified, render });
+    writeMasks({ target, human, laid, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace });
 }
 
-// MakeHuman's masks (client/characters/masks) carried over into Vitruvian's texture layout: each
-// texel of the skin's takes the mask at the nearest point of MakeHuman's body laid over it
-function writeMasks({ target, human, laid, humanSkin, vitruvian, simplified, render }) {
+// How much each of the MakeHuman body's vertices is in one of its masks (a JPEG in its texture
+// layout), 0 to 1: the most of its texture coordinates'
+function maskOnVertices(human, file) {
+    const { width, height, data } = jpeg.decode(readFileSync(file), { useTArray: true });
+    const values = new Float32Array(human.vertexCount);
+
+    for (const r of human.renderIndices("body")) {
+        const x = Math.min(width - 1, Math.max(0, Math.round(human.uvs[r * 2] * width - 0.5)));
+        const y = Math.min(height - 1, Math.max(0, Math.round((1 - human.uvs[r * 2 + 1]) * height - 0.5)));
+        const v = human.renderSource[r];
+
+        values[v] = Math.max(values[v], data[(y * width + x) * 4] / 255);
+    }
+
+    return values;
+}
+
+// The masks in Vitruvian's texture layout: its lips from its own (ColLipMask), and the rest
+// MakeHuman's (client/characters/masks) carried over, each texel of the skin's taking the mask at
+// the nearest point of MakeHuman's body: on the head, where it is on MakeHuman's face (by the face
+// map: toHumanFace), and elsewhere on MakeHuman's body laid over it
+function writeMasks({ target, human, laid, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace }) {
     const size = MASK_SIZE;
     const texels = [];
+    const onHead = [];
     const at = new Int32Array(size * size).fill(-1);
 
     // Rasterise the skin's triangles in texture space: each covered texel's point on the body
-    for (let t = 0; t < simplified.length / 3; t++) {
-        const corners = [0, 1, 2].map((k) => render[simplified[t * 3 + k]]);
-        const [a, b, c] = corners.map(({ uv }) => [uv[0] * size, (1 - uv[1]) * size]);
-        const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
-
-        if (Math.abs(area) < 1e-12) {
-            continue;
+    rasterise(simplified, render, size, (i, corners, weights) => {
+        if (at[i] < 0) {
+            at[i] = texels.length;
+            texels.push(corners.reduce((p, { v }, k) => [0, 1, 2].map((axis) => p[axis] + weights[k] * vitruvian.positions[v * 3 + axis]), [0, 0, 0]));
+            onHead.push(corners.reduce((sum, { v }, k) => sum + weights[k] * headShare[v], 0) >= 0.5);
         }
+    });
 
-        for (let y = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1]))); y <= Math.min(size - 1, Math.ceil(Math.max(a[1], b[1], c[1]))); y++) {
-            for (let x = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]))); x <= Math.min(size - 1, Math.ceil(Math.max(a[0], b[0], c[0]))); x++) {
-                const [px, py] = [x + 0.5, y + 0.5];
-                const w1 = ((b[0] - px) * (c[1] - py) - (c[0] - px) * (b[1] - py)) / area;
-                const w2 = ((c[0] - px) * (a[1] - py) - (a[0] - px) * (c[1] - py)) / area;
-                const w3 = 1 - w1 - w2;
+    // Its lips: its own mask over all its triangles (not only those kept), so their edge is as
+    // fine as it's drawn
+    const lips = new Uint8Array(size * size);
 
-                if (w1 >= -0.01 && w2 >= -0.01 && w3 >= -0.01 && at[y * size + x] < 0) {
-                    at[y * size + x] = texels.length;
-                    texels.push(corners.reduce((p, { v }, k) => [0, 1, 2].map((axis) => p[axis] + [w1, w2, w3][k] * vitruvian.positions[v * 3 + axis]), [0, 0, 0]));
-                }
-            }
-        }
-    }
+    rasterise(skin, render, size, (i, corners, weights) => {
+        const lip = corners.reduce((sum, { v }, k) => sum + weights[k] * vitruvian.lips[v], 0);
 
-    const near = nearestPoints(laid, humanSkin, null, Float64Array.from(texels.flat()), null, { reach: 0.3 });
+        lips[i] = Math.max(lips[i], Math.round(255 * Math.min(1, Math.max(0, lip))));
+    });
+
+    const headTexels = texels.map((_, t) => t).filter((t) => onHead[t]);
+    const bodyTexels = texels.map((_, t) => t).filter((t) => !onHead[t]);
+    const near = new Array(texels.length);
+    const nearHead = nearestPoints(humanDefault, humanSkin, null, Float64Array.from(headTexels.flatMap((t) => toHumanFace(texels[t]))), null, { reach: 0.3 });
+    const nearBody = nearestPoints(laid, humanSkin, null, Float64Array.from(bodyTexels.flatMap((t) => texels[t])), null, { reach: 0.3 });
+
+    headTexels.forEach((t, k) => {
+        near[t] = nearHead[k];
+    });
+    bodyTexels.forEach((t, k) => {
+        near[t] = nearBody[k];
+    });
 
     // MakeHuman's texture coordinates at each of its triangles' corners
     const skinRender = human.renderIndices("body");
@@ -1040,6 +1230,11 @@ function writeMasks({ target, human, laid, humanSkin, vitruvian, simplified, ren
     mkdirSync(path.join(target, "vitruvian/masks"), { recursive: true });
 
     for (const name of MASKS) {
+        if (name === "lips") {
+            writeFileSync(path.join(target, "vitruvian/masks/lips.png"), grayPng(lips, size));
+            continue;
+        }
+
         const { width, height, data } = jpeg.decode(readFileSync(path.join(target, "masks", `${name}.jpg`)), { useTArray: true });
         const sample = ([u, v]) => {
             const x = Math.min(width - 1, Math.max(0, Math.round(u * width - 0.5)));
@@ -1059,6 +1254,34 @@ function writeMasks({ target, human, laid, humanSkin, vitruvian, simplified, ren
     }
 
     console.log(`masks: ${MASKS.length} at ${size}x${size}, ${texels.length} texels of skin`);
+}
+
+// Each texel `size` by `size` of texture space that triangles (`triangles`: indices into `render`,
+// whose corners have texture coordinates `uv`) cover: `each(texel's index, the triangle's three
+// corners, the texel's barycentric weights)`
+function rasterise(triangles, render, size, each) {
+    for (let t = 0; t < triangles.length / 3; t++) {
+        const corners = [0, 1, 2].map((k) => render[triangles[t * 3 + k]]);
+        const [a, b, c] = corners.map(({ uv }) => [uv[0] * size, (1 - uv[1]) * size]);
+        const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+
+        if (Math.abs(area) < 1e-12) {
+            continue;
+        }
+
+        for (let y = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1]))); y <= Math.min(size - 1, Math.ceil(Math.max(a[1], b[1], c[1]))); y++) {
+            for (let x = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]))); x <= Math.min(size - 1, Math.ceil(Math.max(a[0], b[0], c[0]))); x++) {
+                const [px, py] = [x + 0.5, y + 0.5];
+                const w1 = ((b[0] - px) * (c[1] - py) - (c[0] - px) * (b[1] - py)) / area;
+                const w2 = ((c[0] - px) * (a[1] - py) - (a[0] - px) * (c[1] - py)) / area;
+                const w3 = 1 - w1 - w2;
+
+                if (w1 >= -0.01 && w2 >= -0.01 && w3 >= -0.01) {
+                    each(y * size + x, corners, [w1, w2, w3]);
+                }
+            }
+        }
+    }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

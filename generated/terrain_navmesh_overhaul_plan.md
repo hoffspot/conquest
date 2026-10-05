@@ -4369,3 +4369,31 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the game on Vitruvian (its lower-detail body, the motion check's baseline, the
     clips' bake), its own skin textures, the lips and mouth (the lip mask sits a little low), the
     face's measures, blinks and expressions.
+- **2026-10-05, the Vitruvian face** (§10; docs/CHARACTERS.md *The Vitruvian body*). Close-ups of
+  Vitruvian's faces: the lip colour painted on the chin under the lips, the lips pale, blotches
+  under the eyes; and the face sliders barely reaching its mouth and chin.
+  - **The cause:** face coordinates (`face.js`, where the skin's features, hair, helmets, cat
+    folk's ears and tusks are placed) are scaled by the eyes' spacing, and Vitruvian's eyes are
+    further apart for its head's size (6.4 cm to MakeHuman's 5.8), so its skull was 8% small in
+    them. And its face took MakeHuman's face's changes, and the lip mask, from MakeHuman's body
+    laid over it by its bones, which doesn't line faces up: the underbite moved its lower lip
+    0 mm to MakeHuman's 7.5, the chin slider its chin 4 mm to 10.3.
+  - **The face map:** the build measures both heads alike (`faceLandmarks`: the lips by each
+    one's own lip mask, the nose's tip, the chin, the crown, the back of the skull, the ears) and
+    the manifest's `landmarks.face` brings Vitruvian's head onto MakeHuman's face coordinates:
+    its size (0.925 of its eyes' spacing), then its heights and depths between those landmarks.
+    Once sized, its lips, nose, chin, crown and skull were already within 2 mm of MakeHuman's.
+  - **The face matched by it:** each vertex of the head takes the change at the point where it is
+    on MakeHuman's face by the map, as much as it's the Head bone's (the rest from the body laid
+    over it, so the neck has no seam); turned as the head is, not scaled (a change there is the
+    head's moving with the body too: scaled by the faces' sizes, the orc's crown rose 6 mm too
+    far). The underbite now moves its lower lip 7.1 mm (MakeHuman's 7.5), the chin its chin 10.6
+    (10.3), the lips 3.9 (4.4), the head's squareness its jaw 23.9 (23.3). The masks on the head
+    (eyelids, ears) are carried by the map too.
+  - **Its lips:** painted from its own lip mask (`ColLipMask` in `char.blend`), over all its
+    triangles.
+  - **Tests:** its face's landmarks where MakeHuman's are in four presets; five face sliders
+    moving its face as MakeHuman's (within 30%); the orc's tusks at its lower lip, as on
+    MakeHuman's; points into face coordinates and back.
+  - **Next:** the game on Vitruvian (its lower-detail body, the motion check's baseline, the
+    clips' bake), its own skin textures, the inside of the mouth, blinks and expressions.
