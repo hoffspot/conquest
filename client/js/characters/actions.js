@@ -3133,11 +3133,18 @@ export class Actions {
             const rig = this.rig;
             const head = (name) => rig.heads[rig.index.get(name)];
             const chest = head("Spine2");
+            const arm = head("RightForeArm").distanceTo(head("RightArm")) + head("RightHand").distanceTo(head("RightForeArm"));
+            // (A hand's place is given from the shoulder as the reference body's lies, every pose
+            // having been made on it: on another body, where the reference body's would be on it,
+            // in arm lengths from its own, the left's: its landmarks.shoulder. Vitruvian's own sit
+            // further back in the body and higher)
+            const [x, y, z] = character.human.landmarks?.shoulder ?? [0, 0, 0];
+            const from = (Side, side) => head(`${Side}Arm`).clone().sub(chest).add(new THREE.Vector3(side * x, y, z).multiplyScalar(arm));
 
             this.body = {
                 positions: character.positions,
-                shoulders: { right: head("RightArm").clone().sub(chest), left: head("LeftArm").clone().sub(chest) },
-                arm: head("RightForeArm").distanceTo(head("RightArm")) + head("RightHand").distanceTo(head("RightForeArm")),
+                shoulders: { right: from("Right", -1), left: from("Left", 1) },
+                arm,
                 sockets: { right: socketOn(character, "rightHand"), left: socketOn(character, "leftHand") },
                 skin: null,
                 limbs: null,

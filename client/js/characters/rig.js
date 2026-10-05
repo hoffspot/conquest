@@ -311,6 +311,73 @@ export function blendRotation(kind, side, from, to, t, target = new THREE.Quater
     return axis ? target.multiply(_q.setFromAxisAngle(axis, twist)) : target;
 }
 
+// How the reference body (MakeHuman's, as the sliders start: what every keyed pose, gait curve
+// and clip was made on) rests its thighs, shins and fingers: each one's direction in its
+// anatomical frame as the rest pose has it (the left side's; the right's mirrored: restOf). A
+// body made from other data whose own default body rests them otherwise (its HumanData's
+// landmarks.rest, as restOf measures them) is measured as though that default rested them so, so
+// an angle puts its limbs where it puts the reference body's: Vitruvian's knees rest 9°
+// straighter than MakeHuman's (measured from its own rest, they locked straight in every stride
+// and its running feet slid), its thumbs 44° to 66° from MakeHuman's and its fingers about 20°
+// (they gripped elsewhere). Each shape's own difference from its default is kept, as on
+// MakeHuman's body.
+const REST = {
+    UpLeg: [0.0056, -0.9982, 0.0602],
+    Leg: [-0.0054, -0.9983, -0.0582],
+    HandThumb1: [-0.6825, -0.3588, 0.6368],
+    HandThumb2: [-0.4978, -0.6884, 0.5275],
+    HandThumb3: [-0.5462, -0.7966, 0.259],
+    HandIndex1: [-0.2775, -0.95, 0.1429],
+    HandIndex2: [-0.4754, -0.8751, 0.0909],
+    HandIndex3: [-0.5868, -0.8051, 0.0868],
+    HandMiddle1: [-0.3403, -0.9311, -0.1316],
+    HandMiddle2: [-0.435, -0.8978, -0.069],
+    HandMiddle3: [-0.551, -0.8292, -0.0939],
+    HandRing1: [-0.3053, -0.9039, -0.2997],
+    HandRing2: [-0.4253, -0.8779, -0.2199],
+    HandRing3: [-0.5242, -0.8085, -0.2677],
+    HandPinky1: [-0.3814, -0.8317, -0.4035],
+    HandPinky2: [-0.5251, -0.7861, -0.3259],
+    HandPinky3: [-0.5103, -0.7853, -0.3505],
+};
+
+// The limbs REST lists (thighs, shins, fingers), and the turn from a body's frame for one as its
+// default rests it (`rest`: its data's landmarks.rest, if not the reference body's) to the
+// reference body's: the frame turned by the least that takes the reference body's direction
+// for the limb onto its default's (`limb`: a bone's name)
+function fromReference(frame, limb, rest) {
+    const side = limb.startsWith("Left") ? "Left" : "Right";
+    const [reference, own] = [REST, rest ?? {}].map((table) => table[limb.slice(side.length)]);
+
+    if (!reference || !own) {
+        return frame;
+    }
+
+    const mirror = side === "Left" ? 1 : -1;
+
+    return frame.clone().multiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(mirror * reference[0], reference[1], reference[2]), new THREE.Vector3(mirror * own[0], own[1], own[2])));
+}
+
+/**
+ * How a body (`rig`, fitted to its default shape, measured from its own rest: no `rest`) rests
+ * the limbs REST lists: each one's direction in its anatomical frame, the left side's, to the
+ * ten-thousandth (a body's data's landmarks.rest, scripts/build-vitruvian.js; REST is MakeHuman's).
+ */
+export function restOf(rig) {
+    const head = (name) => rig.heads[rig.index.get(name)];
+    const tail = (name) => rig.tails[rig.index.get(name)];
+    const along = { UpLeg: () => head("LeftLeg").clone().sub(head("LeftUpLeg")), Leg: () => head("LeftFoot").clone().sub(head("LeftLeg")) };
+
+    return Object.fromEntries(
+        Object.keys(REST).map((limb) => {
+            const name = `Left${limb}`;
+            const direction = (along[limb]?.() ?? tail(name).clone().sub(head(name))).normalize().applyQuaternion(rig.frames[rig.index.get(name)].clone().invert());
+
+            return [limb, direction.toArray().map((value) => Math.round(value * 1e4) / 1e4)];
+        }),
+    );
+}
+
 /** The rotation whose y axis points along `down` reversed... a frame from where two axes go. */
 function frame(yAxis, xAxis) {
     const y = yAxis.clone().normalize();
@@ -416,9 +483,13 @@ const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 /** A skeleton for the body, posed with joint rotations. */
 export class Rig {
-    /** `bones`: [{ name, parent }], parents first (from HumanData). */
-    constructor(bones) {
+    /**
+     * `bones`: [{ name, parent }], parents first (from HumanData); `rest`: how its data's default
+     * body rests its limbs, if not as the reference body's (HumanData's landmarks.rest: REST).
+     */
+    constructor(bones, rest = null) {
         this.definition = bones;
+        this.rest = rest;
         this.bones = bones.map(({ name }) => Object.assign(new THREE.Bone(), { name }));
 
         // Bones are posed by their quaternions alone, and nothing reads their Euler angles: so
@@ -475,21 +546,26 @@ export class Rig {
         this.frames.forEach((rotation) => rotation.identity());
 
         for (const side of ["Left", "Right"]) {
-            // Legs: hip to ankle straight down in the anatomical position
+            // Legs: hip to ankle straight down in the anatomical position (the thigh and shin as
+            // the reference body's rest along it, if the data's default rests them otherwise: REST)
             const leg = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), head(`${side}Foot`).clone().sub(head(`${side}UpLeg`)).normalize());
 
-            set(`${side}UpLeg`, leg);
-            set(`${side}Leg`, leg);
+            set(`${side}UpLeg`, fromReference(leg, `${side}UpLeg`, this.rest));
+            set(`${side}Leg`, fromReference(leg, `${side}Leg`, this.rest));
 
-            // Arms: hanging straight down, the elbow bending forward
+            // Arms: hanging straight down, the elbow bending forward: its hinge across the arm,
+            // level from front to back, as the reference body's lies (where its forearm, bent at
+            // rest, bends). Not from how a body's own rest bends it: Vitruvian's forearm rests all
+            // but straight, and its hinge came out 45° off, twisting every forearm and grip
             const upper = tail(`${side}Arm`).clone().sub(head(`${side}Arm`));
             const fore = tail(`${side}ForeArm`).clone().sub(head(`${side}ForeArm`));
-            const bend = new THREE.Vector3().crossVectors(upper, fore).normalize().negate();
+            const bend = new THREE.Vector3().crossVectors(upper, new THREE.Vector3(...Z)).normalize().negate();
 
             set(`${side}Arm`, frame(upper.clone().negate(), bend));
             set(`${side}ForeArm`, frame(fore.clone().negate(), bend));
 
-            // Hands: fingers down, thumb forward, palm facing the thigh
+            // Hands: fingers down, thumb forward, palm facing the thigh (each finger's bones as the
+            // reference body's rest in it, if the data's default rests them otherwise: REST)
             const hand = head(`${side}HandMiddle1`).clone().sub(head(`${side}Hand`));
             const across = head(`${side}HandIndex1`).clone().sub(head(`${side}HandPinky1`));
             const handFrame = frameYZ(hand.clone().negate(), across);
@@ -498,7 +574,7 @@ export class Rig {
 
             for (const name of this.index.keys()) {
                 if (name.startsWith(`${side}Hand`) && name !== `${side}Hand`) {
-                    set(name, handFrame);
+                    set(name, fromReference(handFrame, name, this.rest));
                 }
             }
         }
@@ -894,9 +970,11 @@ export class Rig {
         const endWorld = end.getWorldQuaternion(new THREE.Quaternion());
         const frame = this.frames[u];
         const inverse = frame.clone().invert();
-        // The limb at rest in the upper bone's anatomical frame: the upper bone, the lower
+        const lowerInverse = this.frames[l].clone().invert();
+        // The limb in the upper bone's anatomical frame with the middle joint at none: the upper
+        // bone, the lower (each from its own anatomical frame: their rest frames needn't be one)
         const thigh = this.heads[l].clone().sub(this.heads[u]).applyQuaternion(inverse);
-        const shin = this.heads[e].clone().sub(this.heads[l]).applyQuaternion(inverse);
+        const shin = this.heads[e].clone().sub(this.heads[l]).applyQuaternion(lowerInverse);
         const hinge = new THREE.Vector3(0, 1, 0).cross(pole).normalize();
 
         // The hinge's angle: |thigh + R(angle) shin| = the way to the target, R turning about the
@@ -940,7 +1018,6 @@ export class Rig {
         upper.quaternion.copy(_parentWorld.invert()).multiply(spaceRotation).multiply(turned).multiply(inverse);
         upper.updateMatrixWorld(true);
 
-        const lowerInverse = this.frames[l].clone().invert();
         const keepEnd = () => {
             lower.quaternion.copy(frame).multiply(bend).multiply(lowerInverse);
             lower.updateMatrixWorld(true);

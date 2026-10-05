@@ -174,6 +174,24 @@ as it is:
   Vitruvian's neck bone (`landmarks.neck`: 0.425 of the way up it), and `measureBody` measures
   from there. Without it a shirt's top fell to the collarbones. MakeHuman's body is also laid
   over Vitruvian's with its neck bone starting there.
+- **The shoulders.** Every pose gives its hands' places in arm lengths from the shoulder joints
+  (`Actions`), as they lie on MakeHuman's body: the poses were all made on it. Vitruvian's sit
+  further back in the body and higher up the neck (its chest and face 2 cm further forward of
+  them, its head 3 cm lower), so from them a book held before the belly went into it and a
+  tankard raised to the lips into the face. The build finds where MakeHuman's shoulders are on
+  Vitruvian's body by what's before them: moved as MakeHuman's skin there (the chest's front and
+  the face) moves from its own body onto Vitruvian's, fitted. They're 1.2 cm further out, 2.6 cm
+  lower and 2.2 cm further forward than its own, and the manifest's `landmarks.shoulder` says so
+  in arm lengths (the left's; the right's mirrored). The hands' places start from there. (Round
+  the shoulder itself, the two bodies' skin lies alike about their joints.)
+- **The hands' joints.** The wrist is found from the skin, as every joint is; the fingers' and
+  thumbs' joints from the wrist as MakeHuman's are, turned as its hand is laid onto Vitruvian's
+  and sized to it, in every shape. Found from the skin, a bigger body's fingers shrank (the
+  tallest man's index finger's middle bone went from 2.6 to 1.7 cm, where MakeHuman's grows from
+  2.3 to 2.5), its palm didn't grow, and so its grips were wrong.
+- **Its rest.** Its knees rest straighter than MakeHuman's, and its fingers and thumbs otherwise.
+  The manifest's `landmarks.rest` says how its default body rests them, and the rig measures its
+  limbs as though it rested them as MakeHuman's does (the rest frames, below).
 - **The face.** Face coordinates (`face.js`) are measured from between the eyes, and scaled by
   the eyes' spacing. The skin's features (cheeks, nose, under the eyes, brows, beard, hairline,
   ears), hair, helmets, cat folk's ears and tusks are all placed in them, as on MakeHuman's head.
@@ -714,7 +732,21 @@ standing, arms at the sides, palms facing the thighs.
   and invert...), turn about named axes, and are limited to their normal range of motion.
 - **Rest frames.** The body's rest pose is not the anatomical position: the arms are out at about
   50° with the elbows bent. So each bone knows the turn from its anatomical orientation to its
-  rest orientation, measured from the joints.
+  rest orientation, measured from the joints. Where a body's rest pose isn't the reference
+  body's (MakeHuman's, as the sliders start: every keyed pose, gait curve and clip was made on
+  it), its limbs are measured as the reference body's lie, so an angle puts every body's limb
+  where it puts that body's:
+  - **The elbow's hinge** lies across the arm, level from front to back, as the reference body's
+    does where its forearm bends at rest. Vitruvian's forearm rests all but straight (11° to
+    MakeHuman's 39°), and its hinge found from that came out 37° to 49° off, so every forearm's
+    turn and every grip was twisted about 45°.
+  - **The thighs, shins and fingers** of a body whose data's default body rests them otherwise
+    (the manifest's `landmarks.rest`, measured by the build: `restOf`) are measured as though that
+    default rested them as the reference body's does (`REST` in `rig.js`). Each shape's own
+    difference from its default is kept, as on MakeHuman's body, whose own rig is as it was.
+    Vitruvian's knees rest 9° straighter than MakeHuman's: measured from its own rest, they locked
+    straight in every stride and its running feet slid. Its thumbs rest 44° to 66° from
+    MakeHuman's and its fingers about 20°, so they gripped elsewhere.
 - **Mirroring.** The right side mirrors the left.
 - **Other rotations.** Rotations from anywhere else (IK, motion capture) are limited too. They are
   split into a twist about the bone and a swing of the bone. The swing is kept inside an ellipse

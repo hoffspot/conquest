@@ -162,7 +162,7 @@ const vector = (v, places = 2) => v.toArray().map((x) => round(x, places));
 export function referenceBody() {
     const human = readHumanData();
     const { positions, joints } = human.shape({});
-    const rig = new Rig(human.bones);
+    const rig = new Rig(human.bones, human.landmarks?.rest);
     const object = new THREE.Group();
     let height = 0;
 
