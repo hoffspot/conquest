@@ -64,7 +64,7 @@ test("builds the taverns with their names and signs, the guild, the churches of 
 });
 
 test("draws a village out in the world in its chunks, with its tavern, church, smithy and guild", async ({ page }) => {
-    await page.goto("/building-lab.html?seed=7&show=village");
+    await page.goto("/building-lab.html?seed=21&show=village");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
 
     const village = await page.evaluate(() => {
