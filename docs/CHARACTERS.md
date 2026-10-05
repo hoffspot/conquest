@@ -454,12 +454,13 @@ became 48, for about 10% more vertices (the doubled faces). Their pictures are t
 
 An item can bring a garment: a backpack brings its straps, spiked gauntlets their plate
 gauntlets. It can hide things: a helmet hides the hair above its rim. It can also set how its arm
-is carried when walking: a shield at the side, its face out, a staff or war hammer upright, a
-sword or wand lowered, a grimoire open on the palm, fists clenched, with less arm swing and a
-gripping fist. An arm swinging free is held 10° further out when something hangs at its hip (a
-scabbard, a wand in the belt) or its hand wears spiked knuckles, so it swings past them, not
-through them (`Character.clearing`); an arm carrying something, 5° further out from what hangs at
-its hip only (`Character.hung`).
+is carried when walking: a shield at the side, its face out (or slung on the back, below), a
+staff or war hammer upright, a sword or wand lowered, a grimoire open on the palm, fists clenched,
+with less arm swing and a gripping fist. An arm swinging free is held 10° further out when
+something hangs at its hip (a wand in the belt) or its hand wears spiked knuckles, and 28° past a
+sword's or cleaver's hilt hung forward of the hip, so it swings past them, not through them
+(`Character.clearing`); an arm carrying something, 5° further out from what hangs at its hip only
+(`Character.hung`).
 
 **Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
 `skullOf`: how far the head reaches behind and before its middle at each height, and how high):
@@ -507,6 +508,29 @@ holds with them (an empty hand swings and relaxes as it walks). Taking one into 
 letting it go into its sheath (`settle`), the weapon keeps where it was in the world and settles
 into its new place over a fraction of a second, the way fingers close round a grip, so the hand
 needn't meet it exactly. `sheathPose(side)` says where the weapon a hand draws is put away.
+
+**Slinging the shield** (`SLING`, an item's `sling`, `Character.sling`). With the weapons put away,
+a shield that can be slung goes on the back, hung by its strap (the guige) from the right shoulder
+across the chest (a baldric): its back to the upper back, the middle of its top 23 cm above the
+back's socket and 6.5 cm off it (10 cm more over a quiver or a pack), leaning out 0.2 radians at
+the bottom, clear of the buttocks and of the heels and arms walking and running. The left arm,
+free, then swings and rests as an empty arm does. Every shield says whether it can be slung, and a
+new one must say too (a test checks):
+
+| Shield | Slung | Why |
+| --- | --- | --- |
+| Round shield; the orcs' and the lizard folk's round shields | Yes | Carried so on the march, by the strap |
+| Kite shield; the humans' kite | Yes | The same; short enough to clear the backs of the knees |
+| The elves' leaf | Yes | Light, with a strap |
+| The cat folk's hide on a stick | No | Carried by its stick, with no strap to sling it by |
+| The dark elves' long kite | No | Spikes round its rim would gash the arms swinging past, and it'd reach past the backs of the knees |
+| A tower shield (were there one) | No | Too tall and heavy to carry on the back |
+
+`Character.sheathe(on)` slings it with the weapons (or takes it off the back), and
+`Character.slings` says whether the shield carried can be. Moving between the arm and the back,
+it swings round the left side, out of the body's way: out to the left and forward of the arm, and
+round from behind onto the back (`SLING.swing`: a curve through those two ways), turning only in
+the middle of the move, so it never passes through the body.
 
 **Swinging clear of the legs** (`Character.hang`, `hangs` in `SHEATHS`). A sword or cleaver hung
 from the belt swings about its grip, back or forward and out from the body, as little as keeps its
@@ -803,9 +827,10 @@ done with, a tenth of the way at a time and at each key, and check that:
 
 And (`test/clipping.test.js`) nothing worn or carried sinks more than 1.2 cm into the body (what
 a sleeve or surcoat over it would hide), on every people's soldiers, the folk and the heroes:
-carried standing, walking and running; a shield on guard, through every blow, cast and flinch
-and a sentry's rests; every weapon's blows and casts, and running on guard with it; every draw
-and put-away; and the folk's and heroes' rests, each stepped a frame at a time at 30 frames a
+carried standing, walking and running; a shield on guard, through every blow, cast and flinch,
+and slung on the back (or carried at the side) through a sentry's rests; every weapon's blows
+and casts, and running on guard with it; every draw and put-away, the shield taken off the back
+and slung again with them; and the folk's and heroes' rests, each stepped a frame at a time at 30 frames a
 second, as in the game. Every point along what's held is looked at (2 cm apart along its edges,
 not only its corners), against the nearest of the body's vertices (not the hand holding it or
 that hand's forearm), and it's in only if it's behind that skin, not off to one side of it.
@@ -950,6 +975,21 @@ a flourish:
 | Bow | Up over the left shoulder, the elbow leading up and forward, pulled over and swung down in front, spinning, held upright and its string plucked | Raised, turned over at the left side, out from the head, and slung back over the left shoulder |
 | Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
 | Spiked boots | Up on guard, and shadow kicks: a snap kick high in the air, the knee driven up | Standing down: the fists dropped, the shoulders and neck rolled loose |
+
+**A slung shield** (`DRAWS.sling`) is taken off the back before the weapon's drawn, and slung there
+after it's put away, each in turn (`draw` returns how long it all takes). Taking it off: the left
+hand reaches back over the left shoulder for its rim, and brings it round the left side, out and
+forward, onto the arm as it comes up on guard. Slinging it: from the guard out to the left and
+forward, then back over the left shoulder, let go there and the hand let fall. Something done
+meanwhile puts it where it was going at once, as with a weapon.
+
+With the left arm free, a sentry's rests bring the hand round a sword's or cleaver's hilt at the
+left hip, not through it: folding the arms, the hand comes up in front of the hilt first, and goes
+down the same way (`ARMED_FOLDED`); shifting the weight, the thumb is brought to the belt from in
+front and above the hilt, and hooked in it a little further forward, the upper arm off the shield
+on the back (`ARMED_SHIFTING`); looking about, the hand shading the eyes is a little lower and
+further forward, clear of a helm's brim or an orc's horns (`HELMED_LOOKING`). Other folk's rests
+keep their own ways.
 
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
 when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,

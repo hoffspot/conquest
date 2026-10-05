@@ -193,6 +193,12 @@ npm run check:motion -- --update          # keep this run's failures as the new 
      build the same world and play out the same fight.
    - The game has to run well on a phone (the budget is an iPhone 16 Pro). Anything costly to
      draw goes under the Visual quality setting's levels.
+   - A new shield (an item in `ITEMS`, `client/js/characters/equipment.js`, held on the left
+     forearm or fist) must say whether it's slung on the back once the weapons are put away:
+     `sling: true` for a round, kite or other strapped shield light and short enough, `false`
+     for one that isn't (a tower shield, one with spikes round its rim, one carried by a stick).
+     The reasons for each are kept beside `SLING` and in `docs/CHARACTERS.md`. A test fails if
+     a shield doesn't say.
 4. **Bump a version number when you change what it guards:**
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another

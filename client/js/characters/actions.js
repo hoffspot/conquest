@@ -126,6 +126,10 @@ const REACH_OUT = { at: [-0.15, -0.35, 0.75], pronate: 20, wrist: { flex: -5, de
 // (`aside`) as the sword hand comes across the body (its `at` x, `across`), out of its way
 const SHIELD = { in: [-0.38, -0.05, 0.52], out: [-0.36, -0.15, 0.6], aside: [-0.05, 0, 0.5], across: [0.1, 0.5], elbow: [0.9, -0.45, -0.1], pronate: -55, wrist: { flex: 0, deviate: 0 } };
 
+// Where the shield arm is as a shield is slung on the back or taken off it (DRAWS.sling): as on
+// guard, swung aside out to the left
+const SLUNG_FROM = { at: [0.06, -0.15, 0.48], elbow: SHIELD.elbow, pronate: SHIELD.pronate, wrist: SHIELD.wrist };
+
 // A staff or war hammer held upright out at the right side in the one hand while the other casts
 // a spell, its foot clear of the legs
 const UPRIGHT = { at: [-0.1, -0.5, 0.45], point: [0.05, 1, 0.1], pronate: 10 };
@@ -1029,6 +1033,22 @@ const BARKEEP_RESTS = [
         [1.65, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 4 }), Head: { flex: 4, bend: 0 } }]),
 ];
 
+// Arms folded with a sword or cleaver at the left hip and the left hand free (the shield slung on
+// the back): the hand brought up in front first, over the hilt, and let down the same way
+const OVER_THE_HILT = { left: { at: [-0.04, -0.52, 0.4], pronate: 30, shape: "relaxed" } };
+const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", keys: [...BARKEEP_RESTS[3].keys.slice(0, 1), [0.22, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(1, -1), [1.82, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(-1)] };
+
+// Shifting the weight with the left hand free: the thumb brought to the belt from in front, over
+// the hilt, and hooked in it a little forward of where it is unarmed, the upper arm kept off a
+// shield slung on the back
+// Looking about, a hand shading the eyes, a little lower and further forward, clear of a helm's
+// brim or horns
+const UNDER_THE_HELM = [-0.3, 0.36, 0.44];
+const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: { ...pose.left, at: UNDER_THE_HELM } }]) };
+
+const BELT_HOOK = [-0.2, -0.62, 0.28];
+const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? OVER_THE_HILT.left : { ...pose.left, at: BELT_HOOK } }]) };
+
 const BASE_RESTS = {
     barkeep: BARKEEP_RESTS,
     innkeeper: BARKEEP_RESTS.map((rest, k) => ({ ...rest, name: ["wiping the counter", "a hand to the chin", "leaning on the counter", "arms folded", "rubbing the neck"][k] })),
@@ -1224,7 +1244,7 @@ const KEYED_RESTS = {
     ruler: [renamed(WORSHIPPER[4], "hands on the knees"), renamed(WORSHIPPER[2], "gazing over the hall"), renamed(PATRON[4], "looking about the hall"), renamed(WORSHIPPER[1], "brooding"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
     steward: [renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[1], PRIEST_RESTS[2]],
     councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
-    sentry: [ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[4], renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4]],
+    sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, PRIEST_RESTS[4]],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars
@@ -1536,6 +1556,39 @@ export const DRAWS = Object.freeze({
                 [1, { left: { at: [-0.15, 0.15, -0.25], sheath: 1, elbow: [0.65, 0.75, 0] } }],
                 [1.12, { left: { at: [0.3, 0.2, 0.35], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
                 [1.35, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    // A shield slung on the back (equipment.js SLING), after the weapon's put away, and taken off
+    // it before the weapon's drawn (Actions.draw): held up as on guard and swung out to the left
+    // (SLUNG_FROM), the body turning from it, then swung on round the left side onto the back as
+    // the arm gets there (key time 1: Character.settle), and the hand let fall; and back the other
+    // way, the arm out to the left, the shield swung round from the back onto it there, and
+    // brought before the body
+    sling: {
+        draw: {
+            hitAt: 0.45,
+            duration: 1.2,
+            settle: 0.35,
+            keys: [
+                [0, EASY],
+                [0.5, { left: { at: [0.1, -0.4, 0.35], pronate: 0, shape: "relaxed", elbow: [0.9, -0.4, -0.1] }, ...spine({ turn: 6 }) }],
+                [1, { left: SLUNG_FROM, ...spine({ turn: 12 }) }],
+                [1.5, { left: { at: SHIELD.in, elbow: SHIELD.elbow, pronate: SHIELD.pronate, wrist: SHIELD.wrist }, ...spine({}) }],
+                [2, EASY],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.55,
+            duration: 1.2,
+            settle: 0.35,
+            keys: [
+                [0, EASY],
+                [0.5, { left: { at: SHIELD.in, elbow: SHIELD.elbow, pronate: SHIELD.pronate, wrist: SHIELD.wrist }, ...spine({ turn: 4 }) }],
+                [1, { left: SLUNG_FROM, ...spine({ turn: 12 }) }],
+                [1.3, { left: { at: [0.1, -0.4, 0.35], pronate: 0, shape: "relaxed", elbow: [0.9, -0.4, -0.1] }, ...spine({ turn: 6 }) }],
+                [1.6, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" }, ...spine({}) }],
                 [2, EASY],
             ],
         },
@@ -2308,24 +2361,51 @@ export class Actions {
     /**
      * Draw a weapon (`on`), or put it away: the DRAWS action for its guard (`name`), the weapon
      * moving between its sheath and the hand when the hand takes hold of it (Character.sheathe).
-     * With no action for it, it moves at once. Returns how long it takes (s), or 0.
+     * With no action for it, it moves at once. A shield slung on the back while the weapons are
+     * put away (Character.slings) is taken off it first, before the weapon's drawn, and slung
+     * there after it's put away (DRAWS.sling), each in turn. Returns how long it all takes (s),
+     * or 0.
      */
     draw(name, on = true) {
-        const how = DRAWS[name]?.[on ? "draw" : "sheathe"];
+        const sling = name !== "sling" && Boolean(this.character.slings);
+        const steps = !sling ? [name] : on ? ["sling", name] : [name, "sling"];
 
         this.#swapped();
+        this.#drawStep(steps, on, sling);
+
+        return steps.reduce((total, step) => total + (DRAWS[step]?.[on ? "draw" : "sheathe"]?.duration ?? 0), 0);
+    }
+
+    // The first of a draw's steps (draw), the rest to come after it; one with no action moving
+    // at once
+    #drawStep([name, ...then], on, sling) {
+        const how = DRAWS[name]?.[on ? "draw" : "sheathe"];
+        const shield = name === "sling";
 
         if (!how) {
-            this.character.sheathe?.(!on);
+            this.#swap(shield, !on, sling, 0);
 
-            return 0;
+            if (then.length) {
+                this.#drawStep(then, on, sling);
+            }
+
+            return;
         }
 
         const action = `${on ? "draw" : "sheathe"}:${name}`;
 
-        this.attack = { name: action, variant: 0, tracks: COMPILED.get(action)[0], start: this.time, hitAt: how.hitAt, duration: how.duration, mirror: false, swap: on ? "draw" : "sheathe", settle: how.settle };
+        this.attack = { name: action, variant: 0, tracks: COMPILED.get(action)[0], start: this.time, hitAt: how.hitAt, duration: how.duration, mirror: false, swap: on ? "draw" : "sheathe", settle: how.settle, shield, sling, then };
+    }
 
-        return how.duration;
+    // The weapons put away (`away`) or into the hand, or the shield (`shield`) slung or onto the
+    // arm, over `settle` seconds; the weapons alone with a shield that's slung in its own step
+    // (`sling`)
+    #swap(shield, away, sling, settle) {
+        if (shield) {
+            this.character.sling?.(away, { settle });
+        } else {
+            this.character.sheathe?.(away, { settle, shield: !sling });
+        }
     }
 
     /** Is a weapon being drawn or put away? */
@@ -2333,11 +2413,24 @@ export class Actions {
         return Boolean(this.attack?.swap);
     }
 
-    // A draw or sheathing cut short: the weapon ends up where it was going
-    #swapped() {
+    // A draw or sheathing's step at the moment it moves (`rest`: false), or cut short: the weapon
+    // ends up where it was going, and so does all that was still to be done after it
+    #swapped({ rest = true } = {}) {
         if (this.attack?.swap && !this.attack.swapped) {
+            const { swap, shield = false, sling = false, settle = SETTLE } = this.attack;
+
             this.attack.swapped = true;
-            this.character.sheathe?.(this.attack.swap === "sheathe", { settle: this.attack.settle ?? SETTLE });
+            this.#swap(shield, swap === "sheathe", sling, settle);
+        }
+
+        if (rest && this.attack?.then?.length) {
+            const { swap, then, sling } = this.attack;
+
+            for (const step of then) {
+                this.#swap(step === "sling", swap === "sheathe", sling, SETTLE);
+            }
+
+            this.attack.then = [];
         }
     }
 
@@ -2479,7 +2572,7 @@ export class Actions {
 
         // (Drawing a weapon or putting it away, it moves when the hand takes hold of it)
         if (this.attack?.swap && this.time - this.attack.start >= this.attack.hitAt) {
-            this.#swapped();
+            this.#swapped({ rest: false });
         }
 
         if (this.attack) {
@@ -2488,7 +2581,14 @@ export class Actions {
             const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
             if (elapsed >= duration || easing <= 0) {
+                const { then = [], swap, sling } = this.attack;
+
                 this.attack = null;
+
+                // (The next of a draw's steps: a shield slung after the weapon's put away)
+                if (then.length && easing > 0) {
+                    this.#drawStep(then, swap === "draw", sling);
+                }
             } else {
                 // Key time: 0 to 1 until the blow lands, 1 to 2 after (a held pose: always there)
                 const key = this.attack.held ? 1 : elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
@@ -2687,7 +2787,8 @@ export class Actions {
         const hands = {};
         // (A shield on the left forearm: held up in a fight; resting, carried as it is, the left
         // arm left out of the rest)
-        const shielded = SHIELD_SOCKETS.has(ITEMS[this.character.equipment?.get("offHand")]?.socket);
+        // (not slung on the back, nor being slung or taken off it: the arm does that as its keys say)
+        const shielded = SHIELD_SOCKETS.has(ITEMS[this.character.equipment?.get("offHand")]?.socket) && !this.character.slung && !this.attack?.shield;
         const carried = shielded && rest;
         let shieldHand = null;
 
