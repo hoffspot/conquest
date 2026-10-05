@@ -23,7 +23,14 @@
 
 import * as THREE from "three";
 import { amplitude, CURVES, curveAt, PELVIC_TILT, RUN_CURVES, RUN_STANCE, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "./gait.js";
-import { jointAngles } from "./rig.js";
+import { jointAngles, limitRotation } from "./rig.js";
+
+/**
+ * What an overlay (Walker.overlay) says when the feet are to be planted only where it plants
+ * them (a fall's clip: those it frees, Walker.freed, follow its legs), not shuffled round under
+ * the body as a turned body's are.
+ */
+export const STEPPED = "stepped";
 
 /** How a character walks (all angles in degrees). */
 export const WALK_STYLES = Object.freeze({
@@ -62,12 +69,16 @@ const REACH = 0.985;
 const LET_GO = 5;
 
 // Knees bend forward (in the thigh's anatomical frame)
-const KNEE = new THREE.Vector3(0, 0, 1);
+export const KNEE = new THREE.Vector3(0, 0, 1);
 
 // How far the shin bends over a planted foot standing (degrees of the ankle's dorsiflexion: its
 // range's 20, less a little) before the heel lifts, up onto the ball of the foot
 const DORSIFLEXION = 19;
 const RISES = 4;
+
+// How far past its range a hip may be turned keeping a foot planted where a fall plants it, before
+// the foot's let go of (degrees)
+const HIP_GIVE = 2;
 
 // How far short of the most a leg's let reach the knees give, leaning over a planted foot (m)
 const GIVE_SPARE = 0.001;
@@ -91,6 +102,8 @@ const _under = new THREE.Vector3();
 const _turn = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _ankle = new THREE.Quaternion();
+const _hipTurn = new THREE.Quaternion();
+const _hipHeld = new THREE.Quaternion();
 const _lift = new THREE.Quaternion();
 const _footTurn = new THREE.Quaternion();
 const _ball = new THREE.Vector3();
@@ -286,11 +299,14 @@ export class Walker {
 
         // Anything layered over the walk (an attack, a flinch, a fall; told how far into its
         // stride the walk is) changes the joints now. It
-        // says false when the feet shouldn't be kept on the ground (falling down)
+        // says false when the feet shouldn't be kept on the ground (down on it, falling), STEPPED
+        // when they're kept only where it plants them
         this.stance.offset.copy(rig.offset);
         this.stance.turn.copy(rig.rotations[0]);
 
         const planted = this.overlay?.(dt, s) ?? true;
+
+        this.stepped = planted === STEPPED;
 
         rig.apply();
         this.character.object.updateMatrixWorld(true);
@@ -607,7 +623,7 @@ export class Walker {
         // has it (moved back and turned back from where what's layered over the walk put it)
         const other = SIDES[1 - i];
 
-        if (foot.planted && s === 0 && dt > 0 && !(this.freed?.(other) > 0)) {
+        if (foot.planted && s === 0 && dt > 0 && !this.stepped && !(this.freed?.(other) > 0)) {
             const { rig, stance } = this;
             const space = rig.root.parent ?? rig.root;
             const hips = _hips.copy(rig.heads[0]);
@@ -691,6 +707,13 @@ export class Walker {
         object.worldToLocal(_target);
         this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
 
+        // (Planted only where a fall's clip plants it, a foot its hip can't keep it at within its
+        // range is let go of, the hip held to its range: it goes with the body as it falls, and
+        // is planted again where it's got to)
+        if (this.stepped && foot.planted && this.#holdHip(side) > HIP_GIVE) {
+            foot.planted = false;
+        }
+
         // Standing, crouched lower than the ankle bends: up onto the ball of the foot, the heel
         // lifted, rather than the shin bent further over it (a few times: the shin tips as the
         // ankle rises)
@@ -704,6 +727,29 @@ export class Walker {
     // Lift a planted foot's heel (turning it about the ball, which stays where it is) as far as
     // keeps its ankle within DORSIFLEXION, the leg reached again to the ankle there. Whether it
     // was lifted
+    // Hold a hip (`side`'s) within its range, the leg below going with it; returns how far past
+    // its range it was (degrees)
+    #holdHip(side) {
+        const rig = this.rig;
+        const b = rig.index.get(`${side}UpLeg`);
+        const bone = rig.bones[b];
+        const parent = rig.frames[rig.definition[b].parent];
+        const { kind, side: s } = rig.joints[b];
+
+        _hipTurn.copy(parent).invert().multiply(bone.quaternion).multiply(rig.frames[b]);
+        _hipHeld.copy(_hipTurn);
+        limitRotation(kind, s, _hipHeld);
+
+        const over = (_hipTurn.angleTo(_hipHeld) * 180) / Math.PI;
+
+        if (over > HIP_GIVE) {
+            bone.quaternion.copy(parent).multiply(_hipHeld).multiply(_hipTurn.copy(rig.frames[b]).invert());
+            bone.updateMatrixWorld(true);
+        }
+
+        return over;
+    }
+
     #rise(side, i) {
         const rig = this.rig;
         const b = rig.index.get(`${side}Foot`);

@@ -492,8 +492,9 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         const fallen = orc.dead ? orc : player;
         const standing = orc.dead ? player : orc;
 
-        // Down, bleeding (and nobody else hurting the one left standing)
-        game.advance(2.5);
+        // Down, bleeding (and nobody else hurting the one left standing): the slowest fall, onto
+        // the knees and over, hits the ground 3.7 s after the blow, and the player's back 5 s after
+        game.advance(4.2);
 
         const pool = game.pools.get(fallen.id)?.spot;
         const arrows = game.wounds.get(fallen.id).list.map((wound) => wound.arrow).filter(Boolean);

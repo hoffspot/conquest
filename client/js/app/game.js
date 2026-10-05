@@ -132,7 +132,8 @@ export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? nul
 // clenched
 const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null] };
 
-// How long the dead lie before sinking out of sight (s), and how long they take to sink
+// How long the dead lie once they've hit the ground before sinking out of sight (s), and how long
+// they take to sink
 const LIE_STILL = 4;
 const SINK = 1.5;
 
@@ -145,7 +146,7 @@ const FOCUS_EASE = 6;
 // How far the camera's eased height may lag under the ground the player's climbing (metres)
 const FOCUS_LAG = 0.2;
 
-// How long the shadow under someone takes to fade once they've fallen (s): they lie flat
+// How long the shadow under someone takes to fade once they've hit the ground (s): they lie flat
 const CONTACT_FADES = 0.6;
 
 // A tap that moves less than this (pixels) is a tap, not a drag
@@ -2218,7 +2219,7 @@ export class Game {
         const { x, z } = avatar.object.position;
         const tall = avatar.character.height;
         const risen = Math.exp(-(avatar.lift ?? 0) / (tall * 0.4));
-        const dying = actor.dead ? Math.max(0, 1 - (avatar.deadFor ?? 0) / CONTACT_FADES) : 1;
+        const dying = actor.dead ? Math.max(0, 1 - Math.max(0, (avatar.deadFor ?? 0) - (avatar.lands ?? 0)) / CONTACT_FADES) : 1;
         const seen = this.battle.buffOf(actor, "invisibility") ? 0.22 : 1;
 
         this.contacts.add(x, actor.dead ? (avatar.ground ?? 0) : (avatar.standing ?? 0), z, tall, risen * dying * seen);
@@ -2255,7 +2256,7 @@ export class Game {
 
         avatar.deadFor = (avatar.deadFor ?? 0) + dt;
 
-        const sinking = Math.max(0, avatar.deadFor - LIE_STILL) / SINK;
+        const sinking = Math.max(0, avatar.deadFor - (avatar.lands ?? 0) - LIE_STILL) / SINK;
 
         avatar.ground = ground;
         object.position.y = ground - 0.5 * Math.min(1, sinking);
@@ -4611,9 +4612,10 @@ export class Game {
                     // battle lets them act again
                     const by = event.by ? this.avatars.get(event.by) : null;
 
-                    avatar.actions.knockdown?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0, seconds: (event.until - battle.time) / 1000 });
+                    const lands = avatar.actions.knockdown?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0, seconds: (event.until - battle.time) / 1000 }) ?? FALL_LANDS;
+
                     hud.damage(this.#screenAbove(event.id), "Knocked down", { kind: "stun" });
-                    this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS / 1.35 });
+                    this.sound?.play("fall", { at: avatar.object.position, delay: lands });
 
                     if (event.id === this.me) {
                         hud.message("Knocked off your feet!", 1.2);
@@ -4631,14 +4633,15 @@ export class Game {
                 case "death": {
                     const killer = event.by ? this.avatars.get(event.by) : null;
 
-                    avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 });
+                    // (Falling as they do, they hit the ground so long after: `lands`)
+                    avatar.lands = avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 }) ?? FALL_LANDS;
                     avatar.deadFor = 0;
                     effects.clearDaze(avatar.object);
-                    this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
+                    this.sound?.play("fall", { at: avatar.object.position, delay: avatar.lands });
 
                     // Blood pools under their chest once they're down
                     if (this.#bleeds(battle.actor(event.id))) {
-                        this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+                        this.pools.set(event.id, { left: avatar.lands + 0.2, spot: null });
                     }
 
                     if (event.id === this.me) {
@@ -4646,7 +4649,7 @@ export class Game {
                         this.sound?.play("fallen");
                     } else {
                         hud.message(`The ${battle.actor(event.id).name.toLowerCase()} is slain!`, 3);
-                        this.sound?.play("slain", { delay: FALL_LANDS });
+                        this.sound?.play("slain", { delay: avatar.lands });
                     }
 
                     this.onDeath(event);

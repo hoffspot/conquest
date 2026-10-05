@@ -3416,278 +3416,760 @@
   "draw/wand|orc-shortest-f": {
    "item": 0.0121
   },
+  "fall/dead-forward|cat-bulkiest-f": {
+   "joint": 5.49
+  },
+  "fall/dead-forward|cat-bulkiest-m": {
+   "joint": 6.26
+  },
+  "fall/dead-forward|cat-shortest-f": {
+   "joint": 5.87
+  },
+  "fall/dead-forward|cat-tallest-m": {
+   "joint": 6.09
+  },
+  "fall/dead-forward|cat-thinnest-f": {
+   "joint": 5.65
+  },
+  "fall/dead-forward|darkElf-bulkiest-f": {
+   "joint": 4.65,
+   "item": 0.0197
+  },
+  "fall/dead-forward|darkElf-bulkiest-m": {
+   "joint": 5.51,
+   "item": 0.0124
+  },
+  "fall/dead-forward|darkElf-shortest-f": {
+   "joint": 4.79,
+   "item": 0.016
+  },
+  "fall/dead-forward|darkElf-tallest-m": {
+   "joint": 5.5
+  },
+  "fall/dead-forward|darkElf-thinnest-f": {
+   "joint": 4.81,
+   "item": 0.0217
+  },
+  "fall/dead-forward|elf-bulkiest-f": {
+   "joint": 4.69
+  },
+  "fall/dead-forward|elf-bulkiest-m": {
+   "joint": 5.51
+  },
+  "fall/dead-forward|elf-shortest-f": {
+   "joint": 4.8
+  },
+  "fall/dead-forward|elf-tallest-m": {
+   "joint": 5.48
+  },
+  "fall/dead-forward|elf-thinnest-f": {
+   "joint": 4.81
+  },
+  "fall/dead-forward|human-bulkiest-f": {
+   "joint": 5.74
+  },
+  "fall/dead-forward|human-bulkiest-m": {
+   "joint": 6.69,
+   "item": 0.013
+  },
+  "fall/dead-forward|human-shortest-f": {
+   "joint": 6.22
+  },
+  "fall/dead-forward|human-tallest-m": {
+   "joint": 6.41
+  },
+  "fall/dead-forward|human-thinnest-f": {
+   "joint": 6.13
+  },
+  "fall/dead-forward|lizard-bulkiest-f": {
+   "joint": 5.8
+  },
+  "fall/dead-forward|lizard-bulkiest-m": {
+   "joint": 6.61
+  },
+  "fall/dead-forward|lizard-shortest-f": {
+   "joint": 5.91
+  },
+  "fall/dead-forward|lizard-tallest-m": {
+   "joint": 6.45
+  },
+  "fall/dead-forward|lizard-thinnest-f": {
+   "joint": 5.79
+  },
   "fall/dead-from-behind|cat-bulkiest-f": {
-   "ground": 0.3421
+   "joint": 5.49
   },
   "fall/dead-from-behind|cat-bulkiest-m": {
-   "ground": 0.4084
+   "joint": 6.3
   },
   "fall/dead-from-behind|cat-shortest-f": {
-   "ground": 0.3252
+   "joint": 5.87
   },
   "fall/dead-from-behind|cat-tallest-m": {
-   "ground": 0.4512
+   "joint": 6.13
   },
   "fall/dead-from-behind|cat-thinnest-f": {
-   "ground": 0.3429
+   "joint": 5.65
   },
   "fall/dead-from-behind|darkElf-bulkiest-f": {
-   "ground": 0.4381
+   "joint": 4.65,
+   "item": 0.019
   },
   "fall/dead-from-behind|darkElf-bulkiest-m": {
-   "ground": 0.5116
+   "joint": 5.54
   },
   "fall/dead-from-behind|darkElf-shortest-f": {
-   "ground": 0.4076
+   "joint": 4.79,
+   "item": 0.0247
   },
   "fall/dead-from-behind|darkElf-tallest-m": {
-   "ground": 0.5474
+   "joint": 5.53
   },
   "fall/dead-from-behind|darkElf-thinnest-f": {
-   "ground": 0.4421
+   "joint": 4.81,
+   "item": 0.0208
   },
   "fall/dead-from-behind|elf-bulkiest-f": {
-   "ground": 0.45
+   "joint": 4.69,
+   "item": 0.012
   },
   "fall/dead-from-behind|elf-bulkiest-m": {
-   "ground": 0.522
+   "joint": 5.54
   },
   "fall/dead-from-behind|elf-shortest-f": {
-   "ground": 0.4169
+   "joint": 4.8
   },
   "fall/dead-from-behind|elf-tallest-m": {
-   "ground": 0.56
+   "joint": 5.51
   },
   "fall/dead-from-behind|elf-thinnest-f": {
-   "ground": 0.4514
+   "joint": 4.81
   },
   "fall/dead-from-behind|human-bulkiest-f": {
-   "ground": 0.3355
+   "joint": 5.74
   },
   "fall/dead-from-behind|human-bulkiest-m": {
-   "ground": 0.3892
+   "joint": 6.73,
+   "item": 0.027
   },
   "fall/dead-from-behind|human-shortest-f": {
-   "ground": 0.313
+   "joint": 6.22
   },
   "fall/dead-from-behind|human-tallest-m": {
-   "ground": 0.4444
+   "joint": 6.45,
+   "item": 0.0163
   },
   "fall/dead-from-behind|human-thinnest-f": {
-   "ground": 0.336
+   "joint": 6.13
   },
   "fall/dead-from-behind|lizard-bulkiest-f": {
-   "ground": 0.3519
+   "joint": 5.8
   },
   "fall/dead-from-behind|lizard-bulkiest-m": {
-   "ground": 0.428
+   "joint": 6.65
   },
   "fall/dead-from-behind|lizard-shortest-f": {
-   "ground": 0.331
+   "joint": 5.91
   },
   "fall/dead-from-behind|lizard-tallest-m": {
-   "ground": 0.4657
+   "joint": 6.49
   },
   "fall/dead-from-behind|lizard-thinnest-f": {
-   "ground": 0.3519
+   "joint": 5.79
   },
   "fall/dead-from-behind|orc-bulkiest-f": {
-   "ground": 0.4
-  },
-  "fall/dead-from-behind|orc-bulkiest-m": {
-   "ground": 0.479
+   "item": 0.0389
   },
   "fall/dead-from-behind|orc-shortest-f": {
-   "ground": 0.36
-  },
-  "fall/dead-from-behind|orc-tallest-m": {
-   "ground": 0.52
+   "item": 0.0189
   },
   "fall/dead-from-behind|orc-thinnest-f": {
-   "ground": 0.4009
+   "item": 0.0233
+  },
+  "fall/dead-mirrored|cat-bulkiest-f": {
+   "joint": 16.04,
+   "ground": 0.0143,
+   "item": 0.0228
+  },
+  "fall/dead-mirrored|cat-bulkiest-m": {
+   "joint": 15.14,
+   "ground": 0.0222
+  },
+  "fall/dead-mirrored|cat-shortest-f": {
+   "joint": 16.21,
+   "ground": 0.0172,
+   "item": 0.0197
+  },
+  "fall/dead-mirrored|cat-tallest-m": {
+   "joint": 16,
+   "ground": 0.0242,
+   "item": 0.0176
+  },
+  "fall/dead-mirrored|cat-thinnest-f": {
+   "joint": 16.15,
+   "ground": 0.0152,
+   "item": 0.0166
+  },
+  "fall/dead-mirrored|darkElf-bulkiest-f": {
+   "joint": 16.86,
+   "ground": 0.0123,
+   "item": 0.0779
+  },
+  "fall/dead-mirrored|darkElf-bulkiest-m": {
+   "joint": 16.62,
+   "ground": 0.026,
+   "item": 0.0544
+  },
+  "fall/dead-mirrored|darkElf-shortest-f": {
+   "joint": 16.81,
+   "ground": 0.011,
+   "item": 0.0737
+  },
+  "fall/dead-mirrored|darkElf-tallest-m": {
+   "joint": 16.82,
+   "ground": 0.0277,
+   "item": 0.058
+  },
+  "fall/dead-mirrored|darkElf-thinnest-f": {
+   "joint": 16.98,
+   "ground": 0.0124,
+   "item": 0.0723
+  },
+  "fall/dead-mirrored|elf-bulkiest-f": {
+   "joint": 16.93,
+   "ground": 0.0128
+  },
+  "fall/dead-mirrored|elf-bulkiest-m": {
+   "joint": 16.79,
+   "ground": 0.0266
+  },
+  "fall/dead-mirrored|elf-shortest-f": {
+   "joint": 16.87,
+   "ground": 0.0114
+  },
+  "fall/dead-mirrored|elf-tallest-m": {
+   "joint": 16.98,
+   "ground": 0.0284
+  },
+  "fall/dead-mirrored|elf-thinnest-f": {
+   "joint": 17.03,
+   "ground": 0.0128
+  },
+  "fall/dead-mirrored|human-bulkiest-f": {
+   "joint": 16.02,
+   "ground": 0.0155
+  },
+  "fall/dead-mirrored|human-bulkiest-m": {
+   "joint": 15.35,
+   "ground": 0.0223
+  },
+  "fall/dead-mirrored|human-shortest-f": {
+   "joint": 17.38,
+   "ground": 0.0187
+  },
+  "fall/dead-mirrored|human-tallest-m": {
+   "joint": 16.1,
+   "ground": 0.0244,
+   "item": 0.0321
+  },
+  "fall/dead-mirrored|human-thinnest-f": {
+   "joint": 16.2,
+   "ground": 0.0172
+  },
+  "fall/dead-mirrored|lizard-bulkiest-f": {
+   "joint": 15.96,
+   "ground": 0.0143
+  },
+  "fall/dead-mirrored|lizard-bulkiest-m": {
+   "joint": 15.74,
+   "ground": 0.0235
+  },
+  "fall/dead-mirrored|lizard-shortest-f": {
+   "joint": 15.83,
+   "ground": 0.0158
+  },
+  "fall/dead-mirrored|lizard-tallest-m": {
+   "joint": 15.94,
+   "ground": 0.0252
+  },
+  "fall/dead-mirrored|lizard-thinnest-f": {
+   "joint": 15.9,
+   "ground": 0.0138
+  },
+  "fall/dead-mirrored|orc-bulkiest-f": {
+   "joint": 15.59,
+   "ground": 0.0187
+  },
+  "fall/dead-mirrored|orc-bulkiest-m": {
+   "joint": 10.05,
+   "ground": 0.0281,
+   "item": 0.0344
+  },
+  "fall/dead-mirrored|orc-shortest-f": {
+   "joint": 12.6,
+   "ground": 0.0127
+  },
+  "fall/dead-mirrored|orc-tallest-m": {
+   "joint": 13.24,
+   "ground": 0.0286,
+   "item": 0.0312
+  },
+  "fall/dead-mirrored|orc-thinnest-f": {
+   "joint": 15.63,
+   "ground": 0.0188,
+   "item": 0.0135
   },
   "fall/dead|cat-bulkiest-f": {
-   "ground": 0.2161
+   "joint": 15.85,
+   "ground": 0.0146,
+   "item": 0.0218
   },
   "fall/dead|cat-bulkiest-m": {
-   "ground": 0.2622
+   "joint": 15.28,
+   "ground": 0.0091
   },
   "fall/dead|cat-shortest-f": {
-   "ground": 0.2108
+   "joint": 16.37,
+   "ground": 0.0175,
+   "item": 0.0189
   },
   "fall/dead|cat-tallest-m": {
-   "ground": 0.2797
+   "joint": 16.07,
+   "ground": 0.016,
+   "item": 0.0172
   },
   "fall/dead|cat-thinnest-f": {
-   "ground": 0.2158
-  },
-  "fall/dead|darkElf-bulkiest-f": {
-   "ground": 0.2589
-  },
-  "fall/dead|darkElf-bulkiest-m": {
-   "ground": 0.3053
-  },
-  "fall/dead|darkElf-shortest-f": {
-   "ground": 0.246
-  },
-  "fall/dead|darkElf-tallest-m": {
-   "ground": 0.32
-  },
-  "fall/dead|darkElf-thinnest-f": {
-   "ground": 0.2595
-  },
-  "fall/dead|elf-bulkiest-f": {
-   "ground": 0.2631
-  },
-  "fall/dead|elf-bulkiest-m": {
-   "ground": 0.3075
-  },
-  "fall/dead|elf-shortest-f": {
-   "ground": 0.2492
-  },
-  "fall/dead|elf-tallest-m": {
-   "ground": 0.3231
-  },
-  "fall/dead|elf-thinnest-f": {
-   "ground": 0.2627
-  },
-  "fall/dead|human-bulkiest-f": {
-   "ground": 0.2104
-  },
-  "fall/dead|human-bulkiest-m": {
-   "ground": 0.2507
-  },
-  "fall/dead|human-shortest-f": {
-   "ground": 0.2041
-  },
-  "fall/dead|human-tallest-m": {
-   "ground": 0.2719
-  },
-  "fall/dead|human-thinnest-f": {
-   "ground": 0.2105
-  },
-  "fall/dead|lizard-bulkiest-f": {
-   "ground": 0.2163
-  },
-  "fall/dead|lizard-bulkiest-m": {
-   "ground": 0.2664
-  },
-  "fall/dead|lizard-shortest-f": {
-   "ground": 0.2085
-  },
-  "fall/dead|lizard-tallest-m": {
-   "ground": 0.2817
-  },
-  "fall/dead|lizard-thinnest-f": {
-   "ground": 0.2171
-  },
-  "fall/dead|orc-bulkiest-f": {
-   "ground": 0.2363
-  },
-  "fall/dead|orc-bulkiest-m": {
-   "ground": 0.2916
-  },
-  "fall/dead|orc-shortest-f": {
-   "ground": 0.2201
-  },
-  "fall/dead|orc-tallest-m": {
-   "ground": 0.307
-  },
-  "fall/dead|orc-thinnest-f": {
-   "ground": 0.2368
-  },
-  "fall/knocked-down|cat-bulkiest-f": {
-   "ground": 0.2159
-  },
-  "fall/knocked-down|cat-bulkiest-m": {
-   "ground": 0.2623
-  },
-  "fall/knocked-down|cat-shortest-f": {
-   "ground": 0.2106
-  },
-  "fall/knocked-down|cat-tallest-m": {
-   "ground": 0.2799
-  },
-  "fall/knocked-down|cat-thinnest-f": {
-   "ground": 0.2155
-  },
-  "fall/knocked-down|darkElf-bulkiest-f": {
-   "ground": 0.2596,
-   "item": 0.0134
-  },
-  "fall/knocked-down|darkElf-bulkiest-m": {
-   "ground": 0.3061
-  },
-  "fall/knocked-down|darkElf-shortest-f": {
-   "ground": 0.2466,
-   "item": 0.0128
-  },
-  "fall/knocked-down|darkElf-tallest-m": {
-   "ground": 0.3208
-  },
-  "fall/knocked-down|darkElf-thinnest-f": {
-   "ground": 0.2601,
+   "joint": 15.97,
+   "ground": 0.0155,
    "item": 0.0157
   },
+  "fall/dead|darkElf-bulkiest-f": {
+   "joint": 16.69,
+   "ground": 0.0093,
+   "item": 0.0342
+  },
+  "fall/dead|darkElf-bulkiest-m": {
+   "joint": 16.69,
+   "ground": 0.0149,
+   "item": 0.0305
+  },
+  "fall/dead|darkElf-shortest-f": {
+   "joint": 16.65,
+   "ground": 0.0112,
+   "item": 0.0292
+  },
+  "fall/dead|darkElf-tallest-m": {
+   "joint": 16.88,
+   "ground": 0.0134,
+   "item": 0.0286
+  },
+  "fall/dead|darkElf-thinnest-f": {
+   "joint": 16.82,
+   "ground": 0.0093,
+   "item": 0.0359
+  },
+  "fall/dead|elf-bulkiest-f": {
+   "joint": 16.77,
+   "ground": 0.0095
+  },
+  "fall/dead|elf-bulkiest-m": {
+   "joint": 16.86,
+   "ground": 0.0137
+  },
+  "fall/dead|elf-shortest-f": {
+   "joint": 16.71,
+   "ground": 0.0106
+  },
+  "fall/dead|elf-tallest-m": {
+   "joint": 17.03,
+   "ground": 0.0119
+  },
+  "fall/dead|elf-thinnest-f": {
+   "joint": 16.87,
+   "ground": 0.0094
+  },
+  "fall/dead|human-bulkiest-f": {
+   "joint": 15.83,
+   "ground": 0.0158
+  },
+  "fall/dead|human-bulkiest-m": {
+   "joint": 15.22,
+   "ground": 0.0105,
+   "item": 0.0267
+  },
+  "fall/dead|human-shortest-f": {
+   "joint": 17.53,
+   "ground": 0.019
+  },
+  "fall/dead|human-tallest-m": {
+   "joint": 16.16,
+   "ground": 0.0174
+  },
+  "fall/dead|human-thinnest-f": {
+   "joint": 16.04,
+   "ground": 0.0174,
+   "item": 0.0186
+  },
+  "fall/dead|lizard-bulkiest-f": {
+   "joint": 15.78,
+   "ground": 0.0146
+  },
+  "fall/dead|lizard-bulkiest-m": {
+   "joint": 15.79,
+   "ground": 0.0177
+  },
+  "fall/dead|lizard-shortest-f": {
+   "joint": 15.64,
+   "ground": 0.0161
+  },
+  "fall/dead|lizard-tallest-m": {
+   "joint": 16.02,
+   "ground": 0.0155
+  },
+  "fall/dead|lizard-thinnest-f": {
+   "joint": 15.72,
+   "ground": 0.0141
+  },
+  "fall/dead|orc-bulkiest-f": {
+   "joint": 15.6,
+   "ground": 0.0188
+  },
+  "fall/dead|orc-bulkiest-m": {
+   "joint": 10.03,
+   "ground": 0.0124,
+   "item": 0.0197
+  },
+  "fall/dead|orc-shortest-f": {
+   "joint": 12.51,
+   "ground": 0.0126,
+   "item": 0.0126
+  },
+  "fall/dead|orc-tallest-m": {
+   "joint": 13.24,
+   "ground": 0.0187,
+   "item": 0.0197
+  },
+  "fall/dead|orc-thinnest-f": {
+   "joint": 15.64,
+   "ground": 0.0189
+  },
+  "fall/knocked-down-briefly|cat-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.0063,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|cat-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0074,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|cat-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.0061,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|cat-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.0068,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|cat-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.0062,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|darkElf-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.007,
+   "slide": 0.0533,
+   "item": 0.0673
+  },
+  "fall/knocked-down-briefly|darkElf-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0073,
+   "slide": 0.0773,
+   "item": 0.0418
+  },
+  "fall/knocked-down-briefly|darkElf-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.0065,
+   "slide": 0.0533,
+   "item": 0.0798
+  },
+  "fall/knocked-down-briefly|darkElf-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.008,
+   "slide": 0.0799,
+   "item": 0.0357
+  },
+  "fall/knocked-down-briefly|darkElf-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.0069,
+   "slide": 0.0533,
+   "item": 0.0604
+  },
+  "fall/knocked-down-briefly|elf-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.0071,
+   "slide": 0.0732
+  },
+  "fall/knocked-down-briefly|elf-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0075,
+   "slide": 0.0799
+  },
+  "fall/knocked-down-briefly|elf-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.0066,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|elf-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.0082,
+   "slide": 0.0999
+  },
+  "fall/knocked-down-briefly|elf-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.007,
+   "slide": 0.0731
+  },
+  "fall/knocked-down-briefly|human-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.0062,
+   "slide": 0.0533,
+   "item": 0.0141
+  },
+  "fall/knocked-down-briefly|human-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0077,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|human-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.006,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|human-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.0068,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|human-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.0061,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|lizard-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.0064,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|lizard-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0065,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|lizard-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.0062,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|lizard-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.0071,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|lizard-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.0065,
+   "slide": 0.0533
+  },
+  "fall/knocked-down-briefly|orc-bulkiest-f": {
+   "joint": 5.54,
+   "ground": 0.0073,
+   "slide": 0.1067
+  },
+  "fall/knocked-down-briefly|orc-bulkiest-m": {
+   "joint": 5.54,
+   "ground": 0.0089,
+   "slide": 0.1067
+  },
+  "fall/knocked-down-briefly|orc-shortest-f": {
+   "joint": 5.54,
+   "ground": 0.0068,
+   "slide": 0.1321
+  },
+  "fall/knocked-down-briefly|orc-tallest-m": {
+   "joint": 5.54,
+   "ground": 0.0091,
+   "slide": 0.1067
+  },
+  "fall/knocked-down-briefly|orc-thinnest-f": {
+   "joint": 5.54,
+   "ground": 0.0073,
+   "slide": 0.1067
+  },
+  "fall/knocked-down|cat-bulkiest-f": {
+   "joint": 5.09,
+   "ground": 0.012,
+   "slide": 0.0533
+  },
+  "fall/knocked-down|cat-bulkiest-m": {
+   "joint": 5.09,
+   "ground": 0.0212,
+   "slide": 0.08
+  },
+  "fall/knocked-down|cat-shortest-f": {
+   "joint": 5.09,
+   "ground": 0.0116,
+   "slide": 0.0533
+  },
+  "fall/knocked-down|cat-tallest-m": {
+   "joint": 5.09,
+   "ground": 0.0232,
+   "slide": 0.08
+  },
+  "fall/knocked-down|cat-thinnest-f": {
+   "joint": 5.09,
+   "ground": 0.0119,
+   "slide": 0.0533
+  },
+  "fall/knocked-down|darkElf-bulkiest-f": {
+   "joint": 5.09,
+   "ground": 0.0143,
+   "slide": 0.0767,
+   "item": 0.0629
+  },
+  "fall/knocked-down|darkElf-bulkiest-m": {
+   "joint": 5.09,
+   "ground": 0.0249,
+   "slide": 0.08,
+   "item": 0.0525
+  },
+  "fall/knocked-down|darkElf-shortest-f": {
+   "joint": 5.09,
+   "ground": 0.0131,
+   "slide": 0.0736,
+   "item": 0.08
+  },
+  "fall/knocked-down|darkElf-tallest-m": {
+   "joint": 5.09,
+   "ground": 0.0266,
+   "slide": 0.08,
+   "item": 0.0519
+  },
+  "fall/knocked-down|darkElf-thinnest-f": {
+   "joint": 5.09,
+   "ground": 0.0143,
+   "slide": 0.0781,
+   "item": 0.0589
+  },
   "fall/knocked-down|elf-bulkiest-f": {
-   "ground": 0.2638
+   "joint": 5.09,
+   "ground": 0.0148,
+   "slide": 0.0785
   },
   "fall/knocked-down|elf-bulkiest-m": {
-   "ground": 0.3082
+   "joint": 5.09,
+   "ground": 0.0252,
+   "slide": 0.08
   },
   "fall/knocked-down|elf-shortest-f": {
-   "ground": 0.2498
+   "joint": 5.09,
+   "ground": 0.0134,
+   "slide": 0.0747
   },
   "fall/knocked-down|elf-tallest-m": {
-   "ground": 0.3238
+   "joint": 5.09,
+   "ground": 0.0271,
+   "slide": 0.0805
   },
   "fall/knocked-down|elf-thinnest-f": {
-   "ground": 0.2633
+   "joint": 5.09,
+   "ground": 0.0147,
+   "slide": 0.0793
   },
   "fall/knocked-down|human-bulkiest-f": {
-   "ground": 0.2099
+   "joint": 5.09,
+   "ground": 0.0119,
+   "slide": 0.0533,
+   "item": 0.0199
   },
   "fall/knocked-down|human-bulkiest-m": {
-   "ground": 0.2505
+   "joint": 5.09,
+   "ground": 0.0206,
+   "slide": 0.0782
   },
   "fall/knocked-down|human-shortest-f": {
-   "ground": 0.2036
+   "joint": 5.09,
+   "ground": 0.0115,
+   "slide": 0.0533
   },
   "fall/knocked-down|human-tallest-m": {
-   "ground": 0.2716
+   "joint": 5.09,
+   "ground": 0.0231,
+   "slide": 0.08,
+   "item": 0.019
   },
   "fall/knocked-down|human-thinnest-f": {
-   "ground": 0.2099
+   "joint": 5.09,
+   "ground": 0.0119,
+   "slide": 0.0533
   },
   "fall/knocked-down|lizard-bulkiest-f": {
-   "ground": 0.2158
+   "joint": 5.09,
+   "ground": 0.0126,
+   "slide": 0.0533
   },
   "fall/knocked-down|lizard-bulkiest-m": {
-   "ground": 0.2662
+   "joint": 5.09,
+   "ground": 0.0226,
+   "slide": 0.08
   },
   "fall/knocked-down|lizard-shortest-f": {
-   "ground": 0.208
+   "joint": 5.09,
+   "ground": 0.0118,
+   "slide": 0.0533
   },
   "fall/knocked-down|lizard-tallest-m": {
-   "ground": 0.2816
+   "joint": 5.09,
+   "ground": 0.0243,
+   "slide": 0.08
   },
   "fall/knocked-down|lizard-thinnest-f": {
-   "ground": 0.2166
+   "joint": 5.09,
+   "ground": 0.0126,
+   "slide": 0.0533
   },
   "fall/knocked-down|orc-bulkiest-f": {
-   "ground": 0.2347
+   "joint": 5.09,
+   "ground": 0.0157,
+   "slide": 0.1062,
+   "item": 0.0243
   },
   "fall/knocked-down|orc-bulkiest-m": {
-   "ground": 0.2905
+   "joint": 5.09,
+   "ground": 0.0268,
+   "slide": 0.106,
+   "item": 0.0129
   },
   "fall/knocked-down|orc-shortest-f": {
-   "ground": 0.2185
+   "joint": 5.09,
+   "ground": 0.0142,
+   "slide": 0.1062,
+   "item": 0.0122
   },
   "fall/knocked-down|orc-tallest-m": {
-   "ground": 0.3059
+   "joint": 5.09,
+   "ground": 0.0275,
+   "slide": 0.08,
+   "item": 0.0178
   },
   "fall/knocked-down|orc-thinnest-f": {
-   "ground": 0.2352
+   "joint": 5.09,
+   "ground": 0.0157,
+   "slide": 0.1062,
+   "item": 0.0229
   },
   "flinch/arcane|cat-bulkiest-f": {
    "limb": 0.0411

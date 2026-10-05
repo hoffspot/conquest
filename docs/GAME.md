@@ -2464,8 +2464,13 @@ with its sound as the hand takes it or lets it go (a blade's ring leaving its sc
 of its hilt going home, something slung off the back or taken from the belt, knuckles cracking);
 a character only stands on guard with its weapon out; a
 `hit` makes the target flinch in the way the attack's `reaction` says, from the side the blow came
-from, flushes their skin red for a moment and shows the damage; a `death` makes them fall away
-from the killing blow, lie still for 4 seconds and sink out of sight until they come back.
+from, flushes their skin red for a moment and shows the damage; a `death` makes them fall as a
+body does (back from a blow in front, or down onto the knees and over; forward from one behind:
+[CHARACTERS.md](CHARACTERS.md#fighting-actionsjs), Falling), letting go of what they hold, lie
+still for 4 seconds once they're down and sink out of sight until they come back; a `knockdown`
+throws them onto their back, and they get up as the battle lets them. The thud, the blood
+pooling under them and their shadow fading wait till they hit the ground (`die` and `knockdown`
+say when).
 
 **Everyone but a player** has their garments drawn all at once, one mesh with one picture of
 the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12

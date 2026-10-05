@@ -136,5 +136,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const keys = path.join(root, "client/js/characters/clip-keys.js");
 
     writeFileSync(keys, keysModule(baked, { height: referenceBody().character.height }));
-    console.log(`${path.relative(root, keys)}: ${Object.keys(baked).length} clips baked into ${Object.values(baked).reduce((sum, { keys: each }) => sum + each.length, 0)} keys`);
+
+    for (const [what, all] of Object.entries(baked)) {
+        console.log(`${path.relative(root, keys)}: ${Object.keys(all).length} ${what} baked into ${Object.values(all).reduce((sum, { keys: each }) => sum + each.length, 0)} keys`);
+    }
 }

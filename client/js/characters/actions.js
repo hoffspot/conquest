@@ -46,8 +46,10 @@
 import * as THREE from "three";
 import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
-import { CLIP_HEIGHT, CLIP_KEYS } from "./clip-keys.js";
+import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
 import { ITEMS, socketOn } from "./equipment.js";
+import { groundPoints, lowestPoint } from "./grounding.js";
+import { STEPPED } from "./locomotion.js";
 import { blendRotation, jointRotation } from "./rig.js";
 
 const DEG = Math.PI / 180;
@@ -1770,31 +1772,64 @@ export const REACTIONS = Object.freeze({
 
 // --- Falling ---
 
-const FALL = { buckle: 0.28, topple: 0.55, settle: 0.35 };
+// Falling down dead, and knocked off the feet and up again, as animators' clips have them, whole
+// (FALL_KEYS: scripts/bake-clips.js FALLS): every joint, the legs too, and the pelvis turned and
+// moved as far as it goes. Each foot stays planted where it stands while the clip's does, and
+// steps where the clip's steps (Walker.freed: it follows the clip's leg while it's free, and is
+// planted again wherever it comes down); once the body's down, on its knees or the ground, the
+// legs are the clip's. And the body's lowest point is kept as high off the ground as the clip's
+// body's was (grounding.js), so a body of any build lies on the ground, not in it or over it.
+//
+// Struck down from in front, it falls back (deathBack) or sinks to its knees and over onto its
+// face (deathFront); from behind, forward onto its face. Either may be mirrored, left for right.
+// Knocked down, it's thrown onto its back (knockedDown), lies there a moment and gets up
+// (gettingUp), as soon as it's let up (a little quicker if need be, as much as RISE.fastest).
+// The whole of it is turned towards where the blow came from, as far as FALL_TURN, as it falls.
 
-// Knocked down (and up again): how much quicker the fall is than a death's, how long getting up
-// takes (s, at most half the time down), and the crouch it rises out of (degrees)
-const KNOCKED = {
-    quicker: 1.35,
-    rise: 0.75,
-    crouch: {
-        ...spine({ flex: 30 }),
-        Neck: { flex: -10 },
-        LeftUpLeg: { flex: 112 },
-        RightUpLeg: { flex: 104 },
-        LeftLeg: { flex: 132 },
-        RightLeg: { flex: 124 },
-        LeftFoot: { flex: 28 },
-        RightFoot: { flex: 24 },
-        LeftArm: { flex: 55, abduct: 20 },
-        RightArm: { flex: 50, abduct: 22 },
-        LeftForeArm: { flex: 25 },
-        RightForeArm: { flex: 30 },
-    },
-};
+/** A fall clip's keys, unpacked: { seconds, lands, times, rows, joints: [[joint, [[angle, column]]]], turn, offset, free, low } (columns). */
+function fallOf({ seconds, lands, channels, keys }) {
+    const joints = new Map();
+    const fall = { seconds, lands, times: keys.map(([time]) => time), rows: keys.map(([, ...values]) => values), joints: [], turn: [], offset: [], free: {}, low: -1 };
 
-/** How long into a fall the body hits the ground (s): for the sound of it. */
-export const FALL_LANDS = FALL.buckle * 0.6 + FALL.topple;
+    channels.forEach((channel, c) => {
+        const [joint, name] = channel.split(".");
+
+        if (joint === "turn" || joint === "offset") {
+            fall[joint][Number(name)] = c;
+        } else if (joint === "free") {
+            fall.free[name] = c;
+        } else if (joint === "low") {
+            fall.low = c;
+        } else {
+            joints.set(joint, [...(joints.get(joint) ?? []), [name, c]]);
+        }
+    });
+
+    fall.joints = [...joints];
+
+    return fall;
+}
+
+export const FALLS = Object.freeze(Object.fromEntries(Object.entries(FALL_KEYS).map(([name, baked]) => [name, fallOf(baked)])));
+
+// How far a fall's turned towards the blow, at most (radians); how long it eases in over what
+// was being done (s), struck down and knocked down; how long a knocked-down body lies still
+// at least (s), how much quicker than the clip it gets up at most, how long getting up crosses
+// over from lying, and eases out into standing (s)
+const FALL_TURN = 45 * DEG;
+const FALL_IN = { dead: 0.25, knocked: 0.08 };
+const RISE = { lie: 0.15, fastest: 1.6, over: 0.25, out: 0.3 };
+// (An arm in the ground is lifted this far out of it, m; and dying, what's in a hand is let go of
+// as the hand comes this near the ground, m)
+const ARM_CLEAR = 0.01;
+const DROP_HEIGHT = 0.4;
+
+/** How long into a fall that doesn't say (a creature's: die and knockdown say) it hits the ground (s). */
+export const FALL_LANDS = 0.7;
+
+// A pose of a fall: each joint's rotation (by its index), the pelvis's turn and offset, each foot
+// let go of the ground, and how high the lowest point is
+const fallPose = () => ({ rotations: new Map(), turn: new THREE.Quaternion(), offset: new THREE.Vector3(), free: { Left: 0, Right: 0 }, low: 0 });
 
 // --- The engine ---
 
@@ -2187,7 +2222,6 @@ const MIRRORED = new Set(["turn", "bend", "obliquity", "atX", "pointX", "edgeX",
 const LEANING = new Set(["flex", "tilt"]);
 
 const _rotation = new THREE.Quaternion();
-const _fall = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
 const _across = new THREE.Vector3();
 const _frame = new THREE.Quaternion();
@@ -2273,6 +2307,10 @@ export class Actions {
         this.dodging = null;
         this.turning = 0;
         this.fall = null;
+        // (A fall's poses, worked out each frame; the body's points looked at for its lowest)
+        this.fallPoses = [fallPose(), fallPose()];
+        this.ground = null;
+        this.armsLowest = [new THREE.Vector3(), new THREE.Vector3()];
 
         /** How the weapon is held on guard (a GUARDS key, or null), and how much (0 to 1). */
         this.guardName = null;
@@ -2508,31 +2546,62 @@ export class Actions {
         this.dodging = { start: this.time, move: MOVES.get(pick === "back" ? DODGES.back : DODGES.side), mirror: pick === "right" };
     }
 
-    /** Fall down dead, away from `from` (an angle as for react). */
-    die({ from = 0 } = {}) {
+    /**
+     * Fall down dead, away from `from` (an angle as for react): back, or onto the knees and over,
+     * from in front; forward from behind (FALLS); `way` ({ clip, mirror }) says which, else as
+     * comes. Returns how long until the body hits the ground (seconds).
+     */
+    die({ from = 0, way = null } = {}) {
+        const behind = Math.cos(from) < 0;
+        const clip = way?.clip ?? (behind ? "deathFront" : ["deathBack", "deathFront"][this.variety.next("death", 2)]);
+        const mirror = way?.mirror ?? this.variety.next("deathSide", 2) === 1;
+
         this.#swapped();
         this.attack = null;
         this.dodging = null;
-        this.fall = { start: this.time, backwards: Math.cos(from) >= 0 };
         this.guardTarget = 0;
+        this.#startFall([{ clip: FALLS[clip], at: 0, speed: 1 }], { from: behind && clip === "deathFront" ? from + Math.PI : from, mirror, ease: FALL_IN.dead, end: Infinity });
+
+        return FALLS[clip].lands;
     }
 
     /**
      * Knocked off its feet (away from `from`, an angle as for react) and up again `seconds`
-     * later: falling (quicker than a death), a moment on the ground, then sitting up with its feet
-     * drawn in under it, and rising.
+     * later: thrown onto its back, a moment on the ground, then getting up, a little quicker if
+     * need be (and if it can't be quick enough, a little after). Returns how long until it hits
+     * the ground (seconds).
      */
-    knockdown({ from = 0, seconds = 1.5 } = {}) {
+    knockdown({ from = 0, seconds = 1.5, mirror = null } = {}) {
+        const [down, up] = [FALLS.knockedDown, FALLS.gettingUp];
+        const lying = down.lands + RISE.lie;
+        const speed = Math.min(RISE.fastest, Math.max(1, up.seconds / Math.max(1e-3, seconds - lying)));
+        const rises = Math.max(lying, seconds - up.seconds / speed);
+        const end = rises + up.seconds / speed;
+
         this.#swapped();
         this.attack = null;
         this.reactions = [];
         this.dodging = null;
-        this.fall = { start: this.time, backwards: Math.cos(from) >= 0, up: seconds };
+        this.#startFall([{ clip: down, at: 0, speed: 1 }, { clip: up, at: rises, speed }], { from: Math.cos(from) < 0 ? 0 : from, mirror: mirror ?? this.variety.next("knockedSide", 2) === 1, ease: FALL_IN.knocked, end, up: seconds });
+
+        return down.lands;
     }
 
-    /** Get back up (alive again): no fall, attack, reactions or dodge. */
+    // Start falling: `parts` played one after another (each from `at` seconds into the fall, at
+    // `speed`, crossing over from the one before), mirrored (`mirror`), turned towards `from`
+    // (as far as FALL_TURN) as it falls, eased in over `ease` seconds, and eased out to the walk
+    // over the last RISE.out before `end` (seconds into it: Infinity, lying there)
+    #startFall(parts, { from, mirror, ease, end, up = 0 }) {
+        const turn = Math.atan2(Math.sin(from), Math.cos(from));
+        const lands = parts[0].clip.lands;
+
+        this.fall = { start: this.time, parts, mirror, ease, end, up, lands, dropped: { Left: false, Right: false }, turn: Math.min(FALL_TURN, Math.max(-FALL_TURN, turn)), turnBy: Math.max(0.2, lands * 0.8) };
+    }
+
+    /** Get back up (alive again): no fall, attack, reactions or dodge; what was dropped taken back. */
     revive() {
         this.fall = null;
+        this.character.pickUp?.();
         this.attack = null;
         this.reactions = [];
         this.dodging = null;
@@ -2546,7 +2615,7 @@ export class Actions {
 
     /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a dodge, a fall till it lies still? */
     get quick() {
-        const falling = this.fall && (this.fall.up || this.time - this.fall.start < FALL.buckle + FALL.topple + FALL.settle);
+        const falling = this.fall && this.time - this.fall.start < Math.min(this.fall.end, this.fall.parts.at(-1).clip.seconds + this.fall.parts.at(-1).at);
 
         return Boolean(this.attack || this.reactions.length || this.dodging || falling);
     }
@@ -2554,7 +2623,9 @@ export class Actions {
     /**
      * Layer the actions over the pose the walk has set (rig.rotations and rig.offset), `walking`
      * as far into its stride as the walk is (Walker.amount: 0 standing). Returns false while
-     * falling or lying dead (the feet aren't to be kept planted).
+     * the feet aren't to be kept planted (down on the ground, or off it); STEPPED while they're
+     * planted only where a fall's clip plants them (Walker.freed: the others free), not shuffled
+     * under the body.
      */
     apply(dt, walking = 0) {
         this.time += dt;
@@ -2664,15 +2735,14 @@ export class Actions {
         this.#restOnPommel(dt, walking);
 
         // (Knocked down and up again: done)
-        if (this.fall?.up && this.time - this.fall.start >= this.fall.up) {
+        if (this.fall && this.time - this.fall.start >= this.fall.end) {
             this.fall = null;
         }
 
         if (this.fall) {
             this.reaching = [];
-            this.#fall(this.time - this.fall.start);
 
-            return false;
+            return this.#fall(this.time - this.fall.start);
         }
 
         // (Sitting, the feet stay where the legs put them)
@@ -3779,55 +3849,156 @@ export class Actions {
         return grip;
     }
 
-    // Falling down: the knees give, the body topples (backwards, or forwards when hit from
-    // behind) and lands, arms flung out, then lies still
+    // Falling (die, knockdown): the clip's pose `time` seconds into the fall (crossing over from
+    // one part to the next), turned towards the blow as it goes, eased in over what was being
+    // done and out to the walk at the end, the body's lowest point as high as the clip's; and
+    // each foot let go of the ground as the clip's is. Returns as apply does
     #fall(time) {
         const rig = this.rig;
-        const { backwards, up = 0 } = this.fall;
+        const { parts, ease, end } = this.fall;
+        const object = this.character.object;
+        const reach = (this.character.height ?? CLIP_HEIGHT) / CLIP_HEIGHT;
+        const k = parts.findLastIndex(({ at }) => at <= time);
+        const pose = this.#fallPose(parts[k], time, this.fallPoses[0]);
 
-        // (Knocked down, the fall's quicker; and at the end, getting up: `rise` 0 to 1)
-        const elapsed = up ? time * KNOCKED.quicker : time;
-        const riseFor = up ? Math.min(KNOCKED.rise, up * 0.5) : 1;
-        const rise = up ? Math.min(1, Math.max(0, (time - (up - riseFor)) / riseFor)) : 0;
-        const buckle = smooth(0, FALL.buckle, elapsed);
-        const toppling = Math.min(1, Math.max(0, (elapsed - FALL.buckle * 0.6) / FALL.topple));
-        const tilt = toppling * toppling; // falling faster and faster
-        const landed = elapsed - FALL.buckle * 0.6 - FALL.topple;
-        const bounce = landed > 0 ? Math.sin(Math.min(1, landed / FALL.settle) * Math.PI) * 0.06 * (1 - Math.min(1, landed / FALL.settle)) : 0;
-        const angle = (tilt - bounce) * 88 * DEG;
-        const direction = backwards ? -1 : 1;
-        const hips = rig.heads[0].y;
+        // (Crossing over from the part before)
+        if (k > 0 && time - parts[k].at < RISE.over) {
+            const before = this.#fallPose(parts[k - 1], time, this.fallPoses[1]);
+            const u = smooth(0, RISE.over, time - parts[k].at);
 
-        // Knees and back give way, arms fly out
-        const limp = { ...spine({ flex: (backwards ? -8 : 18) * tilt + 14 * buckle * (1 - tilt) }), Neck: { flex: backwards ? -10 : 10 }, Head: { flex: (backwards ? -15 : 5) * tilt }, LeftUpLeg: { flex: 30 * buckle * (1 - tilt) + 8 }, RightUpLeg: { flex: 40 * buckle * (1 - tilt) + 15 }, LeftLeg: { flex: 55 * buckle * (1 - tilt) + 10 }, RightLeg: { flex: 70 * buckle * (1 - tilt) + 25 }, LeftFoot: { flex: -20 }, RightFoot: { flex: -25 }, LeftArm: { abduct: 25 + 50 * tilt, flex: backwards ? 20 : 40 }, RightArm: { abduct: 30 + 45 * tilt, flex: backwards ? 30 : 50 }, LeftForeArm: { flex: 25 }, RightForeArm: { flex: 35 } };
+            for (const [index, rotation] of pose.rotations) {
+                const { kind, side } = rig.joints[index];
 
-        // Getting up: sitting up (the body turning upright about the pelvis, still on the
-        // ground), the feet drawn in under it in a crouch, then rising out of the crouch
-        const sit = smooth(0, 0.5, rise);
-        const stand = smooth(0.35, 1, rise);
-        const crouch = sit * (1 - stand);
+                blendRotation(kind, side, before.rotations.get(index), rotation, u, rotation);
+            }
 
-        for (const [joint, angles] of Object.entries(limp)) {
-            const index = rig.index.get(joint);
-            const { kind, side } = rig.joints[index];
+            pose.turn.slerpQuaternions(before.turn, pose.turn, u);
+            pose.offset.lerpVectors(before.offset, pose.offset, u);
+            pose.low += (before.low - pose.low) * (1 - u);
 
-            blendRotation(kind, side, rig.rotations[index], jointRotation(kind, side, angles, _rotation), Math.max(buckle, tilt) * (1 - sit), rig.rotations[index]);
+            for (const side of ["Left", "Right"]) {
+                pose.free[side] += (before.free[side] - pose.free[side]) * (1 - u);
+            }
         }
 
-        for (const [joint, angles] of Object.entries(crouch > 0 ? KNOCKED.crouch : {})) {
-            const index = rig.index.get(joint);
+        // (Turned towards the blow as it falls)
+        _yaw.setFromAxisAngle(_up, this.fall.turn * smooth(0, this.fall.turnBy, time));
+        pose.turn.premultiply(_yaw);
+        pose.offset.applyQuaternion(_yaw);
+
+        const weight = smooth(0, ease, time) * (end === Infinity ? 1 : 1 - smooth(end - RISE.out, end, time));
+
+        for (const [index, rotation] of pose.rotations) {
             const { kind, side } = rig.joints[index];
 
-            blendRotation(kind, side, rig.rotations[index], jointRotation(kind, side, angles, _rotation), crouch, rig.rotations[index]);
+            blendRotation(kind, side, rig.rotations[index], rotation, weight, rig.rotations[index]);
         }
 
-        // The whole body turns about the pelvis to lie flat, the pelvis dropping to the ground
-        // and ending up behind (or in front of) where the feet were (and back, getting up)
-        const lying = [-hips * 0.22 * buckle * (1 - tilt) + (0.14 - hips) * tilt, direction * hips * 0.82 * tilt];
-        const crouched = [-hips * 0.62, -hips * 0.26];
+        rig.rotations[0].slerp(pose.turn, weight);
+        rig.offset.lerp(pose.offset.multiplyScalar(reach), weight);
 
-        _fall.setFromAxisAngle(_axis.set(1, 0, 0), direction * angle * (1 - sit));
-        rig.rotations[0].premultiply(_fall);
-        rig.offset.set(0, (lying[0] + (crouched[0] - lying[0]) * sit) * (1 - stand), (lying[1] + (crouched[1] - lying[1]) * sit) * (1 - stand));
+        // The body's lowest point as high off the ground as the clip's body's (as far for a
+        // smaller body as for the one it was baked on)
+        rig.apply();
+        object.updateMatrixWorld(true);
+        this.ground ??= groundPoints(this.character.human);
+
+        const scale = object.getWorldScale(_scale).y;
+        const ground = object.getWorldPosition(_lunge).y;
+        const lowest = lowestPoint(rig, this.character.positions, this.ground, this.armsLowest) - ground;
+        const lift = (pose.low * reach * scale - lowest) * weight;
+
+        rig.offset.y += lift / scale;
+
+        // (An arm still in the ground turned up at the shoulder, as far as lifts it out)
+        if (this.armsLowest.some((arm) => arm.y + lift < ground)) {
+            rig.apply();
+            object.updateMatrixWorld(true);
+            this.armsLowest.forEach((arm, k) => arm.y + lift < ground && this.#liftArm(k ? "Right" : "Left", arm.setY(arm.y + lift), ground));
+        }
+
+        for (const side of ["Left", "Right"]) {
+            this.free[side] = Math.max(this.free[side], pose.free[side] * weight);
+
+            // (Dying, what's in each hand let go of as the hand comes down near the ground, or as
+            // the body hits it)
+            if (end === Infinity && !this.fall.dropped[side] && (time >= this.fall.lands || rig.bone(`${side}Hand`).getWorldPosition(_wrist).y - ground < DROP_HEIGHT)) {
+                this.fall.dropped[side] = true;
+                this.character.drop?.(side);
+            }
+        }
+
+        return this.free.Left > 0.5 && this.free.Right > 0.5 ? false : STEPPED;
+    }
+
+    // Turn an arm (`side`, "Left" or "Right") up at the shoulder so its lowest point (`low`, in
+    // the world) comes up to the ground (at height `ground`)
+    #liftArm(side, low, ground) {
+        const rig = this.rig;
+        const index = rig.index.get(`${side}Arm`);
+        const shoulder = rig.bones[index].getWorldPosition(_shoulder);
+        const out = _local.copy(low).sub(shoulder);
+        const length = out.length();
+        const raised = Math.asin(Math.min(1, Math.max(-1, (ground + ARM_CLEAR - shoulder.y) / Math.max(1e-3, length))));
+        const angle = raised - Math.asin(Math.min(1, Math.max(-1, out.y / Math.max(1e-3, length))));
+
+        _axis.crossVectors(out, _up);
+
+        if (angle <= 0 || _axis.lengthSq() < 1e-8) {
+            return;
+        }
+
+        // (Turned in the world, so in the arm's frame: by that turn seen from its parent's frame)
+        const parent = rig.definition[index].parent;
+
+        rig.bones[parent].getWorldQuaternion(_frame).multiply(rig.frames[parent]);
+        _turnBy.setFromAxisAngle(_axis.normalize(), angle);
+        _now.copy(_frame).invert().multiply(_turnBy).multiply(_frame);
+        rig.rotations[index].premultiply(_now);
+    }
+
+    // A fall's part's pose `time` seconds into the fall (its clip's, played from `at` at `speed`,
+    // held at its end), mirrored as the fall is, into `pose` (fallPose)
+    #fallPose({ clip, at, speed }, time, pose) {
+        const { times, rows, joints, turn, offset, free, low } = clip;
+        const t = Math.min(clip.seconds, Math.max(0, (time - at) * speed));
+        const mirror = this.fall.mirror;
+        const rig = this.rig;
+        const angles = this.swayed;
+
+        for (const [joint, channels] of joints) {
+            const index = rig.index.get(mirror ? mirrored(joint) : joint);
+
+            for (const key in angles) {
+                delete angles[key];
+            }
+
+            for (const [name, c] of channels) {
+                angles[name] = sample(times, rows, c, t) * (mirror && MIRRORED.has(name) ? -1 : 1);
+            }
+
+            const { kind, side } = rig.joints[index];
+
+            if (!pose.rotations.has(index)) {
+                pose.rotations.set(index, new THREE.Quaternion());
+            }
+
+            jointRotation(kind, side, angles, pose.rotations.get(index));
+        }
+
+        pose.turn.set(...turn.map((c) => sample(times, rows, c, t))).normalize();
+
+        if (mirror) {
+            pose.turn.set(pose.turn.x, -pose.turn.y, -pose.turn.z, pose.turn.w);
+        }
+
+        pose.offset.set(...offset.map((c) => sample(times, rows, c, t)));
+        pose.offset.x *= mirror ? -1 : 1;
+        // (A foot's planted or not, never half: half let go, a leg's reached halfway, and wrenched)
+        pose.free.Left = sample(times, rows, free[mirror ? "right" : "left"], t) >= 0.5 ? 1 : 0;
+        pose.free.Right = sample(times, rows, free[mirror ? "left" : "right"], t) >= 0.5 ? 1 : 0;
+        pose.low = Math.max(0, sample(times, rows, low, t));
+
+        return pose;
     }
 }
