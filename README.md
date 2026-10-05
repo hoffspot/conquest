@@ -714,6 +714,11 @@ asset out of this public repository.
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
+- Meshes simplified for characters seen from afar, and models read that were compressed for the
+  game: [meshoptimizer](https://github.com/zeux/meshoptimizer) by Arseny Kapoulkine, its simplifier
+  (`client/vendor/meshoptimizer-1.3.0/`) and its decoder (Three.js's copy,
+  `client/vendor/three-r186/addons/libs/`), MIT license (`LICENSE.md` and
+  `meshopt_decoder.LICENSE.md` there).
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT

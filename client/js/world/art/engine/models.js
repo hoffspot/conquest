@@ -1,12 +1,14 @@
 // Ready-made 3D models (glTF), lit like the rest of the art: KayKit's trees, props and landmark
 // buildings (client/models/kaykit, CC0); and, as it is, with its animations, the treasure chest
-// (client/models/jmi, MIT: world/drops3d.js).
+// (client/models/jmi, MIT: world/drops3d.js). Models compressed with meshoptimizer
+// (EXT_meshopt_compression, as utilities/blenderpipeline makes them) are read too.
 
 import * as THREE from "three";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const manager = new THREE.LoadingManager();
-const loader = new GLTFLoader(manager);
+const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
 const loaded = new Map();
 const files = new Map();
 
