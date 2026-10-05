@@ -791,37 +791,76 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
 (core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*).
 
 - **Tiles.** The world is cut into 32 m tiles from its origin (256 a side). A tile is baked from
-  its square and a 2 m border round it (`tiles.js tileInput`), so it depends only on the world
+  its square and a 1 m border round it (`tiles.js tileInput`), so it depends only on the world
   (its seed and what's built), never on which tiles were made first, or by whom: the same bytes in
   the page, a worker or the tests (tested).
 - **What a tile's made from:**
   - the ground's height at every metre, two triangles a square, each walked as open ground, a road
     (roads, streets, yards and planks), steep (over 30°), a ford (water that can be waded: up to
     0.5 m deep and slow enough), or not at all (deeper or faster water, or over 38°: a cliff);
-  - the overworld's *solid* squares (what's built or stands there: the town's, the settlements'
-    and the places' buildings, walls and stalls, the wild's features; not water, cliffs or
-    trees), merged into rectangles, each a box 3 m over the ground under it whose top is no
-    floor, and the ground under them no floor either (before, the ground inside every building
-    was an island of mesh of its own, which a point just by a wall could be found on);
-  - trees as their trunks (0.4 m across at size 1; a great lone oak's 2.4 m);
+  - the overworld's *solid* squares (where something built stands: the town's, the settlements'
+    and the places' buildings and walls, the wild's features; not water, cliffs, trees, props or
+    fences: a layout's `standing`), merged into rectangles, each a box 3 m over the ground under
+    it whose top is no floor, and the ground under them no floor either (before, the ground
+    inside every building was an island of mesh of its own, which a point just by a wall could be
+    found on). Each box stands a centimetre in from its squares' edges: on them, Recast took each
+    a voxel further on its east and south sides;
+  - the settlements' props and their yards' fences as they're drawn (`standingNear`,
+    `setpieces/standing.js`), not by the squares they block: a prop's outlines, one for each thing
+    it's made of that stands apart (a stall's posts and its counter, a well and the reeds and jars
+    round it), all of it lower than 1.75 m measured from the art (`npm run build:footprints`:
+    `setpieces/outlines.js`, checked by `test/footprints.test.js`), and a fence's run as thick as
+    its people's fences, a yard closed along its front a metre into the back of the house it's
+    behind (`HOUSE_REACH`: the house's own squares step round it where it's turned, leaving a
+    way in by a fence's end). Each outline, half a voxel wider, has its ground marked walked by no one
+    before the walker's radius is taken off (Recast's `markConvexPolyArea`, as Unity's and
+    Unreal's modifier volumes do), so a lamp post's foot takes about a metre across of the mesh,
+    and a stall and a lamp three metres apart have a body's way between them. (Before, a prop took
+    every square of the middle half of its plots, each a 3 m box: a lamp post 2 m square, a hole
+    3 to 4 m across round it, and a stall and a lamp near each other no way between them. A box
+    is no good for a prop wider than a voxel or two: hollow, the ground inside it's walked, an
+    island.) The rules' squares still block the middle half of a prop's plots;
+  - trees as their trunks (0.4 m across at size 1; a great lone oak's 2.4 m), the start town's
+    too (`stamp.trunks`): not the four squares round each;
   - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`): the roads', the
-    settlements' streets' and the citadels';
+    settlements' streets' and the citadels'. `heightAt` gives a deck's height wherever it's over
+    the ground, on the squares next to those under its middle too (a stone bridge's ramp up over
+    a bank reaches over the corners of squares whose middles it doesn't), as the mesh has it and
+    walkers are drawn on it;
   - the plank walks over the lizard folk's lagoons, as decks at their planks' height, 0.16 m over
     their decks, as high as the town's ground (`WALK_TOP`, `level`; before, they were only the
     ground under them, walked as a ford or not at all), the squares across their bends with
-    them, so a walk turning sharply over the water is walked round its bend (without them, the
-    mesh there, trimmed half a metre from each edge, comes apart at a sharp bend).
+    them, so a walk turning sharply over the water is walked round its bend. The lagoon's water
+    isn't solid, a box on every square of it no walk's middle is over (it was, the boxes eating
+    into the planks a square at a time along every walk not on the grid, and into the outside of
+    a shallow bend: lanes 3.2 m wide had 1.55 m of mesh, alleys over the water none in places,
+    and three side walks came apart, one 238 m round); its ground's walked by no one, never
+    waded. `heightAt` gives a walk's deck out to its edges over any of the lagoon's squares, not
+    only those whose middles it's over, so a walker on its outer planks stands on them.
 
   Each square's two triangles split from its north-west corner to its south-east, as the ground's
   drawn and stood on (`terrain/ground.js between`; before, the other way, so on a slope the mesh
   stood up to a few centimetres off the ground).
-- **Recast's settings** (`settings.js`, `bake.js`): voxels 0.5 m across and 0.25 m high; a walker
-  0.5 m round and 2 m tall who steps up 0.75 m; polygons of up to six sides, each keeping its
-  ground's kind (`AREA`), which costs a way through it: roads and decks ¾ of a metre each, steep
-  ground 2, fords 3. The step's also how steep the ground walked can be: Recast takes ground
-  rising more than it from one voxel to the next but one for a ledge, so a step of 0.75 m lets a
-  walker up 37°, just short of a cliff; with half a metre, nothing over 27° could be walked, so
-  steep ground (30° to 38°) never was, nor the steepest of the trails.
+- **Recast's settings** (`settings.js`, `bake.js`): voxels 0.25 m across and 0.125 m high; a
+  walker kept a voxel, 0.25 m, from walls and drops (a little under a body's 0.3 m: the voxel
+  over it would keep it half a metre off), 2 m tall, who steps up 0.75 m; islands of mesh under
+  4 m² not joined to a tile's side let go; polygons of up to six sides, each keeping its ground's
+  kind (`AREA`), which costs a way through it: roads and decks ¾ of a metre each, steep ground 2,
+  fords 3. How steep the ground walked can be is its triangles' (steep from 30°, a cliff from
+  38°), not the step's. (In half-metre voxels a walker was kept half a metre off, and as much
+  again was lost to the voxel at each edge, so a 3.2 m deck had 1.55 m of mesh: now 2.65 m, a
+  body's width from each edge. The step was what kept walkers off ground over 37°: in half-metre
+  voxels Recast took ground rising more than it from one voxel to the next but one for a ledge.)
+  Measured across every street over the lizard folk's lagoons on seed 1 (4,069 m of them): no
+  gaps in the mesh along them (45 before, three of them breaks), 3.2 m lanes 2.65 m of mesh
+  across at the median (1.55), 2.9 m alleys 2.4 m (1.35), 5 m main streets 4.45 m (3.6). The
+  ways found change with the mesh: `NET_VERSION` 50.
+- **Drawn** (debug mode's *Navigation mesh*: `world/navview.js`): each tile's polygons, tinted by
+  how they're walked, which are where a walker's middle can be; round their edges against a wall
+  or a drop (`polygons(tx, ty).edges`) a paler band as wide as the walker's radius, rounded at
+  outward corners, where its body reaches, as Recast's demo, Unity's, Unreal's and Godot's views
+  draw them. On a plank walk, or by a lamp post, the two together reach what's drawn: anything
+  they don't is ground the mesh has lost.
 - **Baking** (`navworker.js` with `navbaker.js`): the triangles are worked out on the page (only
   it has the world), Recast's part done in a worker, and the tile added when it comes back; a
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
@@ -847,8 +886,9 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   Detour's own polygon references never leave it: they depend on which tiles came in, in what
   order. Ways are the same whatever order the tiles came in (tested).
 - **What it costs** (measured in Node on a desktop; tests allow far more for slow machines): a
-  tile's triangles about 3 ms once its chunks are made, Recast's part about 4.5 ms (the town's,
-  with many buildings; open country less), its data 6–8 KB. A way found takes 0.05 ms at the
+  tile's triangles about 3 ms once its chunks are made, Recast's part about 8 ms in a town (in
+  half-metre voxels it was 3 ms; open country a little more, its ground's slopes cut finer), its
+  data about 10 KB (5–8). A way found takes 0.05 ms at the
   median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
   say) searches every tile kept before giving up, up to 0.5 ms.
 
@@ -861,7 +901,18 @@ lizard city's lagoon reached from its market, on its planks as high as the town'
 lagoon's water a little below and its bed dug down under them; deep water not walked; the
 same ways whatever order tiles came in; baking and finding ways within their budgets; the
 longest unused tiles let go of; and a map of squares' own mesh, through a doorway a square wide,
-a body's width from walls. `test/overworld.test.js` walks a way out of the town along the roads,
+a body's width from walls; across every run of planks over open water in three lizard places,
+the mesh as wide as the deck but for at most half a metre each side, the deck's height out to its
+edges, and along every street over their lagoons no gap in it (each failed in half-metre voxels
+with the lagoon's water boxed in); round a market's props as they're drawn, nothing on them, a
+lamp post walked round within 0.9 m of its middle, and a way between any two of them 1.1 m and
+more apart (lizard folk's and humans'); the lagoon's water, a prop's and a tree's squares not
+solid, only what's built; and each tile's outer edges for the debug view's band, nothing just
+beyond them. `test/footprints.test.js` checks `setpieces/outlines.js` is the art's: made again,
+the same; a stall and a well of four peoples, turned, drawn inside their outlines; a yard's
+fences along the runs it fences, as thick as its people's, its gateway open, closed along its
+house's back.
+`test/overworld.test.js` walks a way out of the town along the roads,
 every half metre of it on the mesh; `test/host.test.js` walks the player from the start through
 every door near it; the world-generation tests check every interior's squares can be got to over
 the meshes (`test/helpers.js reachable`). `e2e/pellagos.spec.js` checks debug mode draws them

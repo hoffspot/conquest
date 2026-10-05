@@ -22,6 +22,7 @@
     "build:characters": "node scripts/build-characters.js",
     "build:music": "node scripts/build-music.js",
     "build:clips": "node scripts/build-clips.js",
+    "build:footprints": "node scripts/build-footprints.js",
     "vendor:recast": "node scripts/vendor-recast.js"
   },
   "devDependencies": {

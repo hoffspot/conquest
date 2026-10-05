@@ -161,8 +161,8 @@ export class Settlements {
 
     /**
      * What a laid-out settlement has on a square of the world: { blocked, opaque, ground, water (1
-     * over its lagoon, the lizard folk's) }, or null where it has nothing (its fields: the land's
-     * own).
+     * over its lagoon, the lizard folk's), standing (1 where a building stands: layoutTown's) },
+     * or null where it has nothing (its fields: the land's own).
      */
     squareAt(settlement, x, y) {
         const { at, size, town } = settlement;
@@ -172,9 +172,9 @@ export class Settlements {
             return null;
         }
 
-        const [blocked, opaque, ground, water] = [town.blocked[j][i], town.opaque[j][i], town.ground[j][i], town.water?.[j][i] ?? 0];
+        const [blocked, opaque, ground, water, standing] = [town.blocked[j][i], town.opaque[j][i], town.ground[j][i], town.water?.[j][i] ?? 0, town.standing[j][i]];
 
-        return blocked || opaque || water || ground !== GROUND.grass || inside(town, i + 0.5, j + 0.5) ? { blocked, opaque, ground, water } : null;
+        return blocked || opaque || water || ground !== GROUND.grass || inside(town, i + 0.5, j + 0.5) ? { blocked, opaque, ground, water, standing } : null;
     }
 
     /**

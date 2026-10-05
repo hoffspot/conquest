@@ -1,8 +1,9 @@
 // Baking a navigation tile (Recast): the triangles tileInput gives, made voxels, then the walkable
-// surface found, cut back from walls by the walker's radius, split into regions and traced into
-// polygons, each keeping its triangles' area (AREA). Gives Detour's tile data: bytes, the same for
-// the same triangles on every machine (the WebAssembly is the same everywhere, and nothing in it
-// is left to chance), to add to a NavMesh or send from a worker.
+// surface found, the ground under what's walked round as it's drawn taken out of it (its
+// outlines), cut back from walls and those by the walker's radius, split into regions and traced
+// into polygons, each keeping its triangles' area (AREA). Gives Detour's tile data: bytes, the same
+// for the same triangles on every machine (the WebAssembly is the same everywhere, and nothing in
+// it is left to chance), to add to a NavMesh or send from a worker.
 
 import { OVERWORLD } from "./settings.js";
 
@@ -46,7 +47,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
     const {
         RecastBuildContext, VerticesArray, TrianglesArray, TriangleAreasArray, allocHeightfield, createHeightfield, rasterizeTriangles,
         filterLowHangingWalkableObstacles, filterLedgeSpans, filterWalkableLowHeightSpans, allocCompactHeightfield, buildCompactHeightfield,
-        freeHeightfield, erodeWalkableArea, buildDistanceField, buildRegions, allocContourSet, buildContours, allocPolyMesh, buildPolyMesh,
+        freeHeightfield, markConvexPolyArea, erodeWalkableArea, buildDistanceField, buildRegions, allocContourSet, buildContours, allocPolyMesh, buildPolyMesh,
         allocPolyMeshDetail, buildPolyMeshDetail, freeCompactHeightfield, freeContourSet, freePolyMesh, freePolyMeshDetail,
         NavMeshCreateParams, createNavMeshData, Recast,
     } = recast;
@@ -91,7 +92,19 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
             throw new Error("Recast couldn't compact the heightfield");
         }
 
-        // Kept the walker's radius from every wall, then split into regions (by area too)
+        // None of the ground under what's walked round as it's drawn (tiles.js outlines: a
+        // lamp post's foot, a well, a yard's fence)
+        const { corners, counts, heights } = input.outlines ?? { counts: [] };
+
+        for (let k = 0, at = 0; k < counts.length; at += counts[k] * 3, k++) {
+            const outline = new VerticesArray();
+
+            outline.copy(corners.subarray(at, at + counts[k] * 3));
+            markConvexPolyArea(context, outline, counts[k], heights[k * 2], heights[k * 2 + 1], 0, compact);
+            outline.destroy();
+        }
+
+        // Kept the walker's radius from every wall and those, then split into regions (by area too)
         erodeWalkableArea(context, s.walkableRadius, compact);
         buildDistanceField(context, compact);
         buildRegions(context, compact, s.border, s.minRegionArea, s.mergeRegionArea);

@@ -11,17 +11,24 @@
 //    cliff), which Recast leaves out.
 //  - What stands on it: the overworld's solid squares (the town's, the settlements' and the
 //    places' buildings and walls, and the wild's features), merged into rectangles, each a box
-//    OBSTACLE high; trees as their trunks. Their faces are areas of none, so nothing can be stood
-//    on them (a roof is no floor), and so is the ground under them (nothing's walked inside them).
+//    OBSTACLE high, a centimetre in from the squares' edges (on them, Recast would take each box
+//    a voxel further on its east and south sides); trees as their trunks. Their faces are areas
+//    of none, so nothing can be stood on them (a roof is no floor), and so is the ground under
+//    them (nothing's walked inside them).
+//  - What stands about the settlements' open ground as it's drawn (overworld.js standingNear: a
+//    lamp post its foot, not the squares round it), their props and their yards' fences: each an
+//    outline, half a voxel wider (Recast takes in a voxel whose middle's inside it), whose ground
+//    the tile marks walked by no one (bake.js), so walkers are kept their radius from it. (As a
+//    box, a prop as wide as a well would be hollow: the ground inside walked, as an island.)
 //  - Bridges: their decks, a strip of quads along each, at its height; and the plank walks over
 //    the lizard folk's lagoons, at their planks' (the town's ground round the lagoon, its bed dug
-//    down below them).
+//    down below them), the lagoon's water walked nowhere but on them.
 
 import { hypot } from "../exact.js";
 import { WET } from "../overworld.js";
 import { GROUND } from "../setpieces/pieces.js";
 import { CHUNK, CHUNKS, WORLD_SIZE } from "../worldplan/plan.js";
-import { AREA, BORDER, FORD, TILE } from "./settings.js";
+import { AREA, BORDER, CELL, FORD, TILE } from "./settings.js";
 
 export { AGENT, AREA, BORDER, CELL, CELL_HEIGHT, COSTS, FORD, TILE } from "./settings.js";
 
@@ -42,13 +49,19 @@ const WALK_TOP = 0.16;
 const TRUNK = 0.2;
 const LONE_TRUNK = 1.2;
 
+// How far in from the squares' edges a box over solid squares stands (metres)
+const INSET = 0.01;
+
 // (The world's edge: no ground beyond it)
 const inWorld = (x, y) => x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE;
 
 /**
  * The triangles a tile is made from: { positions (Float32Array: x, height, y each, metres),
  * indices (Int32Array, three a triangle), areas (Uint8Array, one a triangle: AREA or 0), bmin, bmax
- * ([x, height, y]: the box round them, the border in) }. `world` is the Overworld.
+ * ([x, height, y]: the box round them, the border in), outlines (what's walked round as it's
+ * drawn: { corners (Float32Array: x, height, y each), counts (Int32Array: an outline's corners),
+ * heights (Float32Array: the lowest and highest of the ground it's marked on, each) }) }.
+ * `world` is the Overworld.
  */
 export function tileInput(world, tx, ty) {
     const [x0, y0] = [tx * TILE - BORDER, ty * TILE - BORDER];
@@ -95,6 +108,9 @@ export function tileInput(world, tx, ty) {
             } else if (chunk.solid[k]) {
                 // (Under a building, a wall or a feature: inside what stands there, never walked,
                 // so none of it's an island of its own)
+                kind = 0;
+            } else if (chunk.water[k] !== WET.none && chunk.built[k]) {
+                // (A lagoon's, in a town: walked on its plank walks over it, never waded)
                 kind = 0;
             } else if (chunk.water[k] !== WET.none) {
                 const depth = world.surfaceAt(sx + 0.5, sy + 0.5) - Math.min(heights[a], heights[b], heights[c], heights[d]);
@@ -143,12 +159,24 @@ export function tileInput(world, tx, ty) {
     for (const [rx0, ry0, rx1, ry1] of solidRectangles(world, x0, y0, size)) {
         const [low, high] = groundUnder(rx0, ry0, rx1, ry1);
 
-        box(rx0, ry0, rx1, ry1, low - 0.5, high + OBSTACLE);
+        box(rx0 + INSET, ry0 + INSET, rx1 - INSET, ry1 - INSET, low - 0.5, high + OBSTACLE);
+    }
+
+    // (The settlements' props and fences, as they're drawn: their outlines, on the ground under
+    // their corners)
+    const outlines = { corners: [], counts: [], heights: [] };
+
+    for (const corners of world.standingNear?.(x0 - 1, y0 - 1, x0 + size + 1, y0 + size + 1) ?? []) {
+        const under = corners.map(([x, y]) => world.ground.heightAt(x, y));
+
+        outlines.corners.push(...grown(corners, CELL / 2).flatMap(([x, y]) => [x, 0, y]));
+        outlines.counts.push(corners.length);
+        outlines.heights.push(Math.min(...under) - 0.5, Math.max(...under) + OBSTACLE);
     }
 
     // Trees: their trunks (those standing in the chunks the tile's in, and a metre round)
     for (const tree of treesNear(world, x0 - 1, y0 - 1, x0 + size + 1, y0 + size + 1)) {
-        const half = (tree.lone ? LONE_TRUNK : TRUNK) * tree.size;
+        const half = (tree.lone ? LONE_TRUNK : TRUNK) * (tree.size ?? 1) - INSET;
         const h = world.ground.heightAt(tree.x, tree.y);
 
         box(tree.x - half, tree.y - half, tree.x + half, tree.y + half, h - 0.5, h + OBSTACLE);
@@ -202,7 +230,28 @@ export function tileInput(world, tx, ty) {
         areas: Uint8Array.from(areas),
         bmin: [x0, low - 1, y0],
         bmax: [x0 + size, high + 1, y0 + size],
+        outlines: { corners: Float32Array.from(outlines.corners), counts: Int32Array.from(outlines.counts), heights: Float32Array.from(outlines.heights) },
     };
+}
+
+// A convex outline ([[x, y], ...]) grown `grow` metres all round, its corners mitred
+function grown(corners, grow) {
+    const n = corners.length;
+    // (Which way round it goes: outwards is to the right of its edges going one way, the left
+    // going the other)
+    const turn = corners.reduce((sum, [x, y], k) => sum + x * corners[(k + 1) % n][1] - corners[(k + 1) % n][0] * y, 0) > 0 ? 1 : -1;
+    const outward = ([ax, ay], [bx, by]) => {
+        const length = hypot(bx - ax, by - ay) || 1;
+
+        return [(turn * (by - ay)) / length, (-turn * (bx - ax)) / length];
+    };
+
+    return corners.map((corner, k) => {
+        const [p, q] = [outward(corners[(k + n - 1) % n], corner), outward(corner, corners[(k + 1) % n])];
+        const mitre = grow / Math.max(0.5, 1 + p[0] * q[0] + p[1] * q[1]);
+
+        return [corner[0] + (p[0] + q[0]) * mitre, corner[1] + (p[1] + q[1]) * mitre];
+    });
 }
 
 // A ground triangle's area by its slope: as it is, steep, or none if too steep to climb (its
@@ -280,12 +329,13 @@ function* chunksOf(x0, y0, x1, y1) {
     }
 }
 
-// The trees whose trunks stand in a box
+// The trees whose trunks stand in a box: the chunks', and the town's own (its stamp's)
 function treesNear(world, x0, y0, x1, y1) {
-    const trees = [];
+    const within = ({ x, y }) => x >= x0 && y >= y0 && x < x1 && y < y1;
+    const trees = (world.stamp?.trunks ?? []).filter(within);
 
     for (const [cx, cy] of chunksOf(x0, y0, x1, y1)) {
-        trees.push(...world.chunk(cx, cy).trees.filter(({ x, y }) => x >= x0 && y >= y0 && x < x1 && y < y1));
+        trees.push(...world.chunk(cx, cy).trees.filter(within));
     }
 
     return trees;
