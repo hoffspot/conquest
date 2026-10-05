@@ -14,7 +14,7 @@ import { DETAILS } from "../characters/details.js";
 import { EQUIPMENT, SLOTS } from "../characters/equipment.js";
 import { cadence, CURVES, curveAt, PELVIC_TILT, phaseName, runCadence, runStrideLength, strideLength, walkToRunSpeed } from "../characters/gait.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
-import { BODIES } from "../characters/body.js";
+import { BODIES, GAME_BODY } from "../characters/body.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { Walker, WALK_STYLES } from "../characters/locomotion.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
@@ -113,8 +113,8 @@ function resize() {
 
 // --- The character ---
 
-// (Which body: ?body=vitruvian for CharMorph's, else MakeHuman's: body.js BODIES)
-const kit = await loadCharacterKit({ body: BODIES.includes(params.get("body")) ? params.get("body") : "human" });
+// (Which body: ?body=human for MakeHuman's, ?body=vitruvian for CharMorph's, else the game's: body.js BODIES)
+const kit = await loadCharacterKit({ body: BODIES.includes(params.get("body")) ? params.get("body") : GAME_BODY });
 const clone = (value) => structuredClone(value);
 
 // Every character to pick: the presets, and one of each of the other peoples, in plain clothes

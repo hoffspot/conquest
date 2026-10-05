@@ -5,11 +5,13 @@
 // check leaves a copy there), else a file chosen. ?measure=, ?group=, ?people=, ?count=, ?new=1
 // choose what's shown, ?close=1 draws each close up. Or a filmstrip of motions instead:
 // ?film=<motion id>,<motion id>... on ?body= (a body's id; the first, if not given), ?frames= a
-// row (8, if not given), from its start to its end, following the pelvis. window.sheet: { ready,
-// shown } (for pictures and tests).
+// row (8, if not given), from its start to its end, following the pelvis (?view=front or side: seen
+// from there, else from in front and to the right). ?data= the body's data
+// (body.js BODIES: the game's, GAME_BODY, if not given). window.sheet: { ready, shown } (for
+// pictures and tests).
 
 import * as THREE from "three";
-import { loadHumanData } from "../characters/body.js";
+import { BODIES as DATA, GAME_BODY, HUMAN_URL, loadHumanData } from "../characters/body.js";
 import { BODIES, MEASURES, motions, play } from "../characters/motioncheck.js";
 
 const params = new URLSearchParams(location.search);
@@ -160,8 +162,13 @@ function draw(human, { key, kind, t, at: spot }) {
     return canvas;
 }
 
-// One frame of a filmstrip: `motion` played on `body` to `t` s, seen from in front and to its
-// right (a right hand's weapon side), following the pelvis; a canvas
+// Where a filmstrip's seen from (?view=): in front and to the right (a right hand's weapon side),
+// straight in front, or from the right
+const VIEWS = { front: [0, 0, 1], side: [-1, 0, 0] };
+const VIEW = new THREE.Vector3(...(VIEWS[params.get("view")] ?? [-0.6, 0, 1])).normalize();
+
+// One frame of a filmstrip: `motion` played on `body` to `t` s, seen from VIEW, following the
+// pelvis; a canvas
 function still(human, motion, body, t) {
     const played = play(human, motion, body, { until: t, every: Infinity });
 
@@ -177,7 +184,7 @@ function still(human, motion, body, t) {
 
     const hips = character.rig.bone("Hips").getWorldPosition(new THREE.Vector3());
     const centre = new THREE.Vector3(hips.x, 0.95, hips.z);
-    const from = new THREE.Vector3(-0.6, 0, 1).normalize().applyQuaternion(character.object.quaternion);
+    const from = VIEW.clone().applyQuaternion(character.object.quaternion);
 
     marker.visible = false;
     halo.visible = false;
@@ -293,7 +300,7 @@ async function load(text) {
 }
 
 async function start() {
-    human = await loadHumanData();
+    human = await loadHumanData(HUMAN_URL, undefined, DATA.includes(params.get("data")) ? params.get("data") : GAME_BODY);
 
     if (params.get("film")) {
         return film(params.get("film").split(","));

@@ -21,20 +21,15 @@
 //
 // writes client/js/characters/clip-keys.js (and the lab's clips, build-clips.js).
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { gunzipSync } from "node:zlib";
 import { NodeIO } from "@gltf-transform/core";
 import * as THREE from "three";
-import { HumanData } from "../client/js/characters/body.js";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, retarget } from "../client/js/characters/bvh.js";
 import { ITEMS, socketOn } from "../client/js/characters/equipment.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
 import { jointAngles, limitRotation, Rig } from "../client/js/characters/rig.js";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { readHumanData } from "./lib/human-data.js";
 
 /** Mesh2Motion's files, by the short names the bakes use. */
 const FILES = { base: "human-base-animations.glb", addon: "human-addon-animations.glb", mocap: "human-mocap-animations.glb" };
@@ -163,11 +158,9 @@ const SHAPES = [["open", 2], ["relaxed", 17], ["cup", 29], ["grip", 73], ["fist"
 const round = (value, places) => Number(value.toFixed(places)) + 0;
 const vector = (v, places = 2) => v.toArray().map((x) => round(x, places));
 
-/** The reference body (MakeHuman's average adult), rigged, with a walker to find its feet. */
+/** The reference body (the game's body's average adult: body.js GAME_BODY), rigged, with a walker to find its feet. */
 export function referenceBody() {
-    const manifest = JSON.parse(readFileSync(path.join(root, "client/characters/human.json"), "utf8"));
-    const unpacked = gunzipSync(readFileSync(path.join(root, "client/characters/human.bin")));
-    const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+    const human = readHumanData();
     const { positions, joints } = human.shape({});
     const rig = new Rig(human.bones);
     const object = new THREE.Group();

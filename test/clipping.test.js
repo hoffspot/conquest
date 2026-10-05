@@ -3,20 +3,17 @@
 // what they put away, the weapons they draw and put back, and the folk's tools, through standing,
 // walking, running, their guard, their blows and flinches, and their rests, on the real body
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
 import { ATTACKS, DRAWS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
-import { HumanData } from "../client/js/characters/body.js";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
 import { folkLook } from "../client/js/characters/folk.js";
 import { dress, itemDepths } from "../client/js/characters/motioncheck.js";
 import { ARMS, soldierLook } from "../client/js/characters/soldiers.js";
 import { ROLES } from "../client/js/core/roles.js";
+import { readHumanData } from "../scripts/lib/human-data.js";
 
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const human = readHumanData();
 // (Dressed and measured as the motion check does: characters/motioncheck.js)
 const dressed = (look, options) => dress(human, look, options);
 const depths = itemDepths;

@@ -9,6 +9,8 @@
 //     npm run check:motion -- --update          # keep this run's failures as the baseline (saying
 //                                               # first what's worse and better than it was)
 //     npm run check:motion -- --jobs 2          # how many threads (all the machine's, else)
+//     npm run check:motion -- --data human      # on another body (body.js BODIES; the game's,
+//                                               # GAME_BODY, else)
 //
 // What's already wrong is kept in test/motion-baseline.json; a failure that's new, or worse than
 // it was by more than a little (TOLERANCE), fails the check (exit code 1), so CI fails on any
@@ -21,9 +23,9 @@ import { availableParallelism } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
-import { gunzipSync } from "node:zlib";
-import { HumanData } from "../client/js/characters/body.js";
+import { GAME_BODY } from "../client/js/characters/body.js";
 import { BODIES, failures, MEASURES, motions, play } from "../client/js/characters/motioncheck.js";
+import { readHumanData } from "./lib/human-data.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE = path.join(root, "test/motion-baseline.json");
@@ -34,13 +36,6 @@ const SHEET_COPY = path.join(root, "client/motion-report.json");
 /** How much worse than the baseline a failure may come out before it counts as a regression (its measure's units). */
 export const TOLERANCE = Object.freeze({ joint: 1, item: 0.003, limb: 0.003, slide: 0.003, ground: 0.003, grip: 0.003 });
 
-// The body all bodies are shaped from
-function humanData() {
-    const manifest = JSON.parse(readFileSync(path.join(root, "client/characters/human.json"), "utf8"));
-    const unpacked = gunzipSync(readFileSync(path.join(root, "client/characters/human.bin")));
-
-    return new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
-}
 
 // A measure's value as kept (degrees to a hundredth, metres to a tenth of a millimetre)
 const kept = (kind, value) => Math.round(value * (kind === "joint" ? 100 : 10000)) / (kind === "joint" ? 100 : 10000);
@@ -90,7 +85,8 @@ const say = (kind, value) => `${(value * MEASURES[kind].scale).toFixed(1)}${MEAS
 // --- A thread: play its share of the pairs, and hand back their worst ---
 
 if (!isMainThread) {
-    const human = humanData();
+    // (The body all bodies are shaped from)
+    const human = readHumanData(workerData.data);
     const all = new Map(motions().map((motion) => [motion.id, motion]));
     const bodies = new Map(BODIES.map((body) => [body.id, body]));
     const results = {};
@@ -118,6 +114,12 @@ async function main() {
     const only = option("--only") ?? "";
     const bodyOnly = option("--body") ?? "";
     const jobs = Math.max(1, Number(option("--jobs")) || availableParallelism());
+    const data = option("--data") ?? GAME_BODY;
+
+    // (The baseline is the game's body's)
+    if (update && data !== GAME_BODY) {
+        throw new Error(`--update keeps the baseline of the game's body (${GAME_BODY}), not of --data's`);
+    }
     const list = motions().filter(({ id }) => id.startsWith(only));
     const bodies = BODIES.filter(({ id }) => id.startsWith(bodyOnly));
     // (Longest first, dealt round the threads, so they finish together)
@@ -126,13 +128,13 @@ async function main() {
     const started = performance.now();
     let done = 0;
 
-    console.log(`The motion check: ${list.length} motions on ${bodies.length} bodies (${keys.length}), ${shares.length} threads`);
+    console.log(`The motion check: ${list.length} motions on ${bodies.length} bodies (${keys.length}) of ${data}'s data, ${shares.length} threads`);
 
     const parts = await Promise.all(
         shares.map(
             (share) =>
                 new Promise((resolve, reject) => {
-                    const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { keys: share } });
+                    const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { keys: share, data } });
 
                     worker.on("message", (message) => {
                         if (message.results) {

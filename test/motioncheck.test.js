@@ -4,17 +4,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { ATTACKS, DRAWS, REACTIONS } from "../client/js/characters/actions.js";
-import { HumanData } from "../client/js/characters/body.js";
 import { BODIES, failures, MEASURES, motions, play } from "../client/js/characters/motioncheck.js";
 import { ACT_TIMES, ROLES } from "../client/js/core/roles.js";
 import { compare, TOLERANCE } from "../scripts/motion-check.js";
+import { readHumanData } from "../scripts/lib/human-data.js";
 
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const human = readHumanData();
 const all = motions();
 const baseline = JSON.parse(readFileSync(new URL("./motion-baseline.json", import.meta.url), "utf8"));
 

@@ -159,6 +159,7 @@ npm run check:motion                      # everything (about 5 minutes, all you
 npm run check:motion -- --only attack/    # only the motions whose ids start so
 npm run check:motion -- --body orc-       # only those bodies
 npm run check:motion -- --update          # keep this run's failures as the new baseline
+npm run check:motion -- --data vitruvian  # on another body's data (the baseline is the game's body's)
 ```
 
 - **To see what it found**, run `npm start` and open `/motion-sheet.html`. It draws each failure
@@ -168,7 +169,9 @@ npm run check:motion -- --update          # keep this run's failures as the new 
   artifact can be chosen with *Report*.
 - **To watch a motion through**, open `/motion-sheet.html?film=attack/gauntlets/5,attack/sword/0&body=human-tallest-m&frames=8`:
   each motion a row of frames from its start to its end on that body (ids as the report has
-  them). Use it for before-and-after pictures of a motion you've changed.
+  them). Add `&view=front` or `&view=side` to see it from there, and `&data=vitruvian` (or
+  `human`) for another body's data. Use it for before-and-after pictures of a motion you've
+  changed.
 - **When it fails** (`WORSE:` lines): fix the motion. If the change is right and the motion was
   meant to change, run it with `--update`, which says again what got worse, and say why in the
   pull request.

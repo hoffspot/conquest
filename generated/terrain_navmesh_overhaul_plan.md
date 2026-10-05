@@ -4397,3 +4397,30 @@ converted data is to be measured in M8 against today's hm08 data.
     MakeHuman's; points into face coordinates and back.
   - **Next:** the game on Vitruvian (its lower-detail body, the motion check's baseline, the
     clips' bake), its own skin textures, the inside of the mouth, blinks and expressions.
+- **2026-10-05, knees and heels, before the game moves onto Vitruvian** (§10; docs/CHARACTERS.md
+  *Foot locking*, *Heel off*, *The Vitruvian body*). The motion check run on Vitruvian
+  (`npm run check:motion -- --data vitruvian`) had 4,937 joints past their range to MakeHuman's
+  718: what to fix before the game switches.
+  - **Knees:** the leg's IK put the knee in the plane of the hip, the foot and the pole, so a knee
+    resting turned in (women's: MakeHuman's 1.6°, Vitruvian's 5°) was pushed straight as it
+    bent, a sideways swing a knee hasn't got (on Vitruvian 4.6° past its range in every
+    bent-kneed motion: 3,640 failures). Now it bends only about its hinge, the leg keeping the
+    shape it rests with, the thigh turning the whole leg onto the foot, its forward where the
+    thigh's turned forward points; a planted foot's twist past the ankle's range the knee takes,
+    up to its 10° (without it, the dead falls' ankles went 6–8° further past their range).
+  - **Heels:** walking, late in stance, the heel lifts when the ankle would bend past 19°, as it
+    did standing (Vitruvian's straight shin read 24.5°; MakeHuman's, leaning 3.5° at rest, had
+    read that much less).
+  - **Falls:** a foot let go of as the body sinks onto it is lifted out of the ground (it was left
+    up to 1.7 cm in it for that frame).
+  - **The numbers** (failing pairs): MakeHuman's joints 718 → 580, its other measures as they
+    were (262 pairs better; 9 a little worse: a staff, hammer or bow 0.5–0.8 cm further into a
+    thigh in one blow each, a tankard in the hips in one rest, the orc's second hand 2 cm further
+    off its haft); the baseline kept. Vitruvian's joints 4,937 → 734; still to do there: seated
+    rests (its hip joints higher, its legs longer: a foot in the ground) and forearms near the
+    chest (narrower shoulders, a shorter upper arm), most with two-handed weapons.
+  - **One setting for the game's body:** `body.js` `GAME_BODY` (MakeHuman's for now), read by the
+    kit, the lab, the download list, the motion check and its baseline, the clips' bake and the
+    character tests (`scripts/lib/human-data.js` in Node). The contact sheet's filmstrip takes
+    `&data=` and `&view=front|side`.
+  - **Next:** Vitruvian's seated rests and forearms, then the game switched to it.

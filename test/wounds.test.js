@@ -1,19 +1,16 @@
 // Battle damage on a character (client/js/world/wounds.js): marks and wounds of each weapon's
 // kind, landing where the blow came from, worse below each threshold, gone when healed
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { REACTIONS } from "../client/js/characters/actions.js";
-import { HumanData } from "../client/js/characters/body.js";
 import { Rig } from "../client/js/characters/rig.js";
 import { SkinMaterial } from "../client/js/characters/surfaces.js";
 import { KINDS, stageOf, THRESHOLDS, Wounds } from "../client/js/world/wounds.js";
+import { readHumanData } from "../scripts/lib/human-data.js";
 
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const human = readHumanData();
 
 // One kit for every figure, as in the game (its texel map is worked out once)
 const kit = { human };

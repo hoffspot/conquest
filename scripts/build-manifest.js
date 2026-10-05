@@ -12,10 +12,17 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { GAME_BODY } from "../client/js/characters/body.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const client = path.join(root, "client");
 const output = path.join(client, "js/app/manifest.js");
+
+// What the loading screen says each body is (body.js BODIES)
+const BODY_DETAILS = {
+    human: { body: "MakeHuman base mesh, skeleton and sliders", skin: "MakeHuman masks" },
+    vitruvian: { body: "CharMorph's Vitruvian, with MakeHuman's sliders", skin: "MakeHuman masks, carried over" },
+};
 
 // The modules the game imports once everything is downloaded (main.js: import()), and those it
 // imports only when they're first wanted (the action wheels' set-up, playing together), so that
@@ -105,14 +112,16 @@ export async function manifestSource() {
         navigation.push(...(await readdir(path.join(client, folder))).filter((name) => name.endsWith(".wasm")).map((name) => `${folder}/${name}`));
     }
 
-    const masks = (await readdir(path.join(client, "characters/masks"))).filter((name) => name.endsWith(".jpg")).map((name) => `characters/masks/${name}`);
+    // (The game's body, body.js GAME_BODY, and the masks its manifest names)
+    const body = JSON.parse(await readFile(path.join(client, `characters/${GAME_BODY}.json`), "utf8"));
+    const masks = body.masks.map((file) => `characters/${file}`).toSorted();
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
     const groups = [
         { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },
         { id: "navigation", label: "Ways over the world", detail: `Recast and Detour (recast-navigation-js ${recast})`, files: await sized(navigation) },
         { id: "code", label: "Game code", detail: "Pellagos", files: await sized(code) },
-        { id: "body", label: "Body and shapes", detail: "MakeHuman base mesh, skeleton and sliders", files: await sized(["characters/human.json", "characters/human.bin"]) },
-        { id: "skin", label: "Skin details", detail: "MakeHuman masks", files: await sized(masks) },
+        { id: "body", label: "Body and shapes", detail: BODY_DETAILS[GAME_BODY].body, files: await sized([`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`]) },
+        { id: "skin", label: "Skin details", detail: BODY_DETAILS[GAME_BODY].skin, files: await sized(masks) },
         { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
         { id: "models", label: "Things in the world", detail: "A treasure chest (JMI 3D Toolkit)", files: await sized(["models/jmi/chest.glb"]) },
     ];

@@ -5,9 +5,8 @@
 // picture shared; and the skin painted elsewhere (a worker: skins.js), waited for, the same
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
+import { readHumanFiles } from "../scripts/lib/human-data.js";
 
 // (Some pictures, the eyes', are put on a canvas: enough of one for that in Node, keeping what's
 // put on it)
@@ -75,9 +74,9 @@ class Worker {
     }
 }
 
-const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
-const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
-const human = new HumanData(manifest, unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength));
+// (The game's body: body.js GAME_BODY)
+const humanFiles = readHumanFiles();
+const human = new HumanData(humanFiles.manifest, humanFiles.data);
 const atlas = new SkinAtlas(human, {}, 128);
 const kitOf = () => ({ human, atlas });
 
@@ -412,7 +411,7 @@ describe("characters built a step at a time (Character.building)", () => {
 
             worker.postMessage = (data) => told.push(Object.keys(data)[0]) && post(data);
 
-            const files = { manifest, data: unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength) };
+            const files = readHumanFiles();
             const ready = skins.analyse(files, human, {}, 128);
 
             await worker.deliver();
