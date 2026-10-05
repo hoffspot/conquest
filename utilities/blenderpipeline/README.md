@@ -125,7 +125,7 @@ error, so a misspelt one isn't silently ignored.
 | `size` | as it is | `{ "height" \| "length" \| "width" \| "longest": metres }` or `{ "scale": factor }` (measured at rest, after turning) |
 | `turn` | `0` | Degrees about the vertical, counterclockwise from above, so it faces +z (Blender's front, −y, already is) |
 | `origin` | `"keep"` | `"feet"`: its lowest point at y = 0, centred across |
-| `compress` | `"meshopt"` | `"meshopt"` (EXT_meshopt_compression: smallest; Three.js needs the meshopt decoder), `"quantize"` (KHR_mesh_quantization: Three.js reads it as it is) or `"none"` |
+| `compress` | `"meshopt"` | `"meshopt"` (EXT_meshopt_compression: smallest; Three.js needs the meshopt decoder, which the game's loader has), `"quantize"` (KHR_mesh_quantization: Three.js reads it as it is) or `"none"` |
 | `resample` | `0.0001` | How far a resampled animation may stray from its keyframes |
 | `stripMaterialExtensions` | `true` | Leaves out transmission, sheen, clearcoat and the like |
 | `lods` | `[]` | `[{ "ratio": 0.35, "error": 0.02 }]`: lower-detail copies (share of vertices kept; error as a share of its size) |
@@ -159,13 +159,16 @@ dragon: dist/dragon.glb, 301.9 KB (meshopt)
 
 ## Using it in the game
 
+The game's own loader, `loadGltf` in `client/js/world/art/engine/models.js`, reads what this
+makes, compressed or not (it has meshoptimizer's decoder):
+
 ```js
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { clone } from "three/addons/utils/SkeletonUtils.js";
+import { loadGltf } from "../world/art/engine/models.js";
 
-const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-const { scene, animations } = await loader.loadAsync("models/dragon.glb");
+const { scene: model, animations } = await loadGltf("models/dragon.glb");
+const scene = clone(model);
 const mixer = new THREE.AnimationMixer(scene);
 const crawling = mixer.clipAction(THREE.AnimationClip.findByName(animations, "Crawling"));
 
@@ -176,10 +179,12 @@ crawling.play();
 // ...and every frame: mixer.update(dt)
 ```
 
-- **The meshopt decoder.** The game doesn't carry it yet: `scripts/vendor-three.js` copies
-  Three.js's add-ons, and `libs/meshopt_decoder.module.js` would be added to its list (and to the
-  manifest). Until then, build with `"compress": "quantize"`, which GLTFLoader reads as it is
-  (larger: see `dragon-statue`).
+- **The meshopt decoder** is Three.js's add-on `libs/meshopt_decoder.module.js`, copied into
+  `client/vendor/three-r186/addons/` by `npm run vendor:three`. Anywhere else, give a GLTFLoader it:
+  `new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)`. Without it, build with
+  `"compress": "quantize"`, which GLTFLoader reads as it is (larger: see `dragon-statue`).
+- **A clone for each.** `loadGltf` reads a file once and shares it: clone its scene for each one
+  drawn (a skinned one with Three.js's `SkeletonUtils.clone`, so each has a skeleton of its own).
 - **The rest pose** is each node's own transform, as loaded. Don't reset a skinned mesh with
   `skeleton.pose()`: once it's quantized, its inverse bind matrices carry the quantization, and its
   bind pose is no longer where it stands.
