@@ -460,6 +460,9 @@ export class Joining {
         this.onWelcome = () => {};
         this.onState = () => {};
         this.onRefused = () => {};
+
+        /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
+        this.onPong = () => {};
     }
 
     /** Ask to join, as a character (as Host.join takes it). */
@@ -507,6 +510,7 @@ export class Joining {
                     const took = Math.max(0, this.clock() - message.t);
 
                     this.rtt = this.rtt === null ? took : this.rtt + (took - this.rtt) / 8;
+                    this.onPong(took);
                 }
 
                 break;

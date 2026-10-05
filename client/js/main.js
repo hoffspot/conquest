@@ -20,6 +20,7 @@ import { ASSETS } from "./app/assets.js";
 import { releaseOf } from "./app/catalog.js";
 import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
+import { Fetcher } from "./app/fetcher.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { loadExplored, loadFollowers, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
@@ -31,6 +32,10 @@ const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
+
+// The downloader: the catalog's models, fetched in the background (app/fetcher.js), kept out of
+// the way of the game's start and of playing together
+const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
@@ -56,6 +61,7 @@ window.pellagos = {
         return state.together;
     },
     debug,
+    fetcher,
     playing: false,
 };
 
@@ -276,6 +282,8 @@ const painted = () => new Promise((resolve) => requestAnimationFrame(() => setTi
 // Playing (as tests are told: window.pellagos.playing) once the game's under way, its world
 // stepped and drawn, not just started (unless it's been left meanwhile)
 function underway(game) {
+    // (Nothing downloaded while the world's first built and its shaders compiled, nor for 10 s after)
+    fetcher.hold("starting", { for: 10000 });
     game.underway.then(() => {
         if (state.game === game) {
             window.pellagos.playing = true;
@@ -296,7 +304,8 @@ function failed(error) {
 
     state.game = null;
     state.together?.close();
-    state.together = null;
+    setTogether(null);
+    fetcher.release("starting");
     window.pellagos.playing = false;
     debug.watch({ game: null });
     show("loading");
@@ -330,6 +339,7 @@ async function playing(save) {
     const { view, kit, sound } = state.session;
 
     state.game?.dispose();
+    fetcher.hold("starting");
     show("loading");
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
@@ -661,7 +671,7 @@ function quit() {
     $("#menu").close();
     $("#invite").close();
     state.together?.close();
-    state.together = null;
+    setTogether(null);
     state.game?.dispose();
     state.game = null;
     window.pellagos.playing = false;
@@ -690,9 +700,11 @@ async function invite() {
     const { openWorld, RELAY_ERRORS } = await import("./app/together.js");
 
     try {
-        state.together = await openWorld(game, {
-            // (Someone come or gone: shown; and the world goes on, for them, even with the menu open)
+        const world = await openWorld(game, {
+            // (Someone come or gone: shown; and the world goes on, for them, even with the menu open;
+            // nothing downloaded while the world's sent them)
             onChange: () => {
+                fetcher.hold("someone joining", { for: 5000 });
                 showInvite();
 
                 if (!state.game?.running) {
@@ -702,12 +714,14 @@ async function invite() {
             // (Its link dropped: shown on the HUD while it comes back; lost for good, the world's
             // its own again)
             onLink: (link) => {
+                holdForLink(link);
+
                 if (state.game === game) {
                     game.link = link;
                 }
             },
             onDrop: () => {
-                state.together = null;
+                setTogether(null);
                 showInvite(RELAY_ERRORS.unreachable);
 
                 if (state.game === game) {
@@ -716,6 +730,11 @@ async function invite() {
                 }
             },
         });
+
+        // (The downloader timing the round trip over the host's own link, to the relay)
+        setTogether(world);
+        world.link.onRtt = (rtt) => fetcher.measure(rtt);
+        fetcher.probe = () => world.link.measure();
         showInvite();
     } catch (error) {
         showInvite(RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable);
@@ -791,6 +810,9 @@ async function join(event) {
     $("#joingo").disabled = true;
     $("#joinstatus").textContent = "Joining…";
 
+    // (Nothing downloaded from here till the world's come and the game's settled into it)
+    fetcher.hold("joining");
+
     let joined;
 
     try {
@@ -799,6 +821,8 @@ async function join(event) {
             character: { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) },
             onClosed: () => leftWorld("The world's host has closed it to others."),
             onLink: (link) => {
+                holdForLink(link);
+
                 if (state.game?.remote) {
                     state.game.link = link;
                 }
@@ -806,21 +830,56 @@ async function join(event) {
             onDrop: () => leftWorld("The link to the world was lost."),
         });
     } catch (error) {
+        fetcher.release("joining");
         $("#joingo").disabled = false;
         $("#joinstatus").textContent = RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable;
 
         return;
     }
 
-    state.together = joined;
+    setTogether(joined);
     joined.joining.onRefused = (reason) => {
         joined.close();
-        state.together = null;
+        setTogether(null);
         $("#joingo").disabled = false;
         $("#joinstatus").textContent = NET_REFUSALS[reason] ?? "You couldn't join that world.";
     };
     joined.joining.onWelcome = (welcome) => playJoined(save, welcome, joined.joining);
-    joined.joining.onState = () => state.game?.rehost();
+    joined.joining.onState = () => {
+        fetcher.hold("the world again", { for: 5000 });
+        state.game?.rehost();
+    };
+
+    // (The downloader timing the round trip to the host, as the game does every second, and told
+    // when the steps it keeps in hand grow: its messages coming unevenly)
+    let delay = joined.joining.delay;
+
+    joined.joining.onPong = (rtt) => {
+        fetcher.measure(rtt, { strained: joined.joining.delay > delay });
+        delay = joined.joining.delay;
+    };
+}
+
+// Playing together or not (a world opened or joined, app/together.js; or null): the downloader
+// told, so it keeps out of the way of the game's messages, and, alone again, what it was holding
+// back for let go of
+function setTogether(together) {
+    state.together = together;
+    fetcher.together = Boolean(together);
+
+    if (!together) {
+        fetcher.probe = () => {};
+
+        for (const reason of ["joining", "someone joining", "link", "the world again"]) {
+            fetcher.release(reason);
+        }
+    }
+}
+
+// The link to the others dropped (this game's, or the host's: `link` says which), or back (null):
+// nothing downloaded till it's back, and for 5 s after
+function holdForLink(link) {
+    fetcher.hold("link", link ? {} : { for: 5000 });
 }
 
 // Into the world joined: made again from its seed, the host's copy of it restored (the player's
@@ -844,6 +903,7 @@ async function playingJoined(save, welcome, joining) {
 
     $("#join").close();
     state.game?.dispose();
+    fetcher.hold("starting");
     show("loading");
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world you've joined");
@@ -884,11 +944,15 @@ async function playingJoined(save, welcome, joining) {
     show("hud");
     game.start();
     underway(game);
+
+    // (Nothing downloaded till the steps it keeps in hand have settled, 5 s at least, and 30 s at
+    // most: a game that can't keep up with the host may never settle)
+    fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.held - game.remote.delay) < 1, most: 30000 });
 }
 
 // Out of a world joined (its host gone, or the link lost): back to the title, saying why
 function leftWorld(why) {
-    state.together = null;
+    setTogether(null);
 
     if (!state.game?.remote) {
         return;
@@ -912,7 +976,7 @@ $("#invitebutton").addEventListener("click", invite);
 $("#inviteback").addEventListener("click", closeInvite);
 $("#invitestop").addEventListener("click", () => {
     state.together?.close();
-    state.together = null;
+    setTogether(null);
     closeInvite();
 });
 $("#invite").addEventListener("cancel", (event) => {
@@ -1174,6 +1238,7 @@ function showAdapted() {
 
 async function start() {
     debug.show(settings.debug);
+    debug.watch({ fetcher });
     registerServiceWorker(releaseOf(MANIFEST, ASSETS, document.baseURI));
 
     // (Anything that fails with no one to catch it: told in the console, and, while a game's

@@ -490,6 +490,8 @@ client/                 The game (static files served to the browser)
     loader.js           Downloads everything, counting every byte; manifest.js lists it
     catalog.js          Files known by their hash (path?h=hash): what this page's release keeps,
                         told to the service worker; assets.js is the catalog
+    fetcher.js          The downloader: the catalog's models in the background, a part at a time,
+                        paced to keep out of the way of playing together, checked and kept
     session.js          The 3D view and the character kit, and starting games
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
@@ -651,8 +653,9 @@ client/                 The game (static files served to the browser)
   js/lab/land.js        The land of a world plan painted as a picture, for the maps
   js/lab/building-lab.js  The building lab
   js/lab/fire-lab.js    The fire lab
-server/                 A static file server for playing locally (npm start), and the relay that
-                        games playing together talk through (relay.js)
+server/                 A static file server for playing locally (npm start: parts of files as asked,
+                        files asked for by hash kept a year), and the relay that games playing
+                        together talk through (relay.js)
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,

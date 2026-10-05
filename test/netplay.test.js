@@ -511,6 +511,9 @@ describe("playing together (netplay.js)", () => {
         assert.ok(heard.every(({ step }) => step === host.battle.time / STEP_MS));
         assert.equal(joining.hostStep, host.battle.time / STEP_MS);
 
+        const pongs = [];
+
+        joining.onPong = (ms) => pongs.push(ms);
         assert.equal(joining.rtt, null);
         joining.ping();
         now += 80;
@@ -521,6 +524,7 @@ describe("playing together (netplay.js)", () => {
         now += 40;
         deliver();
         assert.equal(joining.rtt, 75, "(smoothed)");
+        assert.deepEqual(pongs, [80, 40], "each as it was heard (for the downloader)");
         assert.ok(post.length === 0);
     });
 

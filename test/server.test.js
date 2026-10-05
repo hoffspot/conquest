@@ -1,8 +1,11 @@
 // Integration tests: start the real server and talk to it over HTTP
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
+import { readFile } from "node:fs/promises";
 import { after, before, describe, it } from "node:test";
 import { createServer } from "../server/index.js";
+import { rangeOf } from "../server/static.js";
 
 let server;
 let baseUrl;
@@ -77,8 +80,68 @@ describe("HTTP server", () => {
         }
     });
 
+    it("serves a part of a file, as the downloader asks for it a part at a time", async () => {
+        const whole = new Uint8Array(await readFile(new URL("../client/characters/human.bin", import.meta.url)));
+        const part = await fetch(`${baseUrl}/characters/human.bin`, { headers: { Range: "bytes=1000-1999" } });
+
+        assert.equal(part.status, 206);
+        assert.equal(part.headers.get("content-range"), `bytes 1000-1999/${whole.length}`);
+        assert.equal(part.headers.get("content-length"), "1000");
+        assert.deepEqual(new Uint8Array(await part.arrayBuffer()), whole.subarray(1000, 2000));
+
+        // (Its last part, asked for past its end: what there is)
+        const last = await fetch(`${baseUrl}/characters/human.bin`, { headers: { Range: `bytes=${whole.length - 10}-${whole.length + 1000}` } });
+
+        assert.equal(last.status, 206);
+        assert.deepEqual(new Uint8Array(await last.arrayBuffer()), whole.subarray(whole.length - 10));
+
+        // (Past its end altogether: nothing to send)
+        const past = await fetch(`${baseUrl}/characters/human.bin`, { headers: { Range: `bytes=${whole.length}-` } });
+
+        assert.equal(past.status, 416);
+        assert.equal(past.headers.get("content-range"), `bytes */${whole.length}`);
+
+        // (The file changed since the asker's other parts: all of it)
+        const changed = await fetch(`${baseUrl}/characters/human.bin`, { headers: { Range: "bytes=0-99", "If-Range": "Thu, 01 Jan 2004 00:00:00 GMT" } });
+
+        assert.equal(changed.status, 200);
+        assert.equal((await changed.arrayBuffer()).byteLength, whole.length);
+        assert.equal((await fetch(`${baseUrl}/js/main.js`)).headers.get("accept-ranges"), "bytes");
+    });
+
+    it("lets browsers keep a file asked for by its hash for good, but only if it's the file's", async () => {
+        const hash = createHash("sha256").update(await readFile(new URL("../client/models/jmi/chest.glb", import.meta.url))).digest("hex").slice(0, 10);
+        const right = await fetch(`${baseUrl}/models/jmi/chest.glb?h=${hash}`);
+        const wrong = await fetch(`${baseUrl}/models/jmi/chest.glb?h=0123456789`);
+
+        assert.equal(right.headers.get("cache-control"), "public, max-age=31536000, immutable");
+        assert.equal(wrong.headers.get("cache-control"), "no-cache");
+        assert.equal((await fetch(`${baseUrl}/models/jmi/chest.glb`)).headers.get("cache-control"), "no-cache");
+        await Promise.all([right.arrayBuffer(), wrong.arrayBuffer()]);
+    });
+
     it("returns 404 for missing files and 405 for other methods", async () => {
         assert.equal((await fetch(`${baseUrl}/nope.js`)).status, 404);
         assert.equal((await fetch(`${baseUrl}/`, { method: "POST" })).status, 405);
+    });
+});
+
+describe("the part of a file a Range header asks for (rangeOf)", () => {
+    it("reads one part: from and to, from to the end, or the last so many bytes, kept within the file", () => {
+        assert.deepEqual(rangeOf("bytes=0-99", 1000), { start: 0, end: 99 });
+        assert.deepEqual(rangeOf("bytes=900-", 1000), { start: 900, end: 999 });
+        assert.deepEqual(rangeOf("bytes=-100", 1000), { start: 900, end: 999 });
+        assert.deepEqual(rangeOf("bytes=-5000", 1000), { start: 0, end: 999 });
+        assert.deepEqual(rangeOf("bytes=990-5000", 1000), { start: 990, end: 999 });
+    });
+
+    it("takes all of it for no header, one it doesn't understand, or several parts; and nothing for a part past the end", () => {
+        assert.equal(rangeOf(undefined, 1000), null);
+        assert.equal(rangeOf("bytes=0-9,20-29", 1000), null);
+        assert.equal(rangeOf("lines=1-2", 1000), null);
+        assert.equal(rangeOf("bytes=-", 1000), null);
+        assert.equal(rangeOf("bytes=1000-", 1000), false);
+        assert.equal(rangeOf("bytes=50-10", 1000), false);
+        assert.equal(rangeOf("bytes=-0", 1000), false);
     });
 });

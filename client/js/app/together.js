@@ -108,6 +108,9 @@ export class RelayLink {
         /** Whether the relay answers pings (an older one doesn't: its link's never judged by them). */
         this.answers = false;
         this.pingedAt = null;
+
+        /** When the ping being timed went (ms), to hear how long the relay took to answer it (onRtt). */
+        this.timedAt = null;
         this.tickedAt = 0;
         this.heartbeat = null;
         this.reconnecting = false;
@@ -124,6 +127,9 @@ export class RelayLink {
         this.onLost = () => {};
         this.onFound = () => {};
         this.onDrop = () => {};
+
+        /** Told how long the relay took to answer a ping (ms): the round trip over this game's own link. */
+        this.onRtt = () => {};
 
         this.#attach(socket);
     }
@@ -182,6 +188,12 @@ export class RelayLink {
                 break;
             case "pong":
                 this.answers = true;
+
+                if (this.timedAt !== null) {
+                    this.onRtt(performance.now() - this.timedAt);
+                    this.timedAt = null;
+                }
+
                 break;
             case "peer":
                 this.onPeer(about);
@@ -257,15 +269,36 @@ export class RelayLink {
                 this.#lost();
             } else if (this.pingedAt === null || slept) {
                 this.pingedAt = now;
-                this.#send("ping");
+                this.#ping();
             }
         }, this.timing.ping);
+    }
+
+    // A ping, timed if none is being (its answer heard by onRtt; one unanswered too long, given up on)
+    #ping() {
+        if (!this.#timing()) {
+            this.timedAt = performance.now();
+        }
+
+        this.#send("ping");
+    }
+
+    #timing() {
+        return this.timedAt !== null && performance.now() - this.timedAt < this.timing.patience;
+    }
+
+    /** Time a round trip to the relay now (heard by onRtt), unless one's being timed already. */
+    measure() {
+        if (this.socket && !this.reconnecting && !this.#timing()) {
+            this.#ping();
+        }
     }
 
     #stopBeating() {
         clearInterval(this.heartbeat);
         this.heartbeat = null;
         this.pingedAt = null;
+        this.timedAt = null;
     }
 
     // The link's dropped: its place taken back on a new one, trying again and again, less often
