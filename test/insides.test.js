@@ -17,7 +17,7 @@ const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
+const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -643,6 +643,65 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
 
         // (A building with nothing to gather by: no one)
         assert.equal(heldWithin("tavern", readPlan("test", "Test", ["...", ".D."])), null);
+    });
+
+    it("keeps those holding any of them clear of where anyone comes in, on every floor: their chief and guards five rings or more from a door's or a stair's arriving square, on free ground got to from it", () => {
+        const world = buildWorld({ seed: 1 });
+        const sites = world.maps.town.sites;
+        const rings = ([x, y], [u, v]) => Math.max(Math.abs(x - u), Math.abs(y - v));
+        const kinds = [["cave"], ["ruins"], ["ruined castle"], ["watchtower"], ["watchtower", "human"], ["abbey", "human"], ["manor", "human"], ["tree hall", "elf"]];
+        let floors = 0;
+
+        for (const [kind, race = null] of kinds) {
+            const site = world.plan.sites.find((one) => one.kind === kind && (race ? one.race === race : kind === "ruins" || !one.race));
+
+            if (!site) {
+                continue;
+            }
+
+            sites.heartOf(site);
+
+            const building = world.interiors.buildings.get(`site:${site.id}`);
+
+            if (!building) {
+                continue;
+            }
+
+            world.interiors.make(building.key);
+
+            const ways = [building.door.ends[1], ...(building.stairs?.ends ?? [])];
+
+            building.maps.forEach((id, k) => {
+                const map = world.maps[id];
+                const held = k === 0 && !map.marks.l ? heldWithin(building.kind, map) : null;
+                const posts = held ? [held.leader, ...held.guards] : [...(map.marks.l ?? []), ...(map.marks.g ?? [])];
+                const arrivals = ways.filter((end) => end.map === id).map((end) => end.arrive);
+
+                if (!posts.length) {
+                    return;
+                }
+
+                const placed = clearOfWaysIn(map, arrivals, posts);
+
+                floors++;
+                assert.equal(new Set(placed.map(String)).size, placed.length, `${kind} ${id}: none the same`);
+
+                for (const square of placed) {
+                    assert.ok(!map.blocked[square[1]][square[0]], `${kind} ${id}: ${square} free`);
+                    assert.ok(arrivals.every((arrive) => rings(square, arrive) >= WAY_IN_CLEAR), `${kind} ${id}: ${square} ${Math.min(...arrivals.map((arrive) => rings(square, arrive)))} rings from where they come in`);
+                    assert.ok(reachable(map, arrivals[0], square), `${kind} ${id}: ${square} got to`);
+                }
+
+                // (Those already clear kept where they were)
+                posts.forEach((post, n) => {
+                    if (arrivals.every((arrive) => rings(post, arrive) >= WAY_IN_CLEAR) && posts.findIndex((other) => String(other) === String(post)) === n) {
+                        assert.deepEqual(placed[n], post, `${kind} ${id}: ${post} kept`);
+                    }
+                });
+            });
+        }
+
+        assert.ok(floors >= 7, `(${floors} floors)`);
     });
 
     it("each people's watchtower (but the orcs' open deck) and the elves' tree hall gone into by its door, the way clear: a watchtower kept, its two floors joined by stairs, its lookout and sentry where they can be got to; the tree hall a great hall of their own", () => {

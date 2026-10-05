@@ -2676,11 +2676,28 @@ metres off (back as many as ever the next time, unless it's been cleared).
     its walls falling away to the ground far below.
   - **Who's within** (`host.js` `#inside`): the band's chief and their locked chest at the back of
     the cave or the crypt or the top of the tower (the plan's "l" and "h"), as many of the band as it has room
-    for guarding the way in (its "g", half the band at most), the rest outside; the band's held
+    for at its posts (its "g", half the band at most), each clear of the way in (below), the rest
+    outside; the band's held
     while a player's within. Put to the sword, the chest's shares lie where it stood, inside, for
     the players there (in or near it), and the guild's contract is done for them; a player within
     is told the place is cleared ("The dead of Peningmoor Ruins are laid to rest, for now.") as one
     outside near it is.
+  - **No one's set on as they come in** (`insides.js` `clearOfWaysIn`, `battle.js` `WARY_MS`):
+    - **Where they stand.** Everyone holding a place gone into, its chief too, stands at least
+      five rings of squares (`WAY_IN_CLEAR`) from where anyone comes in on their floor: a door's
+      arriving square (two steps in) or a stair's. That's past the followers placed round whoever
+      came in, a summoned companion behind them, and a step more. A post that's already that far
+      off is kept; one nearer the door moves to the far side, as near its chief as there's room
+      (the chief, as far in as the floor goes). They still wander about there as they did, so one
+      may come nearer before anyone arrives.
+    - **A moment's pause.** One of them first seeing someone come in (a player or anyone with
+      them) turns to them and draws, but does nothing else for two seconds: no moving, no blow,
+      no spell. Struck meanwhile, by a blow or a spell, that one fights back at once; the rest
+      keep their pause. Someone arriving once a fight's on gets no pause. Once it's let them go
+      (all gone, or out of sight a while), it pauses again the next time.
+    - A creature put out alone at a post stands right on it (a pack round its square, as
+      before).
+    - **Versions:** `NET_VERSION` 47.
   - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
     `within`), half of each kind of its dead with it (three skeletons, two ghosts and a wraith,
     each at a post of its own), the rest in the courtyard; slain, the hoard's opened as the
@@ -2697,8 +2714,9 @@ metres off (back as many as ever the next time, unless it's been cleared).
     an acolyte and worshippers; the manor's lord or lady on the throne ("Lord of Brombridge
     Manor", speaking for the realm of the town nearest it), their steward, councillors and
     sentries. Held by outlaws, none of them (`host.js` `#notTheirs`): the band's chief before the
-    altar or the thrones, the chest beside it, guards up the aisle from the door (`insides.js`
-    `heldWithin`, for plans without the marks), the rest outside; put to the sword, it's empty a
+    altar or the thrones, the chest beside it, guards up the aisle (`insides.js` `heldWithin`,
+    for plans without the marks) but none near the door (below), the rest outside; put to the
+    sword, it's empty a
     while, then held again.
   - **The peoples' watchtowers and the elves' tree hall** (M7.5b-2b; `insides.js`
     `STRUCTURE_DOORS`): each people's watchtower has a door in its foot (the humans' round tower,

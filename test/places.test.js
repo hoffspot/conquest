@@ -10,6 +10,7 @@ import { LAIRS, tierAt } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { WAY_IN_CLEAR } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { bandFolk, heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
 import { RELICS, rollLoot, rollRelic, wares } from "../client/js/core/progress.js";
@@ -217,8 +218,24 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
                 assert.ok(building.maps.includes(chest.map), `${kind}'s chest within`);
                 assert.deepEqual(chest.square, world.maps[chest.map].marks.h[0]);
                 assert.equal(leader.map, chest.map, `${kind}'s chief by it`);
-                assert.ok(Math.hypot(leader.square[0] - world.maps[chest.map].marks.l[0][0], leader.square[1] - world.maps[chest.map].marks.l[0][1]) < 1.5, `${kind}'s chief where the plan has them`);
                 assert.equal(within.length, Math.min(posts.length, Math.ceil(folk.length / 2)), `${kind}'s guards within`);
+
+                // (Its chief and those within each put clear of where anyone comes in onto their
+                // floor, its door's or its stairs' arriving square: insides.js WAY_IN_CLEAR rings, as
+                // far as the floor has room; the chief where the plan has them when that's clear)
+                const ways = [building.door.ends[1], ...(building.stairs?.ends ?? [])];
+                const off = (one) => Math.min(...ways.filter((end) => end.map === one.map).map(({ arrive: [x, y] }) => Math.max(Math.abs(one.spawn[0] - x), Math.abs(one.spawn[1] - y))));
+                const mark = world.maps[chest.map].marks.l[0];
+
+                for (const one of [leader, ...within]) {
+                    assert.ok(off(one) >= WAY_IN_CLEAR, `${kind}: ${one.id} ${off(one)} rings from the way in`);
+                }
+
+                if (off({ map: chest.map, spawn: mark }) >= WAY_IN_CLEAR) {
+                    assert.deepEqual(leader.spawn, mark, `${kind}'s chief where the plan has them`);
+                } else {
+                    assert.ok(off(leader) > off({ map: chest.map, spawn: mark }), `${kind}'s chief moved further in than the plan has them`);
+                }
                 assert.ok(within.length >= 2 && folk.some((one) => one.map === "town"));
                 me.map = chest.map;
             }
