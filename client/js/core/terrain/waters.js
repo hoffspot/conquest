@@ -121,10 +121,57 @@ export function setLandOf(land, still = null) {
     stillAt = still;
 }
 
-/** The waters of a world plan (made once for it). */
-export function watersOf(plan) {
+/**
+ * What runs in each of the plan's cells (RUNNING, a Uint8Array a cell each): its rivers, and the
+ * streams: each cell of the hills and mountains enough rain runs through (STREAMS), and on from
+ * each the way its water goes (to the cell beside it more runs through) until it meets a river, a
+ * lake or the sea. `plan`: its water, flow and height (the plan's, or the land's as it's shaped,
+ * settling it: worldplan/settle.js).
+ */
+export function runningIn({ water, flow, height }) {
+    const runs = new Uint8Array(CELLS * CELLS);
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        runs[k] = water[k] === WATER.river ? RUNNING.river : RUNNING.none;
+    }
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        if (water[k] !== WATER.none || flow[k] < STREAMS.flow || height[k] < STREAMS.height) {
+            continue;
+        }
+
+        for (let at = k; at >= 0 && runs[at] === RUNNING.none && water[at] === WATER.none; at = below(flow, at)) {
+            runs[at] = RUNNING.stream;
+        }
+    }
+
+    return runs;
+}
+
+// The cell a cell's water goes on to: the one beside it more runs through than any other (and
+// more than through it), or -1
+function below(flow, k) {
+    const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
+    let [best, most] = [-1, flow[k]];
+
+    for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
+        const [ni, nj] = [i + di, j + dj];
+
+        if (ni >= 0 && nj >= 0 && ni < CELLS && nj < CELLS && flow[nj * CELLS + ni] > most) {
+            [best, most] = [nj * CELLS + ni, flow[nj * CELLS + ni]];
+        }
+    }
+
+    return best;
+}
+
+/**
+ * The waters of a world plan (made once for it; or `made`, those of the same land worked out
+ * already as it was settled: worldplan/plan.js layOutWorld).
+ */
+export function watersOf(plan, made = null) {
     if (!MADE.has(plan)) {
-        MADE.set(plan, new Waters(plan));
+        MADE.set(plan, made ?? new Waters(plan));
     }
 
     return MADE.get(plan);
@@ -144,52 +191,12 @@ export class Waters {
     }
 
     /**
-     * What runs in each cell (RUNNING, a Uint8Array a cell each): the plan's rivers, and the
-     * streams: each cell of the hills and mountains enough rain runs through, and on from each
-     * the way its water goes (to the cell beside it more runs through) until it meets a river, a
-     * lake or the sea.
+     * What runs in each cell (RUNNING, a Uint8Array a cell each): runningIn the plan.
      */
     get running() {
-        if (!this.runs) {
-            const { plan } = this;
-            const runs = new Uint8Array(CELLS * CELLS);
-
-            for (let k = 0; k < CELLS * CELLS; k++) {
-                runs[k] = plan.water[k] === WATER.river ? RUNNING.river : RUNNING.none;
-            }
-
-            for (let k = 0; k < CELLS * CELLS; k++) {
-                if (plan.water[k] !== WATER.none || plan.flow[k] < STREAMS.flow || plan.height[k] < STREAMS.height) {
-                    continue;
-                }
-
-                for (let at = k; at >= 0 && runs[at] === RUNNING.none && plan.water[at] === WATER.none; at = this.#below(at)) {
-                    runs[at] = RUNNING.stream;
-                }
-            }
-
-            this.runs = runs;
-        }
+        this.runs ??= runningIn(this.plan);
 
         return this.runs;
-    }
-
-    // The cell a cell's water goes on to: the one beside it more runs through than any other (and
-    // more than through it), or -1
-    #below(k) {
-        const { plan } = this;
-        const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
-        let [best, most] = [-1, plan.flow[k]];
-
-        for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
-            const [ni, nj] = [i + di, j + dj];
-
-            if (ni >= 0 && nj >= 0 && ni < CELLS && nj < CELLS && plan.flow[nj * CELLS + ni] > most) {
-                [best, most] = [nj * CELLS + ni, plan.flow[nj * CELLS + ni]];
-            }
-        }
-
-        return best;
     }
 
     /**

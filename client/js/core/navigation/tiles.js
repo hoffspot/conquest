@@ -12,8 +12,9 @@
 //  - What stands on it: the overworld's solid squares (the town's, the settlements' and the
 //    places' buildings and walls, and the wild's features), merged into rectangles, each a box
 //    OBSTACLE high; trees as their trunks. Their faces are areas of none, so nothing can be stood
-//    on them (a roof is no floor).
-//  - Bridges: their decks, a strip of quads along each, at its height.
+//    on them (a roof is no floor), and so is the ground under them (nothing's walked inside them).
+//  - Bridges: their decks, a strip of quads along each, at its height; and the plank walks over
+//    the lizard folk's lagoons, at their planks'.
 
 import { hypot } from "../exact.js";
 import { WET } from "../overworld.js";
@@ -32,6 +33,9 @@ const CLIFF_COS = 0.788010753606722;
 
 /** How high a building, wall or feature is taken to stand over the ground under it (metres). */
 const OBSTACLE = 3;
+
+/** How high a plank walk's planks are over the ground under them (metres: world/chunks3d.js DECK.top). */
+const WALK_TOP = 0.16;
 
 /** A tree's trunk: half its width (metres), at its size 1; a great lone oak's (lonetrees.js). */
 const TRUNK = 0.2;
@@ -87,15 +91,20 @@ export function tileInput(world, tx, ty) {
             // masonry, not walked under)
             if (world.sites?.deckAt?.(sx, sy) && world.heightAt(sx + 0.5, sy + 0.5) > Math.max(heights[a], heights[b], heights[c], heights[d]) + 1) {
                 kind = 0;
-            } else if (chunk.water[k] !== WET.none && !chunk.solid[k]) {
-                // (Water the land has, not a settlement's lagoon: what's built there is solid, below)
+            } else if (chunk.solid[k]) {
+                // (Under a building, a wall or a feature: inside what stands there, never walked,
+                // so none of it's an island of its own)
+                kind = 0;
+            } else if (chunk.water[k] !== WET.none) {
                 const depth = world.surfaceAt(sx + 0.5, sy + 0.5) - Math.min(heights[a], heights[b], heights[c], heights[d]);
 
                 kind = (world.wades ? world.wades(sx + 0.5, sy + 0.5, depth) : depth <= FORD) ? AREA.ford : 0;
             }
 
-            triangle(a, c, b, kind && slopeArea(positions, a, c, b, kind));
-            triangle(b, c, d, kind && slopeArea(positions, b, c, d, kind));
+            // (Split from its north-west corner to its south-east, as the ground's drawn and
+            // stood on: terrain/ground.js between)
+            triangle(a, c, d, kind && slopeArea(positions, a, c, d, kind));
+            triangle(a, d, b, kind && slopeArea(positions, a, d, b, kind));
         }
     }
 
@@ -144,9 +153,8 @@ export function tileInput(world, tx, ty) {
         box(tree.x - half, tree.y - half, tree.x + half, tree.y + half, h - 0.5, h + OBSTACLE);
     }
 
-    // Bridges: their decks, a quad every metre along
-    for (const bridge of bridgesNear(world, x0, y0, x0 + size, y0 + size)) {
-        const { a, b, half } = bridge;
+    // A deck from one end to the other (`deck`: its height a way `t` along it), a quad every metre
+    const strip = ({ a, b, half }, deck) => {
         const length = hypot(b[0] - a[0], b[1] - a[1]);
         const [ux, uy] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
         const [nx, ny] = [-uy * half, ux * half];
@@ -156,17 +164,27 @@ export function tileInput(world, tx, ty) {
         for (let s = 0; s <= steps; s++) {
             const t = s / steps;
             const [px, py] = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-            const h = world.deckOf(bridge, t);
+            const h = deck(t, px, py);
             const pair = [vertex(px + nx, h, py + ny), vertex(px - nx, h, py - ny)];
 
             if (last) {
-                // (Faces up, whichever way the bridge runs: worked out from the first two)
+                // (Faces up, whichever way the deck runs: worked out from the first two)
                 triangle(last[0], last[1], pair[0], AREA.deck);
                 triangle(last[1], pair[1], pair[0], AREA.deck);
             }
 
             last = pair;
         }
+    };
+
+    // Bridges: their decks
+    for (const bridge of bridgesNear(world, x0, y0, x0 + size, y0 + size)) {
+        strip(bridge, (t) => world.deckOf(bridge, t));
+    }
+
+    // The plank walks over a lagoon (the lizard folk's): their planks, WALK_TOP over the ground
+    for (const walk of world.walksNear?.(x0, y0, x0 + size, y0 + size) ?? []) {
+        strip(walk, (t, px, py) => world.ground.heightAt(px, py) + WALK_TOP);
     }
 
     let [low, high] = [Infinity, -Infinity];
