@@ -312,6 +312,10 @@ function aboutOf({ id, quality }) {
         return `Cures what's ${label.toLowerCase()} at once. (${about})`;
     }
 
+    if (use?.boon) {
+        return ITEMS[id].about;
+    }
+
     if (use) {
         return `${use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina."}${worth}`;
     }
@@ -403,7 +407,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -4707,6 +4711,14 @@ export class Game {
                 break;
             case "slept":
                 this.#slept(event);
+                break;
+            case "boon":
+                // (A Stamina Boost drunk, or a boon worn off)
+                if (event.id === this.me) {
+                    this.hud.message(event.change === "on" ? (event.boon === "staminaBoost" ? "Your stamina doubles, for five minutes." : `${event.label}.`) : `${event.label} wears off.`, 2.5);
+                    this.#progressed(event);
+                }
+
                 break;
             case "explored":
                 // (Marked on the maps, and kept)

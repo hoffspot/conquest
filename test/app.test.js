@@ -20,6 +20,7 @@ import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { guardOf, heroEquipment } from "../client/js/app/game.js";
 import { BOUGHT } from "../client/js/core/host.js";
+import { distanceLabel } from "../client/js/app/worldmap.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -577,6 +578,15 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal(SPELLS.vigor.target, "any", "healing: on anyone");
         assert.equal(SPELLS.burn.target, "enemy");
         assert.equal(SPELLS.stun.target, "enemy");
+    });
+
+    it("says how far the world map's pin is: in metres, and past a kilometre in kilometres to a tenth", () => {
+        assert.equal(distanceLabel(0), "0 m");
+        assert.equal(distanceLabel(640.4), "640 m");
+        assert.equal(distanceLabel(1000), "1000 m");
+        assert.equal(distanceLabel(1000.4), "1.0 km");
+        assert.equal(distanceLabel(1260), "1.3 km");
+        assert.equal(distanceLabel(12449), "12.4 km");
     });
 
     it("has an icon for everything that does someone good, as their plate shows it: each spell that lasts, and each boon bought by talking", () => {

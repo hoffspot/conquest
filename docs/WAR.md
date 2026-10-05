@@ -522,8 +522,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - the priest: healing draughts;
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
     buy?", which she answers: the spoils of the wild and tomes, which no one else takes, and gear):
-    wands, grimoires, wizards' hats, jewellery, draughts and cures, and the tomes that open the
-    elements' schools, up to fine;
+    wands, grimoires, wizards' hats, jewellery, draughts and cures, the Stamina Boost potion
+    (below), and the tomes that open the elements' schools, up to fine;
   - down in a people's castle's undercroft (GAME.md *Places worth finding*, *The undercroft*):
     its smith as a town's; its quartermaster ("Show me what's on the racks."): the castle's arms,
     shields and armour and the pieces of its people's uniform, up to legendary, the only shop
@@ -543,7 +543,12 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
 - **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
   little more of everything), shown on the player's plate while it lasts (a sword on a whetstone,
-  sparks flying; a six-pointed star under a halo).
+  sparks flying; a six-pointed star under a halo), and said when it wears off.
+- **The Stamina Boost potion** (20 gold, at the adventurers' guild): drunk, it doubles the
+  player's stamina for five minutes, the most of it and what's left alike (a boon as the others
+  are: `staminaTimes`, host.js `#outfit`); when it wears off, both are halved again. Only one at
+  a time: drinking another while one's working is refused ("One's still working: only one at a
+  time."), and the potion's kept. On the plate, an orange draught with a bolt of lightning.
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
 - **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape

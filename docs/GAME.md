@@ -2806,7 +2806,9 @@ zoom out. A key in the corner shows the four icons and the fog.
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
   won't take one there, `setPin`), shown with the
-  way to it from where they are, a glowing blue line; held on the pin, or its button (a pin with
+  way to it from where they are, a glowing blue line, and how far that is beside the pin (along
+  the way, or as the crow flies while there's none: "640 m", and past a kilometre in kilometres
+  to a tenth, "1.3 km": worldmap.js `distanceLabel`); held on the pin, or its button (a pin with
   a cross, by the zoom buttons), it's taken away. It's kept with the character (save.js
   `loadPin`), not the world: each player's is their own. Out in the world (world/pin3d.js
   `PinMarks`) it's a round column of blue light rising 900 m from where it stands (a strip turned

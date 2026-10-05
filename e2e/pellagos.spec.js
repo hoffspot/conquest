@@ -3971,10 +3971,13 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     const dropped = await page.evaluate(() => {
         const { game, worldMap } = window.pellagos;
 
-        return { pin: game.pin, kept: window.keptPins, way: worldMap.drawn.way, unpin: !document.querySelector("#worldmapunpin").hidden, note: document.querySelector("#worldmapnote").textContent };
+        return { pin: game.pin, kept: window.keptPins, way: worldMap.drawn.way, distance: worldMap.drawn.distance, unpin: !document.querySelector("#worldmapunpin").hidden, note: document.querySelector("#worldmapnote").textContent };
     });
 
     expect(dropped.pin.map(Math.round)).toEqual(near.map(Math.round));
+    // (How far, along the way, beside the pin: some 108 metres as the crow flies, a little more along it)
+    expect(dropped.distance).toMatch(/^\d+ m$/);
+    expect(Number.parseInt(dropped.distance, 10)).toBeGreaterThanOrEqual(100);
     expect(dropped.kept).toEqual([dropped.pin]);
     expect(dropped.way).toBeGreaterThan(1);
     expect(dropped.unpin).toBe(true);

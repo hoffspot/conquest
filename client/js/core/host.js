@@ -229,7 +229,8 @@ export const SHOP_REACH = TALK_REACH.across + 3;
 
 /**
  * What the things bought by talking do (their `buy` or `rent`): mend hurts, fill stamina, or a
- * boon for a while (the share more a player's blows, heals and armour are: ms).
+ * boon for a while (the share more a player's blows, heals and armour are: ms). A boon can be
+ * drunk too (progress.js ITEMS `use.boon`: a Stamina Boost, `staminaTimes` the stamina).
  */
 export const BOUGHT = Object.freeze({
     ale: { stamina: 1000 },
@@ -286,6 +287,7 @@ export const REFUSALS = Object.freeze({
     changed: "Something offered isn't there any more: look again.",
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
+    boosted: "One's still working: only one at a time.",
     known: "You know that spell already.",
     unexplored: "You haven't been there.",
     unsummoned: "No one's calling you.",
@@ -891,11 +893,17 @@ export class Host {
 
         this.#scrutiny(ms);
 
-        // Boons worn off
+        // Boons worn off (and said)
         for (const player of this.players.values()) {
-            if (player.boons.some(({ until }) => until <= this.battle.time)) {
+            const ended = player.boons.filter(({ until }) => until <= this.battle.time);
+
+            if (ended.length) {
                 player.boons = player.boons.filter(({ until }) => until > this.battle.time);
                 this.#outfit(player);
+
+                for (const { id, label } of ended) {
+                    this.#event("boon", { id: player.id, boon: id, label, change: "off" });
+                }
             }
         }
 
@@ -1444,7 +1452,9 @@ export class Host {
         actor.armor = Math.min(ARMOR_CAP, bonus.armor);
         actor.dodge = bonus.dodge;
 
-        const [hp, stamina] = [KINDS.player.hp + bonus.hp, KINDS.player.hp + bonus.stamina];
+        // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts)
+        const breath = player.boons.reduce((times, { staminaTimes = 1 }) => times * staminaTimes, 1);
+        const [hp, stamina] = [KINDS.player.hp + bonus.hp, Math.round((KINDS.player.hp + bonus.stamina) * breath)];
 
         if (actor.maxHp !== hp) {
             actor.hp = actor.dead ? 0 : Math.max(1, Math.round((actor.hp * hp) / actor.maxHp));
@@ -1982,10 +1992,21 @@ export class Host {
             return refuse("unafflicted");
         }
 
+        // (A boon in a bottle, a Stamina Boost: one at a time)
+        if (use.boon && player.boons.some(({ id }) => id === use.boon.id)) {
+            return refuse("boosted");
+        }
+
         const item = player.progress.take(index, 1);
 
         if (use.cure) {
             this.battle.cure(actor.id, use.cure);
+        }
+
+        if (use.boon) {
+            player.boons = [...player.boons, { ...use.boon, until: this.battle.time + use.boon.ms }];
+            this.#outfit(player);
+            this.#event("boon", { id: player.id, boon: use.boon.id, label: use.boon.label, change: "on" });
         }
 
         this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
