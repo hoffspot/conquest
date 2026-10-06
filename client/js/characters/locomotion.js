@@ -95,6 +95,11 @@ const HIP_GIVE = 2;
 // How far short of the most a leg's let reach the knees give, leaning over a planted foot (m)
 const GIVE_SPARE = 0.001;
 
+// Sitting, how far a foot the pose puts into the floor is brought up onto it by the knee rising
+// (the thigh tipping up off the seat) before the shin swings forward for the rest (metres, at
+// 1.7 m): a long-legged body on a low bench sits with its knees up, its shins near upright
+const SEAT_RISE = 0.04;
+
 // Running: from the fastest walk to this much faster, the walk blends into a run. Running, the
 // body leans this much further forward (degrees), the feet land this far apart (metres), and the
 // body rises and falls this share of the leg's length (each way) through each step, lowest this
@@ -760,17 +765,30 @@ export class Walker {
         }
     }
 
-    // Sitting: a foot the pose puts into the floor brought onto it forward, the shin swung forward
-    // about the knee (the thigh level on the seat, as it was: a long-legged body's feet further out
-    // in front of it), the foot turned as it was; straight up, if it can't reach it so
+    // Sitting: a foot the pose puts into the floor brought up onto it, first by the knee rising
+    // (as far as SEAT_RISE: the ankle lifted straight up, the thigh tipping up off the seat), then
+    // by the shin swung forward about the knee (a long-legged body's feet further out in front of
+    // it), the foot turned as it was; straight up, if it can't reach it so
     #onFloor(side, i) {
-        const under = -this.#lowest(i);
+        let under = -this.#lowest(i);
 
         if (!(under > 0)) {
             return;
         }
 
         const object = this.character.object;
+        const rise = Math.min(under, SEAT_RISE * (this.character.height ?? 1.7) / 1.7);
+
+        _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
+        _target.y += rise;
+        object.worldToLocal(_target);
+        this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+        under = -this.#lowest(i);
+
+        if (!(under > 0.0005)) {
+            return;
+        }
+
         const knee = _knee.setFromMatrixPosition(this.rig.bone(`${side}Leg`).matrixWorld);
         const shin = _shin.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld).sub(knee);
         const forward = _ahead.set(0, 0, 1).applyQuaternion(object.getWorldQuaternion(_footTurn)).setY(0).normalize();

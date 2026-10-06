@@ -3533,9 +3533,6 @@
   "rest/patron/1|orc-shortest-f": {
    "item": 0.0143
   },
-  "rest/patron/3|orc-bulkiest-m": {
-   "item": 0.0132
-  },
   "rest/petitioner/4|human-bulkiest-f": {
    "limb": 0.041
   },

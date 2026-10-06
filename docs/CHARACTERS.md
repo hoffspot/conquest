@@ -1360,10 +1360,15 @@ Mesh2Motion's clips: "Clips in the game", below):
   flat, leaning a little over the table, the free arm resting on it; the pelvis lowered onto a
   45 cm bench (the hip joints 10 cm above it) and back from the middle of the square, so the
   knees go under the table. The feet aren't kept planted, but the hands still reach. A foot the
-  pose puts into the floor is brought onto it (`SEATED`, `Walker`'s `#onFloor`): the shin swung
-  forward about the knee, the thigh left level on the seat, so a long-legged body's feet are
-  further out in front of it, as people of every height sit on the same bench. (Lifting the foot
-  straight up instead raised the knees into the table and the tankard.)
+  pose puts into the floor is brought onto it (`SEATED`, `Walker`'s `#onFloor`): first the knee
+  rises, the thigh tipping up off the seat, by up to 4 cm (`SEAT_RISE`, for a body 1.7 m tall),
+  then the shin swings forward about the knee for the rest, so a long-legged body sits with its
+  knees a little up and its feet a little out in front of it, as people of every height sit on
+  the same bench. (Lifting the foot straight up all the way raised the knees into the table and
+  the tankard; swung forward only, the drinker's shins leaned 14° out in front on MakeHuman, 27°
+  on Vitruvian's longer legs: now 1° and 11°.) A patron's tankard is held before the chest a
+  little higher and further out than it was (and banged down further out on the table), clear of
+  the thigh as it tips up.
 - **A toast**: a tankard (held upright by its handle, the forearm level) raised high in front,
   shaken, then brought to the mouth and tipped, the head back, and down again.
 - **Serving**: leaning over a table to set a tankard down on it.
