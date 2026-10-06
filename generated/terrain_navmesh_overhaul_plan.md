@@ -4584,3 +4584,28 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the rests whose hand comes back across the chest, the bow, the wand put away and the
     staff cast on Vitruvian, the hammer's blows from the new guard, Vitruvian's baseline, and the
     game switched to it.
+- **2026-10-06, an empty hand placed by its own grip; the rests and casts on Vitruvian** (§10;
+  docs/CHARACTERS.md *Key poses*, *Spells*).
+  - **A sheathed weapon no longer steers the empty hand** (`Actions` reach): a hand's place was
+    worked out as holding the weapon it would draw, whenever one was put away for it, so a
+    sentry folding the arms (a sword at the hip) had the right hand placed as if gripping the
+    sword upright: the hand out past the left shoulder, the forearm 8 cm into the belly on every
+    sentry. Now only while drawing or putting it away.
+  - **Tucking back the hair** (the serving wench's and the receptionist's rest): the hand let down
+    in front of the hip, not back across the chest (12 cm into the bulkiest man's, Vitruvian).
+  - **The sign of the Hearth** (the priest's, acolyte's and worshipper's): the fingertips to the
+    heart a little further out, off a full chest.
+  - **The crouching bow shot**: the bow held further out to the left as the body drops, its lower
+    limb clear of the right thigh coming up.
+  - **A staff or war hammer held upright while casting**: a hand's breadth out to the side and
+    forward of the hip; nearer it, the staff's foot swung through the lizard women's thighs as
+    the other hand came back to the haft.
+  - **The numbers** (failing pairs, against PR #203): MakeHuman forearms in the torso 304 → 274
+    (the sentry's folded arms 28 → 0), joints 582 → 558 (the hair tuck's shoulder 41 → 17), held
+    things 298 → 296; 56 pairs better, none worse. The baseline is updated (1,377 → 1,323).
+    Vitruvian: forearms 489 → 427 (the sentry's 30 → 2, the hair tuck's 22 → 0, the sign of the
+    Hearth's 12 → 0), held things 457 → 429 (the staff casting a stun 15 → 0, the crouching shot's
+    bow 15 → 2), joints 569 → 543; 119 better, 1 worse (the crouching shot's bow 1.5 cm into a
+    tall dark elf's thigh).
+  - **Next:** the hammer's and staff's blows (forearms 10 to 14 cm in, on every body), the wand
+    put away, Vitruvian's baseline, and the game switched to it.
