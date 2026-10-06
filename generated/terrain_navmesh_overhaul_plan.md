@@ -4641,3 +4641,18 @@ converted data is to be measured in M8 against today's hm08 data.
     staff's 31 → 4), second hands 141 → 88, joints 543 → 499; 523 better, 22 worse.
   - **Next:** the hammer's side swing, the spiked boots on Vitruvian, Vitruvian's baseline, and
     the game switched to it.
+- **2026-10-06, the spiked boots' shin plates fitted to each shin** (§10; docs/CHARACTERS.md
+  *Spiked boots*).
+  - **The shin plate** (`equipment.js` socket `leftShin`/`rightShin`, `items.js` `shinPlate`) was
+    placed by the shin's foremost point at one height, upright, with one curve for every body. A
+    full shin is flatter in front than that curve: on Vitruvian's men, its edges went up to 1.7 cm
+    into the shin, standing on guard. Now it lies along the shin (ankle to knee, the shins leaning
+    out as the legs stand apart), and its curve is fitted to the shin's skin it spans: from its
+    own to three times as flat, as wide as ever, the one that sits nearest the skin while clearing
+    it. Centred across the shin rather than on its foremost point, a running orc's plate met the
+    other calf as the legs passed; on the foremost point, as before, it doesn't.
+  - **The numbers** (failing pairs, against PR #205): Vitruvian, held things 310 → 212 (the boots'
+    motions 102 → 4); MakeHuman, held things 197 → 187 (the boots' 47 → 37); none worse on either.
+    What's left is the toe spike and heel spur in the foot (MakeHuman, 1.3 cm on three bodies) and
+    a running orc's toe spike and plate meeting the other leg. The baseline is updated.
+  - **Next:** the hammer's side swing, Vitruvian's baseline, and the game switched to it.

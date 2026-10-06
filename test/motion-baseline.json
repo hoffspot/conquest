@@ -85,8 +85,7 @@
    "slide": 0.0466
   },
   "attack/boots/0|orc-bulkiest-m": {
-   "slide": 0.0526,
-   "item": 0.0121
+   "slide": 0.0526
   },
   "attack/boots/0|orc-shortest-f": {
    "slide": 0.0287
@@ -206,8 +205,7 @@
   },
   "attack/boots/1|orc-bulkiest-m": {
    "joint": 23.09,
-   "slide": 0.0643,
-   "item": 0.0121
+   "slide": 0.0643
   },
   "attack/boots/1|orc-shortest-f": {
    "joint": 23.09,
@@ -331,8 +329,7 @@
   },
   "attack/boots/2|orc-bulkiest-m": {
    "joint": 6.22,
-   "slide": 0.0645,
-   "item": 0.0121
+   "slide": 0.0645
   },
   "attack/boots/2|orc-shortest-f": {
    "slide": 0.0595
@@ -427,8 +424,7 @@
    "slide": 0.0679
   },
   "attack/boots/3|orc-bulkiest-m": {
-   "slide": 0.0747,
-   "item": 0.0121
+   "slide": 0.0747
   },
   "attack/boots/3|orc-shortest-f": {
    "slide": 0.0547
@@ -523,8 +519,7 @@
   },
   "attack/boots/4|orc-bulkiest-m": {
    "joint": 9.89,
-   "slide": 0.1566,
-   "item": 0.0121
+   "slide": 0.1566
   },
   "attack/boots/4|orc-shortest-f": {
    "joint": 16.86,
@@ -623,8 +618,7 @@
   },
   "attack/boots/5|orc-bulkiest-m": {
    "ground": 0.0078,
-   "slide": 0.0907,
-   "item": 0.0121
+   "slide": 0.0907
   },
   "attack/boots/5|orc-shortest-f": {
    "ground": 0.0074,
@@ -1923,8 +1917,7 @@
    "slide": 0.1205
   },
   "draw/boots|orc-bulkiest-m": {
-   "slide": 0.1473,
-   "item": 0.0121
+   "slide": 0.1473
   },
   "draw/boots|orc-shortest-f": {
    "ground": 0.0052,
@@ -2913,20 +2906,20 @@
    "slide": 0.0116
   },
   "guard/boots/run|orc-bulkiest-f": {
-   "item": 0.0243
+   "item": 0.0209
   },
   "guard/boots/run|orc-bulkiest-m": {
    "item": 0.0251
   },
   "guard/boots/run|orc-shortest-f": {
    "slide": 0.0176,
-   "item": 0.0231
+   "item": 0.0147
   },
   "guard/boots/run|orc-tallest-m": {
    "item": 0.0226
   },
   "guard/boots/run|orc-thinnest-f": {
-   "item": 0.0265,
+   "item": 0.016,
    "slide": 0.0135
   },
   "guard/boots/still|darkElf-tallest-m": {
@@ -2934,9 +2927,6 @@
   },
   "guard/boots/still|elf-tallest-m": {
    "item": 0.0126
-  },
-  "guard/boots/still|orc-bulkiest-m": {
-   "item": 0.0121
   },
   "guard/boots/still|orc-tallest-m": {
    "item": 0.0134
@@ -2952,9 +2942,6 @@
   },
   "guard/boots/walk|orc-bulkiest-f": {
    "joint": 6.3
-  },
-  "guard/boots/walk|orc-bulkiest-m": {
-   "item": 0.0121
   },
   "guard/boots/walk|orc-shortest-f": {
    "joint": 7.75
@@ -3994,9 +3981,6 @@
   },
   "sheathe/boots|elf-tallest-m": {
    "item": 0.0126
-  },
-  "sheathe/boots|orc-bulkiest-m": {
-   "item": 0.0121
   },
   "sheathe/boots|orc-tallest-m": {
    "item": 0.0134
