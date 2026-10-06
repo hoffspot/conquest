@@ -30,7 +30,7 @@ const vitruvian = load("vitruvian");
 /** The parts of a Character that garments and measures use, of a body in a shape. */
 function figure(data, shape = {}) {
     const { positions, joints } = data.shape(shape);
-    const rig = new Rig(data.bones);
+    const rig = new Rig(data.bones, data.landmarks.rest);
     const object = new THREE.Group();
     let height = 0;
 
@@ -256,6 +256,69 @@ describe("the Vitruvian body (client/characters/vitruvian.*)", () => {
             const back = frame.fromFace(...frame.toFace(...point));
 
             assert.ok(back.every((value, k) => Math.abs(value - point[k]) < 1e-9), `${point} → ${back}`);
+        }
+    });
+
+    it("starts hands' places where MakeHuman's start: as far behind the chest's front and the face, and below the head", () => {
+        // (Every pose's hands are placed in arm lengths from the shoulders as MakeHuman's lie;
+        // Vitruvian's own sit 2 cm further back and 3 cm higher: the manifest's landmark says
+        // where MakeHuman's are on it, as Actions measures them)
+        const measures = (data, shape) => {
+            const { positions, rig } = figure(data, shape);
+            const head = (name) => rig.heads[rig.index.get(name)];
+            const arm = head("RightForeArm").distanceTo(head("RightArm")) + head("RightHand").distanceTo(head("RightForeArm"));
+            const [x, y, z] = data.landmarks.shoulder ?? [0, 0, 0];
+            const origin = head("LeftArm").clone().add(new THREE.Vector3(x, y, z).multiplyScalar(arm));
+            const chestBones = new Set(["Spine1", "Spine2"].map((name) => rig.index.get(name)));
+            const headBone = rig.index.get("Head");
+            let [chest, face] = [-Infinity, -Infinity];
+
+            for (let v = 0; v < data.vertexCount; v++) {
+                const weights = [0, 1, 2, 3].map((k) => data.skinWeights[v * 4 + k]);
+                const bone = data.skinIndices[v * 4 + weights.indexOf(Math.max(...weights))];
+                const [px, py, pz] = [0, 1, 2].map((k) => positions[v * 3 + k]);
+
+                if (data.partOf[v] === 0 && chestBones.has(bone) && Math.abs(px) < 0.12 && py < origin.y - 0.05 && py > origin.y - 0.2) {
+                    chest = Math.max(chest, pz);
+                }
+
+                if (data.partOf[v] === 0 && bone === headBone) {
+                    face = Math.max(face, pz);
+                }
+            }
+
+            return { chest: (chest - origin.z) / arm, face: (face - origin.z) / arm, head: (head("Head").y - origin.y) / arm };
+        };
+
+        assert.equal(human.landmarks.shoulder, undefined);
+
+        for (const [name, shape] of Object.entries(SHAPES)) {
+            const [ours, theirs] = [measures(vitruvian, shape), measures(human, shape)];
+
+            for (const key of ["chest", "face", "head"]) {
+                assert.ok(Math.abs(ours[key] - theirs[key]) < 0.03, `${name}: the ${key} ${ours[key].toFixed(3)} arm lengths from where the hands' places start, on MakeHuman's ${theirs[key].toFixed(3)}`);
+            }
+        }
+    });
+
+    it("bends its elbows across the arm and holds its hands in the forearm as MakeHuman's body does", () => {
+        // (Vitruvian's forearm rests all but straight: its elbow's hinge found from its rest bend
+        // came out 45° off, and every forearm's turn with it)
+        const measures = (data, shape) => {
+            const { rig } = figure(data, shape);
+            const frame = (name) => rig.frames[rig.index.get(name)];
+            const upper = rig.tails[rig.index.get("LeftArm")].clone().sub(rig.heads[rig.index.get("LeftArm")]).normalize();
+            const hinge = new THREE.Vector3(1, 0, 0).applyQuaternion(frame("LeftArm"));
+            const across = new THREE.Vector3(1, 0, 0).applyQuaternion(frame("LeftForeArm").clone().invert().multiply(frame("LeftHand")));
+
+            return { level: hinge.z, square: hinge.dot(upper), twist: (Math.atan2(-across.z, across.x) * 180) / Math.PI };
+        };
+
+        for (const [name, shape] of Object.entries(SHAPES)) {
+            const [ours, theirs] = [measures(vitruvian, shape), measures(human, shape)];
+
+            assert.ok(Math.abs(ours.level) < 0.01 && Math.abs(ours.square) < 0.01, `${name}: the elbow's hinge ${ours.level.toFixed(3)} from level, ${ours.square.toFixed(3)} from square to the arm`);
+            assert.ok(Math.abs(ours.twist - theirs.twist) < 6, `${name}: the hand turned ${ours.twist.toFixed(1)}° in the forearm, on MakeHuman's ${theirs.twist.toFixed(1)}°`);
         }
     });
 

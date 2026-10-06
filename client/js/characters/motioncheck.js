@@ -84,7 +84,7 @@ function built(human, model, fit) {
  */
 export function dress(human, look, { sheathed = true } = {}) {
     const { positions, normals, joints, height } = bodyOf(human, look.shape);
-    const rig = new Rig(human.bones);
+    const rig = new Rig(human.bones, human.landmarks?.rest);
     const object = new THREE.Group();
 
     object.add(rig.root);

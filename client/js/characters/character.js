@@ -83,7 +83,7 @@ function referenceMeasures(kit) {
     if (!kit.referenceMeasures) {
         const human = kit.human;
         const { positions, joints } = human.shape({});
-        const rig = new Rig(human.bones);
+        const rig = new Rig(human.bones, human.landmarks?.rest);
         let height = 0;
 
         for (let v = 0; v < human.vertexCount; v++) {
@@ -274,7 +274,7 @@ export class Character {
         this.human = human;
         this.object = new THREE.Group();
         this.object.name = "character";
-        this.rig = new Rig(human.bones);
+        this.rig = new Rig(human.bones, human.landmarks?.rest);
         this.object.add(this.rig.root);
 
         this.materials = {

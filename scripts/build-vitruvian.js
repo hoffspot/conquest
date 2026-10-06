@@ -40,6 +40,7 @@ import { allDetailTargetNames } from "../client/js/characters/details.js";
 import { faceFrame } from "../client/js/characters/face.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { Packer } from "../client/js/characters/pack.js";
+import { Rig, restOf } from "../client/js/characters/rig.js";
 import { symmetricEigen } from "./build-characters.js";
 import { meshes, meshLayer, readBlend } from "./lib/blend.js";
 import { namesOf, readNpy, readNpz } from "./lib/npy.js";
@@ -72,6 +73,7 @@ const FACING = 0.2;
 // (fitOnto: from as a whole to point by point)
 const NIPPLE_REACH = 0.07;
 const STIFFNESS = [30, 10, 3, 1, 0.3];
+
 
 // Which of Vitruvian's own shapes (its morphs/L2) make the body's flesh for each slider shape
 // (MakeHuman's, by name: macro.js) and how much of each: its sex; its muscle and weight, as a sex
@@ -939,6 +941,47 @@ async function main() {
     const fitted = fitOnto(laid, humanSkin, vitruvian.positions, vitruvianSkin, [-1, 1].map((side) => ({ from: humanNipples.get(side), to: vitruvianNipples.get(side), radius: NIPPLE_REACH })));
     const jointVertices = [...new Set(jointEnds.flatMap((ends) => (ends.parentTail === undefined ? ends.map(([v]) => v) : [])))];
 
+    // Where MakeHuman's shoulder joints are on Vitruvian's body, by what's before them: each moved
+    // as MakeHuman's skin there moves from its own default body onto Vitruvian's, fitted (the
+    // bodies stand in the same place, as tall): the chest's front, from a hand's width to a
+    // forearm's length below the shoulders, and the face. Every hand's place in a pose is given
+    // from MakeHuman's shoulders (Actions: arm lengths from them), and mostly before the chest,
+    // the belly or the face; Vitruvian's own sit further back and higher (its chest and face 2 cm
+    // further forward of them, its head 3 cm lower): from them, a book held before the belly was
+    // in it, a tankard to the lips in the face. The game's poses start from these instead (the
+    // manifest's landmarks.shoulder: the left's, the right's mirrored, in arm lengths from
+    // Vitruvian's own). (Round the shoulder itself, the bodies' skin lies alike about their joints)
+    const humanSkinVertices = [...new Set(humanSkin)];
+    const heaviestOf = (v) => {
+        const weights = humanWeights(v);
+
+        return humanBones(v)[weights.indexOf(Math.max(...weights))];
+    };
+    const [chestBones, faceBones] = [["Spine1", "Spine2"], ["Neck", "Head"]].map((names) => new Set(names.map((name) => boneIndex.get(name))));
+    const shoulders = ["LeftArm", "RightArm"].map((name) => [0, 1, 2].map((k) => humanJoints[boneIndex.get(name) * 6 + k]));
+    const between = [0, 1, 2].map((k) => (shoulders[0][k] + shoulders[1][k]) / 2);
+    const before = humanSkinVertices.filter((v) => {
+        const [x, y, z] = [0, 1, 2].map((k) => humanDefault[v * 3 + k]);
+        const bone = heaviestOf(v);
+        const chest = chestBones.has(bone) && z > between[2] && Math.abs(x - between[0]) < 0.12 && y < between[1] - 0.05 && y > between[1] - 0.2;
+
+        return chest || (faceBones.has(bone) && z > between[2] + 0.03);
+    });
+    const moved = [0, 1, 2].map((k) => before.reduce((sum, v) => sum + fitted[v * 3 + k] - humanDefault[v * 3 + k], 0) / before.length);
+    const shoulder = ["LeftArm", "RightArm"].map((name, i) => {
+        const b = boneIndex.get(name);
+
+        return [0, 1, 2].map((k) => (k === 0 && i === 1 ? -1 : 1) * (shoulders[i][k] + moved[k] - vitruvianJoints[b * 6 + k]));
+    });
+    const armLength = (joints) => {
+        const at = (name) => [0, 1, 2].map((k) => joints[boneIndex.get(name) * 6 + k]);
+
+        return length(sub(at("LeftForeArm"), at("LeftArm"))) + length(sub(at("LeftHand"), at("LeftForeArm")));
+    };
+    const shoulderOffset = [0, 1, 2].map((k) => Math.round(((shoulder[0][k] + shoulder[1][k]) / 2 / armLength(vitruvianJoints)) * 1e4) / 1e4);
+
+    console.log(`MakeHuman's shoulders on Vitruvian's body: ${shoulder.map((each) => each.map((value) => (value * 100).toFixed(1)).join(", ")).join(" and ")} cm from its own (${shoulderOffset.join(", ")} arm lengths)`);
+
     // The face: where Vitruvian's head is on MakeHuman's in face coordinates (face.js), from the
     // same features measured on each (faceLandmarks), so its face takes MakeHuman's face's changes
     // where they fall on it (the lips' on its lips, the chin's on its chin), rather than from a
@@ -1072,6 +1115,34 @@ async function main() {
 
         return [name, { deltas: Float64Array.from(sources.flatMap((entry) => changeAt(deltas, entry))), joints: jointChanges(deltas) }];
     }));
+
+    // The hands' joints: where the wrist goes (from the skin, as every joint), and from there as
+    // MakeHuman's hand's go, turned as its hand is laid onto Vitruvian's and sized to it. Taken
+    // from the skin, the fingers' came out wrong where MakeHuman's hand laid over Vitruvian's
+    // isn't its fingers over Vitruvian's: a bigger body's fingers shrank (the tallest man's
+    // index finger's middle bone 2.6 to 1.7 cm, as MakeHuman's grows 2.3 to 2.5), its palm
+    // didn't grow, and so its grips were wrong.
+    for (const side of ["Left", "Right"]) {
+        const hand = boneIndex.get(`${side}Hand`);
+        const { turn } = maps[hand];
+        const size = length(sub(Array.from(vitruvianJoints.subarray(hand * 6 + 3, hand * 6 + 6)), Array.from(vitruvianJoints.subarray(hand * 6, hand * 6 + 3))))
+            / length(sub(Array.from(humanJoints.subarray(hand * 6 + 3, hand * 6 + 6)), Array.from(humanJoints.subarray(hand * 6, hand * 6 + 3))));
+        const ends = bones.flatMap(({ name }, b) => (name.startsWith(`${side}Hand`) ? [b * 2 + 1, ...(name === `${side}Hand` ? [] : [b * 2])] : []));
+
+        for (const name of shapeNames) {
+            const theirs = shapes.get(name).joints;
+            const ours = carried.get(name).joints;
+            const wrist = [0, 1, 2].map((k) => theirs[hand * 6 + k]);
+
+            for (const end of ends) {
+                const within = apply(turn, sub([0, 1, 2].map((k) => theirs[end * 3 + k]), wrist));
+
+                for (let k = 0; k < 3; k++) {
+                    ours[end * 3 + k] = ours[hand * 6 + k] + size * within[k];
+                }
+            }
+        }
+    }
 
     // The sliders' own shapes (OWN_SHAPES: sex, muscle, weight, bust, heritage): their flesh is
     // Vitruvian's own shapes', their bones MakeHuman's (each moves the joints as MakeHuman's shape
@@ -1442,7 +1513,7 @@ async function main() {
         },
         details,
         deltaUnit: DELTA_UNIT,
-        landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4 },
+        landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4, shoulder: shoulderOffset },
         masks: MASKS.map((name) => `vitruvian/masks/${name}.png`),
     };
     const bytes = packer.toBytes();
@@ -1461,6 +1532,14 @@ async function main() {
     const theirs = measureFace(human, humanLips);
 
     manifest.landmarks.face = faceMap(ours, theirs);
+
+    // How its default body rests its thighs, shins and fingers (rig.js REST: its knees rest
+    // straighter than MakeHuman's, its fingers and thumbs otherwise), so the rig measures its
+    // limbs as MakeHuman's rest (Rig's `rest`)
+    const restRig = new Rig(made.bones);
+
+    restRig.fit(made.shape({}).joints);
+    manifest.landmarks.rest = restOf(restRig);
 
     const packed = gzipSync(bytes, { level: 9 });
 

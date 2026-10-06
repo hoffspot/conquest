@@ -4459,3 +4459,31 @@ converted data is to be measured in M8 against today's hm08 data.
     rest as they were; its baseline brought down.
   - **Next:** the rest of what depends on the body, on Vitruvian (the clips' bake, poses where its
     check is worse, garments, its baseline), then the game switched to it.
+- **2026-10-05, Vitruvian's limbs measured as MakeHuman's, and its hands placed from MakeHuman's
+  shoulders** (§10; docs/CHARACTERS.md *The Vitruvian body*, *Joints*). Recalculating what
+  depends on the body, on Vitruvian: what made its motions fail more than MakeHuman's.
+  - **The elbow's hinge** was found from how the forearm bends at rest. MakeHuman's rests bent
+    39°; Vitruvian's all but straight (11°), and its hinge came out 37° to 49° off, so every
+    forearm's turn and grip was twisted about 45°. Now it lies across the arm, level from front
+    to back, as MakeHuman's does (within 0.6° of where it was on MakeHuman's).
+  - **Its rest** (`landmarks.rest`, `restOf`): its knees rest 9° straighter than MakeHuman's, its
+    thumbs 44° to 66° and fingers about 20° otherwise. Measured from its own rest, its knees
+    locked straight in every stride (its running feet slid) and its fingers gripped elsewhere.
+    The rig now measures its limbs as though its default body rested them as MakeHuman's does,
+    each shape's own difference kept; MakeHuman's own rig is as it was. A knee's hinge now takes
+    the shin in its own frame (the two needn't be one).
+  - **Its hands' joints** are carried from MakeHuman's, from the wrist, turned and sized to its
+    hand: found from the skin, a bigger body's fingers had shrunk.
+  - **Its hands' places** start from where MakeHuman's shoulders are on its body
+    (`landmarks.shoulder`, by its chest's front and face fitted: 1.2 cm out, 2.6 cm lower, 2.2 cm
+    forward of its own). Every pose's places are given from MakeHuman's shoulders, and its own sit
+    further back and higher: a book held before the belly went into it, a tankard raised to the
+    lips into the face. (Placing them further forward still passed more of the check, but only by
+    holding the hands further from the body.)
+  - **The numbers** (failing pairs), Vitruvian's, before → after: joints 715 → 571, held things
+    in the body 660 → 489, forearms in the torso 1,332 → 1,268, sliding 753 → 563, feet in the
+    ground 128 → 100, second hands off their hafts 152 → 163. MakeHuman's as it was (2 pairs a
+    few millimetres worse, sheathing the hammer; 2 better); its baseline kept.
+  - **Next:** Vitruvian's forearms before its torso (its upper arm 18.6 cm to MakeHuman's 23.4,
+    its forearm 23.6 to 21.3, and thicker), its held things, the two-handed hafts, then its
+    baseline and the game switched to it.
