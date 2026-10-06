@@ -93,8 +93,8 @@ const SHEATHS = {
     // the hip, the grip forward, the blade down and back past the thigh, its edge forward, hung
     // and swung as the sword is)
     cleaver: { socket: "leftFrog", round: 28, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
-    // (Tucked in the belt at the right hip, the tip down)
-    wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
+    // (Tucked in the belt at the right hip, the tip down and a little out, clear of the thigh)
+    wand: { socket: "rightHip", at: [-0.04, 0.05, 0.03], point: [-0.1, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
     grimoire: { socket: "leftHip", at: [0.045, -0.07, -0.07], point: [0, 0, 1], edge: [0, -1, 0], model: "grimoireClosed", garment: "belt" },
     // (On the back, slung from the right shoulder: the grip up behind it at about the ear, where

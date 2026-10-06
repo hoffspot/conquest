@@ -4609,3 +4609,35 @@ converted data is to be measured in M8 against today's hm08 data.
     tall dark elf's thigh).
   - **Next:** the hammer's and staff's blows (forearms 10 to 14 cm in, on every body), the wand
     put away, Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the war hammer's and staff's blows, and four put-aways, refitted** (§10;
+  docs/CHARACTERS.md *Attacks*, *Drawing weapons and putting them away*, *Put away*).
+  - **Two-handed blows keep the haft out in front** (`ATTACKS.hammer`, `ATTACKS.staff`): a
+    second hand on a haft isn't moved out of the torso, so the keys hold both hands far enough
+    out on every body. The smash and the leaping slam lift the haft out in front of the chest on
+    the way up and swing it down in a wide arc (a key each side of the top), and end with the
+    hands low and out before the hips; the upswing comes up out in front; the side swing and the
+    diagonal chop wind up further out. The staff's overhead strike lifts it out in front first;
+    its thrust, rising strike and spin wind up out in front, not tight to the body; a sweep still
+    finishes with the rear hand low by the hip (higher, it came off the haft on the way back to
+    guard). Further out still at the blow, the shoulders went past their range; the hammer's
+    side swing still takes the left forearm into the belly at the strike, on every body.
+  - **The war hammer put away** (`DRAWS.hammer.sheathe`) is raised upright out in front in one
+    hand before it's hoisted overhead and over the shoulder: swung straight back off the guard,
+    its head went through the face and shoulders. **Drawn**, its head comes into the open left
+    palm out before the chest (lower, the haft's foot went into the hips).
+  - **The wand** (`SHEATHS.wand`) is tucked in the belt 1 cm further out, its tip canted out a
+    little: on Vitruvian's thighs it went in as the legs came out of the guard (2 cm out, the
+    right arm swinging past a walking dark elf woman met it). **The grimoire put away** is
+    brought down out to the side of the hip, not straight down into it.
+  - **The numbers** (failing pairs, against PR #204): MakeHuman forearms in the torso 274 → 147
+    (the hammer's blows 135 → 42, the staff's 70 → 41), held things 296 → 197 (the hammer put
+    away 30 → 0, the grimoire 30 → 5, the hammer drawn 10 → 0, the wand 9 → 1, the staff's blows
+    28 → 3), second hands 237 → 152 (the hammer's 89 → 19), joints 558 → 525; 507 better, 47
+    worse (most a staff blow's second hand a few centimetres further off the haft as it returns
+    to guard, at worst 12 cm on the spin; the diagonal chop's left shoulder 0.8° further past).
+    The baseline is updated (1,323 → 1,210). Vitruvian: forearms 427 → 329 (the hammer's blows
+    143 → 70, the staff's 104 → 83), held things 429 → 310 (the hammer put away 27 → 0, the wand
+    17 → 1, the grimoire 19 → 2, the hammer drawn 11 → 0, the hammer's blows 27 → 6, the
+    staff's 31 → 4), second hands 141 → 88, joints 543 → 499; 523 better, 22 worse.
+  - **Next:** the hammer's side swing, the spiked boots on Vitruvian, Vitruvian's baseline, and
+    the game switched to it.
