@@ -1062,8 +1062,25 @@ export class Overworld {
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
 
-        // The settlements' own trees, and the sites' (a graveyard's yew): their squares are
-        // blocked already
+        // The sites' own trees (a graveyard's yew): each one's trunk fills the four squares round
+        // its point, as a planted tree's does, in this chunk or the next (a tree is in the chunk
+        // its point's in)
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                for (const tree of this.sites?.treesIn(cx + dx, cy + dy) ?? []) {
+                    const [x, y] = [Math.round(tree.x), Math.round(tree.y)];
+
+                    for (const [sx, sy] of [[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]]) {
+                        if (sx >= x0 && sy >= y0 && sx < x0 + CHUNK && sy < y0 + CHUNK) {
+                            blocked[(sy - y0) * CHUNK + (sx - x0)] = 1;
+                            opaque[(sy - y0) * CHUNK + (sx - x0)] = 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        // The settlements' own trees (their squares are blocked already), and the sites'
         for (const piece of [...this.settlements.piecesIn(cx, cy).filter(({ kind }) => kind === "tree"), ...(this.sites?.treesIn(cx, cy) ?? [])]) {
             const random = createRandom(Math.round(piece.x * 73 + piece.y * 37));
 

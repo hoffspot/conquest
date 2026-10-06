@@ -144,7 +144,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/navigation/tiles.js", 15655],
             ["js/core/netplay.js", 25705],
             ["js/core/noise.js", 2506],
-            ["js/core/overworld.js", 92119],
+            ["js/core/overworld.js", 92982],
             ["js/core/places.js", 9550],
             ["js/core/progress.js", 44980],
             ["js/core/random.js", 4020],
