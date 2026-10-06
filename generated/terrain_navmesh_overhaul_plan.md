@@ -4514,3 +4514,40 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the gauntlet blows' forearms before the torso (the worst of what fails: 157 pairs on
     MakeHuman), then as before: Vitruvian's forearms, its held things, the two-handed hafts, its
     baseline, and the game switched to it.
+- **2026-10-06, a boxer's guard and punches** (§10; docs/CHARACTERS.md *Key poses*, *Technique*,
+  *Hits and dodges*). The user sent boxing references (silhouettes of a guard, jab, cross, hook,
+  uppercut and crouch; a *Basic boxing stance* chart, "Hands up. Chin down. Elbows in. Knees
+  bent."; and a boxer throwing two jabs and a cross, frame by frame) to fix the gauntlet blows'
+  forearms through the chest.
+  - **The guard** (`actions.js` `fist`, `GUARDS.punch`): the rear fist before the chin, the lead a
+    little higher and further out, the elbows in and down before the ribs, the forearms nearly
+    upright, both fists turning with the chest; the chin down, and the knees bent (the pelvis
+    3 cm lower) standing, straightening into a stride (bent through a walk, the shorter women's
+    ankles went up to 12° past their range). The rear fist is a little out from the chin: searched
+    on all 30 bodies, nearer it a full chest is in the forearm's way. The kick guard's fists are
+    further out too, off a full belly as the body twists.
+  - **The punches leave straight from the guard**, as the boxer's do, not drawn back or wound up
+    first, the body turning into each and the other fist kept at the chin.
+  - **An arm kept clear as a blow fades out** (`Actions.place`): the arms' clearing moved only the
+    last layer reached, and a blow fading into the guard moves the arm only as far as it's blended
+    (at a punch's last frame, 8%), leaving the guard's forearm 6 cm into the bulkiest woman's
+    chest after every punch. The arm under a layer blended less than half over it is kept clear
+    too (not under one blended more: that turned the elbow the last reaches from, and a grimoire
+    blow 98% in had a forearm 5 cm in the hip).
+  - **Pelvis offsets add up** over the guard's, so an action's resting key has none of its own
+    (`rest`); the guard's 3 cm was otherwise counted twice under every punch. Slipping a blow,
+    the fists go 0.15 arm lengths forward (a quarter took the lead arm 21° past the shoulder's
+    range).
+  - **The side kick's fist**, swung down and back, goes beside the hip rather than behind it:
+    from the guard's elbow, forward, it bent the thumb into a lizard's tail (7 cm, Vitruvian).
+    (An elbow of its own, back, took the arm 35° past its range turning back to the guard.)
+  - **The numbers** (failing pairs, MakeHuman): forearms in the torso 813 → 577 (gauntlet blows
+    142 → 0, their guard 10 → 0, kicks 45 → 2, grimoire blows 48 → 36, the flinches, dodges and
+    casts a few each), joints 580 as they were, held or worn things 308 → 311 (a cat's ear on the
+    thumb, 1.3 to 1.6 cm, slipping a blow); 243 pairs better, 6 worse (at worst 4.3 cm, a
+    grimoire blow 0.6 cm deeper). The mean forearm depth over every pair went from -0.18 to
+    -0.52 cm. The baseline is updated (1,779 → 1,590 failing pairs). Vitruvian: forearms
+    1,278 → 950, held things 492 → 493, the rest as they were; 389 better, 47 worse, the mean
+    forearm depth 0.53 → 0.27 cm.
+  - **Next:** Vitruvian's arm proportions, its held things, the two-handed hafts, its baseline,
+    and the game switched to it.
