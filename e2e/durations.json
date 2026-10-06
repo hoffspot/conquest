@@ -55,7 +55,7 @@
     "pellagos.spec.js › tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through": 58.2,
     "pellagos.spec.js › the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two": 63.6,
     "pellagos.spec.js › the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, she signs the player up, and gives them a package to carry off its board of four": 33.1,
-    "pellagos.spec.js › the bars over enemies the same way are smaller the farther off they are, the nearer over the farther and all under the buttons; a creature's level by its name": 29.9,
+    "pellagos.spec.js › the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name": 34.6,
     "pellagos.spec.js › the camera follows from the first step, swinging round behind the player": 32.7,
     "pellagos.spec.js › the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls, its moat and its gate tower in the way": 30.5,
     "pellagos.spec.js › the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered": 73.1,

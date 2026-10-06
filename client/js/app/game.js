@@ -30,7 +30,7 @@ import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
-import { carriesTorch, torchesLit } from "../core/light.js";
+import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
@@ -2098,10 +2098,12 @@ export class Game {
         }
 
         // Bars over the heads of the others on the player's map (those that have one), smaller
-        // the farther they are from the camera than the player is, the nearer over the farther
+        // and fainter the farther they are from the player's character, gone where the player
+        // can't see them (less far in the dark: hud.js PLATE_SIZE); the nearer the camera over
+        // the farther
         const eye = view.camera.position;
-        const own = this.avatars.get(this.me);
-        const reference = own ? eye.distanceTo(own.point(1.08, _head)) : undefined;
+        const own = this.avatars.get(this.me)?.object.position;
+        const lit = this.mapId === battle.lightMap ? battle.light : null;
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -2109,8 +2111,10 @@ export class Game {
             if (actor.id !== this.me && avatar && hud.tracked.has(actor.id)) {
                 const head = avatar.point(1.08, _head);
                 const depth = eye.distanceTo(head);
+                const at = avatar.object.position;
+                const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), sightAt(lit, actor.square)) : 1;
 
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale: plateScale(depth, reference), depth });
+                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale, depth });
             }
         }
 

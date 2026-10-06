@@ -3313,11 +3313,12 @@ it.
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
    menu buttons in the top right), bars over the other characters (the target's lit red, and
-   over the rest), and the damage each blow does. A bar's smaller the farther its character is
-   from the camera than the player is, a little more gently than the character itself looks
-   smaller (twice as far, three fifths the size; four times, a little over a third; never under
-   30%: `PLATE_SIZE`), so several the same way show which is nearer; the nearer bars are drawn
-   over the farther, and all of them under the buttons.
+   over the rest), and the damage each blow does. A bar's full size within 12 m of the player's
+   character, and beyond that smaller and fainter evenly with the distance, frame by frame as
+   either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
+   player sees there (light.js `sightAt`, as the battle has it: 30 m where they see half as far;
+   `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
+   the nearer the camera are drawn over the farther, and all of them under the buttons.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,

@@ -12,26 +12,31 @@ import { ICONS } from "./icons.js";
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
 /**
- * How the bars over the others shrink the farther off they are, so several the same way show
- * which is nearer: full size as near the camera as the player is (or `near` metres, if that's
- * farther), and beyond that a little more gently than the character itself looks smaller (as the
- * distance to the power `falloff`: twice as far, three fifths the size; four times, a little over
- * a third), so those near stay easily read; never less than `least` of it.
+ * How the bars over the others shrink and fade the farther their characters are from the player's
+ * own: full size within `near` metres of them, and beyond that smaller and fainter evenly with the
+ * distance, gone at the edge of sight (`far` metres; less far where it's dark, as the battle sees
+ * it: light.js sightAt), so how big a bar is says how near its character is.
  */
-export const PLATE_SIZE = Object.freeze({ near: 8, falloff: 0.75, least: 0.3 });
+export const PLATE_SIZE = Object.freeze({ near: 12, far: 60 });
 
 /** How long the player's card is held (ms), not moving more than HOLD_MOVE pixels, to show all that's on them. */
 export const HOLD_MS = 500;
 const HOLD_MOVE = 10;
 
 /**
- * How big a bar's drawn (a share of its full size) over a character `distance` metres from the
- * camera, when the player's `reference` metres from it.
+ * How big a bar's drawn (a share of its full size, and as faint: 0, not at all) over a character
+ * `distance` metres from the player's, `sight` of the way as far as by day seen where it is
+ * (light.js sightAt).
  */
-export function plateScale(distance, reference = PLATE_SIZE.near) {
-    const full = Math.max(PLATE_SIZE.near, reference);
+export function plateScale(distance, sight = 1) {
+    const far = PLATE_SIZE.far * sight;
+    const near = Math.min(PLATE_SIZE.near, far);
 
-    return Math.max(PLATE_SIZE.least, Math.min(1, (full / Math.max(distance, 1e-6)) ** PLATE_SIZE.falloff));
+    if (distance <= near) {
+        return 1;
+    }
+
+    return distance >= far ? 0 : (far - distance) / (far - near);
 }
 
 export class Hud {
@@ -264,8 +269,9 @@ export class Hud {
 
     /**
      * Move a character's bar to a point on the screen (client pixels), or hide it (null): drawn at
-     * `scale` of its size (plateScale), standing on the point; the nearer (`depth`: metres from
-     * the camera) over the farther, the one the player's set to fight over them all.
+     * `scale` of its size and as faint (plateScale; hidden at none), standing on the point; the
+     * nearer (`depth`: metres from the camera) over the farther, the one the player's set to fight
+     * over them all.
      */
     place(id, point, { scale = 1, depth = 0 } = {}) {
         const plate = this.tracked.get(id);
@@ -274,10 +280,17 @@ export class Hud {
             return;
         }
 
-        plate.hidden = !point;
+        plate.hidden = !point || scale <= 0;
 
-        if (point) {
+        if (!plate.hidden) {
+            const faint = scale.toFixed(2);
+
             plate.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
+
+            if (plate.faint !== faint) {
+                plate.faint = faint;
+                plate.style.opacity = faint;
+            }
 
             const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - Math.round(depth));
 

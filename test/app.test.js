@@ -695,24 +695,32 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 });
 
 describe("the bars over the others (hud.js)", () => {
-    it("shrinks a bar the farther its character is from the camera than the player, a little more gently than the distance, never past its least", () => {
+    it("draws a bar full size near the player's character, then smaller and fainter evenly with the distance, gone at the edge of sight", () => {
         const near = (a, b) => Math.abs(a - b) < 1e-9;
 
-        // (The player 11 m from the camera, as the follow camera stands)
-        assert.equal(plateScale(6, 11), 1, "nearer than the player: full size");
-        assert.equal(plateScale(11, 11), 1);
-        assert.ok(near(plateScale(22, 11), 0.5 ** 0.75), "twice as far: three fifths the size");
-        assert.ok(plateScale(22, 11) > 0.55 && plateScale(22, 11) < 0.62);
-        assert.ok(near(plateScale(44, 11), 0.25 ** 0.75), "four times as far: a little over a third");
-        assert.ok(plateScale(14, 11) > 0.8, "a step or two past the player: still easily read");
-        assert.ok([16, 20, 24, 32, 40].every((d, k, all) => !k || plateScale(d, 11) < plateScale(all[k - 1], 11)), "each farther one smaller");
-        assert.equal(plateScale(200, 11), PLATE_SIZE.least, "never too small to be seen");
+        assert.deepEqual({ ...PLATE_SIZE }, { near: 12, far: 60 });
 
-        // (Zoomed right in, the camera a few metres off: as if it were `near`, so those beside
-        // the player aren't shrunk)
-        assert.equal(plateScale(PLATE_SIZE.near, 3), 1);
-        assert.ok(near(plateScale(PLATE_SIZE.near * 2, 3), 0.5 ** 0.75));
-        assert.ok(near(plateScale(10), (PLATE_SIZE.near / 10) ** 0.75), "no player: from `near`");
+        // (By day: full size within 12 m, gone at 60 m, evenly between)
+        assert.equal(plateScale(0), 1);
+        assert.equal(plateScale(6), 1);
+        assert.equal(plateScale(12), 1, "full size to `near`");
+        assert.ok(near(plateScale(36), 0.5), "half way to the edge of sight: half the size");
+        assert.ok(near(plateScale(24), 0.75));
+        assert.ok(near(plateScale(48), 0.25));
+        assert.ok(near(plateScale(13) - plateScale(14), plateScale(50) - plateScale(51)), "evenly with the distance");
+        assert.ok([14, 20, 30, 40, 50, 59].every((d, k, all) => !k || plateScale(d) < plateScale(all[k - 1])), "each farther one smaller");
+        assert.equal(plateScale(60), 0, "gone at the edge of sight");
+        assert.equal(plateScale(200), 0);
+
+        // (In the dark, seeing half as far: gone at 30 m, still full size within 12 m)
+        assert.equal(plateScale(12, 0.5), 1);
+        assert.ok(near(plateScale(21, 0.5), 0.5));
+        assert.equal(plateScale(30, 0.5), 0);
+        assert.ok(plateScale(30, 0.5) < plateScale(30), "smaller in the dark than by day as far off");
+
+        // (So dark the edge of sight is nearer than `near`: full size up to it, then gone)
+        assert.equal(plateScale(9, 0.15), 1);
+        assert.equal(plateScale(9.5, 0.15), 0);
     });
 });
 
