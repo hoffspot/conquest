@@ -1790,6 +1790,54 @@ describe("Mesh2Motion's clips (bvh.js, scripts/build-clips.js)", async () => {
 
         assert.ok(death.frames.at(-1).height < -0.6, "the pelvis comes down to the ground");
     });
+
+    it("lines the hands up with the clip's on both bodies: the palms facing as its do, the fingers curling as its do", () => {
+        const options = { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH };
+        // A hand's palm (across its knuckles and down it) and its middle finger's curl
+        const measure = (at, side) => {
+            const [hand, index, pinky, m1, m2, m3] = ["Hand", "HandIndex1", "HandPinky1", "HandMiddle1", "HandMiddle2", "HandMiddle3"].map((name) => at(`${side}${name}`));
+            const knuckle = m2.clone().sub(m1);
+
+            return { palm: index.clone().sub(hand).cross(pinky.clone().sub(hand)).normalize(), curl: m1.clone().sub(hand).angleTo(knuckle) + knuckle.angleTo(m3.clone().sub(m2)) };
+        };
+
+        for (const body of ["human", "vitruvian"]) {
+            const f = figure({}, readHumanData(body));
+            const ours = (name) => f.rig.bone(name).getWorldPosition(new THREE.Vector3());
+
+            for (const name of ["idle", "sword"]) {
+                const poses = gltfPoses(gltf.scene, clip(name), { loop: !once.has(name) });
+                const joint = new Map(poses.names.map((each, j) => [each, j]));
+                const curls = [];
+
+                retarget(poses, f.rig, options).frames.forEach((frame, k) => {
+                    f.rig.reset();
+                    frame.rotations.forEach((rotation, b) => rotation && f.rig.rotations[b].copy(rotation));
+                    f.rig.apply();
+                    f.object.updateMatrixWorld(true);
+
+                    for (const side of ["Left", "Right"]) {
+                        const theirs = measure((bone) => poses.poses[k].positions[joint.get(MESH2MOTION_NAMES[bone])], side);
+                        const mine = measure(ours, side);
+
+                        // Standing (where the clip's wrists are within their ranges), the palms face
+                        // as the clip's: Vitruvian's were 44° off, its elbow's hinge taken from a
+                        // forearm resting all but straight
+                        if (name === "idle") {
+                            assert.ok(mine.palm.angleTo(theirs.palm) < 15 * DEG, `${body} ${side}: the palm ${(mine.palm.angleTo(theirs.palm) / DEG).toFixed(0)}° off`);
+                        }
+
+                        curls.push(mine.curl - theirs.curl);
+                    }
+                });
+
+                // The fingers curl as the clip's (as far from it as our relaxed hand is, all along)
+                const spread = Math.max(...curls) - Math.min(...curls);
+
+                assert.ok(spread < 6 * DEG, `${body} ${name}: the fingers' curl wanders ${(spread / DEG).toFixed(0)}° from the clip's`);
+            }
+        }
+    });
 });
 
 describe("presets (presets.js)", () => {

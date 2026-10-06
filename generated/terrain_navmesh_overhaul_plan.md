@@ -4861,3 +4861,22 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the clips' hands lined up on Vitruvian's in the retarget; the cleaver's overhead
     hack and the hammer smash's left hand refitted to the new grip; Vitruvian's hands on the
     bulkiest orcs (thin, twisted fingers).
+
+- **2026-10-06, the clips' hands on Vitruvian** (§10; docs/CHARACTERS.md *Motion capture*).
+  - In the character lab, Mesh2Motion's clips played on Vitruvian's body with their palms 45°
+    from the clip's and their fingers straight where the clip's curl (a sword's grip open round
+    the hilt). Measured against the clip's own skeleton, frame by frame: palms 44° off in the idle,
+    the middle finger's curl 86° short.
+  - The cause wasn't the hand: the retarget turned each upper arm about itself so the elbow bends
+    about the same axis as the clip's, and took our elbow's axis from how our rest pose bends it.
+    Vitruvian's forearm rests only 11° bent, and the hinge found from it was 47° off (MakeHuman's,
+    43° bent, 3°), rolling the whole arm; the joints' ranges then straightened the fingers' curl.
+    The hinge is now the rig's own (`Rig` frames, as the rig itself has bent the elbow since PR
+    #198), for elbows and knees. Lining up the hands, or rolling the forearms to turn the palms,
+    added nothing and was dropped.
+  - Now Vitruvian's hands follow the clips as MakeHuman's do: palms 7° off in the idle (MakeHuman
+    6°), the fingers' curl within 3° of the clip's. `test/characters.test.js` checks it on both
+    bodies.
+  - The game's moves are baked keys (each hand's place, palm and finger shape), baked on
+    MakeHuman's body, whose hinge was already right: they're left as they are. A rebake moves
+    every clip a little (MakeHuman's hinge 3° nearer), so it waits for a motion check of its own.

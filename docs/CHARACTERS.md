@@ -267,9 +267,8 @@ two-handed blows, which aren't moved out of the torso, and kicks) and things hel
 225 to 194; 1,070 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
-Still to come: the clips' hands lined up on it (their fingers and palms are MakeHuman's), its
-hands on the bulkiest orcs (thin and twisted), its own skin textures, the inside of the mouth,
-and blinking and expressions.
+Still to come: its hands on the bulkiest orcs (thin and twisted), its own skin textures, the
+inside of the mouth, and blinking and expressions.
 
 ### Skin, eyes and hair
 
@@ -1565,7 +1564,11 @@ The lab's Motion tab has them (Resting: a class, the way from Fighting's Way, Re
 Lining up (step 2) only turns the bones whose rest poses really differ. Mesh2Motion's skeleton
 rests in a T-pose and ours with the arms down, so the upper arms and forearms are turned to point
 where its do (the upper arm also turned about itself so both elbows bend about the same axis:
-each skeleton's rest pose bends them a little, which shows it). Every other bone turns with its
+the clip's rest pose bends its elbows a little, which shows its axis, and ours is where the rig
+bends the elbow, `Rig`'s frames, not where our rest pose happens to bend it: Vitruvian's forearm
+rests only 11° bent, and the hinge found from that was 47° off, rolling the whole arm, so the
+palms faced 45° from the clip's and the joints' ranges then straightened the fingers' curl).
+Every other bone turns with its
 parent, keeping our rest shape: the skeletons are just built differently there (Mesh2Motion's
 collarbones point back from the breastbone, its feet are pitched down at rest, its fingers
 straight), and lining those up too would pose those differences (shoulders shrugged back and
@@ -1604,10 +1607,8 @@ measures it as it does any other:
 1. Retarget it (above) onto the average body, in Node: the arms as the clip has them (not held to
    their ranges: they're reached again within them), every other joint within its range; the
    lower foot on the ground. The body is MakeHuman's (`BAKE_BODY`), whichever the game plays
-   on: what's baked fits any body, but Vitruvian's rest hand is turned 46° about the forearm from
-   the clips' (MakeHuman's, 6°), and the retarget lines up only the arms and forearms, so on
-   Vitruvian the clips' finger curl went about the wrong axis and the palms came out turned (a
-   jab's fists open).
+   on: what's baked fits any body (each hand's place, which way its palm faces, its fingers'
+   shape).
 2. At every frame, take the spine's, neck's, head's and collarbones' joint angles (`rig.js`
    `jointAngles`: `jointRotation` backwards), and each hand's place (arm lengths from its
    shoulder, as `at`), how what it holds points (`point`, `edge`) or its palm faces (`palm`,

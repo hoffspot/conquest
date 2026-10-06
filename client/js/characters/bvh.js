@@ -17,7 +17,7 @@
 // the clip's feet push the ground back, so feet don't slide.
 
 import * as THREE from "three";
-import { limitRotation } from "./rig.js";
+import { jointRotation, limitRotation } from "./rig.js";
 
 /** Our bones for the joints of MakeHuman's own BVH skeleton (data/animations in MakeHuman 1.1). */
 export const MAKEHUMAN_NAMES = Object.freeze({
@@ -313,6 +313,16 @@ export function retarget(clip, rig, { names = MAKEHUMAN_NAMES, limit = true, mat
     };
     const ourDirectionOf = (b) => rig.tails[b].clone().sub(rig.heads[b]).normalize();
 
+    // Which way our limb's middle joint (an elbow, a knee: `next`, below `b`) bends: as the rig
+    // bends it (rig.js frames), not as our rest pose happens to (Vitruvian's forearm rests all but
+    // straight, and the elbow's hinge from it came out 47° off, rolling every arm)
+    const bentAt = (b, next) => {
+        const { kind, side } = rig.joints[next];
+        const local = rig.frames[b].clone().multiply(jointRotation(kind, side, { flex: 30 })).multiply(rig.frames[next].clone().invert());
+
+        return ourDirectionOf(next).applyQuaternion(local);
+    };
+
     // The clip bone's direction at rest: to the joint our bone's next maps to, or its first child
     const theirDirectionOf = (b) => {
         const j = index.get(names[rig.definition[b].name]);
@@ -348,7 +358,8 @@ export function retarget(clip, rig, { names = MAKEHUMAN_NAMES, limit = true, mat
         const ours = ourDirectionOf(b).applyQuaternion(inherited);
         const theirNext = next >= 0 && match?.includes(rig.definition[next].name) ? theirDirectionOf(next) : null;
         const theirHinge = theirNext ? theirs.clone().cross(theirNext) : null;
-        const ourHinge = theirHinge ? ours.clone().cross(ourDirectionOf(next).applyQuaternion(inherited)) : null;
+        const ourNext = theirHinge ? (HINGED.has(rig.joints[next].kind) ? bentAt(b, next) : ourDirectionOf(next)).applyQuaternion(inherited) : null;
+        const ourHinge = ourNext ? ours.clone().cross(ourNext) : null;
 
         if (theirHinge && theirHinge.lengthSq() > 1e-4 && ourHinge.lengthSq() > 1e-4) {
             align[b].premultiply(basis(theirs, theirHinge).multiply(basis(ours, ourHinge).invert()));
@@ -385,6 +396,9 @@ export function retarget(clip, rig, { names = MAKEHUMAN_NAMES, limit = true, mat
 
     return { frames, frameTime: source.frameTime, duration: (frames.length - (source.loop ? 0 : 1)) * source.frameTime, loop: source.loop, scale };
 }
+
+// The joints that bend one way only, about a hinge (an elbow, a knee)
+const HINGED = new Set(["ForeArm", "Leg"]);
 
 // A clip played once holds its last pose this long before it starts again
 const HOLD = 1;
