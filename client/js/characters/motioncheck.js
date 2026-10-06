@@ -567,7 +567,7 @@ function thickness(character) {
 // their two movements together turn them a little about themselves, which their ranges, having
 // no twist, would take off; how they close round what's held is the grip's measure and the hands'
 // tests')
-const HANDLESS = new Set(["finger", "thumb"]);
+const HANDLESS = new Set(["HandIndex", "HandMiddle", "HandRing", "HandPinky", "thumb"]);
 
 /**
  * How far the joint turned furthest past its range is (degrees), and which: { degrees, bone }

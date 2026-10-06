@@ -514,7 +514,10 @@ export class Walker {
                 const curl = grip ? hold.curl?.[k] ?? 78 : style.fingers * (finger === "Index" ? 0.7 : finger === "Pinky" ? 1.25 : 1);
 
                 for (const joint of [1, 2, 3]) {
-                    rig.setAngles(`${side}Hand${finger}${joint}`, { flex: curl * (joint === 1 ? (grip ? 0.95 : 0.8) : grip ? 1.05 : 1) });
+                    // (A fist's fingers as it has them, equipment.js FIST_HAND: each joint's curl, the knuckles turned together)
+                    const flex = grip && hold.fingers ? hold.fingers[joint - 1] : curl * (joint === 1 ? (grip ? 0.95 : 0.8) : grip ? 1.05 : 1);
+
+                    rig.setAngles(`${side}Hand${finger}${joint}`, { flex, spread: grip && joint === 1 ? (hold.spread?.[k] ?? 0) : 0 });
                 }
             });
 
