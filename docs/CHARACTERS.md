@@ -914,6 +914,9 @@ over whatever the character was doing and back out at the end. Each key says:
 - **Where a weapon is put away** (a hand's `sheath`: 0 to 1): the hand goes to the grip of its
   weapon there, pointing it the way it lies. It's turned about that as strains least (the arm is
   reached once just aiming it, to see), easing from there to how the keys either side turn it.
+  Only while drawing or putting it away is the hand placed as holding the weapon it draws; at
+  other times an empty hand is placed by its own grip. (A sentry folding the arms, a sword at the
+  hip, had the right hand placed as if gripping it upright, the forearm 8 cm into the belly.)
 - **Forearms and hands kept out of the torso** (`keepClear`). A hand's place is in arm lengths
   from its shoulder, so on a bulkier body than the keys were set on, a forearm can come inside
   the belly or the chest. After the arms' last reach each frame, points along each forearm and
@@ -953,7 +956,9 @@ battle knowing.
 the left, the right keeping hold of the weapon; or, if the left holds something (a bow) and the
 right's free, the right, the whole cast mirrored. A staff or war hammer is held upright out at the
 right side in the one hand while the other casts, its foot clear of the legs, rather than across
-the body where the turning body would swing it into them.
+the body where the turning body would swing it into them: the hand a hand's breadth out to the
+side and forward of the hip (nearer it, the foot swung through the lizard women's thighs, 5 to
+6 cm, on Vitruvian, as the other hand came back to the haft).
 
 | Spell | The first way | And four more |
 | --- | --- | --- |

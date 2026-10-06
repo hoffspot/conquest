@@ -135,7 +135,7 @@ const SLUNG_FROM = { at: [0.06, -0.15, 0.48], elbow: SHIELD.elbow, pronate: SHIE
 
 // A staff or war hammer held upright out at the right side in the one hand while the other casts
 // a spell, its foot clear of the legs
-const UPRIGHT = { at: [-0.1, -0.5, 0.45], point: [0.05, 1, 0.1], pronate: 10 };
+const UPRIGHT = { at: [-0.22, -0.4, 0.5], point: [0.03, 1, 0.12], pronate: 10 };
 const LEFT_ARM = /^Left(Shoulder|Arm|ForeArm|Hand)/;
 const SHIELD_SOCKETS = new Set(["leftForearm", "leftFist"]);
 
@@ -502,7 +502,7 @@ export const ATTACKS = Object.freeze({
                 [1.5, { left: { at: [-0.22, -0.08, 1.05], point: [0, 1, 0.15], edge: [0, -0.15, 1] }, right: { at: [0.2, -0.2, 0.3], pronate: 30, shape: "relaxed" }, ...spine({ turn: -22 }), Hips: { turn: -30 }, Head: { turn: 18, flex: 0 }, offset: [0, 0, 0] }]),
             variant("crouching shot", BOW,
                 // Dropping low on bent knees to draw and loose
-                [0.3, { left: { at: [-0.52, -0.04, 0.86], point: [0, 1, 0.1], edge: [0, -0.1, 1] }, right: { at: [0.2, -0.16, 0.92], palm: [1, 0, 0], shape: "hook" }, ...spine({ turn: -38, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 30, flex: -6 }, offset: [0, -0.2, -0.03] }],
+                [0.3, { left: { at: [-0.4, 0, 0.95], point: [0, 1, 0.1], edge: [0, -0.1, 1] }, right: { at: [0.2, -0.16, 0.92], palm: [1, 0, 0], shape: "hook" }, ...spine({ turn: -38, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 30, flex: -6 }, offset: [0, -0.2, -0.03] }],
                 [1, { left: { at: [-0.3, 0.12, 1.16], point: [0, 1, 0.05], edge: [0, -0.05, 1] }, right: { at: [0.16, 0.2, 0.44], palm: [1, 0, 0], towards: [0, -0.1, 1], elbow: [-1, 0.15, -0.5], shape: "hook" }, ...spine({ turn: -40, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
                 [1.15, { left: { at: [-0.3, 0.12, 1.16], point: [0, 1, 0.05], edge: [0, -0.05, 1] }, right: { at: [0.05, 0.22, 0.14], pronate: 10, elbow: [-1, 0.1, -0.3], shape: "relaxed" }, ...spine({ turn: -40, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
                 [1.5, { left: { at: [-0.28, 0.02, 1.08], point: [-0.2, 1, 0.05], edge: [0, -0.12, 1] }, right: { at: [0.12, 0, 0.12], pronate: 30, shape: "relaxed" }, ...spine({ turn: -34, flex: 3 }), Hips: { turn: -30 }, Head: { turn: 26, flex: -4 }, offset: [0, -0.12, -0.02] }]),
@@ -923,7 +923,7 @@ const BARMAID_RESTS = [
         // The hand up to the side of the head, tucking the hair back behind the ear
         [0.55, { left: { at: [-0.16, 0.36, 0.14], palm: [-0.95, 0.07, 0.29], towards: [-0.21, 0.54, -0.82], shape: "relaxed" }, Head: { bend: 10, flex: 4 } }],
         [1, { left: { at: [-0.12, 0.34, -0.02], palm: [-0.99, 0.14, 0], towards: [0.04, 0.3, -0.95], shape: "relaxed" }, Head: { bend: 12, flex: 2 } }],
-        [1.4, { left: { at: [0.02, -0.25, 0.1] }, Head: { bend: 4, flex: 0 } }]),
+        [1.4, { left: { at: [0.1, -0.4, 0.35] }, Head: { bend: 4, flex: 0 } }]),
     variant("a curtsy", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
         // Bobbing down, the head bowed, the skirt held out to the side
         [1, { left: { at: [0.34, -0.9, 0.2], palm: [-0.5, -0.2, 0.8], towards: [0.3, -0.9, 0.2], shape: "cup" }, ...spine({ flex: 17 }), Head: { flex: 20 }, offset: [0, -0.045, -0.03] }],
@@ -991,7 +991,7 @@ const PRIEST_RESTS = [
     variant("the sign of the Hearth", { ...spine({}), Head: { flex: 0 } },
         // Fingertips to the brow, then the heart, then out palm up to all
         [0.5, { right: { at: [0.3, 0.22, 0.28], palm: [0, 0, -1], towards: [0, 1, 0], shape: "open" }, Head: { flex: 8 } }],
-        [1, { right: { at: [0.3, -0.32, 0.24], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 10 } }],
+        [1, { right: { at: [0.3, -0.32, 0.32], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 10 } }],
         [1.4, { right: { at: [0, -0.3, 0.62], palm: [0, 1, 0.2], towards: [0, 0, 1], shape: "open" }, Head: { flex: 0 } }]),
     variant("hands clasped behind", { ...spine({}), Head: { flex: 0, turn: 0 } },
         // Hands clasped at the small of the back (held there in every key), looking over the
@@ -1225,7 +1225,7 @@ const BASE_RESTS = {
         variant("the sign of the Hearth", { ...spine({}), Head: { flex: 0 } },
             // Fingertips to the brow, then the heart, then out palm up
             [0.5, { right: { at: [0.3, 0.22, 0.28], palm: [0, 0, -1], towards: [0, 1, 0], shape: "open" }, Head: { flex: 10 } }],
-            [1, { right: { at: [0.3, -0.32, 0.24], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 12 } }],
+            [1, { right: { at: [0.3, -0.32, 0.32], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 12 } }],
             [1.4, { right: { at: [0.1, -0.35, 0.6], palm: [0, 1, 0.2], towards: [0, 0, 1], shape: "open" }, Head: { flex: 4 } }]),
         variant("hands in the lap", { ...spine({}), Head: { flex: 0 } },
             // Hands open in the lap, palms up, eyes closed
@@ -3655,8 +3655,10 @@ export class Actions {
         const body = this.#measure();
         const handBone = rig.bone(`${Side}Hand`);
         const handFrame = rig.frames[rig.index.get(`${Side}Hand`)];
-        // (What it holds, or will once it's drawn: as it's held, `home`)
-        const item = this.character.items.find((model) => model.parent === handBone || (model.userData.hand === Side && model.userData.sheath));
+        // (What it holds, or, drawing or putting it away, will once it's drawn: as it's held,
+        // `home`. Not otherwise: an empty hand's placed by its own grip, not a sheathed weapon's)
+        const swapping = Boolean(this.attack?.swap);
+        const item = this.character.items.find((model) => model.parent === handBone || (swapping && model.userData.hand === Side && model.userData.sheath));
         const socket = body.sockets[side];
         const holding = item?.userData.home ?? item;
         const itemPosition = holding ? holding.position : socket.position;
