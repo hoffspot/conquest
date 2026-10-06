@@ -222,45 +222,132 @@ describe("the fords as they're drawn (world/art/kits/fords.js) and marked (app/m
         assert.equal(fordParts([ford], { groundAt, landAt: () => "meadow" }, [64, 0, 128, 64]).stones.length, 0);
     });
 
-    it("lays a fallen trunk across it, downstream of the stones, its ends up the banks, in wooded lands only", () => {
-        for (const land of WOODED) {
-            const { trunks } = fordParts([ford], { groundAt, landAt: () => land }, [0, 0, 64, 64]);
+    it("lays a fallen tree's trunk across it in wooded lands, each its own: askew, clear of the stones, tapering, knotted, bent, a bare branch or two", () => {
+        const seen = { skews: new Set(), sides: new Set(), barkless: new Set(), torn: new Set(), branches: new Set(), lengths: new Set(), roots: new Set() };
 
-            assert.equal(trunks.length, 1, land);
+        // (Forty fords, each its own place)
+        for (let k = 0; k < 40; k++) {
+            const here = { ...ford, at: [10 + k * 0.53, 10 + k * 1.7], banks: [[6, 10 + k * 1.7], [14, 10 + k * 1.7]] };
+            const { trunks } = fordParts([here], { groundAt, landAt: () => WOODED[k % WOODED.length] }, [0, 0, 64, 200]);
 
-            const [{ a, b, radius }] = trunks;
+            assert.equal(trunks.length, 1);
 
-            assert.ok(a[0] < 6 - 1 && b[0] > 14 + 1, "(up the banks)");
-            assert.ok(Math.abs(a[1] - (10 + FORD_TRUNK.downstream)) < 1e-9, "(downstream)");
-            assert.ok(a[2] - radius > 1 && b[2] - radius > 1, "(over the water)");
+            const [{ limbs, side, skew, barkless }] = trunks;
+            const [trunk] = limbs;
+            const away = ([, y]) => (y - here.at[1]) * side;
+
+            assert.equal(trunk.kind, "trunk");
+            assert.ok(Math.abs(skew) <= FORD_TRUNK.skew);
+
+            // Across the water, its ends up both banks
+            assert.ok(Math.min(...trunk.points.map(([x]) => x)) < 6 - 0.4 && Math.max(...trunk.points.map(([x]) => x)) > 14 + 0.4, `${k}: up the banks`);
+
+            // Clear of the stones, all of it, on its own side of them
+            assert.ok(trunk.points.every((point) => away(point) >= FORD_TRUNK.clear - 1e-9), `${k}: the trunk clear of the stones`);
+            assert.ok(limbs.every(({ points }) => points.every((point) => away(point) >= FORD_TRUNK.clear / 2 - 0.15)), `${k}: its branches clear of them`);
+
+            // Thick at its root end, tapering to its top; never down through the ground or the bed
+            const [first, last] = [trunk.radii[0], trunk.radii.at(-1)];
+            const [root, top] = first > last ? [first, last] : [last, first];
+
+            assert.ok(top / root < FORD_TRUNK.taper[1] + 0.05 && root <= FORD_TRUNK.radius[1] * 1.3, `${k}: ${root} to ${top}`);
+            assert.ok(trunk.points.every(([x, y, h], i) => h >= groundAt(x, y) + trunk.radii[i] * (1 - 2 * FORD_TRUNK.settled) - 1e-9), `${k}: lying on the ground`);
+
+            // Bent a little: not every ring on the line from one end to the other
+            const [[ax, ay], [bx, by]] = [trunk.points[0], trunk.points.at(-1)];
+            const off = trunk.points.map(([x, y]) => Math.abs((x - ax) * (by - ay) - (y - ay) * (bx - ax)) / Math.hypot(bx - ax, by - ay));
+
+            assert.ok(Math.max(...off) > 0.01, `${k}: straight`);
+
+            // Its knots and bare branches; roots where it was torn up
+            const count = (kind) => limbs.filter((limb) => limb.kind === kind).length;
+
+            assert.ok(count("knot") >= FORD_TRUNK.knots[0] && count("knot") <= FORD_TRUNK.knots[1]);
+            assert.ok(count("branch") >= FORD_TRUNK.branches[0]);
+            assert.equal(count("root") > 0, trunk.ends.includes("torn"));
+
+            seen.skews.add(Math.round(skew * 20));
+            seen.sides.add(side);
+            seen.barkless.add(barkless);
+            seen.torn.add(trunk.ends.includes("torn"));
+            seen.branches.add(count("branch"));
+            seen.lengths.add(Math.round(Math.hypot(bx - ax, by - ay)));
+            seen.roots.add(first > last);
         }
 
+        // No two alike: lying every way, either side, barked or bare, torn up or snapped off
+        assert.ok(seen.skews.size > 8, `${seen.skews.size} ways askew`);
+        assert.deepEqual([...seen.sides].sort(), [-1, 1]);
+        assert.deepEqual([...seen.barkless].sort(), [false, true]);
+        assert.deepEqual([...seen.torn].sort(), [false, true]);
+        assert.deepEqual([...seen.roots].sort(), [false, true], "(its root at either end)");
+        assert.ok(seen.branches.size >= 3 && seen.lengths.size >= 3);
         assert.deepEqual(WOODED, ["woods", "darkwood", "elfwood", "jungle"]);
     });
 
     it("draws them in one mesh with the atlas, every face facing out", () => {
         const parts = fordParts([ford], { groundAt, landAt: () => "woods" }, [0, 0, 64, 64]);
         const mesh = fordsMesh(parts, [0, 0]);
-        const { position, normal } = mesh.geometry.attributes;
-        let inward = 0;
+        // (Each triangle's normal against the way out from what it's part of)
+        const inward = (built, from) => {
+            const { position, normal } = built.geometry.attributes;
+            let count = 0;
+
+            for (let t = 0; t < position.count; t += 3) {
+                const middle = [0, 1, 2].map((axis) => (position.getComponent(t, axis) + position.getComponent(t + 1, axis) + position.getComponent(t + 2, axis)) / 3);
+                const out = from(middle);
+
+                count += out && out[0] * normal.getX(t) + out[1] * normal.getY(t) + out[2] * normal.getZ(t) < 0 ? 1 : 0;
+            }
+
+            return count;
+        };
 
         assert.equal(mesh.name, "fords");
         assert.equal(fordsMesh({ stones: [], trunks: [] }, [0, 0]), null);
 
-        for (let t = 0; t < position.count; t += 3) {
-            const middle = [0, 1, 2].map((axis) => (position.getComponent(t, axis) + position.getComponent(t + 1, axis) + position.getComponent(t + 2, axis)) / 3);
-            const stone = parts.stones.find(({ x, y, radius }) => Math.hypot(x - middle[0], y - middle[2]) < radius * 1.5);
-            const trunk = parts.trunks[0];
-            // (From the thing it's part of: a stone's middle, or the trunk's line under it)
-            const from = stone ? [stone.x, (stone.top + stone.bottom) / 2, stone.y] : [middle[0], trunk.a[2], trunk.a[1]];
-            const out = middle.map((value, axis) => value - from[axis]);
+        // The stones: out from each one's middle
+        const stones = fordsMesh({ stones: parts.stones, trunks: [] }, [0, 0]);
 
-            if (stone || Math.abs(middle[0] - trunk.a[0]) > 0.01) {
-                inward += out[0] * normal.getX(t) + out[1] * normal.getY(t) + out[2] * normal.getZ(t) < 0 ? 1 : 0;
-            }
+        assert.equal(
+            inward(stones, (middle) => {
+                const stone = parts.stones.find(({ x, y, radius }) => Math.hypot(x - middle[0], y - middle[2]) < radius * 1.5);
+
+                return [middle[0] - stone.x, middle[1] - (stone.top + stone.bottom) / 2, middle[2] - stone.y];
+            }),
+            0,
+        );
+
+        // The trunk, a limb at a time: out from the nearest point of its line (its ends', past them)
+        for (const limb of parts.trunks[0].limbs) {
+            const built = fordsMesh({ stones: [], trunks: [{ ...parts.trunks[0], limbs: [limb] }] }, [0, 0]);
+            const line = limb.points.map(([x, y, h]) => [x, h, y]);
+
+            assert.equal(
+                inward(built, (middle) => {
+                    let best = null;
+
+                    for (let k = 0; k + 1 < line.length; k++) {
+                        const [a, b] = [line[k], line[k + 1]];
+                        const d = [0, 1, 2].map((j) => b[j] - a[j]);
+                        const long = Math.hypot(...d);
+                        const t = [0, 1, 2].reduce((sum, j) => sum + (middle[j] - a[j]) * d[j], 0) / (long * long);
+                        const near = [0, 1, 2].map((j) => a[j] + d[j] * Math.max(0, Math.min(1, t)));
+                        const far = Math.hypot(...near.map((value, j) => middle[j] - value));
+                        // (At or past an end, out along it as well: a cut end's face lies flat across it)
+                        const past = k === 0 && t <= 1e-6 ? -1 / long : k + 2 === line.length && t >= 1 - 1e-6 ? 1 / long : 0;
+
+                        if (!best || far < best.far) {
+                            best = { far, out: near.map((value, j) => middle[j] - value + d[j] * past * far) };
+                        }
+                    }
+
+                    return best.out;
+                }),
+                0,
+                limb.kind,
+            );
         }
-
-        assert.equal(inward, 0);
     });
 
     it("marks each on the map as a row of pale stones straight across the water, onto each bank", () => {

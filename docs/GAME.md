@@ -1318,8 +1318,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   wade (fords, lakes' shallows, and mountain streams, stepped across: WORLD.md).
 - **Fords** (world/art/kits/fords.js) are marked so they're seen from afar: stepping stones
   straight across the water at each, their tops just clear of it (boulders in rocky lands), a
-  fallen trunk across too in wooded lands, and the way over trodden bare up both banks. Only
-  drawn, in no one's way: the ford's waded as it was (WORLD.md, *Fords*).
+  fallen tree's trunk across too in wooded lands, no two alike (askew of the stones, tapering
+  from its root to its broken top, bent, knotted, a bare branch or two, torn roots or a snapped
+  stump, barked or weathered bare), and the way over trodden bare up both banks. Only drawn, in
+  no one's way: the ford's waded as it was (WORLD.md, *Fords*).
 - **Waterfalls** (world/falls.js), wherever a river or stream spills over a lip 0.6 m high or
   more:
   - **A sheet** falls from the lip across the river's width. Thrown forward as fast as the water
