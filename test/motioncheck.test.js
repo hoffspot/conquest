@@ -77,12 +77,12 @@ describe("the motion check", () => {
 
                 hammer.position.copy(chest);
             },
-            // The left arm hung from inside the chest
+            // The left forearm hung from inside the chest
             limb: ({ character }) => {
-                const arm = character.rig.bone("LeftArm");
-                const into = arm.getWorldPosition(new THREE.Vector3()).lerp(character.rig.bone("Spine1").getWorldPosition(new THREE.Vector3()), 0.6);
+                const forearm = character.rig.bone("LeftForeArm");
+                const into = character.rig.bone("Spine1").getWorldPosition(new THREE.Vector3());
 
-                arm.position.copy(arm.parent.worldToLocal(into));
+                forearm.position.copy(forearm.parent.worldToLocal(into));
             },
             // The body moved a centimetre a frame, its feet planted
             slide: ({ character }) => {

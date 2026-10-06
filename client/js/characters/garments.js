@@ -718,7 +718,7 @@ export function* fittingGarment(character, id, measures) {
     }
 
     if (garment.toeBox) {
-        const cap = { shell, sharedOf, onCut, near, out, sources, human, positions, normals, vertices, thickness, triangles };
+        const cap = { shell, sharedOf, onCut, out, sources, human, positions, normals, vertices, thickness, triangles };
 
         for (const side of [1, -1]) {
             if (cuts[side]) {
@@ -775,7 +775,7 @@ export function insideOf(human, garment, { vertices, landmarks }, { toes = false
  * the toes, so it bends with them.
  */
 function addToeCap(cap, { loop, fractions }, side) {
-    const { shell, sharedOf, onCut, near, out, sources, human, positions, normals, vertices, thickness, triangles } = cap;
+    const { shell, sharedOf, onCut, out, sources, human, positions, normals, vertices, thickness, triangles } = cap;
     const RINGS = 20;
 
     // Which of the boot's vertices each stretch of the cut uses at its ends. Where the cut
@@ -941,12 +941,37 @@ function addToeCap(cap, { loop, fractions }, side) {
         out.skinWeights.push(...bytes);
     };
 
-    // The boot's slope at each point of the cut (sideways and up, for each step forward), from
-    // the boot just behind it, for the cap to set off along so there's no crease where they join
-    let slopes = loop.map((s, i) => {
-        const behind = Array.from(near.list.subarray(near.start[s], near.start[s + 1])).filter((other) => !onCut[other]);
+    // The boot's slope at each point of the cut (sideways and up, for each step forward), for the
+    // cap to set off along so there's no crease where they join: from the boot 1 to 3 cm behind
+    // it, the same way round the foot (from the point's own neighbours, a column set off 2 cm out
+    // past the little toe where they lay more to its side than behind it)
+    const around = (x, y) => Math.atan2(y - loopCentre[1], x - loopCentre[0]);
+    const boot = [];
 
-        return behind.length ? [0, 1, 2].map((k) => loopPoints[i][k] - behind.reduce((sum, other) => sum + shell[other * 3 + k], 0) / behind.length) : [0, 0, 1];
+    for (let s = 0; s < shell.length / 3; s++) {
+        const dz = z0 - shell[s * 3 + 2];
+
+        if (!onCut[s] && Math.sign(shell[s * 3]) === side && dz > 0 && dz < 0.06) {
+            boot.push(s);
+        }
+    }
+
+    let slopes = loopPoints.map((p) => {
+        const way = around(p[0], p[1]);
+        let behind = -1;
+        let nearest = Infinity;
+
+        for (const s of boot) {
+            const dz = p[2] - shell[s * 3 + 2];
+            const turn = Math.abs(Math.atan2(Math.sin(around(shell[s * 3], shell[s * 3 + 1]) - way), Math.cos(around(shell[s * 3], shell[s * 3 + 1]) - way)));
+
+            if (dz >= 0.01 && dz <= 0.03 && turn < nearest) {
+                behind = s;
+                nearest = turn;
+            }
+        }
+
+        return behind >= 0 ? [0, 1, 2].map((k) => p[k] - shell[behind * 3 + k]) : [0, 0, 1];
     });
 
     for (let pass = 0; pass < 3; pass++) {
@@ -1332,7 +1357,7 @@ export function texelMap(human, size = 512) {
     const bones = new Uint8Array(count);
     const triangles = new Int32Array(count).fill(-1);
     const weights = new Float32Array(count * 2);
-    const positions = human.basePositions;
+    const positions = human.designPositions;
     const indices = human.renderIndices("body");
     const uvs = human.uvs;
     const source = human.renderSource;
@@ -1788,7 +1813,7 @@ const LEG_AXIS = [[0.11, 0.049, 0.012], [0.158, -0.369, 0.032], [0.22, -0.745, -
 
 // A bra's cups: triangles round each nipple (across from it, out to the side, and up from it),
 // their apex towards the strap
-const CUP = [[-0.058, -0.042], [0.046, -0.041], [0.012, 0.072]];
+const CUP = [[-0.058, -0.042], [0.046, -0.041], [0.008, 0.072]];
 
 /**
  * A point of the base body (`leg`: whether it's on a leg or foot), for designs: { ax (how far out
@@ -1850,7 +1875,7 @@ export const DESIGNS = Object.freeze({
         const dx = ax - NIPPLE[0];
         const dy = y - NIPPLE[1];
         const cup = Math.min(inTriangle(dx, dy, CUP), z - 0.06);
-        const lined = Math.min(cup, 0.038 - Math.hypot(dx - 0.002, dy + 0.004));
+        const lined = Math.min(cup, 0.046 - Math.hypot(dx - 0.002, dy + 0.004));
         const apex = [NIPPLE[0] + CUP[2][0], NIPPLE[1] + CUP[2][1]];
         const strap = z > 0.03 ? strip(ax, y, apex, [0.105, 0.62], 0.005) : strip(ax, y, [0.095, 0.33], [0.105, 0.62], 0.005);
 
@@ -1868,8 +1893,8 @@ export const DESIGNS = Object.freeze({
         const waist = 0.064 - 0.01 * smoothstep(0.08, 0.17, ax);
         const front = z > 0.02;
         const leg = front ? -0.05 + 0.108 * smoothstep(0.03, 0.16, ax) : -0.065 + 0.115 * smoothstep(0.01, 0.075, ax);
-        const inside = Math.min(waist - y, Math.max(y - leg, 0.03 - ax));
-        const lined = Math.min(inside, (ax < 0.047 && y < 0.024 && z > 0.005) || (ax < 0.032 && y < -0.03) ? 1 : -1);
+        const inside = Math.min(waist - y, Math.max(y - leg, 0.035 - ax));
+        const lined = Math.min(inside, (ax < 0.05 && y < 0.032 && z > 0.005) || (ax < 0.037 && y < -0.03) ? 1 : -1);
 
         return first(
             [BOW, bow(ax, y, [0, waist - 0.016], 0.011)],
@@ -2088,7 +2113,7 @@ const LEG_BONE = /Leg$|Foot|Toe/;
  */
 export function designSolid(human, name) {
     const solid = new Uint8Array(human.vertexCount);
-    const positions = human.basePositions;
+    const positions = human.designPositions;
     const { heights: [low, high], fabric } = DESIGNS[name];
 
     for (let v = 0; v < human.vertexCount; v++) {

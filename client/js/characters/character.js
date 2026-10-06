@@ -815,7 +815,7 @@ export class Character {
             const socket = item?.sheath?.worn ? item.socket : item?.sheath?.socket;
 
             if (/^(left|right)(Hip|Frog|Hand)$/.test(socket ?? "")) {
-                this.clearing[socket.startsWith("left") ? "Left" : "Right"] = item.sheath?.hangs ? HILT_CLEARING : HIP_CLEARING;
+                this.clearing[socket.startsWith("left") ? "Left" : "Right"] = item.sheath?.worn ? KNUCKLE_CLEARING : item.sheath?.hangs ? HILT_CLEARING : HIP_CLEARING;
             }
 
             if (/^(left|right)(Hip|Frog)$/.test(socket ?? "")) {
@@ -2110,4 +2110,6 @@ const _segment = new THREE.Line3();
 // past a blade's hilt, hung from the belt, forward of the hip: a sword's, a cleaver's)
 const HIP_CLEARING = 10;
 const HILT_CLEARING = 10;
+// (and further with spiked knuckles worn on the hand, swung past a full thigh running)
+const KNUCKLE_CLEARING = 16;
 

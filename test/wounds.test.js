@@ -36,7 +36,7 @@ function figure() {
         positions,
         normals: human.normals(positions),
         height,
-        rig: new Rig(human.bones),
+        rig: new Rig(human.bones, human.landmarks?.rest),
         materials: { body },
         mesh: { material: [body, new THREE.MeshStandardMaterial()] },
         garments: [new THREE.Mesh(new THREE.BufferGeometry(), tunic), new THREE.Mesh(new THREE.BufferGeometry(), helmet)],

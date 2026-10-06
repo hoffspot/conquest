@@ -1485,8 +1485,37 @@ async function main() {
         };
     });
 
+    // Where each vertex is on MakeHuman's base body, which garments' designs are drawn on
+    // (HumanData's designPositions): at the point of MakeHuman's skin it's placed on, fitted (on
+    // the head, where it is on MakeHuman's face, as much as it's the head's); an eye's on its
+    // eye; an eyelash's, its own (they're MakeHuman's). Its own base is laid out otherwise
+    // (Vitruvian's chest 12 cm lower in it, its crotch 4 cm): a bra drawn there lay on the
+    // collarbones
+    const onBase = (triangles, { triangle, weights }) => [0, 1, 2].map((k) => weights.reduce((sum, w, c) => sum + w * human.basePositions[triangles[triangle * 3 + c] * 3 + k], 0));
+    const designs = new Float64Array(count * 3);
+
+    sources.forEach((entry, i) => {
+        let p;
+
+        if (entry.kind === "human") {
+            p = [...human.basePositions.subarray(entry.v * 3, entry.v * 3 + 3)];
+        } else if (onEyes.has(entry.v)) {
+            p = onBase(humanEyes, onEyes.get(entry.v));
+        } else if (onSkin.has(entry.v)) {
+            const body = onBase(humanSkin, onSkin.get(entry.v));
+            const face = onFace.has(entry.v) ? onBase(humanSkin, onFace.get(entry.v)) : body;
+
+            p = body.map((value, k) => value + (face[k] - value) * headShare[entry.v]);
+        } else {
+            p = [...base.subarray(i * 3, i * 3 + 3)];
+        }
+
+        designs.set(p, i * 3);
+    });
+
     const layout = {
         basePositions: packer.add(Float32Array.from(base)),
+        designPositions: packer.add(Float32Array.from(designs)),
         uvs: packer.add(new Uint16Array(renderUV.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 65535)))),
         renderSource: packer.add(new Uint16Array(renderSource)),
         indices: packer.add(new Uint16Array(indices)),

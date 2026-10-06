@@ -4551,3 +4551,211 @@ converted data is to be measured in M8 against today's hm08 data.
     forearm depth 0.53 → 0.27 cm.
   - **Next:** Vitruvian's arm proportions, its held things, the two-handed hafts, its baseline,
     and the game switched to it.
+- **2026-10-06, the arms on Vitruvian's proportions** (§10; docs/CHARACTERS.md *The Vitruvian body*).
+  The user asked to keep Vitruvian's own joints and refit what depends on the body to them. Its
+  elbow joint is higher up the arm than MakeHuman's (on the default body the upper arm is
+  20.4 cm and the forearm 25.5; MakeHuman's are 24.2 and 23.9), so the same hand place puts the
+  forearm more steeply across the body, into the belly and hips wherever something is held low
+  before it. Those poses now hold it further out, on both bodies:
+  - **The grimoire's book** (`actions.js` `book`): before the belly rather than low by the hip,
+    and turning with the chest as the blows turn it.
+  - **The staff and war hammer on guard** (`GUARDS.staff`, `GUARDS.hammer`): both hands further
+    forward, the right hand nearer the middle. A second hand on a haft isn't moved out of the
+    torso, and its forearm lay in the belly. The hammer's left hand was searched for a place
+    whose elbow, carried into the blows, keeps the side swing's left shoulder in range (the
+    unit test's 5°).
+  - **The numbers** (failing pairs): MakeHuman's forearms in the torso 577 → 304 (the grimoire's
+    guard and blows 42 → 0, the casts 50 → 0, the staff's guard 51 → 0 and blows 116 → 70, the
+    hammer's draw 17 → 4, the flinches and dodges on guard down by half or to none), held or worn
+    things 311 → 298, second hands off their hafts 258 → 237, joints 580 → 582; 500 pairs
+    better, 144 worse (mostly a staff blow's second hand 1 to 6 cm further off the haft as the
+    blow leaves the new guard; at worst, the bulkiest dark elf woman's hammer smash, its left
+    hand 18 cm off the haft at the bottom of the blow, as the on-haft hand's elbow comes from
+    the guard's). The mean forearm depth over every pair went from -0.52 to -0.88 cm. The
+    baseline is updated (1,590 → 1,377 failing pairs). Vitruvian: forearms 950 → 489 (the
+    grimoire's 208 → 6, the staff's guard 81 → 9, the hammer's guard 38 → 8, the casts 54 → 4),
+    held things 493 → 457 (the staff in the thighs casting a stun 25 → 15, the hammer's guard
+    20 → 3), second hands 163 → 141, joints 571 → 569; 782 better, 84 worse (at worst the
+    hammer's side swing, the left shoulder up to 2.7° further past its range on four bodies);
+    the mean forearm depth 0.27 → -0.16 cm.
+  - **The motion check's own test** (`test/motioncheck.test.js`) hangs the left forearm inside the
+    chest for its forearm fault, not the whole arm 60% of the way in: on the new hammer guard the
+    arm hung that way reached out of the body, and the fault went unfound.
+  - **Next:** the rests whose hand comes back across the chest, the bow, the wand put away and the
+    staff cast on Vitruvian, the hammer's blows from the new guard, Vitruvian's baseline, and the
+    game switched to it.
+- **2026-10-06, an empty hand placed by its own grip; the rests and casts on Vitruvian** (§10;
+  docs/CHARACTERS.md *Key poses*, *Spells*).
+  - **A sheathed weapon no longer steers the empty hand** (`Actions` reach): a hand's place was
+    worked out as holding the weapon it would draw, whenever one was put away for it, so a
+    sentry folding the arms (a sword at the hip) had the right hand placed as if gripping the
+    sword upright: the hand out past the left shoulder, the forearm 8 cm into the belly on every
+    sentry. Now only while drawing or putting it away.
+  - **Tucking back the hair** (the serving wench's and the receptionist's rest): the hand let down
+    in front of the hip, not back across the chest (12 cm into the bulkiest man's, Vitruvian).
+  - **The sign of the Hearth** (the priest's, acolyte's and worshipper's): the fingertips to the
+    heart a little further out, off a full chest.
+  - **The crouching bow shot**: the bow held further out to the left as the body drops, its lower
+    limb clear of the right thigh coming up.
+  - **A staff or war hammer held upright while casting**: a hand's breadth out to the side and
+    forward of the hip; nearer it, the staff's foot swung through the lizard women's thighs as
+    the other hand came back to the haft.
+  - **The numbers** (failing pairs, against PR #203): MakeHuman forearms in the torso 304 → 274
+    (the sentry's folded arms 28 → 0), joints 582 → 558 (the hair tuck's shoulder 41 → 17), held
+    things 298 → 296; 56 pairs better, none worse. The baseline is updated (1,377 → 1,323).
+    Vitruvian: forearms 489 → 427 (the sentry's 30 → 2, the hair tuck's 22 → 0, the sign of the
+    Hearth's 12 → 0), held things 457 → 429 (the staff casting a stun 15 → 0, the crouching shot's
+    bow 15 → 2), joints 569 → 543; 119 better, 1 worse (the crouching shot's bow 1.5 cm into a
+    tall dark elf's thigh).
+  - **Next:** the hammer's and staff's blows (forearms 10 to 14 cm in, on every body), the wand
+    put away, Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the war hammer's and staff's blows, and four put-aways, refitted** (§10;
+  docs/CHARACTERS.md *Attacks*, *Drawing weapons and putting them away*, *Put away*).
+  - **Two-handed blows keep the haft out in front** (`ATTACKS.hammer`, `ATTACKS.staff`): a
+    second hand on a haft isn't moved out of the torso, so the keys hold both hands far enough
+    out on every body. The smash and the leaping slam lift the haft out in front of the chest on
+    the way up and swing it down in a wide arc (a key each side of the top), and end with the
+    hands low and out before the hips; the upswing comes up out in front; the side swing and the
+    diagonal chop wind up further out. The staff's overhead strike lifts it out in front first;
+    its thrust, rising strike and spin wind up out in front, not tight to the body; a sweep still
+    finishes with the rear hand low by the hip (higher, it came off the haft on the way back to
+    guard). Further out still at the blow, the shoulders went past their range; the hammer's
+    side swing still takes the left forearm into the belly at the strike, on every body.
+  - **The war hammer put away** (`DRAWS.hammer.sheathe`) is raised upright out in front in one
+    hand before it's hoisted overhead and over the shoulder: swung straight back off the guard,
+    its head went through the face and shoulders. **Drawn**, its head comes into the open left
+    palm out before the chest (lower, the haft's foot went into the hips).
+  - **The wand** (`SHEATHS.wand`) is tucked in the belt 1 cm further out, its tip canted out a
+    little: on Vitruvian's thighs it went in as the legs came out of the guard (2 cm out, the
+    right arm swinging past a walking dark elf woman met it). **The grimoire put away** is
+    brought down out to the side of the hip, not straight down into it.
+  - **The numbers** (failing pairs, against PR #204): MakeHuman forearms in the torso 274 → 147
+    (the hammer's blows 135 → 42, the staff's 70 → 41), held things 296 → 197 (the hammer put
+    away 30 → 0, the grimoire 30 → 5, the hammer drawn 10 → 0, the wand 9 → 1, the staff's blows
+    28 → 3), second hands 237 → 152 (the hammer's 89 → 19), joints 558 → 525; 507 better, 47
+    worse (most a staff blow's second hand a few centimetres further off the haft as it returns
+    to guard, at worst 12 cm on the spin; the diagonal chop's left shoulder 0.8° further past).
+    The baseline is updated (1,323 → 1,210). Vitruvian: forearms 427 → 329 (the hammer's blows
+    143 → 70, the staff's 104 → 83), held things 429 → 310 (the hammer put away 27 → 0, the wand
+    17 → 1, the grimoire 19 → 2, the hammer drawn 11 → 0, the hammer's blows 27 → 6, the
+    staff's 31 → 4), second hands 141 → 88, joints 543 → 499; 523 better, 22 worse.
+  - **Next:** the hammer's side swing, the spiked boots on Vitruvian, Vitruvian's baseline, and
+    the game switched to it.
+- **2026-10-06, the spiked boots' shin plates fitted to each shin** (§10; docs/CHARACTERS.md
+  *Spiked boots*).
+  - **The shin plate** (`equipment.js` socket `leftShin`/`rightShin`, `items.js` `shinPlate`) was
+    placed by the shin's foremost point at one height, upright, with one curve for every body. A
+    full shin is flatter in front than that curve: on Vitruvian's men, its edges went up to 1.7 cm
+    into the shin, standing on guard. Now it lies along the shin (ankle to knee, the shins leaning
+    out as the legs stand apart), and its curve is fitted to the shin's skin it spans: from its
+    own to three times as flat, as wide as ever, the one that sits nearest the skin while clearing
+    it. Centred across the shin rather than on its foremost point, a running orc's plate met the
+    other calf as the legs passed; on the foremost point, as before, it doesn't.
+  - **The numbers** (failing pairs, against PR #205): Vitruvian, held things 310 → 212 (the boots'
+    motions 102 → 4); MakeHuman, held things 197 → 187 (the boots' 47 → 37); none worse on either.
+    What's left is the toe spike and heel spur in the foot (MakeHuman, 1.3 cm on three bodies) and
+    a running orc's toe spike and plate meeting the other leg. The baseline is updated.
+  - **Next:** the hammer's side swing, Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the war hammer's side swing** (§10; docs/CHARACTERS.md *Attacks*).
+  - **The left arm** (`ATTACKS.hammer`, "side swing"): the second hand on the haft, its elbow left
+    to come as it would, lay across the belly from the wind-up behind the right hip to the
+    follow-through, up to 13 cm in, on every body. Its elbow is now set, down through the wind-up
+    and the strike and out and back after it (a key just after the blow); the hands are wound up
+    further forward, the left hand is further forward at the blow, and the right hand follows
+    through less far across (further across and forward, the right shoulder went past its range).
+    With the left hand further out to the left after the blow, the forearm cleared the belly
+    throughout, but its wrist couldn't turn with the haft that far (the arms test's 35° strain
+    limit), so it goes only as far as it can.
+  - **The numbers** (failing pairs, against PR #206): MakeHuman, forearms in the torso 147 → 124
+    (the hammer's blows 42 → 19; the side swing's 30, 11 cm in, → 7, 5 cm), second hands 152 →
+    148; 34 better, none worse. Vitruvian, forearms 329 → 324 (the side swing's 30, 13 cm in, →
+    25, 6 cm), joints 499 → 490 (the hammer's 17 → 8); 40 better, 2 worse (two orc men's left
+    shoulder 2° further past its range at the wind-up). The baseline is updated.
+  - **Next:** Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, Vitruvian's wrists and the tests' rigs** (§10; docs/CHARACTERS.md *Vitruvian*).
+  - **The tests' rigs** (`test/actions.test.js`, `characters.test.js`, `wounds.test.js`) were
+    made without the manifest's `landmarks.rest`, which the game passes: on Vitruvian, the fists
+    and grips closed with the thumb along the fingers and a sprinting foot slid 5.6 cm, in the
+    tests only. They're made as the game makes them now.
+  - **Five keys bent Vitruvian's wrist 37° to 50° past its range** (the arms test's strain; its
+    forearm is longer than MakeHuman's and its upper arm shorter, so a hand drawn in close lies
+    steeper): the stun's palm thrust, the grimoire's palm push, the hair tuck (the fingers now
+    up past the ear, and the hand out to the side on its way down), the wand's flick and the bow
+    slung back. Each is turned or tipped back less. The toast is raised a little higher, so the
+    tankard is over 15 cm above Vitruvian's shoulder at its top, as the rests' test wants.
+  - **The numbers** (failing pairs, against PR #207): MakeHuman unchanged (none better or worse;
+    the baseline is unchanged). Vitruvian, 4 better and none worse: forearms 324 → 322 (the
+    stun's 4 → 2), held things 211 → 209 (the toast's tankard in the head 4 → 2).
+  - **Next:** garments, hair and skirts fitted to Vitruvian, sitting on its longer thighs, its
+    baseline, and the game switched to it.
+- **2026-10-06, garments, hair and skirts on Vitruvian** (§10; docs/CHARACTERS.md *Vitruvian*,
+  *Lingerie*, *Drapes*, hair, toe boxes).
+  - **Designs where they're drawn.** Lingerie's and surcoats' designs are drawn on MakeHuman's
+    base body, and Vitruvian's base is laid out otherwise (its chest 12 cm lower, its crotch
+    4 cm), so a bra lay on its collarbones and the surcoat's crown sat high. The Vitruvian build
+    now gives each vertex its place on MakeHuman's base body too (`designPositions`: the point of
+    MakeHuman's skin, fitted onto it, that it lies on; on the head by the face map), and
+    `texelMap` and `designSolid` draw designs there. The bra's and briefs' linings are a little
+    larger, so the nipples and the groin are under lining on both bodies (the lingerie test).
+    `vitruvian.bin` is rebuilt (1.87 → 2.03 MB).
+  - **Toe caps.** Their columns set off along the boot's slope from each cut point's own
+    neighbours, which on Vitruvian's foot lay to its side, so the cap came out 2 cm wider than the
+    toes with a crease at the cut. The slope is now taken from the boot 1 to 3 cm behind each
+    point, the same way round the foot. (The footwear test's allowance is now twice the boot's
+    thickness and a centimetre: plate boots are thicker.)
+  - **Hair.** Bangs end at the brows (Vitruvian's forehead runs lower under its hairline), and a
+    parting has denser roots (an eighth of the strands, at least 30).
+  - **Skirts.** A drape is built round the legs as they're set apart in the body as built, and
+    its sides go with them, so standing they came in as far as the legs did: on Vitruvian
+    (ankles 8.5 cm out from the hips, MakeHuman's 6.8), with narrower hips, a walking priestess's
+    and priest's feet came 2.6 and 4.3 cm out through the alb's sides. A drape's sides are now
+    built out as far as the legs are apart at their height (`drapes.js`), on both bodies: walking,
+    Vitruvian's alb lets the feet out 0.4 and 1.1 cm, and MakeHuman's priest's none (was 2.2).
+    The test's limit for the priest is now 1.5 cm (was 3).
+  - **Next:** sitting on Vitruvian's longer thighs (with the seated tankards cleared), its
+    baseline, and the game switched to it.
+- **2026-10-06, sitting on Vitruvian's longer thighs** (§10; docs/CHARACTERS.md *Sitting*).
+  - **The knee raised first** (`locomotion.js` `#onFloor`, `SEAT_RISE`): a seated foot the pose
+    puts into the floor was brought onto it only by swinging the shin forward, the thigh level on
+    the bench. Vitruvian's legs are longer (its knee 4 cm higher, the hip joint at 57.6% of the
+    height against MakeHuman's 53.6%), so a drinker's shins leaned 27° out in front (MakeHuman's
+    14°). Now the knee rises first, the thigh tipping up off the seat, by up to 4 cm (at 1.7 m
+    tall), and the shin swings forward for the rest: 11° and 1°. The tallest bodies still lean
+    theirs (Vitruvian's tallest man 49° → 42°); lifted all the way, the knees would meet the
+    table.
+  - **The tankard** a patron holds before the chest is held about 6 cm higher and 3 cm further
+    out (`tankard`, a tenth and a twentieth of an arm's length), and banged down on the table
+    further out, clear of a thigh tipped up (held where it was, a 5 cm raise put the thighs into
+    it on 24 more pairs on Vitruvian).
+  - **Next:** Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the last clipping on Vitruvian, and the switch held back** (§10;
+  docs/CHARACTERS.md *Items*, *Arms and hands*, *Reactions*, *Drawing weapons and putting them
+  away*, *Resting*, *Clips in the game*). With the game set to Vitruvian, the clipping test failed five ways; each is fixed,
+  on both bodies:
+  - **Running in spiked gauntlets**, a cat woman's left fist came 1.9 cm into Vitruvian's fuller
+    thigh: an arm swinging free is held 16° out with spiked knuckles on its hand
+    (`KNUCKLE_CLEARING`), 10° as before for what hangs at the hip.
+  - **The crush flinch** bowed the head 12° onto a shield hand held up before the face (an orc's
+    helm 1.6 cm into it): the head now tips back 3° as the chest folds, kept off the hand.
+  - **The hook's follow-through** came down across the lead fist's forearm (1.7 cm): carried
+    round up and out instead.
+  - **Putting the cleaver away**, its blade went 2.2 cm into the left thigh: the point is taken
+    down further out.
+  - **The adventurer's stretch**: a mage's thumb went 2.6 cm into her hat's brim going up: the
+    hands go up a hand's breadth further apart.
+  - The motion check: MakeHuman 4 failing pairs better, none worse (the baseline brought down,
+    1,183 → 1,180); Vitruvian 12 better, none worse.
+  - **The clips' bake stays on MakeHuman's body** (`bake-clips.js` `BAKE_BODY`). Baked on
+    Vitruvian, the jab's fists came out open and its palms turned up: Vitruvian's rest hand is
+    turned 46° about the forearm from the clips' (MakeHuman's 6°), and the retarget lines up only
+    the arms (`bvh.js`), so the clips' finger curl went about the wrong axis. The keys baked are
+    body-relative and play on either body; the lab plays the clips live, so its clips on
+    Vitruvian show it until the retarget lines up the hands too.
+  - **The switch held back.** With all of the above, Vitruvian's motion check has 1,298 failing
+    pairs to MakeHuman's 1,180: fewer joints past their range (490 to 525), feet in the ground
+    (100 to 126) and second hands off their hafts (88 to 148), but more forearms in the torso (322
+    to 124: the war hammer's and staff's blows 65 and 83 to 19 and 41, the hammer's draw and
+    put-away, kicks), planted feet sliding in every guard (14 bodies to 4) and things held in the
+    body (196 to 183). Switched now, those blows would look worse in play.
+  - **Next:** the guards' sliding feet and the two-handed blows' forearms on Vitruvian, the
+    clips' hands lined up in the retarget, then the switch with Vitruvian's baseline.

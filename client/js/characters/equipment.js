@@ -93,8 +93,8 @@ const SHEATHS = {
     // the hip, the grip forward, the blade down and back past the thigh, its edge forward, hung
     // and swung as the sword is)
     cleaver: { socket: "leftFrog", round: 28, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
-    // (Tucked in the belt at the right hip, the tip down)
-    wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
+    // (Tucked in the belt at the right hip, the tip down and a little out, clear of the thigh)
+    wand: { socket: "rightHip", at: [-0.04, 0.05, 0.03], point: [-0.1, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
     grimoire: { socket: "leftHip", at: [0.045, -0.07, -0.07], point: [0, 0, 1], edge: [0, -1, 0], model: "grimoireClosed", garment: "belt" },
     // (On the back, slung from the right shoulder: the grip up behind it at about the ear, where
@@ -290,6 +290,8 @@ export function socketOn(character, socket, { round = null } = {}) {
             const bone = `${Side}${{ Toe: "ToeBase", Heel: "Foot", Shin: "Leg" }[part]}`;
             const extent = boneExtent(character, part === "Toe" ? [`${Side}Foot`, `${Side}ToeBase`] : [bone], part === "Toe" ? (y, z) => z : part === "Heel" ? (y, z) => (y < 0.07 * face.scale ? -z : -Infinity) : null);
             let position;
+            let quaternion = new THREE.Quaternion();
+            let shin = null;
 
             if (part === "Toe") {
                 const toe = head(`${Side}ToeBase`);
@@ -298,16 +300,50 @@ export function socketOn(character, socket, { round = null } = {}) {
             } else if (part === "Heel") {
                 position = new THREE.Vector3(extent.x, 0.045 * face.scale, extent.z - 0.01).sub(head(bone));
             } else {
-                // A third of the way up from the ankle to the knee, on the front of the shin
+                // A third of the way up from the ankle to the knee, down the front of the shin
+                // and along it (it leans out as the legs stand apart), on its foremost point, and
+                // curved round it as it fits closest, clear of it from edge to edge (`fit.shin`,
+                // the curve's radius: a full shin is flatter in front than the plate's own curve)
                 const knee = head(bone);
                 const ankle = head(`${Side}Foot`);
-                const y = ankle.y + (knee.y - ankle.y) * 0.4;
-                const front = boneExtent(character, [bone], (vy, z) => (Math.abs(vy - y) < 0.03 ? z : -Infinity));
+                const centre = ankle.clone().lerp(knee, 0.4);
+                const up = knee.clone().sub(ankle).normalize();
+                const forward = new THREE.Vector3(0, 0, 1).addScaledVector(up, -up.z).normalize();
+                const right = new THREE.Vector3().crossVectors(up, forward);
+                const reach = SHIN_PLATE.length * face.scale * 0.5;
+                // (The shin's skin along it: x across, y up it, z forward)
+                const skin = boneSkin(character, bone).map((p) => {
+                    const from = p.sub(centre);
 
-                position = new THREE.Vector3(front.x, y, front.z + 0.012).sub(knee);
+                    return new THREE.Vector3(from.dot(right), from.dot(up), from.dot(forward));
+                }).filter((p) => Math.abs(p.y) < reach);
+                const level = skin.filter((p) => Math.abs(p.y) < 0.03);
+                const across = level.reduce((best, p) => (p.z > best.z ? p : best), level[0]).x;
+                // (About the middle across)
+                const local = skin.map((p) => p.clone().setX(p.x - across));
+                const foremost = Math.max(...local.map((p) => p.z));
+                // (Each curve, from the plate's own to three times as wide, as far out as keeps
+                // all the skin it spans inside it, clear of it; the one nearest the skin kept)
+                let front = Infinity;
+
+                for (let radius = SHIN_PLATE.radius * face.scale; radius <= SHIN_PLATE.radius * face.scale * 3; radius += 0.002) {
+                    const reachAcross = radius * Math.sin((SHIN_PLATE.round * face.scale) / radius);
+                    const inner = radius - SHIN_PLATE.clear;
+                    const middleAt = Math.max(...local.filter((p) => Math.abs(p.x) <= Math.min(reachAcross, inner)).map((p) => p.z - Math.sqrt(inner * inner - p.x * p.x)));
+
+                    if (middleAt + radius < front - 0.0005) {
+                        front = middleAt + radius;
+                        shin = radius;
+                    }
+                }
+
+                front = Math.max(front, foremost + SHIN_PLATE.clear);
+
+                quaternion = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, forward));
+                position = new THREE.Vector3(across, 0, front).applyQuaternion(quaternion).add(centre).sub(knee);
             }
 
-            return { bone, position, quaternion: new THREE.Quaternion(), fit };
+            return { bone, position, quaternion, fit: shin ? { ...fit, shin } : fit };
         }
         case "head": {
             const middle = new THREE.Vector3(...face.fromFace(0, 0.035, -0.068));
@@ -381,6 +417,26 @@ export function socketOn(character, socket, { round = null } = {}) {
         default:
             throw new Error(`No socket "${socket}"`);
     }
+}
+
+// The spiked boots' shin plate (items.js shinPlate) at a scale of 1: its length, its curve's
+// radius and how far round it goes each way from the front (m), and how far it's kept off the
+// skin (m)
+const SHIN_PLATE = { length: 0.17, radius: 0.046, round: 0.046 * Math.PI * 0.36, clear: 0.008 };
+
+// A bone's skin (what it moves most), in the body's rest pose: its points
+function boneSkin(character, boneName) {
+    const { human, positions, rig } = character;
+    const index = rig.index.get(boneName);
+    const skin = [];
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] === 0 && human.skinIndices[v * 4] === index) {
+            skin.push(new THREE.Vector3(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]));
+        }
+    }
+
+    return skin;
 }
 
 /**
