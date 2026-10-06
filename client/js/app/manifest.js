@@ -300,8 +300,8 @@ export const MANIFEST = Object.freeze([
         label: "Body and shapes",
         detail: "CharMorph's Vitruvian, with MakeHuman's sliders",
         files: [
-            ["characters/vitruvian.bin", 2034568, "26d6aa7db4"],
-            ["characters/vitruvian.json", 156319, "9e64b7b1da"],
+            ["characters/vitruvian.bin", 2002768, "886de7793d"],
+            ["characters/vitruvian.json", 156319, "590d1e660b"],
         ],
     },
     {
