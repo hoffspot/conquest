@@ -5106,6 +5106,54 @@ test("magic: the spellbook shows every school and the tomes; an element opened b
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+    test("a quick action tapped is used once: a draught tapped drinks one, Vigor tapped heals without being refused as cooling down", async ({ page }) => {
+        await page.goto("/?play&seed=1");
+        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+        // (In a fight with the orc, stunned, the player hurt and carrying five draughts)
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const player = battle.actor("player");
+            const orc = battle.actor("orc");
+            const square = [player.square[0] + 3, player.square[1] - 2];
+
+            game.host.players.get(game.me).progress.pack[0] = { id: "potion", quality: "common", count: 5 };
+            game.stop();
+            Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, stunnedUntil: battle.time + 600000 });
+            game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+            player.hp = 10;
+            battle.command("player", { type: "engage", target: "orc" });
+            game.advance(0.1);
+        });
+
+        const slot = (n) => page.locator(`.quickbar .quick-slot[data-slot="${n}"]`);
+        const play = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
+        const state = () => page.evaluate(() => ({ potions: window.pellagos.game.progress.count("potion"), hp: window.pellagos.game.battle.actor("player").hp }));
+
+        await expect(page.locator(".quickbar")).toHaveClass(/up/);
+        await expect(slot(3).locator(".quick-label")).toHaveText("Draught");
+
+        // A draught tapped (a finger's tap, and the click the browser fires after it): one drunk
+        const before = await state();
+
+        await slot(3).tap();
+        await play(1);
+        expect((await state()).potions).toBe(before.potions - 1);
+
+        // Vigor tapped: cast, and nothing refused (as a second use would be, cooling down)
+        await page.evaluate(() => {
+            window.pellagos.game.battle.actor("player").hp = 10;
+        });
+        await slot(0).tap();
+        await play(0.1);
+        await expect(slot(0)).not.toHaveClass(/refused/);
+        await expect(page.locator("#banner")).not.toHaveText("Not ready yet");
+        await play(1);
+        expect((await state()).hp).toBeGreaterThan(10);
+    });
+
     test("fits the screen: the title, making a character and the game's buttons; runs where the ground is double-tapped", async ({ page }) => {
         await title(page);
 
