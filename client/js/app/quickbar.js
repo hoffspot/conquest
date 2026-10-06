@@ -29,6 +29,15 @@ export const QUICK_REFUSALS = Object.freeze({
 // How far a finger can stray from where it went down and still tap (pixels)
 const STRAY = 24;
 
+// How long after a finger's lifted from a slot the click a browser fires for it may come (ms)
+const TAP_CLICK_MS = 700;
+
+/**
+ * Is a click the keyboard's (Enter or Space on a slot): no count of clicks, and from no pointer
+ * (a finger's or a mouse's names its kind; the keyboard's none, or it isn't a pointer's at all).
+ */
+export const keyboard = (event) => event.detail === 0 && !event.pointerType;
+
 const empty = '<circle r="15" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" opacity="0.6"/>';
 
 /**
@@ -102,9 +111,12 @@ export class QuickBar {
         this.left = QUICK.map(() => 0);
     }
 
-    // A slot tapped (used) or held (changed); Enter or Space on it, as a tap
+    // A slot tapped (used) or held (changed); Enter or Space on it, as a tap. (A tap's used as the
+    // finger's lifted; the click a browser fires after it is the tap's, not another: a phone's
+    // Chrome gives it no count, as the keyboard's has none, but says it's a finger's)
     #listen(slot, index) {
         let press = null;
+        let lifted = -Infinity;
 
         const end = (use) => (event) => {
             if (press?.pointer !== event.pointerId) {
@@ -112,6 +124,7 @@ export class QuickBar {
             }
 
             clearTimeout(press.hold);
+            lifted = event.timeStamp;
 
             if (use && !press.held) {
                 this.onUse(index);
@@ -145,8 +158,8 @@ export class QuickBar {
         slot.addEventListener("pointercancel", end(false));
         slot.addEventListener("contextmenu", (event) => event.preventDefault());
         slot.addEventListener("click", (event) => {
-            // (Only the keyboard's: a tap's heard as the finger's lifted)
-            if (event.detail === 0) {
+            // (Only the keyboard's: a tap's heard as the finger's lifted, and its click isn't)
+            if (keyboard(event) && event.timeStamp - lifted > TAP_CLICK_MS) {
                 this.onUse(index);
             }
         });
