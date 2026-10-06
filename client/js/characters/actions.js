@@ -459,11 +459,13 @@ export const ATTACKS = Object.freeze({
         variants: [
             variant("overhead smash", HAMMER,
                 // High over the head, the head hanging back, arching back, then down with the whole body onto the enemy
+                // (the hands out before the hips as it lands and after: drawn in, the left came off the
+                // haft on a big belly)
                 [0.25, { right: { at: [0.15, -0.02, 0.85] }, left: { on: 0, at: [-0.42, -0.28, 0.88] }, ...spine({ flex: -6 }), offset: [0, 0.01, -0.02] }],
                 [0.6, { right: { at: [0.06, 0.85, 0.2] }, left: { on: 0, at: [-0.62, 0.58, 0.58] }, ...spine({ flex: -12 }), offset: [0, 0.02, -0.05] }],
                 [0.8, { right: { at: [0.3, 0.25, 0.8] }, left: { on: 0, at: [-0.35, 0.05, 0.95] }, ...spine({ flex: 3 }), offset: [0, -0.04, 0.03] }],
-                [1, { right: { at: [0.48, -0.65, 0.75] }, left: { on: 0, at: [-0.21, -0.82, 0.31] }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
-                [1.35, { right: { at: [0.45, -0.72, 0.55] }, left: { on: 0, at: [-0.12, -0.75, 0.28] }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }],
+                [1, { right: { at: [0.48, -0.65, 0.8] }, left: { on: 0, at: [-0.21, -0.82, 0.4] }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.45, -0.72, 0.62] }, left: { on: 0, at: [-0.12, -0.75, 0.38] }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }],
                 // (Lifted out in front on the way back, clear of the legs)
                 [1.7, { right: { at: [0.3, -0.5, 0.75] }, left: { on: 0, at: [-0.25, -0.85, 0.45] }, ...spine({ flex: 12 }), offset: [0, -0.06, 0.05] }]),
             variant("side swing", HAMMER,
@@ -495,14 +497,16 @@ export const ATTACKS = Object.freeze({
                 [1, { right: { at: [0.3, -0.52, 0.75] }, left: { on: 0, at: [-0.38, -0.75, 0.68] }, ...spine({ flex: -2, turn: 10 }), offset: [0, 0, 0.08] }],
                 [1.35, { right: { at: [0.22, -0.1, 0.72] }, left: { on: 0, at: [-0.4, -0.45, 0.88] }, ...spine({ flex: -6, turn: 12 }), offset: [0, 0.01, 0.06] }]),
             variant("leaping slam", HAMMER,
-                // Rising up on the toes with it high overhead, then slammed down, crouching into it
+                // Rising up on the toes with it high overhead, then slammed down, crouching into it (the
+                // hands out before the knees as it lands, the left forearm clear of the belly as the body
+                // folds over it)
                 [0.25, { right: { at: [0.15, -0.02, 0.85] }, left: { on: 0, at: [-0.42, -0.28, 0.88] }, ...spine({ flex: -8 }), offset: [0, 0.02, -0.03] }],
                 [0.55, { right: { at: [0.08, 0.84, 0.14] }, left: { on: 0, at: [-0.62, 0.6, 0.53] }, ...spine({ flex: -16 }), offset: [0, 0.05, -0.06] }],
                 [0.78, { right: { at: [0.3, 0.25, 0.8] }, left: { on: 0, at: [-0.35, 0.05, 0.95] }, ...spine({ flex: 5 }), offset: [0, -0.05, 0.04] }],
-                [1, { right: { at: [0.25, -0.67, 0.78] }, left: { on: 0, at: [-0.31, -0.79, 0.3] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
+                [1, { right: { at: [0.25, -0.67, 0.92] }, left: { on: 0, at: [-0.31, -0.79, 0.48] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
                 [1.4, { right: { at: [0.45, -0.75, 0.55] }, left: { on: 0, at: [-0.12, -0.78, 0.28] }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }],
                 // (Lifted out in front on the way back, clear of the legs)
-                [1.7, { right: { at: [0.2, -0.37, 0.7] }, left: { on: 0, at: [-0.32, -0.87, 0.35] }, ...spine({ flex: 14 }), offset: [0, -0.08, 0.06] }]),
+                [1.7, { right: { at: [0.2, -0.37, 0.76] }, left: { on: 0, at: [-0.32, -0.87, 0.45] }, ...spine({ flex: 14 }), offset: [0, -0.08, 0.06] }]),
         ],
     },
     bow: {

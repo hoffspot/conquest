@@ -82,7 +82,7 @@ export const MANIFEST = Object.freeze([
             ["js/beasts/serpent.js", 9125],
             ["js/beasts/shapes.js", 7215],
             ["js/beasts/spectre.js", 19702],
-            ["js/characters/actions.js", 260535],
+            ["js/characters/actions.js", 260826],
             ["js/characters/body.js", 9696],
             ["js/characters/character.js", 89728],
             ["js/characters/clip-keys.js", 127431],

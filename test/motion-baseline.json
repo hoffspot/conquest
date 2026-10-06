@@ -858,7 +858,6 @@
    "slide": 0.0106
   },
   "attack/hammer/0|cat-shortest-f": {
-   "joint": 7.42,
    "slide": 0.0149
   },
   "attack/hammer/0|cat-thinnest-f": {
@@ -883,16 +882,13 @@
    "slide": 0.0109
   },
   "attack/hammer/0|human-bulkiest-f": {
-   "joint": 3.11,
    "slide": 0.0141
   },
   "attack/hammer/0|human-bulkiest-m": {
    "slide": 0.0117,
-   "item": 0.0143,
    "limb": 0.0472
   },
   "attack/hammer/0|human-shortest-f": {
-   "joint": 6.65,
    "slide": 0.0151
   },
   "attack/hammer/0|human-thinnest-f": {
@@ -905,17 +901,10 @@
    "slide": 0.0102
   },
   "attack/hammer/0|lizard-shortest-f": {
-   "joint": 5.17,
    "slide": 0.0143
   },
   "attack/hammer/0|lizard-thinnest-f": {
    "slide": 0.0135
-  },
-  "attack/hammer/0|orc-bulkiest-m": {
-   "grip": 0.045
-  },
-  "attack/hammer/0|orc-tallest-m": {
-   "grip": 0.0416
   },
   "attack/hammer/1|human-bulkiest-f": {
    "limb": 0.0372
@@ -994,15 +983,13 @@
    "limb": 0.0347
   },
   "attack/hammer/4|cat-bulkiest-f": {
-   "slide": 0.0243,
-   "limb": 0.0311
+   "slide": 0.0243
   },
   "attack/hammer/4|cat-bulkiest-m": {
    "slide": 0.0193
   },
   "attack/hammer/4|cat-shortest-f": {
-   "slide": 0.0258,
-   "limb": 0.0303
+   "slide": 0.0258
   },
   "attack/hammer/4|cat-tallest-m": {
    "slide": 0.0174
@@ -1042,57 +1029,47 @@
   },
   "attack/hammer/4|human-bulkiest-f": {
    "slide": 0.0244,
-   "limb": 0.0428
+   "limb": 0.0306
   },
   "attack/hammer/4|human-bulkiest-m": {
    "slide": 0.0208,
-   "limb": 0.061
+   "limb": 0.0483
   },
   "attack/hammer/4|human-shortest-f": {
-   "slide": 0.0261,
-   "limb": 0.0384
+   "slide": 0.0261
   },
   "attack/hammer/4|human-tallest-m": {
    "slide": 0.0177
   },
   "attack/hammer/4|human-thinnest-f": {
-   "slide": 0.0242,
-   "limb": 0.0331
+   "slide": 0.0242
   },
   "attack/hammer/4|lizard-bulkiest-f": {
-   "slide": 0.0234,
-   "limb": 0.0333
+   "slide": 0.0234
   },
   "attack/hammer/4|lizard-bulkiest-m": {
-   "slide": 0.0185,
-   "limb": 0.0338
+   "slide": 0.0185
   },
   "attack/hammer/4|lizard-shortest-f": {
-   "slide": 0.0246,
-   "limb": 0.0345
+   "slide": 0.0246
   },
   "attack/hammer/4|lizard-tallest-m": {
    "slide": 0.0169
   },
   "attack/hammer/4|lizard-thinnest-f": {
-   "slide": 0.0235,
-   "limb": 0.0314
+   "slide": 0.0235
   },
   "attack/hammer/4|orc-bulkiest-f": {
-   "slide": 0.0166,
-   "limb": 0.0362
+   "slide": 0.0166
   },
   "attack/hammer/4|orc-bulkiest-m": {
-   "slide": 0.0126,
-   "limb": 0.0702
+   "slide": 0.0126
   },
   "attack/hammer/4|orc-shortest-f": {
-   "slide": 0.0181,
-   "limb": 0.0382
+   "slide": 0.0181
   },
   "attack/hammer/4|orc-tallest-m": {
-   "slide": 0.011,
-   "limb": 0.0681
+   "slide": 0.011
   },
   "attack/hammer/4|orc-thinnest-f": {
    "slide": 0.0163

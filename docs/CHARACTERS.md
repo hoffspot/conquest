@@ -268,11 +268,11 @@ both bodies: Foot locking, below), and ankles bending further over the foot walk
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
 4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
-against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 497
-to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, planted feet
-sliding 429 to 488, but forearms in the torso 167 to 55 (most in the staff's and war hammer's
+against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 493
+to 502, feet in the ground 100 to 126, second hands off their hafts 30 to 53, planted feet
+sliding 429 to 488, but forearms in the torso 155 to 55 (most in the staff's and war hammer's
 two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
-195 to 194; 1,038 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
+194 to 194; 1,036 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
 Still to come: its own skin textures, the inside of the mouth, and blinking and expressions.
@@ -1038,7 +1038,8 @@ out of the torso (above), so their keys hold both hands far enough out on every 
 lifted out in front of the chest on its way overhead (a key between the guard and the top), and
 swung down in a wide arc to the blow (a key between the top and the strike), not pulled close past
 the face; at the bottom of a smash or slam the hands low and out before the hips, not drawn back
-into them; a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
+into them, and kept out as it follows through (drawn in, the left hand came off the haft on the
+biggest orcs, and the slam's left forearm went into the belly as the body folded over it); a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
 spin) out in front rather than tight to the body. A sweep still finishes with the rear hand low by
 the left hip: held higher, it came off the haft on the way back to guard. Further out still at the
 blow, the shoulders went past their range. A hammer's side swing sets the left elbow, down through
@@ -1316,7 +1317,9 @@ held in the body 215, forearms in the torso 175, the rest as they were. With the
 made worse refitted (the bow's crouching shot, the grimoire's overhand hurl and side-arm throw,
 the cleaver's overhead hack, looking about under a hat's brim, and a few thumbs round a
 scabbard), 1,038: things held in the body 195, forearms in the torso 167, joints past their
-range 497.
+range 497. With the war hammer's overhead smash and leaping slam keeping the hands out as they
+land and follow through, 1,036: forearms in the torso 155, joints past their range 493, second
+hands off their hafts 30, things held in the body 194.
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
