@@ -73,6 +73,8 @@ const spine = ({ flex = 0, turn = 0, bend = 0 }) => ({
 // --- Guards: how each weapon is held while fighting ---
 
 const book = { at: [-0.3, -0.5, 0.75], point: [1, 0, 0], edge: [0, 0.35, 1], chest: 1 };
+// (Held further out as the caster leans into a throw: its forearm was in the belly)
+const BOOK_OUT = { ...book, at: [-0.3, -0.47, 0.86] };
 
 // A hand on the hip (side 1: the right), the fingers forward over the hip bone, the thumb behind,
 // the elbow out to the side
@@ -427,13 +429,15 @@ export const ATTACKS = Object.freeze({
             variant("overhand hurl", GRIMOIRE,
                 // Up by the ear, then hurled forward and down
                 [0.55, { left: book, right: { at: [-0.12, 0.35, 0.1], palm: [0.2, 0.2, 1], towards: [0, 1, -0.2], shape: "cup" }, ...spine({ turn: -20, flex: -8 }), offset: [0, 0.02, -0.04] }],
-                [1, { left: book, right: { at: [0.12, 0, 1.04], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ turn: 14, flex: 10 }), offset: [0, -0.04, 0.08] }],
-                [1.5, { left: book, right: { at: [0.18, -0.3, 0.95], palm: [0.2, -0.6, 0.8], towards: [0, 0.6, 0.8], shape: "relaxed" }, ...spine({ turn: 14, flex: 12 }), offset: [0, -0.04, 0.06] }]),
+                [1, { left: BOOK_OUT, right: { at: [0.12, 0, 1.04], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ turn: 14, flex: 10 }), offset: [0, -0.04, 0.08] }],
+                [1.5, { left: BOOK_OUT, right: { at: [0.18, -0.3, 0.95], palm: [0.2, -0.6, 0.8], towards: [0, 0.6, 0.8], shape: "relaxed" }, ...spine({ turn: 14, flex: 12 }), offset: [0, -0.04, 0.06] }],
+                [1.75, { left: BOOK_OUT, ...spine({ turn: 7, flex: 6 }), offset: [0, -0.02, 0.03] }]),
             variant("side-arm", GRIMOIRE,
                 // Down by the right hip, then swung round and let go
                 [0.55, { left: book, right: { at: [-0.45, -0.45, 0.15], pronate: 0, shape: "cup" }, ...spine({ turn: -28 }), Hips: { turn: 10 }, offset: [0, -0.01, -0.03] }],
-                [1, { left: book, right: { at: [0.15, -0.1, 1.12], palm: [0.13, -0.34, 0.93], towards: [0.69, 0.71, 0.16], shape: "open" }, ...spine({ turn: 18, flex: 6 }), Hips: { turn: -10 }, offset: [0, -0.03, 0.07] }],
-                [1.5, { left: book, right: { at: [0.4, -0.2, 0.85], palm: [0.5, -0.3, 0.8], towards: [0.7, 0, 0.7], shape: "relaxed" }, ...spine({ turn: 22, flex: 6 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.05] }]),
+                [1, { left: BOOK_OUT, right: { at: [0.15, -0.1, 1.12], palm: [0.13, -0.34, 0.93], towards: [0.69, 0.71, 0.16], shape: "open" }, ...spine({ turn: 18, flex: 6 }), Hips: { turn: -10 }, offset: [0, -0.03, 0.07] }],
+                [1.5, { left: BOOK_OUT, right: { at: [0.4, -0.2, 0.85], palm: [0.5, -0.3, 0.8], towards: [0.7, 0, 0.7], shape: "relaxed" }, ...spine({ turn: 22, flex: 6 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.05] }],
+                [1.75, { left: BOOK_OUT, ...spine({ turn: 11, flex: 3 }), Hips: { turn: -6 }, offset: [0, -0.015, 0.025] }]),
             variant("palm push", GRIMOIRE,
                 // Drawn in to the chest, the fire growing, then pushed out at arm's length (drawn
                 // in, the fingers up and a little forward: tipped back, the wrist was wanted 37°
@@ -528,8 +532,9 @@ export const ATTACKS = Object.freeze({
                 [1.15, { left: { at: [-0.25, 0.02, 1.12], point: [0, 1, 0.1], edge: [0, -0.1, 1] }, right: { at: [0.22, 0.16, 0.32], pronate: 10, shape: "relaxed" }, ...spine({ turn: -28 }), Hips: { turn: -30 }, Head: { turn: 22, flex: 0 }, offset: [0, -0.01, 0] }],
                 [1.5, { left: { at: [-0.22, -0.08, 1.05], point: [0, 1, 0.15], edge: [0, -0.15, 1] }, right: { at: [0.2, -0.2, 0.3], pronate: 30, shape: "relaxed" }, ...spine({ turn: -22 }), Hips: { turn: -30 }, Head: { turn: 18, flex: 0 }, offset: [0, 0, 0] }]),
             variant("crouching shot", BOW,
-                // Dropping low on bent knees to draw and loose
-                [0.3, { left: { at: [-0.4, 0, 0.95], point: [0, 1, 0.1], edge: [0, -0.1, 1] }, right: { at: [0.2, -0.16, 0.92], palm: [1, 0, 0], shape: "hook" }, ...spine({ turn: -38, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 30, flex: -6 }, offset: [0, -0.2, -0.03] }],
+                // Dropping low on bent knees to draw and loose (the bow up before the body, its lower
+                // limb over the thigh as the knees bend)
+                [0.3, { left: { at: [-0.38, 0.1, 1.05], point: [0, 1, 0.1], edge: [0, -0.1, 1] }, right: { at: [0.2, -0.06, 0.98], palm: [1, 0, 0], shape: "hook" }, ...spine({ turn: -38, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 30, flex: -6 }, offset: [0, -0.2, -0.03] }],
                 [1, { left: { at: [-0.3, 0.12, 1.16], point: [0, 1, 0.05], edge: [0, -0.05, 1] }, right: { at: [0.16, 0.2, 0.44], palm: [1, 0, 0], towards: [0, -0.1, 1], elbow: [-1, 0.15, -0.5], shape: "hook" }, ...spine({ turn: -40, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
                 [1.15, { left: { at: [-0.3, 0.12, 1.16], point: [0, 1, 0.05], edge: [0, -0.05, 1] }, right: { at: [0.05, 0.22, 0.14], pronate: 10, elbow: [-1, 0.1, -0.3], shape: "relaxed" }, ...spine({ turn: -40, flex: 6 }), Hips: { turn: -30 }, Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
                 [1.5, { left: { at: [-0.28, 0.02, 1.08], point: [-0.2, 1, 0.05], edge: [0, -0.12, 1] }, right: { at: [0.12, 0, 0.12], pronate: 30, shape: "relaxed" }, ...spine({ turn: -34, flex: 3 }), Hips: { turn: -30 }, Head: { turn: 26, flex: -4 }, offset: [0, -0.12, -0.02] }]),
@@ -653,8 +658,9 @@ export const ATTACKS = Object.freeze({
         // (Hacked with the edge leading: palm up for a forehand, down for a backhand)
         variants: [
             variant("overhead hack", CLEAVER,
-                // Raised high behind the head, the edge up, then hacked straight down
-                [0.6, { right: { at: [0.05, 0.5, 0.05], point: [0.1, 0.4, -0.9], edge: [-0.5, 0.8, 0.3] }, left: REACH_OUT, ...spine({ flex: -8, turn: -18 }), offset: [0, 0.01, -0.03] }],
+                // Raised high over the right shoulder (out clear of the head, the elbow up and out),
+                // the edge up, then hacked straight down
+                [0.6, { right: { at: [-0.15, 0.55, 0], point: [0, 0.4, -0.9], edge: [-0.5, 0.8, 0.3], elbow: [-0.6, 0.5, -0.2] }, left: REACH_OUT, ...spine({ flex: -8, turn: -18 }), offset: [0, 0.01, -0.03] }],
                 [1, { right: { at: [0.3, -0.35, 1], point: [0.14, 0.2, 0.97], edge: [0.27, -0.95, 0.16] }, left: DRAW_IN, ...spine({ flex: 22, turn: 14 }), offset: [0, -0.1, 0.1] }],
                 [1.35, { right: { at: [0.3, -0.75, 0.75], point: [0.28, -0.22, 0.94], edge: [0.24, -0.93, -0.29] }, left: DRAW_IN, ...spine({ flex: 25, turn: 16 }), offset: [0, -0.11, 0.09] }]),
             variant("backhand", CLEAVER,
@@ -968,6 +974,9 @@ const BARMAID_RESTS = [
         [1.5, { left: { at: [0.05, -0.65, -0.2], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -6 }, offset: [0, 0, 0.01] }]),
 ];
 
+// A hand shading the eyes, palm down at the brow (looking about)
+const SHADING = { at: [-0.32, 0.36, 0.38], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" };
+
 // The player's rests (some of them the smith's and the apprentice's too)
 const ADVENTURER_RESTS = [
     variant("stretching", { ...spine({}), Head: { flex: 0 } },
@@ -977,11 +986,15 @@ const ADVENTURER_RESTS = [
         [1.35, { right: { at: [-0.12, 0.93, 0.06], palm: [0.6, 0.4, 0.7], towards: [-0.3, 0.95, -0.25], shape: "open" }, left: { at: [0.12, 0.93, 0.06], palm: [-0.6, 0.4, 0.7], towards: [0.3, 0.95, -0.25], shape: "open" }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
         [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
     variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
-        // A hand shading the eyes, looking into the distance one way, then the other
-        [0.5, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, Head: { flex: -4 } }],
+        // A hand shading the eyes (under a hat's brim), looking into the distance one way, then
+        // the other, then let fall: held at the brow a moment and lowered forward, away from the
+        // brim (dropped at once, the curve through the keys lifted it into a hat's brim first)
+        [0.5, { left: SHADING, Head: { flex: -4 } }],
         [0.8, { ...spine({ turn: 14 }), Head: { turn: 26, flex: -4 } }],
         [1.2, { ...spine({ turn: -14 }), Head: { turn: -26, flex: -4 } }],
-        [1.55, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
+        [1.55, { left: SHADING, ...spine({ turn: 0 }), Head: { turn: 0, flex: -4 } }],
+        [1.62, { left: SHADING }],
+        [1.75, { left: { at: [-0.3, 0.22, 0.52], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0, 0.3], shape: "open" } }]),
     variant("rolling the shoulders", { ...spine({}), LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: 0 } },
         // The shoulders rolled up and back, and the neck stretched one way and the other
         [0.4, { LeftShoulder: { elevate: 22, protract: 14 }, RightShoulder: { elevate: 22, protract: 14 } }],
@@ -1087,9 +1100,9 @@ const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", keys: [...BARKE
 // the hilt, and hooked in it a little forward of where it is unarmed, the upper arm kept off a
 // shield slung on the back
 // Looking about, a hand shading the eyes, a little lower and further forward, clear of a helm's
-// brim or horns
+// brim or horns (and let fall forward from there as from the brow)
 const UNDER_THE_HELM = [-0.3, 0.36, 0.44];
-const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: { ...pose.left, at: UNDER_THE_HELM } }]) };
+const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.map(([time, pose]) => [time, pose.left === SHADING ? { ...pose, left: { ...SHADING, at: UNDER_THE_HELM } } : pose]) };
 
 // Hands clasped behind with a sword or cleaver at the left hip: the left hand brought up to the
 // waist first, over the scabbard, the elbow out to the side, clear of a shield slung on the back,
@@ -1098,7 +1111,8 @@ const OVER_THE_SCABBARD = { left: { at: [-0.24, -0.56, -0.08], palm: [-0.3, 0, -
 const ARMED_CLASPED = { ...PRIEST_RESTS[4], keys: [...PRIEST_RESTS[4].keys.slice(0, 1), [0.25, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(1, -1), [1.88, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(-1)] };
 
 const BELT_HOOK = [-0.2, -0.62, 0.28];
-const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? { ...OVER_THE_HILT.left, pommel: 0 } : { ...pose.left, at: BELT_HOOK, pommel: 0 } }]) };
+// (Brought over the hilt a little wide of it, so the thumb doesn't catch the scabbard's throat)
+const ARMED_SHIFTING = { ...ADVENTURER_RESTS[4], keys: ADVENTURER_RESTS[4].keys.map(([time, pose]) => [time, !pose.left ? pose : { ...pose, left: time === 0.25 || time === 1.75 ? { ...OVER_THE_HILT.left, at: [0.01, -0.52, 0.43], pommel: 0 } : { ...pose.left, at: BELT_HOOK, pommel: 0 } }]) };
 
 const BASE_RESTS = {
     barkeep: BARKEEP_RESTS,
@@ -1392,7 +1406,7 @@ export const DRAWS = Object.freeze({
                 // ...then the point round to the scabbard's mouth (the other hand at its throat,
                 // guiding it in), the hilt kept out clear of the waist, and slid home
                 [0.8, { right: { at: [0.38, -0.4, 0.75], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.35, elbow: CROSS }, left: THROAT, ...spine({ turn: 18 }) }],
-                [0.9, { right: { at: [0.45, -0.55, 0.6], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 26, flex: 2 }), Hips: { turn: 6 } }],
+                [0.9, { right: { at: [0.45, -0.52, 0.68], sheath: 0.7, elbow: CROSS }, ...spine({ turn: 26, flex: 2 }), Hips: { turn: 6 } }],
                 [1, { right: { at: [0.4, -0.65, 0.25], sheath: 1, elbow: CROSS }, left: THROAT, ...spine({ turn: 32, flex: 4 }), Hips: { turn: 10 } }],
                 // (The hand let go, falling to the side)
                 [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
@@ -1648,7 +1662,8 @@ export const DRAWS = Object.freeze({
                 [0.5, { left: { at: SHIELD.in, elbow: SHIELD.elbow, pronate: SHIELD.pronate, wrist: SHIELD.wrist }, ...spine({ turn: 4 }) }],
                 [1, { left: SLUNG_FROM, ...spine({ turn: 12 }) }],
                 [1.3, { left: { at: [0.1, -0.4, 0.35], pronate: 0, shape: "relaxed", elbow: [0.9, -0.4, -0.1] }, ...spine({ turn: 6 }) }],
-                [1.6, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" }, ...spine({}) }],
+                // (Let fall wide of a hilt at that hip, behind it)
+                [1.6, { left: { at: [0.13, -0.85, 0.04], pronate: 40, shape: "relaxed" }, ...spine({}) }],
                 [2, EASY],
             ],
         },
@@ -1766,15 +1781,15 @@ export const REACTIONS = Object.freeze({
             return { ...spine({ flex: -front * 10 * e, turn: 8 * e }), Head: { flex: 10 * e, turn: -14 * e }, RightArm: { flex: 80 * e, abduct: -10 * e }, RightForeArm: { flex: 90 * e }, LeftArm: { flex: 70 * e, abduct: -5 * e }, LeftForeArm: { flex: 100 * e }, offset: [0, -0.05 * e, -front * 0.07 * e] };
         },
     },
-    // A hammer blow: doubled over, knees buckling, knocked back (the head kept up off the chest, clear
-    // of a shield hand held up before the face)
+    // A hammer blow: doubled over, knees buckling, knocked back (the head kept up off the chest, and
+    // not bent so far, that a helm stays clear of a shield hand held up before the face)
     crush: {
         length: 0.8,
         effect: "impact",
         pose: (t, { side, front }) => {
             const e = pulse(t, 0.2);
 
-            return { ...spine({ flex: front * 28 * e, bend: side * 6 * e }), Head: { flex: front * -3 * e }, RightArm: { flex: 25 * e, abduct: 18 * e }, LeftArm: { flex: 25 * e, abduct: 18 * e }, RightForeArm: { flex: 30 * e }, LeftForeArm: { flex: 30 * e }, offset: [0, -0.14 * e, -front * 0.16 * e] };
+            return { ...spine({ flex: front * 24 * e, bend: side * 6 * e }), Head: { flex: front * -3 * e }, RightArm: { flex: 25 * e, abduct: 18 * e }, LeftArm: { flex: 25 * e, abduct: 18 * e }, RightForeArm: { flex: 30 * e }, LeftForeArm: { flex: 30 * e }, offset: [0, -0.14 * e, -front * 0.16 * e] };
         },
     },
     // An arrow: a sharp jolt at the chest
