@@ -292,8 +292,9 @@ describe("attacks (actions.js)", () => {
         const { hitAt, duration } = WEAPONS.gauntlets.attacks[0];
         const reach = [];
 
+        // (The straight each time: a hook lands no further out than the lead fist's guard)
         for (let k = 0; k < 2; k++) {
-            actions.startAttack("punch", { hitAt: hitAt / 1000, duration: duration / 1000, variant: k });
+            actions.startAttack("punch", { hitAt: hitAt / 1000, duration: duration / 1000, variant: 0 });
             walker.update(hitAt / 1000);
             reach.push(world("RightHand", character).z - world("LeftHand", character).z);
             walker.update(duration / 1000);

@@ -915,7 +915,12 @@ over whatever the character was doing and back out at the end. Each key says:
   arm's joints more than 6° further past their ranges, or sinks what either hand holds further
   into the body, is halved, and after the last try taken back. A two-handed weapon's hands aren't
   moved: moving the weapon whole took the second hand off the haft and strained the arms for no
-  less in the body, so its keys keep it clear.
+  less in the body, so its keys keep it clear. While the last reach is blended over the one under
+  it by less than half (a blow fading out into the guard), the arm under it is kept clear too: a
+  move of the last moves the arm only as far as it's blended, so at a punch's last frame (8% of
+  it) the guard's forearm was left 6 cm into the chest. Not under one blended more than that:
+  moving the arm under it turns the elbow the last reaches from, which it couldn't always move
+  clear again (a grimoire's blow, 98% in, had a forearm 5 cm in the hip).
 - **A second hand on and off the weapon.** A second hand that grips the other's weapon in some
   keys and not in others (`onto`) lets go of it nearer those that don't, so it can swing free
   while a staff is whirled and take hold of it again on guard.
@@ -1003,8 +1008,14 @@ anatomically, whatever the body's size:
   - A two-handed shaft crosses the forearms at the blow, as a bat does.
   - The bow is shot side on. The bow arm is straight, its wrist relaxed. A three-finger hook
     draws the string to an anchor at the jaw, the drawing elbow up at shoulder height behind.
-  - Punches come from a guard by the chin: a straight punch turning palm down, a hook with the
-    elbow level, an uppercut with the palm to the body.
+  - Punches come from a boxer's guard, from the user's references (a basic boxing stance, and a
+    boxer's jabs and cross frame by frame): the rear fist before the chin, the lead a little
+    higher and further out, the elbows in and down before the ribs, the chin down and the knees
+    bent. Each punch leaves straight from the guard, not drawn back or wound up first, the body
+    turning into it and the other fist kept at the chin: a straight punch at the shoulder's
+    height turning palm down, a hook with the elbow raised level with the fist, an uppercut from
+    a dip of the knees with the palm to the body, a body blow from dropping low, an overhand up
+    over the line from the guard.
   - Spells are pushed out with the palm, or lifted in a cupped hand.
 - **Out of the body.** What's held stays out of the body. A staff's or hammer's butt and a bow's
   limbs pass beside the legs and hips, not through them. A tankard's rim meets the lower lip when
@@ -1176,7 +1187,9 @@ back, never the same twice running. It's added from the clip's first pose like a
 out over its last quarter, with the feet planted where they stand. Its lean is taken at 65%:
 all of it, over a guard's, took the spine 8° and the neck 13° past their ranges. The hands on guard
 stay before the face as the head ducks, going forward and aside with it as a boxer's do (the
-cat folk's gauntlets were in the head), unless both are on a haft. And they turn with the chest as
+cat folk's gauntlets were in the head), unless both are on a haft: forward by 0.15 arm lengths at
+the deepest (a quarter took a boxer's lead arm, its fist out before the face already, 21° past
+the shoulder's range). And they turn with the chest as
 it goes round: the backward dodge's 37° turn had the lizard folk's forearm 11 cm into the belly.
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
