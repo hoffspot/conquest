@@ -370,7 +370,7 @@ describe("a hero's kit (game.js, creator.js)", () => {
     it("says what a weapon does, and with spiked boots too, how kicks mix in", () => {
         assert.equal(weaponNumbers("sword"), "4–8 damage up close · 0.9 a second");
         assert.equal(weaponNumbers("sword", true), "3.5–7.5 damage up close (kicks or the weapon)");
-        assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 3–7 damage 18 m · 0.7 a second");
+        assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 3–7 damage 13.5 m · 0.7 a second");
         assert.equal(weaponNumbers("boots"), "3–7 damage up close · 1.0 a second");
     });
 });

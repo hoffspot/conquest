@@ -456,7 +456,7 @@ options, Action wheels: docs/GAME.md):
 - **Power strike** and **aimed shot** (an enemy's wheel): the next blow (up close, or from
   afar) does twice the damage. Each is ready again 12 seconds after, its slice greyed till then.
   A power strike walks up to the enemy to land it. An aimed shot at an enemy further off than
-  what's in hand shoots (a bow's 18 m, a wand's 7), or out of sight, is refused ("Out of reach",
+  what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of reach",
   "Can't see it"), as a spell out of reach is, and stays ready: nothing's spent
   (`Battle.shotAt`; `NET_VERSION` 46).
 
