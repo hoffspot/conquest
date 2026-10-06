@@ -1,15 +1,16 @@
 // The wild's creatures (client/js/core/creatures.js, core/battle.js, core/host.js; docs/WILDS.md):
 // each with a look and a weapon, about a match for a new adventurer near home and stronger the
 // further out; the uniques only in their people's lands, the mightiest only in the perilous
-// places; about eight kept near each player out in the wilds, out of sight at first, let go once
-// far; wandering, and fighting as their temper has it (a pack together); the people's soldiers
+// places; about four kept near each player out in the wilds (five at night), out of sight at first,
+// clear of the settlements and the roads, let go once far, the ground cleared of them left clear a
+// while; wandering, and fighting as their temper has it (a pack together); the people's soldiers
 // going after those that are a menace; the wild camps and the perilous sites come to life near a
 // player; and all of it carried on exactly from a snapshot
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { LOOKS } from "../client/js/beasts/looks.js";
 import { KINDS, STEP_MS } from "../client/js/core/battle.js";
-import { CAMP_FOLK, candidatesAt, CREATURES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
+import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -165,7 +166,7 @@ describe("the wild's creatures (creatures.js)", () => {
 });
 
 describe("the wild come to life near the players (host.js, battle.js)", () => {
-    it("keeps about eight creatures near a player out in the wilds, put out of sight, and lets them go once far", () => {
+    it("keeps about four creatures near a player out in the wilds, put out of sight, and lets them go once far", () => {
         const { host, me } = outside(hosted());
 
         // (The first look round: the first pack put out)
@@ -191,6 +192,68 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         run(host, 1500);
 
         assert.ok(ids.every((id) => !host.battle.actor(id)), "those far away let go");
+    });
+
+    it("puts them out clear of the settlements and the roads, and leaves the ground cleared of them clear two minutes, for everyone", () => {
+        const { host, world, me } = outside(hosted(), 200);
+        const roaming = () => about(host).filter((beast) => {
+            const one = host.wild.get(beast.id);
+
+            return !beast.dead && !one.camp && !one.lair && !one.place;
+        });
+
+        assert.deepEqual([WILDS.count, WILDS.night, WILDS.clear, WILDS.road, WILDS.cleared], [4, 1, 60, 10, 120000]);
+
+        run(host, 12000);
+
+        // Put out clear of the settlements and the roads (a pack a square or two round where it was
+        // put; they may wander onto a road after)
+        for (const beast of roaming()) {
+            const spawn = beast.spawn.map((v) => v + 0.5);
+
+            assert.ok(clearOfSettlements(world.plan, spawn, WILDS.clear - 4), `${beast.id} clear of the settlements`);
+            assert.ok(!world.maps.town.nearRoad(...spawn, WILDS.road - 4), `${beast.id} clear of the roads`);
+        }
+
+        const near = roaming().filter((beast) => Math.hypot(beast.x - me.x, beast.y - me.y) < WILDS.about);
+
+        assert.ok(near.length >= 2, `${near.length} about`);
+
+        // All those about the player felled
+        for (const beast of near) {
+            host.battle.afflict(beast.id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        run(host, 3000);
+
+        assert.ok(near.every(({ id }) => !host.battle.actor(id) || host.battle.actor(id).dead), "felled");
+        assert.equal(host.cleared.length, near.length, "their ground cleared");
+
+        const marks = host.cleared.map(({ at }) => at);
+        const before = new Set(host.wild.keys());
+        const fresh = () => roaming().filter(({ id }) => !before.has(id));
+
+        // A friend joins them there: the ground they cleared stays clear for them too
+        host.join({ id: "guest", hero: { ...HERO, name: "Bea" } });
+        put(host.battle.actor("guest"), [Math.floor(me.x), Math.floor(me.y) + 2]);
+
+        for (let t = 0; t < 100000; t += 5000) {
+            run(host, 5000);
+
+            for (const beast of fresh()) {
+                assert.ok(marks.every(([x, y]) => Math.hypot(beast.spawn[0] - x, beast.spawn[1] - y) >= WILDS.about - 4), `${beast.id} put out away from the cleared ground`);
+            }
+
+            const about = roaming().filter((beast) => Math.hypot(beast.x - me.x, beast.y - me.y) < WILDS.about);
+
+            assert.ok(about.length <= WILDS.count - near.length, `${about.length} about the cleared ground after ${t + 5000} ms`);
+        }
+
+        // Then, the two minutes out, they come back
+        run(host, WILDS.cleared - 100000 + 15000);
+
+        assert.equal(host.cleared.length, 0, "the cleared ground filled again");
+        assert.ok(roaming().some((beast) => Math.hypot(beast.x - me.x, beast.y - me.y) < WILDS.about), "back about the player");
     });
 
     it("leaves the player be where a creature's defensive, till they strike it, then its pack turns on them", () => {

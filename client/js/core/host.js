@@ -143,12 +143,15 @@ const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMEN
 /**
  * The wild's creatures about the players (docs/WILDS.md): how many are kept about each player out
  * in the world (within `about` metres; `night` more after dark), put out `from` to `to` metres
- * away (out of sight), clear of the settlements by `clear` metres; let go once every player's
- * `far` away (not while fighting), and the night's own at daybreak once every player's `from`
- * away. A wild camp's folk come out once a player's `camp` metres from it (a few more than its
- * patrols roam), and are let go `campFar` away.
+ * away (out of sight), clear of the settlements by `clear` metres and of the roads by `road`
+ * metres (they may wander onto them after); let go once every player's `far` away (not while
+ * fighting), and the night's own at daybreak once every player's `from` away. Ground cleared of
+ * them stays clear a while: each one killed keeps its `about` metres round where it fell empty
+ * for `cleared` ms, for everyone, one fewer kept about anyone near it, so they come back one at a
+ * time as each one's time runs out. A wild camp's folk come out once a player's `camp` metres
+ * from it (a few more than its patrols roam), and are let go `campFar` away.
  */
-export const WILDS = Object.freeze({ count: 8, night: 2, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
+export const WILDS = Object.freeze({ count: 4, night: 1, about: 60, from: 30, to: 44, clear: 60, road: 10, cleared: 120000, far: 90, camp: 60, campFar: 140 });
 
 /**
  * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
@@ -434,6 +437,9 @@ export class Host {
         this.wildCamps = new Map();
         this.lairs = new Map();
         this.slain = {};
+
+        /** Where the wild's creatures have been cleared lately: [{ at: [x, y], until }] (battle ms; WILDS.cleared). */
+        this.cleared = [];
         // The places worth finding held by outlaws or the dead whose band is out (core/places.js):
         // by the place's id, { ids (the band, its leader first), leader, at, tier, holder, chest
         // (its square), race (the place's people, or null), cleared }
@@ -966,6 +972,14 @@ export class Host {
             }
 
             if (beast) {
+                const fell = this.battle.actor(event.id);
+
+                // (One of those roaming about the players, felled out in the world: its ground
+                // cleared a while, WILDS.cleared)
+                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !this.companions.has(event.id)) {
+                    this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
+                }
+
                 this.#fall(event.id, CORPSE_MS);
                 this.#spoils(event.id, beast);
 
@@ -1152,6 +1166,7 @@ export class Host {
             nextFollower: this.nextFollower,
             hired: [...this.hired],
             wild: [...this.wild.entries()],
+            cleared: structuredClone(this.cleared),
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
             lairs: [...this.lairs.entries()],
@@ -1242,6 +1257,7 @@ export class Host {
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
+        host.cleared = structuredClone(snapshot.cleared ?? []);
         host.nextWild = snapshot.nextWild ?? 1;
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
@@ -2448,6 +2464,9 @@ export class Host {
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
+        // (The ground cleared long enough ago filled again)
+        this.cleared = this.cleared.filter(({ until }) => until > this.battle.time);
+
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
             const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && actor.target === null;
@@ -2476,10 +2495,12 @@ export class Host {
                 return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
 
-            const count = WILDS.count + (dark ? WILDS.night : 0);
+            // (One fewer for each felled near them lately: the ground they cleared stays clear)
+            const cleared = this.cleared.filter(({ at: [x, y] }) => hypot(x - actor.x, y - actor.y) < WILDS.about).length;
+            const room = WILDS.count + (dark ? WILDS.night : 0) - about - cleared;
 
-            if (about < count) {
-                this.#putOut([actor.x, actor.y], this.#homeOf(player), count - about, dark);
+            if (room > 0) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(player), room, dark);
             }
         }
     }
@@ -2499,8 +2520,8 @@ export class Host {
     }
 
     // A pack of what lives there put out near a place (out of sight of it, as strong as its
-    // distance from `home` has it, what's about at that hour), clear of the settlements and the
-    // water, no bigger than `room`
+    // distance from `home` has it, what's about at that hour), clear of the settlements, the roads,
+    // the water and the ground cleared lately, no bigger than `room`
     #putOut([x, y], home, room, dark = false) {
         const plan = this.world.plan;
 
@@ -2509,7 +2530,7 @@ export class Host {
             const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
             const at = [x + cos(angle) * reach, y + sin(angle) * reach];
 
-            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water) {
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about)) {
                 continue;
             }
 

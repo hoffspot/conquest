@@ -1702,10 +1702,11 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
-test("the bars over enemies the same way are smaller the farther off they are, the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
+test("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // Three slimes in a line the way the camera looks, 4, 10 and 18 m ahead of the player
+    // Four slimes in a line the way the camera looks, 6, 24, 48 and 66 m ahead of the player (by
+    // day: full size within 12 m, gone at 60 m)
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const me = game.battle.actor(game.me);
@@ -1714,7 +1715,7 @@ test("the bars over enemies the same way are smaller the farther off they are, t
 
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        [4, 10, 18].forEach((ahead, k) => {
+        [6, 24, 48, 66].forEach((ahead, k) => {
             const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
 
             game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
@@ -1722,35 +1723,98 @@ test("the bars over enemies the same way are smaller the farther off they are, t
             game.enlisting.push(`slime${k}`);
         });
     });
-    expect(await playUntil(page, () => [0, 1, 2].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
+    expect(await playUntil(page, () => [0, 1, 2, 3].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
 
-    const plates = await page.evaluate(() => {
-        window.pellagos.game.advance(0.05);
+    // (How each bar's drawn, and how far its slime is from the player)
+    await page.evaluate(() => {
+        window.platesNow = () => {
+            const { game } = window.pellagos;
+            const own = game.avatars.get(game.me).object.position;
 
-        return {
-            each: [0, 1, 2].map((k) => {
+            return [0, 1, 2, 3].map((k) => {
                 const plate = document.querySelector(`.floater[data-id="slime${k}"]`);
+                const at = game.avatars.get(`slime${k}`).object.position;
                 const { width, height } = plate.getBoundingClientRect();
                 const name = plate.querySelector(".name").getBoundingClientRect();
                 const level = plate.querySelector(".level");
 
-                return { width, height, layer: Number(plate.style.zIndex), level: getComputedStyle(level).display, levelLine: Math.abs(level.getBoundingClientRect().top - name.top) < name.height / 2 };
-            }),
-            stacking: getComputedStyle(document.querySelector("#floaters")).zIndex,
+                return {
+                    off: Math.hypot(at.x - own.x, at.z - own.z),
+                    hidden: plate.hidden,
+                    width,
+                    height,
+                    faint: Number(getComputedStyle(plate).opacity),
+                    layer: Number(plate.style.zIndex),
+                    level: getComputedStyle(level).display,
+                    levelLine: Math.abs(level.getBoundingClientRect().top - name.top) < name.height / 2,
+                };
+            });
         };
     });
-    const [near, middle, far] = plates.each;
 
-    // Each farther one smaller (the nearest still easily read), and drawn under the nearer
+    const plates = await page.evaluate(() => {
+        window.pellagos.game.advance(0.05);
+
+        return { light: window.pellagos.game.battle.light, each: window.platesNow(), stacking: getComputedStyle(document.querySelector("#floaters")).zIndex };
+    });
+    const [near, middle, far, gone] = plates.each;
+
+    // (By day: seen as far as ever)
+    expect(plates.light).toBeNull();
+
+    // The nearest full size and solid; each farther one smaller and fainter, evenly with the
+    // distance, to none at the edge of sight; and drawn under the nearer
+    expect(near.off).toBeLessThan(12);
     expect(near.width).toBeGreaterThan(110 * 0.6);
-    expect(middle.width).toBeLessThan(near.width * 0.9);
-    expect(far.width).toBeLessThan(middle.width * 0.95);
+    expect(near.faint).toBe(1);
+    expect(middle.width / near.width).toBeCloseTo((60 - middle.off) / 48, 1);
+    expect(middle.faint).toBeCloseTo((60 - middle.off) / 48, 1);
+    expect(far.width / near.width).toBeCloseTo((60 - far.off) / 48, 1);
+    expect(far.faint).toBeCloseTo((60 - far.off) / 48, 1);
+    expect(far.width).toBeLessThan(middle.width * 0.5);
+    expect(gone.off).toBeGreaterThan(60);
+    expect(gone.hidden).toBe(true);
     expect(near.layer).toBeGreaterThan(middle.layer);
     expect(middle.layer).toBeGreaterThan(far.layer);
 
     // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
     expect(plates.stacking).toBe("0");
-    expect(plates.each.map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
+    expect(plates.each.slice(0, 3).map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
+
+    // The farthest seen comes near: its bar grows as it comes, to full size
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [near, far] = [game.battle.actor("slime0"), game.battle.actor("slime2")];
+
+        Object.assign(far, { square: [near.square[0] + 1, near.square[1]], x: near.x + 1, y: near.y });
+    });
+
+    // (Frame by frame, as its figure walks up)
+    const growing = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const seen = [];
+
+        for (let k = 0; k < 90; k++) {
+            game.advance(1 / 30, { render: false, wait: true });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            const [near, , far] = window.platesNow();
+
+            seen.push({ off: far.off, share: far.width / near.width });
+
+            if (far.off < 12 && far.share > 0.99) {
+                break;
+            }
+        }
+
+        return seen;
+    });
+
+    expect(growing.at(-1).off).toBeLessThan(12);
+    expect(growing.at(-1).share).toBeCloseTo(1, 1);
+    expect(growing.some(({ share }) => share > 0.4 && share < 0.9), "between sizes on the way").toBe(true);
+    expect(growing.every(({ share, off }, k) => !k || (share >= growing[k - 1].share - 0.01 && off <= growing[k - 1].off + 0.01))).toBe(true);
+    expect(growing.filter(({ off }) => off > 12).every(({ share, off }) => Math.abs(share - (60 - off) / 48) < 0.05), "as big as its distance has it each frame").toBe(true);
 });
 
 test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {

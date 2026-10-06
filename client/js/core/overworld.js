@@ -1565,6 +1565,26 @@ export class Overworld {
         return this.settlements.settle(cx, cy).flatMap(({ bridges }) => bridges ?? []).filter(({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half < x0 + CHUNK && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half < y0 + CHUNK);
     }
 
+    /**
+     * Is a road (a trade road, a road, a track or a trail) within `within` metres of its side, from
+     * a point in the world (x, y metres)? Those of the chunks round it too, as far as that reaches.
+     */
+    nearRoad(x, y, within) {
+        for (let cy = Math.floor((y - within) / CHUNK); cy <= Math.floor((y + within) / CHUNK); cy++) {
+            for (let cx = Math.floor((x - within) / CHUNK); cx <= Math.floor((x + within) / CHUNK); cx++) {
+                if (cx < 0 || cy < 0 || cx >= CHUNKS || cy >= CHUNKS) {
+                    continue;
+                }
+
+                if (this.#roadsIn(cx, cy).some((segment) => fromSegment(x, y, segment) <= (ROAD_HALF[segment[4]] ?? 1) + within)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // The kind of road at a point (the widest, where roads and paths meet: the same whichever
     // were listed first), or null
     #roadAt(px, py, margin = 0) {
