@@ -689,17 +689,34 @@ export const TREES = Object.freeze({
                     { say: "Good to know.", next: "more" },
                 ],
             },
+            // (The notices on the board, up to four (standing.js BOARD_SIZE), each read in full and
+            // taken, or not)
             offer: {
                 say: [
-                    { if: { offer: true }, lines: ["Ooh, this one's just gone up! {offer} It pays {reward}.", "Let me see... here! {offer} {reward}, when it's done. Don't die!"] },
+                    { if: { offer1: true }, lines: ["Ooh, here's what's up on the board! All fresh. Which one?", "Let me see... these just went up. See anything you like?"] },
                     { lines: ["Oh! The board's bare right now. Someone took the last one this morning. Try again later?", "Nothing for you just now, sorry! Check back in a little while."] },
                 ],
                 choices: [
-                    { if: { offer: true }, say: "I'll take it.", next: "accepted", do: [{ work: "accept" }] },
-                    { if: { offer: true }, say: "Not that one.", next: "more" },
-                    { if: { offer: false }, say: "I'll come back.", next: "more" },
+                    { if: { offer1: true }, say: "{brief1}, for {reward1}.", next: "notice1" },
+                    { if: { offer2: true }, say: "{brief2}, for {reward2}.", next: "notice2" },
+                    { if: { offer3: true }, say: "{brief3}, for {reward3}.", next: "notice3" },
+                    { if: { offer4: true }, say: "{brief4}, for {reward4}.", next: "notice4" },
+                    { if: { offer1: true }, say: "None of them, thanks.", next: "more" },
+                    { if: { offer1: false }, say: "I'll come back.", next: "more" },
                 ],
             },
+            ...Object.fromEntries(
+                [1, 2, 3, 4].map((k) => [
+                    `notice${k}`,
+                    {
+                        say: [`{offer${k}} It pays {reward${k}}.`, `{offer${k}} {reward${k}}, when it's done. Don't die!`],
+                        choices: [
+                            { say: "I'll take it.", next: "accepted", do: [{ work: "accept", which: k }] },
+                            { say: "Let me look at the others.", next: "offer" },
+                        ],
+                    },
+                ]),
+            ),
             accepted: {
                 say: ["It's yours! I've stamped it. Come back and tell me when it's done.", "Wonderful! Off you go, then. Carefully!"],
                 choices: "more",

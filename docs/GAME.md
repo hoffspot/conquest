@@ -1168,7 +1168,12 @@ each block's edges (4 metres of it between two blocks: where hedgerow trees grow
 own things lie and the plough turned). About one block in five is left as pasture, grass all
 over; the rest are in parallel strips, all of a block's one way (east to west or north to
 south), 8 to 20 metres wide as its block has them, a metre's baulk of grass between each and the
-next, and grass where a block runs out with no room for another. Each strip's its own crop
+next, and grass where a block runs out with no room for another. No field comes up to a road,
+a bridge or a settlement's street out through its fields: at least 2 metres of the wild's own
+grass are left between them, edge to edge (the user: "Farm fields should not butt right up
+against roads"; overworld.js `VERGE`). (The fields drawn far off, past the chunks, are worked out
+on the GPU from the fields alone, `FIELDS_GLSL`: the verge, under a pixel there, isn't.) Each
+strip's its own crop
 (`CROP`): ploughed (a third of them), wheat, barley, greens, or fallow (grass). Ploughed and sown
 strips are soil, their furrows running along them (the soil's texture turned for a block's strips
 running north to south); the ground under a sown strip is its crop's colour (`CROP_COLOURS`),
@@ -1973,7 +1978,9 @@ the adventurers drinking at a guild's tables are patrons who talk as adventurers
 stranger to the town's branch of the guild, and signs the player up as an adventurer
 (remembered, and the player learns `guildMember`: "Rank: Copper. Everyone starts at Copper,
 don't pout!"), and tells of the quest board, the ranks (Copper, Iron, Bronze, Silver, Gold and
-Mithril) and the other branches. The adventurers are wry and give advice ("Be nice to
+Mithril) and the other branches. Asked what's on the board, she lists its notices, up to four
+(`notice1` to `notice4`: what each asks in a few words, and what it pays: docs/WAR.md M8); one
+picked is read in full, and taken, or the player looks at the others. The adventurers are wry and give advice ("Be nice to
 {receptionist}. She decides who gets the good notices.").
 
 **The courtesans' talk** (`TREES.courtesan`) is warm and teasing, all innuendo and nothing

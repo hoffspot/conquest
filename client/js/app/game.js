@@ -44,7 +44,7 @@ import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
-import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { BOARD_SIZE, briefOf, COUNSEL, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
@@ -2911,7 +2911,7 @@ export class Game {
         const oppressor = war.oppressor(this.self.realm);
         const unrest = war.realm(this.self.realm)?.unrest ?? 0;
         const ready = unrest >= RISING.ready * (1 - COUNSEL[rank] * (1 - RISING.early));
-        const state = { offer: null, reported: false };
+        const state = { offer: null, board: [], reported: false };
         const giftDue = () => rank >= OPENS.armoury && Array.from({ length: rank - OPENS.armoury + 1 }, (_, k) => OPENS.armoury + k).some((each) => !standing.claimed.includes(each));
 
         const words = {
@@ -2932,6 +2932,8 @@ export class Game {
             own: () => own,
             room: () => standing.requests.length < MOST_REQUESTS,
             offer: () => Boolean(state.offer),
+            // (A guild's board: its notices, each there or not)
+            ...Object.fromEntries(Array.from({ length: BOARD_SIZE }, (_, k) => [`offer${k + 1}`, () => Boolean(state.board[k])])),
             due: () => this.host.dueTo(this.me, npc.id).length > 0,
             reported: () => state.reported,
             keep: () => rank >= OPENS.keep,
@@ -2948,10 +2950,21 @@ export class Game {
         const heard = (effect, result, kind, chosen) => {
             if (effect.work === "ask") {
                 state.offer = result.ok ? result.request : null;
+                state.board = result.ok ? (result.board ?? [result.request]) : [];
                 names.offer = state.offer?.text ?? "";
                 names.reward = state.offer ? rewardOf(state.offer.reward) : "";
+
+                // (Each of a guild's notices: what it asks in a few words, in full, and what it pays)
+                for (let k = 0; k < BOARD_SIZE; k++) {
+                    const notice = state.board[k];
+
+                    names[`brief${k + 1}`] = notice ? briefOf(notice) : "";
+                    names[`offer${k + 1}`] = notice?.text ?? "";
+                    names[`reward${k + 1}`] = notice ? rewardOf(notice.reward) : "";
+                }
             } else if (effect.work === "accept") {
                 state.offer = null;
+                state.board = result.ok ? state.board.filter((notice) => objectiveOf(notice) !== objectiveOf(result.request)) : state.board;
 
                 if (!result.ok) {
                     this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
@@ -2962,7 +2975,7 @@ export class Game {
                 const first = handed[0];
 
                 state.reported = result.ok;
-                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
+                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "courier" ? `The package from ${first.from.townName}! Seal unbroken, too.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
             } else if (effect.armoury) {
                 names.gift = result.ok && result.item ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : (REFUSALS[result.reason] ?? "There's nothing for you.");
             } else if (kind) {
@@ -2997,8 +3010,11 @@ export class Game {
             effect: (effect) => {
                 const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
                 const chosen = kind && kind !== "rise" ? options[kind]?.[index - 1] : null;
+                // (A notice on a guild's board taken, by its place on it: sent as what it asks)
+                const notice = effect.work === "accept" && Number.isInteger(effect.which) ? state.board[effect.which - 1] : null;
+                const sent = kind && kind !== "rise" ? { counsel: { [kind]: chosen?.id } } : notice ? { work: "accept", which: objectiveOf(notice) } : effect;
 
-                this.#command({ type: "effect", effect: kind && kind !== "rise" ? { counsel: { [kind]: chosen?.id } } : effect }, (result) => heard(effect, result, kind, chosen));
+                this.#command({ type: "effect", effect: sent }, (result) => heard(effect, result, kind, chosen));
             },
         };
     }

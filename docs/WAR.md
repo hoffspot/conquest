@@ -989,17 +989,50 @@ game fills in what's heard where they are (`{rumour1}` to `{rumour3}`, `{rumourR
 only asked when there's something to tell. The guards and officials say how the war goes too (M2,
 M4).
 
-**The adventurers' guild's board** (`standing.js` `offerContract`): its receptionist gives
-contracts to any registered adventurer, of whatever people (no standing needed, none given; paid
-in gold):
+**The adventurers' guild's board** (`standing.js` `offerBoard`, `offerContract`, `offerCourier`):
+its receptionist gives contracts to any registered adventurer, of whatever people (no standing
+needed, none given; paid in gold). The board has up to four notices up at once (`BOARD_SIZE`):
+up to three contracts and the courier work. No two ask the same thing (`objectiveOf`: the same kind
+for the same beasts, people, part, camp, place or town), and none asks what the player carries
+already. Asked, the receptionist lists them in a few words with what each pays (`briefOf`: "Beasts
+round Redemoor, for 24 gold."). The player reads one in full, then takes it or looks at the rest.
+What's on the board holds for the war's turn: a notice taken is gone from it, the rest stay, and a
+board emptied is put up afresh.
+
+Everything a contract asks for is within 1.5 km of the guild's town (`GUILD_REACH`):
 
 | Contract | On the board | Done when | Pays |
 | --- | --- | --- | --- |
-| Beasts on the roads | always | 2 to 4 of the wild brought down | 10, and 7 for each |
-| A bounty | the town's holders at war | 2 to 4 of their enemies' soldiers brought down | 8, and 6 for each |
-| The camp outside the walls | an enemy camp before the town (M6) | the player was at it, and it's gone | 70 |
-| Wanted at the guild | always | 2 to 5 of a creature's parts (docs/WILDS.md) brought to the counter | 4, and 1.6 times what they'd sell for |
-| Put them to the sword | a place within 3 km held by outlaws or the dead (docs/GAME.md *Held, in play*) | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome |
+| Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town | 10, and 7 for each |
+| A bounty | the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each |
+| The camp outside the walls | an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 |
+| Wanted at the guild | the parts of the creatures that live within 1.5 km, at the tiers they're found at there (measured from the town: docs/WILDS.md) | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for |
+| Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*) | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome |
+| A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km |
+
+A beast or soldier brought down counts for a guild's contract only with the player within 1.5 km
+of the town's middle (the host's `#felled`: the contract's `target.near`); the journal says so ("1
+of 3 brought down within 1.5 km of Redemoor"). A bounty says where that people's soldiers are
+("They hold Gorgash, 1.2 km north-east of Redemoor", or "They have a camp 0.4 km east of
+Redemoor"), and so does a camp.
+
+**The courier work** (`offerCourier`) takes the player towards a people their own aren't friends
+with: neutral, at war, or not met (`war.relation`). The package goes to the guild in a town of the
+player's own people or their friends (`war.friendly`: their own, their overlord, their vassals and
+their allies), never into the strangers' town itself:
+
+1. The towns, cities and capitals of peoples the player's aren't friends with are taken nearest
+   the guild first.
+2. For the first, the town, city or capital of the player's people or their friends nearest it is
+   found. It mustn't be the guild's own town, and must be nearer the strangers' town than the
+   guild's town is, so the way there leads towards them.
+3. With none, the next strangers' town is tried. With none anywhere, or a package carried already,
+   the board has no courier work.
+
+The notice says where it goes and why it's the way to go: "The guild in Langdenwick wants this
+package, sealed, by someone who'll get it there: 0.6 km north of Ashby, on the way to the Orcs at
+Gorgash." It's due like a letter (12 turns, and 10 more for each km), and told of at the guild it's
+for, which pays.
 
 They're carried like the rulers' requests (the journal shows them), and told of at the counter.
 A place to put to the sword is told with where it lies ("Outlaws hold Peninggate, 0.8 km south-west

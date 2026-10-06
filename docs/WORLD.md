@@ -321,6 +321,27 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   navigation mesh as a road's are, and found as the settlement's laid out, so a chunk is the same
   whichever chunks were made first. Any other square of its streets over the land's water is the
   water's: waded where the land's would be, else not walked.
+- **Fingerposts** (`core/signposts.js`; the user: "a wooden road sign with nearest town names on
+  the roads leading out of town"): each town, city and capital has one beside its main road out
+  (its biggest: a trade road, a road, then a track), always outside the ground of every
+  settlement (past its fields, and its walls and gatehouse if it has them), so walled peoples'
+  cities have theirs on the world's road past their gate. It stands on the first stretch of that
+  road past the edge of its ground, 6 m along it to its right going out if there's room, else its
+  left, else further along (up to 40 m: `SIGNPOST.past`), or a little further off the road (up
+  to 5 m: `SIGNPOST.aside`), clear of every settlement's ground, the water, its own roads and the
+  roads as planned. If its main road has no room anywhere, its next biggest is tried. It's
+  raised as the road out is joined to the town's streets (`Overworld#join`, `#raisePost`; the
+  start town's when its roads are laid), looking at nothing that's laid as the world's made (the
+  trails, the other settlements' joins), so it's the same whichever chunks are made first. It's a
+  prop of its town's (`signpost`, one plot): drawn with the chunk its middle's in, its four
+  squares blocked (`Overworld.fingerposts`), the navigation mesh walking round its foot as it's
+  drawn (`setpieces/outlines.js`). A squared oak post 3 m tall on a stone foot, capped, with a
+  board for each of the nearest three other towns, cities and capitals (`boardsFor`), the nearest
+  at the top, all above anyone's head: each board points straight at its town, its end shaped
+  to a point, and is lettered on both faces, the right way round from either side, with the
+  town's name, how far it is from the post as the crow flies, to a tenth of a km, and an arrow
+  towards the point (`world/art/kits/props.js` `signpost`, `kits/signs.js` `fingerboardTexture`).
+  The building lab's *structures* has one to look at.
 - **Each people's castle, special places and watchtowers** (`core/sites.js`, `Sites`): the
   plan's castle for each people, their three buildings of their own (the cat folk's sun temple,
   pride rock and watering hole; the orcs' war totem, skull pit and fighting pit; the lizard

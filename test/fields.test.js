@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ALONG, blockAlong, CROP, fieldAt, FIELDS, hedgeLine, sown } from "../client/js/core/fields.js";
-import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
+import { buildWorld, CHUNK, VERGE } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { fieldsOf } from "../client/js/world/ground.js";
 import { CROP_STANDS, grassMap } from "../client/js/world/grassmap.js";
@@ -193,6 +193,50 @@ describe("the fields in the world (overworld.js, grassmap.js, ground.js)", () =>
         }
 
         assert.ok(strips > 3000, `${strips} squares in strips`);
+    });
+
+    it("leaves a verge of the wild's grass between the fields and the roads, and the settlements' streets out through their fields", () => {
+        // (Round where the player starts, and the next town: its streets running out through its fields)
+        const world = buildWorld({ seed: SEED });
+        const map = world.maps.town;
+        const next = world.plan.places.filter(({ kind }) => kind === "town" && kind !== world.start).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[1];
+        const square = (x, y) => {
+            const chunk = map.chunk(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+            const k = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+
+            return { crop: chunk.crops[k], ground: chunk.ground[k] };
+        };
+        const reach = Math.ceil(VERGE) + 1;
+        let [crops, roads] = [0, 0];
+
+        for (const [cx, cy] of [world.start.at, next.at]) {
+            for (let y = Math.round(cy) - 180; y < Math.round(cy) + 180; y++) {
+                for (let x = Math.round(cx) - 180; x < Math.round(cx) + 180; x++) {
+                    const { crop, ground } = square(x, y);
+
+                    roads += ground === GROUND.road || ground === GROUND.cobbles ? 1 : 0;
+
+                    if (!crop) {
+                        continue;
+                    }
+
+                    crops++;
+
+                    // (No road's or street's square nearer it than the verge, edge to edge)
+                    for (let dy = -reach; dy <= reach; dy++) {
+                        for (let dx = -reach; dx <= reach; dx++) {
+                            const near = square(x + dx, y + dy).ground;
+                            const gap = Math.hypot(Math.max(0, Math.abs(dx) - 1), Math.max(0, Math.abs(dy) - 1));
+
+                            assert.ok(!(near === GROUND.road || near === GROUND.cobbles) || gap >= VERGE, `${x}, ${y}: a field ${gap} m from a road at ${x + dx}, ${y + dy}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        assert.ok(crops > 10000 && roads > 2000, `${crops} squares sown, ${roads} of road`);
+        assert.equal(VERGE, 2);
     });
 
     it("keeps trees and the land's things out of the strips: the trees on the verges, only haystacks and scarecrows in them", () => {

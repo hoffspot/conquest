@@ -29,6 +29,7 @@ import { LONE_TREES, loneTreesNear, loneTreesOf, nearLone } from "./lonetrees.js
 import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
+import { byRank, SIGNED, signpostBeside, signpostPiece } from "./signposts.js";
 import { LAGOON, lagoonDepths, lagoonReach } from "./lagoons.js";
 import { PEOPLE_TOWNS } from "./setpieces/town.js";
 import { Sites } from "./sites.js";
@@ -93,6 +94,16 @@ const HOME_TREE_SHARE = 0.7;
 
 // Roads' half-widths (metres), by kind
 const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1, path: TRAILS.half });
+
+/**
+ * How far a field's squares keep from a road's, or a settlement's street's (metres, between
+ * their nearest edges): a verge of the wild's own grass between them.
+ */
+export const VERGE = 2;
+
+// (From a road's side to a field's square's middle: the verge, and as far again as from a
+// square's middle to its corner, so that no corner of it comes nearer a road's square)
+const VERGE_REACH = VERGE + Math.SQRT2;
 
 /**
  * Bridges: how far past the road's edge the deck reaches each side (metres), and how far onto
@@ -328,7 +339,15 @@ export class Overworld {
                 this.#enter(settlement);
             },
         });
+        // (The towns' fingerposts by their roads out, signposts.js: the squares each stands on.
+        // The town's own raised once its roads are laid, the others' as each is laid out)
+        this.fingerposts = new Set();
         this.roads = this.#layRoads();
+        this.startPost = this.#raisePost(start, this.startRoads, this.stamp.at);
+
+        if (this.startPost) {
+            this.stamp.props?.push({ ...this.startPost, x: this.startPost.x + this.stamp.at[0], y: this.startPost.y + this.stamp.at[1] });
+        }
         this.bridges = new Map();
 
         // The trails up into the hills, from the roads as planned, keeping out of the town and
@@ -956,11 +975,20 @@ export class Overworld {
                 // (Or under a settlement's bridge, reaching past its edge)
                 const deck = !land.bridge && decks.length ? under(decks, x + 0.5, y + 0.5) : null;
 
-                ground[k] = deck ? (deck.stone ? GROUND.cobbles : GROUND.planks) : land.ground;
+                // (No field up against a settlement's streets, out through its fields: a verge)
+                const verge = Boolean(land.crop) && settled.length > 0 && this.#byStreet(settled, x, y);
+
+                ground[k] = deck ? (deck.stone ? GROUND.cobbles : GROUND.planks) : verge ? GROUND.grass : land.ground;
                 water[k] = land.water;
                 bridge[k] = land.bridge || deck ? 1 : 0;
-                crops[k] = deck ? 0 : (land.crop ?? 0);
+                crops[k] = deck || verge ? 0 : (land.crop ?? 0);
                 blocked[k] = land.water && !bridge[k] ? 1 : 0;
+
+                // (A town's fingerpost by its road out: #raisePost)
+                if (this.fingerposts.has(y * WORLD_SIZE + x)) {
+                    blocked[k] = 1;
+                    crops[k] = 0;
+                }
 
                 // (A citadel's moat: still water, too deep to wade, over a bed of mud; the ground
                 // under its far side's wall and just behind it built on, seen over)
@@ -1057,10 +1085,39 @@ export class Overworld {
         return null;
     }
 
+    // Whether a square is within a verge's width (VERGE, between their nearest edges) of one of
+    // the settlements' streets (laid out, `settled`), where its fields leave off
+    #byStreet(settled, x, y) {
+        const reach = Math.ceil(VERGE) + 1;
+        const apart = (d) => Math.max(0, Math.abs(d) - 1);
+
+        for (const { at, size, town } of settled) {
+            const [i, j] = [x - at[0], y - at[1]];
+
+            if (i < -reach || j < -reach || i >= size + reach || j >= size + reach) {
+                continue;
+            }
+
+            for (let dj = -reach; dj <= reach; dj++) {
+                for (let di = -reach; di <= reach; di++) {
+                    const street = town.ground[j + dj]?.[i + di];
+
+                    if ((street === GROUND.road || street === GROUND.cobbles) && apart(di) * apart(di) + apart(dj) * apart(dj) < VERGE * VERGE) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     // Join the roads waiting on a settlement just laid out to its streets' ends: each from the end
     // nearest where it comes in (those chunks aren't made yet: they're within a chunk of it)
     #join(settlement) {
         const exits = settlement.town.exits.map(([x, y]) => [x + settlement.at[0], y + settlement.at[1]]);
+        // (Each from its edge out, for its fingerpost)
+        const out = [];
 
         for (const line of this.waiting.get(settlement.place.id) ?? []) {
             const end = line.ends[settlement.place.id];
@@ -1079,16 +1136,63 @@ export class Overworld {
             }
 
             this.#index(line, end === "start" ? [exit, from] : [from, exit]);
+            out.push({ kind: line.kind, points: end === "start" ? line.points : [...line.points].reverse() });
         }
 
         this.waiting.delete(settlement.place.id);
+        this.#raisePost(settlement.place, out, settlement.at, settlement.town.pieces);
+    }
+
+    // A town's fingerpost (signposts.js), beside its main road out (of `roads`: [{ kind, points
+    // from the edge of its ground out }]; or, with no room by it, the next biggest) past the edge
+    // of its ground, on squares clear of every settlement's, the water and its roads, and the
+    // roads as planned (not what's laid as the world's made, the trails and the roads' joins to
+    // the other settlements, so that it's the same whichever's made first): added to its
+    // layout's pieces (if given: `origin` its north-west corner), its squares blocked as the
+    // world's made. The piece, or null
+    #raisePost(place, roads, origin, pieces = null) {
+        if (!SIGNED.includes(place.kind)) {
+            return null;
+        }
+
+        const off = (px, py, segment, kind) => fromSegment(px, py, segment) > ROAD_HALF[kind] + 0.5;
+        const clear = (px, py) =>
+            roads.every(({ kind, points }) => points.every((point, k) => k === 0 || off(px, py, [...points[k - 1], ...point], kind))) &&
+            (this.roads.get(Math.floor(py / CHUNK) * CHUNKS + Math.floor(px / CHUNK)) ?? []).every((segment) => segment[6] || segment[4] === "path" || off(px, py, segment, segment[4]));
+        const settled = (i, j) =>
+            this.settlements.near(Math.floor(i / CHUNK), Math.floor(j / CHUNK)).some((each) => {
+                const { at, size } = squareOf(each);
+
+                return i >= at[0] && j >= at[1] && i < at[0] + size && j < at[1] + size;
+            });
+        const free = (i, j) => {
+            const [px, py] = [i + 0.5, j + 0.5];
+
+            return inside(i, j) && !this.inTown(i, j) && !settled(i, j) && !this.waters.riverAt(px, py) && stillWaterAt(this.plan, px, py) === null && clear(px, py);
+        };
+        const spot = byRank(roads).reduce((found, road) => found ?? signpostBeside(road.points, ROAD_HALF[road.kind], free), null);
+
+        if (!spot) {
+            return null;
+        }
+
+        for (const [i, j] of spot.squares) {
+            this.fingerposts.add(j * WORLD_SIZE + i);
+        }
+
+        const piece = signpostPiece(this.plan, place, spot.at, origin);
+
+        pieces?.push(piece);
+
+        return piece;
     }
 
     // List a road's segment [a, b] by the chunks it passes through (one joined to a settlement's
     // street: marked so, for #bridgesNear)
     #index(line, [a, b]) {
         const segment = [...a, ...b, line.kind, line, true];
-        const pad = ROAD_HALF[line.kind] + 1;
+        // (Listed as far out as the fields keep from it)
+        const pad = ROAD_HALF[line.kind] + VERGE_REACH + 1;
         const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
         const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
 
@@ -1138,9 +1242,10 @@ export class Overworld {
         // Fields in farmland (each block's farmed if the land at its middle is): soil where a strip's
         // ploughed or sown, grass on its verges, baulks and fallow, and pasture; none on the ground a
         // citadel keeps clear round it
+        // (None up against a road: a verge of grass along it, VERGE wide)
         const field = fieldAt(plan.seed, x, y);
         const [mx, my] = field.middle;
-        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py);
+        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py) && this.#roadAt(px, py, VERGE_REACH) === null && !this.#nearBridge(px, py, VERGE_REACH);
 
         return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
     }
@@ -1250,6 +1355,14 @@ export class Overworld {
     // The road's bridge whose deck a point's under, if any
     #bridgeAt(px, py) {
         return under(this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)), px, py);
+    }
+
+    // Whether a point's within `reach` of a bridge's deck (a stone one's ends wider than its road)
+    #nearBridge(px, py, reach) {
+        const chunkOf = (v) => Math.max(0, Math.min(CHUNKS - 1, Math.floor(v / CHUNK)));
+        const keys = new Set([-reach, reach].flatMap((dy) => [-reach, reach].map((dx) => chunkOf(py + dy) * CHUNKS + chunkOf(px + dx))));
+
+        return [...keys].some((key) => this.#bridgesNear(key % CHUNKS, Math.floor(key / CHUNKS)).some(({ a, b, half }) => fromSegment(px, py, [...a, ...b]) <= half + reach));
     }
 
     // The bridges that reach into a chunk (the roads' through it)
@@ -1408,18 +1521,18 @@ export class Overworld {
 
     // The kind of road at a point (the widest, where roads and paths meet: the same whichever
     // were listed first), or null
-    #roadAt(px, py) {
+    #roadAt(px, py, margin = 0) {
         let kind = null;
 
         for (const segment of this.#roadsIn(Math.floor(px / CHUNK), Math.floor(py / CHUNK))) {
-            const half = ROAD_HALF[segment[4]];
+            const half = ROAD_HALF[segment[4]] + margin;
 
             // (Not looked at closer if it's further off than its half-width by its bounds)
             if (px < Math.min(segment[0], segment[2]) - half || px > Math.max(segment[0], segment[2]) + half || py < Math.min(segment[1], segment[3]) - half || py > Math.max(segment[1], segment[3]) + half) {
                 continue;
             }
 
-            if ((kind === null || half > ROAD_HALF[kind]) && fromSegment(px, py, segment) <= half) {
+            if ((kind === null || half > ROAD_HALF[kind] + margin) && fromSegment(px, py, segment) <= half) {
                 kind = segment[4];
             }
         }
@@ -1432,6 +1545,9 @@ export class Overworld {
     #layRoads() {
         const { plan, start } = this;
         const byChunk = new Map();
+
+        // (The town's own, from its streets' ends out: for its fingerpost)
+        this.startRoads = [];
         const exits = this.#exits();
         const [sx, sy, sw, sh] = [this.stamp.at[0] - 10, this.stamp.at[1] - 10, this.stamp.width + 20, this.stamp.height + 20];
         const near = ([x, y]) => x >= sx && y >= sy && x < sx + sw && y < sy + sh;
@@ -1503,6 +1619,10 @@ export class Overworld {
             // planned: `planned`, never the bit joined to a settlement's street when it's laid
             // out, so that they're the same whichever chunks are made first)
             const line = { id: `road ${String(index).padStart(4, "0")}`, points, planned: [...points], kind: road.kind, bridges: null, ends: {} };
+
+            if (road.from === start.id || road.to === start.id) {
+                this.startRoads.push(line);
+            }
 
             for (const [id, [end]] of Object.entries(ends)) {
                 line.ends[id] = end;
@@ -1751,7 +1871,7 @@ export class Overworld {
     #busy(x, y) {
         const settlement = this.settlements.at(x, y);
 
-        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y)) || this.sites.squareAt(x, y)) {
+        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y)) || this.sites.squareAt(x, y) || this.fingerposts.has(y * WORLD_SIZE + x)) {
             return true;
         }
 
@@ -1774,6 +1894,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const start = startFor(plan, race);
     const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
+
     const walks = town.town.walks.map(({ a, b, ...walk }) => ({ ...walk, a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]] }));
     const yards = town.town.yards.map((yard) => ({ ...yard, x: yard.x + town.origin + at[0], y: yard.y + town.origin + at[1] }));
     // (Its trees' trunks, in the fields and in the town: where the navigation mesh walks round them)
@@ -1782,6 +1903,11 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const props = town.town.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
     const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
+
+    // (Its fingerpost, by its main road out: Overworld's, in its own metres)
+    if (overworld.startPost) {
+        town.town.pieces.push(overworld.startPost);
+    }
     const move = ([x, y]) => [x + at[0], y + at[1]];
     const tavern = town.tavern && {
         ...town.tavern,

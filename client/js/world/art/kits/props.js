@@ -10,6 +10,7 @@ import { AWNINGS, awning } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { pitchedRoof } from "./roofs.js";
+import { FINGER_TIP, fingerboardTexture, signMaterial } from "./signs.js";
 import { lanternLight } from "./torches.js";
 
 const M = 5;
@@ -261,15 +262,66 @@ const PROPS = {
         // valance flapping (world/cloth.js)
         awning(solid, [cx, m(2.45), cz - hd - m(0.15)], [0, 0, 1], { width: 2 * hw + m(0.3), depth: 2 * hd + m(0.5), fall: m(0.4), skirt: m(0.24), look: random.pick(Object.keys(AWNINGS)) });
     },
+
+    signpost(solid, { cx, cz, piece }) {
+        // A fingerpost by a town's main road out (core/signposts.js): a squared oak post on a
+        // stone foot, capped, and a board for each town it points to, the nearest at the top,
+        // all of them higher than anyone's head
+        const oak = material("timber");
+        const half = m(FINGER.post / 2);
+
+        solid.cylinder(cx, cz, 0, m(0.22), m(0.24), m(0.19), material("stone-old"), { segments: 7 });
+        solid.box(cx - half, 0, cz - half, cx + half, m(FINGER.top), cz + half, oak);
+        solid.box(cx - half - m(0.03), m(FINGER.top), cz - half - m(0.03), cx + half + m(0.03), m(FINGER.top + 0.05), cz + half + m(0.03), oak);
+        solid.cone(cx, cz, m(FINGER.top + 0.05), m(0.14), m(0.1), oak, 4);
+
+        (piece?.boards ?? []).forEach((board, k) => fingerboard(solid, [cx, cz], m(FINGER.first - k * FINGER.step), board, oak));
+    },
 };
 
+/**
+ * A fingerpost's measures (metres): its post's width and height, its boards' length, height
+ * and thickness, how high the first's middle is, and how much lower each next one's is.
+ */
+const FINGER = Object.freeze({ post: 0.14, top: 3, length: 1.4, height: 0.28, thick: 0.045, first: 2.68, step: 0.36 });
+
+// One of a fingerpost's boards, its middle `y` up the post at (cx, cz): out from the post the way
+// it points (`angle`, as core/signposts.js has it: 0 east, π/2 south), its end pointed, with its
+// town's name, how far and an arrow painted on both faces, the right way round from either side
+function fingerboard(solid, [cx, cz], y, { name, km, angle }, oak) {
+    const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
+    const [nx, nz] = [-dz, dx];
+    const [s0, s1] = [m(FINGER.post / 2), m(FINGER.post / 2 + FINGER.length)];
+    const tip = (s1 - s0) * FINGER_TIP;
+    const [v0, v1] = [y - m(FINGER.height) / 2, y + m(FINGER.height) / 2];
+    const t = m(FINGER.thick) / 2;
+    const at = (s, v, side) => [cx + dx * s + nx * t * side, v, cz + dz * s + nz * t * side];
+    const outline = [[s0, v0], [s1 - tip, v0], [s1, y], [s1 - tip, v1], [s0, v1]];
+    const share = ([s, v]) => [(s - s0) / (s1 - s0), (v - v0) / (v1 - v0)];
+
+    // (Seen from its side `n` is towards, its point's on the right; from the other, on the left)
+    solid.facing(outline.map(([s, v]) => at(s, v, 1)), [nx, 0, nz], signMaterial(fingerboardTexture({ name, km, toward: "right" }), `finger ${name}`), outline.map(share));
+    solid.facing(outline.map(([s, v]) => at(s, v, -1)), [-nx, 0, -nz], signMaterial(fingerboardTexture({ name, km, toward: "left" }), `finger ${name} back`), outline.map((point) => [1 - share(point)[0], share(point)[1]]));
+
+    // Its edges, all round, facing out
+    for (let k = 0; k < outline.length; k++) {
+        const [a, b] = [outline[k], outline[(k + 1) % outline.length]];
+        const middle = [(a[0] + b[0]) / 2 - (s0 + s1) / 2, (a[1] + b[1]) / 2 - y];
+        const across = [b[1] - a[1], a[0] - b[0]];
+        const [os, ov] = across[0] * middle[0] + across[1] * middle[1] < 0 ? [-across[0], -across[1]] : across;
+
+        solid.facing([at(a[0], a[1], 1), at(b[0], b[1], 1), at(b[0], b[1], -1), at(a[0], a[1], -1)], [dx * os, ov, dz * os], oak);
+    }
+}
+
 /** A prop (by its name: core/setpieces/pieces.js PROPS) filling a w x h footprint (plots). */
-export function prop({ name, w, h, x = 0, y = 0 }) {
+export function prop(piece) {
+    const { name, w, h, x = 0, y = 0 } = piece;
     const solid = new Solid();
     const random = createRandom(Math.round(x * 31 + y * 17) + name.length * 131);
 
     solid.tone = ground;
-    PROPS[name](solid, { cx: w * 10, cz: h * 10, random });
+    PROPS[name](solid, { cx: w * 10, cz: h * 10, random, piece });
 
     return solid.toObject();
 }

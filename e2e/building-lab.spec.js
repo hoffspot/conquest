@@ -63,6 +63,30 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     expect(built.names).toContain("cloth");
 });
 
+test("stands a fingerpost among a people's own places: a board for each town, lettered on both faces", async ({ page }) => {
+    await page.goto("/building-lab.html?seed=7&show=structures");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const post = await page.evaluate(() => {
+        const boards = [];
+
+        window.buildingLab.state.built.traverse((node) => {
+            if (node.isMesh && node.material.name?.startsWith("finger ")) {
+                boards.push({ name: node.material.name, sign: node.material.map.userData.sign, size: [node.material.map.image.width, node.material.map.image.height] });
+            }
+        });
+
+        return { boards, framed: window.buildingLab.state.frames.some(({ label }) => label === "fingerpost") };
+    });
+
+    // (Each board's two faces, each with its own picture: the town's name, how far, and which way
+    // its point is, seen from that side)
+    expect(post.framed).toBe(true);
+    expect(post.boards.map(({ name }) => name).sort()).toEqual(["finger Gorgash", "finger Gorgash back", "finger Langdenwick", "finger Langdenwick back", "finger Mardenmoor", "finger Mardenmoor back"]);
+    expect(post.boards.map(({ sign }) => sign).sort()).toEqual(["finger|Gorgash|2.3|left", "finger|Gorgash|2.3|right", "finger|Langdenwick|0.6|left", "finger|Langdenwick|0.6|right", "finger|Mardenmoor|1.4|left", "finger|Mardenmoor|1.4|right"]);
+    expect(post.boards.every(({ size }) => size[0] === 960 && size[1] === 192)).toBe(true);
+});
+
 test("draws a village out in the world in its chunks, with its tavern, church, smithy and guild", async ({ page }) => {
     await page.goto("/building-lab.html?seed=21&show=village");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });

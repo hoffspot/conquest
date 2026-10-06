@@ -15,7 +15,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { bandFolk, heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
 import { RELICS, rollLoot, rollRelic, wares } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { CLEAR_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
+import { GUILD_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
@@ -686,7 +686,8 @@ describe("the guilds' contracts to clear the places held (standing.js \"clear\")
         const { town, contract } = contractFor(war);
         const place = placesOf(plan).find((each) => each.id === contract.target.place);
 
-        assert.ok(Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= CLEAR_REACH);
+        assert.ok(Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= GUILD_REACH);
+        assert.equal(GUILD_REACH, 1500);
         assert.ok(PLACE_BANDS[contract.target.holder]);
         assert.equal(contract.target.holder, holderOf(plan, place, undefined, war.turn));
         assert.deepEqual(contract.target.at, place.at);
@@ -699,9 +700,10 @@ describe("the guilds' contracts to clear the places held (standing.js \"clear\")
         assert.ok(contract.reward.gold >= gold + size[place.size] + tier, `${contract.reward.gold}`);
         assert.equal(contract.reward.standing, 0);
 
-        // Carried already, or cleared: not offered again
+        // Carried already, or cleared: not offered again (asked often enough to come up among
+        // the dozen or so places within a guild's reach)
         const random = createRandom(9);
-        const offered = (held) => Array.from({ length: 80 }, () => offerContract({ war, town: town.id, giver, held, random })).filter((each) => each?.target.place === place.id).length;
+        const offered = (held) => Array.from({ length: 400 }, () => offerContract({ war, town: town.id, giver, held, random })).filter((each) => each?.target.place === place.id).length;
 
         assert.ok(offered([]) > 0);
         assert.equal(offered([{ ...contract, id: "request-1" }]), 0);
