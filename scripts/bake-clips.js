@@ -160,9 +160,9 @@ const vector = (v, places = 2) => v.toArray().map((x) => round(x, places));
 
 // The body the clips are baked on: MakeHuman's, whichever the game plays on (body.js GAME_BODY).
 // What's baked is the same on any body (joint angles; hands in arm lengths from the shoulder,
-// turned as the body is), but Vitruvian's rest hand is turned 46° about the forearm from the
-// clips' (MakeHuman's 6°) and the retarget lines up only the arms (bvh.js), so on Vitruvian the
-// clips' fingers curl about the wrong axis and the palms come out turned: a jab's fists open
+// turned as the body is), and clip-keys.js's keys were baked and motion-checked on it. (Baked on
+// Vitruvian before the retarget took the elbow's hinge from the rig, bvh.js, a jab's fists came
+// out open: its forearm rests all but straight, and the hinge found from it rolled the arms)
 const BAKE_BODY = "human";
 
 /** The reference body (MakeHuman's average adult: BAKE_BODY), rigged, with a walker to find its feet. */
