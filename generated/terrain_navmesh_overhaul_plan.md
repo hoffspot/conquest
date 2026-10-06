@@ -4656,3 +4656,19 @@ converted data is to be measured in M8 against today's hm08 data.
     What's left is the toe spike and heel spur in the foot (MakeHuman, 1.3 cm on three bodies) and
     a running orc's toe spike and plate meeting the other leg. The baseline is updated.
   - **Next:** the hammer's side swing, Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the war hammer's side swing** (§10; docs/CHARACTERS.md *Attacks*).
+  - **The left arm** (`ATTACKS.hammer`, "side swing"): the second hand on the haft, its elbow left
+    to come as it would, lay across the belly from the wind-up behind the right hip to the
+    follow-through, up to 13 cm in, on every body. Its elbow is now set, down through the wind-up
+    and the strike and out and back after it (a key just after the blow); the hands are wound up
+    further forward, the left hand is further forward at the blow, and the right hand follows
+    through less far across (further across and forward, the right shoulder went past its range).
+    With the left hand further out to the left after the blow, the forearm cleared the belly
+    throughout, but its wrist couldn't turn with the haft that far (the arms test's 35° strain
+    limit), so it goes only as far as it can.
+  - **The numbers** (failing pairs, against PR #206): MakeHuman, forearms in the torso 147 → 124
+    (the hammer's blows 42 → 19; the side swing's 30, 11 cm in, → 7, 5 cm), second hands 152 →
+    148; 34 better, none worse. Vitruvian, forearms 329 → 324 (the side swing's 30, 13 cm in, →
+    25, 6 cm), joints 499 → 490 (the hammer's 17 → 8); 40 better, 2 worse (two orc men's left
+    shoulder 2° further past its range at the wind-up). The baseline is updated.
+  - **Next:** Vitruvian's baseline, and the game switched to it.
