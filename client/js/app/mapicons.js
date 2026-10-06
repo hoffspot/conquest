@@ -5,7 +5,7 @@
 // crown for a keep. And the places worth finding out in the world (core/places.js; the terrain
 // plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
 // spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
-// standing stones and a camp, each rimmed in the colour of who holds it (PLACE_RIMS). Drawn on a
+// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS). Drawn on a
 // canvas, from paths on a grid 24 across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
@@ -209,6 +209,15 @@ const LOOKS = {
             // Two standing stones, a lintel across them
             ["M-8,9 l0.6,-12 h3.8 l0.4,12 z M3.6,9 l0.4,-12 h3.8 l0.6,12 z", "#a8a89a", "#1e1e1a", 1],
             ["M-9.2,-6.2 h18.4 v3.2 h-18.4 z", "#a8a89a", "#1e1e1a", 1],
+        ],
+    },
+    graveyard: {
+        rim: "#9fb4a8",
+        parts: [
+            // Two headstones, round-headed, and a cross between them, on a mound
+            ["M-10,9 q10,-4.6 20,0 z", "#6f7a5e", "#1e2420", 0.9],
+            ["M-9,7.4 v-6.4 a2.6,2.6 0 0 1 5.2,0 v5.6 z M3.8,6.6 v-5.6 a2.6,2.6 0 0 1 5.2,0 v6.4 z", "#b0ab9c", "#1e2420", 1],
+            ["M-1.1,6 v-10.5 h2.2 v10.5 z M-3.6,-1.6 h7.2 v2.2 h-7.2 z", "#c4bfb0", "#1e2420", 1],
         ],
     },
     camp: {

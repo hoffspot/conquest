@@ -4053,6 +4053,62 @@ test("the places worth finding are on the minimap near them and on the world map
     expect(seen.kinds).toBeGreaterThan(10);
 });
 
+test("an old graveyard outside the start town: walled, its graves, tombs and yew laid out and drawn; its dead out by day, a skeleton leading them; on the minimap", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const graveyard = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // The graveyard nearest the start town, and how far it is from it
+        const start = [player.x, player.y];
+        const [icon] = game.placeIcons()
+            .filter(({ kind }) => kind === "graveyard")
+            .sort((a, b) => Math.hypot(a.x - player.x, a.z - player.y) - Math.hypot(b.x - player.x, b.z - player.y));
+        const site = game.world.plan.sites.find(({ id }) => id === icon.id);
+
+        Object.assign(player, { x: icon.x + 18, y: icon.z, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 16; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const set = game.world.maps.town.sites.set.get(site.id);
+        const held = game.host.held.get(site.id);
+        const chunk = 64;
+        const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [Math.floor(set.x / chunk) + dx, Math.floor(set.y / chunk) + dy]));
+
+        return {
+            out: Math.hypot(icon.x - start[0], icon.z - start[1]),
+            parts: [...new Set(set.pieces.map(({ part }) => part?.part))].sort(),
+            yew: near.some(([cx, cy]) => game.world.maps.town.sites.treesIn(cx, cy).some((tree) => tree.site === site.id)),
+            minimap: game.minimap.icons.includes("graveyard"),
+            holder: icon.holder,
+            band: held?.ids.map((id) => game.battle.actor(id).wild.creature) ?? [],
+        };
+    });
+
+    expect(graveyard.out).toBeLessThan(1500);
+    expect(graveyard.parts).toEqual(expect.arrayContaining(["flags", "gate", "gatepost", "grave", "lowWall"]));
+    expect(graveyard.parts.includes("tomb") || graveyard.parts.includes("mausoleum")).toBe(true);
+    expect(graveyard.yew).toBe(true);
+    expect(graveyard.minimap).toBe(true);
+    expect(graveyard.holder).toBe("dead");
+    expect(graveyard.band[0]).toBe("skeleton");
+    expect(new Set(graveyard.band.slice(1))).toEqual(new Set(["skeleton", "ghost"]));
+});
+
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

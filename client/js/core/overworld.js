@@ -1062,8 +1062,9 @@ export class Overworld {
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
 
-        // The settlements' own trees (their squares are blocked already)
-        for (const piece of this.settlements.piecesIn(cx, cy).filter(({ kind }) => kind === "tree")) {
+        // The settlements' own trees, and the sites' (a graveyard's yew): their squares are
+        // blocked already
+        for (const piece of [...this.settlements.piecesIn(cx, cy).filter(({ kind }) => kind === "tree"), ...(this.sites?.treesIn(cx, cy) ?? [])]) {
             const random = createRandom(Math.round(piece.x * 73 + piece.y * 37));
 
             chunk.trees.push({ x: Math.round(piece.x), y: Math.round(piece.y), variant: piece.variant, size: random.range(0.85, 1.05), turn: random.next() * Math.PI * 2 });

@@ -40,18 +40,18 @@ two tiers above it, up to their most.
 | Ogre | 80 | aggressive | 1–2 | 4–9 | badlands, heath, mountain, savannah, marsh |
 | Wyvern | 60 | aggressive | 1–2 | 5–9 | mountain, badlands, volcanic, snow |
 | Black shuck | 50 | aggressive | 1 | 3–8 | the humans' wilds only |
-| Boggart | 30 | territorial | 1 | 2–6 | the humans' wilds only |
-| Will-o'-wisp | 22 | aggressive | 1–2 | 2–7 | the elves' wilds only |
+| Boggart | 30 | territorial | 1 | 1–6 | the humans' wilds only |
+| Will-o'-wisp | 22 | aggressive | 1–2 | 1–7 | the elves' wilds only |
 | Blighted treant | 80 | territorial | 1 | 4–9 | the elves' wilds only |
-| Cave spider | 24 | territorial | 1–4 | 2–7 | the dark elves' wilds only |
+| Cave spider | 24 | territorial | 1–4 | 1–7 | the dark elves' wilds only |
 | Shadow stalker | 50 | aggressive | 1 | 4–9 | the dark elves' wilds only |
-| Hyena | 22 | aggressive | 2–5 | 2–7 | the cat folk's wilds only |
-| Sand scorpion | 30 | territorial | 1–2 | 2–7 | the cat folk's wilds only |
-| Bog frog | 28 | territorial | 1–2 | 2–6 | the lizard folk's wilds only |
+| Hyena | 22 | aggressive | 2–5 | 1–7 | the cat folk's wilds only |
+| Sand scorpion | 30 | territorial | 1–2 | 1–7 | the cat folk's wilds only |
+| Bog frog | 28 | territorial | 1–2 | 1–6 | the lizard folk's wilds only |
 | Marsh crocodile | 60 | territorial | 1 | 3–8 | the lizard folk's wilds only |
-| Magma slime | 45 | territorial | 1–2 | 3–8 | the orcs' wilds only |
+| Magma slime | 45 | territorial | 1–2 | 1–8 | the orcs' wilds only |
 | Rock tusker | 80 | territorial | 1 | 4–9 | the orcs' wilds only |
-| Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins and ruined castles, with their dead |
+| Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
@@ -69,16 +69,25 @@ bleeding wound, a web or roots holding them (below: "What lingers").
 ## How strong, and where
 
 The tier of a place goes up the further it is from home: `tierAt` counts from the player's own
-people's start (where their heroes begin), one tier from 1200 m out and another every 850 m, up
-to 8 in the open. The high, cold and burning lands (snow, mountain, volcanic) two tiers more once
-they're past tier 6, up to 10. So what's near home is a match for a new adventurer, and the danger
-grows the further they go. What's found at a place (`candidatesAt`) is whatever likes its land
-and has that tier among its tiers; the people's own creatures only in the wilds of their lands.
+people's start (where their heroes begin). It's the first tier as far as 1,450 m out
+(`TIER_LAND.from` 600 m and `every` 850 m), the second from there, and one more every 850 m
+further, up to 8 in the open. The high, cold and burning lands (snow, mountain, volcanic) two
+tiers more once they're past tier 6, up to 10. So what's near home is a match for a new
+adventurer, and the danger grows the further they go. What's found at a place (`candidatesAt`) is
+whatever likes its land and has that tier among its tiers; the people's own creatures only in the
+wilds of their lands. Each people has creatures of its own from the first tier, so what's about a
+start town differs by who you play: the humans' boggarts, the elves' will-o'-wisps (by night),
+the dark elves' cave spiders, the cat folk's hyenas and sand scorpions, the lizard folk's bog
+frogs and the orcs' magma slimes. (The wild camps keep their own ladder, the first tier within
+about 2 km of the start: docs/WORLD.md.)
 
 The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the dragon at the
 dragon's lair, a wight lord and its dead in each ruined castle (three skeletons, two ghosts and a
 wraith), the frost troll in the snows. The ghosts and wraiths are found nowhere else but with the
-dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago.
+dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago;
+and at the old graveyard outside each people's start town, a few bones and a ghost led by a
+skeleton (`PLACE_BANDS.graveyard`), out by day as by night, so the dead and what they leave
+(bone dust, old skulls, ectoplasm) are met near home, before the far ruins.
 Once slain, a master is gone a long while (it comes back after `slain` has passed). The world
 plan's wild camps (bandits, wolves, goblins, spiders and the rest) come to life when a player's
 near them, as strong as the camp's distance from that player's home (`CAMP_FOLK`).

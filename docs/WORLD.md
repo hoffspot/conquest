@@ -203,8 +203,11 @@ and 40 to 55 farmsteads.
 | Watchtowers | 18 | By roads |
 | Ruined castles | 5 | Only in the wild |
 | A dragon's lair | 1 | Volcanic ground, mountains or snow, in the wild |
+| An old graveyard | 1 for each people | Outside their start town, 8 to 17 cells out (about 250 to 550 m), in their lands, as near a road as there's room (`graveyards`) |
 
-Ruins, castles and people's buildings have names.
+Ruins, castles and people's buildings have names. The graveyards are laid out last, once every
+place has been moved out of the water, from random numbers of their own, so nothing else in the
+world moves for them.
 
 **Enemy camps.** There are 72 camps, of eight factions:
 

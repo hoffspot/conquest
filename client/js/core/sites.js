@@ -239,6 +239,8 @@ export class Sites {
         this.near = new Map();
         this.byChunk = new Map();
         this.parts = new Map();
+        // (The sites' own trees, a graveyard's yew, by the chunk each stands in: treesIn)
+        this.trees = new Map();
         this.bySquare = new Set();
         this.paved = new Set();
         this.courts = new Map();
@@ -317,6 +319,16 @@ export class Sites {
                     }
                 }
             }
+
+            // (Its trees, a graveyard's yew: planted as the land's are, each in the chunk it stands
+            // in, overworld.js; not built as its pieces are)
+            for (const tree of set.pieces.filter(({ kind }) => kind === "tree")) {
+                const own = Math.floor(tree.y / CHUNK) * CHUNKS + Math.floor(tree.x / CHUNK);
+
+                this.trees.set(own, [...(this.trees.get(own) ?? []), tree]);
+            }
+
+            set.pieces = set.pieces.filter(({ kind }) => kind !== "tree");
 
             const chunk = Math.floor(set.y / CHUNK) * CHUNKS + Math.floor(set.x / CHUNK);
 
@@ -442,6 +454,16 @@ export class Sites {
     }
 
     /**
+     * The sites' own trees standing in a chunk (a graveyard's yew), in the world's metres
+     * (settled): { kind: "tree", variant (pieces.js TREE_KINDS), x, y }.
+     */
+    treesIn(cx, cy) {
+        this.settle(cx, cy);
+
+        return this.trees.get(cy * CHUNKS + cx) ?? [];
+    }
+
+    /**
      * The pieces of the sites whose middles are in a chunk, in the world's metres (settled); of a
      * citadel, those standing in it.
      */
@@ -513,7 +535,7 @@ export class Sites {
             }
 
             // (All it stands on, or for a neutral site just what of it stands in the way)
-            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
+            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form, facing }) : null;
             const turn = turned(x, y, facing, [w, h]);
             // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
             // its layout's way in; the humans' abbey and manor by their church's and keep's door; a
@@ -765,6 +787,11 @@ export class Sites {
             const turn = turned(x, y, facing, [w, h]);
             const land = (point) => heightAt(this.plan, Math.min(WORLD_SIZE - 1, Math.max(0, point.x)), Math.min(WORLD_SIZE - 1, Math.max(0, point.y)));
             const parts = laid.parts.map((part) => {
+                // (A tree, a graveyard's yew: planted where it stands, as the land's are)
+                if (part.part === "tree") {
+                    return { kind: "tree", variant: part.variant, site: site.id, ...turn(part.x, part.y) };
+                }
+
                 const [px, py, pw, pd] = extentOf(part);
                 // (Rock cut into a hillside: how steeply the land rises across it, front to back,
                 // so it's shaped to the hill: art/kits/neutral.js)

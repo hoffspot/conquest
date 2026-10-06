@@ -7,7 +7,9 @@
 // Who holds a place is mixed by the war, a world at a time (the user's choice): each people's own
 // castle is theirs; their other places theirs or taken by bandits; a watchtower out in the wild,
 // and a cave, a band of outlaws'; the ruins the restless dead's (the bones, ghosts and wraiths of
-// whoever lived there long ago, led by a wight guarding an old relic); the dragon's lair the
+// whoever lived there long ago, led by a wight guarding an old relic), and the old graveyard
+// outside each people's start town theirs too (a few bones and ghosts, led by a skeleton: the
+// first of the dead a new adventurer meets); the dragon's lair the
 // dragon's; the shrines and the circles of stones no one's. Once a place's occupiers are put to
 // the sword and their leader killed it's empty for a while (`PLACE_TIMES.retake`: a few days of
 // the world's clock), and then a new band moves in, or the dead rise again (the war keeps when
@@ -56,6 +58,8 @@ export const PLACE_KINDS = Object.freeze({
     "dragon's lair": { size: "large", icon: "lair", holds: ["beast"] },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
+    // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)
+    graveyard: { size: "small", icon: "graveyard", holds: ["dead"], band: "graveyard" },
     // The wild camps (the world plan's): their faction's
     camp: { size: "medium", icon: "camp", holds: [] },
 });
@@ -69,12 +73,16 @@ export const PLACE_KINDS = Object.freeze({
  * tierAt); the band round the middle `ring` metres off, by its size, each going for anyone who
  * comes within `guard` metres of them; put out once a player's within `near` metres, let go once
  * every one's further than `far`. The ruined castles and the dragon's lair keep their own masters
- * (creatures.js LAIRS).
+ * (creatures.js LAIRS). A kind of place with a band of its own (PLACE_KINDS' `band`: the
+ * graveyards') has it in place of its holder's: bandOf.
  */
 export const PLACE_BANDS = Object.freeze({
     bandits: { folk: "bandit", leader: "banditChief" },
     // (The restless dead of whoever lived there long ago: their bones, their ghosts, and a wraith)
     dead: { folk: ["skeleton", "ghost", "skeleton", "wraith", "ghost"], leader: "wightLord", relic: true },
+    // (A graveyard's dead, risen from its graves: bones and a ghost, a skeleton leading them, and
+    // no relic to guard)
+    graveyard: { folk: ["skeleton", "ghost", "skeleton"], leader: "skeleton" },
     count: { small: 3, medium: 5, large: 7 },
     per: 3,
     lead: 2,
@@ -83,6 +91,16 @@ export const PLACE_BANDS = Object.freeze({
     near: 90,
     far: 180,
 });
+
+/**
+ * The band holding a place for whoever holds it (`holder`: holderOf's): its kind's own, if it has
+ * one (PLACE_KINDS' `band`), or its holder's (PLACE_BANDS); null if no band holds it.
+ */
+export function bandOf(place, holder) {
+    const band = PLACE_BANDS[holder];
+
+    return band?.leader ? (PLACE_BANDS[PLACE_KINDS[place.kind]?.band] ?? band) : null;
+}
 
 /** Which kind of creature a band's `k`th member is (PLACE_BANDS: its one kind, or its kinds in turn). */
 export function bandFolk(band, k) {

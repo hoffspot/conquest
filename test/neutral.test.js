@@ -248,7 +248,9 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // (A hall's ruins with its windows through its walls, its courses and its buttresses, and
         // a ruined keep with its rows of windows and its courses: M7b-3b, about 700 and 900 more;
         // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
-        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000 };
+        // (An old graveyard's forty graves or so, its walls, gates, path, tombs and mausoleum: as much as
+        // a house)
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, graveyard: 6000 };
         const most = new Map();
 
         for (const site of sites) {
