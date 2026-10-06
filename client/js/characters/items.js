@@ -458,10 +458,13 @@ function heelSpur(scale) {
     ], "heelSpur");
 }
 
-function shinPlate(scale) {
-    // A curved plate down the front of the shin (the origin on it), three spikes along it
-    const radius = 0.046 * scale;
-    const parts = [[at(arcPlate(radius, 0.004 * scale, 0.17 * scale, -Math.PI * 0.36, Math.PI * 0.36), 0, 0, -radius), "darkSteel"]];
+function shinPlate(scale, shin = null) {
+    // A curved plate down the front of the shin (the origin on it), three spikes along it; curved
+    // round as the shin it's fitted to (`shin`, its radius: equipment.js) or an average one, as
+    // wide either way
+    const radius = shin ?? 0.046 * scale;
+    const round = (0.046 * scale * Math.PI * 0.36) / radius;
+    const parts = [[at(arcPlate(radius, 0.004 * scale, 0.17 * scale, -round, round), 0, 0, -radius), "darkSteel"]];
 
     for (const y of [-0.055, 0, 0.055]) {
         parts.push([at(new THREE.ConeGeometry(0.0075 * scale, 0.032 * scale, 6), 0, y * scale, 0.014 * scale, Math.PI / 2, 0, 0), "darkSteel"]);
@@ -1279,7 +1282,7 @@ export function buildItem(model, fit = {}) {
         case "heelSpur":
             return heelSpur(fit.scale ?? 1);
         case "shinPlate":
-            return shinPlate(fit.scale ?? 1);
+            return shinPlate(fit.scale ?? 1, fit.shin);
         case "cleaver":
             return cleaver();
         case "bow":

@@ -632,7 +632,12 @@ bracers, leather pants and leather boots.
 **Spiked boots** are an item in several parts (`parts`), each on its own socket: a domed iron cap
 over the toes with a spike out of its front (on the toe bone, so it bends with the toes), a band
 round the heel with a spur, and a curved plate down each shin with three spikes. They bring their
-own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
+own dark, calf-high leather (`spikedBootLeather`), in the feet slot. The shin plate is fitted to
+each shin (`fit.shin`): along it, from the ankle to the knee (the shins lean out as the legs stand
+apart), on its foremost point a third of the way up, and as wide as ever but curved round it as
+closely as clears it from edge to edge (from its own curve to three times as flat). A full shin is
+flatter in front than the plate's own curve: on Vitruvian's men, the plate's edges went 1.7 cm
+into it.
 
 **Putting weapons away** (`SHEATHS`). Each weapon has a place on the body it's put away in:
 - a socket, and where the grip goes from it;
