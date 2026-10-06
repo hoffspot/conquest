@@ -41,7 +41,7 @@ import { archesOf, archSquares, roomOf } from "./arches.js";
 import { AQUEDUCTS, aqueductsOf, pierSquares } from "./aqueducts.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
-import { WADE, wadeable, watersOf } from "./terrain/waters.js";
+import { FORD_WAY, WADE, wadeable, watersOf } from "./terrain/waters.js";
 import { rounded, wayOver } from "./terrain/ways.js";
 import { FLATS, flatSpot } from "./terrain/flats.js";
 import { metresOf } from "./terrain/curve.js";
@@ -1239,13 +1239,18 @@ export class Overworld {
             return { ground: GROUND.road, water, bridge: false, road };
         }
 
+        // (Trodden bare up the banks either side of a ford, the way over it)
+        if (this.#fordWayAt(px, py)) {
+            return { ground: GROUND.road, water, bridge: false, road: null };
+        }
+
         // Fields in farmland (each block's farmed if the land at its middle is): soil where a strip's
         // ploughed or sown, grass on its verges, baulks and fallow, and pasture; none on the ground a
         // citadel keeps clear round it
-        // (None up against a road: a verge of grass along it, VERGE wide)
+        // (None up against a road, or the way over a ford: a verge of grass along it, VERGE wide)
         const field = fieldAt(plan.seed, x, y);
         const [mx, my] = field.middle;
-        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py) && this.#roadAt(px, py, VERGE_REACH) === null && !this.#nearBridge(px, py, VERGE_REACH);
+        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py) && this.#roadAt(px, py, VERGE_REACH) === null && !this.#nearBridge(px, py, VERGE_REACH) && !this.#fordWayAt(px, py, VERGE_REACH);
 
         return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
     }
@@ -1355,6 +1360,29 @@ export class Overworld {
     // The road's bridge whose deck a point's under, if any
     #bridgeAt(px, py) {
         return under(this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)), px, py);
+    }
+
+    /**
+     * Whether a square (x, y) is on the way over a ford (waters.js FORD_WAY): its bed under the
+     * water there drawn as a foot track's (world/ground.js), the banks either side trodden bare.
+     */
+    onFordWay(x, y) {
+        return this.#fordWayAt(x + 0.5, y + 0.5);
+    }
+
+    // Whether a point's on the way over a ford, or within `margin` of it: straight across it at
+    // its middle, from one bank to the other and on up each (waters.js fordsNear)
+    #fordWayAt(px, py, margin = 0) {
+        for (const { banks: [[ax, ay], [bx, by]] } of this.waters.fordsNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK))) {
+            const long = hypot(bx - ax, by - ay) || 1;
+            const [ux, uy] = [((bx - ax) / long) * FORD_WAY.approach, ((by - ay) / long) * FORD_WAY.approach];
+
+            if (fromSegment(px, py, [ax - ux, ay - uy, bx + ux, by + uy]) <= FORD_WAY.half + margin) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Whether a point's within `reach` of a bridge's deck (a stone one's ends wider than its road)
@@ -1871,7 +1899,7 @@ export class Overworld {
     #busy(x, y) {
         const settlement = this.settlements.at(x, y);
 
-        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y)) || this.sites.squareAt(x, y) || this.fingerposts.has(y * WORLD_SIZE + x)) {
+        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y)) || this.sites.squareAt(x, y) || this.fingerposts.has(y * WORLD_SIZE + x) || this.#fordWayAt(x + 0.5, y + 0.5)) {
             return true;
         }
 

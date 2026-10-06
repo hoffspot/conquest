@@ -403,6 +403,29 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   - **Fords:** about one in five calm cells of a small river (half-width up to 3 m) is a ford.
     Over the middle half of its stretch the river is 1.4 times as wide and 0.35 m deep over
     gravel, so slow and shallow enough to wade.
+    - **Listed** (`Waters.fordOf`, `fordsNear`, `fords`): each ford's middle, where it's
+      fullest, where it lies in the world, and its banks straight across the river from it as
+      the river lies there (the river's wandering leaves them within a metre or so of the water's
+      edge); worked out once each.
+    - **The way over** (the user: "mark fords on the ground so they're legible at a distance"):
+      straight across each ford at its middle, from bank to bank and 6 m on up each
+      (`FORD_WAY`), 2.2 m wide, the banks' ground is a foot track's (`Overworld#fordWayAt`:
+      `GROUND.road`, its `road` still null, so no bridge is built and no road's rules apply). The
+      water across it stays the ford's, waded; its bed's drawn as the track's (`onFordWay`), so
+      it shows as a bar of pebbly earth under the shallows. Trees, the land's things and the
+      fields keep off it as off a road, the fields a verge off it (`VERGE`). It's worked out from
+      the plan's rivers alone, so the same whichever chunks are made first.
+    - **Drawn** (`world/art/kits/fords.js`): a row of stepping stones straight across each,
+      0.85 m apart, from half a metre up one bank to half a metre up the other, their tops just
+      clear of the water, of the land's own rock (`LOOKS`), and half as big again in rocky lands
+      (`ROCKY`: the mountains, the badlands, volcanic land and the snows); in wooded lands
+      (`WOODED`: woods, the darkwood, the elfwood and jungle) a fallen trunk lies across it too,
+      1.8 m downstream of the stones, its ends up on the banks. They're only drawn: nothing's
+      blocked and nothing's in the navigation mesh (the user: "the art must not be baked solid"),
+      so the ford's walked as it was, across its water.
+    - **On the maps:** a row of pale stones straight across the water (`minimap.js` `fordMark`),
+      on the minimap and the world map near in, as bridges are; and on the world map further
+      out, three stones across each ford in the chunks the player's been in.
   - **Wading:** water up to 0.5 m deep, where its depth times its speed is under 0.6 (the
     flood-safety limit for an adult), can be waded: fords, and the shallows of lakes and the
     sea. Its squares are open, and the navigation mesh walks it as a ford. A river is waded only
@@ -980,6 +1003,14 @@ It also checks the rivers:
 
 `test/navigation.test.js` wades across a ford, straight over, and keeps out of the river's deep
 water beside it, and steps across a mountain stream running too fast to wade.
+
+`test/fords.test.js` checks the fords made to be seen: each one's middle, as deep and wide as a
+ford, its banks straight across it near the water's edge; those near a chunk listed; the way over
+each a track's ground up both banks and none of its water, the same whichever chunks are made
+first, the fields a verge off it and nothing standing on it; the stepping stones straight across
+it over the water, bigger in rocky lands, a fallen trunk downstream in wooded lands only, every
+face facing out; and the maps' row of stones across it. `test/signposts.test.js` checks the
+fingerposts (*Fingerposts*, above).
 
 `test/world-plan.test.js` checks, for three seeds:
 

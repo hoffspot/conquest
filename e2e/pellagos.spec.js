@@ -2416,6 +2416,99 @@ test("a fingerpost stands by the town's main road out, past its edge, on squares
     expect(post.drawn).toEqual(post.nearest.flatMap((name) => [`finger ${name}`, `finger ${name} back`]).sort());
 });
 
+test("a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (Beside the ford in the woods south of the town: test/navigation.test.js's)
+    const ford = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const map = game.world.maps.town;
+        const found = map.waters.fords().sort((a, b) => Math.hypot(a.at[0] - 3112.5, a.at[1] - 4374.5) - Math.hypot(b.at[0] - 3112.5, b.at[1] - 4374.5))[0];
+        const [[ax, ay], [bx, by]] = found.banks;
+        const long = Math.hypot(bx - ax, by - ay);
+        const [x, y] = [Math.floor(ax - ((bx - ax) / long) * 3), Math.floor(ay - ((by - ay) / long) * 3)];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+        game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
+        game.previous.set("player", { x: player.x, y: player.y });
+
+        return { at: found.at, banks: found.banks, bank: [x, y] };
+    });
+
+    expect(await playUntil(page, () => {
+        let found = false;
+
+        window.pellagos.session.view.scene.traverse((node) => (found ||= node.name === "fords"));
+
+        return found;
+    }, { seconds: 60 })).toBe(true);
+
+    const seen = await page.evaluate(({ at, banks, bank }) => {
+        const { game, session } = window.pellagos;
+        const map = game.world.maps.town;
+        const meshes = [];
+
+        session.view.scene.traverse((node) => node.name === "fords" && meshes.push(node));
+
+        // (The stones over the water: walked through, the ford's squares open; the bank trodden bare)
+        const middle = [Math.floor(at[0]), Math.floor(at[1])];
+
+        return {
+            near: meshes.some((mesh) => {
+                mesh.updateWorldMatrix(true, false);
+                mesh.geometry.computeBoundingBox();
+
+                const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+
+                return box.min.x < at[0] && box.max.x > at[0] && box.min.z < at[1] && box.max.z > at[1];
+            }),
+            open: !map.squares.blocked(...middle),
+            trodden: map.squares.ground(...bank),
+            road: game.world.maps.town.landAt(...bank).road,
+            wade: map.wades?.(...middle) ?? null,
+            banks: banks.length,
+        };
+    }, ford);
+
+    expect(seen.near).toBe(true);
+    expect(seen.open).toBe(true);
+    expect(seen.trodden).toBe(1);
+    expect(seen.road).toBe(null);
+    expect(seen.banks).toBe(2);
+
+    // On the minimap: a row of pale stones across the river (its picture of the world round the
+    // player, four pixels to the metre: painted a step at a time, so played on till it's there)
+    const minimap = await page.evaluate(({ at }) => {
+        const { game } = window.pellagos;
+        const covers = () => {
+            const patch = game.minimap.patch;
+
+            return patch && at[0] > patch.x + 2 && at[1] > patch.z + 2 && at[0] < patch.x + patch.image.width / 4 - 2 && at[1] < patch.z + patch.image.height / 4 - 2 && !game.minimap.painting;
+        };
+
+        for (let k = 0; k < 400 && !covers(); k++) {
+            game.minimap.drawn = -Infinity;
+            game.advance(0.05);
+        }
+
+        const { x, z, image } = game.minimap.patch;
+        const pixels = image.getContext("2d").getImageData(Math.round((at[0] - x) * 4) - 8, Math.round((at[1] - z) * 4) - 8, 17, 17).data;
+        let pale = 0;
+
+        for (let k = 0; k < pixels.length; k += 4) {
+            pale += pixels[k] > 200 && pixels[k + 1] > 190 && pixels[k + 2] > 160 ? 1 : 0;
+        }
+
+        return { covered: covers(), pale };
+    }, ford);
+
+    expect(minimap.covered).toBe(true);
+    expect(minimap.pale).toBeGreaterThan(10);
+});
+
 // (How often each is posed goes by how tall they look on the screen, in its pixels: at the
 // screen's own, as the game's drawn, not the half the others are drawn at: playwright.config.js)
 test.describe("drawn at the screen's own pixels", () => {

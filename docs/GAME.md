@@ -1302,7 +1302,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     - The water's own colour is what it takes out. The sky and sun are reflected off it, more
       the more glancing the look (Fresnel, after Schlick, 0.02 square on).
   - **The bed** is drawn as packed earth (the land sets soil there, drawn ploughed, whose furrows
-    showed through). The ground reads the water's field too (world/ground.js):
+    showed through); across a ford, along the way over it, as a track's pebbly earth, a bar of it
+    showing under the shallows between the banks trodden bare either side, the grass worn beside
+    it as beside any track (WORLD.md, *Fords*). The ground reads the water's field too
+    (world/ground.js):
     - It's wet, so darker, under the water and a metre and more up its banks.
     - There's no rock at the water's edge or under it: the bed's own ground, not a channel's cut
       edge drawn square by square as cliff. Where it's all but sheer, as the rock a fall drops
@@ -1313,6 +1316,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
 
   Water can't be walked into, but can be seen over, except where it's shallow and slow enough to
   wade (fords, lakes' shallows, and mountain streams, stepped across: WORLD.md).
+- **Fords** (world/art/kits/fords.js) are marked so they're seen from afar: stepping stones
+  straight across the water at each, their tops just clear of it (boulders in rocky lands), a
+  fallen trunk across too in wooded lands, and the way over trodden bare up both banks. Only
+  drawn, in no one's way: the ford's waded as it was (WORLD.md, *Fords*).
 - **Waterfalls** (world/falls.js), wherever a river or stream spills over a lip 0.6 m high or
   more:
   - **A sheet** falls from the lip across the river's width. Thrown forward as fast as the water
@@ -2605,7 +2612,8 @@ the 128 metres round the player; inside, the whole floor. Each square is coloure
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
 a little variation from square to square; the buildings get a dark edge and a light ridge and
 the trees round crowns, and the land's features marks of their own (boulders grey, fallen trees
-and walls lines, bushes dark green). That's painted four pixels to the metre: the town once, and the world a
+and walls lines, bushes dark green), and each ford a row of pale stones straight across the
+water, on onto its banks (`fordMark`: as plain as a bridge's planks). That's painted four pixels to the metre: the town once, and the world a
 patch 192 metres square at a time round the player, the town's picture laid in it and the other
 settlements' buildings and props painted over their ground the same way. Once the player's 16
 metres from the patch's middle, the next is begun, as far ahead of them again, and painted a step
@@ -2880,8 +2888,10 @@ zoom out. A key in the corner shows the four icons and the fog.
   square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player
   walks into it.
 - **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
-  closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
-  the player, pointing the way they face (inside, at the building they're in).
+  closer), the fords in the chunks they've been in, three pale stones straight across each (from
+  20 metres to a pixel to where the chunks are shown square by square, which have them as the
+  minimap does), the icons over the buildings they've gone into (6 metres to a pixel or closer),
+  and the player, pointing the way they face (inside, at the building they're in).
 - **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
