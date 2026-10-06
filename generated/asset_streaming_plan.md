@@ -1,7 +1,9 @@
 # Heavier models downloaded in the background, and kept in the browser: the plan
 
 A living plan, like `terrain_navmesh_overhaul_plan.md`: updated as each milestone lands and as
-measurements come in. The [change log](#11-change-log) at the end records every change and why.
+measurements come in. The [change log](#12-change-log) at the end records every change and why.
+[Section 11](#11-picking-up-a3-to-a5) is where to pick up: what's live, and the research and steps
+for A3 to A5.
 
 **Goal.** Bring heavier models into the game, such as creatures made by `utilities/blenderpipeline`
 (a dragon is 0.3–5 MB). Do it without making the first download any bigger, and without making
@@ -370,9 +372,9 @@ Each is shippable alone, and the game is no worse after each.
 | --- | --- | --- |
 | **A1** (done) | The catalog and the cache | `assets.json` and the generated `assets.js` (hashes, sizes); hashes for the manifest's data too; the boot budget test; the service worker's `-v2` caches, `?h=` keys checked before they're kept, collection (§5.4) and the move from `pellagos-v1`. The body, its skin and the chest move to `?h=`. No lazy loading yet |
 | **A2** (done) | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support and `immutable` for `?h=` (when the hash is the file's) in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
-| **A3** | The first model on demand | The pipeline's dragon (lower-detail copy and full) in the catalog. Prediction from lairs (§4); the stand-in swap (§3.6); `useWorkers`; compiling ahead |
-| **A4** | Players' choices | **Extra models** under Game options; storage used, **Download all now**, **Clear**; `persist()` |
-| **A5** | Quality variants | The pipeline builds texture variants (512, 1024, 2048); the catalog lists them; the device and Visual quality pick. KTX2 textures to be weighed after |
+| **A3** (next: §11.2) | The first model on demand | The pipeline's dragon (lower-detail copy and full) in the catalog. Prediction from lairs (§4); the stand-in swap (§3.6); `useWorkers`; compiling ahead |
+| **A4** (§11.3) | Players' choices | **Extra models** under Game options; storage used, **Download all now**, **Clear**; `persist()` |
+| **A5** (§11.4) | Quality variants | The pipeline builds texture variants (512, 1024, 2048); the catalog lists them; the device and Visual quality pick. KTX2 textures to be weighed after |
 
 ---
 
@@ -444,7 +446,200 @@ bufferbloated router, the round trip and playout while downloading at full speed
 
 ---
 
-## 11. Change log
+## 11. Picking up A3 to A5
+
+Written on 2026-10-06, when A1 and A2 had landed and A3 was waiting for a model. Everything a
+session needs to carry on: what's live, what to build on, and the research done so far, with the
+code's own names, so nothing has to be looked up again from scratch.
+
+### 11.1 Where things stand
+
+- **Live:** A1 (#195) and A2 (#197) are merged and on GitHub Pages. The live `sw.js`, `main.js`,
+  `loader.js`, `manifest.js`, `assets.js`, `catalog.js` and `fetcher.js` were checked byte for byte
+  against `main`. Pages serves `?h=` addresses (it ignores the query) and byte ranges (`206` for
+  `chest.glb?h=…` and `human.bin?h=…`), which is all A1 and A2 need from it.
+- **The catalog is empty**, so the downloader idles: debug mode says `Downloads idle`.
+  `window.pellagos.fetcher` is there to try it from the console.
+- **What A3 builds on:**
+  - `fetcher.want({ path, hash, bytes }, "now" | "soon" | "later")` resolves with a Blob, from the
+    cache if it's kept; or with `null` if it's dropped, or not fetched (saving data, and not wanted
+    now). `fetcher.drop(file)`, `fetcher.hold(reason, { for, until, most })` and
+    `fetcher.release(reason)`. `fetcher.thrifty` and `fetcher.status` too (`app/fetcher.js`).
+  - `ASSETS.models[name]` (`app/assets.js`): what `client/models/assets.json` says of the model,
+    every field passed through (so `stand`, `when`, `clips` and the like need no change to
+    `scripts/build-manifest.js`), each file with its `hash` and `bytes` added. `tier` must be `near`
+    or `demand`, and each file must be there.
+  - `loadGltf(url)` (`world/art/engine/models.js`) reads a model, meshoptimizer's decoder and all.
+    For a Blob from the fetcher: `URL.createObjectURL(blob)`, revoked once it's read. A skinned
+    model's scene is copied with `SkeletonUtils.clone`, not `scene.clone()` (the pipeline's README).
+  - The service worker keeps the catalog's files in `pellagos-assets-v2`, within half the room the
+    browser offers, the least recently used let go of first (`sw.js`: `room`, `toLetGo`).
+
+### 11.2 A3: the first model on demand
+
+**The model.** The plan was the pipeline's dragon. The player's own secondary model, put through
+`utilities/blenderpipeline`, takes its place when it's ready: a config like
+`utilities/blenderpipeline/examples/dragon.json`, then `npm run build` there. That makes
+`<name>.glb`, `<name>.lod1.glb` (one per `lods` entry) and `<name>.report.json`, whose budgets it
+must meet. Until then, the pipeline's CC0 dragon exercises every part of A3 with no new asset:
+
+| `utilities/blenderpipeline/dist/` | Size | What's in it |
+| --- | --- | --- |
+| `dragon.glb` | 302 KB | 3,498 triangles, 90 joints, one draw call, a 512² WebP; clips `Idling`, `Crawling`, `Flying`, `Gliding` |
+| `dragon.lod1.glb` | 281 KB | The same at 35% of the vertices |
+
+Its lower-detail copy is hardly smaller: the clips are most of the file, and every copy carries
+them all. For a copy worth having, the pipeline could leave clips out of it, or resample them
+more coarsely (`resample` is one setting for all copies now: `lib/config.js`). Decide this before
+listing lower-detail copies in the catalog, or list only the full model.
+
+**Steps, each testable alone:**
+
+1. **The files:** the built GLBs in `client/models/beasts/` (`<name>.glb`, `<name>.lod1.glb`), with
+   a licence file and a credit in `README.md` (contribution.md, section 3, rules 8 and 9). A bought
+   model never goes in the repository: `utilities/blenderpipeline/private/`.
+2. **The catalog entry**, in `client/models/assets.json`, then `npm run build:manifest`:
+
+   ```json
+   "dragon": {
+       "tier": "near",
+       "stand": "dragon",
+       "when": { "sites": ["dragon's lair"], "within": 1500 },
+       "clips": { "idle": "Idling", "walk": "Crawling", "fly": "Flying", "glide": "Gliding" },
+       "files": [{ "lod": 1, "path": "models/beasts/dragon.lod1.glb" }, { "lod": 0, "path": "models/beasts/dragon.glb" }]
+   }
+   ```
+
+   `stand` is the `LOOKS` id (`beasts/looks.js`) drawn until the model is here. `clips` names the
+   model's clips for what the game asks of a body.
+3. **A body made from a model.** `BeastAvatar` (`beasts/beast.js`) builds its body with
+   `this.plan = BUILDERS[look.body](look, random, key)`, and everything else goes through the plan:
+   - `plan.object`, scaled by `sizeOf(id, seed)`;
+   - `plan.materials.body`, whose `emissive` is flushed red when it's struck;
+   - `plan.joints`, which `BONES` maps names onto (`torso`, `body`, `head`, `mouth`, `left`), for
+     where blows land and things are held;
+   - `plan.attacks` and `plan.rests`;
+   - `plan.pose({ dt, t, speed, run, attack: { u, hit, style, reach }, rest: { name, w, t },
+     react: { u }, dead: { u, side }, onStep, fly, seen })`, each frame.
+
+   A model body is a plan too: a `SkeletonUtils.clone` of the scene, an `AnimationMixer`, and a
+   `pose` that turns those inputs into clip weights and times (speed into walk, `fly.beat` into
+   `Flying` or `Gliding`, `attack.u` into an attack clip's time, `dead.u` into a fall, or the code's
+   own fall where the model has none). Its material needs an `emissive`: a Lambert copy, as
+   `loadModel` makes, or the glTF material's own. The catalog entry can carry a bone map if the
+   model's bone names aren't the ones `BONES` knows. The mapping from inputs to weights is a pure
+   function: test it alone.
+4. **Where creatures are made**, both of which should ask one small registry: is this kind's model
+   here? If so, the model body; if not, the code-built stand-in, and the fetcher asked for it.
+   - In the air: `world/flyers3d.js`, `#hatch(kind, up)`, which builds a wyvern or the dragon a
+     step at a time before it's shown (`new Steps(sculpting(() => new BeastAvatar(kind, { seed })))`),
+     and `#beast`. Its `prepare` is `view.prepare(object)`, which compiles the shaders ahead
+     (`world/view.js`).
+   - On the ground: `dressingCreature` in `beasts/beast.js`, the battle's creatures
+     (`sculpting(() => new BeastAvatar(id, { seed }))`).
+5. **Prediction (§4).**
+   - Lairs: `game.js` `#lairsAloft()` already lists the lairs whose dragon is alive and not on the
+     ground nearby (`world.plan.sites`, kind `"dragon's lair"`; `creatures.js` `"dragon's lair"`).
+     Every second or so: inside `within`, `want(lod1, "soon")`; inside a third of it,
+     `want(lod0, "soon")`; walking away past it, `drop`.
+   - Lands: `WYVERN_LANDS` (`flyers3d.js`), and each creature's `biomes` (`core/creatures.js`).
+   - Spawns: a creature of a kind arriving in the battle whose model isn't here: `want(…, "now")`.
+   - Write it as a pure function (where the player is and where the sites are, in; what to want
+     and drop, out) and test that.
+6. **The swap (§3.6).** When a model arrives while its stand-in is drawn, build it a little each
+   frame, as `#hatch` does, and compile it ahead (`view.prepare`). Swap only out of view, far off or
+   behind a fade, never mid-attack, carrying over where it is, which way it faces and what it's
+   doing (`doing`, `resting`, `flight`).
+7. `MeshoptDecoder.useWorkers(2)` once at start (`models.js`), so decompression is off the main
+   thread.
+8. **The service worker, put off from A1 (§5.4):**
+   - keep a replaced catalog file until its new version is kept;
+   - offline, give an older kept version of the same path for a catalog file (never for a file
+     needed to start).
+9. **Tests.**
+   - Unit: the new catalog fields, the prediction and the clip-weight functions, and the
+     registry's fallback.
+   - Browser: walking towards a lair shows the stand-in, then the model swaps in. A model that's
+     missing or corrupt leaves the stand-in drawn, with no error: route the file in Playwright.
+     Find a seed with a lair near the start from the world plan, or place the player near one.
+10. **Docs:** this plan (A3 done, the change log), `docs/GAME.md` and `docs/WILDS.md` for how the
+    creature's drawn, `README.md` for the credit, and contribution.md if adding a model's steps
+    change.
+
+Still open for A3 (§10): whether the host hints models to joined players (each game should
+predict the same spawns, so it shouldn't need to), and whether to keep lower-detail copies once
+the full model is kept.
+
+### 11.3 A4: players' choices
+
+- **The setting:** `SETTINGS_DEFAULTS` in `app/save.js` gets `extraModels: "auto"`; the others are
+  `"needed"` and `"never"`. Settings aren't versioned, and `loadSettings` fills in what a save
+  lacks from the defaults. Game options is the menu's `#menuoptions` page in `client/index.html`
+  (its title is `#optionstitle`), applied by `applySetting` in `main.js`.
+- **What it does:**
+  - `never`: `fetcher.want` gives `null` for everything, and only stand-ins are drawn;
+  - `needed`: only `now` (as `thrifty` does);
+  - `auto`: as now.
+- **How much is kept:** `navigator.storage.estimate()` for the site, and the catalog's own share,
+  the sum of `Content-Length` over `pellagos-assets-v2`. The service worker's room is half of what
+  the browser offers (`sw.js` `room`). The player's own limit goes with the page's release message
+  (`device.js` `registerServiceWorker` posts it), and the worker takes the least of the two.
+- **Download all now:** every catalog file wanted `later`, still within the link's quiet times.
+  Then `navigator.storage.persist()`. Chrome grants it without asking to an installed or much-used
+  site. Firefox asks the player, so ask only here. Safari may clear storage after 7 days unused,
+  unless the game's added to the Home Screen: say so beside the button (§5.5).
+- **Clear:** `caches.delete("pellagos-assets-v2")`, and a message telling the worker to forget the
+  catalog's last-used times.
+- **Tests:**
+  - unit: the setting's three ways through the fetcher, and the worker's room with a limit;
+  - browser: **Clear** empties the cache; **Never** fetches nothing.
+
+### 11.4 A5: quality variants
+
+- **The pipeline** caps textures at `textures.atlasSize` and `textures.maxSize`, 1024 by default
+  (`utilities/blenderpipeline/lib/config.js`). A `variants` option could build the same model at
+  512, 1024 and 2048 (`<name>.t512.glb` and so on). Only the textures differ, so later the
+  textures could go in files of their own and the geometry and clips be shared.
+- **The catalog:** each file says what it's for (`quality`, or its texture size). Fields pass
+  through `build-manifest.js` as they are.
+- **Choosing:** the Visual quality level (`QUALITY` in `world/view.js`). Its `skin` (512, 512,
+  1024 for low, medium, high) is the same kind of choice for the characters' skins, so the
+  model's textures can follow it. `detectQuality` already weighs `deviceMemory`, cores and touch.
+  Cap at 512 where `deviceMemory` is 4 GB or less.
+- **KTX2, after:** textures the GPU keeps compressed take 4 to 8 times less of its memory, but
+  need Three.js's `KTX2Loader` and the Basis transcoder (WebAssembly, a few hundred KB, through
+  `scripts/vendor-three.js` `ADDONS`). The pipeline would also need KTX-Software's `toktx`, which
+  isn't on npm. Weigh it once there are several models.
+
+### 11.5 Measurements still owed
+
+The controller's numbers (§3.3: `PACING` in `app/fetcher.js`) wait on real devices: CI's machines
+can't tell a download's harm from their own noise (§9).
+
+1. Host a world on a desktop (`npm start`), and join it from a phone over 4G, then over Wi-Fi
+   behind a router known to queue (bufferbloat). Turn debug mode on in both.
+2. On the phone, start a download from the console:
+   `pellagos.fetcher.want({ path: "characters/vitruvian.bin", hash, bytes }, "now")`, the hash being
+   the first 10 hex digits of the file's SHA-256 (`sha256sum`) and the bytes its size. Use the
+   body the game isn't made from (`GAME_BODY`).
+3. Watch `Net joined: RTT … in hand …` and `Downloads …`.
+4. Compare with an unpaced `fetch()` of the same file, to see the harm the controller saves.
+5. Then try `target` 20 to 50 ms, parts of 40 to 100 ms of the link, and a filter of 2 to 4 round
+   trips. Record what's chosen, and why, in §9 and the change log.
+
+The CI experiment can be rebuilt from §9 for a machine with a GPU. It was two browser contexts,
+host and joined, with Chromium's `Network.emulateNetworkConditions` at 200 KB/s and 40 ms on the
+joined one, and `Joining.onPong` wrapped to log each round trip. There it could become a real test.
+
+### 11.6 Landing the next pull requests
+
+- Other sessions merge into `main` often. Expect to merge `origin/main` into the branch more than
+  once before it lands, each time regenerating with `npm run build:manifest`, running
+  `npm run check`, and pushing (contribution.md, section 6).
+- A CI job cancelled after 15 minutes with no steps and no logs was never given a runner. That's
+  GitHub, not the change: re-run the failed jobs (contribution.md, *When something goes wrong*).
+
+## 12. Change log
 
 - **2026-10-05.** First version: the paradigm (models are dressing; tiers; one polite downloader;
   content-addressed caching collected by the catalogs in use), from the audit in §1.
@@ -479,3 +674,7 @@ bufferbloated router, the round trip and playout while downloading at full speed
     was made isn't kept by browsers under the old one (§7).
   - The Playwright test of playing together under a download isn't a CI test: measured in
     Chromium, CI's machines are too busy to tell a download's harm apart (§9).
+- **2026-10-06.** Section 11, where to pick up A3 to A5: what's live (checked against Pages), what
+  A3 builds on, the code's own hook points for the model body, prediction, the swap, the settings
+  and quality variants, the pipeline dragon's numbers (its lower-detail copy is hardly smaller,
+  the clips being most of the file), and the measurements still owed on real devices.

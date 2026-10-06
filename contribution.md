@@ -280,6 +280,10 @@ npx playwright test ...  # the browser tests your change touches (above)
 git status               # only the files you meant to change
 ```
 
+- **Docs only** (nothing changed but Markdown files: `docs/`, the plans in `generated/`,
+  `README.md`, this file): run none of the checks that run code. CI still runs them all, and
+  `test/contribution.test.js` reads this file, so a script it no longer names fails there.
+
 - Add files by name (`git add path/to/file`), not `git add -A` or `git add .`. Never commit
   `node_modules/`, `test-results/`, `playwright-report/`, reports, pictures you took to check
   your work, or scratch files.
@@ -410,4 +414,5 @@ A good first message in a session:
 | A conflict in `manifest.js`, `assets.js`, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
 | The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
 | A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
+| A CI job cancelled after about 15 minutes, with no steps and no logs | It was never given a runner: GitHub's doing, not your change. *Re-run failed jobs* on the run |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |
