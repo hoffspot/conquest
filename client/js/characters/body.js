@@ -74,6 +74,10 @@ export class HumanData {
         this.parts = manifest.parts;
         this.bones = manifest.bones;
         this.basePositions = section("basePositions");
+        // Where each vertex is on MakeHuman's base body (its own base positions, for MakeHuman's
+        // body): garments' designs are drawn in those coordinates (garments.js texelMap,
+        // designSolid), so they fall where they're drawn on a body whose base is laid out otherwise
+        this.designPositions = manifest.layout.designPositions ? section("designPositions") : this.basePositions;
         this.renderSource = section("renderSource");
         this.indices = section("indices");
         this.skinIndices = section("skinIndices");

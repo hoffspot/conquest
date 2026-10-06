@@ -226,6 +226,25 @@ as it is:
   texture layout, texel by texel, from the nearest point of MakeHuman's body fitted onto it: on
   the head, where it is on MakeHuman's face, by the face map. (Carried over, the areolae's had
   come out all but empty: MakeHuman's were 4.5 cm from Vitruvian's nipples.)
+- **Garments' designs.** Lingerie's and surcoats' designs, and what of them is opaque, are drawn
+  in MakeHuman's base body's coordinates (`DESIGNS`, `texelMap`, `designSolid`). Vitruvian's base
+  is laid out otherwise (its chest 12 cm lower in it, its crotch 4 cm), so a bra drawn there lay
+  on its collarbones. The build gives each of its vertices its place on MakeHuman's base body
+  too (`designPositions`: the point of MakeHuman's skin, fitted onto Vitruvian's, that it lies
+  on; on the head, where it is on MakeHuman's face), and designs are drawn there. The bra's
+  lining and the briefs' are a little larger, so they cover the nipples and the groin on both.
+- **Toe caps.** A toe cap's columns set off along the boot's slope from each point's own
+  neighbours on the cut. On Vitruvian's foot they lay more to its side than behind it, past the
+  little toe, and the cap came out 2 cm wider than the toes. The slope is now taken from the boot
+  1 to 3 cm behind each point, the same way round the foot.
+- **Hair.** Vitruvian's forehead runs lower under its hairline, and a fringe of bangs came down
+  past the brows: bangs now end at the brows. A parting's roots are denser (an eighth of the
+  strands, at least 30), so it stays a thin line on its head too.
+- **Skirts.** A skirt is built round the legs as the body is built, set apart, and its sides go
+  with them: standing, the legs come in, and the cloth with them. Vitruvian's legs are set
+  further apart (its ankles 8.5 cm out from its hips, MakeHuman's 6.8) and its hips are
+  narrower, so the alb's sides came in to its feet, which came out through it 3 to 4 cm walking.
+  A skirt's sides are now built out as far as the legs are apart (*Drapes*), on both bodies.
 
 `test/vitruvian.test.js` checks the data: the bones, weights, parts and shapes; that it stands as
 tall as MakeHuman's body in every preset; that a shirt comes as high up its neck; that its face's
@@ -302,9 +321,10 @@ groomed so it looks kept:
    back if behind, never swept out sideways. Hair drawn to a tie or knot lies on the head all the way
    there, pulled taut.
 4. **Cut.** A bob and long hair end at a hem (clean, a little longer behind), not at random lengths;
-   other hair grows shorter low on the head (round the ears, at the nape).
+   bangs end at the brows; other hair grows shorter low on the head (round the ears, at the nape).
 5. **A parting** runs only over the top of the head, with roots all along it a hair's breadth
-   either side, so it's a thin line; behind the crown the hair falls straight down.
+   either side (an eighth of the strands, at least 30), so it's a thin line; behind the crown the
+   hair falls straight down.
 6. **Smoothing.** Each strand is smoothed where it hangs (no kinks where it meets the body), then
    resampled to a few segments, more where it bends. Its card faces out from the scalp, or the
    body it lies on, or (hanging free) out from the neck, so it never twists edge on.
@@ -421,8 +441,8 @@ slots, sockets and hidden skin.
      - **Each ring** shrink-wraps the toes at that point along the foot (their convex hull,
        smoothed), so the cap follows the toes as a whole, down to the shortest, not each toe.
        Columns are placed by how far round they are from the top, so they never cross.
-     - **The join.** Each column sets off along the boot's own slope, then eases into its ring,
-       so there is no crease.
+     - **The join.** Each column sets off along the boot's own slope (from the boot 1 to 3 cm
+       behind it, the same way round the foot), then eases into its ring, so there is no crease.
      - **Texture.** Each column slides from the boot's texture at the cut to the middle of the
        toes' part of the texture, fanning in as the cap narrows.
    - **Size.** Boots come out about a centimetre bigger than the foot all round, and plate about
@@ -513,7 +533,9 @@ cloth round the body:
   the hips, where the body (and the tops of the thighs) is widest. Below that, twelve rings fall
   to its hem (from the hips at 0 to the ankles at 1), rounding off from the body's shape to a
   circle and flaring out by its `flare` (a share of the hips' width), with pleats round it,
-  deeper towards the hem and shaded darker in their folds.
+  deeper towards the hem and shaded darker in their folds. Its sides go with the legs (below),
+  which are set apart as the body is built and come in as it stands, so they're built out as far
+  as the legs are apart at their height: standing, it hangs as wide as it's meant to.
 - **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
   under it.
 - **Skinned** like the body: the waist to the lower back and pelvis; below the hips, quickly
@@ -551,8 +573,9 @@ the bust, painted with a cord criss-crossing down the front).
 **Lingerie** (`garments.js` `DESIGNS`) is modern lace with a nod to the period, worn by the
 courtesans upstairs. It isn't cut by its region, which only has to take it all in (the torso from
 the waist to the shoulders for a bra), but by a **design**: what fabric is at each point of the
-*base* body, where garment textures are painted. So it fits every body, stretching with it (a
-fuller bust stretches its cups with it), and moves with the skin in any pose.
+*base* body, where garment textures are painted (MakeHuman's base body: on Vitruvian, at each
+point's place on it, `designPositions`). So it fits every body, stretching with it (a fuller bust
+stretches its cups with it), and moves with the skin in any pose.
 
 - **Fabrics.** None (the garment is clear there), floral lace (flowers on a honeycomb, each
   turned its own way, on tulle crossed by curling stems, with scalloped edges bound by a cord),
