@@ -268,11 +268,11 @@ both bodies: Foot locking, below), and ankles bending further over the foot walk
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
 4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
-against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 498
-to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, planted feet
-sliding 429 to 488, but forearms in the torso 175 to 55 (most in the staff's and war hammer's
+against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 493
+to 502, feet in the ground 100 to 126, second hands off their hafts 30 to 53, planted feet
+sliding 429 to 488, but forearms in the torso 155 to 55 (most in the staff's and war hammer's
 two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
-215 to 194; 1,061 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
+194 to 194; 1,036 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
 Still to come: its own skin textures, the inside of the mouth, and blinking and expressions.
@@ -952,7 +952,10 @@ feet are planted they reach the hands.
 **Attacks** are a few key poses per weapon, timed round the blow: key time 1 is when it lands
 (or the arrow or spell is let go), 2 is when the attack ends, so the same keys fit an attack of
 any speed. Between keys every value follows a smooth Catmull-Rom curve, and the attack eases in
-over whatever the character was doing and back out at the end. Each key says:
+over whatever the character was doing and back out at the end. A curve can overshoot: a hand
+moved away right after a key swings a little the other way first (looking about, the hand
+shading the eyes rose into a hat's brim before it dropped), so a place held for a while is given
+twice, its curve flat there, before it's left. Each key says:
 
 - **Where the hands are**: the grip, measured from the shoulder in arm lengths, in the
   character's frame (x to its left, y up, z forward, towards whoever it's fighting). The shoulder
@@ -1035,7 +1038,8 @@ out of the torso (above), so their keys hold both hands far enough out on every 
 lifted out in front of the chest on its way overhead (a key between the guard and the top), and
 swung down in a wide arc to the blow (a key between the top and the strike), not pulled close past
 the face; at the bottom of a smash or slam the hands low and out before the hips, not drawn back
-into them; a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
+into them, and kept out as it follows through (drawn in, the left hand came off the haft on the
+biggest orcs, and the slam's left forearm went into the belly as the body folded over it); a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
 spin) out in front rather than tight to the body. A sweep still finishes with the rear hand low by
 the left hip: held higher, it came off the haft on the way back to guard. Further out still at the
 blow, the shoulders went past their range. A hammer's side swing sets the left elbow, down through
@@ -1309,7 +1313,13 @@ MakeHuman's had 1,037. MakeHuman's body can still be checked with `--data human`
 one baseline, the game's body's, so it's measured against Vitruvian's failures (and `--update`
 keeps only the game's body's). With its hands' skin going with their bones (*The hands' skin*,
 above), and its folded skin not measured against (`test/clipping.test.js`, above), 1,061: things
-held in the body 215, forearms in the torso 175, the rest as they were.
+held in the body 215, forearms in the torso 175, the rest as they were. With the motions that
+made worse refitted (the bow's crouching shot, the grimoire's overhand hurl and side-arm throw,
+the cleaver's overhead hack, looking about under a hat's brim, and a few thumbs round a
+scabbard), 1,038: things held in the body 195, forearms in the torso 167, joints past their
+range 497. With the war hammer's overhead smash and leaping slam keeping the hands out as they
+land and follow through, 1,036: forearms in the torso 155, joints past their range 493, second
+hands off their hafts 30, things held in the body 194.
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
@@ -1402,9 +1412,11 @@ meanwhile puts it where it was going at once, as with a weapon.
 With the left arm free, a sentry's rests bring the hand round a sword's or cleaver's hilt at the
 left hip, not through it: folding the arms, the hand comes up in front of the hilt first, and goes
 down the same way (`ARMED_FOLDED`); shifting the weight, the thumb is brought to the belt from in
-front and above the hilt, and hooked in it a little further forward, the upper arm off the shield
+front and above the hilt (a little wide of it, the thumb clear of the scabbard's throat), and
+hooked in it a little further forward, the upper arm off the shield
 on the back (`ARMED_SHIFTING`); looking about, the hand shading the eyes is a little lower and
-further forward, clear of a helm's brim or an orc's horns (`HELMED_LOOKING`); clasping the hands
+further forward, clear of a helm's brim or an orc's horns, and lowered forward from there as from
+the brow (`HELMED_LOOKING`, which moves only the shading hand, `SHADING`); clasping the hands
 behind, the left hand comes up to the waist first, over the scabbard, the elbow out to the side
 clear of the shield on the back, and goes behind from there (`ARMED_CLASPED`). Other folk's rests
 keep their own ways.
@@ -1557,7 +1569,7 @@ as the barkeep does, at the counter.
 | | tidying the papers | (the barkeep's wiping the bar) |
 | | tucking back her hair | (the serving wench's) |
 | Adventurer | stretching | both arms up high and apart, going up wide of a hat's brim, the back arched |
-| | looking about | a hand shading the eyes, one way then the other |
+| | looking about | a hand shading the eyes (under a hat's brim), one way then the other, then lowered forward |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |
 | | a yawn | a hand to the mouth, the head back, the shoulders up |
 | | shifting the weight | from one foot to the other, a thumb in the belt, or, a sword or cleaver at the left hip, the left hand on its pommel |
