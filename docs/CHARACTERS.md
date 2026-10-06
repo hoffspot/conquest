@@ -258,11 +258,11 @@ both bodies: Foot locking, below), and ankles bending further over the foot walk
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
 4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
-against MakeHuman's): joints past their range 490 to 525, feet in the ground 100 to 126, second
-hands off their hafts 88 to 148, but forearms in the torso 322 to 124 (most in the war hammer's
-and staff's two-handed blows, which aren't moved out of the torso, the hammer's draw and
-put-away, and kicks), planted feet sliding 563 to 530 (in every guard, 14 bodies to 4) and things
-held in the body 196 to 183. The game's clipping test passes on it.
+against MakeHuman's): joints past their range 499 to 525, feet in the ground 100 to 126, second
+hands off their hafts 88 to 148, planted feet sliding 433 to 498, but forearms in the torso 322
+to 124 (most in the war hammer's and staff's two-handed blows, which aren't moved out of the
+torso, the hammer's draw and put-away, and kicks) and things held in the body 196 to 183. The
+game's clipping test passes on it.
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
 motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
@@ -829,8 +829,8 @@ standing, arms at the sides, palms facing the thighs.
   its ball late in stance. Two-bone IK bends the leg to keep it there, the knee always bending
   forward (the thigh's anatomical forward, turned with it, is the IK's pole) and only about its
   own hinge (`Rig.reach`, below). A leg is never
-  asked to reach more than 98.5% of its length: a planted foot that would need it slides along
-  with the body instead. The swinging foot eases back (and, however long it's in the air, soon
+  asked to reach more than 98.5% of its length (running, more only as straight as it landed:
+  below): a planted foot that would need it slides along with the body instead. The swinging foot eases back (and, however long it's in the air, soon
   stops making up for how far it slid), and toes bend to stay flat as the heel lifts. The tests
   check that a planted foot moves less than a centimetre, and that, run and walked round sharp
   corners, starting and stopping, at 60 and 30 frames a second, knees never bend backwards,
@@ -850,6 +850,15 @@ standing, arms at the sides, palms facing the thighs.
     taken by the knee, up to its 10°, the shin turning about its own line (as the old IK's
     turning the shin had done, by chance: without it, the dead falls' ankles went 6–8° further
     past their range).
+  - **Running, a foot can land with its leg straight.** The stride puts it down a little above
+    the ground on a long-legged body (on Vitruvian, the orcs most), and the leg straightens all
+    the way to reach the ground. Held to 98.5% of its length the moment after, the leg drew the
+    foot in, and it slid along under the body: up to 5.6 cm in a frame. Now a running foot is
+    planted where it came down, and its leg may stay as straight as it came down while the foot's
+    down, as the body comes over it (`stretch`). The pelvis isn't moved for it: run lower, the
+    orcs' ankles went past their range pushing off, and sunk onto each landing, the hips jolted.
+    Standing still, a foot is planted as before: planting it where it came down deepened the
+    kicks' slides.
 - **Heel off.** Late in stance, on the ball of the foot, as the body comes further over the foot
   than the ankle bends (19°, of its 20°), the heel lifts rather than the shin bending further
   over it, as it does standing and crouching. (Measured from the hip-to-ankle line, MakeHuman's

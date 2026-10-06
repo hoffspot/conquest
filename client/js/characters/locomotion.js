@@ -120,6 +120,7 @@ const _hip = new THREE.Vector3();
 const _reach = new THREE.Vector3();
 const _hips = new THREE.Vector3();
 const _under = new THREE.Vector3();
+const _landed = new THREE.Vector3();
 const _turn = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _ankle = new THREE.Quaternion();
@@ -170,9 +171,10 @@ export class Walker {
 
         /**
          * Per foot: whether it's planted, the pivot it's planted on (world), how far the joint
-         * angles would have slid it, and how far they had when it lifted off.
+         * angles would have slid it, how far they had when it lifted off, and (running) how
+         * straight its leg came down (a share of its length).
          */
-        this.feet = SIDES.map(() => ({ planted: false, pivot: "heel", lock: new THREE.Vector3(), correction: new THREE.Vector3(), release: new THREE.Vector3() }));
+        this.feet = SIDES.map(() => ({ planted: false, pivot: "heel", lock: new THREE.Vector3(), correction: new THREE.Vector3(), release: new THREE.Vector3(), stretch: 0 }));
 
         this.measure();
     }
@@ -630,7 +632,9 @@ export class Walker {
 
         now.y = ground;
 
-        if (onGround && !foot.planted) {
+        const landing = onGround && !foot.planted;
+
+        if (landing) {
             foot.planted = true;
             foot.pivot = pivot;
             foot.lock.copy(now);
@@ -711,8 +715,10 @@ export class Walker {
         _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
         _hip.setFromMatrixPosition(this.rig.bone(`${side}UpLeg`).matrixWorld);
 
-        // (As far as it reaches, or as straight as the walk has it)
-        const reach = Math.max(this.reaches[i] * REACH * object.getWorldScale(_scale).y, _target.distanceTo(_hip));
+        // (As far as it reaches, or as straight as the walk has it, or as it landed: below)
+        const scale = object.getWorldScale(_scale).y;
+        const stretch = foot.planted && !landing ? foot.stretch : 0;
+        const reach = Math.max(this.reaches[i] * Math.max(REACH, stretch) * scale, _target.distanceTo(_hip));
 
         _target.y += lift;
 
@@ -736,6 +742,20 @@ export class Walker {
         _target.add(c);
         object.worldToLocal(_target);
         this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
+
+        // (Landing further out than the leg reaches, running, the foot's planted where it came
+        // down, not where the stride would have put it: it doesn't snap there the moment after.
+        // And the leg may stay as straight as it came down while the foot's down, as the body
+        // comes over it: held to REACH, it was drawn in the moment after, and the foot slid along
+        // under it)
+        if (landing && s > 0) {
+            this.#contact(i, foot.pivot, _under);
+            foot.lock.x = _under.x;
+            foot.lock.z = _under.z;
+            foot.stretch = r > 0.5 ? Math.min(1, _hip.distanceTo(_landed.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld)) / (this.reaches[i] * scale)) : 0;
+        } else if (landing) {
+            foot.stretch = 0;
+        }
 
         // (Planted only where a fall's clip plants it, a foot its hip can't keep it at within its
         // range is let go of, the hip held to its range: it goes with the body as it falls, and
