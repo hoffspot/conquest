@@ -13,7 +13,7 @@
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { drawBuildingIcon } from "./mapicons.js";
-import { grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
+import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
 const PIXELS = 4;
@@ -437,6 +437,13 @@ export class WorldMap {
 
         this.#drawFog(ox, oy, across, ratio);
 
+        // The fords where the player's been: further out than the chunks are drawn square by
+        // square (which have them marked as the minimap has: minimap.js fordMark), as many stones
+        // across as there's room for
+        if (view.scale > DETAIL_FROM && view.scale <= NAMES_FROM) {
+            this.#fords(at, width, height);
+        }
+
         // The settlements' names, where the player's been
         const names = [];
 
@@ -667,6 +674,38 @@ export class WorldMap {
         }
 
         context.restore();
+    }
+
+    // The fords (core/terrain/waters.js fords) in the chunks the player's been in: a row of three
+    // pale stones straight across the river at each, a few pixels apart whatever the scale
+    #fords(at, width, height) {
+        const { context } = this;
+
+        context.fillStyle = FORD_MARK.colour;
+        context.strokeStyle = FORD_MARK.edge;
+        context.lineWidth = 1;
+
+        for (const { at: [fx, fz], banks: [[ax, az], [bx, bz]] } of this.world.maps?.town?.waters?.fords() ?? []) {
+            if (!this.explored.isVisited(Math.floor(fx / CHUNK), Math.floor(fz / CHUNK))) {
+                continue;
+            }
+
+            const [x, y] = at(fx, fz);
+
+            if (x < -10 || y < -10 || x > width + 10 || y > height + 10) {
+                continue;
+            }
+
+            const long = Math.hypot(bx - ax, bz - az) || 1;
+            const [ux, uy] = [(bx - ax) / long, (bz - az) / long];
+
+            for (const k of [-1, 0, 1]) {
+                context.beginPath();
+                context.arc(x + ux * k * 4, y + uy * k * 4, 1.8, 0, Math.PI * 2);
+                context.fill();
+                context.stroke();
+            }
+        }
     }
 
     // The roads between the settlements, as the plan has them (from cell middle to cell middle)

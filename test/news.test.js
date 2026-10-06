@@ -11,7 +11,7 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../client/js/core/places.js";
-import { CLEAR_REACH, MOST_REQUESTS, offerContract, progressOf } from "../client/js/core/standing.js";
+import { GUILD_REACH, MOST_REQUESTS, offerContract, progressOf } from "../client/js/core/standing.js";
 import { rumourOfRuler, rumoursAt, tell } from "../client/js/core/war/news.js";
 import { TURN_MS, War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -106,7 +106,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         const random = createRandom(2);
         const kinds = () => new Set(Array.from({ length: 60 }, () => offerContract({ war, town: town.id, giver, random })?.kind));
         // (A place near held by outlaws or the dead: to be cleared)
-        const occupied = placesOf(plan).some((place) => Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= CLEAR_REACH && PLACE_BANDS[holderOf(plan, place, undefined, war.turn)]);
+        const occupied = placesOf(plan).some((place) => Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= GUILD_REACH && PLACE_BANDS[holderOf(plan, place, undefined, war.turn)]);
         const clear = occupied ? ["clear"] : [];
 
         assert.deepEqual([...kinds()].sort(), ["beasts", ...clear, "parts"].sort());

@@ -35,6 +35,7 @@ import { aqueductMaking } from "./art/kits/aqueducts.js";
 import { bridgeGrowth, stoneBridgeMaking } from "./art/kits/bridges.js";
 import { ARCHES, legsOf } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
+import { fordParts, fordsMesh } from "./art/kits/fords.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
 import { disposeChunkGround, disposeGrass, FIELDS_CLEAR, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { grassLooks } from "./grassmap.js";
@@ -856,6 +857,13 @@ export class Chunks {
 
         if (stones.length) {
             object.add(stepsMesh(stones, (x, y) => this.overworld.biomeAt(x, y), [chunk.x0, chunk.y0]));
+        }
+
+        // The ways over its fords: stepping stones, and a fallen trunk in wooded lands (kits/fords.js)
+        const fords = this.overworld.waters?.fordsNear ? fordsMesh(fordParts(this.overworld.waters.fordsNear(cx, cy), { groundAt: this.groundAt, landAt: (x, y) => this.overworld.biomeAt(x, y) }, [chunk.x0, chunk.y0, chunk.x0 + CHUNK, chunk.y0 + CHUNK]), [chunk.x0, chunk.y0]) : null;
+
+        if (fords) {
+            object.add(fords);
         }
 
         yield;

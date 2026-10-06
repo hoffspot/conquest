@@ -411,6 +411,8 @@ describe("the settlements ahead of the player, laid out off the page's thread (l
         const laid = settlements.of(place);
 
         assert.notEqual(laid.town, elsewhere);
-        assert.equal(JSON.stringify(laid.town.pieces), JSON.stringify(elsewhere.pieces));
+        // (But for its fingerpost, stood by its road once it's laid out: overworld.js, signposts.js)
+        assert.equal(JSON.stringify(laid.town.pieces.filter(({ name }) => name !== "signpost")), JSON.stringify(elsewhere.pieces));
+        assert.equal(laid.town.pieces.filter(({ name }) => name === "signpost").length, 1);
     });
 });

@@ -534,6 +534,89 @@ function paintWenches() {
     return textureOf(canvas);
 }
 
+/**
+ * How a fingerpost's board is shaped (as a share of its length, its pointed end): the board's
+ * picture is painted to match (fingerboardTexture), and the board built to it (props.js).
+ */
+export const FINGER_TIP = 0.13;
+
+// The letters on a fingerpost's boards: plain, bold and black, to be read from the road
+const roadLetters = (size) => `bold ${size}px Georgia, "Palatino Linotype", "Times New Roman", serif`;
+
+/**
+ * A fingerpost's board's picture (a texture, 5 wide to 1 high: the board's length to its height),
+ * as seen from one side: the board's pointed end `toward` "right" or "left" (seen from the other
+ * side, it points the other way), a town's name on it, how far it is (`km`), and an arrow pointing
+ * the way, in black on weathered pale oak within a dark line round its shape.
+ */
+export function fingerboardTexture({ name, km, toward = "right" }) {
+    return once(`finger|${name}|${km}|${toward}`, () => paintFingerboard(name, km, toward === "left"));
+}
+
+function paintFingerboard(name, km, left) {
+    const [width, height] = [960, 192];
+    const { canvas, context } = canvasOf(width, height);
+    const tip = width * FINGER_TIP;
+    // (Where along it, from its square end: turned round for a board pointing left)
+    const x = (along) => (left ? width - along : along);
+
+    grain(context, width, height, "#c9a97a", "#7a5634", name.length);
+
+    // A dark line round its shape, a little in from its edge
+    context.strokeStyle = "#2a1a0e";
+    context.lineWidth = 10;
+    context.lineJoin = "miter";
+    context.beginPath();
+    context.moveTo(x(14), 14);
+    context.lineTo(x(width - tip - 4), 14);
+    context.lineTo(x(width - 16), height / 2);
+    context.lineTo(x(width - tip - 4), height - 14);
+    context.lineTo(x(14), height - 14);
+    context.closePath();
+    context.stroke();
+
+    // The arrow, near the point: a shaft, and its head
+    const [a0, a1] = [width - tip - 150, width - tip + 20];
+    const [mid, shaft, head] = [height / 2, 13, 34];
+
+    context.fillStyle = "#1c120a";
+    context.beginPath();
+    context.moveTo(x(a0), mid - shaft);
+    context.lineTo(x(a1 - 46), mid - shaft);
+    context.lineTo(x(a1 - 46), mid - head);
+    context.lineTo(x(a1), mid);
+    context.lineTo(x(a1 - 46), mid + head);
+    context.lineTo(x(a1 - 46), mid + shaft);
+    context.lineTo(x(a0), mid + shaft);
+    context.closePath();
+    context.fill();
+
+    // How far, before the arrow; the name, the rest of the way (squeezed if it's long)
+    const distance = `${km.toFixed(1)} km`;
+
+    context.textBaseline = "middle";
+    context.font = roadLetters(58);
+
+    const far = context.measureText(distance).width;
+    const [d0, d1] = [a0 - 24 - far, a0 - 24];
+
+    context.textAlign = "left";
+    context.fillText(distance, left ? width - d1 : d0, mid + 3);
+    context.font = roadLetters(92);
+
+    const room = d0 - 40 - 34;
+    const measured = context.measureText(name).width;
+    const squeeze = Math.min(1, room / measured);
+
+    context.save();
+    context.translate(left ? width - 34 - Math.min(room, measured) : 34, mid + 5);
+    context.scale(squeeze, 1);
+    context.fillText(name, 0, 0);
+    context.restore();
+
+    return textureOf(canvas);
+}
+
 /** A material showing a sign's picture (lit like the rest of the town). */
 export function signMaterial(texture, name) {
     const result = new THREE.MeshLambertMaterial({ map: texture });

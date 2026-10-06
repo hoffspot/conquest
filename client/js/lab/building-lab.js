@@ -127,8 +127,18 @@ function structuresOf(seed, people) {
         pieces.push({ kind: "prop", people, name, key: `prop-${people}-${name}-${k}`, w: 2, h: 2, x: wx + 8 + k * 10, y: wallY + 4, facing: 0, seed: seed * 10 + k });
     }
 
-    return { width: Math.ceil(Math.max(x, wx + 36) + 4), height: Math.ceil(wallY + 14), pieces };
+    // (And a fingerpost, as by a town's road out: core/signposts.js, its boards pointing three ways)
+    pieces.push({ kind: "prop", people, name: "signpost", key: `prop-${people}-signpost`, w: 1, h: 1, x: wx + 40, y: wallY + 4, facing: 0, boards: FINGERPOST });
+
+    return { width: Math.ceil(Math.max(x, wx + 44) + 4), height: Math.ceil(wallY + 14), pieces };
 }
+
+// The lab's fingerpost's boards: the nearest town first, each pointing its own way
+const FINGERPOST = [
+    { name: "Langdenwick", km: 0.6, angle: -2.4 },
+    { name: "Mardenmoor", km: 1.4, angle: 0.5 },
+    { name: "Gorgash", km: 2.3, angle: -0.9 },
+];
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep
@@ -204,7 +214,7 @@ function framesOf(pieces) {
     const groups = new Map();
 
     for (const piece of pieces) {
-        const label = piece.kind === "house" ? `house ${piece.type ?? piece.style}` : piece.kind === "prop" ? "stalls" : ["wall", "tower", "gatehouse"].includes(piece.kind) ? "walls" : piece.kind === "tree" ? null : `${piece.kind} ${piece.name ?? ""}`.trim();
+        const label = piece.kind === "house" ? `house ${piece.type ?? piece.style}` : piece.kind === "prop" ? (piece.name === "signpost" ? "fingerpost" : "stalls") : ["wall", "tower", "gatehouse"].includes(piece.kind) ? "walls" : piece.kind === "tree" ? null : `${piece.kind} ${piece.name ?? ""}`.trim();
 
         if (label) {
             const [hw, hd] = [piece.w * 2, piece.h * 2];

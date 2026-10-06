@@ -833,6 +833,13 @@ export function* paintingPatch(world, x0, z0, size, town = null) {
                 mark(context, feature);
             }
 
+            // (And its fords: those whose middles are in it)
+            for (const ford of overworld.waters?.fordsNear(cx, cy) ?? []) {
+                if (Math.floor(ford.at[0] / CHUNK) === cx && Math.floor(ford.at[1] / CHUNK) === cy) {
+                    fordMark(context, ford);
+                }
+            }
+
             yield;
         }
     }
@@ -878,6 +885,38 @@ function outline(context, corners, at) {
     context.beginPath();
     corners.forEach(([x, y], k) => context[k ? "lineTo" : "moveTo"](x + at[0], y + at[1]));
     context.closePath();
+}
+
+/**
+ * How a ford's marked on the maps: a row of pale stones straight across the water, on past it
+ * onto each bank (metres apart, each one's radius and its dark edge's width: big enough to be seen
+ * on the minimap, a metre or so a pixel), so it stands out from the river as a bridge's planks do.
+ */
+export const FORD_MARK = Object.freeze({ colour: "rgb(236, 228, 204)", edge: "rgb(52, 44, 34)", apart: 2.4, radius: 1.05, line: 0.45, beyond: 1 });
+
+/**
+ * A ford (core/terrain/waters.js fordOf) on a map drawn in the world's metres: a row of stones
+ * straight across the water from one bank to the other, where the way over it goes (`size`:
+ * how much bigger each stone and the gaps between them are drawn, for a map further out).
+ */
+export function fordMark(context, { banks: [[ax, ay], [bx, by]] }, size = 1) {
+    const long = Math.hypot(bx - ax, by - ay) || 1;
+    const [ux, uy] = [(bx - ax) / long, (by - ay) / long];
+    const reach = long + 2 * FORD_MARK.beyond;
+    const count = Math.max(2, Math.round(reach / (FORD_MARK.apart * size)) + 1);
+
+    context.fillStyle = FORD_MARK.colour;
+    context.strokeStyle = FORD_MARK.edge;
+    context.lineWidth = FORD_MARK.line * size;
+
+    for (let k = 0; k < count; k++) {
+        const along = -FORD_MARK.beyond + (reach * k) / (count - 1);
+
+        context.beginPath();
+        context.arc(ax + ux * along, ay + uy * along, FORD_MARK.radius * size, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+    }
 }
 
 // The colours of the land's own features on the map: stone grey, wood brown, bushes dark green

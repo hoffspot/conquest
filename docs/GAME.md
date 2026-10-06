@@ -528,8 +528,9 @@ draws anything.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (walking away calls off an attack that hasn't landed yet).
   Told to fight someone, they walk until that enemy is within reach, then attack. A shot needs
-  its target in sight, looked for as far as it reaches: a bow's 18 m, past the 12 m anyone looks
-  round for enemies, so an archer told to fight someone shoots from 18 m.
+  its target in sight, looked for as far as it reaches: a bow's 13.5 m (18 m till the user cut
+  it by a quarter), past the 12 m anyone looks round for enemies, so an archer told to fight
+  someone shoots from 13.5 m.
 - **The orc.** It patrols between its two points, waiting a moment at each end. When it sees the
   player (within 12 squares, in sight) it chases them, finding a new path at most every 0.5 s as
   they move, and attacks whenever they're within reach. If it loses sight of them for 3 seconds it
@@ -597,7 +598,7 @@ would be one line in weapons.js):
 | Wand | bolt | 7 m | 2–6 | 300 | 620 | 1000 | 150 | arcane |
 | Grimoire | fireball | 7 m | 4–9 | 720 | 1100 | 1800 | 250 | fire |
 | War hammer | smash | melee | 6–12 | 640 | 1100 | 1700 | 450 | crush |
-| Bow | arrow | 18 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
+| Bow | arrow | 13.5 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
 | Spiked gauntlets | punch | melee | 2–5 | 170 | 420 | 600 | 80 | punch |
 | Spiked boots | kick | melee | 3–7 | 360 | 760 | 1050 | 220 | kick |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
@@ -1168,7 +1169,12 @@ each block's edges (4 metres of it between two blocks: where hedgerow trees grow
 own things lie and the plough turned). About one block in five is left as pasture, grass all
 over; the rest are in parallel strips, all of a block's one way (east to west or north to
 south), 8 to 20 metres wide as its block has them, a metre's baulk of grass between each and the
-next, and grass where a block runs out with no room for another. Each strip's its own crop
+next, and grass where a block runs out with no room for another. No field comes up to a road,
+a bridge or a settlement's street out through its fields: at least 2 metres of the wild's own
+grass are left between them, edge to edge (the user: "Farm fields should not butt right up
+against roads"; overworld.js `VERGE`). (The fields drawn far off, past the chunks, are worked out
+on the GPU from the fields alone, `FIELDS_GLSL`: the verge, under a pixel there, isn't.) Each
+strip's its own crop
 (`CROP`): ploughed (a third of them), wheat, barley, greens, or fallow (grass). Ploughed and sown
 strips are soil, their furrows running along them (the soil's texture turned for a block's strips
 running north to south); the ground under a sown strip is its crop's colour (`CROP_COLOURS`),
@@ -1296,7 +1302,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     - The water's own colour is what it takes out. The sky and sun are reflected off it, more
       the more glancing the look (Fresnel, after Schlick, 0.02 square on).
   - **The bed** is drawn as packed earth (the land sets soil there, drawn ploughed, whose furrows
-    showed through). The ground reads the water's field too (world/ground.js):
+    showed through); across a ford, along the way over it, as a track's pebbly earth, a bar of it
+    showing under the shallows between the banks trodden bare either side, the grass worn beside
+    it as beside any track (WORLD.md, *Fords*). The ground reads the water's field too
+    (world/ground.js):
     - It's wet, so darker, under the water and a metre and more up its banks.
     - There's no rock at the water's edge or under it: the bed's own ground, not a channel's cut
       edge drawn square by square as cliff. Where it's all but sheer, as the rock a fall drops
@@ -1307,6 +1316,12 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
 
   Water can't be walked into, but can be seen over, except where it's shallow and slow enough to
   wade (fords, lakes' shallows, and mountain streams, stepped across: WORLD.md).
+- **Fords** (world/art/kits/fords.js) are marked so they're seen from afar: stepping stones
+  straight across the water at each, their tops just clear of it (boulders in rocky lands), a
+  fallen tree's trunk across too in wooded lands, no two alike (askew of the stones, tapering
+  from its root to its broken top, bent, knotted, a bare branch or two, torn roots or a snapped
+  stump, barked or weathered bare), and the way over trodden bare up both banks. Only drawn, in
+  no one's way: the ford's waded as it was (WORLD.md, *Fords*).
 - **Waterfalls** (world/falls.js), wherever a river or stream spills over a lip 0.6 m high or
   more:
   - **A sheet** falls from the lip across the river's width. Thrown forward as fast as the water
@@ -1973,7 +1988,9 @@ the adventurers drinking at a guild's tables are patrons who talk as adventurers
 stranger to the town's branch of the guild, and signs the player up as an adventurer
 (remembered, and the player learns `guildMember`: "Rank: Copper. Everyone starts at Copper,
 don't pout!"), and tells of the quest board, the ranks (Copper, Iron, Bronze, Silver, Gold and
-Mithril) and the other branches. The adventurers are wry and give advice ("Be nice to
+Mithril) and the other branches. Asked what's on the board, she lists its notices, up to four
+(`notice1` to `notice4`: what each asks in a few words, and what it pays: docs/WAR.md M8); one
+picked is read in full, and taken, or the player looks at the others. The adventurers are wry and give advice ("Be nice to
 {receptionist}. She decides who gets the good notices.").
 
 **The courtesans' talk** (`TREES.courtesan`) is warm and teasing, all innuendo and nothing
@@ -2597,7 +2614,8 @@ the 128 metres round the player; inside, the whole floor. Each square is coloure
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
 a little variation from square to square; the buildings get a dark edge and a light ridge and
 the trees round crowns, and the land's features marks of their own (boulders grey, fallen trees
-and walls lines, bushes dark green). That's painted four pixels to the metre: the town once, and the world a
+and walls lines, bushes dark green), and each ford a row of pale stones straight across the
+water, on onto its banks (`fordMark`: as plain as a bridge's planks). That's painted four pixels to the metre: the town once, and the world a
 patch 192 metres square at a time round the player, the town's picture laid in it and the other
 settlements' buildings and props painted over their ground the same way. Once the player's 16
 metres from the patch's middle, the next is begun, as far ahead of them again, and painted a step
@@ -2872,8 +2890,10 @@ zoom out. A key in the corner shows the four icons and the fog.
   square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player
   walks into it.
 - **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
-  closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
-  the player, pointing the way they face (inside, at the building they're in).
+  closer), the fords in the chunks they've been in, three pale stones straight across each (from
+  20 metres to a pixel to where the chunks are shown square by square, which have them as the
+  minimap does), the icons over the buildings they've gone into (6 metres to a pixel or closer),
+  and the player, pointing the way they face (inside, at the building they're in).
 - **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
