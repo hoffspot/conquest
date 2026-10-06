@@ -27,7 +27,7 @@ const human = readHumanData();
 // The parts of a Character the actions use (no meshes or textures, which need a DOM)
 function figure(shape = {}) {
     const { positions, joints } = human.shape(shape);
-    const rig = new Rig(human.bones);
+    const rig = new Rig(human.bones, human.landmarks?.rest);
     const object = new THREE.Group();
     let height = 0;
 

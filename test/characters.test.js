@@ -36,7 +36,7 @@ const humanData = human;
 /** The parts of a Character the engine's modules use, without its textures (which need a DOM). */
 function figure(shape = {}, human = humanData) {
     const { positions, joints } = human.shape(shape);
-    const rig = new Rig(human.bones);
+    const rig = new Rig(human.bones, human.landmarks?.rest);
     const object = new THREE.Group();
     let height = 0;
 

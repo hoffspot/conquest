@@ -374,8 +374,8 @@ export const ATTACKS = Object.freeze({
         // (Pinched like a pen, pointing along the fingers: cast with the arm reaching out straight at the enemy)
         variants: [
             variant("flick", WAND,
-                // Tip up and back, the wrist cocked, then flicked at the enemy
-                [0.65, { right: { at: [-0.1, 0.3, 0.3], point: [0, 0.75, -0.65] }, left: FREE, ...spine({ turn: -10, flex: -4 }) }],
+                // Tip up and back (no further back than the wrist cocks), then flicked at the enemy
+                [0.65, { right: { at: [-0.1, 0.3, 0.3], point: [0, 0.85, -0.5] }, left: FREE, ...spine({ turn: -10, flex: -4 }) }],
                 [1, { right: { at: [0.15, -0.12, 1.18], point: [0.05, 0, 1] }, left: DRAW_IN, ...spine({ turn: 8, flex: 4 }) }],
                 [1.45, { right: { at: [0.15, -0.16, 1.16], point: [0.05, -0.08, 1] }, left: DRAW_IN, ...spine({ turn: 8, flex: 4 }) }]),
             variant("jab", WAND,
@@ -426,9 +426,11 @@ export const ATTACKS = Object.freeze({
                 [1, { left: book, right: { at: [0.15, -0.1, 1.12], palm: [0.13, -0.34, 0.93], towards: [0.69, 0.71, 0.16], shape: "open" }, ...spine({ turn: 18, flex: 6 }), Hips: { turn: -10 }, offset: [0, -0.03, 0.07] }],
                 [1.5, { left: book, right: { at: [0.4, -0.2, 0.85], palm: [0.5, -0.3, 0.8], towards: [0.7, 0, 0.7], shape: "relaxed" }, ...spine({ turn: 22, flex: 6 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.05] }]),
             variant("palm push", GRIMOIRE,
-                // Drawn in to the chest, the fire growing, then pushed out at arm's length
-                [0.55, { left: book, right: { at: [0.1, -0.1, 0.28], palm: [0.52, 0.13, 0.84], towards: [0.12, 0.97, -0.22], shape: "cup" }, ...spine({ flex: -3 }), offset: [0, 0, -0.03] }],
-                [0.8, { left: book, right: { at: [0.12, -0.12, 0.24], palm: [0.52, -0.07, 0.85], towards: [0.23, 0.97, -0.07], shape: "cup" }, ...spine({ flex: -4 }), offset: [0, 0, -0.04] }],
+                // Drawn in to the chest, the fire growing, then pushed out at arm's length (drawn
+                // in, the fingers up and a little forward: tipped back, the wrist was wanted 37°
+                // past its range on a longer forearm)
+                [0.55, { left: book, right: { at: [0.1, -0.1, 0.28], palm: [0.52, -0.17, 0.83], towards: [0.12, 0.99, 0.13], shape: "cup" }, ...spine({ flex: -3 }), offset: [0, 0, -0.03] }],
+                [0.8, { left: book, right: { at: [0.12, -0.12, 0.24], palm: [0.52, -0.36, 0.77], towards: [0.23, 0.94, 0.27], shape: "cup" }, ...spine({ flex: -4 }), offset: [0, 0, -0.04] }],
                 [0.9, { right: { at: [0.11, -0.07, 0.66], palm: [0.26, -0.17, 0.95], towards: [0.14, 0.98, 0.14], shape: "cup" } }],
                 [1, { left: book, right: { at: [0.1, -0.02, 1.08], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ flex: 6 }), offset: [0, -0.03, 0.08] }],
                 [1.5, { left: book, right: { at: [0.1, -0.05, 1.04], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ flex: 6 }), offset: [0, -0.03, 0.07] }]),
@@ -705,8 +707,10 @@ export const ATTACKS = Object.freeze({
         cast: true,
         variants: [
             variant("palm thrust", CAST,
-                // Drawn back by the left shoulder, then thrust open-palmed at the enemy
-                [0.55, { left: { at: [0.2, 0.05, 0.3], palm: [-0.11, 0.28, 0.95], towards: [-0.01, 0.96, -0.28], shape: "relaxed" }, ...spine({ turn: 18, flex: -4 }), offset: [0, 0.01, -0.03] }],
+                // Drawn back by the left shoulder, then thrust open-palmed at the enemy (drawn back,
+                // the palm turned a little out to the left and the fingers up: square to the front,
+                // the wrist was wanted 45° past its range on a longer forearm)
+                [0.55, { left: { at: [0.2, 0.05, 0.3], palm: [0.22, 0.11, 0.96], towards: [-0.11, 0.99, -0.09], shape: "relaxed" }, ...spine({ turn: 18, flex: -4 }), offset: [0, 0.01, -0.03] }],
                 [1, { left: { at: [-0.1, 0.02, 1.08], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ turn: -12, flex: 6 }), offset: [0, -0.02, 0.06] }],
                 [1.5, { left: { at: [-0.1, -0.02, 1.04], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ turn: -10, flex: 6 }), offset: [0, -0.02, 0.05] }]),
             variant("pointed from above", CAST,
@@ -740,8 +744,8 @@ export const ATTACKS = Object.freeze({
             // Raising a tankard (held in the right hand by its handle) high in a toast, tipping back
             // as it rises (as one held high does), then drinking from it, key 1 at the top of it
             variant("toast", { right: tankard, ...spine({}), Head: { flex: 0 } },
-                [1, { right: { at: [0.1, 0.5, 0.55], point: [0.05, 0.8, -0.6] }, ...spine({ flex: -6 }), Head: { flex: -12 } }],
-                [1.25, { right: { at: [0.1, 0.54, 0.52], point: [0.05, 0.78, -0.62] }, ...spine({ flex: -7 }), Head: { flex: -12 } }],
+                [1, { right: { at: [0.1, 0.54, 0.53], point: [0.05, 0.8, -0.6] }, ...spine({ flex: -6 }), Head: { flex: -12 } }],
+                [1.25, { right: { at: [0.1, 0.6, 0.5], point: [0.05, 0.78, -0.62] }, ...spine({ flex: -7 }), Head: { flex: -12 } }],
                 // (Drinking: the rim to the lower lip, the tankard tipped and the head back)
                 [1.6, { right: { at: [0.27, 0.46, 0.33], point: [0.35, 0.55, -0.75] }, ...spine({ flex: -8 }), Head: { flex: -22 } }],
                 [1.85, { right: { at: [0.21, 0.49, 0.31], point: [0.35, 0.5, -0.8] }, ...spine({ flex: -8 }), Head: { flex: -24 } }]),
@@ -931,9 +935,12 @@ const BARMAID_RESTS = [
         [0.5, { left: akimbo(-1), Hips: { obliquity: 5, turn: -6 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.03, -0.01, 0] }],
         [1.6, { left: akimbo(-1), Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -7 }), Head: { bend: 12 }, offset: [0.035, -0.01, 0] }]),
     variant("tucking back her hair", { ...spine({}), Head: { bend: 0, flex: 0 } },
-        // The hand up to the side of the head, tucking the hair back behind the ear
-        [0.55, { left: { at: [-0.16, 0.36, 0.14], palm: [-0.95, 0.07, 0.29], towards: [-0.21, 0.54, -0.82], shape: "relaxed" }, Head: { bend: 10, flex: 4 } }],
-        [1, { left: { at: [-0.12, 0.34, -0.02], palm: [-0.99, 0.14, 0], towards: [0.04, 0.3, -0.95], shape: "relaxed" }, Head: { bend: 12, flex: 2 } }],
+        // The hand up to the side of the head, tucking the hair back behind the ear, the fingers up
+        // past it (laid back along the head, the wrist was wanted 50° past its range on a longer
+        // forearm); then brought out to the side on its way down, not across the chest
+        [0.55, { left: { at: [-0.16, 0.36, 0.14], palm: [-0.95, -0.03, 0.3], towards: [-0.21, 0.79, -0.59], shape: "relaxed" }, Head: { bend: 10, flex: 4 } }],
+        [1, { left: { at: [-0.12, 0.34, -0.02], palm: [-0.99, 0.13, 0.05], towards: [0.04, 0.61, -0.79], shape: "relaxed" }, Head: { bend: 12, flex: 2 } }],
+        [1.2, { left: { at: [0.12, 0.05, 0.28] } }],
         [1.4, { left: { at: [0.1, -0.4, 0.35] }, Head: { bend: 4, flex: 0 } }]),
     variant("a curtsy", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
         // Bobbing down, the head bowed, the skirt held out to the side
@@ -1586,7 +1593,7 @@ export const DRAWS = Object.freeze({
                 // down into it along its length
                 [0.4, { left: { at: [-0.2, 0.45, 0.45], point: [-0.77, 0.32, 0.59], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] }, right: { at: [0.2, -0.7, 0.2], pronate: 40, shape: "relaxed" } }],
                 [0.58, { left: { at: [0.35, 0.15, 0.3], point: [0.6, 0.6, -0.5] } }],
-                [0.75, { left: { at: [0.15, 0.45, -0.3], point: [-0.2, -0.95, -0.1], elbow: OVER_LEFT } }],
+                [0.75, { left: { at: [0.15, 0.45, -0.3], point: [-0.2, -0.86, -0.42], elbow: OVER_LEFT } }],
                 [1, { left: { at: [-0.15, 0.15, -0.25], sheath: 1, elbow: [0.65, 0.75, 0] } }],
                 [1.12, { left: { at: [0.3, 0.2, 0.35], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
                 [1.35, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
