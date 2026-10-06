@@ -4714,3 +4714,17 @@ converted data is to be measured in M8 against today's hm08 data.
     The test's limit for the priest is now 1.5 cm (was 3).
   - **Next:** sitting on Vitruvian's longer thighs (with the seated tankards cleared), its
     baseline, and the game switched to it.
+- **2026-10-06, sitting on Vitruvian's longer thighs** (§10; docs/CHARACTERS.md *Sitting*).
+  - **The knee raised first** (`locomotion.js` `#onFloor`, `SEAT_RISE`): a seated foot the pose
+    puts into the floor was brought onto it only by swinging the shin forward, the thigh level on
+    the bench. Vitruvian's legs are longer (its knee 4 cm higher, the hip joint at 57.6% of the
+    height against MakeHuman's 53.6%), so a drinker's shins leaned 27° out in front (MakeHuman's
+    14°). Now the knee rises first, the thigh tipping up off the seat, by up to 4 cm (at 1.7 m
+    tall), and the shin swings forward for the rest: 11° and 1°. The tallest bodies still lean
+    theirs (Vitruvian's tallest man 49° → 42°); lifted all the way, the knees would meet the
+    table.
+  - **The tankard** a patron holds before the chest is held about 6 cm higher and 3 cm further
+    out (`tankard`, a tenth and a twentieth of an arm's length), and banged down on the table
+    further out, clear of a thigh tipped up (held where it was, a 5 cm raise put the thighs into
+    it on 24 more pairs on Vitruvian).
+  - **Next:** Vitruvian's baseline, and the game switched to it.

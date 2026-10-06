@@ -79,7 +79,9 @@ const akimbo = (side) => ({ at: [side * -0.08, -0.68, 0.02], palm: [side * 0.98,
 
 // The right hand held out in front, palm up, the index finger curled `index` degrees (beckoning)
 const BECKONING = (index) => ({ at: [0.04, -0.12, 0.72], palm: [0, 1, 0.1], towards: [0.05, 0.1, 1], shape: "beckon", index });
-const tankard = { at: [0.12, -0.46, 0.5], point: [0, 1, 0.08] };
+// A tankard held upright by its handle before the chest (sitting, clear of the thigh as the knee
+// rises: locomotion.js SEAT_RISE)
+const tankard = { at: [0.12, -0.36, 0.56], point: [0, 1, 0.08] };
 
 // Sitting on a bench: the thighs level and the shins upright, leaning a little over the table,
 // the free arm resting on it; the pelvis lowered to the seat (SEAT: metres above the floor, and
@@ -1111,9 +1113,9 @@ const BASE_RESTS = {
         variant("thumping the table", TOASTING,
             // The tankard banged down on the table, twice, cheering
             [0.45, { right: { at: [0.16, -0.22, 0.58], point: [0, 1, 0.1] }, ...spine({ flex: -4 }), Head: { flex: -8 } }],
-            [1, { right: { at: [0.16, -0.58, 0.66], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
+            [1, { right: { at: [0.16, -0.56, 0.72], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
             [1.25, { right: { at: [0.16, -0.25, 0.6], point: [0, 1, 0.1] }, ...spine({ flex: -2 }), Head: { flex: -6 } }],
-            [1.5, { right: { at: [0.16, -0.58, 0.66], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
+            [1.5, { right: { at: [0.16, -0.56, 0.72], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
             [1.8, { right: tankard, ...spine({}), Head: { flex: 0 } }]),
         variant("looking about", { ...spine({}), Neck: { turn: 0 }, Head: { turn: 0, flex: 0 } },
             // Over one shoulder, then the other
