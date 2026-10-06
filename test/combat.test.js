@@ -150,8 +150,9 @@ describe("weapons (weapons.js)", () => {
 
     it("picks an attack that reaches: ranged weapons out to their range", () => {
         assert.equal(chooseAttack("bow", [0, 0], [9, 0])?.id, "arrow");
-        assert.equal(chooseAttack("bow", [0, 0], [18, 0])?.id, "arrow");
-        assert.equal(chooseAttack("bow", [0, 0], [18, 3]), null);
+        assert.equal(chooseAttack("bow", [0, 0], [13, 0])?.id, "arrow");
+        assert.equal(chooseAttack("bow", [0, 0], [14, 0]), null);
+        assert.equal(chooseAttack("bow", [0, 0], [13, 4]), null);
         assert.equal(chooseAttack("wand", [0, 0], [4, 5])?.id, "bolt");
         assert.equal(chooseAttack("sword", [0, 0], [2, 0]), null);
     });
@@ -465,13 +466,14 @@ describe("the battle (battle.js)", () => {
         assert.ok(hit.time - shot.time >= (8 / WEAPONS.bow.attacks[0].projectile.speed) * 1000 - STEP_MS, "after flying 8 metres");
     });
 
-    it("shoots with a bow from 18 metres, past where anyone looks round for enemies, without closing in", () => {
-        assert.equal(WEAPONS.bow.attacks[0].reach, 18);
+    it("shoots with a bow from 13.5 metres, past where anyone looks round for enemies, without closing in", () => {
+        assert.equal(WEAPONS.bow.attacks[0].reach, 13.5);
 
         const battle = new Battle(open(30, 5), { seed: 5 });
         const player = battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 2] });
 
-        battle.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [2 + SIGHT + 5, 2] });
+        // (13 m off: within its reach, past the 12 anyone looks round)
+        battle.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [2 + SIGHT + 1, 2] });
         assert.equal(battle.canSee(player, battle.actor("dummy")), false, "(further than anyone looks round)");
         battle.command("player", { type: "engage", target: "dummy" });
 

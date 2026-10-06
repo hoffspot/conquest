@@ -1329,7 +1329,9 @@ export function chunkGround(overworld, chunk, land, step = 1) {
 }
 
 // A square's ground as it's drawn: under a lake or a river, packed earth (the land sets soil
-// there, which is drawn ploughed, in furrows, and shows through the shallows)
+// there, which is drawn ploughed, in furrows, and shows through the shallows); but on the way over
+// a ford, the pebbly earth of a track, as up the banks either side (core/overworld.js onFordWay),
+// the grass beside it worn as beside any track
 function bedOf(overworld, x, y) {
     const kind = overworld.squares.ground(x, y);
 
@@ -1346,7 +1348,7 @@ function bedOf(overworld, x, y) {
         return chunk.bridge[k] ? GROUND.planks : kind;
     }
 
-    return chunk.water[k] ? GROUND.courtyard : kind;
+    return !chunk.water[k] ? kind : overworld.onFordWay?.(x, y) ? GROUND.road : GROUND.courtyard;
 }
 
 // How far each chunk's ground hangs down round its edges (metres): where it meets a chunk drawn

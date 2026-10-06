@@ -309,7 +309,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         assert.ok(progress.abilities().includes("aimedShot") && progress.knows("stun") && progress.knows("vigor"));
 
-        // Further than a bow reaches (18 m), and than a spell does (16 to 18)
+        // Further than a bow reaches (13.5 m), and than a spell does (16 to 18)
         put(orc, player.map, [player.square[0] + 21, player.square[1]]);
 
         for (const command of [{ type: "ability", ability: "aimedShot", target: "orc" }, { type: "cast", spell: "stun", target: "orc" }, { type: "cast", spell: "vigor", target: "orc" }]) {

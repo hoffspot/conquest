@@ -321,6 +321,27 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   navigation mesh as a road's are, and found as the settlement's laid out, so a chunk is the same
   whichever chunks were made first. Any other square of its streets over the land's water is the
   water's: waded where the land's would be, else not walked.
+- **Fingerposts** (`core/signposts.js`; the user: "a wooden road sign with nearest town names on
+  the roads leading out of town"): each town, city and capital has one beside its main road out
+  (its biggest: a trade road, a road, then a track), always outside the ground of every
+  settlement (past its fields, and its walls and gatehouse if it has them), so walled peoples'
+  cities have theirs on the world's road past their gate. It stands on the first stretch of that
+  road past the edge of its ground, 6 m along it to its right going out if there's room, else its
+  left, else further along (up to 40 m: `SIGNPOST.past`), or a little further off the road (up
+  to 5 m: `SIGNPOST.aside`), clear of every settlement's ground, the water, its own roads and the
+  roads as planned. If its main road has no room anywhere, its next biggest is tried. It's
+  raised as the road out is joined to the town's streets (`Overworld#join`, `#raisePost`; the
+  start town's when its roads are laid), looking at nothing that's laid as the world's made (the
+  trails, the other settlements' joins), so it's the same whichever chunks are made first. It's a
+  prop of its town's (`signpost`, one plot): drawn with the chunk its middle's in, its four
+  squares blocked (`Overworld.fingerposts`), the navigation mesh walking round its foot as it's
+  drawn (`setpieces/outlines.js`). A squared oak post 3 m tall on a stone foot, capped, with a
+  board for each of the nearest three other towns, cities and capitals (`boardsFor`), the nearest
+  at the top, all above anyone's head: each board points straight at its town, its end shaped
+  to a point, and is lettered on both faces, the right way round from either side, with the
+  town's name, how far it is from the post as the crow flies, to a tenth of a km, and an arrow
+  towards the point (`world/art/kits/props.js` `signpost`, `kits/signs.js` `fingerboardTexture`).
+  The building lab's *structures* has one to look at.
 - **Each people's castle, special places and watchtowers** (`core/sites.js`, `Sites`): the
   plan's castle for each people, their three buildings of their own (the cat folk's sun temple,
   pride rock and watering hole; the orcs' war totem, skull pit and fighting pit; the lizard
@@ -382,6 +403,44 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   - **Fords:** about one in five calm cells of a small river (half-width up to 3 m) is a ford.
     Over the middle half of its stretch the river is 1.4 times as wide and 0.35 m deep over
     gravel, so slow and shallow enough to wade.
+    - **Listed** (`Waters.fordOf`, `fordsNear`, `fords`): each ford's middle, where it's
+      fullest, where it lies in the world, and its banks straight across the river from it as
+      the river lies there (the river's wandering leaves them within a metre or so of the water's
+      edge); worked out once each.
+    - **The way over** (the user: "mark fords on the ground so they're legible at a distance"):
+      straight across each ford at its middle, from bank to bank and 6 m on up each
+      (`FORD_WAY`), 2.2 m wide, the banks' ground is a foot track's (`Overworld#fordWayAt`:
+      `GROUND.road`, its `road` still null, so no bridge is built and no road's rules apply). The
+      water across it stays the ford's, waded; its bed's drawn as the track's (`onFordWay`), so
+      it shows as a bar of pebbly earth under the shallows. Trees, the land's things and the
+      fields keep off it as off a road, the fields a verge off it (`VERGE`). It's worked out from
+      the plan's rivers alone, so the same whichever chunks are made first.
+    - **Drawn** (`world/art/kits/fords.js`): a row of stepping stones straight across each,
+      0.85 m apart, from half a metre up one bank to half a metre up the other, their tops just
+      clear of the water, of the land's own rock (`LOOKS`), and half as big again in rocky lands
+      (`ROCKY`: the mountains, the badlands, volcanic land and the snows); in wooded lands
+      (`WOODED`: woods, the darkwood, the elfwood and jungle) a fallen tree's trunk lies across it
+      too, each its own (`fallenTrunk`, from where the ford is; the user: "Fallen logs would not
+      look identical and be positioned identically each time"):
+      - **where it lies:** askew of the stones by up to about 25° either way, mostly downstream
+        of them but a quarter of the time up, a way along the ford, its ends up the banks 0.6 to
+        2.4 m each, and always at least 1.5 m clear of the stones, all along it however it lies;
+      - **its shape:** 0.22 to 0.38 m thick at its root end, flared there, tapering to two-fifths
+        to three-fifths of that at its broken top (its root at either end); bent a little and
+        wandering ring by ring, out of round, sagging between the banks onto whatever's under it;
+      - **what's on it:** two to five knots (the cut-off stubs of branches long gone), one to
+        three bare branches sticking up and out towards its top (drooping, now and then forked,
+        any that would reach over the stones turned the other way), and, where it was torn up
+        rather than snapped (a little over half the time), three to five broken roots splayed
+        back from its root end; its broken ends jagged, long splinters and short;
+      - **its wood:** bark, darker underneath; or, three times in ten, lain long enough to have
+        lost it, weathered grey; each a little lighter or darker than the next.
+
+      They're only drawn: nothing's blocked and nothing's in the navigation mesh (the user: "the
+      art must not be baked solid"), so the ford's walked as it was, across its water.
+    - **On the maps:** a row of pale stones straight across the water (`minimap.js` `fordMark`),
+      on the minimap and the world map near in, as bridges are; and on the world map further
+      out, three stones across each ford in the chunks the player's been in.
   - **Wading:** water up to 0.5 m deep, where its depth times its speed is under 0.6 (the
     flood-safety limit for an adult), can be waded: fords, and the shallows of lakes and the
     sea. Its squares are open, and the navigation mesh walks it as a ford. A river is waded only
@@ -959,6 +1018,17 @@ It also checks the rivers:
 
 `test/navigation.test.js` wades across a ford, straight over, and keeps out of the river's deep
 water beside it, and steps across a mountain stream running too fast to wade.
+
+`test/fords.test.js` checks the fords made to be seen: each one's middle, as deep and wide as a
+ford, its banks straight across it near the water's edge; those near a chunk listed; the way over
+each a track's ground up both banks and none of its water, the same whichever chunks are made
+first, the fields a verge off it and nothing standing on it; the stepping stones straight across
+it over the water, bigger in rocky lands; in wooded lands only, a fallen trunk, forty of them no
+two alike (askew either way, either side of the stones, barked or bare, torn or snapped, their
+roots at either end, their lengths and branches their own), each up both banks, clear of the
+stones, tapering, bent, knotted, lying on the ground; every face facing out; and the maps' row of
+stones across it. `test/signposts.test.js` checks the
+fingerposts (*Fingerposts*, above).
 
 `test/world-plan.test.js` checks, for three seeds:
 

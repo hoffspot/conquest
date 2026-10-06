@@ -103,6 +103,8 @@ export const PROPS = Object.freeze({
     target: [1, 1],
     tent: [2, 2],
     lamppost: [1, 1],
+    // (The fingerpost by a town's main road out: core/signposts.js stands it, its boards its own)
+    signpost: [1, 1],
 });
 
 /**

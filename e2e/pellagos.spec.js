@@ -2269,7 +2269,7 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
     expect(temple.place).toBe("temple");
 });
 
-test("the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, and she signs the player up", async ({ page }) => {
+test("the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, she signs the player up, and gives them a package to carry off its board of four", async ({ page }) => {
     // (Seed 2's town's guild)
     await playing(page, "/?play&seed=2");
 
@@ -2324,7 +2324,25 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Good to know."));
         conversation?.choose(conversation.choices.findIndex(({ text }) => text.includes("register")));
 
+        const registered = conversation?.line ?? null;
+
+        // What's on the board: its notices, the package among them, read and taken
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Thank you!"));
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Anything on the board for me?"));
+
+        const notices = conversation?.choices.map(({ text }) => text) ?? [];
+
+        conversation?.choose(notices.findIndex((text) => text.startsWith("A package for")));
+
+        const notice = conversation?.line ?? null;
+
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text === "I'll take it."));
+
         return {
+            notices,
+            notice,
+            taken: conversation?.line ?? null,
+            carried: game.host.players.get(game.me).standing.requests.map(({ kind, target }) => ({ kind, town: target.name })),
             offers,
             buys,
             map: player.map,
@@ -2333,7 +2351,7 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
             sheathed: folk.filter(({ role }) => role === "adventurer").map(({ id }) => game.avatars.get(id).character.sheathed),
             roles: folk.map(({ role }) => role),
             acts,
-            registered: conversation?.line ?? null,
+            registered,
             place: session.sound.place,
         };
     });
@@ -2349,6 +2367,146 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.buys).toMatch(/^Anything you drag back from the wild! Pelts, fangs, scales/);
     expect(guild.registered).toMatch(/^Wonderful! Name: .+\. Rank: Copper\./);
     expect(guild.place).toBe("guild");
+
+    // Four notices on the board (docs/WAR.md M8), each in a few words and what it pays, the package
+    // last; it read in full, where it goes and which way that leads, and taken
+    expect(guild.notices).toHaveLength(5);
+    expect(guild.notices.slice(0, 4).every((text) => /^.+, for \d+ gold(, and the Tome of [^.]+)?\.$/.test(text))).toBe(true);
+    expect(guild.notices[3]).toMatch(/^A package for /);
+    expect(guild.notices[4]).toBe("None of them, thanks.");
+    expect(guild.notice).toMatch(/^The guild in .+ wants this package, sealed, by someone who'll get it there: [\d.]+ km .+, on the way to .+ at .+\./);
+    expect(guild.taken).toMatch(/^(It's yours!|Wonderful!)/);
+    expect(guild.carried).toEqual([{ kind: "courier", town: guild.notices[3].match(/^A package for (.+), for /)[1] }]);
+});
+
+test("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    const post = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const piece = game.world.town.pieces.find(({ name }) => name === "signpost");
+        const [ox, oy] = game.world.origin;
+        const { at, width, height } = game.world.stamp;
+        const drawn = [];
+
+        session.view.scene.traverse((node) => {
+            if (node.isMesh && node.material.name?.startsWith("finger ")) {
+                drawn.push(node.material.name);
+            }
+        });
+
+        return {
+            at: [piece.x + ox, piece.y + oy],
+            outside: piece.x + ox < at[0] || piece.y + oy < at[1] || piece.x + ox >= at[0] + width || piece.y + oy >= at[1] + height,
+            blocked: game.world.maps.town.squares.blocked(piece.x + ox, piece.y + oy),
+            boards: piece.boards.map(({ name, km }) => ({ name, km })),
+            nearest: game.world.plan.places
+                .filter((place) => place !== game.world.start && ["town", "city", "capital"].includes(place.kind))
+                .sort((a, b) => Math.hypot(a.at[0] - piece.x - ox, a.at[1] - piece.y - oy) - Math.hypot(b.at[0] - piece.x - ox, b.at[1] - piece.y - oy))
+                .slice(0, 3)
+                .map(({ name }) => name),
+            drawn: drawn.sort(),
+        };
+    });
+
+    expect(post.outside).toBe(true);
+    expect(post.blocked).toBe(true);
+    expect(post.boards.map(({ name }) => name)).toEqual(post.nearest);
+    expect(post.boards.every(({ km }) => km > 0)).toBe(true);
+    expect(post.drawn).toEqual(post.nearest.flatMap((name) => [`finger ${name}`, `finger ${name} back`]).sort());
+});
+
+test("a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (Beside the ford in the woods south of the town: test/navigation.test.js's)
+    const ford = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const map = game.world.maps.town;
+        const found = map.waters.fords().sort((a, b) => Math.hypot(a.at[0] - 3112.5, a.at[1] - 4374.5) - Math.hypot(b.at[0] - 3112.5, b.at[1] - 4374.5))[0];
+        const [[ax, ay], [bx, by]] = found.banks;
+        const long = Math.hypot(bx - ax, by - ay);
+        const [x, y] = [Math.floor(ax - ((bx - ax) / long) * 3), Math.floor(ay - ((by - ay) / long) * 3)];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+        game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
+        game.previous.set("player", { x: player.x, y: player.y });
+
+        return { at: found.at, banks: found.banks, bank: [x, y] };
+    });
+
+    expect(await playUntil(page, () => {
+        let found = false;
+
+        window.pellagos.session.view.scene.traverse((node) => (found ||= node.name === "fords"));
+
+        return found;
+    }, { seconds: 60 })).toBe(true);
+
+    const seen = await page.evaluate(({ at, banks, bank }) => {
+        const { game, session } = window.pellagos;
+        const map = game.world.maps.town;
+        const meshes = [];
+
+        session.view.scene.traverse((node) => node.name === "fords" && meshes.push(node));
+
+        // (The stones over the water: walked through, the ford's squares open; the bank trodden bare)
+        const middle = [Math.floor(at[0]), Math.floor(at[1])];
+
+        return {
+            near: meshes.some((mesh) => {
+                mesh.updateWorldMatrix(true, false);
+                mesh.geometry.computeBoundingBox();
+
+                const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+
+                return box.min.x < at[0] && box.max.x > at[0] && box.min.z < at[1] && box.max.z > at[1];
+            }),
+            open: !map.squares.blocked(...middle),
+            trodden: map.squares.ground(...bank),
+            road: game.world.maps.town.landAt(...bank).road,
+            wade: map.wades?.(...middle) ?? null,
+            banks: banks.length,
+        };
+    }, ford);
+
+    expect(seen.near).toBe(true);
+    expect(seen.open).toBe(true);
+    expect(seen.trodden).toBe(1);
+    expect(seen.road).toBe(null);
+    expect(seen.banks).toBe(2);
+
+    // On the minimap: a row of pale stones across the river (its picture of the world round the
+    // player, four pixels to the metre: painted a step at a time, so played on till it's there)
+    const minimap = await page.evaluate(({ at }) => {
+        const { game } = window.pellagos;
+        const covers = () => {
+            const patch = game.minimap.patch;
+
+            return patch && at[0] > patch.x + 2 && at[1] > patch.z + 2 && at[0] < patch.x + patch.image.width / 4 - 2 && at[1] < patch.z + patch.image.height / 4 - 2 && !game.minimap.painting;
+        };
+
+        for (let k = 0; k < 400 && !covers(); k++) {
+            game.minimap.drawn = -Infinity;
+            game.advance(0.05);
+        }
+
+        const { x, z, image } = game.minimap.patch;
+        const pixels = image.getContext("2d").getImageData(Math.round((at[0] - x) * 4) - 8, Math.round((at[1] - z) * 4) - 8, 17, 17).data;
+        let pale = 0;
+
+        for (let k = 0; k < pixels.length; k += 4) {
+            pale += pixels[k] > 200 && pixels[k + 1] > 190 && pixels[k + 2] > 160 ? 1 : 0;
+        }
+
+        return { covered: covers(), pale };
+    }, ford);
+
+    expect(minimap.covered).toBe(true);
+    expect(minimap.pale).toBeGreaterThan(10);
 });
 
 // (How often each is posed goes by how tall they look on the screen, in its pixels: at the

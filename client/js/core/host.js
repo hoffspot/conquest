@@ -29,7 +29,7 @@ import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, RISING, War } from "./war/war.js";
@@ -3953,7 +3953,8 @@ export class Host {
         }
 
         return player.standing.requests.filter((request) => {
-            if (request.kind === "message") {
+            // (A letter, or a guild's package, for them)
+            if (request.kind === "message" || request.kind === "courier") {
                 return request.target.town === post.town && request.target.post === post.post;
             }
 
@@ -3995,25 +3996,30 @@ export class Host {
                 return refuse("requests");
             }
 
-            // (What they offer holds for the turn: asking again doesn't change it)
+            // (What they offer holds for the turn, until it's all taken: asking again doesn't
+            // change it. A guild's board has several notices up, its courier work among them: any
+            // can be taken, by what it asks, and the rest stay)
             const kept = player.offers[post.id];
 
             if (effect.work === "ask") {
-                const offer = post.post === "guild" ? offerContract : offerRequest;
-                const request = kept?.turn === this.war.turn ? kept.request : offer({ war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random });
+                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random };
+                const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? offerBoard(asked) : [offerRequest(asked)].filter(Boolean);
 
-                player.offers[post.id] = { turn: this.war.turn, request };
+                player.offers[post.id] = { turn: this.war.turn, board };
 
-                return request ? { ok: true, request: structuredClone(request) } : refuse("work");
+                return board.length ? { ok: true, request: structuredClone(board[0]), board: structuredClone(board) } : refuse("work");
             }
 
-            if (!kept?.request) {
+            const chosen = kept?.board.find((offered) => effect.which === undefined || objectiveOf(offered) === effect.which);
+
+            if (!chosen) {
                 return refuse("work");
             }
 
-            const taken = standing.take(kept.request);
+            const taken = standing.take(chosen);
 
-            delete player.offers[post.id];
+            kept.board = kept.board.filter((offered) => offered !== chosen);
+
             this.#event("request", { id: player.id, change: "taken", request: structuredClone(taken) });
 
             return { ok: true, request: structuredClone(taken) };
@@ -4232,15 +4238,29 @@ export class Host {
     }
 
     // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the
-    // wild. One of their oppressors' soldiers stirs their people (M10)
+    // wild (a guild's, only near its town: standing.js GUILD_REACH). One of their oppressors'
+    // soldiers stirs their people (M10)
     #felled(player, fallen) {
         if (fallen.kind === "soldier" && this.war?.oppressor(player.realm) && this.war.liege(fallen.team) === this.war.oppressor(player.realm)) {
             this.#stir(player, STIR.soldier);
         }
 
+        const at = this.#whereIs(player);
+
         for (const request of [...player.standing.requests]) {
             if (request.state !== "open") {
                 continue;
+            }
+
+            const near = request.target.near;
+
+            if (near) {
+                const place = this.#placeOf(near.town);
+                const middle = place ? this.#middleOf(place) : near.at;
+
+                if (!at || hypot(at[0] - middle[0], at[1] - middle[1]) > near.reach) {
+                    continue;
+                }
             }
 
             const counts =

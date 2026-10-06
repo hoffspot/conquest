@@ -51,6 +51,13 @@ export const REACH = Object.freeze({ calm: 0, rapids: 1, steps: 2 });
 export const FORDS = Object.freeze({ half: 3, every: 5, depth: 0.35, widen: 1.4 });
 
 /**
+ * The way over a ford (metres): straight across it at its middle, trodden bare `half` either side
+ * of its line, on up each bank `approach` past the water (overworld.js: the ground there a foot
+ * track's).
+ */
+export const FORD_WAY = Object.freeze({ half: 1.1, approach: 6 });
+
+/**
  * Wading: through water no deeper than `deepest` (metres), and only where its depth times its
  * speed is under `sweep` (square metres a second: deeper or faster, and it sweeps a body away).
  */
@@ -183,6 +190,11 @@ export class Waters {
         this.plan = plan;
         this.near = new Map();
         this.courses = new Map();
+        // (Each river cell's ford, or null, by its index; those near each chunk, by its key; and
+        // the world's: fordOf, fordsNear, fords)
+        this.fordOfCell = new Map();
+        this.fordsByChunk = new Map();
+        this.allFords = null;
         this.bare = new Map();
         this.shapes = new Map();
         this.made = null;
@@ -600,6 +612,101 @@ export class Waters {
         }
 
         return this.near.get(key);
+    }
+
+    /**
+     * The fords whose crossings reach into a chunk (cx, cy: chunks of CHUNK metres): fordOf's, of
+     * every river cell near it with a ford.
+     */
+    fordsNear(cx, cy) {
+        const key = cy * CHUNKS + cx;
+
+        if (!this.fordsByChunk.has(key)) {
+            const fords = [];
+            const reach = Math.ceil((WANDER + RIVER_HALF[1] * FORDS.widen + FORD_WAY.approach) / CELL) + 1;
+            const [c0, c1] = [Math.floor((cx * CHUNK) / CELL) - reach, Math.floor(((cx + 1) * CHUNK) / CELL) + reach];
+            const [r0, r1] = [Math.floor((cy * CHUNK) / CELL) - reach, Math.floor(((cy + 1) * CHUNK) / CELL) + reach];
+
+            for (let j = Math.max(0, r0); j <= Math.min(CELLS - 1, r1); j++) {
+                for (let i = Math.max(0, c0); i <= Math.min(CELLS - 1, c1); i++) {
+                    const ford = this.fordOf(j * CELLS + i);
+
+                    if (ford) {
+                        fords.push(ford);
+                    }
+                }
+            }
+
+            this.fordsByChunk.set(key, fords);
+        }
+
+        return this.fordsByChunk.get(key);
+    }
+
+    /** Every ford in the world (fordOf's), worked out the first time they're wanted. */
+    fords() {
+        if (!this.allFords) {
+            this.allFords = [];
+
+            for (let k = 0; k < CELLS * CELLS; k++) {
+                const ford = this.fordOf(k);
+
+                if (ford) {
+                    this.allFords.push(ford);
+                }
+            }
+        }
+
+        return this.allFords;
+    }
+
+    /**
+     * A river cell's ford, if it has one (#course: the middle of a calm, small river's cell): {
+     * cell (its index), at (its middle, where it lies in the world: [x, y] metres), banks (the
+     * points either side where the water ends, straight across from it as the river lies in the
+     * world: [[x, y], [x, y]]), way (the way the river runs there: a unit vector), half (its
+     * half-width), surface, depth }; or null. The same each time it's asked for.
+     */
+    fordOf(k) {
+        if (!this.fordOfCell.has(k)) {
+            this.fordOfCell.set(k, this.#ford(k));
+        }
+
+        return this.fordOfCell.get(k);
+    }
+
+    #ford(k) {
+        if (this.running[k] !== RUNNING.river || this.#linked().into[k] < 0) {
+            return null;
+        }
+
+        const { pieces } = this.course(k);
+        // (Its middle: where its second piece ends, the ford at its fullest: [0, 1, 1, 1, 0])
+        const middle = pieces[1];
+
+        if (middle.stream || middle.ford[0] < 1 || middle.ford[1] < 1) {
+            return null;
+        }
+
+        const [lx, ly] = [middle.bx, middle.by];
+        const [dx, dy] = [middle.dx, middle.dy];
+        const half = middle.half[1];
+        const [ax, ay] = this.placeOf(lx - dx, ly - dy);
+        const [bx, by] = this.placeOf(lx + dx, ly + dy);
+        const long = hypot(bx - ax, by - ay) || 1;
+        const [wx, wy] = [(bx - ax) / long, (by - ay) / long];
+        const [mx, my] = this.placeOf(lx, ly);
+
+        // (Its banks straight across the way it runs where it lies, the wandering not shearing them)
+        return {
+            cell: k,
+            at: [mx, my],
+            banks: [[mx + wy * half, my - wx * half], [mx - wy * half, my + wx * half]],
+            way: [wx, wy],
+            half,
+            surface: middle.surface[1],
+            depth: middle.depth[1],
+        };
     }
 
     // Where a point is taken to be, for rivers: moved a wandering way, so they don't run straight
