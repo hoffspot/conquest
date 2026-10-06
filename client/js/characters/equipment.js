@@ -16,6 +16,7 @@ import * as THREE from "three";
 import { faceFrame } from "./face.js";
 import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
+import { powerGrip } from "./grip.js";
 import { LIVERIES } from "./liveries.js";
 
 /** The slots, in the order to show them. */
@@ -144,14 +145,16 @@ const SLUNG_SHIELDS = new Set(["human", "elf", "orc", "lizard"]);
  * the hold pose for its arm, whether the hand grips it, what it hides and brings; and for a
  * two-handed haft, where along it the other hand holds it (`haft`: metres along its y from the
  * grip, from and to: a quarterstaff's hands about shoulder width apart, a war hammer's rear hand
- * at the end of the handle).
+ * at the end of the handle). What a hand closes round is as thick as it is (`round`, and the
+ * other hand's `haftRound`: metres, its radius: grip.js), and a hilt's hand goes between its
+ * pommel and its guard (`hilt`: metres along its y from the grip).
  */
 export const ITEMS = Object.freeze({
-    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, hold: HOLDS.sword, sheath: SHEATHS.sword },
-    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.staff, haft: [-0.7, -0.3], sheath: SHEATHS.staff },
+    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, round: 0.014, hilt: [-0.045, 0.053], hold: HOLDS.sword, sheath: SHEATHS.sword },
+    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.019, hold: HOLDS.staff, haft: [-0.7, -0.3], haftRound: 0.017, sheath: SHEATHS.staff },
     wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand, sheath: SHEATHS.wand },
-    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.hammer, haft: [-0.22, -0.16], sheath: SHEATHS.hammer },
-    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, hold: HOLDS.sword, sheath: SHEATHS.cleaver },
+    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.021, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.hammer },
+    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.015, hilt: [-0.06, 0.054], hold: HOLDS.sword, sheath: SHEATHS.cleaver },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },
     // (Iron on both feet: over the toes, round the heels and down the shins, each on its bone)
@@ -205,10 +208,40 @@ export const EQUIPMENT = Object.freeze(Object.fromEntries([
 ]));
 
 /**
+ * How an item (or a part of one) held in a hand round its haft or hilt is gripped: socketOn's
+ * `haft` ({ radius, turn, hilt }), or null (not held so: a wand's pinched, a bow's held as it is).
+ */
+export function heldRound(item) {
+    return item.round && /^(left|right)Hand$/.test(item.socket) ? { radius: item.round, turn: item.turn?.[0] ?? 0, hilt: item.hilt ?? null } : null;
+}
+
+// How a second hand's haft lies across its palm (radians from straight across, towards the
+// fingers at the thumb's side: grip.js), as the first's does
+const SECOND_TURN = 0.25;
+
+/**
+ * Where the other hand holds a two-handed haft (ITEMS `haftRound`: how thick it is there), as a
+ * socket (socketOn's, turned across the palm as it lies there) on that hand, with how the hand
+ * closes round it (`grip`) and which hand it is (`side`: "left" or "right"); or null.
+ */
+export function secondGrip(character, item) {
+    if (!item.haftRound || !/^(left|right)Hand$/.test(item.socket)) {
+        return null;
+    }
+
+    const socket = item.socket === "rightHand" ? "leftHand" : "rightHand";
+    const placed = socketOn(character, socket, { haft: { radius: item.haftRound, turn: SECOND_TURN } });
+
+    placed.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), SECOND_TURN));
+
+    return { ...placed, side: socket === "leftHand" ? "left" : "right" };
+}
+
+/**
  * Where a socket is on a character's (rest-pose) body: { bone (name), position and quaternion
  * (in the bone's space), fit (sizes items need: headRadius, scale) }.
  */
-export function socketOn(character, socket, { round = null } = {}) {
+export function socketOn(character, socket, { round = null, haft = null } = {}) {
     const { rig, human, positions } = character;
     const head = (name) => rig.heads[rig.index.get(name)];
     const frame = (name) => rig.frames[rig.index.get(name)];
@@ -224,8 +257,17 @@ export function socketOn(character, socket, { round = null } = {}) {
             const bone = `${side}Hand`;
             const hand = head(`${side}HandMiddle1`).distanceTo(head(bone));
             const palm = side === "Left" ? -1 : 1;
-            const position = new THREE.Vector3(palm * 0.022 * face.scale, -hand * 1.05, 0.004).applyQuaternion(frame(bone));
             const quaternion = frame(bone).clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+
+            // (Round a haft, a pole or a hilt `haft.radius` thick, lying `haft.turn` across the
+            // palm: in a power grip, the fingers closed round it, grip.js)
+            if (haft) {
+                const grip = powerGrip(character, side, { radius: haft.radius, turn: haft.turn ?? 0, palm: boneSkin(character, bone), hilt: haft.hilt ?? null });
+
+                return { bone, position: grip.position, quaternion, fit, grip };
+            }
+
+            const position = new THREE.Vector3(palm * 0.022 * face.scale, -hand * 1.05, 0.004).applyQuaternion(frame(bone));
 
             return { bone, position, quaternion, fit };
         }

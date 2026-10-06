@@ -4810,3 +4810,38 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the switch to Vitruvian's body (`GAME_BODY`), with its own baseline. Its failing pairs
     are now fewer than MakeHuman's. Then the clips' hands lined up in the retarget, and the grip
     round a pole or handle from the user's photos.
+- **2026-10-06, pole and handle grips from the user's photos** (§10; docs/CHARACTERS.md *Grips*).
+  - The user's photos of a hand round a pole: the pole diagonal across the palm from the base of
+    the index finger to the heel of the hand, the fingers wrapped round it in a staircase, the
+    thumb over the index and middle fingers. Every hilt and haft in a hand was held at the finger
+    bases, past the knuckles, the fingers curled to a fixed shape beside it.
+  - `grip.js` (new): the haft is laid on the palm's skin down the item's diagonal; each finger's
+    three joints and the thumb are fitted to it on each body, none sunk in it. The sword's and
+    cleaver's hand is slid down the hilt between the pommel and the guard (`ITEMS.hilt`): on their
+    steep diagonal the index finger lay over the guard. The staff's and hammer's second hand, and a
+    guard's torch, are held the same way. About 1.25 ms a hand, once, when it's put in the hand.
+  - The arm is placed by the hand's own grip point (the keys were made for it), half way to the
+    haft when held in both hands; nearing a sheath hung at the hip, by where the hand holds the
+    weapon (a sword lay off the scabbard's line and went 2.7 cm into the hips), and half way for
+    the back. The trial reach that finds how the hand turns at the sheath used the full point
+    while the arm was placed by the half-way one: the staff's and hammer's draws strained the
+    shoulder 7–9° past its range.
+  - Tried and dropped: placing the hand by the item's grip point along the haft (the blade's path
+    as before: joints 111 → 123, the cleaver no better); a gentler diagonal for the second hand
+    (0.12 rad: it cleared the hammer's overhead smash, but second hands off their hafts went 53 →
+    72 on MakeHuman, 32 → 57 on Vitruvian); keys added to the cleaver's overhead hack (the
+    failures moved between bodies).
+  - The motion check:
+    - MakeHuman: 150 failing pairs better, 61 worse; failing pairs 1,096 → 1,037. Second hands
+      off their hafts 104 → 53 (the staff's blows 96 → 25), forearms in the torso 71 → 55; joints
+      495 → 502, things in the body 183 → 194. The worse: the hammer's overhead smash and leaping
+      slam's left hand (8 → 28), the cleaver's overhead hack and the sword's backhand into small
+      women's heads and chests (0 → 16), and right shoulders 3–4.3° in the sword's and cleaver's
+      put-aways. The baseline is kept with them.
+    - Vitruvian: 147 better, 117 worse; failing pairs 1,066 → 1,070. Second hands 65 → 32 (the
+      hammer's 23 → 2), forearms 190 → 177 (the staff's blows 34 → 15); things in the body 191 →
+      225 (the weapon a little further from the hand: the hammer's blows, the stun cast's shield
+      against the thumb wrapped round the hilt, the sword's draw), joints 492 → 498.
+  - **Next:** the switch to Vitruvian's body (`GAME_BODY`), with its own baseline; then the
+    clips' hands in the retarget; the cleaver's overhead hack and the hammer smash's left hand
+    refitted to the new grip.

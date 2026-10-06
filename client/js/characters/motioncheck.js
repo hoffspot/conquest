@@ -17,7 +17,7 @@ import { WEAPONS } from "../core/weapons.js";
 import { Actions, ATTACKS, DODGES, DRAWS, REACTIONS } from "./actions.js";
 import { Character, hanging, placed, slung } from "./character.js";
 import { CLIP_KEYS } from "./clip-keys.js";
-import { EQUIPMENT, SLING, socketOn } from "./equipment.js";
+import { EQUIPMENT, heldRound, secondGrip, SLING, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
 import { buildItem } from "./items.js";
 import { Walker, WALK_STYLES } from "./locomotion.js";
@@ -106,7 +106,7 @@ export function dress(human, look, { sheathed = true } = {}) {
         const item = EQUIPMENT[id];
 
         for (const part of item.parts ?? [item]) {
-            const socket = socketOn(character, part.socket);
+            const socket = socketOn(character, part.socket, { haft: heldRound(part) });
             const home = { bone: socket.bone, position: socket.position.clone(), quaternion: socket.quaternion.clone() };
 
             if (part.turn) {
@@ -122,7 +122,7 @@ export function dress(human, look, { sheathed = true } = {}) {
             const look = built(human, part.model, { ...socket.fit, ears: character.equipment.get("ears") === "catEars" });
 
             model.add(look);
-            Object.assign(model.userData, { home, socket: part.socket, sway: item.sway ?? 0, hand: /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null, hangs: part === item ? hanging(item, look) : null });
+            Object.assign(model.userData, { home, socket: part.socket, sway: item.sway ?? 0, hand: /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null, hangs: part === item ? hanging(item, look) : null, grip: socket.grip ?? null, second: part === item ? secondGrip(character, item) : null });
             // (A shield that's slung on the back while the weapons are put away, over whatever else is on the back)
             model.userData.sling = part === item && item.sling ? slung(socketOn(character, SLING.socket), look, { over: character.equipment.has("back") }) : null;
             model.name = id;

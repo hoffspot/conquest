@@ -48,6 +48,7 @@ import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
 import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
 import { FIST_HAND, ITEMS, socketOn } from "./equipment.js";
+import { closeHand } from "./grip.js";
 import { groundPoints, lowestPoint } from "./grounding.js";
 import { SEATED, STEPPED } from "./locomotion.js";
 import { blendRotation, jointRotation } from "./rig.js";
@@ -2296,6 +2297,7 @@ const _local = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
 const _nudge = new THREE.Vector3();
 const _turnBy = new THREE.Quaternion();
+const _placed = new THREE.Vector3();
 const _slice = new THREE.Vector3();
 const _lever = new THREE.Vector3();
 const _push = new THREE.Vector3();
@@ -3111,6 +3113,15 @@ export class Actions {
             hands.left = { at: SHIELD.in.map((near, k) => near + (SHIELD.out[k] - near) * out + (SHIELD.aside[k] - near) * aside * (1 - out)), elbow, pronate, wrist, reach: shieldHand.reach, shield: true };
         }
 
+        // (A hand on the other's haft closed round it as a real one closes: grip.js)
+        for (const side of HANDS) {
+            const haft = hands[side] && "on" in hands[side] ? this.#haftGrip(side) : null;
+
+            if (haft) {
+                closeHand(rig, side, haft.grip, weight);
+            }
+        }
+
         if (upright && !hands.right) {
             hands.right = UPRIGHT;
         }
@@ -3228,6 +3239,15 @@ export class Actions {
         }
 
         return this.body;
+    }
+
+    // A second hand's grip round the haft the other hand holds (equipment.js secondGrip: a socket,
+    // with how the hand closes round it), or null (the other hand holds no two-handed haft)
+    #haftGrip(side) {
+        const other = this.rig.bone(side === "right" ? "LeftHand" : "RightHand");
+        const second = this.character.items.find((model) => model.parent === other && !model.userData.holder)?.userData.second;
+
+        return second?.side === side ? second : null;
     }
 
     // An arm's joints as they are (its shoulder, elbow and wrist: [quaternions]), or set back to
@@ -3700,7 +3720,8 @@ export class Actions {
         // `home`. Not otherwise: an empty hand's placed by its own grip, not a sheathed weapon's)
         const swapping = Boolean(this.attack?.swap);
         const item = this.character.items.find((model) => model.parent === handBone || (swapping && model.userData.hand === Side && model.userData.sheath));
-        const socket = body.sockets[side];
+        // (A hand on the other's haft holds it as the hand closes round it: grip.js)
+        const socket = ("on" in hand && this.#haftGrip(side)) || body.sockets[side];
         const holding = item?.userData.home ?? item;
         const itemPosition = holding ? holding.position : socket.position;
         const itemQuaternion = holding ? holding.quaternion : socket.quaternion;
@@ -3708,6 +3729,8 @@ export class Actions {
         let point = null;
         let edge = null;
         let pommel = null;
+        // (How far it's placed by what it'll hold, nearing where that's put away)
+        let reaching = 0;
 
         this.#frame(hand, _frame);
 
@@ -3773,6 +3796,10 @@ export class Actions {
             if (away) {
                 const share = Math.min(1, hand.sheath);
 
+                // (All the way into a sheath hung at the hip; half way to the back, all the way
+                // the arm reached back over the shoulder too far)
+                reaching = item?.userData.hangs ? share : share * 0.5;
+
                 position.lerp(away.position, share);
                 point = point ? point.lerp(away.point, share).normalize() : away.point.clone();
 
@@ -3781,7 +3808,7 @@ export class Actions {
                 const along = new THREE.Vector3(0, 1, 0).applyQuaternion(_item.copy(handFrame).invert().multiply(itemQuaternion));
                 const bend = hand.elbow ? new THREE.Vector3().fromArray(hand.elbow).normalize().applyQuaternion(_frame) : null;
 
-                rig.reachArm(Side, { grip: position, offset: itemPosition.clone().applyQuaternion(_item.copy(handFrame).invert()), aim: { axis: along, toward: point }, hold: 1, pronate: hand.pronate ?? 25, bend, bent: 1, swivel: this.swivel[side] });
+                rig.reachArm(Side, { grip: position, offset: _placed.copy(socket.position).lerp(itemPosition, reaching).applyQuaternion(_item.copy(handFrame).invert()), aim: { axis: along, toward: point }, hold: 1, pronate: hand.pronate ?? 25, bend, bent: 1, swivel: this.swivel[side] });
 
                 const natural = _edge.set(0, 0, 1).applyQuaternion(handBone.getWorldQuaternion(_now).multiply(itemQuaternion));
 
@@ -3828,7 +3855,14 @@ export class Actions {
         }
 
         const saved = [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`].map((name) => rig.bone(name).quaternion.clone());
-        const offset = itemPosition.clone().applyQuaternion(_item.copy(handFrame).invert());
+        // (The point of the hand placed: its own grip, where every key's place was given, what's
+        // held round a haft lying deeper in the palm from there (grip.js); held in both hands, half
+        // way to the haft, which the keys lay along the line through both; nearing where what it
+        // draws is put away, towards where it'll hold it as it nears, so what's put away at the hip
+        // goes into its sheath along it (from its own grip, a sword went 2.7 cm into the hips); and
+        // on the other's haft, the haft)
+        const placed = "on" in hand ? itemPosition : _placed.copy(socket.position).lerp(itemPosition, second && item?.parent === handBone ? 0.5 : reaching);
+        const offset = placed.clone().applyQuaternion(_item.copy(handFrame).invert());
         const bend = hand.elbow && (hand.bent ?? 1) > 0.001 ? new THREE.Vector3().fromArray(hand.elbow).normalize().applyQuaternion(_frame) : null;
         const held = second || "on" in hand ? 1 : hand.held ?? 1;
         const reach = (swivel) => rig.reachArm(Side, { grip: position, offset, hand: wanted, aim, hold: held, pronate: hand.pronate ?? 25, wrist: hand.wrist ?? null, bend, bent: hand.bent ?? 1, swivel });
@@ -3886,8 +3920,8 @@ export class Actions {
                     break;
                 }
 
-                // (From how the hand is now: where it grips, and how it's turned)
-                const grip = item.getWorldPosition(_grip);
+                // (From how the hand is now: where it's placed by, and how it's turned)
+                const grip = _grip.copy(placed).applyMatrix4(handBone.matrixWorld);
                 const turn = handBone.getWorldQuaternion(_handTurn).multiply(handFrame);
 
                 // (A turn about the grip, if there's one to make; if it's still in after that
