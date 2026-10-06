@@ -135,7 +135,7 @@ describe("the catalog of models downloaded as they're wanted (client/js/app/asse
 
         assert.equal(told.kind, "release");
         assert.equal(told.release, "0123456789");
-        assert.ok(told.boot.includes(`https://example.github.io/conquest/characters/human.bin?h=${await hashOf("characters/human.bin")}`));
+        assert.ok(told.boot.includes(`https://example.github.io/conquest/characters/${GAME_BODY}.bin?h=${await hashOf(`characters/${GAME_BODY}.bin`)}`));
         assert.equal(told.boot.length, MANIFEST.flatMap(({ files }) => files).filter(([, , hash]) => hash).length);
         assert.deepEqual(told.assets, [`https://example.github.io/conquest/models/kaykit/barrel.gltf?h=${await hashOf("models/kaykit/barrel.gltf")}`]);
     });

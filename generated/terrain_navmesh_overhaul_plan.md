@@ -4845,3 +4845,19 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** the switch to Vitruvian's body (`GAME_BODY`), with its own baseline; then the
     clips' hands in the retarget; the cleaver's overhead hack and the hammer smash's left hand
     refitted to the new grip.
+
+- **2026-10-06, the game on Vitruvian's body** (§10; docs/CHARACTERS.md *The Vitruvian body*,
+  *The motion check*).
+  - `body.js` `GAME_BODY = "vitruvian"`: the kit, the loading screen's download list, the
+    character lab (unless `?body=human`), the motion check and the character tests take
+    Vitruvian's body. The clips stay baked on MakeHuman's (`BAKE_BODY`); their keys play on both.
+  - The download before the game starts: 9.79 → 10.22 MB (the body 1.65 → 2.19 MB, the skin
+    details' masks 0.14 → 0.04 MB), within the 12 MB budget.
+  - The motion check's baseline is Vitruvian's, kept with `--update`: 1,070 failing pairs (joints
+    498, feet sliding 429, things in the body 225, forearms in the torso 177, feet in the ground
+    100, second hands off their hafts 32), where MakeHuman's had 1,037.
+  - Pictures, before and after: each people's captain, soldier, reeve and ruler in the uniform
+    lab; the same three heroes (seeded) in the start town and close up.
+  - **Next:** the clips' hands lined up on Vitruvian's in the retarget; the cleaver's overhead
+    hack and the hammer smash's left hand refitted to the new grip; Vitruvian's hands on the
+    bulkiest orcs (thin, twisted fingers).

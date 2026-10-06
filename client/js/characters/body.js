@@ -22,8 +22,11 @@ export const HUMAN_URL = new URL("../../characters/", import.meta.url);
  */
 export const BODIES = Object.freeze(["human", "vitruvian"]);
 
-/** The body the game's characters are made from (and the motion check's, the tests' and the clips' bake). */
-export const GAME_BODY = "human";
+/**
+ * The body the game's characters are made from, and the motion check's and the tests' (the clips
+ * are baked on MakeHuman's, whichever this is: scripts/bake-clips.js).
+ */
+export const GAME_BODY = "vitruvian";
 
 /** Download and unpack a body (`body`.json and `body`.bin from `base`, with `fetch`). */
 export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis), body = GAME_BODY) {
