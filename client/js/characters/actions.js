@@ -71,7 +71,7 @@ const spine = ({ flex = 0, turn = 0, bend = 0 }) => ({
 
 // --- Guards: how each weapon is held while fighting ---
 
-const book = { at: [-0.3, -0.55, 0.6], point: [1, 0, 0], edge: [0, 0.35, 1] };
+const book = { at: [-0.3, -0.5, 0.75], point: [1, 0, 0], edge: [0, 0.35, 1], chest: 1 };
 
 // A hand on the hip (side 1: the right), the fingers forward over the hip bone, the thumb behind,
 // the elbow out to the side
@@ -193,10 +193,10 @@ export const GUARDS = Object.freeze({
     // (A sword before the right hip, the forearm level and the elbow at the side, the point at the enemy's face)
     sword: { right: { at: [0.1, -0.55, 0.72], point: [0.2, 0.6, 0.78], edge: [-0.35, -0.7, 0.63] }, left: FREE },
     // (Two-handed: the left hand's place too, the shaft lying along the line from it through the right)
-    staff: { right: { at: [0.31, -0.57, 0.7] }, left: { on: 0, at: [-0.2, -0.74, 0.65] } },
+    staff: { right: { at: [0.18, -0.55, 0.8] }, left: { on: 0, at: [-0.2, -0.74, 0.7] } },
     wand: { right: { at: [0.1, -0.55, 0.72], point: [0.1, 0.45, 0.9] }, left: FREE },
     grimoire: { left: book, right: { at: [0.22, -0.58, 0.5], pronate: 40, wrist: { flex: 8, deviate: -5 }, shape: "relaxed" } },
-    hammer: { right: { at: [0.18, -0.42, 0.65], edge: [0.1, -0.3, 0.95] }, left: { on: 0, at: [-0.35, -0.89, 0.31] } },
+    hammer: { right: { at: [0.15, -0.38, 0.75], edge: [0.1, -0.3, 0.95] }, left: { on: 0, at: [-0.38, -0.85, 0.48] } },
     // (The bow low before the body, its back to the enemy, the drawing hand near the string; its
     // lower limb forward, clear of the thigh swinging up running)
     bow: { left: { at: [-0.15, -0.6, 0.62], point: [-0.3, 0.9, 0.2], edge: [0, -0.5, 0.85] }, right: { at: [0.3, -0.6, 0.5], pronate: 40, shape: "relaxed" } },

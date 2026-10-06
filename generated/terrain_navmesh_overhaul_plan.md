@@ -4551,3 +4551,36 @@ converted data is to be measured in M8 against today's hm08 data.
     forearm depth 0.53 → 0.27 cm.
   - **Next:** Vitruvian's arm proportions, its held things, the two-handed hafts, its baseline,
     and the game switched to it.
+- **2026-10-06, the arms on Vitruvian's proportions** (§10; docs/CHARACTERS.md *The Vitruvian body*).
+  The user asked to keep Vitruvian's own joints and refit what depends on the body to them. Its
+  elbow joint is higher up the arm than MakeHuman's (on the default body the upper arm is
+  20.4 cm and the forearm 25.5; MakeHuman's are 24.2 and 23.9), so the same hand place puts the
+  forearm more steeply across the body, into the belly and hips wherever something is held low
+  before it. Those poses now hold it further out, on both bodies:
+  - **The grimoire's book** (`actions.js` `book`): before the belly rather than low by the hip,
+    and turning with the chest as the blows turn it.
+  - **The staff and war hammer on guard** (`GUARDS.staff`, `GUARDS.hammer`): both hands further
+    forward, the right hand nearer the middle. A second hand on a haft isn't moved out of the
+    torso, and its forearm lay in the belly. The hammer's left hand was searched for a place
+    whose elbow, carried into the blows, keeps the side swing's left shoulder in range (the
+    unit test's 5°).
+  - **The numbers** (failing pairs): MakeHuman's forearms in the torso 577 → 304 (the grimoire's
+    guard and blows 42 → 0, the casts 50 → 0, the staff's guard 51 → 0 and blows 116 → 70, the
+    hammer's draw 17 → 4, the flinches and dodges on guard down by half or to none), held or worn
+    things 311 → 298, second hands off their hafts 258 → 237, joints 580 → 582; 500 pairs
+    better, 144 worse (mostly a staff blow's second hand 1 to 6 cm further off the haft as the
+    blow leaves the new guard; at worst, the bulkiest dark elf woman's hammer smash, its left
+    hand 18 cm off the haft at the bottom of the blow, as the on-haft hand's elbow comes from
+    the guard's). The mean forearm depth over every pair went from -0.52 to -0.88 cm. The
+    baseline is updated (1,590 → 1,377 failing pairs). Vitruvian: forearms 950 → 489 (the
+    grimoire's 208 → 6, the staff's guard 81 → 9, the hammer's guard 38 → 8, the casts 54 → 4),
+    held things 493 → 457 (the staff in the thighs casting a stun 25 → 15, the hammer's guard
+    20 → 3), second hands 163 → 141, joints 571 → 569; 782 better, 84 worse (at worst the
+    hammer's side swing, the left shoulder up to 2.7° further past its range on four bodies);
+    the mean forearm depth 0.27 → -0.16 cm.
+  - **The motion check's own test** (`test/motioncheck.test.js`) hangs the left forearm inside the
+    chest for its forearm fault, not the whole arm 60% of the way in: on the new hammer guard the
+    arm hung that way reached out of the body, and the fault went unfound.
+  - **Next:** the rests whose hand comes back across the chest, the bow, the wand put away and the
+    staff cast on Vitruvian, the hammer's blows from the new guard, Vitruvian's baseline, and the
+    game switched to it.
