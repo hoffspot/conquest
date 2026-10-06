@@ -258,11 +258,11 @@ both bodies: Foot locking, below), and ankles bending further over the foot walk
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
 4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
-against MakeHuman's): joints past their range 499 to 525, feet in the ground 100 to 126, second
-hands off their hafts 88 to 148, planted feet sliding 433 to 498, but forearms in the torso 322
-to 124 (most in the war hammer's and staff's two-handed blows, which aren't moved out of the
-torso, the hammer's draw and put-away, and kicks) and things held in the body 196 to 183. The
-game's clipping test passes on it.
+against MakeHuman's): joints past their range 492 to 495, feet in the ground 100 to 126, second
+hands off their hafts 65 to 104, planted feet sliding 429 to 488, but forearms in the torso 190
+to 71 (most in the staff's and war hammer's two-handed blows, which aren't moved out of the
+torso, and kicks) and things held in the body 191 to 183. The game's clipping test passes on
+it.
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
 motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
@@ -1019,6 +1019,32 @@ follow-through, on every body. The left hand goes no further out to the left aft
 wrist can turn with the haft (the arms test's strain limit); further, the forearm cleared the belly
 throughout.
 
+On Vitruvian's body, whose shoulders are 2 cm narrower and upper arms shorter, the forearms came
+nearer the chest, and these blows were fitted again on both bodies:
+
+- **Turned into the blow less.** The war hammer's side swing and diagonal chop turn the body into
+  the blow less (the chop 15° to 8° at the strike), and the side swing's left elbow goes out to
+  the side from the blow on. Turned as far as the shoulders, both forearms came across into the
+  chest and belly.
+- **Hands kept out in front.** The diagonal chop has keys on the way up and on the way down that
+  keep the hands out in front, and its hammer's head out before the thighs. The staff's rising
+  strike keeps the right forearm clear of the belly as it swings across. Its thrust is drawn back
+  with the right hand before the right hip, not across the belly (its forearm had gone 8 cm in).
+  Its overhead strike is raised further out in front.
+- **The hammer's draw and put-away.** Drawn, the left hand comes round to the haft's foot out in
+  front; straight there from the hammer's head, its forearm crossed the hips. Put away, the left
+  hand lets go before the hammer's lifted. Held on, the haft's foot drew its forearm into the belly.
+- **The shadow boxing.** The rear fist is kept a little out from the chin through the hook.
+- **The war hammer's guard.** Both hands are a little further out in front (the left 0.48 to
+  0.62 arm lengths ahead, nearer the middle, the right 0.75 to 0.8). On guard, the bulkiest
+  man's left forearm lay 8.4 cm into his belly, and every hammer blow starts and ends there; now
+  5.5 cm. The overhead smash and the leaping slam lift the haft out further in front, and the side
+  swing winds up with the right hand further out.
+
+Forearms in the torso on Vitruvian, by motion: the hammer's blows 65 to 24, the staff's 83 to 34,
+its draw 16 to 4 and put-away 17 to 1, the gauntlets' draw 13 to 4. Second hands off their hafts
+88 to 65.
+
 **Spells** are cast the same way, with the free hand, key 1 being when the spell takes effect:
 the left, the right keeping hold of the weapon; or, if the left holds something (a bow) and the
 right's free, the right, the whole cast mirrored. A staff or war hammer is held upright out at the
@@ -1300,7 +1326,7 @@ a flourish:
 | Wand | Snatched from the belt, flicked up, its tip twirled round in a circle and held up a moment | A last twirl, tucked back in the belt |
 | Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand, brought down out to the side of the hip (straight down, it went into the hips) and hung back there |
 | Staff | Up over the right shoulder, the elbow leading up and forward, to the staff by the ear (the other hand pushing its lower end up from behind the hip), pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder, the elbow forward as the hand comes away |
-| War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm out before the chest (lower, the haft's foot went into the hips) | Raised upright out in front in one hand, then hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away (swung straight back off the guard, its head went through the face and shoulders) |
+| War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm out before the chest (lower, the haft's foot went into the hips), and the left hand brought round to the haft's foot out in front | The left hand letting go first, raised upright out in front in one hand, then hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away (swung straight back off the guard, its head went through the face and shoulders) |
 | Orc cleaver | Across in front of the belly to the grip at the left hip, the other hand on the belt beside it, ripped up and out across the body, wheeled round over the head, and brandished with a snarl | Brought down across the body, the point down and out to the ring at the left hip (clear of the thigh), the body turning into it, and dropped through |
 | Bow | Up over the left shoulder, the elbow leading up and forward, pulled over and swung down in front, spinning, held upright and its string plucked | Raised, turned over at the left side, out from the head, and slung back over the left shoulder |
 | Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
