@@ -280,6 +280,10 @@ npx playwright test ...  # the browser tests your change touches (above)
 git status               # only the files you meant to change
 ```
 
+- **Docs only** (nothing changed but Markdown files: `docs/`, the plans in `generated/`,
+  `README.md`, this file): run none of the checks that run code. CI still runs them all, and
+  `test/contribution.test.js` reads this file, so a script it no longer names fails there.
+
 - Add files by name (`git add path/to/file`), not `git add -A` or `git add .`. Never commit
   `node_modules/`, `test-results/`, `playwright-report/`, reports, pictures you took to check
   your work, or scratch files.
