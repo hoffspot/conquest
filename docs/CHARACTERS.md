@@ -258,10 +258,11 @@ both bodies: Foot locking, below), and ankles bending further over the foot walk
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
 4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
-against MakeHuman's): joints past their range 492 to 495, feet in the ground 100 to 126, second
-hands off their hafts 65 to 104, planted feet sliding 429 to 488, but forearms in the torso 190
-to 71 (most in the staff's and war hammer's two-handed blows, which aren't moved out of the
-torso, and kicks) and things held in the body 191 to 183. The game's clipping test passes on
+against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 498
+to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, planted feet
+sliding 429 to 488, but forearms in the torso 177 to 55 (most in the staff's and war hammer's
+two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
+225 to 194; 1,070 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it.
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
@@ -615,7 +616,8 @@ ivory with suspenders, ivory stockings and a choker.
 **Items** (`items.js`) are rigid models on **sockets**, points on bones placed from the body's
 shape:
 
-- the palm of either hand, with the grip across it
+- the palm of either hand, with the grip across it (a hilt or haft on the palm's skin, the
+  fingers fitted round it: *Grips*, below)
 - the outside of the left forearm, for shields
 - the middle of the head, for helmets, sized to fit it
 - the upper back, for packs, quivers and slung guns
@@ -699,7 +701,11 @@ into it.
 holds with them (an empty hand swings and relaxes as it walks). Taking one into the hand, or
 letting it go into its sheath (`settle`), the weapon keeps where it was in the world and settles
 into its new place over a fraction of a second, the way fingers close round a grip, so the hand
-needn't meet it exactly. `sheathPose(side)` says where the weapon a hand draws is put away.
+needn't meet it exactly. `sheathPose(side)` says where the weapon a hand draws is put away. Nearing
+a sheath at the hip, the hand's placed by where it holds the weapon round its grip (*Grips*,
+below), so the weapon goes into its sheath along it (placed by the hand's own grip point, a sword
+lay off the scabbard's line and went 2.7 cm into the hips putting it away); nearing the back, half
+way to there (all the way, the arm reached back over the shoulder too far).
 
 **Slinging the shield** (`SLING`, an item's `sling`, `Character.sling`). With the weapons put away,
 a shield that can be slung goes on the back, hung by its strap (the guige) from the right shoulder
@@ -1098,15 +1104,34 @@ anatomically, whatever the body's size:
   the rotations swung elbows up to 34° sideways on the way. An action eases out after its last
   key (from key time 1.55 at the soonest), so a late key, like the toast's drink, is played in
   full.
-- **Grips.** Each item sits in the fist as a real grip holds it. A hilt or haft lies across the
-  palm from the index knuckle to the heel of the hand, so a sword's blade leans 38° from the line
-  of the fingers towards the thumb, and tilting the wrist towards the little finger brings it
-  nearer in line with the forearm. A staff's or hammer's haft lies nearly square across the palm,
-  and a wand is pinched along the fingers. The thumb bends about its own axes (it lies turned
-  from the fingers): round a grip it closes over the curled fingers, and in a fist it lies across
-  them (above). The second
-  hand on a staff or hammer closes round the shaft too. A hand holding something keeps its grip
-  whatever shape a pose gives the hand.
+- **Grips.** Each item sits in the hand as a real grip holds it. A hilt or haft (the sword's, the
+  cleaver's, the staff's and the war hammer's, and a guard's torch at night) is held in a power
+  grip, as in the user's photos of a hand round a pole (`grip.js`):
+  - **In the palm.** It lies across the palm on its skin, from the base of the index finger (90%
+    of the way from the wrist to its knuckle) to the heel of the hand, on the diagonal its item
+    gives it (`turn`). A sword's and a cleaver's run steeply, so the blade leans towards the line
+    of the fingers, and tilting the wrist towards the little finger brings it nearer in line with
+    the forearm; a staff's or hammer's haft lies nearly square across. It used to sit at the
+    finger bases, past the knuckles, and the fingers closed on air below it.
+  - **The fingers fitted round it.** Each finger's three joints are fitted, on each body, so its
+    bones lie on the haft and none sinks into it. They stack in a staircase down the diagonal,
+    the index finger nearest the thumb's end. A small hand goes less far round a thick haft than
+    a big one: round the staff's 3.8 cm leather grip, the smallest hands' fingers go about 100°
+    round it and the biggest 150°.
+  - **Between the pommel and the guard.** A sword's and a cleaver's hand is slid along the hilt
+    (`hilt`: where its pommel and guard are) till the fingers are between them: on the steep
+    diagonal the curled fingers reach up the hilt from the knuckles, and the index finger lay
+    over the guard. A hand broader than the hilt (the biggest orcs') has its index finger at the
+    guard and the little finger on the pommel.
+  - **The thumb** comes round the other side, across the haft, bent over it, its tip on the
+    index finger.
+  - **The second hand** on a staff or hammer is held round the shaft the same way, where it
+    holds it (`haftRound`: the shaft's thickness there, its own diagonal).
+  - Each grip is fitted once, when the item is put in the hand: about a millisecond a hand.
+
+  A wand is pinched along the fingers, and a bow held loosely. The thumb bends about its own axes
+  (it lies turned from the fingers); in a fist it lies across the fingers (above). A hand holding
+  something keeps its grip whatever shape a pose gives the hand.
 - **Technique.** The keys follow how people really fight:
   - A sword's forehand cuts go palm up, the true edge leading, and backhands palm down. Blows land
     with the arm extended and the elbow a little bent.
@@ -1166,6 +1191,9 @@ done with, a tenth of the way at a time and at each key, and check that:
   put away, which then settles into the hand, the hand needn't be turned exactly, and the
   shoulder may go as far as mid-swing);
 - the thumb closes over the fingers round a grip, and both fists close round a two-handed shaft;
+  and (`test/grip.test.js`), on both bodies' extremes, each hilt and haft lies across the palm
+  in front of it, every finger's bones lie round it and none in it, in order down it, the
+  thumb goes across it, and a hilt's fingers stay below its guard;
 - nothing held sinks into the body.
 
 And (`test/clipping.test.js`) nothing worn or carried sinks more than 1.2 cm into the body (what

@@ -9,11 +9,11 @@
 
 import * as THREE from "three";
 import { Rig } from "./rig.js";
-import { EQUIPMENT, limbThickness, SLING, socketOn } from "./equipment.js";
+import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
-import { buildItem, HAND_TORCH_FLAME } from "./items.js";
+import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
 import { LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
@@ -37,6 +37,10 @@ const ROBED = 0.9;
 // wear one
 const IDLE_COMPOSITES = 8;
 const IDLE_EYES = 8;
+
+// How a carried torch's shaft lies across the palm (radians from straight across, towards the
+// fingers at the thumb's side: grip.js), as a staff's does
+const TORCH_TURN = 0.25;
 
 // (Given to the constructor by Character.building: built a step at a time there, not at once)
 const LATER = Symbol("later");
@@ -389,14 +393,17 @@ export class Character {
         }
 
         if (on) {
-            const socket = socketOn(this, "leftHand");
+            // (Its shaft held round, as a pole is: grip.js)
+            const socket = socketOn(this, "leftHand", { haft: { radius: HAND_TORCH_GRIP, turn: TORCH_TURN } });
             const torch = new THREE.Group();
 
             torch.name = "torch";
             torch.add(buildItem("handTorch", socket.fit));
             torch.position.copy(socket.position);
             torch.quaternion.copy(socket.quaternion);
+            torch.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), TORCH_TURN));
             torch.userData.flame = new THREE.Vector3(...HAND_TORCH_FLAME);
+            torch.userData.grip = socket.grip;
             this.rig.bone(socket.bone).add(torch);
             this.torch = torch;
         } else {
@@ -633,7 +640,7 @@ export class Character {
 
             // (Some are in several parts, each on its own socket: spiked boots' iron)
             for (const part of item.parts ?? [item]) {
-                const socket = socketOn(this, part.socket);
+                const socket = socketOn(this, part.socket, { haft: heldRound(part) });
                 const home = { bone: socket.bone, position: socket.position.clone(), quaternion: socket.quaternion.clone() };
 
                 if (part.turn) {
@@ -664,6 +671,10 @@ export class Character {
                 model.userData.home = home;
                 model.userData.sway = item.sway ?? 0;
                 model.userData.hand = /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null;
+                // (Held round its haft or hilt: how the hand closes round it, and a two-handed
+                // haft's other hand, grip.js)
+                model.userData.grip = socket.grip ?? null;
+                model.userData.second = part === item ? secondGrip(this, item) : null;
 
                 const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
 
@@ -798,7 +809,7 @@ export class Character {
             }
 
             if (item.hold) {
-                this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { ...item.hold, grips: item.grips };
+                this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { ...item.hold, grips: item.grips, grip: this.items.find((model) => model.name === id)?.userData.grip ?? null };
             } else if (item.grips) {
                 this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { grips: true };
             }

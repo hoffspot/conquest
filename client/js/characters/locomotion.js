@@ -23,6 +23,7 @@
 
 import * as THREE from "three";
 import { amplitude, CURVES, curveAt, PELVIC_TILT, RUN_CURVES, RUN_STANCE, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "./gait.js";
+import { closeHand } from "./grip.js";
 import { jointAngles, limitRotation } from "./rig.js";
 
 /**
@@ -514,8 +515,17 @@ export class Walker {
                 rig.setAngles(`${side}Hand`, { flex: mix(8, 0), deviate: -5 });
             }
 
-            // Fingers: relaxed, or closed round a grip
+            // Fingers: relaxed, or closed round a grip (round a haft or a hilt as the hand closes
+            // round it, grip.js)
             const grip = hold?.grips;
+            // (A torch carried in the left hand, its shaft held round)
+            const round = grip ? hold.grip : side === "Left" ? this.character.torch?.userData.grip : null;
+
+            if (round) {
+                closeHand(rig, side, round);
+
+                return;
+            }
 
             ["Index", "Middle", "Ring", "Pinky"].forEach((finger, k) => {
                 const curl = grip ? hold.curl?.[k] ?? 78 : style.fingers * (finger === "Index" ? 0.7 : finger === "Pinky" ? 1.25 : 1);

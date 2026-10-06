@@ -328,7 +328,7 @@ function wand() {
 function handTorch() {
     return assemble([
         [at(new THREE.CylinderGeometry(0.016, 0.014, 0.56, 8), 0, 0.2, 0), "wood"],
-        [at(new THREE.CylinderGeometry(0.019, 0.019, 0.09, 8), 0, 0, 0), "leather"],
+        [at(new THREE.CylinderGeometry(HAND_TORCH_GRIP, HAND_TORCH_GRIP, 0.09, 8), 0, 0, 0), "leather"],
         [at(new THREE.CylinderGeometry(0.034, 0.026, 0.12, 9), 0, 0.46, 0), "darkWood"],
         [at(new THREE.CylinderGeometry(0.036, 0.036, 0.015, 9), 0, 0.41, 0), "iron"],
         [at(new THREE.CylinderGeometry(0.036, 0.036, 0.015, 9), 0, 0.5, 0), "iron"],
@@ -337,6 +337,8 @@ function handTorch() {
 
 /** Where a carried torch's flame burns, in its model's frame (metres up its shaft from the grip). */
 export const HAND_TORCH_FLAME = [0, 0.53, 0];
+/** How thick a carried torch's grip is (metres: its leather's radius), as a hand closes round it. */
+export const HAND_TORCH_GRIP = 0.019;
 
 function warHammer() {
     // A long ash haft (gripped a quarter of the way up, the other hand at its end), a square
