@@ -4917,3 +4917,9 @@ converted data is to be measured in M8 against today's hm08 data.
   - The neckline now rises steeply over the shoulders past the neck's sides (`neckRadius`,
     measured from the neck's skin: 6 to 9 cm), still dipping at the front. The jerkin covers the
     shoulders' tops on both bodies, and `test/characters.test.js` checks every triangle there.
+  - The strap across the chest (the baldric, for what's slung on the back) had ragged edges on
+    both bodies: at its own thickness (1 cm) it was under the jerkin (1.2 cm), and 2 cm under a
+    breastplate, so only its middle showed. Straps now lie over what's worn under them, pushed
+    out by their thickness past the furthest of the lower garments at each point
+    (`underneath`): 6 to 15 mm over a jerkin or a breastplate, on both bodies (tested). Posed,
+    where it crosses the shoulder, a jerkin can still show through its edge on MakeHuman's body.
