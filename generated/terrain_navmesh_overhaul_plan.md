@@ -4759,3 +4759,29 @@ converted data is to be measured in M8 against today's hm08 data.
     body (196 to 183). Switched now, those blows would look worse in play.
   - **Next:** the guards' sliding feet and the two-handed blows' forearms on Vitruvian, the
     clips' hands lined up in the retarget, then the switch with Vitruvian's baseline.
+- **2026-10-06, running feet planted where they land.**
+  - Running, a foot can come down with its leg straight. On long-legged bodies the stride puts
+    it down a little above the ground, and the leg straightens all the way to reach it (on
+    Vitruvian, the orcs most, and a few of MakeHuman's).
+  - The leg was then held to 98.5% of its length the moment after. That drew the foot in, and it
+    slid along under the body: up to 5.6 cm in a frame, on 14 of Vitruvian's 30 bodies, in the
+    run and every guard's run.
+  - Now a running foot is planted where it comes down, and its leg may stay as straight as it
+    came down while the foot's down, as the body comes over it (`locomotion.js`, `stretch`).
+    Standing still, planting is unchanged: planting where it came down deepened the kicks'
+    slides.
+  - Two other ways were tried and dropped:
+    - Sinking the pelvis onto each overreached landing, as the knees give standing: the unit
+      tests caught the hips jolting 25 cm in a frame breaking into a run, bobbing 11.5 cm
+      sprinting and a knee flicking sideways.
+    - Running lower all the time, eased on a spring: the orcs' ankles went up to 4° past their
+      range pushing off, on both bodies.
+  - The motion check:
+    - MakeHuman: 32 failing pairs better, none worse. Every running slide is gone (5 bodies, 1.1
+      to 1.8 cm). The baseline is brought down, 1,180 → 1,150.
+    - Vitruvian: 142 better, 10 worse. Planted feet sliding 563 → 433, now fewer than
+      MakeHuman's 498. The worse ones: a thin orc woman's push-off ankle in the guards' runs,
+      3.06° against the 3° limit, and a spiked boot 2 mm deeper into the other shin. Failing pairs
+      1,298 → 1,186, to MakeHuman's 1,150.
+  - **Next:** the forearms in the two-handed blows on Vitruvian (322 to MakeHuman's 124), then the
+    switch.
