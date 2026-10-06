@@ -219,13 +219,30 @@ export function buildDrape(character, id, measures) {
         ];
     };
 
+    // (How much of the cloth at height `y` below the hips goes with the legs: taken up quickly
+    // below the hips, where a thigh driving forward first meets it, all of it from halfway down
+    // to the knees)
+    const onLegs = (y) => (y >= kneeY ? 1 - (1 - Math.min(1, Math.max(0, (hipsY - y) / ((hipsY - kneeY) * THIGH_REACH)))) ** 2 : 1);
+
+    // (How far each leg is out to its side at height `y` as the body is built, from where it is
+    // standing straight down from its hip, as the rig rests it: the legs are built apart, and the
+    // cloth that goes with one comes in with it as it stands)
+    const splay = (side, y) => {
+        const [hip, knee, ankle] = (side > 0 ? [bones.left, bones.leftShin, rig.index.get("LeftFoot")] : [bones.right, bones.rightShin, rig.index.get("RightFoot")]).map((i) => rig.heads[i]);
+        const [from, to] = y >= knee.y ? [hip, knee] : [knee, ankle];
+        const share = Math.min(1, Math.max(0, (from.y - y) / Math.max(1e-6, from.y - to.y)));
+
+        return side * (from.x + (to.x - from.x) * share - hip.x);
+    };
+
     rings.forEach(([y, t, radius], r) => {
         for (let c = 0; c < columns; c++) {
             const angle = angleOf(c);
             const pleat = 1 + PLEAT_DEPTH * t * Math.sin(angle * drape.pleats);
             const out = (reachAt(radius, angle) + over) * pleat;
-            const x = hips.middle.x + Math.sin(angle) * out;
             const z = hips.middle.z + Math.cos(angle) * out;
+            const side = Math.sin(angle) >= 0 ? 1 : -1;
+            const x = hips.middle.x + Math.sin(angle) * out + side * Math.sin(angle) ** 2 * (r === 0 ? 0 : onLegs(y)) * Math.max(0, splay(side, y));
             const shade = 0.86 + 0.14 * (0.5 + 0.5 * Math.sin(angle * drape.pleats)) * Math.min(1, t * 3) + (t === 0 ? 0.14 : 0) * (1 - Math.min(1, r / 2));
 
             positions.push(x, y, z);
@@ -240,9 +257,7 @@ export function buildDrape(character, id, measures) {
                 skinIndex.push(bones.spine, bones.hips, 0, 0);
                 skinWeight.push(0.4, 0.6, 0, 0);
             } else if (y >= kneeY) {
-                // (Taken up quickly below the hips, where a thigh driving forward first meets it)
-                const down = Math.min(1, Math.max(0, (hipsY - y) / ((hipsY - kneeY) * THIGH_REACH)));
-                const legs = 1 - (1 - down) ** 2;
+                const legs = onLegs(y);
 
                 skinIndex.push(bones.hips, alongThigh, asideThigh, 0);
                 skinWeight.push(1 - legs, legs * along, legs * aside, 0);

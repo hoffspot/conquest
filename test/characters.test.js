@@ -963,8 +963,8 @@ describe("clothing and armour (garments.js)", () => {
 
     it("lines lingerie over the nipples and the groin, hiding the skin there, on any body in any pose", () => {
         // Where the skin's nipples and groin are (as its masks paint them: characters/masks), on
-        // the base body the designs are drawn on
-        const base = human.basePositions;
+        // the base body the designs are drawn on (MakeHuman's: HumanData's designPositions)
+        const base = human.designPositions;
         const near = (v, [x, y, z], r) => Math.hypot(Math.abs(base[v * 3]) - x, base[v * 3 + 1] - y, base[v * 3 + 2] - z) < r;
         const nipples = [];
         const groin = [];
@@ -1103,11 +1103,19 @@ describe("clothing and armour (garments.js)", () => {
 
         // The surcoat on the chest; mail at the shoulders under it; the livery's sleeves below the
         // mail's; a boot's toes; each one's roughness and metalness, and heights, with its picture
+        // (At the first such vertex on a texel of the picture: one on a seam of the texture can lie
+        // between its texels)
         const at = (region, test) => {
-            const v = measures.vertices.findIndex((vertex, n) => human.partOf[n] === 0 && vertex.region === region && test(vertex));
-            const r = human.renderSource.indexOf(v);
+            for (const [v, vertex] of measures.vertices.entries()) {
+                const r = human.partOf[v] === 0 && vertex.region === region && test(vertex) ? human.renderSource.indexOf(v) : -1;
+                const layer = r >= 0 ? layerAt(human.uvs[r * 2], human.uvs[r * 2 + 1]) : null;
 
-            return layerAt(human.uvs[r * 2], human.uvs[r * 2 + 1]);
+                if (layer !== null) {
+                    return layer;
+                }
+            }
+
+            return null;
         };
 
         assert.equal(outfit[at("torso", (v) => v.z > 0.1 && Math.abs(v.x) < 0.03 && Math.abs(v.y - measures.landmarks.chest) < 0.03)], "surcoat.human");
@@ -1164,9 +1172,10 @@ describe("clothing and armour (garments.js)", () => {
 
             const boot = size(points);
 
-            // Covering the foot, but no more than a few centimetres bigger (not clown shoes)
+            // Covering the foot, but no more than a few centimetres bigger (not clown shoes): as wide
+            // as it is thick on either side, and a centimetre more
             assert.ok(boot.length > foot.length && boot.length < foot.length + 0.03, `${id} is ${boot.length} long for a ${foot.length} foot`);
-            assert.ok(boot.width > foot.width && boot.width < foot.width + 0.025, `${id} is ${boot.width} wide for a ${foot.width} foot`);
+            assert.ok(boot.width > foot.width && boot.width < foot.width + 2 * GARMENTS[id].thickness + 0.01, `${id} is ${boot.width} wide for a ${foot.width} foot`);
         }
     });
 
@@ -1362,7 +1371,7 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
     });
 
     it("swings with the legs below the hips: its sides with their own shins at the hem, its front and back with its own bones", () => {
-        const { geometry } = buildDrape(f, "skirt", measures);
+        const { geometry, columns } = buildDrape(f, "skirt", measures);
         const index = geometry.attributes.skinIndex.array;
         const weight = geometry.attributes.skinWeight.array;
         const position = geometry.attributes.position;
@@ -1372,7 +1381,9 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
 
         for (let i = 0; i < position.count; i++) {
             if (Math.abs(position.getY(i) - hem) < 1e-4) {
-                const [x, z] = [position.getX(i), position.getZ(i)];
+                // (Which way round it is: its sides are built out as far as the legs are apart)
+                const angle = ((i % columns) / columns) * 2 * Math.PI;
+                const [x, z] = [Math.sin(angle), Math.cos(angle)];
                 const side = x > 0 ? "Left" : "Right";
                 const way = z > 0 ? "front" : "back";
 
@@ -1485,8 +1496,10 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
         const priestess = { macro: { gender: 0, muscle: 0.4, weight: 0.6, height: 0.55, bust: 0.6 } };
         const priest = { macro: { gender: 1, muscle: 0.45, weight: 0.7, height: 0.6 }, details: { belly: 0.5 } };
 
-        // (On main the alb let a shin or boot out 6 to 10 cm, 4 to 6 cm through every stride)
-        for (const [shape, id, most] of [[priestess, "albSkirt", 0.01], [FOLK.wench.shape, "gown", 0.01], [priest, "albSkirt", 0.03]]) {
+        // (On main the alb let a shin or boot out 6 to 10 cm, 4 to 6 cm through every stride. Built
+        // round legs set apart, its sides came in with them as they stood: on Vitruvian, whose legs
+        // are set further apart, a foot came out 3 to 4 cm)
+        for (const [shape, id, most] of [[priestess, "albSkirt", 0.01], [FOLK.wench.shape, "gown", 0.01], [priest, "albSkirt", 0.015]]) {
             const { most: out } = through(shape, id, NATURAL_SPEED);
 
             assert.ok(out < most, `${id}: out ${(out * 100).toFixed(1)} cm`);

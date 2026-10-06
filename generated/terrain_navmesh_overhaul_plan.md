@@ -4688,3 +4688,29 @@ converted data is to be measured in M8 against today's hm08 data.
     stun's 4 → 2), held things 211 → 209 (the toast's tankard in the head 4 → 2).
   - **Next:** garments, hair and skirts fitted to Vitruvian, sitting on its longer thighs, its
     baseline, and the game switched to it.
+- **2026-10-06, garments, hair and skirts on Vitruvian** (§10; docs/CHARACTERS.md *Vitruvian*,
+  *Lingerie*, *Drapes*, hair, toe boxes).
+  - **Designs where they're drawn.** Lingerie's and surcoats' designs are drawn on MakeHuman's
+    base body, and Vitruvian's base is laid out otherwise (its chest 12 cm lower, its crotch
+    4 cm), so a bra lay on its collarbones and the surcoat's crown sat high. The Vitruvian build
+    now gives each vertex its place on MakeHuman's base body too (`designPositions`: the point of
+    MakeHuman's skin, fitted onto it, that it lies on; on the head by the face map), and
+    `texelMap` and `designSolid` draw designs there. The bra's and briefs' linings are a little
+    larger, so the nipples and the groin are under lining on both bodies (the lingerie test).
+    `vitruvian.bin` is rebuilt (1.87 → 2.03 MB).
+  - **Toe caps.** Their columns set off along the boot's slope from each cut point's own
+    neighbours, which on Vitruvian's foot lay to its side, so the cap came out 2 cm wider than the
+    toes with a crease at the cut. The slope is now taken from the boot 1 to 3 cm behind each
+    point, the same way round the foot. (The footwear test's allowance is now twice the boot's
+    thickness and a centimetre: plate boots are thicker.)
+  - **Hair.** Bangs end at the brows (Vitruvian's forehead runs lower under its hairline), and a
+    parting has denser roots (an eighth of the strands, at least 30).
+  - **Skirts.** A drape is built round the legs as they're set apart in the body as built, and
+    its sides go with them, so standing they came in as far as the legs did: on Vitruvian
+    (ankles 8.5 cm out from the hips, MakeHuman's 6.8), with narrower hips, a walking priestess's
+    and priest's feet came 2.6 and 4.3 cm out through the alb's sides. A drape's sides are now
+    built out as far as the legs are apart at their height (`drapes.js`), on both bodies: walking,
+    Vitruvian's alb lets the feet out 0.4 and 1.1 cm, and MakeHuman's priest's none (was 2.2).
+    The test's limit for the priest is now 1.5 cm (was 3).
+  - **Next:** sitting on Vitruvian's longer thighs (with the seated tankards cleared), its
+    baseline, and the game switched to it.

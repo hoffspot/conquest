@@ -567,7 +567,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
         // Parted hair starts right at the parting, and falls away from it either side: roots all
         // along it, a hair's breadth either side, so it's a thin line, not a bald strip
         if (hair.flow === "part") {
-            const count = Math.max(24, Math.round(hair.strands * 0.1));
+            const count = Math.max(30, Math.round(hair.strands * 0.12));
 
             for (let n = 0; n < count; n++) {
                 const z = PARTING_ENDS + (0.08 - PARTING_ENDS) * ((n + next()) / count);
@@ -642,7 +642,9 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
             const lie = (k) => 0.002 + hair.volume * layer * Math.min(1, k * 4);
             const stop = hair.flow === "knot" ? knot : hair.flow === "tail" ? tie : hair.flow === "twin" && !bang ? ties[side] : null;
             const start = point.clone().addScaledVector(normal.dot(outward) > 0 ? normal : outward, 0.001);
-            const hem = hair.hem ? at(0, hemAt(hair.hem, z) + (next() - 0.5) * 2 * hair.ragged, 0).y : null;
+            // (Cut hair ends at its hem; a bang at the brows, however low the forehead runs under
+            // the hairline)
+            const hem = hair.hem ? at(0, hemAt(hair.hem, z) + (next() - 0.5) * 2 * hair.ragged, 0).y : bang ? at(0, BROWS, 0).y : null;
             const points = grow(start, direction, {
                 // (Uncut hair growing low on the head, round the ears and at the nape, is shorter)
                 length: bang ? hair.bangs * (0.85 + 0.3 * next()) : hair.length * (hem === null && !stop ? (0.9 + 0.2 * next()) * (0.4 + 0.6 * smoothstep(-0.3, 0, outward.y)) : 1),
@@ -861,6 +863,9 @@ function grow(root, direction, { length, segments, bend = 0, head = null, lie = 
 
 // Strands are grown in steps this long (metres), then resampled
 const FINE_STEP = 0.005;
+
+// How low a bang falls at most (face coordinates' height: the brows)
+const BROWS = 0.03;
 
 // A parting: how near the middle (face coordinates) its roots are, and where it ends behind (at
 // the crown)
