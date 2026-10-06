@@ -46,6 +46,9 @@ Others contribute too, so a green pull request can go stale (contribution.md, se
 
 ## Before every push
 
+- Docs only (nothing changed but Markdown files): run none of the checks below that run code
+  (`npm run check`, `npm run check:motion`, the browser tests, the pipeline's checks). CI still
+  runs them all, `test/contribution.test.js` among them, which reads contribution.md.
 - `npm run build:manifest` if anything under `client/` changed.
 - `npm run check` (lint and unit tests).
 - `npm run check:motion` if characters' motions, bodies or what they hold changed.
