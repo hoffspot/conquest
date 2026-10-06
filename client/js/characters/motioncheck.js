@@ -261,6 +261,42 @@ function skinOf(human) {
     return skins.get(human);
 }
 
+// The skin folded under, for each body (its normals): a vertex facing against its neighbours, as
+// some round Vitruvian's nails and fingertips do (30 or so; MakeHuman's, none). It isn't measured
+// against: nearest a thing in front of it, it had it in the skin (an orc's shield 4.5 cm "into"
+// a thumb 4.5 cm behind it)
+const folds = new WeakMap();
+const besides = new WeakMap();
+
+function foldedOf(human, normals) {
+    if (!besides.has(human)) {
+        const source = human.renderSource;
+        const next = Array.from({ length: human.vertexCount }, () => new Set());
+
+        for (let i = 0; i < human.indices.length; i += 3) {
+            const corners = [0, 1, 2].map((k) => source[human.indices[i + k]]);
+
+            corners.forEach((a) => corners.forEach((b) => a !== b && next[a].add(b)));
+        }
+
+        besides.set(human, next.map((each) => [...each]));
+    }
+
+    if (!folds.has(normals)) {
+        const folded = new Uint8Array(human.vertexCount);
+
+        besides.get(human).forEach((next, v) => {
+            const sum = [0, 1, 2].map((k) => next.reduce((total, u) => total + normals[u * 3 + k], 0));
+
+            folded[v] = sum[0] * normals[v * 3] + sum[1] * normals[v * 3 + 1] + sum[2] * normals[v * 3 + 2] < 0 ? 1 : 0;
+        });
+
+        folds.set(normals, folded);
+    }
+
+    return folds.get(normals);
+}
+
 // How far each bone's skin reaches from its head (metres, at rest: its vertices' furthest), for
 // each body: a bone whose skin can't reach anything looked at isn't skinned
 const reaches = new WeakMap();
@@ -296,6 +332,7 @@ function under(character, groups) {
     const { human, rig, positions, normals } = character;
     const { heaviest, names } = madeFor(human);
     const { at: skinAt, facing: skinFacing } = skinOf(human);
+    const folded = foldedOf(human, normals);
     const reach = reachOf(character);
     const near = new Set();
     const boxes = new Map();
@@ -333,7 +370,7 @@ function under(character, groups) {
     const normal = new THREE.Vector3();
 
     for (let v = 0; v < human.vertexCount; v++) {
-        if (human.partOf[v] !== 0 || !skinned[heaviest[v]] || !around.has(cellOf(point.fromArray(positions, v * 3).applyMatrix4(matrices[heaviest[v]])))) {
+        if (human.partOf[v] !== 0 || folded[v] || !skinned[heaviest[v]] ||!around.has(cellOf(point.fromArray(positions, v * 3).applyMatrix4(matrices[heaviest[v]])))) {
             continue;
         }
 

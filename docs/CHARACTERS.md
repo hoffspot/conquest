@@ -205,6 +205,14 @@ as it is:
   and sized to it, in every shape. Found from the skin, a bigger body's fingers shrank (the
   tallest man's index finger's middle bone went from 2.6 to 1.7 cm, where MakeHuman's grows from
   2.3 to 2.5), its palm didn't grow, and so its grips were wrong.
+- **The hands' skin** goes with those joints: in MakeHuman's shapes carried over, a hand's skin
+  moves with its bones, and only the flesh's own change is carried (MakeHuman's change, less
+  what its bones' moves make of it), as Vitruvian's own shapes' is. Carried whole, MakeHuman's
+  change was turned as each of its fingers lies on Vitruvian's, so a longer arm, which moves the
+  whole hand as one, sent each finger's skin its own way, up to 6 cm off its bones (MakeHuman's,
+  none). On the bulkiest orcs (`armLength` 0.5, `handSize` 0.7) the fingers' skin lay a median
+  36 mm from their bones instead of 8, and they bent thin, flat and twisted.
+  `test/vitruvian.test.js` checks that the fingers' skin moves with their bones.
 - **Its rest.** Its knees rest straighter than MakeHuman's, and its fingers and thumbs otherwise.
   The manifest's `landmarks.rest` says how its default body rests them, and the rig measures its
   limbs as though it rested them as MakeHuman's does (the rest frames, below). The tests make
@@ -262,13 +270,12 @@ lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) an
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
 against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 498
 to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, planted feet
-sliding 429 to 488, but forearms in the torso 177 to 55 (most in the staff's and war hammer's
+sliding 429 to 488, but forearms in the torso 175 to 55 (most in the staff's and war hammer's
 two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
-225 to 194; 1,070 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
+215 to 194; 1,061 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
-Still to come: its hands on the bulkiest orcs (thin and twisted), its own skin textures, the
-inside of the mouth, and blinking and expressions.
+Still to come: its own skin textures, the inside of the mouth, and blinking and expressions.
 
 ### Skin, eyes and hair
 
@@ -1206,6 +1213,9 @@ and slung again with them; and the folk's and heroes' rests, each stepped a fram
 second, as in the game. Every point along what's held is looked at (2 cm apart along its edges,
 not only its corners), against the nearest of the body's vertices (not the hand holding it or
 that hand's forearm), and it's in only if it's behind that skin, not off to one side of it.
+Skin folded under isn't looked at: a vertex facing against its neighbours, as 30 or so round
+Vitruvian's nails and fingertips do (MakeHuman's, none). Nearest a thing in front of it, it had
+it in the skin: an orc's shield 4.5 cm "into" a thumb 4.5 cm behind it.
 
 **The motion check** (`client/js/characters/motioncheck.js`, `npm run check:motion`, CI's
 `motion` job) goes further. It plays every motion, a frame at a time at 30 frames a second, on 30
@@ -1285,7 +1295,9 @@ failing pairs (joints past their range 498, planted feet sliding 429, things hel
 225, forearms in the torso 177, feet in the ground 100, second hands off their hafts 32), where
 MakeHuman's had 1,037. MakeHuman's body can still be checked with `--data human`, but there's
 one baseline, the game's body's, so it's measured against Vitruvian's failures (and `--update`
-keeps only the game's body's).
+keeps only the game's body's). With its hands' skin going with their bones (*The hands' skin*,
+above), and its folded skin not measured against (`test/clipping.test.js`, above), 1,061: things
+held in the body 215, forearms in the torso 175, the rest as they were.
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its

@@ -1223,6 +1223,53 @@ async function main() {
         return flesh.get(name);
     };
 
+    // The hands' skin in MakeHuman's shapes carried over: moved with its bones (as the hands'
+    // joints move, above), and only the flesh's own change carried over (MakeHuman's, less what
+    // its bones' moves make of it), as Vitruvian's own shapes are. Carried whole, MakeHuman's
+    // change was turned as each of its fingers lies on Vitruvian's, so a longer arm, moving the
+    // whole hand as one, sent each finger's skin its own way, up to 6 cm off its bones: the
+    // bulkiest orcs' fingers bent thin and twisted.
+    const handBones = new Set(bones.flatMap(({ name }, b) => (/^(Left|Right)Hand/.test(name) ? [b] : [])));
+    const handShare = sources.map((entry) => {
+        const list = entry.kind === "vitruvian" ? (ownWeights.get(entry.v) ?? []) : [];
+        const total = list.reduce((sum, [, weight]) => sum + weight, 0) || 1;
+
+        return list.reduce((sum, [b, weight]) => sum + (handBones.has(b) ? weight : 0), 0) / total;
+    });
+    const inHands = sources.flatMap((entry, i) => (handShare[i] > 0 ? [i] : []));
+
+    for (const name of shapeNames.filter((each) => !ownShape(each))) {
+        const { deltas: theirs, joints: theirJoints } = shapes.get(name);
+        const { deltas, joints } = carried.get(name);
+        const theirMaps = boneMaps(humanJoints, Float64Array.from(humanJoints, (value, k) => value + theirJoints[k]), bones.length);
+        const theirFlesh = new Float64Array(theirs.length);
+
+        for (let h = 0; h < humanCount; h++) {
+            const p = [human.basePositions[h * 3], human.basePositions[h * 3 + 1], human.basePositions[h * 3 + 2]];
+            const weights = humanWeights(h);
+
+            theirFlesh.set([0, 1, 2].map((k) => theirs[h * 3 + k]), h * 3);
+            humanBones(h).forEach((b, i) => {
+                const { matrix, from: head, to } = theirMaps[b];
+                const local = apply(matrix, sub(p, head));
+
+                for (let k = 0; k < 3; k++) {
+                    theirFlesh[h * 3 + k] -= weights[i] * (to[k] + local[k] - p[k]);
+                }
+            });
+        }
+
+        const body = skeletal(joints);
+
+        for (const i of inHands) {
+            const flesh = changeAt(theirFlesh, sources[i]);
+
+            for (let k = 0; k < 3; k++) {
+                deltas[i * 3 + k] = handShare[i] * (body[i * 3 + k] + flesh[k]) + (1 - handShare[i]) * deltas[i * 3 + k];
+            }
+        }
+    }
+
     // (The head keeps MakeHuman's shapes carried over, as its face's are: what's worn on it, hair,
     // helmets, beards, tusks, is fitted to those; the neck goes from one to the other as it's the
     // head's)

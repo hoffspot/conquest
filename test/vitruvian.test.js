@@ -322,6 +322,38 @@ describe("the Vitruvian body (client/characters/vitruvian.*)", () => {
         }
     });
 
+    it("moves the hands' skin with their bones as the sliders move them, as on MakeHuman's", () => {
+        // (A longer arm moves the whole hand as one. Carried over from MakeHuman's whole, each
+        // finger's skin went its own way, up to 6 cm off its bones, and the bulkiest orcs' fingers
+        // bent thin and twisted)
+        const owner = Int32Array.from({ length: vitruvian.vertexCount }, (_, v) => (vitruvian.partOf[v] === 0 ? vitruvian.skinIndices[v * 4] : -1));
+        const fingers = vitruvian.bones.flatMap(({ name }, b) => (/^RightHand(Index|Middle|Ring|Pinky|Thumb)[123]$/.test(name) ? [b] : []));
+
+        for (const details of [{ armLength: 1 }, { armLength: -1 }, { neck: 1, shoulders: 0.9, armLength: 0.5, handSize: 0.7 }]) {
+            const shaped = vitruvian.shape({ macro: { gender: 1, muscle: 1, weight: 1 }, details });
+            const bones = vitruvian.shape({ macro: { gender: 1, muscle: 1, weight: 1 } });
+
+            for (const b of fingers) {
+                // How far the finger's skin moves on its own, the bone's move taken off
+                const move = [0, 1, 2].map((k) => shaped.joints[b * 6 + k] - bones.joints[b * 6 + k]);
+                const off = [0, 0, 0];
+                let count = 0;
+
+                for (let v = 0; v < vitruvian.vertexCount; v++) {
+                    if (owner[v] === b) {
+                        [0, 1, 2].forEach((k) => (off[k] += shaped.positions[v * 3 + k] - bones.positions[v * 3 + k] - move[k]));
+                        count++;
+                    }
+                }
+
+                const drift = Math.hypot(...off) / count;
+
+                assert.ok(count > 0, vitruvian.bones[b].name);
+                assert.ok(drift < (details.handSize ? 0.025 : 0.004), `${JSON.stringify(details)}: ${vitruvian.bones[b].name}'s skin ${(drift * 1000).toFixed(0)} mm off its bone`);
+            }
+        }
+    });
+
     it("puts an orc's tusks at its lower lip, as on MakeHuman's", () => {
         // (Where the jaw's pushed the lower lip forward: the orcs' underbite. Its height in face
         // coordinates, as MakeHuman's)
