@@ -2591,15 +2591,6 @@
   "flinch/arcane|orc-thinnest-f": {
    "joint": 10.67
   },
-  "flinch/crush|orc-bulkiest-f": {
-   "item": 0.0129
-  },
-  "flinch/crush|orc-shortest-f": {
-   "item": 0.0157
-  },
-  "flinch/crush|orc-thinnest-f": {
-   "item": 0.0127
-  },
   "flinch/hack|lizard-bulkiest-f": {
    "limb": 0.0316
   },
@@ -3916,10 +3907,10 @@
    "joint": 3.08
   },
   "sheathe/cleaver|darkElf-tallest-m": {
-   "joint": 3.04
+   "joint": 3.03
   },
   "sheathe/cleaver|darkElf-thinnest-f": {
-   "joint": 3.23
+   "joint": 3.05
   },
   "sheathe/cleaver|elf-bulkiest-f": {
    "joint": 3.22

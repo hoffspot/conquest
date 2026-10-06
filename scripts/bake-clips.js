@@ -158,9 +158,16 @@ const SHAPES = [["open", 2], ["relaxed", 17], ["cup", 29], ["grip", 73], ["fist"
 const round = (value, places) => Number(value.toFixed(places)) + 0;
 const vector = (v, places = 2) => v.toArray().map((x) => round(x, places));
 
-/** The reference body (the game's body's average adult: body.js GAME_BODY), rigged, with a walker to find its feet. */
+// The body the clips are baked on: MakeHuman's, whichever the game plays on (body.js GAME_BODY).
+// What's baked is the same on any body (joint angles; hands in arm lengths from the shoulder,
+// turned as the body is), but Vitruvian's rest hand is turned 46° about the forearm from the
+// clips' (MakeHuman's 6°) and the retarget lines up only the arms (bvh.js), so on Vitruvian the
+// clips' fingers curl about the wrong axis and the palms come out turned: a jab's fists open
+const BAKE_BODY = "human";
+
+/** The reference body (MakeHuman's average adult: BAKE_BODY), rigged, with a walker to find its feet. */
 export function referenceBody() {
-    const human = readHumanData();
+    const human = readHumanData(BAKE_BODY);
     const { positions, joints } = human.shape({});
     const rig = new Rig(human.bones, human.landmarks?.rest);
     const object = new THREE.Group();

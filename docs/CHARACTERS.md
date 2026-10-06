@@ -255,10 +255,14 @@ Before the game switches to it, its motion check (`npm run check:motion -- --dat
 should come out no worse than MakeHuman's. The first run had 4,937 joints past their range against
 MakeHuman's 718: nearly all knees, pushed straight as they bent (now bent about their hinge, for
 both bodies: Foot locking, below), and ankles bending further over the foot walking (now the heel
-lifts): now 734 (MakeHuman's 580). What's left comes from its build: its hip joints are higher (12.6 cm above the crotch,
-MakeHuman's 9.5) and its legs about 4 cm longer, so seated rests put a foot in the ground; and its
-shoulders are 2 cm narrower with a shorter upper arm, so forearms come nearer the chest, most
-holding a staff or hammer (two-handed, which aren't moved out of the torso).
+lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
+4 cm longer (seated, the knee is now raised first: *Sitting*); its shoulders are 2 cm narrower
+with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
+against MakeHuman's): joints past their range 490 to 525, feet in the ground 100 to 126, second
+hands off their hafts 88 to 148, but forearms in the torso 322 to 124 (most in the war hammer's
+and staff's two-handed blows, which aren't moved out of the torso, the hammer's draw and
+put-away, and kicks), planted feet sliding 563 to 530 (in every guard, 14 bodies to 4) and things
+held in the body 196 to 183. The game's clipping test passes on it.
 
 Still to come: the game switched to it (with its lower-detail body for far characters, and the
 motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
@@ -639,9 +643,10 @@ gauntlets. It can hide things: a helmet hides the hair above its rim. It can als
 is carried when walking: a shield at the side, its face out (or slung on the back, below), a
 staff or war hammer upright, a sword or wand lowered, a grimoire open on the palm, fists clenched,
 with less arm swing and a gripping fist. An arm swinging free is held 10° further out when
-something hangs at its hip (a wand in the belt), its hand wears spiked knuckles, or a sword or
-cleaver hangs canted there (the hilt held back off the forearm by the scabbard swinging aside,
-below), so it swings past them, not through them (`Character.clearing`); an arm carrying
+something hangs at its hip (a wand in the belt) or a sword or cleaver hangs canted there (the
+hilt held back off the forearm by the scabbard swinging aside, below), and 16° when its hand
+wears spiked knuckles (at 10°, a running cat woman's left fist came 1.9 cm into Vitruvian's
+fuller thigh), so it swings past them, not through them (`Character.clearing`); an arm carrying
 something, 5° further out from what hangs at its hip only (`Character.hung`).
 
 **Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
@@ -1078,9 +1083,10 @@ anatomically, whatever the body's size:
     higher and further out, the elbows in and down before the ribs, the chin down and the knees
     bent. Each punch leaves straight from the guard, not drawn back or wound up first, the body
     turning into it and the other fist kept at the chin: a straight punch at the shoulder's
-    height turning palm down, a hook with the elbow raised level with the fist, an uppercut from
-    a dip of the knees with the palm to the body, a body blow from dropping low, an overhand up
-    over the line from the guard.
+    height turning palm down, a hook with the elbow raised level with the fist (carried round,
+    up and out, after it lands, not down across the lead fist's forearm), an uppercut from a dip
+    of the knees with the palm to the body, a body blow from dropping low, an overhand up over
+    the line from the guard.
   - Spells are pushed out with the palm, or lifted in a cupped hand.
 - **Out of the body.** What's held stays out of the body. A staff's or hammer's butt and a bow's
   limbs pass beside the legs and hips, not through them. A tankard's rim meets the lower lip when
@@ -1231,7 +1237,7 @@ effect where it lands, so how a character reacts depends on what hit it:
 | strike (staff) | rocks back, head thrown back | `Hit_Chest`: doubling over it | dust |
 | arcane (wand) | a shudder through the whole body | | violet light |
 | fire (grimoire) | flinches back, arms up to shield the face | | fire |
-| crush (war hammer) | doubled over, knees buckling, knocked back | | a flash and dust |
+| crush (war hammer) | doubled over, knees buckling, knocked back, the head kept up (bowed with the chest, it came down onto a shield hand held up before the face) | | a flash and dust |
 | pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | `Hit_Chest` | sparks |
 | punch (gauntlets) | the head snaps round | `Hit_Head`: the head jolted, the body knocked back a little | a flash and dust |
 | hack (orc cleaver) | a heavy cut that twists and staggers | | sparks |
@@ -1286,7 +1292,7 @@ a flourish:
 | Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand, brought down out to the side of the hip (straight down, it went into the hips) and hung back there |
 | Staff | Up over the right shoulder, the elbow leading up and forward, to the staff by the ear (the other hand pushing its lower end up from behind the hip), pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder, the elbow forward as the hand comes away |
 | War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm out before the chest (lower, the haft's foot went into the hips) | Raised upright out in front in one hand, then hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away (swung straight back off the guard, its head went through the face and shoulders) |
-| Orc cleaver | Across in front of the belly to the grip at the left hip, the other hand on the belt beside it, ripped up and out across the body, wheeled round over the head, and brandished with a snarl | Brought down across the body, the point down to the ring at the left hip, the body turning into it, and dropped through |
+| Orc cleaver | Across in front of the belly to the grip at the left hip, the other hand on the belt beside it, ripped up and out across the body, wheeled round over the head, and brandished with a snarl | Brought down across the body, the point down and out to the ring at the left hip (clear of the thigh), the body turning into it, and dropped through |
 | Bow | Up over the left shoulder, the elbow leading up and forward, pulled over and swung down in front, spinning, held upright and its string plucked | Raised, turned over at the left side, out from the head, and slung back over the left shoulder |
 | Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
 | Spiked boots | Up on guard, and shadow kicks: a snap kick high in the air, the knee driven up | Standing down: the fists dropped, the shoulders and neck rolled loose |
@@ -1455,7 +1461,7 @@ as the barkeep does, at the counter.
 | | a little bow | hands together at the waist, a quick bow |
 | | tidying the papers | (the barkeep's wiping the bar) |
 | | tucking back her hair | (the serving wench's) |
-| Adventurer | stretching | both arms up high and apart, clear of a hat's brim, the back arched |
+| Adventurer | stretching | both arms up high and apart, going up wide of a hat's brim, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |
 | | a yawn | a hand to the mouth, the head back, the shoulders up |
@@ -1525,7 +1531,11 @@ measures it as it does any other:
 
 1. Retarget it (above) onto the average body, in Node: the arms as the clip has them (not held to
    their ranges: they're reached again within them), every other joint within its range; the
-   lower foot on the ground.
+   lower foot on the ground. The body is MakeHuman's (`BAKE_BODY`), whichever the game plays
+   on: what's baked fits any body, but Vitruvian's rest hand is turned 46° about the forearm from
+   the clips' (MakeHuman's, 6°), and the retarget lines up only the arms and forearms, so on
+   Vitruvian the clips' finger curl went about the wrong axis and the palms came out turned (a
+   jab's fists open).
 2. At every frame, take the spine's, neck's, head's and collarbones' joint angles (`rig.js`
    `jointAngles`: `jointRotation` backwards), and each hand's place (arm lengths from its
    shoulder, as `at`), how what it holds points (`point`, `edge`) or its palm faces (`palm`,

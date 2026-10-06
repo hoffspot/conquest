@@ -4728,3 +4728,34 @@ converted data is to be measured in M8 against today's hm08 data.
     further out, clear of a thigh tipped up (held where it was, a 5 cm raise put the thighs into
     it on 24 more pairs on Vitruvian).
   - **Next:** Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, the last clipping on Vitruvian, and the switch held back** (§10;
+  docs/CHARACTERS.md *Items*, *Arms and hands*, *Reactions*, *Drawing weapons and putting them
+  away*, *Resting*, *Clips in the game*). With the game set to Vitruvian, the clipping test failed five ways; each is fixed,
+  on both bodies:
+  - **Running in spiked gauntlets**, a cat woman's left fist came 1.9 cm into Vitruvian's fuller
+    thigh: an arm swinging free is held 16° out with spiked knuckles on its hand
+    (`KNUCKLE_CLEARING`), 10° as before for what hangs at the hip.
+  - **The crush flinch** bowed the head 12° onto a shield hand held up before the face (an orc's
+    helm 1.6 cm into it): the head now tips back 3° as the chest folds, kept off the hand.
+  - **The hook's follow-through** came down across the lead fist's forearm (1.7 cm): carried
+    round up and out instead.
+  - **Putting the cleaver away**, its blade went 2.2 cm into the left thigh: the point is taken
+    down further out.
+  - **The adventurer's stretch**: a mage's thumb went 2.6 cm into her hat's brim going up: the
+    hands go up a hand's breadth further apart.
+  - The motion check: MakeHuman 4 failing pairs better, none worse (the baseline brought down,
+    1,183 → 1,180); Vitruvian 12 better, none worse.
+  - **The clips' bake stays on MakeHuman's body** (`bake-clips.js` `BAKE_BODY`). Baked on
+    Vitruvian, the jab's fists came out open and its palms turned up: Vitruvian's rest hand is
+    turned 46° about the forearm from the clips' (MakeHuman's 6°), and the retarget lines up only
+    the arms (`bvh.js`), so the clips' finger curl went about the wrong axis. The keys baked are
+    body-relative and play on either body; the lab plays the clips live, so its clips on
+    Vitruvian show it until the retarget lines up the hands too.
+  - **The switch held back.** With all of the above, Vitruvian's motion check has 1,298 failing
+    pairs to MakeHuman's 1,180: fewer joints past their range (490 to 525), feet in the ground
+    (100 to 126) and second hands off their hafts (88 to 148), but more forearms in the torso (322
+    to 124: the war hammer's and staff's blows 65 and 83 to 19 and 41, the hammer's draw and
+    put-away, kicks), planted feet sliding in every guard (14 bodies to 4) and things held in the
+    body (196 to 183). Switched now, those blows would look worse in play.
+  - **Next:** the guards' sliding feet and the two-handed blows' forearms on Vitruvian, the
+    clips' hands lined up in the retarget, then the switch with Vitruvian's baseline.
