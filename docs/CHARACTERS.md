@@ -184,6 +184,13 @@ as it is:
   lower and 2.2 cm further forward than its own, and the manifest's `landmarks.shoulder` says so
   in arm lengths (the left's; the right's mirrored). The hands' places start from there. (Round
   the shoulder itself, the two bodies' skin lies alike about their joints.)
+- **The arms.** Vitruvian's elbow joint is higher up the arm than MakeHuman's: on the default
+  body the upper arm is 20.4 cm and the forearm 25.5 (MakeHuman's 24.2 and 23.9), so the same
+  hand place puts its forearm more steeply across the body. Its joints are kept as they are, and
+  the poses that hold something low before the body hold it further out instead (on both
+  bodies): the grimoire's book (before the belly, turning with the chest as the blows turn it),
+  and the staff's and war hammer's hands on guard (their forearms came into the belly and hips,
+  and two-handed hands aren't moved out of the torso).
 - **The hands' joints.** The wrist is found from the skin, as every joint is; the fingers' and
   thumbs' joints from the wrist as MakeHuman's are, turned as its hand is laid onto Vitruvian's
   and sized to it, in every shape. Found from the skin, a bigger body's fingers shrank (the
