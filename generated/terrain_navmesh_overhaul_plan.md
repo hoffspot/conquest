@@ -4672,3 +4672,19 @@ converted data is to be measured in M8 against today's hm08 data.
     25, 6 cm), joints 499 → 490 (the hammer's 17 → 8); 40 better, 2 worse (two orc men's left
     shoulder 2° further past its range at the wind-up). The baseline is updated.
   - **Next:** Vitruvian's baseline, and the game switched to it.
+- **2026-10-06, Vitruvian's wrists and the tests' rigs** (§10; docs/CHARACTERS.md *Vitruvian*).
+  - **The tests' rigs** (`test/actions.test.js`, `characters.test.js`, `wounds.test.js`) were
+    made without the manifest's `landmarks.rest`, which the game passes: on Vitruvian, the fists
+    and grips closed with the thumb along the fingers and a sprinting foot slid 5.6 cm, in the
+    tests only. They're made as the game makes them now.
+  - **Five keys bent Vitruvian's wrist 37° to 50° past its range** (the arms test's strain; its
+    forearm is longer than MakeHuman's and its upper arm shorter, so a hand drawn in close lies
+    steeper): the stun's palm thrust, the grimoire's palm push, the hair tuck (the fingers now
+    up past the ear, and the hand out to the side on its way down), the wand's flick and the bow
+    slung back. Each is turned or tipped back less. The toast is raised a little higher, so the
+    tankard is over 15 cm above Vitruvian's shoulder at its top, as the rests' test wants.
+  - **The numbers** (failing pairs, against PR #207): MakeHuman unchanged (none better or worse;
+    the baseline is unchanged). Vitruvian, 4 better and none worse: forearms 324 → 322 (the
+    stun's 4 → 2), held things 211 → 209 (the toast's tankard in the head 4 → 2).
+  - **Next:** garments, hair and skirts fitted to Vitruvian, sitting on its longer thighs, its
+    baseline, and the game switched to it.

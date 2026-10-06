@@ -190,7 +190,14 @@ as it is:
   the poses that hold something low before the body hold it further out instead (on both
   bodies): the grimoire's book (before the belly, turning with the chest as the blows turn it),
   and the staff's and war hammer's hands on guard (their forearms came into the belly and hips,
-  and two-handed hands aren't moved out of the torso).
+  and two-handed hands aren't moved out of the torso). With the forearm steeper, a hand drawn in
+  close with its palm out bends the wrist further back too, and five such keys wanted it 37° to
+  50° past its range (the arms test's strain): the stun's palm thrust and the grimoire's palm
+  push drawn back (the palm now turned a little out and the fingers up), the hair tuck (the
+  fingers up past the ear, and the hand brought out to the side on its way down), the wand's
+  flick cocked back and the bow slung back over the shoulder (each tipped back a little less). And
+  the toast is raised a little higher: raised as before, Vitruvian's tankard came 14 cm above
+  the shoulder, short of the 15 cm the rests' test wants of a toast held high.
 - **The hands' joints.** The wrist is found from the skin, as every joint is; the fingers' and
   thumbs' joints from the wrist as MakeHuman's are, turned as its hand is laid onto Vitruvian's
   and sized to it, in every shape. Found from the skin, a bigger body's fingers shrank (the
@@ -198,7 +205,10 @@ as it is:
   2.3 to 2.5), its palm didn't grow, and so its grips were wrong.
 - **Its rest.** Its knees rest straighter than MakeHuman's, and its fingers and thumbs otherwise.
   The manifest's `landmarks.rest` says how its default body rests them, and the rig measures its
-  limbs as though it rested them as MakeHuman's does (the rest frames, below).
+  limbs as though it rested them as MakeHuman's does (the rest frames, below). The tests make
+  their rigs with it too, as the game does (`new Rig(bones, landmarks.rest)`): made without it,
+  Vitruvian's fists and grips closed elsewhere (the thumb along the fingers) and a sprinting
+  foot slid 5.6 cm.
 - **The face.** Face coordinates (`face.js`) are measured from between the eyes, and scaled by
   the eyes' spacing. The skin's features (cheeks, nose, under the eyes, brows, beard, hairline,
   ears), hair, helmets, cat folk's ears and tusks are all placed in them, as on MakeHuman's head.
