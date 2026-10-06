@@ -374,7 +374,7 @@ function handOf(character, side, held) {
         const frame = turned.multiply(rig.frames[rig.index.get(`${Side}Hand`)]);
         const x = new THREE.Vector3(1, 0, 0).applyQuaternion(frame);
         const y = new THREE.Vector3(0, 1, 0).applyQuaternion(frame);
-        const curl = FINGERS.flatMap((finger) => [1, 2, 3].map((k) => jointAngles("finger", side === "left" ? 1 : -1, rig.rotations[rig.index.get(`${Side}Hand${finger}${k}`)]).flex));
+        const curl = FINGERS.flatMap((finger) => [1, 2, 3].map((k) => jointAngles(`Hand${finger}`, side === "left" ? 1 : -1, rig.rotations[rig.index.get(`${Side}Hand${finger}${k}`)]).flex));
         const mean = curl.reduce((sum, flex) => sum + flex, 0) / curl.length;
 
         Object.assign(out, { palm: vector(side === "left" ? x.negate() : x), towards: vector(y.negate()), shape: SHAPES.reduce((best, shape) => (Math.abs(shape[1] - mean) < Math.abs(best[1] - mean) ? shape : best))[0] });

@@ -254,7 +254,7 @@ describe("the body (body.js)", () => {
 describe("joints (rig.js)", () => {
     it("knows each bone's kind of joint and side", () => {
         assert.deepEqual(jointOf("LeftUpLeg"), { kind: "UpLeg", side: 1 });
-        assert.deepEqual(jointOf("RightHandIndex2"), { kind: "finger", side: -1 });
+        assert.deepEqual(jointOf("RightHandIndex2"), { kind: "HandIndex", side: -1 });
         assert.deepEqual(jointOf("Hips"), { kind: "pelvis", side: 0 });
         assert.ok(human.bones.every(({ name }) => JOINTS[jointOf(name).kind]), "every bone has a joint");
     });
