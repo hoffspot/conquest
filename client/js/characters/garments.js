@@ -28,7 +28,8 @@ const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
  * Measurements of the body at every vertex, for garments' regions: { region ("head", "torso",
  * "arm", "hand", "leg", "foot"), side (1 left, -1 right), arm and leg (fractions down the
  * limb), y, front (how far forward of the body's middle), face ([x, y, z] face coordinates) },
- * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }.
+ * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }, and the neck's
+ * radius (`neckRadius`).
  */
 export function measureBody(character) {
     const { human, rig, positions } = character;
@@ -100,6 +101,12 @@ export function measureBody(character) {
         });
     }
 
+    // How far the neck's skin is from its middle, at the neck's height (the middle of its sides)
+    const neckBone = human.bones.findIndex(({ name }) => name === "Neck");
+    const round = vertices.flatMap(({ x, y, z }, v) => (human.partOf[v] === 0 && human.skinIndices[v * 4] === neckBone && Math.abs(y - neck.y) < 0.01 ? [Math.hypot(x, z - neck.z)] : [])).sort((a, b) => a - b);
+
+    landmarks.neckRadius = round.length ? round[round.length >> 1] : 0.07 * (character.height / 1.7);
+
     return { vertices, landmarks };
 }
 
@@ -116,8 +123,12 @@ function segment(p, a, b) {
 
 const OUTSIDE = -1;
 
-/** Up to the neck: a round neckline, dipping at the front. */
-const neckline = (v, l, depth = 0.03) => l.neck - depth - v.y - 0.035 * smoothstep(0, 0.12, v.z - l.neckZ);
+/**
+ * Up to the neck: a round neckline, dipping at the front and rising over the shoulders, out past
+ * the neck's sides (level, it cut across shoulders that rise to the neck, as Vitruvian's do, and
+ * left their tops bare).
+ */
+const neckline = (v, l, depth = 0.03) => l.neck - depth - v.y - 0.035 * smoothstep(0, 0.12, v.z - l.neckZ) + 2 * Math.max(0, Math.abs(v.x) - l.neckRadius - depth / 2);
 
 /** The torso from `bottom` up to the neckline, arms down to `sleeve` (0 none, 1 the wrist). */
 function top(bottom, sleeve, neck = 0.03) {

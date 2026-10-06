@@ -4906,3 +4906,14 @@ converted data is to be measured in M8 against today's hm08 data.
     6.4 cm in the thigh on the bulkiest and tallest elves and dark elves (attack 3), a cleaver
     1.7 cm in dark elf women's heads (attack 0), the grimoire's left forearm 3.4 to 4.3 cm in the
     torso (attacks 1 and 2), the arcanist's hat in the hand (rest 4). Those are to refit.
+- **2026-10-06, the shirt through the jerkin at Vitruvian's shoulders** (§10; docs/CHARACTERS.md
+  *Equipment*).
+  - In the character lab, the hero on Vitruvian's body showed the shirt in ragged patches over
+    the tops of the shoulders, through the jerkin.
+  - A top's neckline was cut level, 3 to 5 cm under the neck's mark. Vitruvian's shoulders rise
+    to the neck, their tops 1 to 4 cm under the mark and counted the torso's (MakeHuman's are the
+    arm's, under the sleeve), so the jerkin stopped short of them: only the shirt, cut higher,
+    covered them.
+  - The neckline now rises steeply over the shoulders past the neck's sides (`neckRadius`,
+    measured from the neck's skin: 6 to 9 cm), still dipping at the front. The jerkin covers the
+    shoulders' tops on both bodies, and `test/characters.test.js` checks every triangle there.

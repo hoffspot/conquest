@@ -1038,6 +1038,40 @@ describe("clothing and armour (garments.js)", () => {
         assert.ok(end > 0.8 && end < 1.02, `the sleeve ends near the elbow (${end})`);
     });
 
+    it("covers the shoulders' tops, out from the neck's sides, on both bodies", () => {
+        // (Vitruvian's shoulders rise to its neck, their tops part of the torso: a neckline cut
+        // level left them bare, the shirt showing through in patches)
+        for (const body of ["human", "vitruvian"]) {
+            const data = readHumanData(body);
+            const hero = figure(PRESETS.hero.shape, data);
+            const shaped = measureBody(hero);
+            const { neckRadius, neckZ } = shaped.landmarks;
+            const shoulder = hero.rig.heads[hero.rig.index.get("LeftArm")];
+            const top = (v) => {
+                const { x, y, z } = shaped.vertices[v];
+
+                return data.partOf[v] === 0 && Math.abs(x) > neckRadius + 0.04 && Math.abs(x) < shoulder.x && y > shoulder.y && Math.abs(z - neckZ) < 0.05;
+            };
+            const triangles = data.renderIndices("body");
+            const { covers } = buildGarment(hero, "jerkin", shaped);
+            const bare = [];
+            let tops = 0;
+
+            for (let t = 0; t < triangles.length; t += 3) {
+                if ([0, 1, 2].every((k) => top(data.renderSource[triangles[t + k]]))) {
+                    tops++;
+
+                    if (!covers.has(t / 3)) {
+                        bare.push(t / 3);
+                    }
+                }
+            }
+
+            assert.ok(tops > 20, `${body}: ${tops} triangles on the shoulders' tops`);
+            assert.equal(bare.length, 0, `${body}: ${bare.length} of ${tops} bare`);
+        }
+    });
+
     it("draws a soldier's garments all at once: one picture, of the outermost garment wherever it's seen", () => {
         // (Each garment a plain colour of its own, to tell which is where: under ones first)
         const outfit = ["livery.human", "trousers.human", "mail.human", "gauntlets.human", "sabatons.human", "vambraces.human", "greaves.human", "surcoat.human", "belt.human"];
