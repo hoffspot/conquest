@@ -7,7 +7,8 @@
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
-// upstairs, BECKON), and how it passes the time: five resting animations of its own, and for many
+// upstairs, BECKON), its face at rest (`mood`: a face of characters/expressions.js FACES, as
+// "smiling"; none, its face at ease), and how it passes the time: five resting animations of its own, and for many
 // some of an animator's clips after them (`rests`), one of which it plays every several seconds
 // while the player can see it (battle.js #rest; the player, after standing a while with nothing
 // going on: game.js). It picks any of them at first, then any but the last (variety.js). Everyone
@@ -34,6 +35,7 @@ export const ROLES = Object.freeze({
     },
     barmaid: {
         title: "Serving wench",
+        mood: "smiling",
         rests: [
             { name: "wiping her brow", hitAt: 1, duration: 2.4 },
             { name: "hand on her hip", hitAt: 1, duration: 3.2 },
@@ -67,6 +69,7 @@ export const ROLES = Object.freeze({
     },
     madam: {
         title: "Madam",
+        mood: "smiling",
         rests: [
             { name: "fanning herself", hitAt: 1, duration: 3 },
             { name: "hands on her hips", hitAt: 1, duration: 3.4 },
@@ -78,6 +81,7 @@ export const ROLES = Object.freeze({
     },
     courtesan: {
         title: "Courtesan",
+        mood: "smiling",
         // Seeing the player come into sight, she turns to them and beckons them into her room
         beckons: true,
         rests: [

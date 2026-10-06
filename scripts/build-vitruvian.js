@@ -63,6 +63,33 @@ const DELTA_UNIT = 0.0001;
 // Detail shapes' moves smaller than this (metres) are left out
 const DETAIL_CUTOFF = 0.00005;
 
+// The face's expressions (Vitruvian's own, its morphs/L3: FACS shapes), each the sum of these,
+// a left and a right half as one; only those that keep the lips together, as there's no inside
+// of the mouth to show (expressions.js plays them)
+const EXPRESSIONS = {
+    blink: ["Eyes_Closed_Left", "Eyes_Closed_Right"],
+    squint: ["Eyes_Squint"],
+    smile: ["Smile_Lips_Closed"],
+    angry: ["Angry"],
+    sad: ["Sad"],
+    frown: ["Frown_Left", "Frown_Right"],
+    browsUp: ["Eyebrows_InnerBrow_Raised_Left", "Eyebrows_InnerBrow_Raised_Right"],
+    browsKnit: ["Eyebrows_Frown_Left", "Eyebrows_Frown_Right"],
+};
+
+// How far round the eye (radians) a lash's vertices are from those of its column, which is
+// seated on its lid and swings with it in one piece (about its root, the column's nearest the
+// eye); and how far out from the lid's edge (metres) its root's set
+const LASH_COLUMN = 0.1;
+const LASH_SEAT = 0.0004;
+
+// Where the edges of an eye's lids are looked for: between these distances (metres) from its
+// middle, and a step at a time round it (radians), the nearest the eye's opening within so far
+// round of each step (the skin's simplified: wider than between its vertices along a lid's edge)
+const LID_SHELL = [0.009, 0.016];
+const LID_STEP = 0.05;
+const LID_WINDOW = 0.2;
+
 // How far (metres) a Vitruvian point looks for the MakeHuman body's nearest point, and how alike
 // their surfaces' facings must be (the cosine of the angle between them) for it to count
 const REACH = 0.08;
@@ -1302,10 +1329,110 @@ async function main() {
     const lashes = sources.map((entry, i) => [entry, i]).filter(([entry]) => entry.kind === "human");
     const lidSources = sources.map((entry, i) => [entry, i]).filter(([entry]) => entry.kind === "vitruvian" && headShare[entry.v] > 0.5 && !eyeVertices.includes(entry.v));
 
-    const lashLids = lashes.map(([entry, i]) => {
-        const p = [...laid.subarray(entry.v * 3, entry.v * 3 + 3)];
-        const offset = eyeOffsets.get(Math.sign(p[0]) || 1);
-        const at = [0, 1, 2].map((k) => p[k] + offset[k]);
+    // Where each kept vertex is on Vitruvian's body as it is: the eyelashes (MakeHuman's) set on
+    // its eyes, by how far their middles are from MakeHuman's, then each column of a card (the
+    // lashes' connected pieces) seated on its lid's edge (below). Set on its eyes alone, the cards
+    // stood 4 to 10 mm out in front of its lids, which are set further back round its eyes than
+    // MakeHuman's
+    const restAt = (entry) => {
+        const p = entry.kind === "human" ? [...laid.subarray(entry.v * 3, entry.v * 3 + 3)] : [...vitruvian.positions.subarray(entry.v * 3, entry.v * 3 + 3)];
+
+        if (entry.kind === "human") {
+            const offset = eyeOffsets.get(Math.sign(p[0]) || 1);
+
+            p[0] += offset[0];
+            p[1] += offset[1];
+            p[2] += offset[2];
+        }
+
+        return p;
+    };
+    const unseated = sources.map(restAt);
+
+    // A lid's edge is its skin nearest the eye's opening (the skin is closed round the eye: past
+    // the edge it lines the lid, inwards), the way round the eye; a card is on the upper lid or the
+    // lower, as it lies above or below the eye's middle. An eyelash swings with the edge of the lid
+    // it grows from, about the middle of the eye (as a lid closes over it), rather than moving as
+    // the lid's skin nearest it does (the skin nearest a card's tip is the lid's fold, which hardly
+    // moves: a card crumpled)
+    const eyeMiddles = new Map([-1, 1].map((side) => [side, eyeCentre(eyeVertices.map((v) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]), side)]));
+    const sideOf = (i) => Math.sign(unseated[i][0]) || 1;
+    const fromMiddle = (i) => sub(unseated[i], eyeMiddles.get(sideOf(i)));
+    const round = (i) => Math.atan2(fromMiddle(i)[0], fromMiddle(i)[2]);
+    const elevation = (i) => Math.atan2(fromMiddle(i)[1], Math.hypot(fromMiddle(i)[0], fromMiddle(i)[2]));
+    const eyeSet = new Set(eyeVertices);
+    const lidSkin = sources.map((entry, i) => i).filter((i) => sources[i].kind === "vitruvian" && !eyeSet.has(sources[i].v) && length(fromMiddle(i)) > LID_SHELL[0] && length(fromMiddle(i)) < LID_SHELL[1]);
+    const lids = new Map([-1, 1].map((side) => {
+        const rounds = lashes.map(([, i]) => i).filter((i) => sideOf(i) === side).map(round);
+        const edge = (upper) => {
+            const found = new Set();
+
+            for (let r = Math.min(...rounds) - LID_STEP; r <= Math.max(...rounds) + LID_STEP; r += LID_STEP) {
+                const near = lidSkin.filter((i) => sideOf(i) === side && Math.abs(round(i) - r) < LID_WINDOW && (elevation(i) > 0) === upper);
+
+                if (near.length) {
+                    found.add(near.reduce((best, i) => (Math.abs(elevation(i)) < Math.abs(elevation(best)) ? i : best)));
+                }
+            }
+
+            return [...found].sort((i, j) => round(i) - round(j));
+        };
+
+        return [side, { upper: edge(true), lower: edge(false) }];
+    }));
+
+    console.log(`the lids' edges: ${[...lids.values()].map(({ upper, lower }) => `${upper.length} and ${lower.length} vertices`).join("; ")}`);
+
+    const cardOf = new Map(lashes.map(([, i]) => [i, i]));
+    const cardRoot = (i) => (cardOf.get(i) === i ? i : cardRoot(cardOf.get(i)));
+
+    for (let t = 0; t < lashRender.length; t += 3) {
+        const [a, b, c] = [0, 1, 2].map((k) => cardRoot(sourceOf.get(`h${human.renderSource[lashRender[t + k]]}`)));
+
+        cardOf.set(b, a);
+        cardOf.set(c, a);
+    }
+
+    const cards = new Map();
+
+    for (const [, i] of lashes) {
+        cards.set(cardRoot(i), [...(cards.get(cardRoot(i)) ?? []), i]);
+    }
+
+    // Each lash vertex: its root, its lid's edge's two vertices either side of that (round the
+    // eye), how far it is between them, and the eye's middle
+    const lashSwings = [...cards.values()].flatMap((card) => {
+        const lid = lids.get(sideOf(card[0]));
+        const edge = card.filter((i) => elevation(i) > 0).length > card.length / 2 ? lid.upper : lid.lower;
+
+        return card.map((i) => {
+            // (Its root: its column's nearest the eye, so the column swings in one piece)
+            const root = card.filter((j) => Math.abs(round(j) - round(i)) < LASH_COLUMN)
+                .reduce((best, j) => (length(fromMiddle(j)) < length(fromMiddle(best)) ? j : best), i);
+            const k = Math.max(0, Math.min(edge.length - 2, edge.findIndex((j) => round(j) > round(root)) - 1));
+            const [a, b] = [edge[k], edge[k + 1]];
+            const along = Math.max(0, Math.min(1, (round(root) - round(a)) / (round(b) - round(a))));
+
+            return [i, root, a, b, along, eyeMiddles.get(sideOf(i))];
+        });
+    });
+
+    // Each column seated on its lid's edge where it is round the eye (its root a hair out from it)
+    const seats = new Map(lashSwings.map(([i, root, a, b, along]) => {
+        const edge = [0, 1, 2].map((k) => (1 - along) * unseated[a][k] + along * unseated[b][k]);
+        const out = fromMiddle(root).map((value) => (value / length(fromMiddle(root))) * LASH_SEAT);
+
+        return [i, [0, 1, 2].map((k) => edge[k] + out[k] - unseated[root][k])];
+    }));
+    const rest = unseated.map((p, i) => (seats.has(i) ? p.map((value, k) => value + seats.get(i)[k]) : p));
+
+    console.log(`the lashes seated on the lids' edges: moved ${(Math.max(...[...seats.values()].map(length)) * 1000).toFixed(1)} mm at most`);
+
+    // (Each shape moves a lash as the lid's skin nearest where it was set on the eyes, before it was
+    // seated: the lids' skin round it moves alike, and so every shape, and the principal components
+    // made of them, are as they were; the bodies the sliders make with them, to the bit)
+    const lashLids = lashes.map(([, i]) => {
+        const at = unseated[i];
         const nearest = lidSources.map(([lid, j]) => [j, length(sub(at, [...vitruvian.positions.subarray(lid.v * 3, lid.v * 3 + 3)]))]).sort((a, b) => a[1] - b[1]).slice(0, 4);
         const total = nearest.reduce((sum, [, d]) => sum + 1 / (d + 1e-4), 0);
 
@@ -1323,19 +1450,8 @@ async function main() {
     // The base: Vitruvian's own body (and the eyelashes set on its eyes), less the default shapes,
     // so the sliders as they start give Vitruvian's body
     const base = new Float64Array(count * 3);
-
     sources.forEach((entry, i) => {
-        const p = entry.kind === "human" ? [...laid.subarray(entry.v * 3, entry.v * 3 + 3)] : [...vitruvian.positions.subarray(entry.v * 3, entry.v * 3 + 3)];
-
-        if (entry.kind === "human") {
-            const offset = eyeOffsets.get(Math.sign(p[0]) || 1);
-
-            p[0] += offset[0];
-            p[1] += offset[1];
-            p[2] += offset[2];
-        }
-
-        base.set(p, i * 3);
+        base.set(rest[i], i * 3);
     });
 
     const jointBase = Float64Array.from(vitruvianJoints);
@@ -1573,6 +1689,66 @@ async function main() {
         pca: packer.add(pcaData, { codec: "delta", channels: 3 }),
     };
 
+    // The face's expressions, sparse as the detail shapes are: Vitruvian's own moves at the kept
+    // vertices, and the eyelashes swung with the lids' edges (packed after the rest, so the rest
+    // lies where it did)
+    let widestSwing = 0;
+    const expressions = Object.entries(EXPRESSIONS).map(([name, parts]) => {
+        const deltas = new Float64Array(count * 3);
+
+        for (const part of parts) {
+            const { idx, delta } = readNpz(path.join(from, `morphs/L3/${part}.npz`));
+            const moves = new Map();
+
+            idx.data.forEach((v, k) => {
+                moves.set(v, toOurs(delta.data[k * 3], delta.data[k * 3 + 1], delta.data[k * 3 + 2]).map((value) => value * scale));
+            });
+
+            sources.forEach((entry, i) => {
+                const move = entry.kind === "vitruvian" ? moves.get(entry.v) : undefined;
+
+                if (move) {
+                    for (let k = 0; k < 3; k++) {
+                        deltas[i * 3 + k] += move[k];
+                    }
+                }
+            });
+        }
+
+        // (Carried as the lid's edge is, and turned about its root, in the eye's up-and-down
+        // plane, by as much as the edge turns about the eye's middle there: turned about the edge
+        // itself, a lash's root, which sits a little out from it, swung down off the lid)
+        for (const [i, root, a, b, along, middle] of lashSwings) {
+            const mix = (by) => [0, 1, 2].map((k) => (1 - along) * (rest[a][k] + by * deltas[a * 3 + k]) + along * (rest[b][k] + by * deltas[b * 3 + k]));
+            const [from, to] = [mix(0), mix(1)];
+            const turn = Math.atan2(to[1] - middle[1], to[2] - middle[2]) - Math.atan2(from[1] - middle[1], from[2] - middle[2]);
+            const [x, y, z] = sub(rest[i], rest[root]);
+            const swung = [x, y * Math.cos(turn) + z * Math.sin(turn), z * Math.cos(turn) - y * Math.sin(turn)];
+
+            widestSwing = Math.max(widestSwing, Math.abs(turn));
+
+            for (let k = 0; k < 3; k++) {
+                deltas[i * 3 + k] = to[k] - from[k] + swung[k] - [x, y, z][k];
+            }
+        }
+
+        const moved = [];
+
+        for (let i = 0; i < count; i++) {
+            if (Math.hypot(deltas[i * 3], deltas[i * 3 + 1], deltas[i * 3 + 2]) > DETAIL_CUTOFF) {
+                moved.push(i);
+            }
+        }
+
+        return {
+            name,
+            vertices: packer.add(Uint16Array.from(moved), { codec: "delta" }),
+            deltas: packer.add(Int16Array.from(moved.flatMap((i) => [0, 1, 2].map((k) => Math.round(deltas[i * 3 + k] / DELTA_UNIT)))), { codec: "delta", channels: 3 }),
+        };
+    });
+
+    console.log(`expressions: ${expressions.map(({ name, vertices }) => `${name} ${vertices.length}`).join(", ")}; lashes swung up to ${(widestSwing * 180 / Math.PI).toFixed(0)}°`);
+
     const target = path.join(root, "client/characters");
     const manifest = {
         about: "CharMorph's Vitruvian body (CC0), prepared by scripts/build-vitruvian.js, with MakeHuman's shapes carried over onto it. Metres, y up, facing +z. vitruvian.bin is gzip-compressed; see client/js/characters/pack.js.",
@@ -1588,6 +1764,7 @@ async function main() {
             coefficients: coefficients.map((row) => row.map((value) => Math.round(value * 1e6) / 1e6)),
         },
         details,
+        expressions,
         deltaUnit: DELTA_UNIT,
         landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4, shoulder: shoulderOffset },
         masks: MASKS.map((name) => `vitruvian/masks/${name}.png`),

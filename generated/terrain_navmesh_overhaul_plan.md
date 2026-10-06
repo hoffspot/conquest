@@ -4958,3 +4958,17 @@ converted data is to be measured in M8 against today's hm08 data.
     hands off their hafts 32 to 30; 21 readings better, none worse. On MakeHuman's body (checked,
     not drawn in play) the smash's left hand is still off the haft as it follows through, as it
     was, and the slam's left forearm now meets the chest on 14 bodies (3 before).
+- **2026-10-06, Vitruvian's face: blinking and expressions; lashes as strands** (§10;
+  docs/CHARACTERS.md *The Vitruvian body*, *The body*).
+  - Eight of Vitruvian's own FACS shapes that keep the lips together (blink, squint, a
+    closed-lipped smile, angry, sad, frown, brows raised, brows knit), played on the GPU from one
+    texture for the kit (moves and the normals' turns at 2,300 vertices, 576 KB) by each
+    character's own weights: 15 KB more of the download, one more texture read in the skin's and
+    lashes' shaders.
+  - Characters blink every few seconds and show what they're doing: angry attacking, pained hurt,
+    a little smile with the brows lifting talked to, the eyes half shut dead; the serving wenches,
+    the madam and the courtesans smile at rest.
+  - The lashes are seated on the lids' edges (they stood 4 to 10 mm out in front of them), swing
+    with the lids' edges (moved as the lid's skin nearest them, a closing lid crumpled them), and
+    are drawn as tapering strands rather than a grey see-through sheet, the lower lid's shorter.
+  - The character lab's *Face* tab shows each face or one expression held.
