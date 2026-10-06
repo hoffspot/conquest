@@ -425,6 +425,7 @@ npm run check       # lint + unit tests
 npm run build:manifest  # after changing what the game downloads: lists it for the loading screen, and the catalog
 npm run vendor:three    # after changing the three version in package.json: copies it to client/vendor
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
+npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body, from CharMorph's Vitruvian
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
 npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
@@ -464,8 +465,9 @@ client/                 The game (static files served to the browser)
   manifest.webmanifest  Lets the game be installed as an app
   sw.js                 Service worker: keeps a copy of the game for offline play, its data by
                         the hash of its bytes, letting go of what no release in use lists
-  characters/           The body characters are made from (made by npm run build:characters),
-                        MakeHuman's texture masks, and motion capture clips
+  characters/           The bodies characters are made from: CharMorph's Vitruvian, the game's
+                        (made by npm run build:vitruvian), and MakeHuman's (npm run
+                        build:characters), their texture masks, and motion capture clips
   models/assets.json    The catalog: models downloaded only as they're wanted (none yet), each
                         file's hash and size added by npm run build:manifest into js/app/assets.js
   models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
@@ -702,9 +704,12 @@ asset out of this public repository.
 - Houses laid out with a facade grammar after Wonka and Müller's split grammars; their jetties,
   timber framing and windows sized after the carpenters' own, and BlendBuildingCreator
   (<https://github.com/plastdrake/BlendBuildingCreator>), studied, not copied.
-- Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
-  zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
-  CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
+- Characters: the game's body is CharMorph's Vitruvian
+  (<https://github.com/Upliner/CharMorph-Vitruvian>), CC0, its sliders' shapes carried over from
+  MakeHuman's. MakeHuman's body, its shapes, skeleton and skin weights, the texture masks and the
+  walk and zombie walk motion capture clips are from MakeHuman
+  (<https://github.com/makehumancommunity>), CC0. Gait data from the normal datasets bundled with
+  pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
   The character lab's idle, walk, run, sword attack and death clips are Quaternius's Universal
   Animation Library as packed by Mesh2Motion (<https://github.com/Mesh2Motion/mesh2motion-app>),
   CC0 (`client/characters/animations/mesh2motion.glb`, made by `npm run build:clips`).

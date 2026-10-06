@@ -111,13 +111,15 @@ fairly toned bodies, each a different height, heritage, face and hair.
 
 ### The Vitruvian body
 
-A second body, CharMorph's [Vitruvian](https://github.com/Upliner/CharMorph-Vitruvian) (CC0), is
-on its way in (the terrain plan's M8). It's a newer, finer body than MakeHuman's: 37,436
-vertices, sculpted muscles and a face with a real mouth and eyelids, and 4K textures. For now it's
-in the character lab only: `character-lab.html?body=vitruvian`. The game still uses MakeHuman's.
+The game's body is CharMorph's [Vitruvian](https://github.com/Upliner/CharMorph-Vitruvian) (CC0),
+since the terrain plan's M8 (2026-10-06). It's a newer, finer body than MakeHuman's: 37,436
+vertices, sculpted muscles and a face with a real mouth and eyelids, and 4K textures. MakeHuman's
+is still there, for what's made from it (Vitruvian's shapes are carried over from it, and the
+clips are baked on it) and in the character lab (`character-lab.html?body=human`).
 Which body the game uses is `body.js`'s `GAME_BODY`: the kit, the lab (unless `?body=` says), the
-download list, the motion check and its baseline, the clips' bake and the character tests all
-take it from there (Node reads it with `scripts/lib/human-data.js`).
+download list, the motion check and its baseline and the character tests all take it from there
+(Node reads it with `scripts/lib/human-data.js`). The clips' bake doesn't: it stays on
+MakeHuman's (`scripts/bake-clips.js` `BAKE_BODY`), and the keys it makes play on either body.
 
 `npm run build:vitruvian -- --from=../charmorph-vitruvian` makes it into the same kind of data as
 MakeHuman's body, so every slider, garment, hairstyle, people's look and animation works on it
@@ -251,8 +253,8 @@ tall as MakeHuman's body in every preset; that a shirt comes as high up its neck
 landmarks are where MakeHuman's are in face coordinates, in every preset; that the face sliders
 move its face as they move MakeHuman's; and that tusks find its lower lip.
 
-Before the game switches to it, its motion check (`npm run check:motion -- --data vitruvian`)
-should come out no worse than MakeHuman's. The first run had 4,937 joints past their range against
+The game switched to it once its motion check came out about as well as MakeHuman's (MakeHuman's
+is checked with `npm run check:motion -- --data human`). The first run had 4,937 joints past their range against
 MakeHuman's 718: nearly all knees, pushed straight as they bent (now bent about their hinge, for
 both bodies: Foot locking, below), and ankles bending further over the foot walking (now the heel
 lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) and its legs about
@@ -263,11 +265,11 @@ to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, pl
 sliding 429 to 488, but forearms in the torso 177 to 55 (most in the staff's and war hammer's
 two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
 225 to 194; 1,070 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
-it.
+it, and the motion check's baseline is now its own (*The motion check*, below).
 
-Still to come: the game switched to it (with its lower-detail body for far characters, and the
-motion check's baseline), its own skin textures, the inside of the mouth, and blinking and
-expressions.
+Still to come: the clips' hands lined up on it (their fingers and palms are MakeHuman's), its
+hands on the bulkiest orcs (thin and twisted), its own skin textures, the inside of the mouth,
+and blinking and expressions.
 
 ### Skin, eyes and hair
 
@@ -1278,6 +1280,13 @@ the clips' own: an ankle up to 17° past its range as the backward fall's first 
 wrist 5° past as the knockdown breaks its fall on a hand, a foot sliding up to 13 cm as the body
 gets back up over it, and held things in the body as it lands (up to 8 cm, mostly a dark elf's
 shield on the arm; a sword up to 6 cm in the thigh, the rest about 2 cm).
+
+When the game switched to Vitruvian's body (2026-10-06), the baseline became Vitruvian's: 1,070
+failing pairs (joints past their range 498, planted feet sliding 429, things held in the body
+225, forearms in the torso 177, feet in the ground 100, second hands off their hafts 32), where
+MakeHuman's had 1,037. MakeHuman's body can still be checked with `--data human`, but there's
+one baseline, the game's body's, so it's measured against Vitruvian's failures (and `--update`
+keeps only the game's body's).
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its
