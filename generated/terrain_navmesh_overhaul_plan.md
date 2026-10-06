@@ -4880,3 +4880,46 @@ converted data is to be measured in M8 against today's hm08 data.
   - The game's moves are baked keys (each hand's place, palm and finger shape), baked on
     MakeHuman's body, whose hinge was already right: they're left as they are. A rebake moves
     every clip a little (MakeHuman's hinge 3° nearer), so it waits for a motion check of its own.
+- **2026-10-06, Vitruvian's hands on the bulkiest orcs** (§10; docs/CHARACTERS.md *The Vitruvian
+  body*).
+  - The bulkiest orcs' hands were stringy on Vitruvian's body: thin, flat, twisted fingers.
+  - Most of Vitruvian's sliders are MakeHuman's shapes carried over, each point's change turned as
+    the nearest part of MakeHuman's body lies on Vitruvian's. A longer arm moves the whole hand as
+    one, but each finger lies its own way on the two bodies, so the carried change sent each
+    finger's skin its own way: up to 6 cm off its bones (MakeHuman's none), a median 36 mm on the
+    bulkiest orcs where their bones' moves make 8.
+  - In the shapes carried over, the hands' skin now moves with its bones (as the hands' joints
+    already did, since PR #198), and only MakeHuman's flesh change is carried (its change less
+    what its bones' moves make of it), as Vitruvian's own shapes are. A longer arm's fingers now
+    move exactly with their bones; the orc's fingers are 8 to 11 mm round, not 36 to 38.
+    `test/vitruvian.test.js` checks it for longer and shorter arms and the orcs' sliders.
+  - That had an orc's shield 4.5 cm "into" her thumb as she slipped a blow (`test/clipping.test.js`),
+    the thumb 4.5 cm behind it: the skin nearest the shield was one of 30 or so vertices round
+    Vitruvian's nails and fingertips that face against their neighbours (folded under; MakeHuman's
+    body has none). The motion check (and so the clipping test) no longer measures against skin
+    folded under.
+  - The motion check on Vitruvian: 1,070 failing pairs to 1,061, things held in the body 225 to
+    215, forearms in the torso 177 to 175, kept as the baseline. Of the pairs that changed, 30
+    are better (a sword drawn, swung and sheathed by the orcs and the thinnest elves, 3 to 4 cm in
+    the body before, now 0 to 1.6; an orc's gauntlet punch's forearm 4.3 to 1.8 cm in the torso)
+    and 15 worse, held things placed by the palm's skin now where it is: the bow's lower limb up to
+    6.4 cm in the thigh on the bulkiest and tallest elves and dark elves (attack 3), a cleaver
+    1.7 cm in dark elf women's heads (attack 0), the grimoire's left forearm 3.4 to 4.3 cm in the
+    torso (attacks 1 and 2), the arcanist's hat in the hand (rest 4). Those are to refit.
+- **2026-10-06, the shirt through the jerkin at Vitruvian's shoulders** (§10; docs/CHARACTERS.md
+  *Equipment*).
+  - In the character lab, the hero on Vitruvian's body showed the shirt in ragged patches over
+    the tops of the shoulders, through the jerkin.
+  - A top's neckline was cut level, 3 to 5 cm under the neck's mark. Vitruvian's shoulders rise
+    to the neck, their tops 1 to 4 cm under the mark and counted the torso's (MakeHuman's are the
+    arm's, under the sleeve), so the jerkin stopped short of them: only the shirt, cut higher,
+    covered them.
+  - The neckline now rises steeply over the shoulders past the neck's sides (`neckRadius`,
+    measured from the neck's skin: 6 to 9 cm), still dipping at the front. The jerkin covers the
+    shoulders' tops on both bodies, and `test/characters.test.js` checks every triangle there.
+  - The strap across the chest (the baldric, for what's slung on the back) had ragged edges on
+    both bodies: at its own thickness (1 cm) it was under the jerkin (1.2 cm), and 2 cm under a
+    breastplate, so only its middle showed. Straps now lie over what's worn under them, pushed
+    out by their thickness past the furthest of the lower garments at each point
+    (`underneath`): 6 to 15 mm over a jerkin or a breastplate, on both bodies (tested). Posed,
+    where it crosses the shoulder, a jerkin can still show through its edge on MakeHuman's body.

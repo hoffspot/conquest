@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES } from "./drapes.js";
-import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
+import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap, underneath } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
@@ -518,7 +518,9 @@ export class Character {
         for (const id of garmentIds) {
             yield;
 
-            const garment = yield* fittingGarment(this, id, fitted);
+            // (A strap lies over what's worn under it, grown out past it)
+            const under = GARMENTS[id].over ? yield* underneath(this.human, id, garmentIds, fitted) : null;
+            const garment = yield* fittingGarment(this, id, fitted, under);
 
             if (garment) {
                 built.push(garment);

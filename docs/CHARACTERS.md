@@ -205,6 +205,14 @@ as it is:
   and sized to it, in every shape. Found from the skin, a bigger body's fingers shrank (the
   tallest man's index finger's middle bone went from 2.6 to 1.7 cm, where MakeHuman's grows from
   2.3 to 2.5), its palm didn't grow, and so its grips were wrong.
+- **The hands' skin** goes with those joints: in MakeHuman's shapes carried over, a hand's skin
+  moves with its bones, and only the flesh's own change is carried (MakeHuman's change, less
+  what its bones' moves make of it), as Vitruvian's own shapes' is. Carried whole, MakeHuman's
+  change was turned as each of its fingers lies on Vitruvian's, so a longer arm, which moves the
+  whole hand as one, sent each finger's skin its own way, up to 6 cm off its bones (MakeHuman's,
+  none). On the bulkiest orcs (`armLength` 0.5, `handSize` 0.7) the fingers' skin lay a median
+  36 mm from their bones instead of 8, and they bent thin, flat and twisted.
+  `test/vitruvian.test.js` checks that the fingers' skin moves with their bones.
 - **Its rest.** Its knees rest straighter than MakeHuman's, and its fingers and thumbs otherwise.
   The manifest's `landmarks.rest` says how its default body rests them, and the rig measures its
   limbs as though it rested them as MakeHuman's does (the rest frames, below). The tests make
@@ -262,13 +270,12 @@ lifts). Its hip joints are higher (12.6 cm above the crotch, MakeHuman's 9.5) an
 with a shorter upper arm, so forearms come nearer the chest. Now, failing pairs (Vitruvian's
 against MakeHuman's, with the grips round a haft or hilt, *Grips*): joints past their range 498
 to 502, feet in the ground 100 to 126, second hands off their hafts 32 to 53, planted feet
-sliding 429 to 488, but forearms in the torso 177 to 55 (most in the staff's and war hammer's
+sliding 429 to 488, but forearms in the torso 175 to 55 (most in the staff's and war hammer's
 two-handed blows, which aren't moved out of the torso, and kicks) and things held in the body
-225 to 194; 1,070 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
+215 to 194; 1,061 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
-Still to come: its hands on the bulkiest orcs (thin and twisted), its own skin textures, the
-inside of the mouth, and blinking and expressions.
+Still to come: its own skin textures, the inside of the mouth, and blinking and expressions.
 
 ### Skin, eyes and hair
 
@@ -430,6 +437,11 @@ slots, sockets and hidden skin.
    the elbow". A chest wrap is a band round the torso, from three quarters of the way down from
    the chest to the waist (under the fullest bust) to just above the armpits, so it covers any
    bust.
+   - **The neckline** is round: it dips at the front, and out past the neck's sides (its radius,
+     `neckRadius`, measured from the neck's skin) it rises steeply over the shoulders. Cut
+     level, it crossed Vitruvian's shoulders, which rise to the neck and are its torso's (on
+     MakeHuman's the shoulders' tops are the arm's, under the sleeve), and left their tops bare:
+     the shirt showed through a jerkin in patches.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
    not jagged along the mesh. The cut (which triangles, which points are one, what's beside
    what, the edge and hem, texture coordinates and skin weights) doesn't depend on the body's
@@ -438,6 +450,13 @@ slots, sockets and hidden skin.
    garment, the 40 most recently wanted): fitting a garment again takes about 7 ms, not 23.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
    looseness, and smoothed. A breastplate is smoothed more than a shirt.
+   - **Straps lie over what's under them** (`over`: a baldric, pack straps). A strap is pushed
+     out by its own thickness past the furthest of the garments on lower layers at each point
+     (`underneath`). At its own thickness, 1 cm, it was under a jerkin (1.2 cm) and well under
+     a breastplate (3 cm): only its middle showed, its edges bitten into. Now it stands 6 to
+     15 mm over either, on both bodies. Where it crosses the shoulder, posed, a jerkin under it
+     can still show through its edge on MakeHuman's body: the shoulder's bones turn each shell's
+     offset their own way.
    - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
      is cut just behind the ball of the foot, and a toe cap is lofted forward from the cut, ring
      by ring, to a dome over the longest toe:
@@ -1206,6 +1225,9 @@ and slung again with them; and the folk's and heroes' rests, each stepped a fram
 second, as in the game. Every point along what's held is looked at (2 cm apart along its edges,
 not only its corners), against the nearest of the body's vertices (not the hand holding it or
 that hand's forearm), and it's in only if it's behind that skin, not off to one side of it.
+Skin folded under isn't looked at: a vertex facing against its neighbours, as 30 or so round
+Vitruvian's nails and fingertips do (MakeHuman's, none). Nearest a thing in front of it, it had
+it in the skin: an orc's shield 4.5 cm "into" a thumb 4.5 cm behind it.
 
 **The motion check** (`client/js/characters/motioncheck.js`, `npm run check:motion`, CI's
 `motion` job) goes further. It plays every motion, a frame at a time at 30 frames a second, on 30
@@ -1285,7 +1307,9 @@ failing pairs (joints past their range 498, planted feet sliding 429, things hel
 225, forearms in the torso 177, feet in the ground 100, second hands off their hafts 32), where
 MakeHuman's had 1,037. MakeHuman's body can still be checked with `--data human`, but there's
 one baseline, the game's body's, so it's measured against Vitruvian's failures (and `--update`
-keeps only the game's body's).
+keeps only the game's body's). With its hands' skin going with their bones (*The hands' skin*,
+above), and its folded skin not measured against (`test/clipping.test.js`, above), 1,061: things
+held in the body 215, forearms in the torso 175, the rest as they were.
 
 The check writes a report (`test-results/motion/report.json`, kept with each CI run as
 `motion-report`). **The contact sheet** (`/motion-sheet.html`, served by `npm start`) draws its

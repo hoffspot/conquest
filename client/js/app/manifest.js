@@ -84,7 +84,7 @@ export const MANIFEST = Object.freeze([
             ["js/beasts/spectre.js", 19702],
             ["js/characters/actions.js", 259299],
             ["js/characters/body.js", 9696],
-            ["js/characters/character.js", 89526],
+            ["js/characters/character.js", 89728],
             ["js/characters/clip-keys.js", 127431],
             ["js/characters/details.js", 7649],
             ["js/characters/drapes.js", 30850],
@@ -92,7 +92,7 @@ export const MANIFEST = Object.freeze([
             ["js/characters/face.js", 4646],
             ["js/characters/folk.js", 21791],
             ["js/characters/gait.js", 8036],
-            ["js/characters/garments.js", 89468],
+            ["js/characters/garments.js", 91899],
             ["js/characters/grip.js", 15318],
             ["js/characters/grounding.js", 4059],
             ["js/characters/hair.js", 47797],
@@ -300,8 +300,8 @@ export const MANIFEST = Object.freeze([
         label: "Body and shapes",
         detail: "CharMorph's Vitruvian, with MakeHuman's sliders",
         files: [
-            ["characters/vitruvian.bin", 2034568, "26d6aa7db4"],
-            ["characters/vitruvian.json", 156319, "9e64b7b1da"],
+            ["characters/vitruvian.bin", 2002768, "886de7793d"],
+            ["characters/vitruvian.json", 156319, "590d1e660b"],
         ],
     },
     {
