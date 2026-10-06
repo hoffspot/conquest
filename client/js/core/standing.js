@@ -12,8 +12,8 @@
 //
 // Pure data and a little bookkeeping, no DOM.
 
-import { CREATURES, livesOn, tierAt } from "./creatures.js";
-import { holderOf, PLACE_BANDS, placesOf } from "./places.js";
+import { candidatesAt, CREATURES, tierAt } from "./creatures.js";
+import { bandOf, holderOf, placesOf } from "./places.js";
 import { PARTS, SPOILS } from "./spoils.js";
 import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
@@ -365,18 +365,20 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
  * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
  * people (no standing needed, and none given: gold), everything it asks for within GUILD_REACH of
  * the town: beasts off the roads round it; a bounty on the soldiers of a people at war with those
- * who hold it, who have a town or a camp near; creatures' parts, of those that live near; the camp
- * outside it broken up; a place near held by outlaws or the dead put to the sword, its leader with
+ * who hold it, who have a town or a camp near; creatures' parts, of those found near (as strong as
+ * they are there for whoever's asking: as far from their `home`); the camp outside it broken up; a place near held by outlaws or the dead put to the sword, its leader with
  * them (core/places.js). Null if there's nothing on the board they haven't got already.
  * @param {object} options
  * @param {object} options.war - The war (war.js).
  * @param {string} options.town - The town the guild's in (an id).
  * @param {object} options.giver - Who's at the counter: { id, name, title }.
+ * @param {number[]} [options.home] - Where whoever's asking starts ([x, y] metres: their people's
+ *   start town's middle, the wild tamest near it: creatures.js tierAt); the town's own if not given.
  * @param {object[]} [options.held] - The requests they carry.
  * @param {object[]} [options.also] - What's on the board already (none of it offered twice).
  * @param {object} options.random - Random numbers (random.js).
  */
-export function offerContract({ war, town: townId, giver, held = [], also = [], random }) {
+export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], random }) {
     const town = war.town(townId);
 
     if (!town || held.length >= MOST_REQUESTS) {
@@ -388,7 +390,7 @@ export function offerContract({ war, town: townId, giver, held = [], also = [], 
     const soldiers = soldiersNear(war, town);
     const foes = war.enemiesOf(holders).filter((foe) => soldiers.has(foe) && !has("hunt", foe));
     const camps = war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && apart(force.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", force.id));
-    const wanted = wantedNear(war, town).filter((part) => !has("parts", part));
+    const wanted = wantedNear(war, town, home ?? town.at).filter((part) => !has("parts", part));
     const occupied = heldNear(war, town).filter(({ place }) => !has("clear", place.id));
     const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : [])];
 
@@ -449,7 +451,7 @@ export function offerContract({ war, town: townId, giver, held = [], also = [], 
             const tome = random.chance(GUILD_TOMES.clear) ? rollTome(random) : null;
             const text =
                 holder === "dead"
-                    ? `The dead walk at ${name}, ${way}, and no one will go near it. Lay them to rest, the ${CREATURES[PLACE_BANDS.dead.leader].name.toLowerCase()} that leads them with them.`
+                    ? `The dead walk at ${name}, ${way}, and no one will go near it. Lay them to rest, the ${CREATURES[bandOf(place, holder).leader].name.toLowerCase()} that leads them with them.`
                     : `Outlaws hold ${name}, ${way}, and rob all who pass. Put them to the sword, their chief with them.`;
 
             return {
@@ -516,12 +518,12 @@ export const BOARD_SIZE = 4;
  * the player carries already. Empty if there's nothing.
  * @param {object} options - As offerContract's and offerCourier's.
  */
-export function offerBoard({ war, realm, town, giver, held = [], random }) {
+export function offerBoard({ war, realm, town, giver, home = null, held = [], random }) {
     const courier = offerCourier({ war, realm, town, giver, held });
     const board = [];
 
     while (board.length < BOARD_SIZE - (courier ? 1 : 0)) {
-        const contract = offerContract({ war, town, giver, held, also: board, random });
+        const contract = offerContract({ war, town, giver, home, held, also: board, random });
 
         if (!contract) {
             break;
@@ -615,22 +617,23 @@ function soldiersNear(war, town) {
     return found;
 }
 
-// The parts a guild wants (WANTED_PARTS) of the creatures that live within its reach of its town,
-// at the tiers they're found at there (as fierce as the land is that far from the town: tierAt)
-function wantedNear(war, town) {
+// The parts a guild wants (WANTED_PARTS) of the creatures found within its reach of its town, as
+// the wild has them there for whoever's asking (candidatesAt, at the tier the land has that far
+// from their `home`: tierAt), by day or by night: none that only the ruins' dead or a perilous
+// place's masters are, none that need lands or tiers there aren't near
+function wantedNear(war, town, home) {
     if (!war.plan) {
         return [];
     }
 
-    const lands = landsNear(war.plan, town.at);
-    const living = WANTED_FROM.filter((id) => lands.some((land) => livesOn(id, land) && land.tier >= CREATURES[id].tiers[0] && land.tier <= CREATURES[id].tiers[1]));
+    const found = new Set(landsNear(war.plan, town.at, home).flatMap((land) => candidatesAt(land, land.tier, true).map(({ id }) => id)));
 
-    return [...new Set(living.flatMap(partsOf))];
+    return [...new Set(WANTED_FROM.filter((id) => found.has(id)).flatMap(partsOf))];
 }
 
 // The lands within a guild's reach of its town, looked at every LAND_STEP metres: [{ biome, race,
-// tier (as from the town) }], each once
-function landsNear(plan, [x, y]) {
+// tier (as far as it is from `home`) }], each once
+function landsNear(plan, [x, y], home) {
     const lands = new Map();
     const steps = Math.floor(GUILD_REACH / LAND_STEP);
 
@@ -639,7 +642,7 @@ function landsNear(plan, [x, y]) {
             if (i * i + j * j <= steps * steps) {
                 const at = [x + i * LAND_STEP, y + j * LAND_STEP];
                 const { biome, race } = landAt(plan, ...at);
-                const tier = tierAt(at, [[x, y]], biome);
+                const tier = tierAt(at, [home], biome);
 
                 lands.set(`${biome}|${race}|${tier}`, { biome, race, tier });
             }
@@ -659,7 +662,7 @@ function heldNear(war, town) {
     return placesOf(war.plan)
         .filter((place) => apart(place.at, town.at) <= GUILD_REACH)
         .map((place) => ({ place, holder: holderOf(war.plan, place, war.places?.[place.id], war.turn) }))
-        .filter(({ holder }) => PLACE_BANDS[holder])
+        .filter(({ place, holder }) => bandOf(place, holder))
         .map(({ place, holder }) => ({ place, holder, tier: tierAt(place.at, [town.at], landAt(war.plan, ...place.at).biome) }));
 }
 

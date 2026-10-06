@@ -73,6 +73,12 @@ const PATROLS = [1, 3];
 const SITE_CLEAR = 5;
 const SITES_APART = 8;
 
+// The old graveyard outside each people's start town (core/places.js: its dead the first a new
+// adventurer meets): how far out from the town's middle (cells: within its guild's reach and the
+// wild's first tier); and how near a road it would rather be (cells), and how far a road's looked
+// for
+const GRAVEYARD = Object.freeze({ out: [8, 17], road: 2, look: 8 });
+
 // Tiers of enemy camp: the first as far as TIER_FROM + TIER_EVERY metres from where the player
 // starts, then one more for each TIER_EVERY metres further, up to TIERS; and the camps pitched
 // round each start (HOME_CAMPS) within the first tier's reach
@@ -610,6 +616,10 @@ export function settleLand(land, seed) {
 
     keepOutOfWater(land, { places, sites, camps, road, roads }, route, wetness(view));
 
+    // (The graveyards outside the start towns last, where everything else has gone, from numbers
+    // of their own: nothing else laid out moves for them)
+    sites.push(...graveyards(land, road, places, sites, camps, createRandom(seed * 37 + 11)));
+
     // (And the land's waters, as far as they've been worked out, for the plan to take on: the same
     // land)
     return { places, road, roads, sites, camps, waters: watersOf(view) };
@@ -838,6 +848,68 @@ function hamlets(land, road, roads, places, sites, camps, random, used, route) {
             roads.push({ from: hamlet.id, to: to.id, kind: "track", cells, bridges: cells.filter(([x, y]) => land.water[cellIndex(x, y)] === WATER.river) });
         }
     });
+}
+
+// The old graveyard outside each people's start town: GRAVEYARD.out from its middle, clear of
+// every settlement, site and camp, off the roads and the water, in the town's people's lands; by a
+// road, so it's found (within GRAVEYARD.road cells of one, or else as near one as there's a spot)
+function graveyards(land, road, places, sites, camps, random) {
+    const { biome, water, territory } = land;
+    const found = [];
+    // (How far a cell is from the nearest road, in cells each way: GRAVEYARD.look + 1 if further)
+    const toRoad = ([x, y]) => {
+        for (let ring = 1; ring <= GRAVEYARD.look; ring++) {
+            for (let dy = -ring; dy <= ring; dy++) {
+                for (let dx = -ring; dx <= ring; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) === ring && road[cellIndex(x + dx, y + dy)]) {
+                        return ring;
+                    }
+                }
+            }
+        }
+
+        return GRAVEYARD.look + 1;
+    };
+
+    RACES.forEach((race, r) => {
+        const town = startTown(places, race.id);
+        const [tx, ty] = town.cell;
+        const [near, far] = GRAVEYARD.out;
+        const fits = [];
+
+        for (let dy = -far; dy <= far; dy++) {
+            for (let dx = -far; dx <= far; dx++) {
+                const cell = [tx + dx, ty + dy];
+                const k = cellIndex(...cell);
+                const out = hypot(dx, dy);
+
+                if (out < near || out > far || cell[0] < 4 || cell[1] < 4 || cell[0] > CELLS - 5 || cell[1] > CELLS - 5) {
+                    continue;
+                }
+
+                if (water[k] || road[k] || biome[k] === BIOME.beach || territory[k] !== r + 1) {
+                    continue;
+                }
+
+                if (!clearOf(places, cell, SITE_CLEAR) || [...sites, ...found].some((site) => apart(site.cell, cell) < SITES_APART) || camps.some((camp) => apart(camp.cell, cell) < 3)) {
+                    continue;
+                }
+
+                fits.push(cell);
+            }
+        }
+
+        const spots = fits.map((cell) => ({ cell, road: toRoad(cell) }));
+        const nearest = Math.max(GRAVEYARD.road, Math.min(...spots.map(({ road: d }) => d)));
+        const roadside = spots.filter(({ road: d }) => d <= nearest).map(({ cell }) => cell);
+        const cell = roadside.length ? random.pick(roadside) : null;
+
+        if (cell) {
+            found.push({ id: `graveyard-${sites.length + found.length + 1}`, kind: "graveyard", race: race.id, name: null, cell, at: centre(...cell), seed: random.seed() });
+        }
+    });
+
+    return found;
 }
 
 /**

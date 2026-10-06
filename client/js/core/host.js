@@ -26,7 +26,7 @@ import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
 import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
-import { bandFolk, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
+import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
@@ -2805,7 +2805,7 @@ export class Host {
             }
 
             const holder = holderOf(plan, place, this.war.places[place.id], this.war.turn);
-            const band = PLACE_BANDS[holder];
+            const band = bandOf(place, holder);
             const site = band ? this.#siteOf(place.id) : null;
 
             if (!site || !homes.length) {
@@ -2846,7 +2846,7 @@ export class Host {
             // (The chest on open ground by the leader: not in a wall)
             const { map, square: chest } = inside?.chest ?? { map: "town", square: this.#freeNear([Math.floor(at[0] + 1.5), Math.floor(at[1])]) };
 
-            this.held.set(place.id, { ids, leader: ids[0] ?? null, at, tier, holder, chest, map, maps: inside?.maps ?? [], race: place.race, cleared: false });
+            this.held.set(place.id, { ids, leader: ids[0] ?? null, at, tier, holder, relic: Boolean(band.relic), chest, map, maps: inside?.maps ?? [], race: place.race, cleared: false });
             this.ground.set(`chest-${place.id}`, { id: `chest-${place.id}`, chest: true, locked: true, for: null, map, square: chest, place: place.id, until: null });
         }
     }
@@ -2864,7 +2864,7 @@ export class Host {
         held.cleared = true;
         this.war?.clearPlace(id);
         this.#clearedBy(id, held.at, held.maps);
-        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier, relic: Boolean(PLACE_BANDS[held.holder]?.relic) });
+        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier, relic: held.relic });
         this.#event("cleared", { place: id, holder: held.holder });
     }
 
@@ -4002,7 +4002,9 @@ export class Host {
             const kept = player.offers[post.id];
 
             if (effect.work === "ask") {
-                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random };
+                // (The parts a guild wants are what's found near it for them: as strong as it is
+                // that far from their home)
+                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, home: this.#homeOf(player), held: standing.requests, random: this.random };
                 const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? offerBoard(asked) : [offerRequest(asked)].filter(Boolean);
 
                 player.offers[post.id] = { turn: this.war.turn, board };

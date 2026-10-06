@@ -1,7 +1,7 @@
 // The sites the world plan puts out in the wild and among the peoples that no people builds (the
 // terrain plan's §9 rows 4 and 6): the ruins of old halls, caves, shrines, circles of standing
-// stones, the ruined castles where the wight lords keep, the dragon's lair, and the watchtowers no
-// one keeps any more. Each is laid out here as what stands where, and which of it stands in the
+// stones, the ruined castles where the wight lords keep, the dragon's lair, the watchtowers no
+// one keeps any more, and the old graveyards outside the towns where the players start. Each is laid out here as what stands where, and which of it stands in the
 // way: the parts (for the art kits, world/art/kits/neutral.js, to build just as laid out), the
 // rectangles no one walks through (a circle of stones is walked into between its stones, a ruin's
 // hall through its door and its breaches, a ruined castle's courtyard through its broken gate),
@@ -11,7 +11,7 @@
 // its north-west corner; sites.js turns it to face its road. Pure, and the same in every browser:
 // the seeded random numbers (random.js) and exact maths (exact.js) only.
 
-import { cos, sin } from "../exact.js";
+import { cos, PI, sin } from "../exact.js";
 import { createRandom } from "../random.js";
 import { layoutCastle } from "./castle.js";
 import { pieceCatalog, PLOT } from "./pieces.js";
@@ -19,7 +19,7 @@ import { pieceCatalog, PLOT } from "./pieces.js";
 /**
  * Each neutral site's size (plots across and deep), as it's built: a circle of stones 24 m across,
  * a shrine 12 m, a cave's crag 20 by 16, a ruined hall 24 by 20, a ruined castle as big as the
- * humans' own, the dragon's crag 40 by 36, and a broken watchtower.
+ * humans' own, the dragon's crag 40 by 36, a broken watchtower, and a walled graveyard 24 by 20.
  */
 export const NEUTRAL = Object.freeze({
     "standing stones": [6, 6],
@@ -29,7 +29,65 @@ export const NEUTRAL = Object.freeze({
     "ruined castle": [18, 16],
     "dragon's lair": [10, 9],
     watchtower: [3, 3],
+    graveyard: [6, 5],
 });
+
+/**
+ * An old graveyard, as old churchyards are (docs/GAME.md, *The sites no people keeps*; the
+ * research behind it: graves run east and west, their headstones at their heads, at the west;
+ * metres):
+ * - its wall of field stone (`wall`: how thick, how high at its least and most), its way in at the
+ *   middle of its front between two piers (`gate`: how wide between them, the piers how wide and
+ *   how high), iron gates hanging open or fallen;
+ * - a path of flagstones (`path` wide) from there to what stands at its back: a family's
+ *   mausoleum (`mausoleum` of them), or a chest tomb; one or two tombs more beside the path
+ *   (`tombs`), chest or table tombs, the grander graves; now and then an obelisk (`obelisk`) and
+ *   a grave railed round (`railing`); a yew by the gate, on the path's west side;
+ * - the graves (`grave`: `long` by `wide`, in rows `row` apart along them and `across` apart
+ *   side by side, set off their places by up to `jitter` and turned by up to `yaw`), east and west
+ *   as the world lies, whichever way the yard faces; some of the plots empty (`keep` of them
+ *   used), fewer on the north side (`north` of those there left empty: the side no one wanted);
+ * - a headstone at most graves' heads (`marked` of them; the rest unmarked), shaped as it was cut
+ *   (`stones`: how often each), its face to the west mostly (`faces`: west, east, or turned to the
+ *   path); leaning forward over the grave as the ground sinks under it, sunk, fallen or snapped
+ *   (`lean`); a footstone at some graves' feet (`footstone`);
+ * - over each, a mound gone to grass, the earth freshly turned, nothing (sunk level), or the
+ *   grave broken open where its dead have risen (`ground`: how often each).
+ */
+export const GRAVEYARD = Object.freeze({
+    wall: { thick: 0.6, low: 0.9, high: 1.4 },
+    gate: { wide: 2.2, pier: 0.55, high: [1.8, 2.1] },
+    path: 1.4,
+    mausoleum: 0.6,
+    tombs: [1, 2],
+    obelisk: 0.35,
+    railing: 0.35,
+    grave: { long: 2.3, wide: 0.9, row: 3.1, across: 1.25, jitter: 0.25, yaw: 0.14 },
+    keep: 0.86,
+    north: 0.55,
+    marked: 0.86,
+    stones: { round: 3, segmental: 2, shouldered: 2, pointed: 1.5, flat: 1.5, cross: 1 },
+    faces: { west: 0.7, east: 0.2, path: 0.1 },
+    lean: { forward: 0.45, sunk: 0.25, fallen: 0.07, snapped: 0.04 },
+    footstone: 0.25,
+    ground: { mound: 0.42, fresh: 0.15, open: 0.16, flat: 0.27 },
+});
+
+// A rectangle `long` along `along` ([x, y], a unit vector) and `wide` across it, round (x, y): its
+// corners; and the box round some points
+const cornersOf = (x, y, [ax, ay], long, wide) =>
+    [
+        [1, 1],
+        [1, -1],
+        [-1, -1],
+        [-1, 1],
+    ].map(([i, j]) => [x + (ax * long * i) / 2 - (ay * wide * j) / 2, y + (ay * long * i) / 2 + (ax * wide * j) / 2]);
+const boundsOf = (points) => [Math.min(...points.map(([x]) => x)), Math.min(...points.map(([, y]) => y)), Math.max(...points.map(([x]) => x)), Math.max(...points.map(([, y]) => y))];
+const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+const grown = ([x0, y0, x1, y1], by) => [x0 - by, y0 - by, x1 + by, y1 + by];
+
+/** The tree a graveyard's yew is drawn as (setpieces/pieces.js TREE_KINDS: a dark spruce, of the middling size). */
+export const YEW = 8;
 
 /**
  * An old hall's crypt's way down (metres): a stair-house `wide` across and `deep`, against the
@@ -55,7 +113,7 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * it's like within: insides.js's kinds) }, facing out the way the site does) }; or null if the
  * kind isn't one.
  */
-export function layoutNeutral({ kind, seed, form = null }) {
+export function layoutNeutral({ kind, seed, form = null, facing = 0 }) {
     const size = NEUTRAL[kind];
 
     if (!size) {
@@ -64,7 +122,7 @@ export function layoutNeutral({ kind, seed, form = null }) {
 
     const random = createRandom((seed ^ 0x5eed) >>> 0);
     const [width, depth] = [size[0] * PLOT, size[1] * PLOT];
-    const laid = LAYOUTS[kind](random, width, depth, seed, form);
+    const laid = LAYOUTS[kind](random, width, depth, seed, form, facing);
 
     return { size, ...laid };
 }
@@ -340,6 +398,233 @@ const LAYOUTS = {
         return { parts, solid, heart: [cx, cy], cut: { x: cx, y: 12, face: 8 }, entry: { x: cx, y: 12.4, width: 7, height: 6, inside: "lair" } };
     },
 
+    // An old graveyard outside a town (GRAVEYARD): a wall of field stone round it, broken here
+    // and there; its way in at the front between two piers, its iron gates hanging open; a path
+    // of flagstones up to a mausoleum or a chest tomb at its back, tombs beside it; a yew by the
+    // gate; and the graves, east and west as the world lies (`facing`: which way the yard's
+    // turned), their headstones at their heads, the ground over them as the years and the risen
+    // dead have left it
+    graveyard(random, width, depth, seed, form, facing) {
+        const { wall, gate, path, grave } = GRAVEYARD;
+        const cx = width / 2;
+        const [x0, y0, x1, y1] = [0.6, 0.6, width - 0.6, depth - 0.6];
+        const inner = [x0 + wall.thick / 2, y0 + wall.thick / 2, x1 - wall.thick / 2, y1 - wall.thick / 2];
+        // (The world's east and north as the yard lies in it: sites.js turns a layout so)
+        const east = [cos(facing), sin(facing)];
+        const north = [sin(facing), -cos(facing)];
+        const parts = [];
+        const solid = [];
+        // (What the graves keep clear of)
+        const kept = [];
+        const run = (a, b, c, d) => {
+            parts.push({ part: "lowWall", x0: a, y0: b, x1: c, y1: d, h: random.range(wall.low, wall.high), seed: random.seed() });
+            solid.push([a, b, c, d]);
+        };
+
+        // Its wall, the way in at the front between its piers, a stretch of a side fallen now and
+        // then
+        const half = gate.wide / 2 + gate.pier;
+        const side = random.chance(0.5) ? random.pick(["west", "east"]) : null;
+        const fallen = { at: random.range(y0 + 4, y1 - 4), half: random.range(1, 1.5) };
+
+        run(x0 - wall.thick / 2, y0 - wall.thick / 2, x1 + wall.thick / 2, y0 + wall.thick / 2);
+        run(x0 - wall.thick / 2, y1 - wall.thick / 2, cx - half, y1 + wall.thick / 2);
+        run(cx + half, y1 - wall.thick / 2, x1 + wall.thick / 2, y1 + wall.thick / 2);
+
+        for (const [x, which] of [
+            [x0, "west"],
+            [x1, "east"],
+        ]) {
+            if (side === which) {
+                run(x - wall.thick / 2, y0 + wall.thick / 2, x + wall.thick / 2, fallen.at - fallen.half);
+                run(x - wall.thick / 2, fallen.at + fallen.half, x + wall.thick / 2, y1 - wall.thick / 2);
+                parts.push({ part: "rubble", x: x + (which === "west" ? 1 : -1) * 0.9, y: fallen.at + random.range(-0.4, 0.4), r: random.range(0.6, 0.9), seed: random.seed() });
+                kept.push(box(x, fallen.at, 3, fallen.half * 2 + 1));
+            } else {
+                run(x - wall.thick / 2, y0 + wall.thick / 2, x + wall.thick / 2, y1 - wall.thick / 2);
+            }
+        }
+
+        const high = random.range(...gate.high);
+
+        for (const hand of [-1, 1]) {
+            const x = cx + hand * (gate.wide / 2 + gate.pier / 2);
+            // (Each gate hangs from its pier, swung in, or fallen; or it's gone)
+            const state = random.pickWeighted(
+                [
+                    ["open", 0.6],
+                    ["fallen", 0.25],
+                    ["gone", 0.15],
+                ],
+                ([, weight]) => weight,
+            )[0];
+
+            parts.push({ part: "gatepost", x, y: y1, w: gate.pier, h: high, seed: random.seed() });
+            solid.push(box(x, y1, gate.pier, gate.pier + 0.1));
+
+            if (state !== "gone") {
+                parts.push({ part: "gate", x: cx + (hand * gate.wide) / 2, y: y1, hand, wide: gate.wide / 2, open: random.range(1, 1.7), fallen: state === "fallen", seed: random.seed() });
+            }
+        }
+
+        // What stands at its back, the path's end: a family's mausoleum, its door to the path;
+        // or a chest tomb
+        const along = (yaw = 0) => [cos(facing + yaw), sin(facing + yaw)];
+        // (A grave's or a tomb's turn, as the art takes it: its across, a quarter turn back from
+        // along it)
+        const turnOf = (yaw) => facing + yaw - PI / 2;
+        let end;
+
+        if (random.chance(GRAVEYARD.mausoleum)) {
+            const [w, d] = [random.range(3, 3.6), random.range(3.6, 4.2)];
+            const y = inner[1] + 0.7 + d / 2;
+
+            parts.push({ part: "mausoleum", x: cx, y, w, d, h: random.range(2.8, 3.4), roof: random.chance(0.65) ? "gable" : "pyramid", door: random.chance(0.6) ? "ajar" : "shut", seed: random.seed() });
+            solid.push(box(cx, y, w + 0.5, d + 0.5));
+            kept.push(box(cx, y, w + 1.6, d + 1.6));
+            end = y + d / 2 + 0.6;
+        } else {
+            const tomb = tombAt(random, cx, inner[1] + 2.2, along, turnOf, "chest");
+
+            parts.push(tomb.part);
+            solid.push(tomb.solid);
+            kept.push(grown(tomb.solid, 0.6));
+            end = tomb.solid[3] + 0.3;
+        }
+
+        parts.push({ part: "flags", x0: cx - path / 2, y0: end, x1: cx + path / 2, y1: y1 + wall.thick / 2, seed: random.seed() });
+        kept.push([cx - path / 2 - 0.45, y0, cx + path / 2 + 0.45, depth]);
+
+        // The yew by the gate, on the path's west side (as the world lies); a tomb or two beside
+        // the path, now and then an obelisk
+        const west = east[0] > 0.2 ? -1 : east[0] < -0.2 ? 1 : random.pick([-1, 1]);
+        const yew = [cx + west * random.range(3.6, 4.6), y1 - random.range(2.8, 3.6)];
+
+        parts.push({ part: "tree", x: yew[0], y: yew[1], variant: YEW });
+        solid.push(box(...yew, 1.2, 1.2));
+        kept.push(box(...yew, 4.4, 4.4));
+
+        const beside = (reach) => {
+            for (let tries = 0; tries < 12; tries++) {
+                const hand = random.pick([-1, 1]);
+                const at = [cx + hand * (path / 2 + 0.6 + reach), random.range(end + 1.4, y1 - 3)];
+
+                if (!kept.some((rect) => overlaps(rect, box(...at, reach * 2, reach * 2)))) {
+                    return at;
+                }
+            }
+
+            return null;
+        };
+
+        for (let k = random.int(...GRAVEYARD.tombs); k > 0; k--) {
+            const at = beside(1.2);
+
+            if (at) {
+                const tomb = tombAt(random, ...at, along, turnOf, random.chance(0.65) ? "chest" : "table");
+
+                parts.push(tomb.part);
+                solid.push(tomb.solid);
+                kept.push(grown(tomb.solid, 0.5));
+            }
+        }
+
+        const obelisk = random.chance(GRAVEYARD.obelisk) ? beside(0.8) : null;
+
+        if (obelisk) {
+            parts.push({ part: "obelisk", x: obelisk[0], y: obelisk[1], h: random.range(2.2, 3.2), seed: random.seed() });
+            solid.push(box(...obelisk, 1.1, 1.1));
+            kept.push(box(...obelisk, 1.8, 1.8));
+        }
+
+        // The graves, row on row east and west as the world lies, their places set off a little
+        // and turned (an old yard's, not laid out with a line); the north side mostly left empty
+        const middle = [(inner[0] + inner[2]) / 2, (inner[1] + inner[3]) / 2];
+        const northmost = Math.max(...cornersOf(...middle, [1, 0], inner[2] - inner[0], inner[3] - inner[1]).map(([x, y]) => (x - middle[0]) * north[0] + (y - middle[1]) * north[1]));
+        const room = grown(inner, -0.35);
+        const pick = (weights) => random.pickWeighted(Object.entries(weights), ([, weight]) => weight)[0];
+        const graves = [];
+
+        for (let i = -6; i <= 6; i++) {
+            for (let j = -14; j <= 14; j++) {
+                const ahead = i * grave.row + random.range(-grave.jitter, grave.jitter);
+                const aside = j * grave.across + random.range(-grave.jitter, grave.jitter) * 0.6;
+                const [x, y] = [middle[0] + east[0] * ahead + north[0] * aside, middle[1] + east[1] * ahead + north[1] * aside];
+                const yaw = random.range(-grave.yaw, grave.yaw);
+                const way = along(yaw);
+                const corners = cornersOf(x, y, way, grave.long, grave.wide);
+                const bounds = boundsOf(corners);
+                const keep = random.chance(GRAVEYARD.keep) && !(aside > northmost * 0.3 && random.chance(GRAVEYARD.north));
+
+                if (!keep || corners.some(([px, py]) => px < room[0] || py < room[1] || px > room[2] || py > room[3]) || kept.some((rect) => overlaps(rect, bounds))) {
+                    continue;
+                }
+
+                graves.push({ x, y, yaw, way, bounds });
+            }
+        }
+
+        // (A grave railed round, now and then: one by the path)
+        const railed = random.chance(GRAVEYARD.railing) ? graves.reduce((best, each) => (!best || Math.abs(each.x - cx) < Math.abs(best.x - cx) ? each : best), null) : null;
+
+        for (const { x, y, yaw, way, bounds } of graves) {
+            const marked = random.chance(GRAVEYARD.marked);
+            const stone = marked ? pick(GRAVEYARD.stones) : null;
+            const look = pick(GRAVEYARD.faces);
+            const forward = random.chance(GRAVEYARD.lean.forward);
+            const fall = random.next();
+            const state = fall < GRAVEYARD.lean.fallen ? "fallen" : fall < GRAVEYARD.lean.fallen + GRAVEYARD.lean.snapped ? "snapped" : "standing";
+            const ground = pick(GRAVEYARD.ground);
+            const part = {
+                part: "grave",
+                x,
+                y,
+                w: grave.wide,
+                d: grave.long,
+                turn: turnOf(yaw),
+                // (Its headstone: shaped, how tall, broad and thick, which way its face looks (west,
+                // east, or to the path: an angle, in the yard), leaning forward over the grave
+                // (`sag`) and to a side (`lean`), sunk, fallen or snapped; and its stone, one of the
+                // land's few)
+                stone,
+                ring: stone === "cross" && random.chance(0.4),
+                tall: stone === "cross" ? random.range(0.9, 1.3) : random.range(0.55, 1),
+                broad: random.range(0.45, 0.75),
+                thick: random.range(0.08, 0.15),
+                look: look === "west" ? facing + yaw + PI : look === "east" ? facing + yaw : x < cx ? 0 : PI,
+                sag: forward ? random.range(0.05, 0.35) : random.range(-0.03, 0.05),
+                lean: random.range(-0.1, 0.1),
+                sunk: random.chance(GRAVEYARD.lean.sunk) ? random.range(0.1, 0.3) : 0,
+                state,
+                tone: random.int(0, 2),
+                footstone: marked && random.chance(GRAVEYARD.footstone),
+                ground,
+                railed: railed?.x === x && railed?.y === y,
+                seed: random.seed(),
+            };
+            const head = [x - (way[0] * grave.long) / 2 + way[0] * 0.25, y - (way[1] * grave.long) / 2 + way[1] * 0.25];
+
+            parts.push(part);
+
+            // (What's in the way: its headstone, standing or lying; its footstone; the whole of it
+            // railed round, or broken open)
+            if (part.railed || ground === "open") {
+                solid.push(grown(bounds, 0.1));
+            } else if (stone && state === "fallen") {
+                solid.push(box(head[0] + way[0] * 0.5, head[1] + way[1] * 0.5, 1.2, 1.2));
+            } else if (stone) {
+                solid.push(box(...head, 0.8, 0.8));
+            }
+
+            if (part.footstone && !part.railed && ground !== "open") {
+                solid.push(box(x + (way[0] * grave.long) / 2 - way[0] * 0.15, y + (way[1] * grave.long) / 2 - way[1] * 0.15, 0.5, 0.5));
+            }
+        }
+
+        // (Its heart on the path, halfway up it)
+        return { parts, solid, heart: [cx, Math.max(end + 1.5, (end + y1) / 2)] };
+    },
+
     // A watchtower no one keeps: its top fallen in, a heap at its foot
     watchtower(random, width, depth) {
         const [cx, cy] = [width / 2, depth / 2 - 1];
@@ -357,9 +642,28 @@ const LAYOUTS = {
 // A rectangle w by d round (x, y): [x0, y0, x1, y1]
 const box = (x, y, w, d) => [x - w / 2, y - d / 2, x + w / 2, y + d / 2];
 
+// A graveyard's tomb at (x, y), east and west as its graves are (`along`, `turnOf`: the
+// graveyard's), a chest tomb (its lid shoved askew, or cracked, or whole) or a table tomb (a slab
+// on legs): its part, and what of it's in the way
+function tombAt(random, x, y, along, turnOf, kind) {
+    const yaw = random.range(-0.06, 0.06);
+    const [long, wide] = kind === "chest" ? [random.range(1.8, 2), random.range(0.8, 1)] : [random.range(1.75, 1.9), random.range(0.75, 0.9)];
+    const lid = random.pickWeighted(
+        [
+            ["askew", 0.55],
+            ["cracked", 0.2],
+            ["whole", 0.25],
+        ],
+        ([, weight]) => weight,
+    )[0];
+    const part = { part: "tomb", kind, x, y, long, wide, h: kind === "chest" ? random.range(0.85, 1.05) : random.range(0.7, 0.85), turn: turnOf(yaw), lid, skew: random.range(0.26, 0.52) * random.pick([-1, 1]), shift: random.range(0.2, 0.45), seed: random.seed() };
+
+    return { part, solid: grown(boundsOf(cornersOf(x, y, along(yaw), long + 0.3, wide + 0.3)), 0.05) };
+}
+
 // How far each kind of part reaches each way from its middle (metres, across and deep: so it's a
 // piece of its own, stood on the ground where it is), for those laid out at a point
-const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2] });
+const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4] });
 
 /**
  * A part's middle and size, laid out ([x, y, w, d] metres, from its site's north-west corner):

@@ -44,7 +44,8 @@ back to the same world:
   plan's roads carried on to its streets' ends.
 - **The sites no people keeps** (`core/setpieces/neutral.js`, built by `art/kits/neutral.js` and
   the castle kit's `RUINED`): the ruins of old halls, caves, shrines, rings of standing stones,
-  ruined castles, the dragon's lair and the broken watchtowers no one mans. Old and weathered,
+  ruined castles, the dragon's lair, the broken watchtowers no one mans, and the old graveyard
+  outside each people's start town. Old and weathered,
   as the Elden Ring's are; the peoples' own towns, castles and farms are kept up and lived in.
   - **Laid out** from the site's seed, the same everywhere: its parts, what of it stands in the
     way (only that blocks; the rest is open ground) and its heart, open ground in its middle,
@@ -67,6 +68,35 @@ back to the same world:
     left by its walls. **Dragon's lair:** a hollow dug into a mountainside, a great dark doorway
     in the face at its back, ridges of dark rock coming down either side, bones. **Broken
     watchtower:** its walls broken off at different heights round its top.
+  - **Graveyard** (`GRAVEYARD`, laid out as old churchyards are; the research behind it, from
+    what's written about English and Scottish churchyards, is summed up in the constants'
+    comments): 24 by 20 m, walled round in dry field stone 0.9 to 1.4 m high, a stretch of a side
+    fallen now and then; its way in between two capped stone piers, its iron gates hanging open,
+    fallen, or gone; a flagstone path up its middle to a family's mausoleum (six yards in ten: a
+    stone house on two steps, pilasters at its front corners, a gabled roof with its pediment
+    over the door or a pyramid of slates, a name panel over its iron door, the door ajar now and
+    then) or a chest tomb; one or two chest or table tombs beside the path, their lids shoved
+    askew or cracked across, the dark showing; now and then an obelisk, and a grave railed round
+    in iron on a stone kerb; a yew by the gate, on the path's west side.
+    - **The graves** run east and west as the world lies, whichever way the yard's turned to its
+      road, the headstone at the west end. They're in rows, but an old yard's: each set off its
+      place and turned a little, plots left empty, the north side (the side no one wanted) mostly
+      empty.
+    - **Headstones:** round-headed, segmental, shouldered, pointed, flat, or a cross (some
+      ring-headed), 0.55 to 1 m high, of the land's stone (the humans' grey limestone, buff
+      sandstone, grey granite). Seven in ten face west, two east, one the path. Nearly half
+      lean forward over the grave, as the ground sinks under them; a quarter are sunk; a few
+      have fallen (face up or down), or snapped off with their tops lying beside. A footstone
+      at a quarter of the graves' feet. Weathered, with green on their north faces, and on the
+      faces the sun reaches, lichen's orange and gold in patches, more on some than others.
+    - **Over each grave:** a low mound gone to grass, a mound of earth freshly turned, nothing
+      (sunk level), or the grave broken open where its dead have risen: a dark hole, the earth
+      dug out of it heaped lumpily on one side, clods rolled off, the broken boards of the
+      coffin about.
+    - **What's in the way:** its walls and piers, the tombs, the mausoleum, the obelisk, the
+      yew's trunk, each headstone and footstone, and a railed or opened grave whole; the mounds
+      and the path are walked over. The yew is planted as the land's trees are (`Sites.treesIn`,
+      a spruce for now).
   - **Crumbled, not cut** (`art/kits/decay.js`): built as it stood, then only what's left made.
     A wall's broken top is jagged at the size of a stone: sloping where stones fell one by one,
     stepping a course where a row held, dropping in a V where a breach fell, lowest where slow
@@ -2665,7 +2695,8 @@ they are: every site the world plan puts out between the settlements and every w
   outlaws' in about a third of them (`PLACE_TIMES.taken`, by the world's seed and the place's).
   Holy springs, pride rock and the war totem are theirs alone.
 - A watchtower out in the wild, and a cave, are outlaws'. The ruins and the ruined castles are the
-  restless dead's, the dragon's lair the dragon's, and the shrines and standing stones no one's.
+  restless dead's, and so is the old graveyard outside each people's start town; the dragon's
+  lair is the dragon's, and the shrines and standing stones no one's.
 - **Cleared and retaken:** once a place's occupiers are put to the sword (`War.clearPlace`, kept
   with the war: `places`, by the place's id, the turn it was cleared and how often), it stands
   empty for 120 of the war's turns (two days of the world's clock: `PLACE_TIMES.retake`), then
@@ -2683,6 +2714,12 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **Their leader**, 2 tiers above them, stands in the middle: a bandit chief (`banditChief`, new:
   a big warrior with a sword, and better spoils) or a wight lord, the greater one of the dead,
   guarding their old relic.
+- **A graveyard's dead** are a band of their own (`PLACE_KINDS.graveyard.band`, `bandOf`:
+  `PLACE_BANDS.graveyard`): bones and a ghost by turns (`skeleton`, `ghost`, `skeleton`), led by a
+  skeleton, with no relic to guard. Near home the land's at its first tier, so they're three at
+  the first tier and their leader at the third: the first of the dead a new adventurer meets.
+  They're out by day as by night (the wild's skeletons only come out after dark), and rise again
+  two days after they're laid to rest, as every place's holders do; camping makes the days pass.
 - **They guard it:** each goes for anyone who comes within 10 metres of them (`guard`), and none
   wanders off; they don't count among the wild's creatures about a player.
 - **The chest** stands by the leader on open ground (drops3d.js: the JMI 3D Toolkit's iron-bound
@@ -2705,7 +2742,7 @@ metres off (back as many as ever the next time, unless it's been cleared).
   chest's open, and in your share an old relic of theirs: the Torc of the Drowned Queen. Tap it to
   take it.").
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
-  3 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
+  1.5 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
 - **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild; M7.5b-4,
   the crypt under the ruins and a ruined castle's keep): its way in is a door as a building's

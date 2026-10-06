@@ -1,7 +1,8 @@
 // The sites no people builds, drawn (core/setpieces/neutral.js lays them out): standing stones and
 // the flat stone in their ring, shrines (a figure on a stepped plinth, braziers, a curved wall
 // behind), crags with a cave's black mouth (a catacomb's, a dragon's), torches, the broken walls
-// and column stumps of old halls, heaps of fallen stone, bones, and broken watchtowers. Old and
+// and column stumps of old halls, heaps of fallen stone, bones, broken watchtowers, and the old
+// graveyards' low walls, gateposts, tombs and graves. Old and
 // weathered: dark at the foot, moss on what faces up, the tops of walls broken off a course at a
 // time. Each part is a piece of its own (sites.js), stood on the ground where it is, so each
 // reaches down into the ground a little, never floating where the land falls away.
@@ -36,6 +37,31 @@ const STONE = Object.freeze({ human: "stone-old", elf: "stone-moon-old", darkElf
 const CORE = "rubble-old";
 // (Standing stones are whole stones, not built of courses: natural rock)
 const MEGALITH = Object.freeze({ human: "rock", elf: "rock-pale", darkElf: "obsidian", cat: "rock-red", lizard: "rock-pale", orc: "rock-dark" });
+// (A graveyard's stones, each cut whole, gone grey and green: of the land's few, by the people's
+// lands it's in, each grave's one of them, `tone`: the humans' grey limestone, buff sandstone and
+// grey granite)
+const HEADSTONES = Object.freeze({ human: ["dressed-old", "rock-pale", "rock"], elf: ["rock-pale", "dressed-old", "rock"], darkElf: ["obsidian", "rock-dark", "rock-dark"], cat: ["rock-red", "rock-pale", "rock-red"], lizard: ["rock-pale", "dressed-old", "rock"], orc: ["rock-dark", "rock", "rock-dark"] });
+const stoneOf = (people, tone = 0) => material((HEADSTONES[people] ?? HEADSTONES.human)[tone]);
+
+/**
+ * A grave as it's drawn (metres): its headstone set `deep` into the ground; a cross's upright and
+ * its arm (`cross`: the upright's width, the arm's width and height, how far its middle is below the
+ * top) and its ring (`ring`: how big round, how thick); a footstone (`footstone`: how high, wide
+ * and thick); the mound over it (`mound`: how high, how much narrower than the grave, how far its
+ * sides slope in), the earth freshly turned higher; a grave broken open (`open`: its hole's inset
+ * from the grave's sides and ends, the earth heaped on one side of it, how high and wide, and the
+ * broken boards of the coffin about it); its railing (`railing`: how high, its bars how far apart,
+ * the kerb it stands on).
+ */
+export const GRAVE = Object.freeze({
+    deep: 0.35,
+    cross: { upright: 0.17, arm: [0.58, 0.15, 0.32] },
+    ring: { radius: 0.22, thick: 0.035 },
+    footstone: { high: [0.25, 0.4], wide: 0.32, thick: 0.08 },
+    mound: { high: 0.16, inset: 0.12, fresh: 0.22 },
+    open: { inset: [0.12, 0.25], heap: [0.45, 0.6], boards: [2, 4] },
+    railing: { high: 0.95, every: 0.3, kerb: 0.14 },
+});
 
 /**
  * An old hall's wall's windows (HALL.windows), along it as its broken top's points (`top`, world
@@ -659,7 +685,502 @@ const BUILD = {
 
         brokenCart(solid, random, [cx, 0, cz], part.turn ?? 0);
     },
+
+    // A graveyard's wall of field stone, laid dry, its top uneven where stones have come off
+    // (grey: the humans' the land's granite, not the ruins' old dark stone)
+    lowWall(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = piece.people && piece.people !== "human" ? rubbleOf(piece.people) : material("granite");
+        const [w, d] = [m(part.x1 - part.x0), m(part.y1 - part.y0)];
+        const alongX = w >= d;
+        const [length, thick] = alongX ? [w, d] : [d, w];
+        const at = alongX ? (u, y, v) => [cx + u, y, cz + v] : (u, y, v) => [cx + v, y, cz + u];
+        const top = brokenTop(random, length, m(part.h * 0.6), m(part.h), { stone: m(1.1), course: m(0.15), breaches: 0.06 });
+
+        crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(0.4), stone, { core: stone });
+    },
+
+    // A pier either side of a graveyard's way in: squared stone, a cap stepping out over it, a
+    // low pyramid on that
+    gatepost(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people);
+        const [r, h] = [m(part.w ?? 0.5) / 2, m(part.h)];
+
+        solid.tone = lichened(part.seed ?? 5, northOf(piece));
+        solid.box(cx - r, -m(0.4), cz - r, cx + r, h, cz + r, stone);
+        solid.box(cx - r - m(0.06), h, cz - r - m(0.06), cx + r + m(0.06), h + m(0.12), cz + r + m(0.06), stone);
+        solid.pyramid(cx - r * 0.8, cz - r * 0.8, cx + r * 0.8, cz + r * 0.8, h + m(0.12), r * 0.9, stone);
+    },
+
+    // An iron gate hung from its pier at the way in (its hinge where the piece stands): bars
+    // between two rails, swung in and left so; or come off its hinges and lying flat inside
+    gate(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const iron = material("iron-black");
+        const [wide, high, bar, rail] = [m(part.wide), m(1.25), m(0.014), m(0.022)];
+        const count = Math.round(part.wide / 0.16);
+        // (Closed, it runs from its hinge to the way in's middle; the yard's behind the front, north
+        // in the layout)
+        const shut = part.hand < 0 ? 0 : Math.PI;
+
+        if (part.fallen) {
+            const a = shut + random.range(-0.4, 0.4);
+            const [ux, uz] = [Math.cos(a), Math.sin(a)];
+            const [vx, vz] = uz > 0 ? [uz, -ux] : [-uz, ux];
+            const [ox, oz] = [cx, cz - m(0.4)];
+
+            for (let k = 0; k <= count; k++) {
+                const u = (k / count) * wide;
+
+                solid.turnedBox(ox + ux * u + (vx * high) / 2, oz + uz * u + (vz * high) / 2, high / 2, bar, m(0.01), m(0.04), Math.atan2(vz, vx), iron);
+            }
+
+            for (const v of [m(0.15), high - m(0.05)]) {
+                solid.turnedBox(ox + (ux * wide) / 2 + vx * v, oz + (uz * wide) / 2 + vz * v, wide / 2, rail, m(0.01), m(0.05), a, iron);
+            }
+
+            return;
+        }
+
+        const a = part.hand < 0 ? -part.open : Math.PI + part.open;
+        const [ux, uz] = [Math.cos(a), Math.sin(a)];
+
+        for (let k = 0; k <= count; k++) {
+            const u = (k / count) * wide;
+
+            solid.turnedBox(cx + ux * u, cz + uz * u, bar, bar, m(0.05), high + (k % 2 ? m(0.08) : 0), a, iron);
+        }
+
+        for (const y of [m(0.15), high - m(0.06)]) {
+            solid.turnedBox(cx + (ux * wide) / 2, cz + (uz * wide) / 2, wide / 2, rail, y, y + m(0.05), a, iron);
+        }
+    },
+
+    // A path of flagstones: in rows across it, one or two to a row, of different lengths, each set
+    // a little off true and standing a little proud; one gone here and there, the ground showing
+    flags(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people);
+        const [w, d] = [part.x1 - part.x0, part.y1 - part.y0];
+
+        for (let v = 0; v < d - 0.25; ) {
+            const long = Math.min(d - v, random.range(0.5, 0.9));
+            const split = random.chance(0.45) ? random.range(0.35, 0.65) : 1;
+
+            for (const [u0, u1] of split < 1 ? [[0, split], [split, 1]] : [[0, 1]]) {
+                const [a, b] = [u0 * w + 0.03, u1 * w - 0.03];
+
+                if (!random.chance(0.08)) {
+                    solid.turnedBox(cx + m(-w / 2 + (a + b) / 2), cz + m(-d / 2 + v + long / 2), m((b - a) / 2), m(long / 2 - 0.03), -m(0.06), m(random.range(0.03, 0.06)), random.range(-0.05, 0.05), stone);
+                }
+            }
+
+            v += long;
+        }
+    },
+
+    // A tomb (setpieces/neutral.js tombAt), east and west as the graves: a chest tomb, its stone
+    // chest on a plinth stepping out round it, its lid overhanging it, shoved askew by what came
+    // out of it (the dark of it showing), cracked across, or whole; or a table tomb, a slab on legs
+    // over a base
+    tomb(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people, part.seed % 2);
+        const angle = part.turn + Math.PI / 2;
+        const [ax, az] = [Math.cos(angle), Math.sin(angle)];
+        const at = (u, v) => [cx + ax * u - az * v, cz + az * u + ax * v];
+        const [long, wide, h] = [m(part.long), m(part.wide), m(part.h)];
+        const [lid, over] = [m(0.12), m(0.08)];
+
+        solid.tone = lichened(part.seed ?? 7, northOf(piece));
+
+        if (part.kind === "table") {
+            solid.turnedBox(cx, cz, long / 2 + m(0.1), wide / 2 + m(0.1), -m(0.3), m(0.12), angle, stone);
+
+            for (const [i, j] of [[-1, -1], [1, -1], [1, 1], [-1, 1], ...(part.long > 1.82 ? [[0, -1], [0, 1]] : [])]) {
+                solid.turnedBox(...at(i * (long / 2 - m(0.15)), j * (wide / 2 - m(0.15))), m(0.08), m(0.08), m(0.12), h - lid, angle, stone);
+            }
+        } else {
+            solid.turnedBox(cx, cz, long / 2 + m(0.1), wide / 2 + m(0.1), -m(0.35), m(0.15), angle, stone);
+            solid.turnedBox(cx, cz, long / 2, wide / 2, m(0.15), h - lid, angle, stone);
+
+            // (The dark of it, where the lid's been moved off it)
+            if (part.lid !== "whole") {
+                const y = h - lid + m(0.02);
+                const rim = m(0.07);
+
+                solid.facing([[...at(-long / 2 + rim, -wide / 2 + rim)], [...at(long / 2 - rim, -wide / 2 + rim)], [...at(long / 2 - rim, wide / 2 - rim)], [...at(-long / 2 + rim, wide / 2 - rim)]].map(([x, z]) => [x, y, z]), [0, 1, 0], material("shadow"));
+            }
+        }
+
+        // Its lid: shoved along and turned; cracked across, its halves apart; or whole
+        if (part.lid === "askew") {
+            solid.turnedBox(...at(m(part.shift) * Math.sign(part.skew), m(part.shift * 0.35)), long / 2 + over, wide / 2 + over, h - lid, h, angle + part.skew, stone);
+        } else if (part.lid === "cracked") {
+            for (const side of [-1, 1]) {
+                solid.turnedBox(...at(side * (long / 4 + m(0.04)), side * m(0.03)), long / 4 + over / 2 - m(0.02), wide / 2 + over, h - lid - (side > 0 ? m(0.05) : 0), h - (side > 0 ? m(0.05) : 0), angle + side * random.range(0.02, 0.07), stone);
+            }
+        } else {
+            solid.turnedBox(cx, cz, long / 2 + over, wide / 2 + over, h - lid, h, angle, stone);
+        }
+    },
+
+    // A family's mausoleum: a small stone house on two steps, pilasters at its front corners, a
+    // cornice round it, under a gabled roof (its pediment over the door) or a pyramid of stone
+    // slates; its iron door in a dark doorway, a stone framing it and a panel for their name over
+    // it; the door ajar now and then, the dark within showing
+    mausoleum(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people);
+        const slates = material(piece.people === "darkElf" ? "obsidian" : "slate-grey");
+        const iron = material("iron-black");
+        const [w, d, h] = [m(part.w), m(part.d), m(part.h)];
+        const [x0, z0, x1, z1] = [cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2];
+        const base = m(0.36);
+        const [dw, dh] = [m(1), m(1.9)];
+
+        solid.tone = lichened(part.seed ?? 9, northOf(piece));
+
+        // Its steps, its walls, the pilasters at its front corners and the cornice round its top
+        solid.box(x0 - m(0.25), -m(0.4), z0 - m(0.25), x1 + m(0.25), m(0.18), z1 + m(0.25), stone);
+        solid.box(x0 - m(0.12), m(0.18), z0 - m(0.12), x1 + m(0.12), base, z1 + m(0.12), stone);
+        solid.box(x0, base, z0, x1, h, z1, stone);
+
+        for (const x of [x0, x1 - m(0.32)]) {
+            solid.box(x, base, z1, x + m(0.32), h, z1 + m(0.1), stone);
+        }
+
+        solid.box(x0 - m(0.12), h, z0 - m(0.12), x1 + m(0.12), h + m(0.16), z1 + m(0.22), stone);
+
+        const eaves = h + m(0.16);
+
+        if (part.roof === "gable") {
+            solid.roof(x0 - m(0.1), z0 - m(0.1), x1 + m(0.1), z1 + m(0.2), eaves, m(part.w * 0.3), { ridge: "z", material: slates, gable: stone });
+        } else {
+            solid.pyramid(x0 - m(0.1), z0 - m(0.1), x1 + m(0.1), z1 + m(0.2), eaves, m(part.w * 0.42), slates);
+        }
+
+        // Its doorway, dark, its stone frame and the name panel over it
+        const front = z1 + m(0.02);
+
+        solid.facing([[cx - dw / 2, base, front], [cx + dw / 2, base, front], [cx + dw / 2, base + dh, front], [cx - dw / 2, base + dh, front]], [0, 0, 1], material("shadow"));
+        solid.box(cx - dw / 2 - m(0.14), base, z1, cx - dw / 2, base + dh + m(0.14), z1 + m(0.06), stone);
+        solid.box(cx + dw / 2, base, z1, cx + dw / 2 + m(0.14), base + dh + m(0.14), z1 + m(0.06), stone);
+        solid.box(cx - dw / 2 - m(0.14), base + dh, z1, cx + dw / 2 + m(0.14), base + dh + m(0.16), z1 + m(0.06), stone);
+        solid.box(cx - m(0.5), base + dh + m(0.3), z1, cx + m(0.5), base + dh + m(0.62), z1 + m(0.04), material("rock-pale"));
+
+        // Its iron door: shut in the doorway, or ajar, swung out on its hinge
+        if (part.door === "ajar") {
+            const swing = random.range(0.5, 1.1);
+
+            solid.turnedBox(cx - dw / 2 + (Math.cos(swing) * dw) / 2, front + (Math.sin(swing) * dw) / 2, dw / 2, m(0.03), base, base + dh, swing, iron);
+        } else {
+            solid.box(cx - dw / 2, base, front, cx + dw / 2, base + dh, front + m(0.04), iron);
+        }
+    },
+
+    // An obelisk on its pedestal: a step, a die with a cornice, the shaft tapering to a point
+    obelisk(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people);
+        const h = m(part.h);
+        const top = h * 0.92;
+
+        solid.tone = lichened(part.seed ?? 11, northOf(piece));
+        solid.box(cx - m(0.5), -m(0.3), cz - m(0.5), cx + m(0.5), m(0.18), cz + m(0.5), stone);
+        solid.box(cx - m(0.36), m(0.18), cz - m(0.36), cx + m(0.36), m(0.85), cz + m(0.36), stone);
+        solid.box(cx - m(0.42), m(0.85), cz - m(0.42), cx + m(0.42), m(0.95), cz + m(0.42), stone);
+        solid.extrude(corners(cx, cz, 1, 0, m(0.42), m(0.42)), m(0.95), top, stone, { batter: m(0.1) });
+        solid.pyramid(cx - m(0.11), cz - m(0.11), cx + m(0.11), cz + m(0.11), top, h - top, stone);
+    },
+
+    // A grave, east and west as the world lies (setpieces/neutral.js GRAVEYARD): its headstone at
+    // its head, at the west (shaped as it was cut, leaning forward over it as the ground's sunk
+    // under it, sunk, fallen or snapped), a footstone at its foot now and then; over it a mound gone
+    // to grass, the earth freshly turned, nothing (sunk level with the ground), or the hole its
+    // dead climbed out of, the earth heaped on one side and the broken boards of the coffin about;
+    // railed round, now and then
+    grave(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = stoneOf(piece.people, part.tone ?? 0);
+        const [ax, az] = [Math.cos(part.turn ?? 0), Math.sin(part.turn ?? 0)];
+        const [nx, nz] = [-az, ax];
+        // (A point on the grave: `u` across it, `v` along it from its middle, its foot +)
+        const on = (u, y, v) => [cx + m(u) * ax + m(v) * nx, m(y), cz + m(u) * az + m(v) * nz];
+        const [head, foot] = [-part.d / 2 + 0.25, part.d / 2 - 0.15];
+        const along = [nx, 0, nz];
+        const across = [ax, 0, az];
+
+        solid.tone = lichened(part.seed ?? 3, northOf(piece));
+
+        if (part.stone) {
+            const look = [Math.cos(part.look ?? 0), 0, Math.sin(part.look ?? 0)];
+            const spec = { shape: part.stone, ring: part.ring, tall: part.tall, broad: part.broad, thick: part.thick, look, sag: part.sag, lean: part.lean, sunk: part.sunk, state: part.state };
+
+            if (part.state === "snapped") {
+                // (Snapped off near the ground: its stump standing, the rest lying beside it)
+                const cut = random.range(0.15, 0.3);
+
+                headstone(solid, { ...spec, shape: "stump", tall: cut, state: "standing" }, stone, on(0, 0, head), along, across);
+                headstone(solid, { ...spec, tall: part.tall - cut, state: "fallen", faceDown: random.chance(0.5) }, stone, on(random.pick([-1, 1]) * 0.55, 0, head + 0.15), along, across);
+            } else {
+                headstone(solid, { ...spec, faceDown: random.chance(0.5) }, stone, on(0, 0, head), along, across);
+            }
+        }
+
+        if (part.footstone && part.ground !== "open") {
+            const { high, wide, thick } = GRAVE.footstone;
+
+            headstone(solid, { shape: random.pick(["round", "flat"]), tall: random.range(...high), broad: wide, thick, look: along, sag: random.range(-0.05, 0.12), lean: random.range(-0.08, 0.08), sunk: 0, state: "standing" }, stone, on(0, 0, foot), along, across);
+        }
+
+        if (part.railed) {
+            railing(solid, on, part, stone);
+        }
+
+        // (The earth: dark and damp where it's been turned, the soil of an old mound under its grass)
+        const [soil, earth] = [material("soil"), material("mud-dark")];
+        const w = part.w;
+
+        if (part.ground === "open") {
+            // The hole, the earth thrown up on one side of it, the coffin's boards about
+            const [inU, inV] = GRAVE.open.inset;
+            const [hw, v0, v1] = [w / 2 - inU, head + 0.2, foot - inV];
+            const hand = random.pick([-1, 1]);
+            const [heap, broad] = GRAVE.open.heap;
+
+            const dug = weathered(part.seed ?? 3, { moss: 0, dirt: 0.55 });
+
+            // (Its dark mouth; the earth dug out of it heaped beside it, lumpy, clods rolled off it)
+            solid.facing([on(-hw, 0.04, v0), on(hw, 0.04, v0), on(hw, 0.04, v1), on(-hw, 0.04, v1)], [0, 1, 0], material("shadow"));
+
+            const out = hand * (hw + 0.1 + broad / 2);
+
+            hump(solid, on, out, (v0 + v1) / 2 - 0.15, broad / 2, (v1 - v0) / 2, heap * random.range(0.8, 1.1), earth, dug, random);
+            hump(solid, on, out + hand * broad * 0.3, v1 - 0.25, broad * 0.35, 0.4, heap * random.range(0.45, 0.65), earth, dug, random);
+
+            for (let k = random.int(2, 4); k > 0; k--) {
+                const [x, , z] = on(out + hand * (broad / 2 + random.range(0.05, 0.3)), 0, random.range(v0, v1));
+
+                solid.cone(x, z, -m(0.05), m(random.range(0.08, 0.16)), m(random.range(0.08, 0.15)), earth, 5);
+            }
+
+            for (let k = random.int(...GRAVE.open.boards); k > 0; k--) {
+                const [x, , z] = on(-hand * (hw + random.range(0.1, 0.5)), 0, random.range(v0, v1));
+
+                solid.turnedBox(x, z, m(random.range(0.3, 0.5)), m(0.07), 0, m(0.03), part.turn + random.range(-0.6, 0.6), material("planks-dark"));
+            }
+
+            return;
+        }
+
+        if (part.ground === "flat") {
+            return;
+        }
+
+        // A mound over it: low and gone to grass, or the earth freshly turned, higher and bare
+        const fresh = part.ground === "fresh";
+        const [hw, hl] = [w / 2 - GRAVE.mound.inset, (foot - head - 0.3) / 2];
+
+        hump(solid, on, 0, head + 0.25 + hl, hw, hl, (fresh ? GRAVE.mound.fresh : GRAVE.mound.high) * random.range(0.75, 1.1), fresh ? earth : soil, fresh ? weathered(part.seed ?? 3, { moss: 0, dirt: 0.5 }) : weathered(part.seed ?? 3, { moss: 1.5, dirt: 0.15 }), fresh ? random : null);
+    },
 };
+
+// A hump of earth on a grave (`on`: a point on it, the grave's), round (u, v) on it, `hw` across
+// and `hl` along from there, `high` at its crest (metres): rounded across and falling away to its
+// ends, its edge down into the ground; lumpy, if it's earth just dug (`random` for its lumps)
+function hump(solid, on, u, v, hw, hl, high, soil, tone, random = null) {
+    const across = [-1, -0.55, 0, 0.55, 1];
+    const lump = () => (random ? random.range(0.7, 1.3) : 1);
+    const rings = [-1, -0.45, 0.45, 1].map((t) => {
+        const swell = Math.sqrt(Math.max(0, 1 - t * t * 0.85));
+
+        return across.map((s) => on(u + s * hw * (0.75 + 0.25 * swell), Math.abs(s) === 1 ? -0.08 : high * swell * Math.pow(1 - s * s, 0.6) * lump(), v + t * hl));
+    });
+    const [mx, , mz] = on(u, 0, v);
+
+    solid.loft(rings, soil, { closed: false, out: (point) => [point[0] - mx, m(1), point[2] - mz], tone });
+}
+
+// Which way north is in a piece, as it's built (x, z): its site's turned so (sites.js)
+const northOf = (piece) => [Math.sin(piece.facing ?? 0), -Math.cos(piece.facing ?? 0)];
+
+// A gravestone's weathering (weathered's: dark at its foot, moss on what faces up), green on what
+// faces north (`north`: which way that is, x and z), and on the faces the sun reaches lichen's
+// orange and gold in patches, more on some stones than others
+function lichened(seed, north) {
+    const random = createRandom((seed ^ 0x11c4e) >>> 0);
+    const base = weathered(random.int(1, 1e6), { moss: 0.45, dirt: 0.35 });
+    const amount = random.range(0.15, 0.8);
+    const [phase, scale] = [random.range(0, 100), random.range(0.12, 0.22)];
+    const gold = [1.25, 0.9, 0.42];
+    const mossy = [0.6, 0.74, 0.48];
+
+    return Object.assign(
+        (point, normal, own) => {
+            const shade = base(point, normal, own);
+
+            if (!shade) {
+                return shade;
+            }
+
+            const northward = Math.max(0, normal[0] * north[0] + normal[2] * north[1]);
+            const patch = Math.max(0, Math.sin(point[0] * scale + phase) * Math.sin(point[2] * scale * 1.3 + phase * 0.7) + Math.sin(point[1] * scale * 1.7 + phase * 0.3) * 0.5);
+            const lichen = Math.min(0.85, amount * (1 - northward) * patch * 1.6);
+            const green = northward * 0.55;
+
+            return shade.map((c, k) => c * (1 - lichen + lichen * gold[k]) * (1 - green + green * mossy[k]));
+        },
+        { bands: base.bands },
+    );
+}
+
+// A headstone (or a footstone) standing at `foot` (world pixels: where its middle meets the
+// ground), as `spec` has it: its shape (round-headed, segmental, shouldered, pointed, flat, a
+// cross, ringed or not; or the stump of one snapped off), how tall, broad and thick (metres), which
+// way its face looks (`look`), leaning forward over its grave (`sag`, along `along`) and to a side
+// (`lean`, along `across`), sunk; or fallen, lying along its grave, face down or up. A slab of its
+// outline, set into the ground but for a fallen one
+function headstone(solid, spec, stone, foot, along, across) {
+    const fallen = spec.state === "fallen";
+    const tip = fallen ? 1.48 : (spec.sag ?? 0);
+    const lean = fallen ? 0 : (spec.lean ?? 0);
+    const up = unit3(add3(add3(times3([0, 1, 0], Math.cos(tip) * Math.cos(lean)), times3(along, Math.sin(tip))), times3(across, Math.sin(lean))));
+    const facing = fallen ? [0, spec.faceDown ? -1 : 1, 0] : spec.look;
+    const towards = unit3(minus3(facing, times3(up, dot3(facing, up))));
+    const side = cross3(up, towards);
+    const thick = m(spec.thick);
+    const base = fallen ? thick / 2 + m(0.02) : -m(spec.sunk ?? 0);
+    const at = (u, y, v) => [foot[0] + side[0] * u + up[0] * y + towards[0] * v, foot[1] + base + side[1] * u + up[1] * y + towards[1] * v, foot[2] + side[2] * u + up[2] * y + towards[2] * v];
+    const [hw, h, y0] = [m(spec.broad) / 2, m(spec.tall), fallen ? 0 : -m(GRAVE.deep)];
+    // (A slab of an outline (convex, round from its foot), `thick` through: its two faces and its
+    // edges, all but its foot's under the ground)
+    const slab = (outline, depth = thick) => {
+        const way = (u, y, v) => minus3(at(u, y, v), at(0, 0, 0));
+
+        solid.facing(outline.map(([u, y]) => at(u, y, depth / 2)), way(0, 0, 1), stone);
+        solid.facing(outline.map(([u, y]) => at(u, y, -depth / 2)), way(0, 0, -1), stone);
+
+        for (let k = 0; k < outline.length; k++) {
+            const [[ua, ya], [ub, yb]] = [outline[k], outline[(k + 1) % outline.length]];
+
+            if (!fallen && ya <= y0 + 1e-6 && yb <= y0 + 1e-6) {
+                continue;
+            }
+
+            solid.facing([at(ua, ya, -depth / 2), at(ub, yb, -depth / 2), at(ub, yb, depth / 2), at(ua, ya, depth / 2)], way(yb - ya, -(ub - ua), 0), stone);
+        }
+    };
+    // (An arc of a circle round (0, cy), radius r, from angle a0 to a1, in `count` steps)
+    const arc = (cy, r, a0, a1, count) => Array.from({ length: count + 1 }, (_, k) => [Math.cos(a0 + ((a1 - a0) * k) / count) * r, cy + Math.sin(a0 + ((a1 - a0) * k) / count) * r]);
+
+    switch (spec.shape) {
+        case "stump":
+            slab([[-hw, y0], [hw, y0], [hw, h], [hw * 0.3, h + m(0.04)], [-hw * 0.4, h - m(0.03)], [-hw, h + m(0.02)]]);
+
+            return;
+        case "flat": {
+            const c = m(0.04);
+
+            slab([[-hw, y0], [hw, y0], [hw, h - c], [hw - c, h], [-hw + c, h], [-hw, h - c]]);
+
+            return;
+        }
+        case "segmental": {
+            // (Its top a shallow arc, rising a fifth of its width)
+            const rise = hw * 0.4;
+            const r = (hw * hw + rise * rise) / (2 * rise);
+            const a0 = Math.atan2(h - rise - (h - r), hw);
+
+            slab([[-hw, y0], [hw, y0], ...arc(h - r, r, a0, Math.PI - a0, 5)]);
+
+            return;
+        }
+        case "shouldered": {
+            // (Square shoulders, a round head standing up from between them)
+            const shoulder = Math.min(h * 0.78, h - hw * 0.75 - m(0.04));
+            const head = hw * 0.75;
+
+            slab([[-hw, y0], [hw, y0], [hw, shoulder], [-hw, shoulder]]);
+            slab([[-head, shoulder - m(0.02)], [head, shoulder - m(0.02)], ...arc(h - head, head, 0, Math.PI, 6)], thick * 0.96);
+
+            return;
+        }
+        case "pointed": {
+            // (An equilateral arch: each side an arc about the other's springing)
+            const spring = Math.max(y0 + m(0.2), h - hw * Math.sqrt(3));
+            const right = arc(spring, hw * 2, 0, Math.PI / 3, 3).map(([u, y]) => [u - hw, y]);
+            const left = right.slice(0, -1).reverse().map(([u, y]) => [-u, y]);
+
+            slab([[-hw, y0], [hw, y0], ...right, ...left]);
+
+            return;
+        }
+        case "cross": {
+            const { upright, arm: [width, high, below] } = GRAVE.cross;
+            const [uw, aw, ah, ab] = [m(upright) / 2, m(width) / 2, m(high), m(below)];
+            const middle = h - ab - ah / 2;
+
+            slab([[-uw, y0], [uw, y0], [uw, h], [-uw, h]]);
+            slab([[-aw, middle - ah / 2], [aw, middle - ah / 2], [aw, middle + ah / 2], [-aw, middle + ah / 2]], thick * 0.9);
+
+            // (A ring round where they cross, now and then: the Celtic cross's)
+            if (spec.ring) {
+                const ring = Array.from({ length: 13 }, (_, k) => at(Math.cos((k / 12) * Math.PI * 2) * m(GRAVE.ring.radius), middle + Math.sin((k / 12) * Math.PI * 2) * m(GRAVE.ring.radius), 0));
+
+                solid.tube(ring, m(GRAVE.ring.thick), stone, { sides: 4 });
+            }
+
+            return;
+        }
+        default:
+            // (Round-headed: its top a half circle)
+            slab([[-hw, y0], [hw, y0], ...arc(h - hw, hw, 0, Math.PI, 6)]);
+    }
+}
+
+// The railing round a grave: a stone kerb, iron bars on it (one gone here and there), a rail along
+// their tops; `on`: a point on the grave (grave's)
+function railing(solid, on, part, stone) {
+    const iron = material("iron-black");
+    const { high, every, kerb } = GRAVE.railing;
+    const [hw, hl] = [part.w / 2 + 0.08, part.d / 2 + 0.02];
+    const sides = [
+        [[-hw, -hl], [hw, -hl]],
+        [[hw, -hl], [hw, hl]],
+        [[hw, hl], [-hw, hl]],
+        [[-hw, hl], [-hw, -hl]],
+    ];
+    const random = createRandom(((part.seed ?? 1) ^ 0x3a11) >>> 0);
+
+    for (const [[ua, va], [ub, vb]] of sides) {
+        const [a, b] = [on(ua, 0, va), on(ub, 0, vb)];
+        const long = Math.hypot(b[0] - a[0], b[2] - a[2]);
+        const angle = Math.atan2(b[2] - a[2], b[0] - a[0]);
+        const [mx, mz] = [(a[0] + b[0]) / 2, (a[2] + b[2]) / 2];
+
+        solid.turnedBox(mx, mz, long / 2 + m(0.06), m(0.07), -m(0.2), m(kerb), angle, stone);
+        solid.turnedBox(mx, mz, long / 2, m(0.018), m(high - 0.04), m(high), angle, iron);
+
+        for (let k = 0, count = Math.max(1, Math.round(long / m(every))); k < count; k++) {
+            if (random.chance(0.08)) {
+                continue;
+            }
+
+            const t = k / count;
+
+            solid.turnedBox(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t, m(0.012), m(0.012), m(kerb), m(high + 0.06), angle, iron);
+        }
+    }
+}
+
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const minus3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const times3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit3 = (a) => times3(a, 1 / Math.hypot(...a));
 
 /** A neutral site's part (sites.js: piece.part, laid out by core/setpieces/neutral.js), built. */
 export function neutral(piece) {
