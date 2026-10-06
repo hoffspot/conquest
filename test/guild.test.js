@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { candidatesAt, CREATURES, tierAt } from "../client/js/core/creatures.js";
+import { candidatesAt, CREATURES, TIER_LAND, tierAt } from "../client/js/core/creatures.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -16,7 +16,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { SPOILS } from "../client/js/core/spoils.js";
 import { BOARD_SIZE, briefOf, GUILD_REACH, MOST_REQUESTS, objectiveOf, offerBoard, offerContract, offerCourier, progressOf, REQUESTS, SOLDIERS_OUT, WANTED_PARTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
-import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
+import { landAt, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const giver = Object.freeze({ id: "guild/receptionist", name: "Mirabel Wren", title: "" });
@@ -36,11 +36,11 @@ function run(host, ms) {
 
 const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
-// What a guild's board offers, asked many times
-const offers = (war, town, count = 200, seed = 3) => {
+// What a guild's board offers, asked many times (by someone whose people start at `home`)
+const offers = (war, town, count = 200, seed = 3, home = undefined) => {
     const random = createRandom(seed);
 
-    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, random })).filter(Boolean);
+    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, home, random })).filter(Boolean);
 };
 
 describe("the guilds' contracts, all within reach of their towns (standing.js offerContract)", () => {
@@ -105,11 +105,12 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
         }
     });
 
-    it("wants only the parts of the creatures that live within reach, at the tiers they're found at there", () => {
+    it("wants only the parts of what's found within reach, as strong as it is there for whoever's asking: tiers from their home", () => {
         const war = new War(plan);
-
-        for (const town of war.towns.filter(({ kind }) => HALLED.includes(kind)).slice(0, 12)) {
-            // (What could be met within reach, by day or night, as dangerous as the land is that far from the town)
+        const home = startFor(plan, "human").at;
+        // (What could be met within reach of a town, by day or night, at the tiers the land has
+        // that far from the home)
+        const metNear = (town) => {
             const met = new Set();
 
             for (let y = -GUILD_REACH; y <= GUILD_REACH; y += 100) {
@@ -117,30 +118,50 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
                     if (x * x + y * y <= GUILD_REACH * GUILD_REACH) {
                         const at = [town.at[0] + x, town.at[1] + y];
                         const land = landAt(plan, ...at);
-                        const tier = tierAt(at, [town.at], land.biome);
 
-                        for (const dark of [false, true]) {
-                            candidatesAt(land, tier, dark).forEach(({ id }) => met.add(id));
-                        }
+                        candidatesAt(land, tierAt(at, [home], land.biome), true).forEach(({ id }) => met.add(id));
                     }
                 }
             }
 
-            const from = (part) => Object.keys(SPOILS).filter((id) => met.has(id) && SPOILS[id].items.some(({ id: item }) => item === part));
-
-            for (const { target } of offers(war, town, 60).filter(({ kind }) => kind === "parts")) {
-                assert.ok(WANTED_PARTS.includes(target.part));
-                assert.ok(from(target.part).length, `${town.name}: ${target.part}, from ${Object.keys(SPOILS).filter((id) => SPOILS[id].items.some(({ id: item }) => item === target.part)).join(", ")}; met ${[...met].join(", ")}`);
-            }
-        }
-
-        // (Near a town, the land's at its mildest: none of the fiercer creatures' parts wanted)
+            return met;
+        };
+        const source = (part) => Object.keys(SPOILS).filter((id) => SPOILS[id].items.some(({ id: item }) => item === part));
+        const towns = war.towns.filter(({ kind }) => HALLED.includes(kind)).sort((a, b) => apart(a.at, home) - apart(b.at, home));
         const fierce = new Set(Object.keys(SPOILS).filter((id) => CREATURES[id].tiers[0] >= 3).flatMap((id) => SPOILS[id].items.map(({ id: item }) => item)));
         const mild = new Set(Object.keys(SPOILS).filter((id) => CREATURES[id].tiers[0] < 3).flatMap((id) => SPOILS[id].items.map(({ id: item }) => item)));
-        const wanted = war.towns.flatMap((town) => offers(war, town, 20).filter(({ kind }) => kind === "parts").map(({ target }) => target.part));
+        const wanted = new Map();
 
-        assert.ok(wanted.length > 20);
-        assert.ok(wanted.every((part) => mild.has(part) || !fierce.has(part)), wanted.filter((part) => fierce.has(part) && !mild.has(part)).join(", "));
+        // (The nearest dozen to the home, and a dozen of the furthest)
+        for (const town of [...towns.slice(0, 12), ...towns.slice(-12)]) {
+            const met = metNear(town);
+            const parts = offers(war, town, 60, 3, home).filter(({ kind }) => kind === "parts").map(({ target }) => target.part);
+
+            for (const part of parts) {
+                assert.ok(WANTED_PARTS.includes(part));
+                assert.ok(source(part).some((id) => met.has(id)), `${town.name}: ${part}, from ${source(part).join(", ")}; met ${[...met].join(", ")}`);
+            }
+
+            wanted.set(town, parts);
+        }
+
+        // (Near home, the land's at its mildest: none of the fiercer creatures' parts wanted; far
+        // from it, some of them are)
+        const near = towns.filter((town) => apart(town.at, home) + GUILD_REACH < TIER_LAND.from + TIER_LAND.every * 2).flatMap((town) => wanted.get(town) ?? []);
+        const far = towns.slice(-12).flatMap((town) => wanted.get(town));
+
+        assert.ok(near.length > 5 && far.length > 20, `${near.length} near, ${far.length} far`);
+        assert.ok(near.every((part) => mild.has(part) || !fierce.has(part)), near.filter((part) => fierce.has(part) && !mild.has(part)).join(", "));
+        assert.ok(far.some((part) => fierce.has(part) && !mild.has(part)), far.join(", "));
+
+        // (The ruins' dead never wander, so a guild never wants what only they leave)
+        assert.ok([...wanted.values()].flat().every((part) => source(part).some((id) => CREATURES[id].biomes?.length !== 0)));
+
+        // (And with no home given, as from the town itself)
+        const town = towns.at(-1);
+        const own = new Set(offers(war, town, 60).filter(({ kind }) => kind === "parts").map(({ target }) => target.part));
+
+        assert.ok([...own].every((part) => mild.has(part) || !fierce.has(part)), [...own].join(", "));
     });
 
     it("breaks up only a camp near the town", () => {

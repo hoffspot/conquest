@@ -1006,7 +1006,7 @@ Everything a contract asks for is within 1.5 km of the guild's town (`GUILD_REAC
 | Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town | 10, and 7 for each |
 | A bounty | the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each |
 | The camp outside the walls | an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 |
-| Wanted at the guild | the parts of the creatures that live within 1.5 km, at the tiers they're found at there (measured from the town: docs/WILDS.md) | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for |
+| Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for |
 | Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*) | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome |
 | A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km |
 

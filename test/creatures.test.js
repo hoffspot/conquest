@@ -16,7 +16,7 @@ import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { PARTS, rollSpoils, SPOILS } from "../client/js/core/spoils.js";
-import { offerContract, WANTED_PARTS } from "../client/js/core/standing.js";
+import { GUILD_REACH, offerContract, WANTED_PARTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { armsOf, chooseAttack, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -120,6 +120,11 @@ describe("the wild's creatures (creatures.js)", () => {
         assert.equal(tiers.at(-1), TIER_LAND.open);
         assert.equal(tierAt([20000, 0], [home], "snow"), TIERS);
         assert.equal(tierAt([1000, 0], [home], "snow"), 1);
+
+        // (The second tier begins within a guild's reach of home: the first a ring 1,450 m out)
+        assert.equal(tierAt([1440, 0], [home], "meadow"), 1);
+        assert.equal(tierAt([0, 1460], [home], "meadow"), 2);
+        assert.ok(TIER_LAND.from + TIER_LAND.every <= GUILD_REACH);
     });
 
     it("keeps each people's own creatures to their lands, the water empty, and the perilous masters out of the open", () => {

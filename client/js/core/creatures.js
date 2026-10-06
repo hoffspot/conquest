@@ -42,7 +42,7 @@ export const TIER_GROWTH = 1.18;
  * then one more each EVERY further (up to OPEN, out in the open); the high, cold and burning
  * lands (PERILOUS) far out two more, up to TIERS.
  */
-export const TIER_LAND = Object.freeze({ from: 1200, every: 850, open: 8, perilous: ["snow", "mountain", "volcanic"], perilousFrom: 6 });
+export const TIER_LAND = Object.freeze({ from: 600, every: 850, open: 8, perilous: ["snow", "mountain", "volcanic"], perilousFrom: 6 });
 
 // Lands no creature's found on (water, and the beach)
 const BARREN = new Set(["sea", "lake", "beach"]);
@@ -86,16 +86,16 @@ export const CREATURES = Object.freeze({
     wyvern: { name: "Wyvern", hp: 60, weapon: "wyvern", speed: 1.3, chase: 3, temper: "aggressive", roam: 14, leash: 26, pack: [1, 2], tiers: [5, 9], biomes: ["mountain", "badlands", "volcanic", "snow"], blood: "red", armor: 0.1 },
     // Only in the wilds of each people's lands
     blackShuck: { name: "Black shuck", hp: 50, weapon: "blackShuck", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [3, 8], biomes: null, people: "human", blood: "none", night: "only", darkSight: true },
-    boggart: { name: "Boggart", hp: 30, hands: true, weapon: "boggart", speed: 1.2, chase: 2.4, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [2, 6], biomes: null, people: "human", blood: "red" },
-    wisp: { name: "Will-o'-wisp", hp: 22, weapon: "wisp", speed: 1, chase: 2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 2], tiers: [2, 7], biomes: null, people: "elf", blood: "none", night: "only", darkSight: true },
+    boggart: { name: "Boggart", hp: 30, hands: true, weapon: "boggart", speed: 1.2, chase: 2.4, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [1, 6], biomes: null, people: "human", blood: "red" },
+    wisp: { name: "Will-o'-wisp", hp: 22, weapon: "wisp", speed: 1, chase: 2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 2], tiers: [1, 7], biomes: null, people: "elf", blood: "none", night: "only", darkSight: true },
     treant: { name: "Blighted treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [4, 9], biomes: null, people: "elf", blood: "sap", armor: 0.15 },
-    caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [2, 7], biomes: null, people: "darkElf", blood: "ichor", darkSight: true },
+    caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [1, 7], biomes: null, people: "darkElf", blood: "ichor", darkSight: true },
     shadowStalker: { name: "Shadow stalker", hp: 50, weapon: "shadowStalker", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [4, 9], biomes: null, people: "darkElf", blood: "none", night: "only", darkSight: true },
-    hyena: { name: "Hyena", hp: 22, weapon: "hyena", speed: 1.4, chase: 3, temper: "aggressive", roam: 14, leash: 24, pack: [2, 5], tiers: [2, 7], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true },
-    scorpion: { name: "Sand scorpion", hp: 30, weapon: "scorpion", speed: 1, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1, night: "more" },
-    bogFrog: { name: "Bog frog", hp: 28, weapon: "bogFrog", speed: 1, chase: 2, temper: "territorial", guard: 3, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 6], biomes: null, people: "lizard", blood: "red" },
+    hyena: { name: "Hyena", hp: 22, weapon: "hyena", speed: 1.4, chase: 3, temper: "aggressive", roam: 14, leash: 24, pack: [2, 5], tiers: [1, 7], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true },
+    scorpion: { name: "Sand scorpion", hp: 30, weapon: "scorpion", speed: 1, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [1, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1, night: "more" },
+    bogFrog: { name: "Bog frog", hp: 28, weapon: "bogFrog", speed: 1, chase: 2, temper: "territorial", guard: 3, roam: 6, leash: 12, pack: [1, 2], tiers: [1, 6], biomes: null, people: "lizard", blood: "red" },
     crocodile: { name: "Marsh crocodile", hp: 60, weapon: "crocodile", speed: 0.8, chase: 2.4, temper: "territorial", guard: 5, roam: 6, leash: 12, pack: [1, 1], tiers: [3, 8], biomes: null, people: "lizard", blood: "red", armor: 0.15 },
-    magmaSlime: { name: "Magma slime", hp: 45, weapon: "magmaSlime", speed: 0.7, chase: 1.4, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [3, 8], biomes: null, people: "orc", blood: "none", armor: 0.1 },
+    magmaSlime: { name: "Magma slime", hp: 45, weapon: "magmaSlime", speed: 0.7, chase: 1.4, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [1, 8], biomes: null, people: "orc", blood: "none", armor: 0.1 },
     rockTusker: { name: "Rock tusker", hp: 80, weapon: "rockTusker", speed: 1.1, chase: 2.8, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [4, 9], biomes: null, people: "orc", blood: "none", armor: 0.2 },
     // The mightiest: only in the perilous places
     dragon: { name: "Dragon", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true },
