@@ -4945,3 +4945,16 @@ converted data is to be measured in M8 against today's hm08 data.
     29 readings cleared, none worse. Left: a dead body's little finger 2.8 cm in its scabbard
     (the forward death's clip, 2.2 before #219), and a smith's rest 0.2 mm past its limit on one
     elf (it fails on six other bodies).
+- **2026-10-06, the war hammer's smash and slam on the new grip** (§10; docs/CHARACTERS.md
+  *Attacks*, *The motion check*).
+  - The overhead smash: the hands kept out before the hips as it lands and follows through. Drawn
+    in, the left hand came off the haft on the biggest orc men (4.2 to 4.5 cm); the shortest
+    women's right shoulders were 3 to 7.4° past their range lifting it, and the bulkiest man's
+    hammer was in his thigh.
+  - The leaping slam: the hands out before the knees as it lands and on the way back (the left
+    forearm was 3 to 7 cm in the belly on 17 bodies as the body folded over it; now on 2).
+  - The motion check on Vitruvian: 1,038 failing pairs to 1,036 (most hammer pairs still slide a
+    planted foot), forearms in the torso 167 to 155, joints past their range 497 to 493, second
+    hands off their hafts 32 to 30; 21 readings better, none worse. On MakeHuman's body (checked,
+    not drawn in play) the smash's left hand is still off the haft as it follows through, as it
+    was, and the slam's left forearm now meets the chest on 14 bodies (3 before).
