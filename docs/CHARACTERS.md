@@ -437,6 +437,11 @@ slots, sockets and hidden skin.
    the elbow". A chest wrap is a band round the torso, from three quarters of the way down from
    the chest to the waist (under the fullest bust) to just above the armpits, so it covers any
    bust.
+   - **The neckline** is round: it dips at the front, and out past the neck's sides (its radius,
+     `neckRadius`, measured from the neck's skin) it rises steeply over the shoulders. Cut
+     level, it crossed Vitruvian's shoulders, which rise to the neck and are its torso's (on
+     MakeHuman's the shoulders' tops are the arm's, under the sleeve), and left their tops bare:
+     the shirt showed through a jerkin in patches.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
    not jagged along the mesh. The cut (which triangles, which points are one, what's beside
    what, the edge and hem, texture coordinates and skin weights) doesn't depend on the body's
@@ -445,6 +450,13 @@ slots, sockets and hidden skin.
    garment, the 40 most recently wanted): fitting a garment again takes about 7 ms, not 23.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
    looseness, and smoothed. A breastplate is smoothed more than a shirt.
+   - **Straps lie over what's under them** (`over`: a baldric, pack straps). A strap is pushed
+     out by its own thickness past the furthest of the garments on lower layers at each point
+     (`underneath`). At its own thickness, 1 cm, it was under a jerkin (1.2 cm) and well under
+     a breastplate (3 cm): only its middle showed, its edges bitten into. Now it stands 6 to
+     15 mm over either, on both bodies. Where it crosses the shoulder, posed, a jerkin under it
+     can still show through its edge on MakeHuman's body: the shoulder's bones turn each shell's
+     offset their own way.
    - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
      is cut just behind the ball of the foot, and a toe cap is lofted forward from the cut, ring
      by ring, to a dome over the longest toe:

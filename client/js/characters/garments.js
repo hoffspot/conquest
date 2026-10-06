@@ -28,7 +28,8 @@ const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
  * Measurements of the body at every vertex, for garments' regions: { region ("head", "torso",
  * "arm", "hand", "leg", "foot"), side (1 left, -1 right), arm and leg (fractions down the
  * limb), y, front (how far forward of the body's middle), face ([x, y, z] face coordinates) },
- * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }.
+ * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }, and the neck's
+ * radius (`neckRadius`).
  */
 export function measureBody(character) {
     const { human, rig, positions } = character;
@@ -100,6 +101,12 @@ export function measureBody(character) {
         });
     }
 
+    // How far the neck's skin is from its middle, at the neck's height (the middle of its sides)
+    const neckBone = human.bones.findIndex(({ name }) => name === "Neck");
+    const round = vertices.flatMap(({ x, y, z }, v) => (human.partOf[v] === 0 && human.skinIndices[v * 4] === neckBone && Math.abs(y - neck.y) < 0.01 ? [Math.hypot(x, z - neck.z)] : [])).sort((a, b) => a - b);
+
+    landmarks.neckRadius = round.length ? round[round.length >> 1] : 0.07 * (character.height / 1.7);
+
     return { vertices, landmarks };
 }
 
@@ -116,8 +123,12 @@ function segment(p, a, b) {
 
 const OUTSIDE = -1;
 
-/** Up to the neck: a round neckline, dipping at the front. */
-const neckline = (v, l, depth = 0.03) => l.neck - depth - v.y - 0.035 * smoothstep(0, 0.12, v.z - l.neckZ);
+/**
+ * Up to the neck: a round neckline, dipping at the front and rising over the shoulders, out past
+ * the neck's sides (level, it cut across shoulders that rise to the neck, as Vitruvian's do, and
+ * left their tops bare).
+ */
+const neckline = (v, l, depth = 0.03) => l.neck - depth - v.y - 0.035 * smoothstep(0, 0.12, v.z - l.neckZ) + 2 * Math.max(0, Math.abs(v.x) - l.neckRadius - depth / 2);
 
 /** The torso from `bottom` up to the neckline, arms down to `sleeve` (0 none, 1 the wrist). */
 function top(bottom, sleeve, neck = 0.03) {
@@ -154,8 +165,9 @@ function bottoms(waist, length) {
 
 /**
  * Every garment: its slot, layer (under garments first), region, thickness and looseness (metres),
- * smoothing, and look (colour, roughness, metalness, a pattern painted in, a tiling detail); or,
- * for lingerie, the design it's cut from (DESIGNS), clear wherever that has no fabric.
+ * whether it lies over what's worn under it (`over`: a strap, grown out past it), smoothing, and
+ * look (colour, roughness, metalness, a pattern painted in, a tiling detail); or, for lingerie,
+ * the design it's cut from (DESIGNS), clear wherever that has no fabric.
  */
 const MADE = {
     briefs: { label: "Briefs", slot: "underwear", layer: 0, thickness: 0.0015, smooth: 2, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: bottoms((l) => l.hips + 0.02, 0.1) },
@@ -181,9 +193,9 @@ const MADE = {
     gauntlets: { label: "Gauntlets", slot: "hands", layer: 2, thickness: 0.007, smooth: 2, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "hand" ? 1 : v.region === "arm" ? v.arm - 0.8 : OUTSIDE) },
     greaves: { label: "Greaves", slot: "shins", layer: 3, thickness: 0.014, smooth: 8, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "leg" ? Math.min(v.leg - 0.56, 0.86 - v.leg) : OUTSIDE) },
     // (A strap from the right shoulder across the chest and back to the left hip, for what's
-    // carried on the back: equipment.js SHEATHS)
-    baldric: { label: "Baldric", slot: "straps", layer: 5, thickness: 0.01, smooth: 3, colour: "#3a2616", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.02 * (l.height / 1.7) - Math.abs(0.83 * (v.x - 0.015 * (l.height / 1.7)) + 0.56 * (v.y - (l.armpit + l.waist + 0.07 * (l.height / 1.7)) / 2)), v.y - (l.waist - 0.07)) : OUTSIDE) },
-    straps: { label: "Pack straps", slot: "straps", layer: 5, thickness: 0.012, smooth: 3, colour: "#2e1d12", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.016 * (l.height / 1.7) - Math.abs(Math.abs(v.x) - 0.085 * (l.height / 1.7)), v.y - l.armpit + 0.04) : OUTSIDE) },
+    // carried on the back: equipment.js SHEATHS. Straps lie over what's worn under them)
+    baldric: { label: "Baldric", slot: "straps", layer: 5, thickness: 0.01, over: true, smooth: 3, colour: "#3a2616", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.02 * (l.height / 1.7) - Math.abs(0.83 * (v.x - 0.015 * (l.height / 1.7)) + 0.56 * (v.y - (l.armpit + l.waist + 0.07 * (l.height / 1.7)) / 2)), v.y - (l.waist - 0.07)) : OUTSIDE) },
+    straps: { label: "Pack straps", slot: "straps", layer: 5, thickness: 0.012, over: true, smooth: 3, colour: "#2e1d12", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.016 * (l.height / 1.7) - Math.abs(Math.abs(v.x) - 0.085 * (l.height / 1.7)), v.y - l.armpit + 0.04) : OUTSIDE) },
     loincloth: { label: "Loincloth", slot: "underwear", layer: 0, thickness: 0.003, smooth: 3, colour: "#5b4632", roughness: 0.9, pattern: "leather", inside: bottoms((l) => l.hips + 0.03, 0.2) },
 
     // The tavern's folk: a chemise with a low neck and short sleeves, and a bodice laced up the
@@ -568,14 +580,47 @@ function cutGarment(human, garment, measures) {
  * Build a garment on a character: { geometry, covers (the body triangles it hides, a Set of
  * body triangle numbers), sources (the body triangle each of its triangles
  * comes from), garment }. `measures` is measureBody(character). (Its cut is the same for everyone
- * measured the same: cutOf)
+ * measured the same: cutOf.) One that lies over what's worn under it (`over`) is grown out past
+ * that too: `under`, how far it reaches at each of the body's vertices (underneath).
  */
-export function buildGarment(character, id, measures) {
-    return allAtOnce(fittingGarment(character, id, measures));
+export function buildGarment(character, id, measures, under = null) {
+    return allAtOnce(fittingGarment(character, id, measures, under));
+}
+
+/**
+ * How far out the garments worn under one that lies over them (`over`: a strap) reach at each
+ * of the body's vertices (metres): the furthest of those on lower layers whose region it's in.
+ * A step (a yield) for each of them, returning it. (A strap at its own thickness was under a
+ * jerkin, which stands further out: only its middle showed, its edges bitten into)
+ */
+export function* underneath(human, id, worn, measures) {
+    const { layer } = GARMENTS[id];
+    const under = new Float32Array(human.vertexCount);
+
+    for (const other of worn) {
+        const garment = GARMENTS[other];
+
+        if (!garment || garment.layer >= layer) {
+            continue;
+        }
+
+        const reach = garment.thickness + (garment.loose ?? 0);
+        const inside = insideOf(human, garment, measures);
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (inside[v] > 0 && reach > under[v]) {
+                under[v] = reach;
+            }
+        }
+
+        yield;
+    }
+
+    return under;
 }
 
 /** The same (buildGarment), a step at a time (each a yield: its shell, each toe box, its mesh), returning it. */
-export function* fittingGarment(character, id, measures) {
+export function* fittingGarment(character, id, measures, under = null) {
     const garment = GARMENTS[id];
     const { human, positions, normals } = character;
     const { vertices } = measures;
@@ -590,6 +635,10 @@ export function* fittingGarment(character, id, measures) {
     const sources = Array.from(cut.sources);
     const base = new Float32Array(count * 3);
     const normal = new Float32Array(count * 3);
+    // (How far out it's grown at each point: its thickness, and for one over others, how far
+    // they reach there)
+    const thickness = garment.thickness + (garment.loose ?? 0);
+    const grown = new Float32Array(count).fill(thickness);
 
     for (let i = 0; i < size; i++) {
         const s = sharedOf[i];
@@ -600,6 +649,10 @@ export function* fittingGarment(character, id, measures) {
         for (let k = 0; k < 3; k++) {
             base[s * 3 + k] = positions[sa + k] * (1 - t) + positions[sb + k] * t;
             normal[s * 3 + k] = normals[sa + k] * (1 - t) + normals[sb + k] * t;
+        }
+
+        if (garment.over && under) {
+            grown[s] = thickness + under[sa / 3] * (1 - t) + under[sb / 3] * t;
         }
     }
 
@@ -612,11 +665,10 @@ export function* fittingGarment(character, id, measures) {
     }
 
     // Grow outward, then smooth, keeping at least most of the thickness everywhere
-    const thickness = garment.thickness + (garment.loose ?? 0);
     const shell = new Float32Array(count * 3);
 
     for (let j = 0; j < count * 3; j++) {
-        shell[j] = base[j] + normal[j] * thickness;
+        shell[j] = base[j] + normal[j] * grown[Math.floor(j / 3)];
     }
 
     const smoothPasses = (passes, keepOut, only = null) => {
@@ -644,12 +696,12 @@ export function* fittingGarment(character, id, measures) {
                     continue;
                 }
 
-                // Not closer to the skin than 70% of the thickness
-                const out = (next[s * 3] - base[s * 3]) * normal[s * 3] + (next[s * 3 + 1] - base[s * 3 + 1]) * normal[s * 3 + 1] + (next[s * 3 + 2] - base[s * 3 + 2]) * normal[s * 3 + 2];
+                // Not closer to the skin than 70% of how far it's grown
+                const now = (next[s * 3] - base[s * 3]) * normal[s * 3] + (next[s * 3 + 1] - base[s * 3 + 1]) * normal[s * 3 + 1] + (next[s * 3 + 2] - base[s * 3 + 2]) * normal[s * 3 + 2];
 
-                if (out < thickness * 0.7) {
+                if (now < grown[s] * 0.7) {
                     for (let k = 0; k < 3; k++) {
-                        next[s * 3 + k] += normal[s * 3 + k] * (thickness * 0.7 - out);
+                        next[s * 3 + k] += normal[s * 3 + k] * (grown[s] * 0.7 - now);
                     }
                 }
             }

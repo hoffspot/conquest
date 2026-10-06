@@ -11,10 +11,11 @@ import { EQUIPMENT, ITEMS, SLOTS, socketOn } from "../client/js/characters/equip
 import { placed } from "../client/js/characters/character.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { createRandom } from "../client/js/core/random.js";
+import { allAtOnce } from "../client/js/core/steps.js";
 import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
+import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap, underneath } from "../client/js/characters/garments.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton } from "../client/js/characters/drapes.js";
@@ -1036,6 +1037,81 @@ describe("clothing and armour (garments.js)", () => {
         const end = Math.max(...lowest);
 
         assert.ok(end > 0.8 && end < 1.02, `the sleeve ends near the elbow (${end})`);
+    });
+
+    it("covers the shoulders' tops, out from the neck's sides, on both bodies", () => {
+        // (Vitruvian's shoulders rise to its neck, their tops part of the torso: a neckline cut
+        // level left them bare, the shirt showing through in patches)
+        for (const body of ["human", "vitruvian"]) {
+            const data = readHumanData(body);
+            const hero = figure(PRESETS.hero.shape, data);
+            const shaped = measureBody(hero);
+            const { neckRadius, neckZ } = shaped.landmarks;
+            const shoulder = hero.rig.heads[hero.rig.index.get("LeftArm")];
+            const top = (v) => {
+                const { x, y, z } = shaped.vertices[v];
+
+                return data.partOf[v] === 0 && Math.abs(x) > neckRadius + 0.04 && Math.abs(x) < shoulder.x && y > shoulder.y && Math.abs(z - neckZ) < 0.05;
+            };
+            const triangles = data.renderIndices("body");
+            const { covers } = buildGarment(hero, "jerkin", shaped);
+            const bare = [];
+            let tops = 0;
+
+            for (let t = 0; t < triangles.length; t += 3) {
+                if ([0, 1, 2].every((k) => top(data.renderSource[triangles[t + k]]))) {
+                    tops++;
+
+                    if (!covers.has(t / 3)) {
+                        bare.push(t / 3);
+                    }
+                }
+            }
+
+            assert.ok(tops > 20, `${body}: ${tops} triangles on the shoulders' tops`);
+            assert.equal(bare.length, 0, `${body}: ${bare.length} of ${tops} bare`);
+        }
+    });
+
+    it("lays a strap over what's worn under it, on both bodies: a baldric over a jerkin, over a breastplate", () => {
+        // (At its own thickness it was under them, a jerkin's 4 mm further out and a breastplate's
+        // 2 cm: only its middle showed, its edges bitten into)
+        for (const body of ["human", "vitruvian"]) {
+            const data = readHumanData(body);
+            const hero = figure(PRESETS.hero.shape, data);
+            const shaped = measureBody(hero);
+            const triangles = data.renderIndices("body");
+            const positions = hero.positions;
+            // How far out a garment stands over each body triangle it covers (its triangles'
+            // middles, along the triangle's normal)
+            const standing = ({ geometry, sources }) => {
+                const at = geometry.attributes.position.array;
+                const index = geometry.index.array;
+                const found = new Map();
+
+                sources.forEach((t, i) => {
+                    const corner = (k) => new THREE.Vector3().fromArray(positions, data.renderSource[triangles[t * 3 + k]] * 3);
+                    const [a, b, c] = [0, 1, 2].map(corner);
+                    const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+                    const middle = [0, 1, 2].reduce((sum, k) => sum.add(new THREE.Vector3().fromArray(at, index[i * 3 + k] * 3)), new THREE.Vector3()).divideScalar(3);
+
+                    found.set(t, [...(found.get(t) ?? []), middle.sub(a.add(b).add(c).divideScalar(3)).dot(normal)]);
+                });
+
+                return new Map([...found].map(([t, each]) => [t, each.reduce((sum, d) => sum + d, 0) / each.length]));
+            };
+
+            for (const outfit of [["shirt", "jerkin"], ["gambeson", "breastplate"]]) {
+                const outer = buildGarment(hero, outfit.at(-1), shaped);
+                const strap = buildGarment(hero, "baldric", shaped, allAtOnce(underneath(data, "baldric", [...outfit, "baldric"], shaped)));
+                const [over, under] = [standing(strap), standing(outer)];
+                const both = [...over.keys()].filter((t) => strap.covers.has(t) && outer.covers.has(t));
+                const least = Math.min(...both.map((t) => over.get(t) - under.get(t)));
+
+                assert.ok(both.length > 100, `${body}: ${both.length} triangles under both`);
+                assert.ok(least > 0.004, `${body}: the baldric ${(least * 1000).toFixed(1)} mm over the ${outfit.at(-1)} at the least`);
+            }
+        }
     });
 
     it("draws a soldier's garments all at once: one picture, of the outermost garment wherever it's seen", () => {
