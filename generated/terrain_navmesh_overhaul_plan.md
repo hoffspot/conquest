@@ -4785,3 +4785,28 @@ converted data is to be measured in M8 against today's hm08 data.
       1,298 → 1,186, to MakeHuman's 1,150.
   - **Next:** the forearms in the two-handed blows on Vitruvian (322 to MakeHuman's 124), then the
     switch.
+- **2026-10-06, the two-handed blows' forearms on Vitruvian.**
+  - Vitruvian's shoulders are 2 cm narrower and its upper arms shorter, so the forearms came
+    nearer the chest. Its forearms in the torso were 322 failing pairs to MakeHuman's 124, most in
+    the war hammer's and staff's two-handed blows, which aren't moved out of the torso.
+  - Refitted on both bodies (`actions.js`):
+    - the hammer's side swing and diagonal chop turn the body into the blow less;
+    - the chop and the staff's blows keep the hands out in front, with keys on the way;
+    - the staff's thrust is drawn back before the right hip, not across the belly;
+    - the hammer is drawn with the left hand coming round out in front, and put away with the left
+      hand letting go first;
+    - the shadow boxing keeps the rear fist a little out from the chin;
+    - the hammer's guard holds both hands a little further out (the bulkiest man's forearm was
+      8.4 cm into his belly on guard).
+  - Tried and dropped: the hammer guard's left hand less far across. It cleared the guard on every
+    body, but the blows that start and end there came out worse (Vitruvian 35 forearms to 47).
+  - The motion check:
+    - MakeHuman: 161 failing pairs better, none worse (forearms in the torso 124 → 71, second hands
+      off their hafts 148 → 104, joints 525 → 495). The baseline is brought down, 1,150 → 1,096.
+    - Vitruvian: 208 better, 7 worse (forearms 322 → 190, second hands 88 → 65). The worse: the
+      leaping slam's left forearm on two lizard women and a bulky woman, the slam's second hand on
+      two bodies, the overhead smash on the bulkiest orc man, and the hammer's draw on the
+      bulkiest man (5.3 → 5.7 cm). Failing pairs 1,186 → 1,066, to MakeHuman's 1,096.
+  - **Next:** the switch to Vitruvian's body (`GAME_BODY`), with its own baseline. Its failing pairs
+    are now fewer than MakeHuman's. Then the clips' hands lined up in the retarget, and the grip
+    round a pole or handle from the user's photos.
