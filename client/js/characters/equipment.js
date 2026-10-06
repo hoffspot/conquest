@@ -44,10 +44,18 @@ export const SLOTS = Object.freeze([
     { id: "offHand", label: "Off hand" },
 ]);
 
+// A fist (the spiked gauntlets' hold, and a "fist" hand in a key pose: actions.js), as a real one
+// closes: each finger curled into the palm in its own plane (rig.js), the four pressed together
+// (`spread`: turned at the knuckles towards each other), their tips on the palm, and the thumb
+// across the index and middle fingers' middle bones. Every finger alike (`fingers`: degrees at
+// each joint), as each one's tip comes down on the palm so, on MakeHuman's body and Vitruvian's,
+// the biggest and the smallest: further, they went through the palm and out of the back of the hand
+export const FIST_HAND = Object.freeze({ fingers: [65, 75, 65], spread: [10, -4, -9, -14], thumb: [{ flex: 30, oppose: -15 }, { flex: 7 }, { flex: 63 }] });
+
 // Arm poses for carrying things (anatomical angles, degrees), used instead of the arm's swing;
 // and how far the fingers curl round what's held (`curl`: the index, middle, ring and little
-// fingers, degrees at each joint; a fist closes tighter, a wand is pinched) and how the thumb
-// closes (`thumb`: its three joints, rig.js JOINTS.thumb; else over the fingers)
+// fingers, degrees at each joint; a wand is pinched; or a fist's, FIST_HAND) and how the thumb closes
+// (`thumb`: its three joints, rig.js JOINTS.thumb; else over the fingers)
 const HOLDS = {
     // (Carried at the side: the upper arm down and a little out, the forearm forward, thumb up, so
     // the shield hangs beside the body, its face out)
@@ -59,7 +67,7 @@ const HOLDS = {
     wand: { Arm: { flex: 4, abduct: 8 }, ForeArm: { flex: 30, pronate: 15 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6, curl: [24, 52, 68, 76], thumb: [{ flex: 35, oppose: 15 }, { flex: 20 }, { flex: 15 }] },
     hammer: { Arm: { flex: 10, abduct: 12, rotate: 10 }, ForeArm: { flex: 72, pronate: 0 }, Hand: { flex: -5, deviate: 8 }, swing: 0.2 },
     book: { Arm: { flex: 22, abduct: 10, rotate: 10 }, ForeArm: { flex: 88, pronate: -80 }, Hand: { flex: -8, deviate: 0 }, swing: 0.12 },
-    fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7, curl: [92, 94, 96, 98], thumb: [{ flex: 60, oppose: -5 }, { flex: 45 }, { flex: 35 }] },
+    fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7, ...FIST_HAND },
     tankard: { Arm: { flex: 12, abduct: 8, rotate: 5 }, ForeArm: { flex: 88, pronate: -5 }, Hand: { flex: 0, deviate: 12 }, swing: 0.15 },
     tongs: { Arm: { flex: 10, abduct: 8, rotate: 5 }, ForeArm: { flex: 60, pronate: 10 }, Hand: { flex: 0, deviate: 5 }, swing: 0.2 },
 };

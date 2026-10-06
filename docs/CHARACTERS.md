@@ -747,6 +747,12 @@ standing, arms at the sides, palms facing the thighs.
     Vitruvian's knees rest 9° straighter than MakeHuman's: measured from its own rest, they locked
     straight in every stride and its running feet slid. Its thumbs rest 44° to 66° from
     MakeHuman's and its fingers about 20°, so they gripped elsewhere.
+- **Each finger bends in its own plane**, square to the way it rests across the palm, as a real
+  finger does (`JOINTS.HandIndex` to `HandPinky`: the finger's flexion turned about the palm's
+  normal into its plane). The reference body's fingers fan out at rest, the index 9° to the
+  thumb's side and the little finger 26° to the other. Bent about one axis across the hand, as
+  they were, they stayed fanned as they curled: a fist's fingers splayed apart and their folded
+  tips turned out, and spreading them at the knuckles only turned the folded tips the other way.
 - **Mirroring.** The right side mirrors the left.
 - **Other rotations.** Rotations from anywhere else (IK, motion capture) are limited too. They are
   split into a twist about the bone and a swing of the bone. The swing is kept inside an ellipse
@@ -876,7 +882,14 @@ over whatever the character was doing and back out at the end. Each key says:
   easing in and out; before and after, the arm is the walk's (or the seat's). Left out of a key in
   between, the hand keeps on its way (arms stay folded while the head nods).
 - **The fingers' shape**: open, relaxed, cupped, gripping, a fist, pointing, or hooked round a
-  bowstring (and beckoning, the index curled further).
+  bowstring (and beckoning, the index curled further). A fist closes as a real one does
+  (`FIST_HAND` in `equipment.js`, the spiked gauntlets' hold too): each finger curled into the
+  palm, the four pressed together, their tips on the palm and hidden behind the curled fingers,
+  and the thumb across the index and middle fingers' middle bones. Every finger curls alike
+  (MCP 65°, PIP 75°, DIP 65° from the relaxed rest, which already curls them about 20°), and no
+  further: these bodies' fingers are short for their palms, and the tighter fist the game had
+  before put the tips through the palm and out of the back of the hand. A pointing hand's other
+  fingers and thumb are the fist's.
 - **The second hand of a two-handed weapon** grips the shaft too (the staff, the war hammer). A
   key gives it its own place, and the shaft lies along the line through both. The hand holds it
   where the item says (`haft`): a quarterstaff's hands about shoulder width apart (30 to 70 cm),
@@ -980,7 +993,8 @@ anatomically, whatever the body's size:
   of the fingers towards the thumb, and tilting the wrist towards the little finger brings it
   nearer in line with the forearm. A staff's or hammer's haft lies nearly square across the palm,
   and a wand is pinched along the fingers. The thumb bends about its own axes (it lies turned
-  from the fingers): round a grip or in a fist it closes over the curled fingers. The second
+  from the fingers): round a grip it closes over the curled fingers, and in a fist it lies across
+  them (above). The second
   hand on a staff or hammer closes round the shaft too. A hand holding something keeps its grip
   whatever shape a pose gives the hand.
 - **Technique.** The keys follow how people really fight:

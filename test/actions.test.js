@@ -1332,9 +1332,9 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
         assert.ok(shoulders > 0, "(the shoulders are measured)");
     });
 
-    // Where a hand's thumb tip is, and its index finger's knuckle, in the hand's own frame
-    // (metres: x towards the palm's side, y along the fingers, z towards the thumb's side)
-    function thumbOf(rig, Side) {
+    // A hand's bones' joints (`at`) and ends (`tip`), in the hand's own frame (metres: x towards
+    // the palm's side, y along the fingers, z towards the thumb's side)
+    function inHand(rig, Side) {
         const hand = rig.bone(`${Side}Hand`);
         const frame = hand.getWorldQuaternion(new THREE.Quaternion()).multiply(rig.frames[rig.index.get(`${Side}Hand`)]).invert();
         const wrist = hand.getWorldPosition(new THREE.Vector3());
@@ -1343,10 +1343,21 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
 
             return new THREE.Vector3(Side === "Left" ? -v.x : v.x, -v.y, v.z);
         };
-        const i = rig.index.get(`${Side}HandThumb3`);
-        const tip = rig.bone(`${Side}HandThumb3`).localToWorld(rig.tails[i].clone().sub(rig.heads[i]));
+        const at = (bone) => local(rig.bone(`${Side}Hand${bone}`).getWorldPosition(new THREE.Vector3()));
+        const tip = (bone) => {
+            const i = rig.index.get(`${Side}Hand${bone}`);
 
-        return { tip: local(tip), knuckle: local(rig.bone(`${Side}HandIndex1`).getWorldPosition(new THREE.Vector3())) };
+            return local(rig.bone(`${Side}Hand${bone}`).localToWorld(rig.tails[i].clone().sub(rig.heads[i])));
+        };
+
+        return { at, tip };
+    }
+
+    // Where a hand's thumb tip is, and its index finger's knuckle, in the hand's own frame
+    function thumbOf(rig, Side) {
+        const { at, tip } = inHand(rig, Side);
+
+        return { tip: tip("Thumb3"), knuckle: at("Index1") };
     }
 
     it("closes the fingers and thumb round what's gripped, both fists round a two-handed shaft, and opens them for an open palm", () => {
@@ -1392,6 +1403,49 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
         const { tip, knuckle } = thumbOf(character.rig, "Left");
 
         assert.ok(tip.z > knuckle.z + 0.03, "the thumb out from the fingers");
+    });
+
+    it("clenches a fist as a real one closes: the fingers side by side, their tips on the palm, the thumb across them", () => {
+        // (The gauntlets' guard, whose fists are the gauntlets' hold, and the kick guard's, a key pose's fist shape)
+        for (const [name, held] of [["punch", ["spikedGauntlets", "spikedGauntletLeft"]], ["kick", []]]) {
+            const { character, walker, actions } = armed(held);
+
+            walker.update(0);
+            actions.setWeapon(name);
+            actions.setGuard(true);
+
+            for (let k = 0; k < 10; k++) {
+                walker.update(0.1);
+            }
+
+            for (const Side of ["Right", "Left"]) {
+                const { at, tip } = inHand(character.rig, Side);
+                const fingers = ["Index", "Middle", "Ring", "Pinky"];
+                const hand = `${name}: the ${Side.toLowerCase()}`;
+
+                // Curled down in front of their own knuckles, not splayed apart (fanned as they rest,
+                // they were: a fist's index and middle finger's middle bones 1 cm further apart than their knuckles)
+                for (let k = 0; k < 3; k++) {
+                    const knuckles = at(`${fingers[k]}1`).z - at(`${fingers[k + 1]}1`).z;
+                    const middles = at(`${fingers[k]}2`).z - at(`${fingers[k + 1]}2`).z;
+
+                    assert.ok(middles < knuckles + 0.003, `${hand} ${fingers[k].toLowerCase()} and ${fingers[k + 1].toLowerCase()} fingers side by side (${(middles * 100).toFixed(1)} cm apart, their knuckles ${(knuckles * 100).toFixed(1)})`);
+                }
+
+                // Their tips curled back on the palm, before its bones (they went through the hand)
+                for (const finger of fingers) {
+                    const end = tip(`${finger}3`);
+
+                    assert.ok(end.x > 0.005 && end.y < at(`${finger}1`).y - 0.02, `${hand} ${finger.toLowerCase()} finger's tip on the palm: ${end.toArray().map((v) => (v * 100).toFixed(1))}`);
+                }
+
+                // The thumb across the outside of the fingers, its tip on the middle finger's middle bone
+                const thumb = tip("Thumb3");
+                const middle = at("Middle2").lerp(at("Middle3"), 0.5);
+
+                assert.ok(thumb.distanceTo(middle) < 0.02 && thumb.x > middle.x, `${hand} thumb across the middle finger: ${thumb.toArray().map((v) => (v * 100).toFixed(1))}`);
+            }
+        }
     });
 
     // Each body vertex's heaviest bone, and whether that's a hand's

@@ -4487,3 +4487,30 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next:** Vitruvian's forearms before its torso (its upper arm 18.6 cm to MakeHuman's 23.4,
     its forearm 23.6 to 21.3, and thicker), its held things, the two-handed hafts, then its
     baseline and the game switched to it.
+- **2026-10-06, a real fist** (§10; docs/CHARACTERS.md *Joints*, *Key poses*). The user, with
+  photos of a real fist: the fist in the gauntlet guards "looked bad before and after. Fingers are
+  packed tightly and curl on a fist", the thumb across the index and middle fingers' middle bones.
+  - **Each finger bends in its own plane** (`rig.js`: `JOINTS.HandIndex` to `HandPinky`, the
+    finger's flexion turned about the palm's normal). The fingers rest fanned (the index 9° to the
+    thumb's side, the little finger 26° to the other) and bent about one axis across the hand, so
+    they stayed fanned as they curled: a fist's knuckles 2.9 cm apart had its middle bones 3.9 cm
+    apart, and spreading them at the knuckles only turned the folded tips the other way (the little
+    finger hooked out). Now they come down in front of their own knuckles, packed (skin gaps 0 to
+    0.1 cm, the little finger's 0.2 to 0.5).
+  - **The fist** (`FIST_HAND` in `equipment.js`): one shape for a fist in a key pose (the kick
+    guard, punches' guard hands) and the spiked gauntlets' hold, which had their own. Its curl went
+    the tips through the palm and out of the back of the hand (these bodies' fingers are short
+    for their palms, and the rest pose already curls them 20°); now every finger curls 65°, 75°,
+    65° and its tip rests on the palm (0.1 to 1.3 cm in, on the biggest and smallest bodies of
+    both), and the thumb's tip lies on the middle finger's middle bone (searched, on both bodies).
+    A pointing hand's other fingers and thumb are the fist's.
+  - **The numbers** (failing pairs). MakeHuman: forearms in the torso 822 → 813, held things
+    309 → 308, the rest as they were; 91 pairs better, 59 worse, the worse mostly gauntlet blows
+    about 1 cm deeper. Those come from the arms' clearing: the other fist's splayed fingers no
+    longer catch the knuckle spikes, so the clearing takes another path from frame to frame
+    (switched off, both put the arm in the same place). The mean forearm depth over every pair is
+    as it was (-0.18 cm); the baseline is kept. Vitruvian: forearms 1,268 → 1,278, held things
+    489 → 492.
+  - **Next:** the gauntlet blows' forearms before the torso (the worst of what fails: 157 pairs on
+    MakeHuman), then as before: Vitruvian's forearms, its held things, the two-handed hafts, its
+    baseline, and the game switched to it.

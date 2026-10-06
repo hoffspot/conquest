@@ -47,7 +47,7 @@ import * as THREE from "three";
 import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
 import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
-import { ITEMS, socketOn } from "./equipment.js";
+import { FIST_HAND, ITEMS, socketOn } from "./equipment.js";
 import { groundPoints, lowestPoint } from "./grounding.js";
 import { SEATED, STEPPED } from "./locomotion.js";
 import { blendRotation, jointRotation } from "./rig.js";
@@ -1837,17 +1837,18 @@ const HANDS = ["right", "left"];
 const VECTORS = ["at", "point", "edge", "palm", "towards", "elbow"];
 
 // How the fingers are held, for a hand's `shape` in a key pose: each finger's flexion at its
-// three joints (degrees; the ring and little fingers curl a little more, as they do), and the
-// thumb's. A pointing hand's index is straight, the others curled into the palm; a beckoning
-// hand's index is straight, the others curled loosely; `index` (degrees) curls it ("come here").
-// A hook draws a bowstring on the fingers' ends
+// three joints (degrees; the ring and little fingers curl a little more, as they do, unless
+// `even`), turned apart or together at the knuckles (`spread`), and the thumb's. A fist is
+// equipment.js FIST_HAND; a pointing hand's index is straight, the others curled into the palm as
+// a fist's; a beckoning hand's index is straight, the others curled loosely; `index` (degrees)
+// curls it ("come here"). A hook draws a bowstring on the fingers' ends
 const CURLS = {
-    open: { fingers: [3, 2, 1], thumb: [{ flex: -5, oppose: 15 }, { flex: 0 }, { flex: 0 }] },
+    open: { fingers: [3, 2, 1], spread: [12, 3, -6, -15], thumb: [{ flex: -5, oppose: 15 }, { flex: 0 }, { flex: 0 }] },
     relaxed: { fingers: [16, 24, 12], thumb: [{ flex: 10, oppose: 10 }, { flex: 10 }, { flex: 8 }] },
     cup: { fingers: [28, 36, 22], thumb: [{ flex: 25, oppose: 20 }, { flex: 15 }, { flex: 10 }] },
     grip: { fingers: [76, 84, 58], thumb: [{ flex: 55, oppose: -10 }, { flex: 35 }, { flex: 25 }] },
-    fist: { fingers: [88, 98, 62], thumb: [{ flex: 60, oppose: -5 }, { flex: 45 }, { flex: 35 }] },
-    point: { fingers: [88, 98, 62], index: [4, 4, 2], thumb: [{ flex: 58, oppose: -5 }, { flex: 45 }, { flex: 30 }] },
+    fist: { ...FIST_HAND, even: true },
+    point: { ...FIST_HAND, even: true, index: [4, 4, 2], spread: [0, ...FIST_HAND.spread.slice(1)] },
     beckon: { fingers: [42, 58, 34], index: [6, 6, 3], thumb: [{ flex: 15, oppose: 15 }, { flex: 15 }, { flex: 10 }] },
     hook: { fingers: [15, 80, 50], thumb: [{ flex: 15, oppose: 10 }, { flex: 15 }, { flex: 10 }] },
 };
@@ -1878,12 +1879,12 @@ function withFingers(pose) {
         }
 
         for (const finger of FINGERS) {
-            const curls = finger === "Index" && shape.index ? shape.index : shape.fingers.map((flex) => flex * MORE[finger]);
+            const curls = finger === "Index" && shape.index ? shape.index : shape.fingers.map((flex) => flex * (shape.even ? 1 : MORE[finger]));
 
             curls.forEach((flex, k) => {
                 const extra = finger === "Index" && hand.index !== undefined ? hand.index * [1, 1.1, 0.7][k] : 0;
 
-                out[`${Side}Hand${finger}${k + 1}`] = { flex: Math.min(100, flex + extra), spread: shape === CURLS.open ? [4, 1, -2, -5][FINGERS.indexOf(finger)] : 0 };
+                out[`${Side}Hand${finger}${k + 1}`] = { flex: Math.min(100, flex + extra), spread: k === 0 ? (shape.spread?.[FINGERS.indexOf(finger)] ?? 0) : 0 };
             });
         }
 

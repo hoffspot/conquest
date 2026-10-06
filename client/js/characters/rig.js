@@ -25,6 +25,36 @@ const NX = [-1, 0, 0];
 const NY = [0, -1, 0];
 const NZ = [0, 0, -1];
 
+// How the reference body (MakeHuman's, as the sliders start: what every keyed pose, gait curve
+// and clip was made on) rests its thighs, shins and fingers: each one's direction in its
+// anatomical frame as the rest pose has it (the left side's; the right's mirrored: restOf). A
+// body made from other data whose own default body rests them otherwise (its HumanData's
+// landmarks.rest, as restOf measures them) is measured as though that default rested them so, so
+// an angle puts its limbs where it puts the reference body's: Vitruvian's knees rest 9°
+// straighter than MakeHuman's (measured from its own rest, they locked straight in every stride
+// and its running feet slid), its thumbs 44° to 66° from MakeHuman's and its fingers about 20°
+// (they gripped elsewhere). Each shape's own difference from its default is kept, as on
+// MakeHuman's body.
+const REST = {
+    UpLeg: [0.0056, -0.9982, 0.0602],
+    Leg: [-0.0054, -0.9983, -0.0582],
+    HandThumb1: [-0.6825, -0.3588, 0.6368],
+    HandThumb2: [-0.4978, -0.6884, 0.5275],
+    HandThumb3: [-0.5462, -0.7966, 0.259],
+    HandIndex1: [-0.2775, -0.95, 0.1429],
+    HandIndex2: [-0.4754, -0.8751, 0.0909],
+    HandIndex3: [-0.5868, -0.8051, 0.0868],
+    HandMiddle1: [-0.3403, -0.9311, -0.1316],
+    HandMiddle2: [-0.435, -0.8978, -0.069],
+    HandMiddle3: [-0.551, -0.8292, -0.0939],
+    HandRing1: [-0.3053, -0.9039, -0.2997],
+    HandRing2: [-0.4253, -0.8779, -0.2199],
+    HandRing3: [-0.5242, -0.8085, -0.2677],
+    HandPinky1: [-0.3814, -0.8317, -0.4035],
+    HandPinky2: [-0.5251, -0.7861, -0.3259],
+    HandPinky3: [-0.5103, -0.7853, -0.3505],
+};
+
 // Each kind of joint's movements: the axis each turns about in the anatomical position (for the
 // left side and the middle of the body; the right side mirrors them) and its range in degrees.
 // A joint rotation applies them in order: the last (the twist about the bone) first.
@@ -34,7 +64,8 @@ const spine = (flex, bend, turn) => [
     { name: "turn", axis: Y, range: turn, twist: true },
 ];
 
-const finger = [
+// A finger's joints, in its own plane (FINGERS: each finger's)
+const FINGER = [
     { name: "flex", axis: NZ, range: [-10, 100] },
     { name: "spread", axis: X, range: [-20, 20] },
 ];
@@ -94,7 +125,6 @@ export const JOINTS = {
         { name: "flex", axis: NZ, range: [-70, 80] },
         { name: "deviate", axis: NX, range: [-30, 20] },
     ],
-    finger,
     // The thumb lies turned from the fingers, down and out from the side of the palm and partly
     // in front of it, so it bends about its own axes (in the hand's frame, measured from the
     // body's rest pose): flexing curls it towards its pad, across the palm to the little finger
@@ -105,6 +135,22 @@ export const JOINTS = {
         { name: "oppose", axis: [-0.447, -0.277, -0.851], range: [-20, 50] },
     ],
 };
+
+// Each finger bends in its own plane, square to the way it rests across the palm (as the reference
+// body rests it, REST: fanned out, the index 9° to the thumb's side, the little finger 26° to the
+// other), as a real finger does. Bent about one axis across the hand, the fingers stayed fanned as
+// they curled: a fist's fingers splayed apart and their folded tips turned out. Each finger's
+// joints are FINGER's turned about the palm's normal into its plane (TURNS: the turn, the same for
+// either hand, as their frames mirror each other)
+const TURNS = {};
+
+for (const digit of ["Index", "Middle", "Ring", "Pinky"]) {
+    const [, y, z] = REST[`Hand${digit}1`];
+    const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...X), -Math.atan2(z, -y));
+
+    JOINTS[`Hand${digit}`] = FINGER.map(({ axis, ...movement }) => ({ ...movement, axis: new THREE.Vector3(...axis).applyQuaternion(turn).toArray() }));
+    TURNS[`Hand${digit}`] = turn;
+}
 
 /** The kind of joint a bone ends at (a key of JOINTS) and its side: -1 right, 0 middle, 1 left. */
 export function jointOf(boneName) {
@@ -120,7 +166,7 @@ export function jointOf(boneName) {
     }
 
     if (/^Hand(Index|Middle|Ring|Pinky)/.test(part)) {
-        return { kind: "finger", side };
+        return { kind: part.replace(/\d$/, ""), side };
     }
 
     return { kind: part, side };
@@ -157,6 +203,7 @@ export function jointRotation(kind, side, angles, target = new THREE.Quaternion(
 }
 
 const _euler = new THREE.Euler();
+const _unturned = new THREE.Quaternion();
 
 /**
  * The angles (degrees) of a joint rotation (in the anatomical frame), as jointRotation takes
@@ -164,7 +211,11 @@ const _euler = new THREE.Euler();
  * its own). Into `target`.
  */
 export function jointAngles(kind, side, rotation, target = {}) {
-    const movements = JOINTS[kind];
+    // (A finger's turned back out of its plane, its movements FINGER's)
+    const turn = TURNS[kind];
+    const movements = turn ? FINGER : JOINTS[kind];
+
+    rotation = turn ? _unturned.copy(turn).invert().multiply(rotation).multiply(turn) : rotation;
     const along = movements.map(({ axis }) => axis.findIndex((value) => value !== 0));
     const order = [...along, ...[0, 1, 2].filter((k) => !along.includes(k))].map((k) => "XYZ"[k]).join("");
 
@@ -310,36 +361,6 @@ export function blendRotation(kind, side, from, to, t, target = new THREE.Quater
 
     return axis ? target.multiply(_q.setFromAxisAngle(axis, twist)) : target;
 }
-
-// How the reference body (MakeHuman's, as the sliders start: what every keyed pose, gait curve
-// and clip was made on) rests its thighs, shins and fingers: each one's direction in its
-// anatomical frame as the rest pose has it (the left side's; the right's mirrored: restOf). A
-// body made from other data whose own default body rests them otherwise (its HumanData's
-// landmarks.rest, as restOf measures them) is measured as though that default rested them so, so
-// an angle puts its limbs where it puts the reference body's: Vitruvian's knees rest 9°
-// straighter than MakeHuman's (measured from its own rest, they locked straight in every stride
-// and its running feet slid), its thumbs 44° to 66° from MakeHuman's and its fingers about 20°
-// (they gripped elsewhere). Each shape's own difference from its default is kept, as on
-// MakeHuman's body.
-const REST = {
-    UpLeg: [0.0056, -0.9982, 0.0602],
-    Leg: [-0.0054, -0.9983, -0.0582],
-    HandThumb1: [-0.6825, -0.3588, 0.6368],
-    HandThumb2: [-0.4978, -0.6884, 0.5275],
-    HandThumb3: [-0.5462, -0.7966, 0.259],
-    HandIndex1: [-0.2775, -0.95, 0.1429],
-    HandIndex2: [-0.4754, -0.8751, 0.0909],
-    HandIndex3: [-0.5868, -0.8051, 0.0868],
-    HandMiddle1: [-0.3403, -0.9311, -0.1316],
-    HandMiddle2: [-0.435, -0.8978, -0.069],
-    HandMiddle3: [-0.551, -0.8292, -0.0939],
-    HandRing1: [-0.3053, -0.9039, -0.2997],
-    HandRing2: [-0.4253, -0.8779, -0.2199],
-    HandRing3: [-0.5242, -0.8085, -0.2677],
-    HandPinky1: [-0.3814, -0.8317, -0.4035],
-    HandPinky2: [-0.5251, -0.7861, -0.3259],
-    HandPinky3: [-0.5103, -0.7853, -0.3505],
-};
 
 // The limbs REST lists (thighs, shins, fingers), and the turn from a body's frame for one as its
 // default rests it (`rest`: its data's landmarks.rest, if not the reference body's) to the
