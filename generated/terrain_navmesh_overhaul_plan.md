@@ -4923,3 +4923,25 @@ converted data is to be measured in M8 against today's hm08 data.
     out by their thickness past the furthest of the lower garments at each point
     (`underneath`): 6 to 15 mm over a jerkin or a breastplate, on both bodies (tested). Posed,
     where it crosses the shoulder, a jerkin can still show through its edge on MakeHuman's body.
+- **2026-10-06, the motions the hands' skin made worse, refitted** (§10; docs/CHARACTERS.md
+  *Attacks*, *The motion check*, the rests).
+  - The bow's crouching shot: the bow comes up before the body as the knees bend (its lower limb
+    was up to 6.4 cm in the thigh on the bulkiest and tallest elves and dark elves).
+  - The grimoire's overhand hurl and side-arm throw: the book is held further out as the caster
+    leans in, and while they unwind (the book arm's forearm was 3.4 to 4.3 cm in the belly).
+  - The cleaver's overhead hack: lifted over the right shoulder, out clear of the head, the elbow
+    up and out (it was 1.7 cm in dark elf women's heads, and the shortest orc's shoulder 9.1° past
+    its range).
+  - Looking about with a hand shading the eyes: lower and further forward, under a hat's brim,
+    held at the brow a moment, then lowered forward (dropped at once, the curve through the keys
+    lifted it into the brim first: up to 2.5 cm on orcs in wizard's hats). The sentry's helmed
+    version moves only the shading hand under the helm.
+  - Thumbs round a scabbard and a helm: the sword sheathed from a little further forward, the
+    shield hand let fall wide of the hilt after slinging the shield, a sentry's hand brought over
+    the hilt a little wide of it, and a hammer blow doubling the body over 24° (28° before), its
+    helm clear of the shield hand.
+  - The motion check on Vitruvian: 1,061 failing pairs to 1,038 (MakeHuman's 1,037), things held
+    in the body 215 to 195, forearms in the torso 175 to 167, joints past their range 498 to 497;
+    29 readings cleared, none worse. Left: a dead body's little finger 2.8 cm in its scabbard
+    (the forward death's clip, 2.2 before #219), and a smith's rest 0.2 mm past its limit on one
+    elf (it fails on six other bodies).
