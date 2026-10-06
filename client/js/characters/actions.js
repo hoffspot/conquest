@@ -452,10 +452,15 @@ export const ATTACKS = Object.freeze({
                 // (Lifted out in front on the way back, clear of the legs)
                 [1.7, { right: { at: [0.3, -0.5, 0.75] }, left: { on: 0, at: [-0.25, -0.85, 0.45] }, ...spine({ flex: 12 }), offset: [0, -0.06, 0.05] }]),
             variant("side swing", HAMMER,
-                // Swung back round to the right, then flat into the enemy's side, the face first
-                [0.6, { right: { at: [-0.3, -0.35, 0.45] }, left: { on: 0, at: [-0.15, -0.72, 0.55] }, ...spine({ turn: -15 }), Hips: { turn: 6 }, offset: [0, -0.02, -0.04] }],
-                [1, { right: { at: [0.35, -0.55, 0.7] }, left: { on: 0, at: [-0.05, -0.8, 0.45] }, ...spine({ flex: 8, turn: 25 }), Hips: { turn: -18 }, offset: [0, -0.06, 0.08] }],
-                [1.35, { right: { at: [0.5, -0.55, 0.3] }, left: { on: 0, at: [-0.1, -0.78, 0.72] }, ...spine({ flex: 12, turn: 35 }), Hips: { turn: -20 }, offset: [0, -0.07, 0.06] }]),
+                // Swung back round to the right, then flat into the enemy's side, the face first;
+                // the left elbow down, then out and back after the blow, its hand out in front all
+                // the way round (left to come as it would, the forearm lay across the belly; the
+                // left hand no further out to the left after the blow than its wrist can turn
+                // with the haft)
+                [0.6, { right: { at: [-0.25, -0.3, 0.55] }, left: { on: 0, at: [-0.15, -0.6, 0.78], elbow: [0.7, -0.7, 0] }, ...spine({ turn: -15 }), Hips: { turn: 6 }, offset: [0, -0.02, -0.04] }],
+                [1, { right: { at: [0.35, -0.55, 0.7] }, left: { on: 0, at: [0.01, -0.77, 0.58], elbow: [0.3, -0.9, -0.3] }, ...spine({ flex: 8, turn: 25 }), Hips: { turn: -18 }, offset: [0, -0.06, 0.08] }],
+                [1.17, { right: { at: [0.42, -0.58, 0.6] }, left: { on: 0, at: [-0.03, -0.76, 0.57], elbow: [0.8, -0.6, -0.1] } }],
+                [1.35, { right: { at: [0.48, -0.6, 0.45] }, left: { on: 0, at: [0.03, -0.73, 0.63], elbow: [0.8, -0.6, -0.1] }, ...spine({ flex: 12, turn: 35 }), Hips: { turn: -20 }, offset: [0, -0.07, 0.06] }]),
             variant("diagonal chop", HAMMER,
                 // Up over the right shoulder, then down and across
                 [0.6, { right: { at: [-0.15, 0.4, 0.48] }, left: { on: 0, at: [-0.55, 0.05, 0.62] }, ...spine({ turn: -22, flex: -8 }), Hips: { turn: 10 }, offset: [0, 0.01, -0.04] }],

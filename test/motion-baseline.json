@@ -950,99 +950,26 @@
   "attack/hammer/0|orc-thinnest-f": {
    "slide": 0.0104
   },
-  "attack/hammer/1|cat-bulkiest-f": {
-   "limb": 0.0791
-  },
-  "attack/hammer/1|cat-bulkiest-m": {
-   "limb": 0.1122
-  },
-  "attack/hammer/1|cat-shortest-f": {
-   "limb": 0.0819
-  },
   "attack/hammer/1|cat-tallest-m": {
-   "limb": 0.1074
-  },
-  "attack/hammer/1|cat-thinnest-f": {
-   "limb": 0.0749
-  },
-  "attack/hammer/1|darkElf-bulkiest-f": {
-   "limb": 0.1006
-  },
-  "attack/hammer/1|darkElf-bulkiest-m": {
-   "limb": 0.0991
-  },
-  "attack/hammer/1|darkElf-shortest-f": {
-   "limb": 0.0895
-  },
-  "attack/hammer/1|darkElf-tallest-m": {
-   "limb": 0.0943
-  },
-  "attack/hammer/1|darkElf-thinnest-f": {
-   "limb": 0.1003
-  },
-  "attack/hammer/1|elf-bulkiest-f": {
-   "limb": 0.1048
-  },
-  "attack/hammer/1|elf-bulkiest-m": {
-   "limb": 0.1029
-  },
-  "attack/hammer/1|elf-shortest-f": {
-   "limb": 0.0922
-  },
-  "attack/hammer/1|elf-tallest-m": {
-   "limb": 0.0947
-  },
-  "attack/hammer/1|elf-thinnest-f": {
-   "limb": 0.1031
-  },
-  "attack/hammer/1|human-bulkiest-f": {
-   "limb": 0.096
+   "limb": 0.0306
   },
   "attack/hammer/1|human-bulkiest-m": {
-   "limb": 0.1211
+   "limb": 0.0529
   },
   "attack/hammer/1|human-shortest-f": {
-   "limb": 0.0939
+   "limb": 0.0347
   },
   "attack/hammer/1|human-tallest-m": {
-   "limb": 0.0996
-  },
-  "attack/hammer/1|human-thinnest-f": {
-   "limb": 0.0827
+   "limb": 0.0397
   },
   "attack/hammer/1|lizard-bulkiest-f": {
-   "limb": 0.0871
-  },
-  "attack/hammer/1|lizard-bulkiest-m": {
-   "limb": 0.1089
-  },
-  "attack/hammer/1|lizard-shortest-f": {
-   "limb": 0.0816
-  },
-  "attack/hammer/1|lizard-tallest-m": {
-   "limb": 0.1048
-  },
-  "attack/hammer/1|lizard-thinnest-f": {
-   "limb": 0.0876
-  },
-  "attack/hammer/1|orc-bulkiest-f": {
-   "limb": 0.1105,
-   "grip": 0.0371
+   "limb": 0.0306
   },
   "attack/hammer/1|orc-bulkiest-m": {
-   "limb": 0.1201,
-   "grip": 0.0363
-  },
-  "attack/hammer/1|orc-shortest-f": {
-   "limb": 0.0924
-  },
-  "attack/hammer/1|orc-tallest-m": {
-   "grip": 0.0377,
-   "limb": 0.1271
+   "limb": 0.0318
   },
   "attack/hammer/1|orc-thinnest-f": {
-   "limb": 0.1072,
-   "grip": 0.0374
+   "limb": 0.032
   },
   "attack/hammer/2|cat-bulkiest-f": {
    "joint": 8.08,

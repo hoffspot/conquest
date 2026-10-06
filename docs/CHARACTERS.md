@@ -965,8 +965,12 @@ the face; at the bottom of a smash or slam the hands low and out before the hips
 into them; a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
 spin) out in front rather than tight to the body. A sweep still finishes with the rear hand low by
 the left hip: held higher, it came off the haft on the way back to guard. Further out still at the
-blow, the shoulders went past their range; a hammer's side swing still takes the left forearm into
-the belly at the strike, on every body (to be refitted).
+blow, the shoulders went past their range. A hammer's side swing sets the left elbow, down through
+the wind-up and the strike and out and back after it, the left hand out in front all the way round:
+left to come as it would, the left forearm lay across the belly from the wind-up to the
+follow-through, on every body. The left hand goes no further out to the left after the blow than its
+wrist can turn with the haft (the arms test's strain limit); further, the forearm cleared the belly
+throughout.
 
 **Spells** are cast the same way, with the free hand, key 1 being when the spell takes effect:
 the left, the right keeping hold of the weapon; or, if the left holds something (a bow) and the
