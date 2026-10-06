@@ -646,7 +646,7 @@ own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
 | --- | --- |
 | Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog on the belt round the front of the hip, close in, canted 45° (the hilt forward and up, where the right hand crossing in front of the belly takes it, the blade down and back behind the thigh) |
 | Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt round the front of the hip, canted as the sword is, the grip forward, the blade down and back behind the thigh, its edge forward |
-| Wand | Tucked in the belt at the right hip, the tip down and a little back, clear of the thigh |
+| Wand | Tucked in the belt at the right hip, the tip down and a little back and out, clear of the thigh (nearer in, Vitruvian's thighs came into it as the legs came out of the guard; further out, the right arm swinging past) |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
 | Staff, war hammer | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's head side-on |
 | Bow | On the back across the quiver, the grip up behind the left shoulder for the left hand, a little off the back so the upper arm coming down passes it (a bow looks the same either way up) |
@@ -952,6 +952,17 @@ battle knowing.
 | Spiked gauntlets | A straight punch at head height from a boxer's guard (left and right in turn, whichever way) | a hook, an uppercut, a body blow, an overhand |
 | Orc cleaver | An overhead hack: raised high behind the head; hacked down | a backhand, a flat chop, a gut rip, a stab and rip |
 
+**Two-handed blows keep the haft out in front.** A staff's or war hammer's second hand isn't moved
+out of the torso (above), so their keys hold both hands far enough out on every body: the haft
+lifted out in front of the chest on its way overhead (a key between the guard and the top), and
+swung down in a wide arc to the blow (a key between the top and the strike), not pulled close past
+the face; at the bottom of a smash or slam the hands low and out before the hips, not drawn back
+into them; a staff's wind-ups (drawn back for a thrust, over the shoulder for a strike, round for a
+spin) out in front rather than tight to the body. A sweep still finishes with the rear hand low by
+the left hip: held higher, it came off the haft on the way back to guard. Further out still at the
+blow, the shoulders went past their range; a hammer's side swing still takes the left forearm into
+the belly at the strike, on every body (to be refitted).
+
 **Spells** are cast the same way, with the free hand, key 1 being when the spell takes effect:
 the left, the right keeping hold of the weapon; or, if the left holds something (a bow) and the
 right's free, the right, the whole cast mirrored. A staff or war hammer is held upright out at the
@@ -1230,9 +1241,9 @@ a flourish:
 | --- | --- | --- |
 | Sword | Across in front of the belly to the hilt at the left hip, the elbow forward and out, the body turned into it and the other hand at the scabbard's throat; drawn forward along the scabbard, clear of the belly, swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth (the other hand at its throat, the body and hips turning into it) and slid home |
 | Wand | Snatched from the belt, flicked up, its tip twirled round in a circle and held up a moment | A last twirl, tucked back in the belt |
-| Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand and hung back at the hip |
+| Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand, brought down out to the side of the hip (straight down, it went into the hips) and hung back there |
 | Staff | Up over the right shoulder, the elbow leading up and forward, to the staff by the ear (the other hand pushing its lower end up from behind the hip), pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder, the elbow forward as the hand comes away |
-| War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm | Hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away |
+| War hammer | Reached for as the staff is, heaved up overhead from the back, swung over and down, its head slapped into the open left palm out before the chest (lower, the haft's foot went into the hips) | Raised upright out in front in one hand, then hoisted overhead and put over the right shoulder, the elbow forward as the hand comes away (swung straight back off the guard, its head went through the face and shoulders) |
 | Orc cleaver | Across in front of the belly to the grip at the left hip, the other hand on the belt beside it, ripped up and out across the body, wheeled round over the head, and brandished with a snarl | Brought down across the body, the point down to the ring at the left hip, the body turning into it, and dropped through |
 | Bow | Up over the left shoulder, the elbow leading up and forward, pulled over and swung down in front, spinning, held upright and its string plucked | Raised, turned over at the left side, out from the head, and slung back over the left shoulder |
 | Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
