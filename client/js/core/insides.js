@@ -20,7 +20,7 @@
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
 // Pure data, no DOM.
 
-import { FACING, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
+import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
 import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
@@ -1229,16 +1229,14 @@ export class Interiors {
             maps: [],
             folk: [],
         };
-        const back = entrance.facing > 0 ? entrance.facing - Math.PI : entrance.facing + Math.PI;
-
         // (Its inside end is where it'll be once its floors are made)
         building.door = {
             id: `${key}/door`,
             kind: "door",
             building: key,
             ends: [
-                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: back, door: entrance.door },
-                { map: inside, squares: [], arrive: null, facing: FACING.s, pending: true },
+                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: entrance.facing, door: entrance.door },
+                { map: inside, squares: [], arrive: null, facing: FACING.n, pending: true },
             ],
         };
         this.buildings.set(key, building);
@@ -1288,15 +1286,13 @@ export class Interiors {
             maps: [],
             folk: [],
         };
-        const back = entrance.facing > 0 ? entrance.facing - Math.PI : entrance.facing + Math.PI;
-
         building.door = {
             id: `${key}/door`,
             kind: "door",
             building: key,
             ends: [
-                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: back, door: entrance.door },
-                { map: inside, squares: [], arrive: null, facing: FACING.s, pending: true },
+                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: entrance.facing, door: entrance.door },
+                { map: inside, squares: [], arrive: null, facing: FACING.n, pending: true },
             ],
         };
         this.buildings.set(key, building);
@@ -1355,11 +1351,10 @@ export class Interiors {
             building.maps.push(map.id);
         }
 
-        // Its door's inside end: a couple of steps in, turned back to face it (as Wenches and Ale's)
+        // Its door's inside end: well in, facing into the room (as Wenches and Ale's)
         const [ground, upstairs] = maps;
-        const [doorX, doorY] = ground.marks.D[0];
 
-        Object.assign(building.door.ends[1], { squares: ground.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s, pending: false });
+        Object.assign(building.door.ends[1], { squares: ground.marks.D, ...comeIn(ground), pending: false });
 
         if (upstairs) {
             // (Their foot below and their top above: up from a tavern's taproom, down from a
@@ -1371,8 +1366,8 @@ export class Interiors {
                 kind: "stairs",
                 building: key,
                 ends: [
-                    { map: below.id, squares: below.marks["<"], arrive: [1, 3], facing: FACING.n },
-                    { map: above.id, squares: above.marks[">"], arrive: [6, 3], facing: FACING.n },
+                    { map: below.id, squares: below.marks["<"], ...offStairs(below, [1, 3]) },
+                    { map: above.id, squares: above.marks[">"], ...offStairs(above, [6, 3]) },
                 ],
             };
             this.world.links.push(building.stairs);
