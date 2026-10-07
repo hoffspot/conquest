@@ -28,11 +28,12 @@ import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS,
 import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
-import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
+import { campTier, CHUNK, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, RISING, War } from "./war/war.js";
+import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
 import { cos, hypot, sin } from "./exact.js";
 
@@ -256,7 +257,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -424,6 +425,12 @@ export class Host {
         this.mustered = new Map();
         this.soldiers = new Map();
         this.fallen = [];
+
+        /**
+         * The settlements and castles whose townsfolk are out, near a player (core/townsfolk.js),
+         * by the place's id: their ids (each one's look and errands among the folk: `folk`).
+         */
+        this.townsfolk = new Map();
 
         /**
          * The war's camps near a player, pitched (by the camp's id): { people, ids (its
@@ -1128,6 +1135,7 @@ export class Host {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
             this.#muster();
+            this.#townsfolk();
             this.#wilds();
             this.#watchRequests();
         }
@@ -1187,6 +1195,7 @@ export class Host {
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
+            townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             sorties: [...this.sorties.entries()],
             envoys: [...this.envoys.entries()],
@@ -1278,6 +1287,15 @@ export class Host {
         host.#wire();
         host.lookAt = snapshot.lookAt;
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
+        host.townsfolk = new Map(
+            (snapshot.townsfolk ?? []).map(([place, folk]) => {
+                for (const one of folk) {
+                    host.folk.set(one.id, structuredClone(one));
+                }
+
+                return [place, folk.map(({ id }) => id)];
+            }),
+        );
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
@@ -2220,6 +2238,127 @@ export class Host {
         const door = actor ? (this.world.interiors?.of(actor.map)?.entrance?.door ?? this.world.tavern?.door) : null;
 
         return door ? [door.x, door.z] : null;
+    }
+
+    // --- The townsfolk (core/townsfolk.js) ---
+
+    // Each settlement's townsfolk out about their business once a player comes near its edge, and
+    // a castle's folk in its wards; home again once every player's far off (TOWNSFOLK_REACH). As
+    // many as are out by day, fewer once the torches are lit
+    #townsfolk() {
+        const town = this.world.maps?.town;
+
+        if (!town?.chunk || !this.world.plan) {
+            return;
+        }
+
+        const places = this.#whereabouts();
+        const near = (middle, edge, within) => places.some(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge < within);
+
+        // (Those out, far from every player now: home)
+        for (const [id, out] of [...this.townsfolk]) {
+            const where = this.#peopledAt(id);
+
+            if (!where || !near(where.middle, where.edge, TOWNSFOLK_REACH.far)) {
+                this.#homeward(id, out);
+            }
+        }
+
+        // (Those a player's come near: out)
+        for (const where of this.#peopledNear(places)) {
+            if (!this.townsfolk.has(where.id) && near(where.middle, where.edge, TOWNSFOLK_REACH.near)) {
+                this.#outward(where);
+            }
+        }
+    }
+
+    // The settlements and the castles set down within reach of any of `places` (players'
+    // whereabouts): [{ id, kind, people, name, middle, edge }]
+    #peopledNear(places) {
+        const reach = TOWNSFOLK_REACH.near + 120;
+        const found = [];
+
+        this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
+
+        for (const place of this.settlementPlaces) {
+            if (places.some(([x, y]) => hypot(x - place.at[0], y - place.at[1]) < SETTLEMENT_KINDS[place.kind].radius + reach)) {
+                found.push(this.#peopledAt(place.id));
+            }
+        }
+
+        for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
+            if ((set.site.kind === "castle" || set.citadel) && places.some(([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
+                found.push(this.#peopledAt(set.site.id));
+            }
+        }
+
+        return found.filter(Boolean);
+    }
+
+    // A settlement or a castle set down, by its id: { id, kind, people, name, middle, edge }, or null
+    #peopledAt(id) {
+        const place = this.#placeOf(id);
+
+        if (place && SETTLEMENT_KINDS[place.kind]) {
+            return { id, kind: place.kind, people: place.race ?? "human", name: place.name ?? "", middle: this.#middleOf(place), edge: SETTLEMENT_KINDS[place.kind].radius };
+        }
+
+        const set = this.world.maps.town.sites?.set?.get(id);
+
+        return set ? { id, kind: "castle", people: set.site.race ?? "human", name: set.site.name ?? "the castle", middle: [set.x, set.y], edge: set.radius, set } : null;
+    }
+
+    // A place's townsfolk out: where they go (its layout's errands, or its wards'), who they are,
+    // each starting where no player sees them come out (if they can), on a square of their own
+    #outward({ id, kind, people, name, set }) {
+        const town = this.world.maps.town;
+        const squares = squaresOf(town);
+        const free = ([x, y]) => {
+            try {
+                return nearestFree(squares, [Math.floor(x), Math.floor(y)], { within: 3 });
+            } catch {
+                return null;
+            }
+        };
+        const home = id === this.world.start?.id;
+        const settlement = !set && !home ? town.settlements.of(this.#placeOf(id)) : null;
+        const outside = set?.entrance?.outside;
+        const errands = set
+            ? wardErrandsOf({ courts: [...set.courts].map((k) => [k % WORLD_SIZE, Math.floor(k / WORLD_SIZE)]), heart: set.heart, keep: outside ? [outside[0] + 0.5, outside[1] + 0.5] : null }, free)
+            : home
+              ? errandsOf(this.world.town, this.world.origin, free)
+              : errandsOf(settlement.town, settlement.at, free);
+        const players = [...this.players.keys()].map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+        const unseen = (square) => !players.some((actor) => this.battle.canSee(actor, { map: "town", square }));
+        const folk = townsfolkOf({ place: id, kind, people, name, errands, count: countOut(kind, torchesLit(elapsedOf(this.war))), seed: this.world.seed ?? 1, start: unseen });
+        const spot = this.#spots();
+        const ids = [];
+
+        for (const one of folk) {
+            try {
+                one.square = spot([one.square[0] + 0.5, one.square[1] + 0.5]);
+            } catch {
+                continue;
+            }
+
+            if (this.#addFolk(one)) {
+                ids.push(one.id);
+            }
+        }
+
+        this.townsfolk.set(id, ids);
+        this.#event("townsfolk", { place: id, ids, change: "out" });
+    }
+
+    // A place's townsfolk home again (none of them anywhere a player is)
+    #homeward(id, ids) {
+        for (const one of ids) {
+            this.battle.remove(one);
+            this.folk.delete(one);
+        }
+
+        this.townsfolk.delete(id);
+        this.#event("townsfolk", { place: id, ids, change: "home" });
     }
 
     // Each town the war's fought over, near a player: its soldiers out (again, if it's changed

@@ -1178,8 +1178,9 @@ a people is a little different, from a seed of their own:
 - **Soldiers** of every people are of it (`characters/soldiers.js`).
 - **Townsfolk** are the people of the place (`Interiors.add`'s `people`): a cat folk's town's
   barkeep, reeve and patrons are cat folk, dressed for their parts, and named in their own tongue
-  (`core/names.js`: "Khekan Mirrzeh", "Silwen Nimarilond"). Conquered townsfolk stay as they were:
-  only a keep's governor is of its new holders' people.
+  (`core/names.js`: "Khekan Mirrzeh", "Silwen Nimarilond"). So are those out in its streets about
+  their business (`core/townsfolk.js`, docs/GAME.md *Townsfolk*). Conquered townsfolk stay as they
+  were: only a keep's governor is of its new holders' people.
 - **The character lab** shows each people (Elf, Dark elf, Cat folk, Lizard folk).
 
 ### The host (core/host.js)

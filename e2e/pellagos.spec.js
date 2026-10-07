@@ -2530,6 +2530,85 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.carried).toEqual([{ kind: "courier", town: guild.notices[3].match(/^A package for (.+), for /)[1] }]);
 });
 
+test("the townsfolk go about their business in the start town: dressed for their callings, carrying what they carry, walking from errand to errand; tapped, they talk of their town", async ({ page }) => {
+    // (Everyone in the town drawn, a step at a time: more than the usual time)
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=2");
+
+    // Out as soon as the game's played, and drawn a few at a time, after the town's soldiers
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.1, { render: false });
+    });
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return !game.enlistees.size && !game.enlisting.length;
+    }, { seconds: 90 })).toBe(true);
+
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return game.battle.actors
+            .filter(({ id }) => id.startsWith("townsfolk:"))
+            .map(({ id, x, y, neutral }) => ({ id, at: [x, y], neutral, drawn: game.avatars.has(id), calling: game.host.folk.get(id).look, title: game.host.folk.get(id).title, wearing: [...(game.avatars.get(id)?.character.equipment.values() ?? [])] }));
+    });
+    const carried = ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger"];
+
+    expect(out.length).toBe(8);
+    expect(out.every(({ drawn, neutral }) => drawn && neutral)).toBe(true);
+    expect(new Set(out.map(({ calling }) => calling)).size).toBeGreaterThanOrEqual(4);
+    expect(out.filter(({ wearing }) => wearing.some((id) => carried.includes(id))).length).toBeGreaterThanOrEqual(5);
+
+    // A quarter of a minute on: most of them gone somewhere else
+    const moved = await page.evaluate((before) => {
+        const { game } = window.pellagos;
+
+        for (let k = 0; k < 30; k++) {
+            game.advance(0.5, { render: false });
+        }
+
+        return before.filter(({ id, at: [x, y] }) => {
+            const one = game.battle.actor(id);
+
+            return Math.hypot(one.x - x, one.y - y) > 3;
+        }).length;
+    }, out);
+
+    expect(moved).toBeGreaterThanOrEqual(5);
+
+    // Walked up to and talked to: who they are, and their town
+    const folk = out[0];
+    const talked = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const one = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        Object.assign(player, { square: [one.square[0] + 2, one.square[1]], x: one.square[0] + 2.5, y: one.square[1] + 0.5, to: null, path: [], order: null });
+        game.approaching = id;
+        game.battle.command("player", { type: "approach", target: id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const conversation = game.talking?.conversation;
+
+        return { with: game.talking?.id ?? null, choices: conversation?.choices.map(({ text }) => text) ?? [] };
+    }, folk.id);
+    const talk = page.locator(".talk");
+
+    expect(talked.with).toBe(folk.id);
+    expect(talked.choices).toContain("What's this place like?");
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-title")).toHaveText(folk.title);
+    await talk.getByRole("button", { name: /What's this place like/ }).click();
+    await expect(talk.locator(".talk-line")).not.toBeEmpty();
+});
+
 test("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
@@ -2669,7 +2748,7 @@ test.describe("drawn at the screen's own pixels", () => {
         await playing(page, "/?play&seed=2");
 
         // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by
-        // each road (drawn over a few seconds, a step at a time)
+        // each road (drawn over a few seconds, a step at a time; before the townsfolk out too)
         await page.evaluate(() => {
             const { game } = window.pellagos;
 
@@ -2679,8 +2758,9 @@ test.describe("drawn at the screen's own pixels", () => {
         });
         expect(await playUntil(page, () => {
             const { game } = window.pellagos;
+            const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
-            return !game.enlistees.size && !game.enlisting.length;
+            return soldiers.length > 0 && soldiers.every(({ id }) => game.avatars.has(id));
         })).toBe(true);
 
         const out = await page.evaluate(() => {

@@ -408,7 +408,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2794,22 +2794,25 @@ export class Game {
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
         const official = this.#officialOf(npc, building, names);
-        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
+        // (One of the townsfolk out in the streets: theirs, and the place they're of)
+        const out = !building ? this.host.folk.get(npc.id) : null;
+        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? ROLES[npc.role]?.title ?? "";
         Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
 
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
         names.keeper ??= names.innkeeper;
 
-        // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother")
-        names.town = building ? this.world.plan?.places.find(({ id }) => id === this.#townOf(building))?.name : undefined;
+        // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother"; out in
+        // the streets, the townsfolk's own)
+        names.town = building ? this.world.plan?.places.find(({ id }) => id === this.#townOf(building))?.name : out?.townName || undefined;
 
         if (building?.patron) {
             names.patron = GODS[building.patron].name;
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(building), this.#guildWords());
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null)), this.#guildWords());
 
         // (An adventurer who could be hired, and for how much; a follower waiting or following)
         const one = folk.find(({ id }) => id === npc.id);
@@ -3478,17 +3481,25 @@ export class Game {
 
     // Of those to be drawn, the one to take the next step of: the nearest the player (on their map
     // before any on another), begun if it isn't yet, and none of those put by this frame (waiting
-    // on their skins, painted elsewhere). { actor, steps }, or null if there's none
-    #nextEnlistee(put) {
+    // on their skins, painted elsewhere). The townsfolk after everyone else, and none of them while
+    // a building's being got ready (`busy`), as Wenches and Ale's folk: only there to be seen about,
+    // they keep no one waiting, the soldiers and creatures nor a building's folk behind them in the
+    // skins worker. { actor, steps }, or null if there's none
+    #nextEnlistee(put, busy = false) {
         const me = this.battle.actor(this.me);
         const far = (actor) => (me && actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity);
+        const later = (actor) => this.host.folk.get(actor.id)?.role === "townsfolk";
         let nearest = null;
 
         // (Those gone, or drawn some other way meanwhile, off the list)
         this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.avatars.has(id) && !this.enlistees.has(id));
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
-            if (!put.has(actor.id) && (!nearest || far(actor) < far(nearest))) {
+            if (put.has(actor.id) || (busy && later(actor))) {
+                continue;
+            }
+
+            if (!nearest || (later(nearest) && !later(actor)) || (later(nearest) === later(actor) && far(actor) < far(nearest))) {
                 nearest = actor;
             }
         }
@@ -3525,11 +3536,11 @@ export class Game {
         }
 
         // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,
-        // the nearest the player first; a creature's bar over it
+        // the nearest the player first, then the townsfolk; a creature's bar over it
         const put = new Set();
 
         while (performance.now() < until) {
-            const next = this.#nextEnlistee(put);
+            const next = this.#nextEnlistee(put, busy);
 
             if (!next) {
                 break;
@@ -4924,6 +4935,19 @@ export class Game {
             case "relieved":
                 // (A town's fallen soldiers' places taken: those who took them drawn)
                 this.enlisting.push(...event.ids);
+                break;
+            case "townsfolk":
+                // (A place's townsfolk out about their business, drawn nearest first; or home again)
+                if (event.change === "out") {
+                    this.enlisting.push(...event.ids);
+                } else {
+                    this.#unenlist(event.ids);
+
+                    for (const id of event.ids) {
+                        this.#undress(id);
+                    }
+                }
+
                 break;
             case "camp":
                 this.#pitch(event);

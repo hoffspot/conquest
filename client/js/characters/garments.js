@@ -205,6 +205,12 @@ const MADE = {
     velvetBodice: { label: "Velvet bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, colour: "#1e1418", roughness: 0.5, pattern: "laced", trim: "#c9a24a", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) },
     greenTunic: { label: "Green tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#3d5733", roughness: 0.85, pattern: "trim", trim: "#b89a55", inside: top((l) => l.hips - 0.06, 0.45) },
     blueTunic: { label: "Blue tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#33456a", roughness: 0.85, pattern: "trim", trim: "#c8b27a", inside: top((l) => l.hips - 0.06, 0.45) },
+    // The townsfolk's (core/townsfolk.js): homespun tunics, undyed and russet; a field hand's
+    // linen smock, long and loose; a friar's brown habit (its skirt a drape: drapes.js)
+    brownTunic: { label: "Brown tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#5b4430", roughness: 0.9, pattern: "trim", trim: "#8a7350", inside: top((l) => l.hips - 0.06, 0.45) },
+    russetTunic: { label: "Russet tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#8a4a2c", roughness: 0.88, pattern: "trim", trim: "#c9a46a", inside: top((l) => l.hips - 0.06, 0.45) },
+    smock: { label: "Linen smock", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.012, smooth: 4, colour: "#d6cbb0", roughness: 0.9, pattern: "cloth", inside: top((l) => l.hips - 0.1, 0.97) },
+    habit: { label: "Friar's habit", slot: "shirt", layer: 1, thickness: 0.005, loose: 0.012, smooth: 4, colour: "#5a4330", roughness: 0.95, pattern: "cloth", inside: top((l) => l.hips - 0.08, 0.97) },
     // A priest's vestments, white: an alb (a long-sleeved tunic, its skirt a drape: drapes.js) and
     // over it a chasuble, sleeveless and bordered in gold
     alb: { label: "Alb", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.01, smooth: 4, colour: "#f1ede4", roughness: 0.9, pattern: "cloth", inside: top((l) => l.hips - 0.08, 0.97) },

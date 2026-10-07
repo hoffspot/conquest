@@ -1255,6 +1255,102 @@
   "attack/sword/3|orc-shortest-f": {
    "slide": 0.0115
   },
+  "carry/broom|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/broom|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/broom|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/broom|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/firewood|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/firewood|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/firewood|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/firewood|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/jug|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/jug|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/jug|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/jug|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/ledger|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/ledger|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/ledger|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/ledger|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/pannier|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/pannier|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/pannier|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/pannier|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/pitchfork|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/pitchfork|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/pitchfork|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/pitchfork|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/sack|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/sack|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/sack|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/sack|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/walkingStaff|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/walkingStaff|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/walkingStaff|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/walkingStaff|orc-thinnest-f": {
+   "joint": 6.53
+  },
   "cast/castStun/0|lizard-shortest-f": {
    "item": 0.0203
   },

@@ -1306,6 +1306,12 @@ const LISTENING = clipped("listening, a hand on the hip", "listening");
 const CHEER = clipped("a cheer", "cheer", { hands: { right: null } });
 const HAILING = clipped("waving someone over", "hailing", { hands: { left: null } });
 
+// A look back over the shoulder, as if someone called, and round again: no hands in it
+const GLANCING_BACK = variant("a glance back", { ...spine({}), Head: { turn: 0, flex: 0 } },
+    [0.45, { ...spine({ turn: 10 }), Head: { turn: 32, flex: -3 } }],
+    [1, { ...spine({ turn: 12 }), Head: { turn: 36, flex: -4 } }],
+    [1.6, { ...spine({ turn: 0 }), Head: { turn: 0, flex: 0 } }]);
+
 const KEYED_RESTS = {
     ...BASE_RESTS,
     reeve: [renamed(BARKEEP_RESTS[3], "arms folded"), LOOKING_OVER, renamed(BARKEEP_RESTS[1], "a hand to the chin"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
@@ -1314,6 +1320,8 @@ const KEYED_RESTS = {
     steward: [renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[1], PRIEST_RESTS[2]],
     councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
     sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, ARMED_CLASPED],
+    // (The townsfolk's, the left hand's alone or no hand's: what's carried stays in the right)
+    townsfolk: [ADVENTURER_RESTS[1], renamed(BARMAID_RESTS[4], "stretching the back"), ADVENTURER_RESTS[3], ADVENTURER_RESTS[4], GLANCING_BACK],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars
