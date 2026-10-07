@@ -5026,3 +5026,25 @@ converted data is to be measured in M8 against today's hm08 data.
     57,000; what's carried isn't lowered (up to 3,400 triangles: drawn faceted, nothing to
     simplify without rebuilding it). Next: the middle level and a crowd cap, and the frame times
     measured with them.
+- **2026-10-07, a middle level for characters, and a crowd cap** (§10, step 7; docs/CHARACTERS.md
+  *Performance*, docs/GAME.md *Fewer triangles as they're smaller*).
+  - Three levels by how tall a character is on the screen: in full over 420 pixels; the middle
+    level under 360 (a quarter of the body's and garments' triangles, the eyes a tenth, the hair as
+    near), 9,200 to 21,200 triangles; the far level under 140 (a tenth of the body's, the
+    garments' till anything would move more than 7 millimetres, the far hair), 4,800 to 12,900
+    (9,000 to 14,700 before). Each switch changes about 2% of the figures' pixels.
+  - The body's lower levels are made from the triangles of it that show, once for everyone
+    dressed alike: the one shared body's big triangles reached under the clothes, and showed
+    through a garment drawn with fewer of its own. The simplifier's limits are in metres.
+  - In a crowd only the 2, 4 or 6 biggest on the screen (by Visual quality) are drawn in full.
+  - Shadows from the far level: the player casts 7,500 to 8,300 triangles into the sun's shadows
+    (11,300 to 11,900 before), a follower, the orc or a wild one 4,700 to 7,100.
+  - Crowd scenes on the phone profile: in the start tavern's taproom (seven folk in view, one
+    drawn in full and six at the middle level), the characters are 100,500 triangles in the main
+    pass at medium where they were 226,200, and the frame 131,600 where it was 260,900; at high
+    104,300 (227,100) and 208,400 (339,700). The lower-detail meshes are kept, 256 at most, the
+    longest unwanted let go (they'd been kept for good).
+  - **Still over step 7's budgets:** the middle level is 9,200 to 21,200 triangles where LOD1 is
+    5,000 to 8,000 (its hair is as near, 2,000 to 7,600, and what's carried up to 3,400), the far
+    level 4,800 to 12,900 where LOD2 is 1,500 to 2,500. The GPU's frame times can't be measured in
+    software rendering here; the debug overlay's GPU timer on a phone says whether they need more.

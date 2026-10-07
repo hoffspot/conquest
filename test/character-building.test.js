@@ -45,7 +45,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, allWaiting, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
 const { Skins } = await import("../client/js/characters/skins.js");
 const THREE = await import("three");
-const { FAR, LOD, Lods, lowerDetail } = await import("../client/js/characters/lod.js");
+const { FAR, KEPT, LODS, Lods, lowerDetail } = await import("../client/js/characters/lod.js");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
 // back kept till it's delivered
@@ -253,7 +253,7 @@ describe("characters built a step at a time (Character.building)", () => {
         beast.dispose();
     });
 
-    it("draws a character small on the screen with a quarter of its body's and outfit's triangles, over the same vertices, made once for everyone", async () => {
+    it("draws a character smaller on the screen with fewer of its body's and outfit's triangles, a quarter then a tenth or so, over the same vertices, made once for everyone dressed alike", async () => {
         const lods = new Lods();
         const character = new Character(kitOf(), options(soldier));
         const other = new Character(kitOf(), options(soldier));
@@ -266,38 +266,74 @@ describe("characters built a step at a time (Character.building)", () => {
         await Promise.all(lods.made.values());
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // (Made once each, the body's, the eyes' and the outfit's, for both of them)
-        assert.equal(asked, 3);
+        // (Made once each, the body's and the outfit's at each level and the eyes', for both of them,
+        // dressed alike)
+        assert.equal(asked, 2 * LODS.length + 1);
 
         const { geometry } = character;
         const outfit = character.garments.find(({ userData }) => userData.merged);
         const vertices = geometry.attributes.position.count;
-        const [full, low] = [character.detail.full, character.detail.low];
+        const [full, middle, far] = character.detail.levels;
+        const body = human.renderIndices("body").length / 3;
 
-        assert.ok(character.lowBody.length / 3 < human.renderIndices("body").length / 3 / 3, `${character.lowBody.length / 3} body triangles from afar`);
-        assert.ok(low[0].count > 0 && low[0].count < full[0].count, "fewer of the body's shown");
-        assert.equal(low.length, 2, "the body and eyes: no lashes, nor the mouth's inside");
-        assert.ok(outfit.userData.detail.low < outfit.userData.detail.full / 3, "fewer of the outfit's");
+        assert.equal(character.detail.levels.length, LODS.length + 1);
+        assert.ok(character.lowBodies[0].length / 3 < body / 3 && character.lowBodies[1].length / 3 < body / 10, `${character.lowBodies.map((low) => low.length / 3)} body triangles`);
+        assert.ok(far[0].count > 0 && far[0].count < middle[0].count && middle[0].count < full[0].count, "fewer of the body's shown at each level");
+        assert.ok(middle.length === 2 && far.length === 2, "the body and eyes: no lashes, nor the mouth's inside");
+
+        const [whole, outfitMiddle, outfitFar] = outfit.userData.detail;
+
+        assert.ok(outfitFar.count < outfitMiddle.count && outfitMiddle.count < whole.count / 3, "fewer of the outfit's at each level");
         assert.ok(Array.from(geometry.index.array).every((v) => v < vertices), "the same vertices");
 
-        // (A body triangle from afar has a corner out from under the clothes)
+        // (A body triangle from afar is made of those shown, not reaching in under the clothes)
         const index = geometry.index.array;
         const shown = new Set(Array.from(index.subarray(full[0].start, full[0].start + full[0].count)));
 
-        for (let k = low[0].start; k < low[0].start + low[0].count; k += 3) {
-            assert.ok(shown.has(index[k]) || shown.has(index[k + 1]) || shown.has(index[k + 2]));
+        for (const level of [middle, far]) {
+            assert.ok(Array.from(index.subarray(level[0].start, level[0].start + level[0].count)).every((v) => shown.has(v)));
         }
 
-        // Switched by how tall it is on the screen, not flicking at the edge
-        assert.equal(geometry.groups, full);
-        character.fitDetail(LOD.far - 1);
-        assert.ok(character.low && geometry.groups === low && outfit.geometry.drawRange.start === outfit.userData.detail.full);
-        character.fitDetail((LOD.far + LOD.near) / 2);
-        assert.ok(character.low, "between the two, as it was");
+        // Switched by how tall it is on the screen, not flicking at the edges
+        const drawn = () => [character.level, geometry.groups, outfit.geometry.drawRange.start];
+
+        assert.deepEqual(drawn(), [0, full, 0]);
+        character.fitDetail(LODS[0].below - 1);
+        assert.deepEqual(drawn(), [1, middle, outfitMiddle.start]);
+        character.fitDetail((LODS[0].below + LODS[0].above) / 2);
+        assert.equal(character.level, 1, "between the two, as it was");
+        character.fitDetail(LODS[1].below - 1);
+        assert.deepEqual(drawn(), [2, far, outfitFar.start]);
+        character.fitDetail((LODS[1].below + LODS[1].above) / 2);
+        assert.equal(character.level, 2, "between the two, as it was");
         character.fitDetail(0);
-        assert.ok(character.low, "out of view, as it was");
-        character.fitDetail(LOD.near + 1);
-        assert.ok(!character.low && geometry.groups === full && outfit.geometry.drawRange.start === 0);
+        assert.equal(character.level, 2, "out of view, as it was");
+        character.fitDetail(LODS[1].above + 1);
+        assert.equal(character.level, 1);
+        character.fitDetail(LODS[0].above + 1);
+        assert.deepEqual(drawn(), [0, full, 0]);
+        // (Straight from far to full)
+        character.fitDetail(10);
+        character.fitDetail(LODS[0].above + 1);
+        assert.equal(character.level, 0);
+
+        // One of a crowd not among the nearest: never in full
+        character.fitDetail(LODS[0].above + 1, 1);
+        assert.equal(character.level, 1);
+        character.fitDetail(LODS[0].above + 1);
+        assert.equal(character.level, 0, "in full again once it's among them");
+
+        // Dressed differently: its body's made again, from what it shows now
+        const before = asked;
+
+        character.setEquipment(["sword"]);
+        assert.equal(character.lowBodies, null, "drawn in full till they're made");
+        await Promise.all(lods.made.values());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.ok(asked > before + LODS.length - 1);
+        assert.ok(character.lowBodies && character.detail.levels[2][0].count < character.detail.levels[0][0].count);
+        character.dispose();
+        other.dispose();
     });
 
     it("from afar, its eyes, hair, lace and skirts drawn with fewer triangles too; into the shadow maps, everyone with their lower detail", async () => {
@@ -318,7 +354,7 @@ describe("characters built a step at a time (Character.building)", () => {
 
         // The eyes: a tenth or so
         assert.ok(folk.lowEyes.length < human.renderIndices("eyes").length / 5, `${folk.lowEyes.length / 3} eye triangles`);
-        assert.equal(folk.detail.low[1].count, folk.lowEyes.length);
+        assert.ok(folk.detail.levels.slice(1).every((level) => level[1].count === folk.lowEyes.length));
 
         // Every garment: lace (not drawn at once with the rest), a skirt, a player's each
         assert.ok(courtesan.garments.some(({ name }) => name.startsWith("lace")) && folk.garments.some(({ userData }) => userData.drape));
@@ -327,11 +363,11 @@ describe("characters built a step at a time (Character.building)", () => {
             for (const mesh of character.garments) {
                 const { detail, cheaper } = mesh.userData;
 
-                assert.ok(detail && detail.low < detail.full, mesh.name);
-                assert.deepEqual(cheaper.range, { start: detail.full, count: detail.low }, "and into the shadow maps");
+                assert.ok(detail && detail[2].count < detail[1].count && detail[1].count < detail[0].count, mesh.name);
+                assert.deepEqual(cheaper.range, detail[2], "and the farthest into the shadow maps");
             }
 
-            assert.ok(character.garments.reduce((low, { userData }) => low + userData.detail.low, 0) < character.garments.reduce((full, { userData }) => full + userData.detail.full, 0) / 3);
+            assert.ok(character.garments.reduce((low, { userData }) => low + userData.detail[1].count, 0) < character.garments.reduce((full, { userData }) => full + userData.detail[0].count, 0) / 3);
         }
 
         // The hair: grown far thinner, drawn instead from afar, and into the shadow maps
@@ -341,9 +377,11 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.ok(hero.farHairMesh, "a player's, asked for");
         assert.equal(plain.farHairMesh, null, "none if not");
         assert.ok(hairMesh.visible && !farHairMesh.visible);
-        folk.setDetail(true);
+        folk.setDetail(1);
+        assert.ok(hairMesh.visible && !farHairMesh.visible, "the middle level, its own hair");
+        folk.setDetail(2);
         assert.ok(!hairMesh.visible && farHairMesh.visible);
-        folk.setDetail(false);
+        folk.setDetail(0);
         assert.equal(hairMesh.userData.cheaper.geometry, farHairMesh.geometry);
 
         // (Short hair too: near, it keeps more of its strands)
@@ -352,13 +390,13 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.ok(triangles(far) < triangles(short) / 4, `${triangles(far)} of ${triangles(short)}`);
 
-        // The body into the shadow maps: its lower detail alone (no eyes, lashes or mouth); one
+        // The body into the shadow maps: its farthest level alone (no eyes, lashes or mouth); one
         // never lowered, its body alone in full
         for (const character of [courtesan, folk, hero]) {
-            assert.deepEqual(character.mesh.userData.cheaper.groups, [character.detail.low[0]]);
+            assert.deepEqual(character.mesh.userData.cheaper.groups, [character.detail.levels.at(-1)[0]]);
         }
 
-        assert.deepEqual(plain.mesh.userData.cheaper.groups, [plain.detail.full[0]]);
+        assert.deepEqual(plain.mesh.userData.cheaper.groups, [plain.detail.levels[0][0]]);
 
         for (const character of [courtesan, folk, hero, plain]) {
             character.dispose();
@@ -375,8 +413,31 @@ describe("characters built a step at a time (Character.building)", () => {
         const lower = await lowerDetail(indices, at, human.uvs);
         const share = lower.length / indices.length;
 
-        assert.ok(share > 0.2 && share <= LOD.share + 0.01, `${share}`);
+        assert.ok(share > 0.2 && share <= LODS[0].share + 0.01, `${share}`);
         assert.ok(lower.every((v) => v < human.renderSource.length));
+    });
+
+    it("keeps the lower-detail meshes most recently asked for, letting the longest unasked for go", async () => {
+        const lods = new Lods();
+        const triangle = () => ({ indices: [0, 1, 2], positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], uvs: [0, 0, 1, 0, 0, 1] });
+        let asked = 0;
+        const ask = (key) => lods.of(key, () => (asked++, triangle()));
+
+        for (let k = 0; k < KEPT; k++) {
+            ask(`mesh ${k}`);
+        }
+
+        // (The first asked for again, so the second's the longest unasked for)
+        ask("mesh 0");
+        ask("one more");
+        await Promise.all(lods.made.values());
+
+        assert.equal(asked, KEPT + 1, "made once each");
+        assert.equal(lods.made.size, KEPT);
+        assert.ok(lods.made.has("mesh 0") && !lods.made.has("mesh 1") && lods.made.has("one more"));
+        ask("mesh 1");
+        assert.equal(asked, KEPT + 2, "made again once it's let go");
+        await Promise.all(lods.made.values());
     });
 
     it("grows the hair once: none grown again for what's carried, and under a helmet only what's below its rim", () => {

@@ -15,7 +15,7 @@ import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
-import { FAR, keyOf, LOD } from "./lod.js";
+import { FAR, keyOf, LODS } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { expressionData, Expressions, expressive } from "./expressions.js";
 import { lashTexture, lashUVs } from "./lashes.js";
@@ -340,9 +340,11 @@ export class Character {
         this.slung = false;
         this.hairHidden = false;
 
-        // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail)
-        this.low = false;
-        this.lowBody = null;
+        // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail.
+        // `level`: 0 in full, then each of LODS')
+        this.level = 0;
+        this.lowBodies = null;
+        this.lowKey = null;
         this.lowEyes = null;
         this.lods = null;
 
@@ -1464,7 +1466,7 @@ export class Character {
             castCheaply(this.hairMesh, { geometry: far });
         }
 
-        this.setDetail(this.low);
+        this.setDetail(this.level);
     }
 
     // Hair grown (growingHair's geometry) on its head, skinned to its rig
@@ -1619,52 +1621,42 @@ export class Character {
 
     #updateIndex() {
         const human = this.human;
-        const body = human.renderIndices("body");
-        const kept = [];
-        // (The corners of the triangles shown: one of the lower-detail body's triangles is drawn
-        // unless all its corners are under clothes)
-        const shown = this.lowBody ? new Uint8Array(human.renderSource.length) : null;
+        const kept = this.#shown();
 
-        for (let t = 0; t < body.length / 3; t++) {
-            if (!this.hidden.has(t)) {
-                kept.push(body[t * 3], body[t * 3 + 1], body[t * 3 + 2]);
-
-                if (shown) {
-                    shown[body[t * 3]] = shown[body[t * 3 + 1]] = shown[body[t * 3 + 2]] = 1;
-                }
-            }
+        // (Its lower-detail bodies made from what it shows, asked for again when that's changed)
+        if (this.lods) {
+            this.#lowerBody(kept);
         }
 
-        const low = [];
-
-        for (let k = 0; shown && k < this.lowBody.length; k += 3) {
-            const [a, b, c] = [this.lowBody[k], this.lowBody[k + 1], this.lowBody[k + 2]];
-
-            if (shown[a] || shown[b] || shown[c]) {
-                low.push(a, b, c);
-            }
-        }
-
+        const lows = this.lowBodies ?? [];
         const eyes = human.renderIndices("eyes");
         const lashes = human.renderIndices("lashes");
         const mouth = human.renderIndices("mouth");
         const lowEyes = this.lowEyes ?? [];
         const mouthAt = kept.length + eyes.length + lashes.length;
-        const lowAt = mouthAt + mouth.length;
-        const lowEyesAt = lowAt + low.length;
+        // (Each level's body one after another, after the mouth)
+        const lowAt = [];
+        let at = mouthAt + mouth.length;
+
+        for (const low of lows) {
+            lowAt.push(at);
+            at += low.length;
+        }
+
+        const lowEyesAt = at;
         const index = new Uint16Array(lowEyesAt + lowEyes.length);
 
         index.set(kept, 0);
         index.set(eyes, kept.length);
         index.set(lashes, kept.length + eyes.length);
         index.set(mouth, mouthAt);
-        index.set(low, lowAt);
+        lows.forEach((low, k) => index.set(low, lowAt[k]));
         index.set(lowEyes, lowEyesAt);
 
         this.geometry.setIndex(new THREE.BufferAttribute(index, 1));
 
-        // Its groups drawn in full, and from afar: the lower-detail body and eyes (as far as it has
-        // them; not lashes, nor the mouth's inside)
+        // Its groups drawn at each level: in full; then each level's body and the eyes from afar
+        // (as far as it has them; not lashes, nor the mouth's inside)
         const full = [
             { start: 0, count: kept.length, materialIndex: 0 },
             { start: kept.length, count: eyes.length, materialIndex: 1 },
@@ -1672,38 +1664,71 @@ export class Character {
             ...(mouth.length ? [{ start: mouthAt, count: mouth.length, materialIndex: 3 }] : []),
         ];
         const farEyes = this.lowEyes ? { start: lowEyesAt, count: lowEyes.length, materialIndex: 1 } : full[1];
+        const lowBodies = lows.map((low, k) => ({ start: lowAt[k], count: low.length, materialIndex: 0 }));
 
-        const lowBody = this.lowBody ? { start: lowAt, count: low.length, materialIndex: 0 } : null;
-
-        // (And into the shadow maps, the body alone, from afar's as far as it has it: shadowpasses.js)
-        this.detail = { full, low: lowBody ? [lowBody, farEyes] : full, shadow: [lowBody ?? full[0]] };
-        this.geometry.groups = this.low ? this.detail.low : this.detail.full;
+        // (And into the shadow maps, the body alone, the farthest level's as far as it has it:
+        // shadowpasses.js)
+        this.detail = { levels: [full, ...LODS.map((lod, k) => (lowBodies[k] ? [lowBodies[k], farEyes] : full))], shadow: [lowBodies.at(-1) ?? full[0]] };
+        this.geometry.groups = this.detail.levels[this.level];
 
         if (this.mesh) {
             castCheaply(this.mesh, { groups: this.detail.shadow });
         }
     }
 
+    // The body's triangles it shows (not hidden under clothing)
+    #shown() {
+        const body = this.human.renderIndices("body");
+        const kept = [];
+
+        for (let t = 0; t < body.length / 3; t++) {
+            if (!this.hidden.has(t)) {
+                kept.push(body[t * 3], body[t * 3 + 1], body[t * 3 + 2]);
+            }
+        }
+
+        return kept;
+    }
+
+    // Its body's triangles at each of LODS' levels, made from those it shows (`kept`), their edges
+    // kept where they are: none reach in under its clothes, where a garment drawn with fewer
+    // triangles of its own wouldn't hide them. Made once for everyone showing the same triangles
+    // (dressed alike, whatever their shape), and put in when they come
+    #lowerBody(kept) {
+        const key = keyOf("body", kept);
+
+        if (key === this.lowKey) {
+            return;
+        }
+
+        this.lowKey = key;
+        this.lowBodies = null;
+
+        const levels = LODS.map(({ share, error }, k) => this.lods.of(`${key}@${k + 1}`, () => ({ indices: kept, positions: this.geometry.attributes.position.array, uvs: this.human.uvs, share, error })));
+
+        Promise.all(levels).then(
+            (lows) => {
+                if (!this.disposed && this.lowKey === key) {
+                    this.lowBodies = lows;
+                    this.#updateIndex();
+                }
+            },
+            () => {},
+        );
+    }
+
     /**
      * Get ready to be drawn with fewer triangles when it's small on the screen (`fitDetail`): its
-     * body's and its outfit's (garments drawn all at once) lower-detail triangles asked for from
-     * `lods` (the kit's: lod.js), each made once for everyone, elsewhere, and put in when they come.
-     * Its outfit's asked for again when it's dressed again.
+     * body's and garments' triangles at each of LODS' levels asked for from `lods` (the kit's:
+     * lod.js), each made once for everyone, elsewhere, and put in when they come. Its garments'
+     * asked for again when it's dressed again.
      */
     lowerDetail(lods) {
         this.lods = lods;
 
         const human = this.human;
 
-        lods.of("body", () => ({ indices: human.renderIndices("body"), positions: this.geometry.attributes.position.array, uvs: human.uvs })).then(
-            (low) => {
-                if (!this.disposed && !this.lowBody) {
-                    this.lowBody = low;
-                    this.#updateIndex();
-                }
-            },
-            () => {},
-        );
+        this.#lowerBody(this.#shown());
         // (And its eyes: a few pixels from afar, a tenth of their triangles is plenty)
         lods.of("eyes", () => ({ indices: human.renderIndices("eyes"), positions: this.geometry.attributes.position.array, uvs: human.uvs, ...FAR.eyes })).then(
             (low) => {
@@ -1720,68 +1745,98 @@ export class Character {
         }
     }
 
-    // A garment's lower-detail triangles put after its own, drawn instead of them from afar and
-    // into the shadow maps: an outfit's (its garments drawn all at once) the same for all who wear
-    // it, a garment's or skirt's for all with the same triangles of it
+    // A garment's triangles at each level put after its own, drawn instead of them as it's smaller
+    // on the screen, and the farthest's into the shadow maps: an outfit's (its garments drawn all
+    // at once) the same for all who wear it, a garment's or skirt's for all with the same
+    // triangles of it
     #lowerGarment(mesh) {
         const { index, attributes } = mesh.geometry;
         const key = mesh.userData.merged ? `outfit:${mesh.userData.merged.join("+")}` : keyOf(mesh.name, index.array);
         // (A skirt's has no picture's layout to keep)
         const uvs = attributes.uv?.array ?? new Float32Array(attributes.position.count * 2);
+        const levels = LODS.map(({ share, error }, k) => this.lods.of(`${key}@${k + 1}`, () => ({ indices: index.array, positions: attributes.position.array, uvs, share, error })));
 
-        this.lods.of(key, () => ({ indices: index.array, positions: attributes.position.array, uvs })).then(
-            (low) => {
+        Promise.all(levels).then(
+            (lows) => {
                 if (this.disposed || !this.garments.includes(mesh) || mesh.userData.detail) {
                     return;
                 }
 
                 const full = mesh.geometry.index.array;
-                const both = new (full instanceof Uint16Array ? Uint16Array : Uint32Array)(full.length + low.length);
+                const all = new (full instanceof Uint16Array ? Uint16Array : Uint32Array)(lows.reduce((length, low) => length + low.length, full.length));
+                // (Where each level's triangles are in it: in full first)
+                const ranges = [{ start: 0, count: full.length }];
 
-                both.set(full);
-                both.set(low, full.length);
-                mesh.geometry.setIndex(new THREE.BufferAttribute(both, 1));
-                mesh.userData.detail = { full: full.length, low: low.length };
-                castCheaply(mesh, { range: { start: full.length, count: low.length } });
-                this.setDetail(this.low);
+                all.set(full);
+
+                for (const low of lows) {
+                    const start = ranges.at(-1).start + ranges.at(-1).count;
+
+                    all.set(low, start);
+                    ranges.push({ start, count: low.length });
+                }
+
+                mesh.geometry.setIndex(new THREE.BufferAttribute(all, 1));
+                mesh.userData.detail = ranges;
+                castCheaply(mesh, { range: ranges.at(-1) });
+                this.setDetail(this.level);
             },
             () => {},
         );
     }
 
-    /** Drawn with its lower-detail triangles (`low`), as far as it has them (lowerDetail), or in full. */
-    setDetail(low) {
-        this.low = low;
+    /** Drawn at a level of detail (`level`: 0 in full, then each of LODS'), as far as it has it (lowerDetail), else in full. */
+    setDetail(level) {
+        this.level = level;
 
         if (this.detail) {
-            this.geometry.groups = low ? this.detail.low : this.detail.full;
+            this.geometry.groups = this.detail.levels[level];
         }
 
-        // (Its far thinner hair from afar: the lods aren't asked for it, it's grown with the other)
+        // (Its far thinner hair at the farthest level, only: nearer, it shows, thin and patchy. The
+        // lods aren't asked for it, it's grown with the other)
         if (this.farHairMesh) {
-            this.farHairMesh.visible = low;
+            this.farHairMesh.visible = level === LODS.length;
 
             if (this.hairMesh) {
-                this.hairMesh.visible = !low;
+                this.hairMesh.visible = level < LODS.length;
             }
         }
 
         for (const { geometry, userData } of this.garments) {
-            const detail = userData.detail;
+            const range = userData.detail?.[level];
 
-            if (detail) {
-                geometry.setDrawRange(low ? detail.full : 0, low ? detail.low : detail.full);
+            if (range) {
+                geometry.setDrawRange(range.start, range.count);
             }
         }
     }
 
     /**
-     * Drawn with fewer triangles when it's under LOD.far pixels tall on the screen (`tall`,
-     * drawing buffer pixels), and in full again over LOD.near; out of view (0), left as it is.
+     * Drawn with fewer triangles the smaller it is on the screen (`tall`, drawing buffer pixels):
+     * at each of LODS' levels under its `below`, and at the level above again over its `above`;
+     * never in more detail than the level `least` (Game's crowd: only so many of those in view
+     * drawn in full); out of view (0), left as it is.
      */
-    fitDetail(tall) {
-        if (tall > 0 && (this.low ? tall > LOD.near : tall < LOD.far)) {
-            this.setDetail(!this.low);
+    fitDetail(tall, least = 0) {
+        if (tall <= 0) {
+            return;
+        }
+
+        let level = this.level;
+
+        while (level < LODS.length && tall < LODS[level].below) {
+            level++;
+        }
+
+        while (level > 0 && tall > LODS[level - 1].above) {
+            level--;
+        }
+
+        level = Math.max(level, least);
+
+        if (level !== this.level) {
+            this.setDetail(level);
         }
     }
 
