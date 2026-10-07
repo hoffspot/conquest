@@ -66,6 +66,9 @@ jobs:
   # GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
+    # (Twenty minutes is four times a job's usual; a job hung longer is ended rather than held to
+    # GitHub's six hours)
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -81,8 +84,10 @@ jobs:
 
       - run: npm ci
 
+      # (Its download now and then hangs for good: each try is given 5 minutes, where it usually
+      # takes under 2, and it's tried three times)
       - name: Install Chromium for the end-to-end tests
-        run: npx playwright install --with-deps chromium
+        run: for try in 1 2 3; do timeout 300 npx playwright install --with-deps chromium && exit 0; done; exit 1
       - name: Choose this job's share of the tests
         run: node scripts/e2e-shard.js ${{ matrix.shard }} ${{ strategy.job-total }} > e2e-share.txt
       - run: npx playwright test --test-list e2e-share.txt
