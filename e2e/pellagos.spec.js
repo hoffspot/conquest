@@ -475,7 +475,8 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
     expect(fight.arrows).toBeGreaterThan(1);
     expect(fight.blood).toBeGreaterThan(200);
     expect(fight.splats).toBeGreaterThan(0);
-    expect(fight.skin).toBe("wounded-skin|skin");
+    // (The wounds' patch over the skin's own, and its face's expressions: expressions.js)
+    expect(fight.skin).toMatch(/^wounded-skin\|skin\|face\d+$/);
 
     // Fought to the end: whoever falls lies in a pool of blood. Healed, the other's worse
     // wounds are gone; come back to life, all of them, arrows and pool too
