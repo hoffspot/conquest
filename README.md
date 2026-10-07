@@ -134,12 +134,15 @@ you tap an enemy to fight it:
 It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
 or after you, you put it away again. The orc does the same, on its patrol.
 
-**The camera** follows you from your first step, swinging round smoothly (over about a second)
-to look from behind you the way you're going. **Drag** (a finger, or the mouse held down) to turn
-it round you, and up or down to tilt it; it stays where you leave it while you stand, and once
-you walk again it swings back round behind you, facing the way you go. Pinch or scroll to zoom.
-In the town, when a building would stand between you and the camera, it comes in closer than
-the building, or rises over it.
+**The camera** follows you from your first step. Walking away from it or across its view, it
+swings round smoothly (over about a second) to look from behind you the way you're going; walking
+back towards it, it backs away rather than turning round, coming round only as you go by it.
+**Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it; it
+stays where you leave it while you stand, and once you've walked a moment it swings back round
+behind you. Pinch or scroll to zoom. In the town, when a building would stand between you and the
+camera, it comes in closer than the building, or rises over it. Holding a phone upright, it looks
+down more steeply from further back, so you see more round you. Game options can turn its
+following off, change how far a drag turns it, invert its tilt, and stop spells shaking it.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left
@@ -169,9 +172,11 @@ with full health; the orc comes back to its corner half a minute after it falls.
 **The tavern.** Facing the market square (or, where it can't, a street) stands *Wenches and Ale*,
 its name in gold blackletter on a red board along its front and, hanging from an iron bracket by
 the door, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
-glow traces round it, and you walk up to it and go in, coming out a couple of steps inside,
-turned back to face the door (so it's in view to tap, and tapping the floor round you walks you
-there rather than straight back out; the same at the stairs, and outside). The rooms are bigger
+glow traces round it, and you walk up to it and go in, coming out a few steps inside, facing
+into the room, the camera behind you under the ceiling looking across it (and the same off the
+stairs, turned from them; coming out of a building, you face the street). A door or the stairs
+behind you can't be tapped by mistake: a tap counts on them only when you're looking towards
+them, so tapping the floor round you walks you there rather than straight back out. The rooms are bigger
 inside than the tavern looks from the street, with room to walk about: two metres and more
 between the tables. Inside are long tables with benches, candles and tankards; the bar, with
 barrels on a rack behind it, each with a brass tap; a great stone hearth, its fire flickering

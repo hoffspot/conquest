@@ -28,6 +28,18 @@ const CHEST = Object.freeze({ width: 0.8, depth: 0.46, height: 0.4, rise: 0.6, b
 // across), and the clip that opens it (the gold heaped in it in its units: gold3d.js GOLD)
 const CHEST_MODEL = Object.freeze({ url: "models/jmi/chest.glb", scale: 1.3, clip: "Open", lid: "Chest_Lid" });
 
+const _box = new THREE.Box3();
+const _middle = new THREE.Vector3();
+const _point = new THREE.Vector3();
+
+// How far a point on the screen (x, y) is from a line on it, from `a` to `b` ({ x, y } each)
+function fromLine(x, y, a, b) {
+    const [dx, dy] = [b.x - a.x, b.y - a.y];
+    const along = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+
+    return Math.hypot(x - a.x - dx * along, y - a.y - dy * along);
+}
+
 // Two things dropped on one square sit a little apart, round its middle
 const SPREAD = 0.28;
 
@@ -142,21 +154,23 @@ export class Drops {
 
     /**
      * The thing dropped nearest a point on the screen (client pixels), within `radius` pixels of
-     * its bundle or its icon: its id, or null. (`toScreen`: a point in the world to the screen.)
+     * it, from where it lies up to its top, its icon over it (a chest stands up off the ground,
+     * and seen close, as indoors, its lid is well over where it lies): its id, or null.
+     * (`toScreen`: a point in the world to the screen.)
      */
     at(clientX, clientY, toScreen, radius = 40) {
         let best = null;
         let bestDistance = radius;
 
-        for (const [id, { object, icon }] of this.drawn) {
-            for (const point of [object.position.clone(), ...(icon ? [icon.getWorldPosition(new THREE.Vector3())] : [])]) {
-                const screen = toScreen(point);
-                const distance = screen ? Math.hypot(screen.x - clientX, screen.y - clientY) : Infinity;
+        for (const [id, { object }] of this.drawn) {
+            const middle = _box.setFromObject(object).getCenter(_middle);
+            const foot = toScreen(_point.set(middle.x, _box.min.y, middle.z));
+            const top = toScreen(_point.set(middle.x, _box.max.y, middle.z));
+            const distance = foot && top ? fromLine(clientX, clientY, foot, top) : Infinity;
 
-                if (distance < bestDistance) {
-                    best = id;
-                    bestDistance = distance;
-                }
+            if (distance < bestDistance) {
+                best = id;
+                bestDistance = distance;
             }
         }
 

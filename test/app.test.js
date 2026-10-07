@@ -88,6 +88,7 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadSettings(), SETTINGS_DEFAULTS);
         assert.equal(SETTINGS_DEFAULTS.minimap, true, "the minimap starts on");
         assert.equal(SETTINGS_DEFAULTS.sound, true, "and so does the sound");
+        assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [true, 1, false, true], "and the camera as it's always been");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
