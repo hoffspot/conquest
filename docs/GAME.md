@@ -70,25 +70,33 @@ back to the same world:
     watchtower:** its walls broken off at different heights round its top.
   - **Graveyard** (`GRAVEYARD`, laid out as old churchyards are; the research behind it, from
     what's written about English and Scottish churchyards, is summed up in the constants'
-    comments): 24 by 20 m, walled round in dry field stone 0.9 to 1.4 m high, a stretch of a side
-    fallen now and then; its way in between two capped stone piers, its iron gates hanging open,
-    fallen, or gone; a flagstone path up its middle to a family's mausoleum (six yards in ten: a
-    stone house on two steps, pilasters at its front corners, a gabled roof with its pediment
-    over the door or a pyramid of slates, a name panel over its iron door, the door ajar now and
-    then) or a chest tomb; one or two chest or table tombs beside the path, their lids shoved
-    askew or cracked across, the dark showing; now and then an obelisk, and a grave railed round
-    in iron on a stone kerb; a yew by the gate, on the path's west side.
+    comments): 24 by 20 m, walled round in dry field stone 0.9 to 1.4 m high, narrowing as it
+    rises (16% of its thickness a metre: `GRAVE.batter`), a stretch of a side fallen now and
+    then; its way in between two capped stone piers, its iron gates hanging open, fallen, or
+    gone; a flagstone path up its middle to a chest tomb, or seldom (one yard in twelve: a few
+    hundred stand in all of Britain's twenty thousand churchyards) a family's mausoleum (a stone
+    house on two steps, pilasters at its front corners, a gabled roof with its pediment over the
+    door or a pyramid of slates, a name panel over its iron door, the door ajar now and then);
+    two to four chest or table tombs beside the path, their lids shoved askew or cracked across,
+    the dark showing; seldom an obelisk, and a grave railed round in iron on a stone kerb now and
+    then; a yew by the gate, on the path's west side.
     - **The graves** run east and west as the world lies, whichever way the yard's turned to its
-      road, the headstone at the west end. They're in rows, but an old yard's: each set off its
-      place and turned a little, plots left empty, the north side (the side no one wanted) mostly
-      empty.
-    - **Headstones:** round-headed, segmental, shouldered, pointed, flat, or a cross (some
-      ring-headed), 0.55 to 1 m high, of the land's stone (the humans' grey limestone, buff
-      sandstone, grey granite). Seven in ten face west, two east, one the path. Nearly half
-      lean forward over the grave, as the ground sinks under them; a quarter are sunk; a few
-      have fallen (face up or down), or snapped off with their tops lying beside. A footstone
-      at a quarter of the graves' feet. Weathered, with green on their north faces, and on the
-      faces the sun reaches, lichen's orange and gold in patches, more on some than others.
+      road, the headstone at the west end. They're in rows, close as an old yard's are (2.7 m
+      apart along them, under a metre side by side: about sixty in a yard), but each set off its
+      place and turned a little, a few plots left empty. The north side (the side no one wanted)
+      is as full, but fewer of its graves have a stone: that no one was buried there is a myth.
+    - **Headstones** at under half the graves (about thirty in a yard, a quarter of the north
+      side's), the rest unmarked mounds, as most of an old yard's are: round-headed, segmental,
+      shouldered, pointed, flat, or a cross (some ring-headed), 0.55 to 1.3 m high (the taller
+      the rarer), set in the ground a third of their whole length, of the land's stone (the
+      humans' grey limestone, buff sandstone, grey granite). Seven in ten face west, two east,
+      one the path. Nearly half lean over the grave as the coffin under it gives way and the
+      ground sinks (back from their faces, for those facing west); a quarter are sunk; a few
+      have fallen (face up or down), or snapped off with their tops lying beside. A footstone at
+      a quarter of the marked graves' feet. Weathered, with what grows on its stone (`LICHENS`):
+      limestone's orange lichens most on its west faces and tops, where the weather and the birds
+      come; sandstone's grey-green all over; granite's grey crusts and yellow-green map lichen,
+      sparser; and green algae on every stone's east and north faces.
     - **Over each grave:** a low mound gone to grass, a mound of earth freshly turned, nothing
       (sunk level), or the grave broken open where its dead have risen: a dark hole, the earth
       dug out of it heaped lumpily on one side, clods rolled off, the broken boards of the
