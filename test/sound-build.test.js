@@ -1,17 +1,19 @@
 // Making the recorded sounds (scripts/build-sounds.js): the sums they're made with
 // (scripts/sounds/dsp.js, as SciPy's, which they were first made and auditioned with), a recipe
 // made into a sound (render.js), and the recipes themselves (weapons.js, spells.js, creatures.js,
-// ambience.js)
+// ambience.js, items.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { butter, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "../scripts/sounds/dsp.js";
 import { LEVEL, prepare, render } from "../scripts/sounds/render.js";
 import * as ambience from "../scripts/sounds/ambience.js";
 import * as creatures from "../scripts/sounds/creatures.js";
+import * as items from "../scripts/sounds/items.js";
 import * as spells from "../scripts/sounds/spells.js";
 import * as weapons from "../scripts/sounds/weapons.js";
 import { ON_DEMAND, RECORDED } from "../client/js/audio/recorded.js";
 import { CATALOG } from "../client/js/audio/catalog.js";
+import { ITEM_SOUNDS } from "../client/js/audio/sound.js";
 
 const tone = (hz, seconds, rate = RATE, level = 0.5) => Float64Array.from({ length: Math.round(seconds * rate) }, (_, n) => level * Math.sin((2 * Math.PI * hz * n) / rate));
 
@@ -114,11 +116,22 @@ describe("a recipe made into a sound (scripts/sounds/render.js)", () => {
         assert.equal(tape.length, 48000);
         assert.ok(Math.abs(peak(tape) + 6) < 0.01, `${peak(tape)} dBFS: asked to be louder, its peak just the ceiling`);
     });
+
+    it("fades a note before it's tuned (as the cues' were), its fades as long as they were before it was slowed", () => {
+        const samples = prepare(recording);
+        const note = (fadedFirst) => render({ layers: [{ from: "a", cut: [0, 4800], rate: 0.5, fadeIn: 10, fadeOut: 10, fadedFirst }], level: null, fadeIn: 0, fadeOut: 0 }, () => samples);
+        const [first, after] = [note(true), note(false)];
+        const energy = (y) => y.slice(0, 480).reduce((sum, value) => sum + value * value, 0);
+
+        assert.equal(first.length, 9600);
+        assert.equal(after.length, 9600);
+        assert.ok(energy(first) < 0.5 * energy(after), `its first 10 ms still fading in (the fade slowed with it): ${(energy(first) / energy(after)).toFixed(2)} of the energy`);
+    });
 });
 
 describe("the recipes (scripts/sounds)", () => {
     it("gives every recipe's sound its recordings, each from a known source, and describes each", () => {
-        for (const area of [weapons, spells, creatures, ambience]) {
+        for (const area of [weapons, spells, creatures, ambience, items]) {
             for (const [name, variants] of Object.entries(area.SOUNDS)) {
                 assert.equal(RECORDED[name]?.length, variants.length, `${name}: npm run build:sounds`);
                 assert.ok(CATALOG[name], `${name} described`);
@@ -135,9 +148,12 @@ describe("the recipes (scripts/sounds)", () => {
             assert.ok(Object.values(area.SOURCES).every((source) => (source.url || source.itch) && ["CC0", "public domain"].includes(source.licence)));
         }
 
-        // (The spells', the creatures' and the ambience's downloaded only once they're wanted; a
-        // cast, and a creature's attack, timed by when it's loudest)
-        assert.deepEqual([...ON_DEMAND].sort(), [...Object.keys(spells.SOUNDS), ...Object.keys(creatures.SOUNDS), ...Object.keys(ambience.SOUNDS)].sort());
+        // (The spells', the creatures', the ambience's and the items' downloaded only once they're
+        // wanted, the interface's and the cues' at the start; a cast, and a creature's attack, timed
+        // by when it's loudest)
+        assert.deepEqual([...ON_DEMAND].sort(), [...Object.keys(spells.SOUNDS), ...Object.keys(creatures.SOUNDS), ...Object.keys(ambience.SOUNDS), ...items.ON_DEMAND].sort());
+        assert.deepEqual([...items.ON_DEMAND].sort(), [...ITEM_SOUNDS].sort(), "the game wants each of the items' as it starts (sound.js ITEM_SOUNDS)");
+        assert.ok(["wheel", "tap", "denied", "slain", "levelUp"].every((name) => RECORDED[name] && !ON_DEMAND.includes(name)), "the interface's and the cues' there from the first tap");
         assert.ok(Object.keys(creatures.SOUNDS).filter((name) => name.endsWith("Attack")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
         assert.ok(Object.keys(spells.SOUNDS).filter((name) => name.startsWith("cast")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
     });

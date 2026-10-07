@@ -3325,12 +3325,47 @@ played at its own volume:
   creak and shutting into a house, a tavern, a smithy or a guild; a heavy one into a keep, a
   temple, a town hall or a watchtower; an iron gate into a ruined keep; a trapdoor down into a
   crypt; none into a cave or the lair, open to the air.
-- **Cues**: a target chosen, an enemy slain (one the player or a follower felled, or one the
-  player fought in the last 30 s; not the folk and soldiers' own fights), falling, waking again,
-  out of breath, the action wheel opening, and a flick refused.
+- **Cues** and the interface, and the player's things in their hands: see below.
 
 They're heard from where they happen: full volume within 4 metres of the player, fading to
 nothing at 34, and panned left or right; at most 24 at once.
+
+**The player's things, the interface and the cues** (`scripts/sounds/items.js`, `audio/handling.js`):
+recorded (all CC0: Freesound's, OpenGameArt's packs, Kenney's, and the Versilian Community Sample
+Library's chimes, harp, glockenspiel and hand bells, the cues in the music's D Dorian), each as
+soft as a light hand on it ("audible, but barely and not distracting"): the interface's 0.15 to
+0.25, the things in hand 0.25 to 0.35, the cues 0.35 to 0.4, all under any blow.
+
+- **Coins and trade**: a purse of coins for gold off a foe, bought or sold at a shop, paid for in
+  talk (ale, a meal, a room, a blessing) or for a hire; coins scooped up taking a sack or a chest's
+  share; a trade with another player done (coins and a chime); a pouch dropped on a table for
+  anything refused for want of gold.
+- **In hand**: picked up (leather creaking), dropped (a bag's thud), thrown away (a knife's thud
+  on a carpet), each from the host's events (`picked`, `dropped`, `discarded`; taken back with
+  Undo). A piece put on or taken off is heard by what it's made of (`handling.js` `wearSound`):
+  cloth, leather, mail or plate, a people's hauberk as its livery has it (an orc's a breastplate,
+  a lizard's a gambeson), a shield slung, a weapon taken up, a ring's or an amulet's chink.
+  Something used (`useSound`): a draught drunk (a vial's pop and two gulps), food eaten, a
+  bandage wound on, a salve's pot opened, a scroll unrolled, a tome opened. The spellbook and the
+  journal opened as a book; the pack's strap unbuckled and buckled, its pages and tabs turned; the
+  world map unfolded. A cleared place's chest: its lock turned and its lid lifted, shut once its
+  share's all taken. A request taken, and signing up at a guild, written with a quill.
+- **The interface**: the action wheel's soft wooden tok opening and turning, a fuller tick as an
+  action's chosen on it; a quick action's quick rattle; a card slid over felt as a talk begins, a
+  tiny tick for each reply; two dull knocks for anything refused, a key's click for a target.
+- **Cues**: two chimes on D for a foe slain (one the player or a follower felled, or one the
+  player fought in the last 30 s; not the folk and soldiers' own fights), three falling for the
+  player or a follower fallen, a rising fifth for waking (and a spell learnt, a place cleared,
+  another player asking to trade or summoning); a harp's run for a new rank (a skill's, among the
+  player's people, in the guilds), a school's next tier or a spell grown; a harp and chimes for a
+  request done; a small hand bell for news of the war near (a raid or an assault coming, a town
+  fallen, an envoy arrived or struck down); a glockenspiel's note for a pin set; and out of
+  breath.
+- **When they're downloaded**: the interface's, the cues' and the coins' with the rest at the
+  start (54 files, 226 KB); the things in hand's (`sound.js` `ITEM_SOUNDS`) wanted once the game
+  starts, after what's heard first. Till a recording's in, the made sound nearest it stands in (a
+  chime for a new rank, coins for a trade done, the made wheel for a choice on it); the recorded
+  wheel, target, refusal and slain cue a little softer than the made ones were.
 
 **The environment** (`ambience.js`, `sound.js` setAmbience): recorded beds looped round and
 round, and calls now and then, each as where the player is makes them (all CC0 or public domain,

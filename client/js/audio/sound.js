@@ -291,7 +291,19 @@ export const RECORDED_ONLY = Object.freeze({
     ...spellsRecorded(),
     ...creaturesRecorded(),
     ...ambienceRecorded(),
+    ...itemsRecorded(),
 });
+
+/**
+ * The items' recorded sounds, downloaded once the game starts (recorded.js ON_DEMAND; sound.js
+ * want): coins picked up, things picked up, dropped and thrown away, put on and taken off, used,
+ * read and opened; the pack, chests, a lock, a quill, a trade, eating.
+ */
+export const ITEM_SOUNDS = Object.freeze(["coinPickup", "pickup", "drop", "discard", "equipCloth", "equipLeather", "equipMail", "equipPlate", "potionCork", "potionDrink", "scroll", "bookOpen", "pageTurn", "mapUnfold", "packOpen", "packClose", "chestOpen", "chestClose", "lockpick", "quill", "tradeDone", "eat"]);
+
+// The recordings of made sounds played softer than the made ones (their volume instead of
+// SOUNDS'): the wheel's tick, a lock, no and a foe slain, gentler recorded
+const RECORDED_VOLUMES = Object.freeze({ wheel: 0.18, lock: 0.25, denied: 0.3, slain: 0.35 });
 
 // The spells' recorded sounds with nothing made (scripts/sounds/spells.js): each school's casts
 // (swelling, as loud as a swing), landings (as loud as a blow) and missiles, Low, Mid and High;
@@ -390,6 +402,48 @@ function ambienceRecorded() {
         gate: { volume: 0.55, instead: "door" },
         trapdoor: { volume: 0.55, instead: "door" },
         stairs: { volume: 0.35 },
+    };
+}
+
+// The items', the interface's and the cues' recorded sounds with nothing made (scripts/sounds/
+// items.js), each as loud as a light hand on it ("audible, but barely, and not distracting"):
+// the interface's softest, a tap; the cues' loudest, below any blow; until they're in, the made
+// sound nearest to them in their place
+function itemsRecorded() {
+    const at = (volume, instead) => ({ volume, ...(instead ? { instead } : {}) });
+
+    return {
+        tap: at(0.15),
+        wheelSelect: at(0.2, "wheel"),
+        talk: at(0.2),
+        quickAction: at(0.25),
+        coinPickup: at(0.25, "coins"),
+        pageTurn: at(0.25),
+        pinSet: at(0.25),
+        quill: at(0.25),
+        pickup: at(0.3),
+        buyDenied: at(0.3, "denied"),
+        newsHeard: at(0.3, "wake"),
+        packOpen: at(0.3),
+        packClose: at(0.3),
+        equipCloth: at(0.3),
+        equipLeather: at(0.3),
+        discard: at(0.3),
+        scroll: at(0.3),
+        bookOpen: at(0.3),
+        mapUnfold: at(0.3),
+        eat: at(0.3),
+        drop: at(0.35),
+        equipMail: at(0.35),
+        equipPlate: at(0.35),
+        potionCork: at(0.35),
+        potionDrink: at(0.35),
+        lockpick: at(0.35),
+        tradeDone: at(0.35, "coins"),
+        chestOpen: at(0.35),
+        chestClose: at(0.35),
+        levelUp: at(0.4, "wake"),
+        questDone: at(0.4, "wake"),
     };
 }
 
@@ -1076,8 +1130,10 @@ export class Sound {
             return null;
         }
 
-        // (A recording's made quieter than a made sound, for its sharper start: played up to match)
-        let gain = volume * (SOUNDS[name] ?? RECORDED_ONLY[name] ?? SOUNDS[RECORDED_ONLY[name]?.instead])?.volume * (buffers === recorded ? LEVEL / RECORDED_LEVEL : 1);
+        // (A recording's made quieter than a made sound, for its sharper start: played up to match;
+        // some softer than the made ones, RECORDED_VOLUMES)
+        const loud = (SOUNDS[name] ?? RECORDED_ONLY[name] ?? SOUNDS[RECORDED_ONLY[name]?.instead])?.volume;
+        let gain = volume * (buffers === recorded ? (RECORDED_VOLUMES[name] ?? loud) * (LEVEL / RECORDED_LEVEL) : loud);
         let pan = 0;
 
         if (at) {

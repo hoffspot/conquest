@@ -29,7 +29,10 @@ export const GROUPS = Object.freeze([
     "Birds",
     "Town and farm",
     "Indoors",
-    "Cues and the interface",
+    "Coins and trade",
+    "In hand",
+    "The interface",
+    "Cues",
 ]);
 
 /** Each sound (a synth.js SOUNDS or sound.js RECORDED_ONLY name): { group, label, about, plays }. */
@@ -314,15 +317,52 @@ export const CATALOG = Object.freeze({
     caveDrips: { group: "Indoors", label: "Drips in a cave", about: "Water dripping in a small cave: Selector's. A 32-second loop.", plays: "In a cave; quieter in a crypt and a ruined keep." },
     lairLoop: { group: "Indoors", label: "The dragon's lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the dragon's lair." },
 
-    // Cues and the interface
-    wheel: { group: "Cues and the interface", label: "Action wheel", about: "A quick swish and a soft note.", plays: "The action wheel opening." },
-    denied: { group: "Cues and the interface", label: "Refused", about: "Two low notes, falling.", plays: "A slice of the wheel that can't be used; anything refused (no gold, too far, on cooldown)." },
-    lock: { group: "Cues and the interface", label: "Target", about: "Two quick rising notes.", plays: "An enemy chosen to fight." },
-    slain: { group: "Cues and the interface", label: "Slain", about: "A rising run of four notes.", plays: "A foe the player or a follower felled, or one the player fought in the last 30 seconds, hitting the ground." },
-    fallen: { group: "Cues and the interface", label: "Fallen", about: "Three falling notes, sombre.", plays: "The player falling." },
-    coins: { group: "Cues and the interface", label: "Coins", about: "A few coins chinking together.", plays: "Gold found on a creature, gold paid or received." },
-    wake: { group: "Cues and the interface", label: "Waking", about: "A gentle rising chime.", plays: "Waking again after falling; a spell learnt; a request granted; a quest done." },
-    breath: { group: "Cues and the interface", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
+    // Coins and trade (scripts/sounds/items.js)
+    coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower." },
+    coinPickup: { group: "Coins and trade", label: "Coins picked up", about: "A few coins chinking together as they're scooped up: SpaceJoe's.", plays: "Taking a sack or a chest's share with gold in it; putting on a ring or an amulet." },
+    tradeDone: { group: "Coins and trade", label: "A trade done", about: "A coin shake, and a hand chime ringing over it (A or D, in the music's key).", plays: "A face-to-face trade with another player agreed and done." },
+    buyDenied: { group: "Coins and trade", label: "Too dear", about: "A coin pouch dropped on a table: a soft, dull thud (Canakinsound's).", plays: "Anything refused for want of gold: a shop's wares, a trade, a room or a hire." },
+
+    // In hand (scripts/sounds/items.js; audio/handling.js says which)
+    pickup: { group: "In hand", label: "Picked up", about: "A leather quiver squeezed: a short creak of leather (Jan Schupke's).", plays: "Something picked up off the ground, found on a foe or taken back after it's thrown away; a weapon taken in hand from the pack." },
+    drop: { group: "In hand", label: "Dropped", about: "A leather bag dropped on the floor: a dull thud (vintage2005's).", plays: "Something dropped on the ground; a creature's spoils left in a sack, or a reward left at the player's feet." },
+    discard: { group: "In hand", label: "Thrown away", about: "A knife dropped on a carpet: a dull thud with a small bounce (Vrymaa's).", plays: "Something thrown away from the pack." },
+    equipCloth: { group: "In hand", label: "Cloth put on", about: "Cloth rustling as it's pulled on (Kenney's).", plays: "A gambeson, trousers, a cloak or a wizard's hat put on or taken off; a bandage wound on." },
+    equipLeather: { group: "In hand", label: "Leather put on", about: "A heavy leather jacket's creak and rustle (Vrymaa's).", plays: "A cap, a jerkin, bracers, gloves, a belt, breeches, boots or a quiver put on or taken off." },
+    equipMail: { group: "In hand", label: "Mail put on", about: "Mail's rings rattling as it's shrugged on (artisticdude's).", plays: "A mail shirt or a hauberk put on or taken off (an elf's or a human's: an orc's is plate, a lizard's cloth)." },
+    equipPlate: { group: "In hand", label: "Plate put on", about: "A steel pot set down on wood: a damped, hollow clank, as a helm or a breastplate is (Vrymaa's: no CC0 recording of real plate armour being handled was found).", plays: "A breastplate, a helm, plated gloves, gauntlets, vambraces, greaves or sabatons put on or taken off." },
+    potionCork: { group: "In hand", label: "A pot uncorked", about: "A small glass vial uncorked: a little pop (Jan Schupke's).", plays: "A burn salve's pot opened." },
+    potionDrink: { group: "In hand", label: "A draught drunk", about: "A vial uncorked, then two gulps (Jan Schupke's pop, Vrymaa's drink).", plays: "Any draught, potion or tankard drunk: healing, stamina, a cure, troll's blood." },
+    eat: { group: "In hand", label: "Eating", about: "Bites of an apple, close (Vrymaa's).", plays: "A hot meal, boar or bear meat or frog's legs eaten." },
+    scroll: { group: "In hand", label: "A scroll unrolled", about: "A scroll unrolling: a long paper crackle (spookymodem's).", plays: "A Scroll of Safety read." },
+    bookOpen: { group: "In hand", label: "A book opened", about: "A heavy old book opened, its cover and pages (j1987's bible).", plays: "The spellbook or the journal opened; a tome read." },
+    pageTurn: { group: "In hand", label: "A page turned", about: "A page riffled over (rubberduck's).", plays: "The pack's pages turned, and its tabs (Gear and Skills, Buy and Sell) changed." },
+    mapUnfold: { group: "In hand", label: "A map unfolded", about: "A map unfolded, and stiff parchment unrolled (Breviceps's and Vrymaa's).", plays: "The world map opened." },
+    packOpen: { group: "In hand", label: "The pack opened", about: "A strap's buckle undone and the leather creaking (Jan Schupke's sword sheath, standing in for a satchel's).", plays: "The pack opened." },
+    packClose: { group: "In hand", label: "The pack closed", about: "The strap buckled again.", plays: "The pack closed." },
+    chestOpen: { group: "In hand", label: "A chest opened", about: "A wooden chest's lid lifted: its latch, then its creak (The_Frisbee_of_Peace's chest and Vrymaa's cupboard).", plays: "A place's chest opening once it's cleared, the player's share in it." },
+    chestClose: { group: "In hand", label: "A chest shut", about: "The lid shut: a thump.", plays: "The last of a chest's share taken." },
+    lockpick: { group: "In hand", label: "A lock turned", about: "A key turned in a lockbox, its bolt drawn (Jan Schupke's).", plays: "A place's chest unlocked as it's cleared, before its lid's lifted." },
+    quill: { group: "In hand", label: "A quill", about: "A sharp point scratching over stiff parchment (Vrymaa's: the CC0 recordings of real quills were too noisy).", plays: "A request taken, written in the journal; signing up at an adventurers' guild." },
+
+    // The interface (scripts/sounds/items.js)
+    wheel: { group: "The interface", label: "Action wheel", about: "A soft wooden tok: a woodblock (the Versilian Community Sample Library's), near F above the treble.", plays: "The action wheel opening, and turned to its other side." },
+    wheelSelect: { group: "The interface", label: "Chosen on the wheel", about: "A fuller wooden tick, small things in a wooden box (Vrymaa's).", plays: "An action chosen on the wheel." },
+    quickAction: { group: "The interface", label: "Quick action", about: "An arrow grabbed from a leather quiver: a quick rattle (Jan Schupke's).", plays: "A quick action used (its button, or keys 1 to 4)." },
+    tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away." },
+    talk: { group: "The interface", label: "Talk", about: "A card slid over felt: a soft, papery swish (Kenney's).", plays: "A talk begun." },
+    denied: { group: "The interface", label: "Refused", about: "Two dull wooden knocks, the second softer: \"tok-tok, no\" (Kenney's).", plays: "A slice of the wheel that can't be used; anything refused but for gold (too far, on cooldown, no room); a request failed." },
+    lock: { group: "The interface", label: "Target", about: "A key turning in a lock: one soft metallic click (Jan Schupke's).", plays: "An enemy chosen to fight." },
+
+    // Cues (scripts/sounds/items.js: the Versilian Community Sample Library's, in the music's D Dorian)
+    slain: { group: "Cues", label: "Slain", about: "Two hand chimes struck together, low on D.", plays: "A foe the player or a follower felled, or one the player fought in the last 30 seconds, hitting the ground." },
+    fallen: { group: "Cues", label: "Fallen", about: "Three hand chimes falling to D, sombre.", plays: "The player falling, or a follower." },
+    wake: { group: "Cues", label: "Waking", about: "Two hand chimes rising a fifth.", plays: "Waking again after falling; a spell learnt from a tome; a place cleared; asked to trade, or summoned, by another player." },
+    levelUp: { group: "Cues", label: "Rising a rank", about: "A quick run up the folk harp, a hand chime on its top note.", plays: "A new rank in a skill, among the player's people or in the guilds; a school of magic come to its next tier; a spell grown stronger." },
+    questDone: { group: "Cues", label: "A quest done", about: "A folk harp's run from D, then two hand chimes ringing.", plays: "A request handed in and done." },
+    newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a raid or an assault coming, a town fallen or a raid driven off, an envoy arrived or struck down." },
+    pinSet: { group: "Cues", label: "A pin set", about: "One soft glockenspiel note.", plays: "A pin put on the world map." },
+    breath: { group: "Cues", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
 });
 
 /** What else the studio can play, not one of SOUNDS: the wind, and the music in each place. */

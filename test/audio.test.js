@@ -8,11 +8,14 @@ import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
+import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
+import { GEAR } from "../client/js/core/gear.js";
+import { ITEMS } from "../client/js/core/progress.js";
 import { DAY, HOUR } from "../client/js/core/daytime.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -575,7 +578,7 @@ describe("playing sounds (sound.js)", () => {
 
             return [...Object.keys(beds), ...Object.keys(calls), ...wants];
         });
-        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath", ...heard, ...Object.keys(PLACES).map(doorOf), "crackle", "churchBell"]);
+        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath", ...heard, ...Object.keys(PLACES).map(doorOf), "crackle", "churchBell", ...ITEM_SOUNDS]);
 
         assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), ["rainLoop", "thunder"]);
     });
@@ -939,6 +942,83 @@ describe("playing sounds (sound.js)", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         assert.equal(sound.music, sound.tracks.tavern);
         assert.deepEqual([sound.tracks.tavern.output.gain.value, sound.tracks.town.output.gain.value, sound.tracks.tavern.filter.frequency.value], [0.4, 0, 650]);
+        sound.close();
+    });
+});
+
+describe("the player's things in their hands, the interface and the cues (handling.js, sound.js)", () => {
+    it("hears a piece put on or taken off by what it's made of: cloth, leather, mail or plate; a shield slung, a weapon taken up, a ring's chink", () => {
+        for (const [id, piece] of Object.entries(GEAR)) {
+            const heard = wearSound({ id });
+
+            assert.ok(heard && RECORDED[heard], `${id}: ${heard}`);
+
+            if (piece.slot === "mainHand") {
+                assert.equal(heard, "pickup", id);
+            } else if (piece.jewel) {
+                assert.equal(heard, "coinPickup", id);
+            } else if (piece.slot === "offHand" && id !== "quiver") {
+                assert.equal(heard, "shieldSling", id);
+            } else {
+                assert.ok(["equipCloth", "equipLeather", "equipMail", "equipPlate"].includes(heard), `${id}: worn, by what it's made of`);
+            }
+        }
+
+        assert.equal(wearSound({ id: "gambeson" }), "equipCloth");
+        assert.equal(wearSound({ id: "jerkin" }), "equipLeather");
+        assert.equal(wearSound({ id: "mail" }), "equipMail");
+        assert.equal(wearSound({ id: "sabatons" }), "equipPlate");
+
+        // (A people's hauberk as their livery has it: an orc's a breastplate, a lizard's a gambeson)
+        assert.equal(wearSound({ id: "hauberk", people: "elf" }), "equipMail");
+        assert.equal(wearSound({ id: "hauberk", people: "orc" }), "equipPlate");
+        assert.equal(wearSound({ id: "hauberk", people: "lizard" }), "equipCloth");
+        assert.equal(wearSound({ id: "potion" }), null, "not worn");
+    });
+
+    it("hears each thing used as what it is: a tome opened, a scroll unrolled, food eaten, a draught drunk", () => {
+        for (const [id, def] of Object.entries(ITEMS)) {
+            const heard = useSound(id);
+
+            assert.equal(Boolean(heard), Boolean(def.use), id);
+            assert.ok(!heard || RECORDED[heard], `${id}: ${heard} recorded`);
+        }
+
+        assert.equal(useSound(Object.keys(ITEMS).find((id) => ITEMS[id].tome)), "bookOpen");
+        assert.equal(useSound("scrollOfSafety"), "scroll");
+        assert.equal(useSound("meal"), "eat");
+        assert.equal(useSound("boarMeat"), "eat");
+        assert.equal(useSound("potion"), "potionDrink");
+        assert.equal(useSound("ale"), "potionDrink");
+        assert.equal(useSound("bandage"), "equipCloth");
+        assert.equal(useSound("sword"), null);
+    });
+
+    it("plays the interface and the cues gently, all under a blow (\"audible, but barely and not distracting\"), the interface the softest; the recorded wheel, lock, no and slain softer than the made", async () => {
+        const interfaces = ["tap", "wheelSelect", "talk", "quickAction"];
+        const cues = ["levelUp", "questDone", "newsHeard", "pinSet", "buyDenied"];
+
+        for (const name of [...interfaces, ...cues, ...ITEM_SOUNDS]) {
+            assert.ok(RECORDED_ONLY[name] && RECORDED[name], name);
+            assert.ok(RECORDED_ONLY[name].volume <= 0.4 && RECORDED_ONLY[name].volume < SOUNDS.slash.volume / 1.5, `${name} at ${RECORDED_ONLY[name].volume}`);
+            assert.equal(RECORDED_ONLY[name].bus ?? "effects", "effects", name);
+        }
+
+        assert.ok(interfaces.every((name) => RECORDED_ONLY[name].volume <= 0.25), "the interface softest");
+        assert.ok(Object.values(RECORDED_ONLY).every(({ volume }) => volume >= RECORDED_ONLY.tap.volume), "a tap softest of all");
+        assert.ok(cues.every((name) => !ON_DEMAND.includes(name)) && ITEM_SOUNDS.every((name) => ON_DEMAND.includes(name)), "the cues there from the start, the items' downloaded as the game starts");
+
+        // (The wheel recorded, softer than made)
+        const { sound, played } = await started();
+        const level = (name) => route(sound, sound.play(name)).gain;
+        const recorded = level("wheel");
+
+        sound.recorded.delete("wheel");
+
+        const made = level("wheel");
+
+        assert.ok(Math.abs(recorded / made - (0.18 / SOUNDS.wheel.volume) * (LEVEL / RECORDED_LEVEL)) < 1e-6, `${recorded} recorded against ${made} made`);
+        assert.ok(played.length > 0);
         sound.close();
     });
 });
