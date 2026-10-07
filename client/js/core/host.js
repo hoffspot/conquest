@@ -1887,7 +1887,7 @@ export class Host {
                 this.ground.delete(id);
             }
 
-            this.#event("picked", { id: player.id, ground: id, bundle: { gold, items: got }, left: left.length });
+            this.#event("picked", { id: player.id, ground: id, bundle: { gold, items: got }, left: left.length, from: dropped.from ?? null });
 
             return left.length ? { ok: true, left: left.length } : OK;
         }

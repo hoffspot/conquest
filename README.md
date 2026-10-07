@@ -496,7 +496,8 @@ client/                 The game (static files served to the browser)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
   sounds/               Recorded sounds, as MP3s: footsteps on each footing, the weapons', armour's
-                        and bodies', the spells', the creatures', the ambience's beds and calls
+                        and bodies', the spells', the creatures', the ambience's beds and calls,
+                        the player's things in hand, the interface and the cues
                         (made by npm run build:sounds from CC0 and public-domain recordings: its
                         recipes in scripts/sounds, their sources in client/js/audio/recorded.js)
   images/icons/         The app's icons
@@ -612,7 +613,9 @@ client/                 The game (static files served to the browser)
                         samples.js are the band's recordings; recorded.js lists the sounds
                         recorded rather than made (client/sounds); sound.js plays it all;
                         ambience.js says what's heard where (beds, calls, a church's bell, doors);
-                        catalog.js describes every sound, for the sound studio
+                        handling.js what the player's things sound like in their hands (put on
+                        by what they're made of, used by what they are); catalog.js describes
+                        every sound, for the sound studio
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
@@ -797,6 +800,14 @@ asset out of this public repository.
   lonemonk, Mystikuum, NachtmahrTV, noisymichael, Nox_Sound, ondondvo, rabban625, richwise,
   Sacha.Julien, scholzn, ScouseMouseJB, Selector, Setuniman, sidequesting, SKrafft, TRP, VMan533,
   Yuval and zembacraftworks; cut and made into MP3s by `scripts/build-sounds.js`.
+- The sounds of the player's things in hand, the interface and the cues: recordings, CC0, from Jan
+  Schupke's Fantasy Accessory and Fantasy Weapons and Apparel libraries, artisticdude's RPG Sound
+  Pack and rubberduck's 80 CC0 RPG SFX on OpenGameArt, Kenney's (RPG Audio, Impact Sounds, Casino
+  Audio, <https://kenney.nl>), the Versilian Community Sample Library's hand chimes, folk harp,
+  glockenspiel, Nepalese hand bells and woodblock (Versilian Studios), and on Freesound by
+  Breviceps, Canakinsound, j1987, SpaceJoe, spookymodem, The_Frisbee_of_Peace, vintage2005 and
+  Vrymaa; cut, layered (the cues' notes tuned a semitone or two) and made into MP3s by
+  `scripts/build-sounds.js`.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).
