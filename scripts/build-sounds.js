@@ -13,6 +13,9 @@
 //   tier, the arcane bolt and hit, and the tome spells, the same way, from Freesound, the VCSL's
 //   percussion, OpenGameArt's packs, lentikula's on itch.io and the National Park Service's
 //   Yellowstone recordings. Downloaded by the game only once they're wanted (ON_DEMAND).
+// - The creatures' (scripts/sounds/creatures.js): each family's call, attack, hurt and death, wings,
+//   fire breath, falls and the player's breath, the same way, from Freesound, OpenGameArt's packs
+//   and the National Park Service's. Downloaded only once they're wanted, too.
 //
 //   npm run build:sounds
 //
@@ -31,6 +34,7 @@ import { MPEGDecoder } from "mpg123-decoder";
 import { loudness } from "../client/js/audio/dsp.js";
 import { decode, fetchSource } from "./sounds/sources.js";
 import { prepare, render } from "./sounds/render.js";
+import * as creatures from "./sounds/creatures.js";
 import * as spells from "./sounds/spells.js";
 import * as weapons from "./sounds/weapons.js";
 
@@ -56,10 +60,10 @@ const FADE_IN = 0.002;
 const FADE_OUT = 0.015;
 
 // The recorded sounds made from recipes (scripts/sounds), by what they are; and those the game
-// downloads only once they're wanted (sound.js want), not at the start: the spells', many, and
-// big once decoded, each heard only by those who cast it or stand near
-const AREAS = { weapons, spells };
-const ON_DEMAND = new Set([spells]);
+// downloads only once they're wanted (sound.js want), not at the start: the spells' and the
+// creatures', many, and big once decoded, each heard only by those who cast it or meet them
+const AREAS = { weapons, spells, creatures };
+const ON_DEMAND = new Set([spells, creatures]);
 
 // The footsteps' recordings, by Freesound id: by Nox_Sound, CC0, each https://freesound.org/s/<id>/
 const RECORDINGS = {
@@ -250,7 +254,10 @@ async function main() {
                 wanted.push(name);
             }
 
-            for (const [k, recipe] of variants.entries()) {
+            for (const [k, variant] of variants.entries()) {
+                // (Under its own, its area's defaults, if it has any: scripts/sounds LAYER, RECIPE)
+                const recipe = { ...area.RECIPE, ...variant, layers: variant.layers.map((layer) => ({ ...area.LAYER, ...layer })) };
+
                 for (const { from, channel = null, highpass = 40 } of recipe.layers) {
                     const key = `${from} ${channel} ${highpass}`;
 
@@ -302,8 +309,8 @@ async function main() {
 //
 // The sounds recorded rather than made, in client/sounds, played instead of synth.js's of the same
 // names once they're downloaded (or, with none made, on their own): footsteps on each footing, the
-// weapons', armour's and bodies', the spells'; all CC0 or public domain, each from the recordings
-// in SOURCES.
+// weapons', armour's and bodies', the spells', the creatures'; all CC0 or public domain, each from
+// the recordings in SOURCES.
 
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};

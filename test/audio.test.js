@@ -8,9 +8,10 @@ import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
+import { CREATURES } from "../client/js/core/creatures.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
@@ -561,8 +562,9 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(spellSounds("curePoison").cast, "castHealingLow", "a friend's or one's own tome spell cast with a healing's swell");
         assert.equal(spellSounds("teleport").land, null, "carried off: heard going and coming");
 
-        // (Every spell sound recorded used)
-        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane"]);
+        // (Every sound downloaded once it's wanted used: the spells', and the creatures' and the
+        // player's breath)
+        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath"]);
 
         assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), []);
     });
@@ -611,6 +613,75 @@ describe("playing sounds (sound.js)", () => {
         sound.landed("resistFire", null);
         assert.equal(played.length, 2);
         assert.ok(Math.abs(route(sound, played[0].source).gain - 0.5 * RECORDED_ONLY.teleportOut.volume * (LEVEL / RECORDED_LEVEL)) < 1e-9);
+        sound.close();
+    });
+
+    it("gives every creature its family's voice, downloaded once it's wanted, and its fall", () => {
+        const families = new Set();
+
+        for (const id of Object.keys(CREATURES)) {
+            const voice = CREATURE_VOICES[id];
+
+            assert.ok(voice, `${id} has a voice`);
+            families.add(voice.family);
+
+            for (const what of ["Attack", "Hurt", "Death"]) {
+                assert.ok(RECORDED_ONLY[`${voice.family}${what}`] && RECORDED[`${voice.family}${what}`], `${id}: ${voice.family}${what}`);
+            }
+
+            // (Its fall a body's thud for its size, a person's fall till it's in; none heard; or as
+            // a person falls)
+            assert.ok(voice.fall === undefined || voice.fall === null || RECORDED_ONLY[voice.fall]?.instead === "fall", `${id}'s fall`);
+            assert.ok(creatureSounds(id).length >= 3 && creatureSounds(id).every((name) => ON_DEMAND.includes(name) && RECORDED_ONLY[name]), id);
+            assert.ok(voice.rate === undefined || (voice.rate > 0.7 && voice.rate < 1.25), `${id}'s pitch`);
+        }
+
+        // (Every family but the men's calls)
+        assert.deepEqual([...families].filter((family) => !RECORDED[`${family}Call`]).sort(), ["human", "humanRough"]);
+        assert.deepEqual(creatureSounds("dragon").filter((name) => !name.startsWith("dragon")), ["deathThudBig", "wingbeat"]);
+        assert.ok(creatureSounds("dragon").includes("dragonBreath") && creatureSounds("magmaSlime").includes("slimeSizzle") && creatureSounds("bats").includes("smallWings"));
+        assert.deepEqual(creatureSounds("nobody"), []);
+    });
+
+    it("voices the wild's creatures: their family's at their own pitch, an attack loudest as it lands, a call heard furthest, what's heard with it, a dragon's own fire", async () => {
+        const { sound, played } = await started();
+
+        await sound.want([...creatureSounds("direWolf"), ...creatureSounds("magmaSlime"), ...creatureSounds("dragon"), ...creatureSounds("bandit")]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // (A dire wolf a wolf's, lower: loudest as its bite lands)
+        played.length = 0;
+        sound.voice("direWolf", "attack", null, { hitAt: 1 });
+
+        const [snarl] = played;
+        const rate = snarl.source.playbackRate.value;
+
+        assert.ok(sound.recorded.get("wolfAttack").includes(snarl.source.buffer));
+        assert.ok(rate >= 0.85 * 0.96 - 1e-9 && rate <= 0.85 * 1.04 + 1e-9, `${rate}`);
+        assert.ok(Math.abs(snarl.when + snarl.source.buffer.peak / rate - 11) < 1e-9, "loudest as it lands");
+
+        // (Its call heard further off than its bite)
+        assert.ok(sound.voice("wolf", "call", { x: 40, z: 0 }));
+        assert.equal(sound.voice("wolf", "attack", { x: 40, z: 0 }), null);
+
+        // (A magma slime's sizzle under its voice, but not its hurt)
+        played.length = 0;
+        sound.voice("magmaSlime", "death", null);
+        assert.equal(played.length, 2);
+        assert.ok(sound.recorded.get("slimeSizzle").includes(played[0].source.buffer) && sound.recorded.get("slimeDeath").includes(played[1].source.buffer));
+        played.length = 0;
+        sound.voice("magmaSlime", "hurt", null);
+        assert.equal(played.length, 1);
+
+        // (A man has no call; none for what has no voice)
+        assert.equal(sound.voice("bandit", "call", null), null);
+        assert.ok(sound.voice("bandit", "hurt", null));
+        assert.equal(sound.voice("nobody", "hurt", null), null);
+
+        // (A dragon's fire its own, not the made fireball)
+        played.length = 0;
+        sound.launch("flame", null);
+        assert.ok(sound.recorded.get("dragonBreath").includes(played[0].source.buffer));
         sound.close();
     });
 

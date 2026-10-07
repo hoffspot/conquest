@@ -1,10 +1,10 @@
 // The game's sound, played with the Web Audio API in three buses, each with its own volume (the
 // sliders in Game options), all turned on or off together (the Sound switch):
 //
-//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps, the weapons',
-//    armour's and bodies' sounds and the spells' recorded, once they're downloaded:
-//    recorded.js), each from where it happens: quieter the further it is from the player, and
-//    to the left or right.
+//  - Sound effects: blows, spells, footsteps, creatures' voices and cues (synth.js; footsteps,
+//    the weapons', armour's and bodies' sounds, the spells' and the creatures' recorded, once
+//    they're downloaded: recorded.js), each from where it happens: quieter the further it is
+//    from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
 //    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
@@ -15,11 +15,11 @@
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
 // recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
-// downloaded meanwhile, but for the spells', each downloaded only once it's wanted (want: those
-// the player can cast, as they come to know them; anyone else's the first time it's heard,
-// what's made playing in its place till then). Browsers only let a page
-// make sound once someone has tapped, clicked or pressed a key on it, so it starts on the first
-// one (unlock()). The music plays from then on, on every screen, the pause menu included;
+// downloaded meanwhile, but for the spells' and the creatures', each downloaded only once it's
+// wanted (want: the spells the player can cast, as they come to know them; a creature's as it's
+// drawn; anyone else's the first time it's heard, what's made playing in its place till then).
+// Browsers only let a page make sound once someone has tapped, clicked or pressed a key on it, so
+// it starts on the first one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
 //
 // The browser's sound can stop on its own: suspended or interrupted (a call, an alarm, another
@@ -145,7 +145,7 @@ const CLEAR = 20000;
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
 const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand" };
-const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "fireball" };
+const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "dragonBreath" };
 
 // The footsteps on each footing (audio/footing.js SURFACES: "grass" → "stepGrass"...)
 const STEPS = Object.fromEntries(SURFACES.map((surface) => [surface, `step${surface[0].toUpperCase()}${surface.slice(1)}`]));
@@ -178,6 +178,77 @@ export const GAITS = Object.freeze({
 });
 
 /**
+ * The wild's creatures' voices (core/creatures.js), each its family's recordings
+ * (scripts/sounds/creatures.js: `${family}Call`, `Attack`, `Hurt` and `Death`; a man's, `human`,
+ * and a rougher man's, `humanRough`, with no call), played `rate` times as fast: a bigger one of
+ * a family slower and lower, a smaller one higher (a dire wolf a wolf's at 0.85). Each falls dead
+ * with a body's thud for its size (`fall`; null: none heard, a slime's, a ghost's, the bats', the
+ * bones of a skeleton and the crash of a treant are in their deaths; none said: as a person
+ * falls, game.js); a dragon's and a wyvern's wings are heard beating in the air (`wings`); a
+ * dragon breathes fire (`fire`); and what's heard under its call, attack and death (`with`): a
+ * magma slime's sizzle, the bats' fluttering. A woman's voice isn't recorded yet: a woman among
+ * the bandits and cultists is silent (game.js).
+ */
+export const CREATURE_VOICES = Object.freeze({
+    rat: { family: "rat", fall: "deathThudSmall" },
+    porcupine: { family: "rat", rate: 0.85, fall: "deathThudSmall" },
+    slime: { family: "slime", fall: null },
+    magmaSlime: { family: "slime", rate: 0.9, fall: null, with: "slimeSizzle" },
+    bats: { family: "bats", fall: null, with: "smallWings" },
+    wolf: { family: "wolf", fall: "deathThudMid" },
+    direWolf: { family: "wolf", rate: 0.85, fall: "deathThudMid" },
+    blackShuck: { family: "wolf", rate: 0.75, fall: "deathThudMid" },
+    hyena: { family: "wolf", rate: 1.1, fall: "deathThudMid" },
+    boar: { family: "boar", fall: "deathThudMid" },
+    rockTusker: { family: "boar", rate: 0.8, fall: "deathThudBig" },
+    snake: { family: "snake", fall: "deathThudSmall" },
+    bear: { family: "bear", fall: "deathThudBig" },
+    puma: { family: "bigCat", fall: "deathThudMid" },
+    shadowStalker: { family: "bigCat", rate: 0.85, fall: "deathThudMid" },
+    caveSpider: { family: "spider", fall: "deathThudSmall" },
+    scorpion: { family: "spider", rate: 0.85, fall: "deathThudSmall" },
+    bogFrog: { family: "frog", fall: "deathThudSmall" },
+    crocodile: { family: "croc", fall: "deathThudBig" },
+    wyvern: { family: "dragon", rate: 1.15, fall: "deathThudBig", wings: "wingbeat" },
+    dragon: { family: "dragon", fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
+    treant: { family: "treant", fall: null },
+    wisp: { family: "ghost", rate: 1.2, fall: null },
+    ghost: { family: "ghost", fall: null },
+    wraith: { family: "ghost", rate: 0.85, fall: null },
+    skeleton: { family: "skeleton", fall: null },
+    wightLord: { family: "wight" },
+    goblin: { family: "goblin" },
+    boggart: { family: "goblin", rate: 0.9 },
+    troll: { family: "troll" },
+    ogre: { family: "troll", rate: 1.05 },
+    frostTroll: { family: "troll", rate: 0.95 },
+    bandit: { family: "human" },
+    cultist: { family: "human", rate: 1.05 },
+    banditChief: { family: "humanRough" },
+});
+
+// What a creature's voice is heard doing, and how loud (as synth.js's `volume`): calling (heard
+// further off, to CALL_FAR metres), attacking, hurt and dying; and the families heard louder,
+// their voices mostly low (a phone's speaker plays little under 200 Hz)
+const UTTERANCES = { call: 0.7, attack: 0.65, hurt: 0.55, death: 0.7 };
+const CALL_FAR = 50;
+const DEEP = { dragon: 1.4, bear: 1.25, troll: 1.15 };
+
+// A family's sound for what it's doing ("wolf", "call" → "wolfCall")
+const uttered = (family, what) => `${family}${what[0].toUpperCase()}${what.slice(1)}`;
+
+/** Every recorded sound a creature (CREATURE_VOICES) may make, to want them when it's drawn. */
+export function creatureSounds(creature) {
+    const voice = CREATURE_VOICES[creature];
+
+    if (!voice) {
+        return [];
+    }
+
+    return [...Object.keys(UTTERANCES).map((what) => uttered(voice.family, what)), voice.with, voice.fall, voice.wings, voice.fire].filter((name) => name && RECORDED[name]);
+}
+
+/**
  * The recorded sounds with nothing made in their place (recorded.js): how loud each is played (as
  * synth.js's `volume`), and the made sound played `instead` until its recordings are in (none:
  * nothing, till then).
@@ -198,6 +269,7 @@ export const RECORDED_ONLY = Object.freeze({
     fallArmoured: { volume: 0.85, instead: "fall" },
     dropWeapon: { volume: 0.5 },
     ...spellsRecorded(),
+    ...creaturesRecorded(),
 });
 
 // The spells' recorded sounds with nothing made (scripts/sounds/spells.js): each school's casts
@@ -237,6 +309,33 @@ function spellsRecorded() {
         lightSpell: { volume: 0.4 },
         fizzle: { volume: 0.45 },
         spellCircle: { volume: 0.5 },
+    };
+}
+
+// The creatures' recorded sounds with nothing made (scripts/sounds/creatures.js): each family's
+// call, attack, hurt and death (UTTERANCES); a magma slime's sizzle, a dragon's fire (the made
+// fireball's in its place till it's in), wings, and bodies falling by their size (a person's fall
+// till they're in)
+function creaturesRecorded() {
+    const each = {};
+
+    for (const family of new Set(Object.values(CREATURE_VOICES).map(({ family }) => family))) {
+        for (const [what, volume] of Object.entries(UTTERANCES)) {
+            if (RECORDED[uttered(family, what)]) {
+                each[uttered(family, what)] = { volume: volume * (DEEP[family] ?? 1) };
+            }
+        }
+    }
+
+    return {
+        ...each,
+        slimeSizzle: { volume: 0.4 },
+        dragonBreath: { volume: 0.75, instead: "fireball" },
+        wingbeat: { volume: 0.6 },
+        smallWings: { volume: 0.4 },
+        deathThudSmall: { volume: 0.6, instead: "fall" },
+        deathThudMid: { volume: 0.75, instead: "fall" },
+        deathThudBig: { volume: 0.9, instead: "fall" },
     };
 }
 
@@ -1044,6 +1143,29 @@ export class Sound {
         if (mine || to) {
             this.play("teleportIn", { at: mine ? null : to, delay: ARRIVED });
         }
+    }
+
+    /**
+     * One of the wild's creatures (CREATURE_VOICES) heard from `at`: calling (`what` "call": it's
+     * seen someone to go after, or it's about its business), attacking ("attack", loudest `hitAt`
+     * seconds from now, as its blow lands), hurt ("hurt") or dying ("death"), `delay` seconds
+     * from now, as its family sounds at its own pitch; with what's heard with it (a magma slime's
+     * sizzle, the bats' fluttering: under all but its hurt). Returns its source, or null if it has
+     * no such voice.
+     */
+    voice(creature, what, at, { hitAt = null, delay = 0 } = {}) {
+        const voice = CREATURE_VOICES[creature];
+        const name = voice ? uttered(voice.family, what) : null;
+
+        if (!RECORDED_ONLY[name]) {
+            return null;
+        }
+
+        if (voice.with && what !== "hurt") {
+            this.play(voice.with, { at, delay });
+        }
+
+        return this.play(name, { at, rate: voice.rate ?? 1, delay, peakAt: hitAt, far: what === "call" ? CALL_FAR : FAR });
     }
 
     /**
