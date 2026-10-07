@@ -764,6 +764,18 @@ asset out of this public repository.
   rucisko, TheLittleCrow, timbreknight, vero.marengere and wubitog; and the National Park
   Service's Yellowstone sound library (public domain); cut, layered and made into MP3s by
   `scripts/build-sounds.js`.
+- The creatures' sounds: recordings, CC0 or public domain, from the National Park Service
+  (Yellowstone's sound library, some by Dan Bergum and Jennifer Jerrett, and its Sound Gallery:
+  wolves, grizzlies, bison, a pig frog), the U.S. Fish and Wildlife Service's
+  bear growls (via AntumDeluge on OpenGameArt), OpenGameArt's packs by qubodup, AntumDeluge,
+  artisticdude and rubberduck, and on Freesound by 2create, ale-batec, aphexx_, betchkal,
+  Breviceps, coelhoigor, csaszi, D.jones, elynch0901, felix.blume, florianreichelt, Garuda1982,
+  geoneo0, GJ55GB, Halgrimm, hnhnh, JesterWhoo, jmdh, Kinoton, Kodack, Lashim, leonelmail,
+  MrFossy, myfreesoundaccount1998, nicotep, Nox_Sound, ozymandias37, qubodup, rubberduck9999,
+  Sadiquecat, samararaine, schreibsel, sinewave1kHz, SirBedlam, SnowFightStudios, SpliceSound,
+  Soundscape_Leuphana, spookymodem, TheKingOfGeeks360, tonsil5, topklang, TRP, unfa,
+  Wigglesworth and Zabuhailo; cut, layered, slowed or sped and made into MP3s by
+  `scripts/build-sounds.js`.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).

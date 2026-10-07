@@ -1,10 +1,11 @@
 // Making the recorded sounds (scripts/build-sounds.js): the sums they're made with
 // (scripts/sounds/dsp.js, as SciPy's, which they were first made and auditioned with), a recipe
-// made into a sound (render.js), and the recipes themselves (weapons.js, spells.js)
+// made into a sound (render.js), and the recipes themselves (weapons.js, spells.js, creatures.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { butter, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "../scripts/sounds/dsp.js";
 import { LEVEL, prepare, render } from "../scripts/sounds/render.js";
+import * as creatures from "../scripts/sounds/creatures.js";
 import * as spells from "../scripts/sounds/spells.js";
 import * as weapons from "../scripts/sounds/weapons.js";
 import { ON_DEMAND, RECORDED } from "../client/js/audio/recorded.js";
@@ -87,11 +88,18 @@ describe("a recipe made into a sound (scripts/sounds/render.js)", () => {
         // (Swelling: quieter at its start than its end)
         assert.ok(rms30(slow.slice(2400, 9600)) < rms30(slow.slice(-9600, -2400)) - 10);
     });
+    it("plays a layer as a tape is (slowed first, then filtered, the cut alone), and levels it to the recipe's own ceiling", () => {
+        const samples = prepare(recording);
+        const tape = render({ layers: [{ from: "a", cut: [0, 24000], rate: 0.5, after: true, order: 4, hp: 100, fadeIn: 0, fadeOut: 0 }], level: 0, ceiling: -6 }, () => samples);
+
+        assert.equal(tape.length, 48000);
+        assert.ok(Math.abs(peak(tape) + 6) < 0.01, `${peak(tape)} dBFS: asked to be louder, its peak just the ceiling`);
+    });
 });
 
 describe("the recipes (scripts/sounds)", () => {
     it("gives every recipe's sound its recordings, each from a known source, and describes each", () => {
-        for (const area of [weapons, spells]) {
+        for (const area of [weapons, spells, creatures]) {
             for (const [name, variants] of Object.entries(area.SOUNDS)) {
                 assert.equal(RECORDED[name]?.length, variants.length, `${name}: npm run build:sounds`);
                 assert.ok(CATALOG[name], `${name} described`);
@@ -108,8 +116,10 @@ describe("the recipes (scripts/sounds)", () => {
             assert.ok(Object.values(area.SOURCES).every((source) => (source.url || source.itch) && ["CC0", "public domain"].includes(source.licence)));
         }
 
-        // (The spells' downloaded only once they're wanted; a cast timed by when it's loudest)
-        assert.deepEqual([...ON_DEMAND].sort(), Object.keys(spells.SOUNDS).sort());
+        // (The spells' and the creatures' downloaded only once they're wanted; a cast, and a
+        // creature's attack, timed by when it's loudest)
+        assert.deepEqual([...ON_DEMAND].sort(), [...Object.keys(spells.SOUNDS), ...Object.keys(creatures.SOUNDS)].sort());
+        assert.ok(Object.keys(creatures.SOUNDS).filter((name) => name.endsWith("Attack")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
         assert.ok(Object.keys(spells.SOUNDS).filter((name) => name.startsWith("cast")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
     });
 });
