@@ -5,7 +5,13 @@
 //    the weapons', armour's and bodies' sounds, the spells' and the creatures' recorded, once
 //    they're downloaded: recorded.js), each from where it happens: quieter the further it is
 //    from the player, and to the left or right.
-//  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
+//  - The environment: the ambience (ambience.js, setAmbience), recorded: beds looped round and
+//    round, each as loud as where the player is makes it (a land's wind, water near, the night's
+//    crickets, a town's bustle; indoors, a taproom's crowd, a temple's hush, a cave's drips),
+//    each copy crossfaded into the next; and calls now and then from round about (birds by the
+//    time of day, a town's dogs, a farm's cattle). Downloaded as they're wanted where the player
+//    is, and let go of a minute after they're last heard. Till they're in, the made wind blows
+//    and a made bird sings; and leaves rustle in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
 //    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
 //    time, so it loops without a seam; with a hall's reverb. Going into the tavern, the town's
@@ -111,12 +117,26 @@ const DOWNLOADS = 6;
 // Sounds wanted later downloaded this many at a time (not to hold up what else is downloading)
 const WANTED_DOWNLOADS = 3;
 
-// How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
-// to), and how near a tree has to be to be heard (metres)
+// How loud the made wind is; how long between leaves rustling (seconds, from and to), and how
+// near a tree has to be to be heard (metres)
 const WIND = 0.2;
-const BIRDS = [4, 14];
 const LEAVES = [2.5, 7];
 const TREES_HEARD = 22;
+
+// The ambience's beds (setAmbience): each copy of a bed's recording set going this far ahead of
+// when it's to play (seconds); a bed fading to a new loudness over this long; one silent this long
+// let go of (its recording forgotten, downloaded again should it be wanted again)
+const BED_AHEAD = 1.5;
+const BED_FADE = 2;
+const BED_KEPT = 60;
+
+// One copy of a bed fading into the next: as one falls (cos), the other rises (sin), together as
+// loud as either (their sound unrelated, as a bed's is from one moment to the next)
+const RISE = Float32Array.from({ length: 33 }, (_, k) => Math.sin((Math.PI / 2) * (k / 32)));
+const FALL = RISE.slice().reverse();
+
+// The recorded winds, standing in for the made one once they're in
+const WINDS = ["windOpen", "windHigh", "windForest"];
 
 // How quickly it fades in and out (seconds)
 const FADE = 0.08;
@@ -270,6 +290,7 @@ export const RECORDED_ONLY = Object.freeze({
     dropWeapon: { volume: 0.5 },
     ...spellsRecorded(),
     ...creaturesRecorded(),
+    ...ambienceRecorded(),
 });
 
 // The spells' recorded sounds with nothing made (scripts/sounds/spells.js): each school's casts
@@ -336,6 +357,39 @@ function creaturesRecorded() {
         deathThudSmall: { volume: 0.6, instead: "fall" },
         deathThudMid: { volume: 0.75, instead: "fall" },
         deathThudBig: { volume: 0.9, instead: "fall" },
+    };
+}
+
+// The ambience's recorded sounds with nothing made (scripts/sounds/ambience.js): on the
+// environment's bus, its beds (each looped by setAmbience, as loud at 1 as the made wind: a bed's
+// recording is made about 10 dB quieter than a one-shot's), the world's calls (birds by day and
+// at dawn, a made bird's chirp in their place till they're in), a church's bell and thunder;
+// among the sound effects, a heavy door, an iron gate, a trapdoor and stairs creaking
+function ambienceRecorded() {
+    const world = (volume, instead) => ({ volume, bus: "environment", ...(instead ? { instead } : {}) });
+    const beds = Object.keys(RECORDED).filter((name) => RECORDED[name][0].loop);
+
+    return {
+        ...Object.fromEntries(beds.map((name) => [name, world(0.3)])),
+        birdDay: world(0.4, "bird"),
+        birdDawn: world(0.35, "bird"),
+        gull: world(0.45),
+        crow: world(0.4),
+        owl: world(0.4),
+        creakTree: world(0.35),
+        dogBark: world(0.45),
+        rooster: world(0.4),
+        cowMoo: world(0.45),
+        sheepBleat: world(0.4),
+        horseWhinny: world(0.4),
+        chickens: world(0.35),
+        churchBell: world(0.6),
+        distantHammer: world(0.35),
+        thunder: world(0.7),
+        doorHeavy: { volume: 0.6, instead: "door" },
+        gate: { volume: 0.55, instead: "door" },
+        trapdoor: { volume: 0.55, instead: "door" },
+        stairs: { volume: 0.35 },
     };
 }
 
@@ -500,8 +554,17 @@ export class Sound {
         this.ambient = false;
         this.wind = null;
         this.trees = [];
-        this.nextBird = BIRDS[0];
         this.nextLeaves = LEAVES[0];
+
+        /**
+         * The ambience (setAmbience): its beds (name → { gain, level (its GainNode), next (when
+         * its next copy starts, the browser's time), copies ([source]), quiet (since when it's
+         * been silent) }); its calls (name → ambience.js's), and when each is next heard
+         * (name → seconds from now).
+         */
+        this.beds = new Map();
+        this.calls = {};
+        this.due = new Map();
         this.hearth = null;
         this.nextCrackle = 0;
         this.music = null;
@@ -593,6 +656,7 @@ export class Sound {
     tick() {
         this.#watch();
         this.scheduleMusic();
+        this.#tendBeds();
     }
 
     // Make the browser's sound: its context, the mix (buses, compressor, limiter), the music's
@@ -737,6 +801,10 @@ export class Sound {
 
         this.context = null;
         this.wind = null;
+
+        for (const bed of this.beds.values()) {
+            Object.assign(bed, { level: null, next: null, copies: [] });
+        }
 
         try {
             old?.close?.()?.catch?.(() => {});
@@ -888,7 +956,48 @@ export class Sound {
         this.hearth = at;
     }
 
-    /** Let the wind blow, birds sing and leaves rustle (in the game), or not. */
+    /**
+     * What the ambience is where the player is (ambience.js ambienceOf): { beds ({ name: how
+     * loud }: each looped, fading to it; any not named fading out), calls ({ name: ambience.js
+     * CALLS' with how loud, how often and where from }), wants (more to download: the folk at
+     * work's sounds) }. Each downloaded now if it isn't yet.
+     */
+    setAmbience({ beds = {}, calls = {}, wants = [] } = {}) {
+        // (The beds first, on their own: not to wait behind the calls' many short recordings)
+        this.want(Object.keys(beds));
+        this.want([...Object.keys(calls), ...wants]);
+
+        for (const [name, bed] of this.beds) {
+            if (!(name in beds)) {
+                bed.gain = 0;
+            }
+        }
+
+        for (const [name, gain] of Object.entries(beds)) {
+            const bed = this.beds.get(name) ?? { gain: 0, level: null, next: null, copies: [], quiet: null };
+
+            bed.gain = gain;
+            this.beds.set(name, bed);
+        }
+
+        // (A call newly heard: first heard somewhere in its usual wait, not all at once)
+        for (const [name, { every, often }] of Object.entries(calls)) {
+            if (!this.due.has(name)) {
+                this.due.set(name, (Math.random() * every[1]) / often);
+            }
+        }
+
+        for (const name of this.due.keys()) {
+            if (!calls[name]) {
+                this.due.delete(name);
+            }
+        }
+
+        this.calls = calls;
+        this.#tendBeds();
+    }
+
+    /** Let the wind blow and leaves rustle (in the game, out of doors), or not. */
     setAmbient(on) {
         this.ambient = on;
 
@@ -900,7 +1009,7 @@ export class Sound {
         }
     }
 
-    /** Birds and leaves, and the hearth's crackling, now and then. Call every frame. */
+    /** The ambience's calls and the leaves, and the hearth's crackling, now and then. Call every frame. */
     update(dt) {
         if (this.paused || !this.playing) {
             return;
@@ -915,17 +1024,19 @@ export class Sound {
             }
         }
 
+        for (const [name, left] of this.due) {
+            if (left > dt) {
+                this.due.set(name, left - dt);
+            } else {
+                this.#call(name, this.calls[name]);
+            }
+        }
+
         if (!this.ambient) {
             return;
         }
 
-        this.nextBird -= dt;
         this.nextLeaves -= dt;
-
-        if (this.nextBird <= 0) {
-            this.nextBird = BIRDS[0] + Math.random() * (BIRDS[1] - BIRDS[0]);
-            this.play("bird", { at: { x: this.listener.x + (Math.random() - 0.5) * 40, z: this.listener.z + (Math.random() - 0.5) * 40 }, volume: 0.6 + Math.random() * 0.4, rate: 0.9 + Math.random() * 0.2 });
-        }
 
         if (this.nextLeaves <= 0) {
             this.nextLeaves = LEAVES[0] + Math.random() * (LEAVES[1] - LEAVES[0]);
@@ -942,10 +1053,11 @@ export class Sound {
      * Play a sound (a SOUNDS name) from a point in the world ({ x, z } metres; null for
      * everywhere), `volume` times its own, starting `delay` seconds from now, `rate` times as fast
      * (higher), heard no further off than `far` metres; its `variant` (by default any but the last
-     * played), and its `made` one rather than its recording (the sound studio's). Returns its
+     * played), its `made` one rather than its recording (the sound studio's), and through a
+     * low-pass filter at `muffle` Hz, if asked (heard from far off). Returns its
      * source node, or null if it isn't played (off, too far, too many).
      */
-    play(name, { at = null, volume = 1, delay = 0, peakAt = null, rate = 1, far = FAR, variant = null, made = false } = {}) {
+    play(name, { at = null, volume = 1, delay = 0, peakAt = null, rate = 1, far = FAR, variant = null, made = false, muffle = null } = {}) {
         const context = this.context;
         const recorded = made ? null : this.recorded.get(name);
 
@@ -953,7 +1065,8 @@ export class Sound {
         if (!made && LATER.has(name)) {
             this.want(name);
         }
-        const buffers = recorded?.length > 1 ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
+        // (Recorded once two of its recordings are in, or its only one)
+        const buffers = recorded?.length >= Math.min(2, RECORDED[name]?.length ?? 2) ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
@@ -981,7 +1094,7 @@ export class Sound {
 
         const source = context.createBufferSource();
         const level = context.createGain();
-        const bus = this.buses[SOUNDS[name]?.bus ?? "effects"];
+        const bus = this.buses[(SOUNDS[name] ?? RECORDED_ONLY[name])?.bus ?? "effects"];
 
         // (Any variant but the one played last: the same footstep or blow twice running sounds
         // mechanical)
@@ -995,13 +1108,24 @@ export class Sound {
         level.gain.value = gain;
         source.connect(level);
 
+        // (Muffled, if asked: heard through the air from far off, or through a wall)
+        let out = level;
+
+        if (muffle) {
+            const filter = context.createBiquadFilter();
+
+            filter.type = "lowpass";
+            filter.frequency.value = muffle;
+            out = level.connect(filter);
+        }
+
         if (pan && context.createStereoPanner) {
             const panner = context.createStereoPanner();
 
             panner.pan.value = pan;
-            level.connect(panner).connect(bus);
+            out.connect(panner).connect(bus);
         } else {
-            level.connect(bus);
+            out.connect(bus);
         }
 
         // (Timed to be loudest `peakAt` seconds from now, if asked: a recording's when it's said
@@ -1282,6 +1406,144 @@ export class Sound {
         }
     }
 
+    // A call heard now (ambience.js CALLS): from a tree near, if it's a tree's, or from where it's
+    // said to be, or from somewhere round the player; and when it's next heard
+    #call(name, { every, often, volume, away, tree, at, heard, muffle = null }) {
+        let from = at;
+
+        if (tree) {
+            const near = this.trees.filter(({ x, z }) => Math.hypot(x - this.listener.x, z - this.listener.z) < heard);
+
+            from = near[Math.floor(Math.random() * near.length)];
+        } else if (!from) {
+            const angle = Math.random() * 2 * Math.PI;
+            const far = away[0] + Math.random() * (away[1] - away[0]);
+
+            from = { x: this.listener.x + far * Math.cos(angle), z: this.listener.z + far * Math.sin(angle) };
+        }
+
+        this.due.set(name, (every[0] + Math.random() * (every[1] - every[0])) / often);
+
+        if (from) {
+            this.play(name, { at: from, volume: volume * (0.75 + Math.random() * 0.25), rate: 0.94 + Math.random() * 0.12, far: heard, muffle });
+        }
+    }
+
+    // The beds: each fading to its loudness; the next copy of each sounding one set going a little
+    // ahead, to fade in as the last fades out (its recording's crossfade longer than its loop);
+    // those silent stopped, and let go of after a while; the made wind blowing until a recorded
+    // one is. Called with every tick, and whenever the ambience changes.
+    #tendBeds() {
+        const context = this.context;
+
+        if (!context) {
+            return;
+        }
+
+        const now = context.currentTime;
+        let blowing = false;
+
+        for (const [name, bed] of this.beds) {
+            const buffer = this.recorded.get(name)?.[0];
+            const loop = RECORDED[name]?.[0]?.loop;
+
+            if (!bed.level && buffer && bed.gain > 0) {
+                bed.level = context.createGain();
+                bed.level.gain.value = 0;
+                bed.level.connect(this.buses.environment);
+                bed.target = 0;
+            }
+
+            if (!bed.level) {
+                // (Silent so long: forgotten)
+                bed.quiet = bed.gain > 0 ? null : (bed.quiet ?? now);
+
+                if (bed.quiet !== null && now - bed.quiet > BED_KEPT) {
+                    this.#letGo(name);
+                }
+
+                continue;
+            }
+
+            const gain = bed.gain * RECORDED_ONLY[name].volume * (LEVEL / RECORDED_LEVEL);
+
+            if (bed.target !== gain) {
+                bed.target = gain;
+                bed.level.gain.cancelScheduledValues(now);
+                bed.level.gain.setValueAtTime(bed.level.gain.value, now);
+                bed.level.gain.linearRampToValueAtTime(gain, now + BED_FADE);
+                bed.quiet = gain > 0 ? null : now + BED_FADE;
+            }
+
+            if (gain > 0 && (bed.next === null || bed.next - now < BED_AHEAD)) {
+                this.#copy(bed, buffer, loop, Math.max(bed.next ?? now, now + 0.02), bed.next === null);
+            }
+
+            blowing ||= WINDS.includes(name) && gain > 0;
+
+            // (Faded out: stopped; and in a while, its recording let go of)
+            if (gain === 0 && bed.quiet !== null && now > bed.quiet) {
+                for (const source of bed.copies) {
+                    try {
+                        source.stop();
+                    } catch {
+                        // (Ended already)
+                    }
+                }
+
+                bed.level.disconnect();
+                Object.assign(bed, { level: null, next: null, copies: [] });
+            }
+        }
+
+        // (The made wind until a recorded one's blowing)
+        if (this.wind) {
+            const to = blowing ? 0 : WIND;
+
+            if (this.wind.target !== to) {
+                this.wind.target = to;
+                this.wind.level.gain.cancelScheduledValues(now);
+                this.wind.level.gain.setValueAtTime(this.wind.level.gain.value, now);
+                this.wind.level.gain.linearRampToValueAtTime(to, now + BED_FADE);
+            }
+        }
+    }
+
+    // A copy of a bed's recording, starting `at` (the browser's time): fading in over its loop's
+    // crossfade (or at once, the first: the bed's own level fades it in), playing its loop's
+    // length, fading out over the crossfade as the next copy fades in
+    #copy(bed, buffer, [length, crossfade], at, first) {
+        const source = this.context.createBufferSource();
+        const envelope = this.context.createGain();
+
+        source.buffer = buffer;
+
+        if (!first) {
+            envelope.gain.setValueCurveAtTime(RISE, at, crossfade);
+        }
+
+        envelope.gain.setValueCurveAtTime(FALL, at + length, crossfade);
+        source.connect(envelope).connect(bed.level);
+        source.start(at);
+        source.stop(at + length + crossfade);
+        source.addEventListener("ended", () => {
+            source.disconnect();
+            envelope.disconnect();
+            bed.copies = bed.copies.filter((copy) => copy !== source);
+        });
+        bed.copies.push(source);
+        bed.next = at + length;
+    }
+
+    // A bed not heard for a while forgotten: its recording dropped (big, decoded), to be
+    // downloaded again should it be wanted again
+    #letGo(name) {
+        this.beds.delete(name);
+        this.recorded.delete(name);
+        this.decoded.delete(name);
+        this.wanted.delete(name);
+    }
+
     #startWind() {
         const buffer = this.buffers.get("wind")?.[0];
 
@@ -1297,7 +1559,8 @@ export class Sound {
         level.gain.value = WIND;
         source.connect(level).connect(this.buses.environment);
         source.start();
-        this.wind = { source, level };
+        this.wind = { source, level, target: WIND };
+        this.#tendBeds();
     }
 
     // The music's tracks, one for each score: a channel for each instrument it plays (its level

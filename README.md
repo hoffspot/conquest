@@ -492,9 +492,9 @@ client/                 The game (static files served to the browser)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
   sounds/               Recorded sounds, as MP3s: footsteps on each footing, the weapons', armour's
-                        and bodies', the spells' (made by npm run build:sounds from CC0 and
-                        public-domain recordings: its recipes in scripts/sounds, their sources
-                        in client/js/audio/recorded.js)
+                        and bodies', the spells', the creatures', the ambience's beds and calls
+                        (made by npm run build:sounds from CC0 and public-domain recordings: its
+                        recipes in scripts/sounds, their sources in client/js/audio/recorded.js)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
@@ -520,6 +520,8 @@ client/                 The game (static files served to the browser)
     game.js             Playing: the world, the battle, the characters, taps and the camera
     camera.js           How the camera follows the player from behind, and turns and tilts by drag
     doors.js            The doors and stairs to tap, and the green glow round them
+    surroundings.js     What's round the player out in the world, for what's heard there: the
+                        land, the waters near, a settlement, its market and smithy, fires
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheels: hold, flick, two sides, cooldowns; icons.js draws
                         their icons, and every item's; wheelsetup.js sets what's on them
@@ -604,6 +606,7 @@ client/                 The game (static files served to the browser)
                         the town's music and tavern.js the tavern's; instruments.js and
                         samples.js are the band's recordings; recorded.js lists the sounds
                         recorded rather than made (client/sounds); sound.js plays it all;
+                        ambience.js says what's heard where (beds, calls, a church's bell, doors);
                         catalog.js describes every sound, for the sound studio
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
@@ -780,6 +783,15 @@ asset out of this public repository.
   Soundscape_Leuphana, spookymodem, TheKingOfGeeks360, tonsil5, topklang, TRP, unfa,
   Wigglesworth and Zabuhailo; cut, layered, slowed or sped and made into MP3s by
   `scripts/build-sounds.js`.
+- The ambience's sounds: recordings, CC0 or public domain, from the National Park Service
+  (Yellowstone's dawn chorus by Jennifer Jerrett, boreal chorus frogs by Neal Herbert, the Dragon's
+  Mouth spring by David Restivo), the Versilian Community Sample Library's anvil (Versilian
+  Studios), and on Freesound by 3bagbrew, Auxide_Audio, bruno.auzet, bushtobazaar, Canardo55,
+  composingatnight, Denis Chapon, dontwanttobehere, evsecrets, felix.blume, Fission9,
+  florianreichelt, Gerent, jmbphilmes, keweldog, Kinoton, kyles, LampEight, launemax, ldezem,
+  lonemonk, Mystikuum, NachtmahrTV, noisymichael, Nox_Sound, ondondvo, rabban625, richwise,
+  Sacha.Julien, scholzn, ScouseMouseJB, Selector, Setuniman, sidequesting, SKrafft, TRP, VMan533,
+  Yuval and zembacraftworks; cut and made into MP3s by `scripts/build-sounds.js`.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).

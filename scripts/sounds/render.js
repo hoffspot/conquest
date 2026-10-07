@@ -15,7 +15,8 @@
 // 3. The layers summed; `trim` seconds taken off the front, cut to `cap` seconds; faded in
 //    (`fadeIn`: 2 ms unless said, 0 for a sound of one layer already faded) and out (`fadeOut`);
 //    and made `level` dBFS loud by its loudest 30 ms (−20 unless said), less if its peak would
-//    pass −1 dBFS (or the recipe's own `ceiling`, its peak then just that).
+//    pass −1 dBFS (or the recipe's own `ceiling`, its peak then just that); or, `level` null, left
+//    as its layers' gains make it.
 
 import { butter, fade, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "./dsp.js";
 
@@ -27,7 +28,10 @@ export const LEVEL = -20;
 
 const ms = (value) => Math.round((value * RATE) / 1000);
 
-/** A recording's samples ({ channels, rate }) mono at 48 kHz, its rumble taken away. */
+/**
+ * A recording's samples ({ channels, rate }) mono at 48 kHz, its rumble taken away (under
+ * `highpass` Hz; or under each of a list in turn, a hum's taken away too).
+ */
 export function prepare({ channels, rate }, { channel = null, highpass = 40 } = {}) {
     const length = channels[0].length;
     const mono = new Float64Array(length);
@@ -46,7 +50,14 @@ export function prepare({ channels, rate }, { channel = null, highpass = 40 } = 
         }
     }
 
-    return withoutRumble(rate === RATE ? mono : resamplePoly(mono, ...limitDenominator(RATE / rate, 2000)), highpass);
+    const [first, ...more] = [highpass].flat();
+    let y = withoutRumble(rate === RATE ? mono : resamplePoly(mono, ...limitDenominator(RATE / rate, 2000)), first);
+
+    for (const frequency of more) {
+        y = sosfiltfilt(butter(4, frequency, "highpass"), y);
+    }
+
+    return y;
 }
 
 // One layer, shaped
@@ -141,9 +152,10 @@ export function render({ layers, trim = 0, cap = null, fadeIn = 2, fadeOut = 15,
         mix[k] *= 0.5 - 0.5 * Math.cos((Math.PI * k) / ms(fadeIn));
     }
 
-    let gain = level - rms30(mix);
+    // (Its layers' gains as they are, if it's not to be levelled: `level` null)
+    let gain = level === null ? 0 : level - rms30(mix);
 
-    if (peak(mix) + gain > (ceiling ?? CEILING)) {
+    if (level !== null && peak(mix) + gain > (ceiling ?? CEILING)) {
         gain = (ceiling ?? CEILING - 0.02) - peak(mix);
     }
 

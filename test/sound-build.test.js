@@ -1,10 +1,12 @@
 // Making the recorded sounds (scripts/build-sounds.js): the sums they're made with
 // (scripts/sounds/dsp.js, as SciPy's, which they were first made and auditioned with), a recipe
-// made into a sound (render.js), and the recipes themselves (weapons.js, spells.js, creatures.js)
+// made into a sound (render.js), and the recipes themselves (weapons.js, spells.js, creatures.js,
+// ambience.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { butter, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "../scripts/sounds/dsp.js";
 import { LEVEL, prepare, render } from "../scripts/sounds/render.js";
+import * as ambience from "../scripts/sounds/ambience.js";
 import * as creatures from "../scripts/sounds/creatures.js";
 import * as spells from "../scripts/sounds/spells.js";
 import * as weapons from "../scripts/sounds/weapons.js";
@@ -79,6 +81,23 @@ describe("a recipe made into a sound (scripts/sounds/render.js)", () => {
         assert.ok(peak(made) <= -1, `${peak(made)} dBFS`);
     });
 
+    it("leaves a bed as its layers' gains make it, unlevelled and unfaded, and takes a hum away as well as the rumble if asked", () => {
+        const samples = prepare(recording);
+        const bed = render({ layers: [{ from: "a", cut: [0, 24000], gain: -10, fadeIn: 0, fadeOut: 0 }], level: null, fadeIn: 0, fadeOut: 0 }, () => samples);
+
+        // (Exactly its layer, 10 dB down: not levelled, nor faded at either end)
+        for (const n of [0, 12007, 23990]) {
+            assert.ok(Math.abs(bed[n] - samples[n] * 10 ** (-10 / 20)) < 1e-9 && Math.abs(bed[n]) > 0.01, `${n}`);
+        }
+
+        // (A 120 Hz hum gone with the 40 Hz rumble; the 300 Hz tone kept)
+        const hum = { channels: [Float64Array.from(tone(300, 1), (v, n) => v + 0.5 * Math.sin((2 * Math.PI * 120 * n) / RATE))], rate: RATE };
+        const humless = prepare(hum, { highpass: [40, 160] });
+
+        assert.ok(rms30(humless.slice(9600, -9600)) < rms30(prepare(hum).slice(9600, -9600)) - 1.5);
+        assert.ok(rms30(humless.slice(9600, -9600)) > rms30(tone(300, 1)) - 1.5);
+    });
+
     it("plays a layer backwards, slower, through a filter, swelling", () => {
         const samples = prepare(recording);
         const slow = render({ layers: [{ from: "a", cut: [0, 24000], rate: 0.5, reverse: true, lp: 2000, ramp: [-30, 0, 1] }] }, () => samples);
@@ -99,7 +118,7 @@ describe("a recipe made into a sound (scripts/sounds/render.js)", () => {
 
 describe("the recipes (scripts/sounds)", () => {
     it("gives every recipe's sound its recordings, each from a known source, and describes each", () => {
-        for (const area of [weapons, spells, creatures]) {
+        for (const area of [weapons, spells, creatures, ambience]) {
             for (const [name, variants] of Object.entries(area.SOUNDS)) {
                 assert.equal(RECORDED[name]?.length, variants.length, `${name}: npm run build:sounds`);
                 assert.ok(CATALOG[name], `${name} described`);
@@ -116,10 +135,28 @@ describe("the recipes (scripts/sounds)", () => {
             assert.ok(Object.values(area.SOURCES).every((source) => (source.url || source.itch) && ["CC0", "public domain"].includes(source.licence)));
         }
 
-        // (The spells' and the creatures' downloaded only once they're wanted; a cast, and a
-        // creature's attack, timed by when it's loudest)
-        assert.deepEqual([...ON_DEMAND].sort(), [...Object.keys(spells.SOUNDS), ...Object.keys(creatures.SOUNDS)].sort());
+        // (The spells', the creatures' and the ambience's downloaded only once they're wanted; a
+        // cast, and a creature's attack, timed by when it's loudest)
+        assert.deepEqual([...ON_DEMAND].sort(), [...Object.keys(spells.SOUNDS), ...Object.keys(creatures.SOUNDS), ...Object.keys(ambience.SOUNDS)].sort());
         assert.ok(Object.keys(creatures.SOUNDS).filter((name) => name.endsWith("Attack")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
         assert.ok(Object.keys(spells.SOUNDS).filter((name) => name.startsWith("cast")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
+    });
+
+    it("cuts each of the ambience's beds as long as its loop and the crossfade into the next, levelled as auditioned, at a lower bitrate", () => {
+        const beds = Object.entries(ambience.SOUNDS).filter(([, [recipe]]) => recipe.loop);
+
+        assert.ok(beds.length >= 20);
+
+        for (const [name, [{ layers, loop, bitrate }]] of beds) {
+            const [length, crossfade] = loop;
+
+            assert.deepEqual(RECORDED[name][0].loop, loop, name);
+            assert.ok(length > crossfade * 3 && crossfade >= 1, name);
+            assert.ok(layers.every(({ cut }) => cut[1] - cut[0] === Math.round((length + crossfade) * RATE)), `${name}: its loop and crossfade long`);
+            assert.ok(bitrate < 64, name);
+        }
+
+        // (Levelled as each was auditioned: each layer at its own gain, none brought to LEVEL)
+        assert.equal(ambience.RECIPE.level, null);
     });
 });

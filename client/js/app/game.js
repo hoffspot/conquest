@@ -37,10 +37,12 @@ import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
+import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { CREATURE_VOICES, creatureSounds, spellSounds } from "../audio/sound.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
+import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
@@ -229,6 +231,13 @@ const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.f
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
 const LIGHT_REACH = 30;
+
+// What's heard round the player (audio/ambience.js) worked out again this often (seconds)
+const HEARD_EVERY = 0.5;
+
+// Wooden stairs' creaks (a recording of three or four treads) played this much quicker, to fit a
+// climb (STAIRS)
+const CREAKS = 1.4;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres, and no more than `away` of how far the camera is from where it looks
@@ -1548,6 +1557,7 @@ export class Game {
     dispose() {
         this.stop();
         this.sound?.setAmbient(false);
+        this.sound?.setAmbience({});
         this.sound?.setPlace("town");
         this.sound?.setHearth(null);
         this.hud.clear();
@@ -2110,6 +2120,7 @@ export class Game {
         const me = this.avatars.get(this.me);
 
         this.sound?.setListener(me.object.position.x, me.object.position.z);
+        this.#hearAround(dt);
         this.sound?.update(dt);
         this.#castsHeard();
 
@@ -3555,10 +3566,58 @@ export class Game {
     // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
     // treads on what's at the stairs' end (`at`, on the player's floor), coming up to it (`coming`)
     // louder and louder, going away quieter and quieter
+    // What's heard round the player (audio/ambience.js), worked out every HEARD_EVERY seconds (or
+    // `now`, on coming to another map): indoors, the place's beds and how far its hearth is; out
+    // of doors, the land's, its waters', a settlement's and its fires' (surroundings.js), by the
+    // time of day. And on the hours of prayer, a church's bell, if they're in a town
+    #hearAround(dt, { now = false } = {}) {
+        const me = this.avatars.get(this.me)?.object.position;
+
+        this.hearing = (this.hearing ?? 0) - dt;
+
+        if (!this.sound || !me || (this.hearing > 0 && !now)) {
+            return;
+        }
+
+        this.hearing = HEARD_EVERY;
+
+        const time = timeOfDay(elapsedOf(this.host.war));
+        const interior = this.interiors.get(this.mapId);
+        const overworld = this.world.maps?.town;
+        let facts = { place: this.#soundOf(this.mapId), time };
+
+        if (interior) {
+            facts.hearth = interior.hearth ? Math.hypot(interior.hearth.x - me.x, interior.hearth.z - me.z) : Infinity;
+        } else if (overworld?.biomeAt) {
+            this.surroundings ??= new Surroundings(overworld);
+            facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)) }) };
+        }
+
+        this.sound.setAmbience(ambienceOf(facts));
+
+        // (Rung once as the hour comes, heard from the town's church, somewhere off)
+        if (facts.settled > 0.3 && this.tolledAt !== undefined && tolled(this.tolledAt, time)) {
+            const angle = Math.random() * 2 * Math.PI;
+            const far = TOLLS.away[0] + Math.random() * (TOLLS.away[1] - TOLLS.away[0]);
+            const at = { x: me.x + far * Math.cos(angle), z: me.z + far * Math.sin(angle) };
+
+            for (let stroke = 0; stroke < TOLLS.strokes; stroke++) {
+                this.sound.play("churchBell", { at, delay: stroke * TOLLS.apart, far: TOLLS.heard });
+            }
+        }
+
+        this.tolledAt = time;
+    }
+
     #climb(avatar, at, coming) {
         const map = this.world.maps?.[this.mapId] ?? this.world;
         const [ox, oz] = this.originOf(this.mapId);
         const surface = this.#footingAt(map, at.x - ox, at.z - oz);
+
+        // (Wooden stairs creaking under the treads)
+        if (surface === "wood") {
+            this.sound?.play("stairs", { at, rate: CREAKS });
+        }
 
         for (let tread = 0; tread < STAIRS.treads; tread++) {
             const near = (coming ? tread + 1 : STAIRS.treads - tread) / STAIRS.treads;
@@ -4929,6 +4988,8 @@ export class Game {
             this.sound?.setAmbient(!interior);
         }
 
+        this.#hearAround(0, { now: true });
+
         if (this.squares?.object.visible) {
             this.showSquares(true);
         }
@@ -5321,8 +5382,12 @@ export class Game {
                     if (event.to === this.mapId || event.from === this.mapId) {
                         const at = event.to === this.mapId ? avatar.object.position : was;
 
-                        if (event.kind === "door") {
-                            this.sound?.play("door", { at });
+                        // (The door's the building's: a keep's heavy one, a ruin's iron gate, none
+                        // into a cave)
+                        const door = event.kind === "door" ? doorOf(this.#soundOf(event.to === "town" ? event.from : event.to)) : null;
+
+                        if (door) {
+                            this.sound?.play(door, { at });
                         } else if (event.kind === "stairs") {
                             this.#climb(avatar, at, event.to === this.mapId);
                         }
