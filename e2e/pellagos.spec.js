@@ -431,6 +431,78 @@ test("the player and the orc draw their weapons and fight when in reach, until o
     expect(fight.dead.length).toBe(1);
 });
 
+test("a new character with a sword carries a round shield, with a wand a spellward; the orc's blows from in front caught on it show \"Blocked\", the shield arm braced into them", async ({ page }) => {
+    await playing(page, "/?play&seed=1&weapon=sword");
+
+    // (What a new swordsman carries, drawn on them and given to the battle)
+    const kit = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { offHand: game.progress.gear.offHand, shield: game.battle.actor(game.me).shield, drawn: game.avatars.get(game.me).character.items.some((item) => item.name === "roundShield") };
+    });
+
+    expect(kit.offHand).toEqual({ id: "roundShield", quality: "common", boost: 0.2 });
+    expect(kit.shield).toEqual({ chance: 0.1, share: 0.2, spells: false });
+    expect(kit.drawn).toBe(true);
+
+    // The orc set on them from in front, every blow caught on a shield that takes all of it
+    const fight = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const events = [];
+        const shown = [];
+        const reacted = [];
+        const orc = game.battle.actor("orc");
+        const player = game.battle.actor("player");
+        const actions = game.avatars.get("player").actions;
+        const [damage, react, advance] = [game.hud.damage.bind(game.hud), actions.react.bind(actions), game.battle.advance.bind(game.battle)];
+
+        game.stop();
+        game.hud.damage = (point, text, options) => (shown.push(String(text)), damage(point, text, options));
+        actions.react = (name, options) => (reacted.push(name), react(name, options));
+        game.battle.advance = (ms) => {
+            const happened = advance(ms);
+
+            events.push(...happened);
+
+            return happened;
+        };
+        game.host.players.get("player").progress.guard = () => ({ chance: 1, share: 1, spells: false });
+        Object.assign(player, { x: orc.x, y: orc.y + 2, square: [orc.square[0], orc.square[1] + 2], hp: 5000, maxHp: 5000, shield: { chance: 1, share: 1, spells: false } });
+        Object.assign(orc, { hp: 5000, maxHp: 5000 });
+        game.previous.set("player", { x: player.x, y: player.y });
+        game.avatars.get("player").place(player.x, player.y, Math.PI);
+
+        for (let second = 0; second < 10; second++) {
+            game.advance(1);
+        }
+
+        const blocked = events.filter((event) => event.type === "blocked" && event.id === "player");
+
+        return { blocked: blocked.length, by: [...new Set(blocked.map((event) => event.by))], hits: events.filter((event) => event.type === "hit" && event.id === "player").length, shown: shown.filter((text) => text === "Blocked").length, braced: reacted.filter((name) => name === "block").length, grown: game.host.players.get("player").progress.skills.shield };
+    });
+
+    // (Each caught: nothing through, "Blocked" over the head, braced into it, the Shield skill grown)
+    expect(fight.blocked).toBeGreaterThan(2);
+    expect(fight.by).toEqual(["orc"]);
+    expect(fight.hits).toBe(0);
+    expect(fight.shown).toBe(fight.blocked);
+    expect(fight.braced).toBe(fight.blocked);
+    expect(fight.grown).toBe(fight.blocked * 20);
+
+    // A new mage with a wand: a spellward, that catches spells too
+    await playing(page, "/?play&seed=1&weapon=wand");
+
+    const mage = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { offHand: game.progress.gear.offHand, shield: game.battle.actor(game.me).shield, drawn: game.avatars.get(game.me).character.items.some((item) => item.name === "spellward") };
+    });
+
+    expect(mage.offHand).toEqual({ id: "spellward", quality: "common", boost: 0.17 });
+    expect(mage.shield).toEqual({ chance: 0.1, share: 0.17, spells: true });
+    expect(mage.drawn).toBe(true);
+});
+
 test("blows leave wounds of their weapon's kind, worse below each threshold, with blood on the ground; healed and come back to life, gone", async ({ page }) => {
     await playing(page, "/?play&seed=1&weapon=bow");
 
@@ -3318,9 +3390,11 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
     await expect(slot("offHand")).toHaveClass(/locked/);
     await expect(pack.locator(".pack-page")).toHaveCount(2);
 
-    // Tapped, the shield says what it is and does, and that it can't go on with the staff
+    // Tapped, the shield says what it is and does (one kept from before shields blocked: two
+    // thirds of the most a fine one can), and that it can't go on with the staff
     await cell("kiteShield").click();
-    await expect(pack.locator(".pack-about .pack-name")).toHaveText("Sturdy kite shield");
+    await expect(pack.locator(".pack-about .pack-name")).toHaveText("Sturdy kite shield (blocks 35%)");
+    await expect(pack.locator(".pack-about")).toContainText("Blocks 35% of a blow caught on it (up to 52% for its make)");
     await expect(pack.locator(".pack-about .pack-compare")).toContainText("The weapon in hand takes both hands.");
 
     // Held, the sword goes on (the staff into the pack), and the other hand's free for the shield
@@ -3329,7 +3403,7 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
     await expect(slot("offHand")).not.toHaveClass(/locked/);
     await expect(cell("staff")).toHaveCount(1);
     await hold(cell("kiteShield"));
-    await expect(slot("offHand")).toHaveAttribute("aria-label", "Off hand: Sturdy kite shield");
+    await expect(slot("offHand")).toHaveAttribute("aria-label", "Off hand: Sturdy kite shield (blocks 35%)");
     await expect.poll(worn).toEqual(expect.arrayContaining(["sword", "kiteShield"]));
 
     // An orc's helm on, counting towards their set; held again, off, back into the pack

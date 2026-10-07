@@ -507,7 +507,7 @@ describe("drawing weapons and putting them away (actions.js DRAWS, Character.she
         assert.ok(character.sheathed);
     });
 
-    it("says of every shield whether it's slung on the back: round, kite and leaf shields, not hide on a stick or a spiked long kite", () => {
+    it("says of every shield whether it's slung on the back: round, kite and leaf shields and spellwards, not hide on a stick, a spiked long kite or a tower shield", () => {
         const shields = Object.entries(ITEMS).filter(([, item]) => item.slot === "offHand" && /^left(Forearm|Fist)$/.test(item.socket));
 
         assert.ok(shields.length >= 8);
@@ -516,7 +516,7 @@ describe("drawing weapons and putting them away (actions.js DRAWS, Character.she
             assert.equal(typeof item.sling, "boolean", `${id}: a new shield says`);
         }
 
-        assert.deepEqual(shields.filter(([, item]) => !item.sling).map(([id]) => id).sort(), ["shield.cat", "shield.darkElf"]);
+        assert.deepEqual(shields.filter(([, item]) => !item.sling).map(([id]) => id).sort(), ["shield.cat", "shield.darkElf", "towerShield"]);
     });
 
     it("takes a slung shield off the back before drawing the sword, and slings it there again after putting the sword away", () => {

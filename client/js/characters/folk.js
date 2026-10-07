@@ -63,10 +63,11 @@ const PARTS = {
     // would have her: big bright eyes in a small, soft face, her hair in twin tails or a bob with
     // bangs, in the guild's uniform
     receptionist: { f: { wear: [["guildBlouse"], ["guildVest"], ["guildSkirt"], ["boots"]], hair: ["twintails", "twintails", "bob"], build: { weight: [0.36, 0.46], muscle: [0.36, 0.44], bust: [0.55, 0.75] }, youthful: true } },
-    // Adventurers, by their calling (sheathing what they carry)
+    // Adventurers, by their calling (sheathing what they carry; a warrior always a shield, which
+    // a hired one blocks with: core/host.js HIRES)
     warrior: {
-        m: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches", "trousers"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", "kiteShield", null]], hair: ["short", "buzz", "swept", "mohawk"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.5, 0.8], muscle: [0.65, 0.95], belly: [0, 0.3] }, armed: true },
-        f: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", null]], hair: ["ponytail", "bob", "topknot"], build: { weight: [0.45, 0.65], muscle: [0.55, 0.75], bust: [0.45, 0.75] }, armed: true },
+        m: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches", "trousers"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", "kiteShield"]], hair: ["short", "buzz", "swept", "mohawk"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.5, 0.8], muscle: [0.65, 0.95], belly: [0, 0.3] }, armed: true },
+        f: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", "kiteShield"]], hair: ["ponytail", "bob", "topknot"], build: { weight: [0.45, 0.65], muscle: [0.55, 0.75], bust: [0.45, 0.75] }, armed: true },
     },
     ranger: {
         m: { wear: [["greenTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["bracers"], ["bow"], ["quiver"]], hair: ["short", "swept", "long"], beard: ["short", "stubble", "none"], build: { weight: [0.4, 0.6], muscle: [0.5, 0.75], belly: [0, 0.1] }, armed: true },
