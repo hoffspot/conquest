@@ -2221,7 +2221,7 @@ export class Battle {
             const blocker = this.#bumps(actor, next);
 
             // Someone in the way (or, off its way, a wall): round them, if there's room
-            if (blocker || (actor.offPath && !this.#clear(actor.map, next))) {
+            if (blocker || (actor.offPath && !this.#clear(actor.map, next, actor))) {
                 const aside = blocker ? this.#aside(actor, [ux, uy], step, blocker) : null;
 
                 if (!aside) {
@@ -2309,8 +2309,11 @@ export class Battle {
         return nearest;
     }
 
-    // Whether a character's body would be clear of every blocked square at a point
-    #clear(mapId, [x, y]) {
+    // Whether a character's body would be clear of every blocked square at a point; and, for one
+    // standing on its map's navigation mesh (`from`), still on it there: the mesh keeps walkers off
+    // what's drawn, a building's walls, a prop, a fence, where its squares don't reach, so a step
+    // aside, or back towards its way, never takes them into them
+    #clear(mapId, [x, y], from = null) {
         const squares = this.#squares(mapId);
 
         for (let sy = Math.floor(y - BODY); sy <= Math.floor(y + BODY); sy++) {
@@ -2323,6 +2326,12 @@ export class Battle {
                     }
                 }
             }
+        }
+
+        if (from) {
+            const navigation = navigatorOf(this.maps[mapId]);
+
+            return !navigation.walkable(from.x, from.y) || navigation.walkable(x, y);
         }
 
         return true;
@@ -2339,7 +2348,7 @@ export class Battle {
                 const [vx, vy] = [ux * c - uy * s * side, uy * c + ux * s * side];
                 const next = [actor.x + vx * step, actor.y + vy * step];
 
-                if (!this.#bumps(actor, next) && this.#clear(actor.map, next)) {
+                if (!this.#bumps(actor, next) && this.#clear(actor.map, next, actor)) {
                     return next;
                 }
             }

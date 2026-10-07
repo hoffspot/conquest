@@ -882,6 +882,15 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
     3 to 4 m across round it, and a stall and a lamp near each other no way between them. A box
     is no good for a prop wider than a voxel or two: hollow, the ground inside it's walked, an
     island.) The rules' squares still block the middle half of a prop's plots;
+  - the settlements' buildings as they stand (`buildingOutline`, also by `standingNear`): a
+    house's whole lot, and a landmark's lot as far forward as half a metre short of its door
+    (`ENTRANCES`' depth and `DOOR_CLEAR`), each an outline marked walked by no one as a prop's
+    is. A building's squares are only those well inside its lot (`setpieces/town.js` `INSET`, so
+    its streets stay open), and its boxes, turned with the building, step in and out along its
+    walls, while every people's kit draws a house's walls a quarter of a metre in from its lot's
+    edge: walkers went half a metre into a house's walls, and a guard could be posted against
+    one, in its plinth. A landmark's front, the way up to its door, is its squares', as before.
+    Every door's still walked up to, and no house is gone into (`test/walls.test.js`);
   - trees as their trunks (0.4 m across at size 1; a great lone oak's 2.4 m), the start town's
     too (`stamp.trunks`): not the four squares round each;
   - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`): the roads', the

@@ -1,7 +1,8 @@
 // A map's squares, however they're kept: as rows of numbers (the tavern's floors, a town laid out
 // on its own, the tests' little maps), or in chunks made from the world plan as they're needed
 // (overworld.js). Everything that walks, looks or finds a way reads a map through squaresOf:
-// blocked(x, y) and opaque(x, y), true off the map's edge, and its size.
+// blocked(x, y) and opaque(x, y), true off the map's edge, and its size; and, where the map says
+// (overworld.js), roomy(x, y): whether someone can be put to stand there, clear of walls.
 
 const read = new WeakMap();
 
@@ -45,11 +46,12 @@ export const squareKey = (x, y) => y * 65536 + x;
 
 /**
  * The free square nearest a square (searching outward ring by ring, as far as `within` squares):
- * not blocked, and not in `taken` (a Set of squareKey). Throws if there's none.
+ * not blocked, with room to stand on (a map's squares that say: `roomy`, overworld.js, clear of
+ * buildings' walls), and not in `taken` (a Set of squareKey). Throws if there's none.
  */
 export function nearestFree(map, [x, y], { taken = null, within = 128 } = {}) {
     const squares = squaresOf(map);
-    const free = (cx, cy) => !squares.blocked(cx, cy) && !taken?.has(squareKey(cx, cy));
+    const free = (cx, cy) => !squares.blocked(cx, cy) && (!squares.roomy || squares.roomy(cx, cy)) && !taken?.has(squareKey(cx, cy));
 
     for (let ring = 0; ring <= within; ring++) {
         for (let dy = -ring; dy <= ring; dy++) {
