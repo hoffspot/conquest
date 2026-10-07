@@ -526,6 +526,7 @@ async function openWorldMap({ pick = null } = {}) {
 
     game.pause();
     $("#worldmap").showModal();
+    state.session?.sound?.play("mapUnfold");
 
     // (Made the first time, for the world being played)
     if (!state.worldMap || state.worldMap.world !== game.world) {

@@ -39,7 +39,8 @@ import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
-import { CREATURE_VOICES, creatureSounds, spellSounds } from "../audio/sound.js";
+import { useSound, wearSound } from "../audio/handling.js";
+import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
@@ -1197,6 +1198,7 @@ export class Game {
         this.spellbook.onWheel = (id) => this.#putOnWheel(id, ACTIONS[id]?.on === "enemy" ? "enemy" : "self");
         this.spellbook.onClose = () => this.closeSpellbook();
         this.pack.onClose = () => this.closePack();
+        this.pack.onPage = () => this.sound?.play("pageTurn");
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
@@ -1499,6 +1501,7 @@ export class Game {
         this.sound?.setPlace(this.#soundOf(this.mapId));
         this.sound?.setPaused(false);
         this.#wantSpells();
+        this.#wantItems();
     }
 
     // The sounds of the spells the player can cast downloaded now (audio/sound.js want), so
@@ -1507,6 +1510,12 @@ export class Game {
         const known = Object.keys(SPELLS).filter((id) => this.progress.knows?.(id));
 
         this.sound?.want(["fizzle", "spellCircle", "teleportOut", "teleportIn", "breath", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))]);
+    }
+
+    // The sounds of the player's things in their hands downloaded now (audio/sound.js want), after
+    // what's heard first: picked up, put on, used, opened
+    #wantItems() {
+        this.sound?.want(ITEM_SOUNDS);
     }
 
     /** Stop: nothing moves until start() again. */
@@ -2781,6 +2790,7 @@ export class Game {
         this.pinLine = null;
         this.pinFrom = null;
         this.onPin([...this.pin]);
+        this.sound?.play("pinSet");
 
         return this.pinView();
     }
@@ -2793,6 +2803,7 @@ export class Game {
         this.pinShown = null;
         this.pinMarks?.setPin(null);
         this.onPin(null);
+        this.sound?.play("tap");
     }
 
     /**
@@ -3171,13 +3182,15 @@ export class Game {
                     return;
                 }
 
-                // (What can't be paid for, said)
+                // (What can't be paid for, said; what is, the gold heard counted out)
                 this.#command({ type: "effect", effect }, (result) => {
                     if (!result.ok) {
                         this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                        this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
                     } else if (effect.price || effect.pay) {
                         this.hud.setGold(this.progress.gold);
                         this.onProgress(this.progress);
+                        this.sound?.play("coins");
                     }
                 });
 
@@ -3198,6 +3211,7 @@ export class Game {
         // (One of a guild's: the player's rank in the guilds, on the talk's card)
         this.talking.guild = OFFICIALS[npc.role]?.post === "guild";
         this.talk.show({ name: npc.name, title, card: this.talking.guild ? this.guildCard() ?? { title: null } : null }, conversation);
+        this.sound?.play("talk");
         this.#keepTalks();
     }
 
@@ -3428,6 +3442,7 @@ export class Game {
             return;
         }
 
+        this.sound?.play("tap");
         this.#keepTalks();
 
         // (Heard: whoever they're talking with nods at every other reply)
@@ -4095,26 +4110,44 @@ export class Game {
             const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options).` : "";
 
             this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, ability ? 5 : 3);
-            this.sound?.play("wake");
+            this.sound?.play("levelUp");
         } else if (event.type === "loot") {
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
             this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+            this.sound?.play(event.gold ? "coins" : "pickup");
         } else if (event.type === "picked" && event.bundle) {
             const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
 
             this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
+            this.sound?.play(event.bundle.gold ? "coinPickup" : "pickup");
+
+            // (A chest emptied, its lid shut)
+            if (event.from === "chest" && !event.left) {
+                this.sound?.play("chestClose", { delay: 0.35 });
+            }
         } else if (event.type === "picked") {
             this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
+            this.sound?.play("pickup");
         } else if (event.type === "spoils" && event.given) {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
+            this.sound?.play("drop");
         } else if (event.type === "spoils" && event.creature === "chest") {
-            // (The dead's, an old relic of theirs in it, named)
+            // (The dead's, an old relic of theirs in it, named: its lock turned, and its lid up)
             this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : "The chest's open, your share in it: tap it to take it.", event.relic ? 4 : 3);
-            this.sound?.play("coins");
+            this.sound?.play("lockpick");
+            this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {
             this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
+            this.sound?.play("drop");
+        } else if (event.type === "bought" || event.type === "sold") {
             this.sound?.play("coins");
+        } else if (event.type === "used" && useSound(event.item.id)) {
+            this.sound?.play(useSound(event.item.id));
+        } else if (event.type === "dropped") {
+            this.sound?.play("drop");
+        } else if (event.type === "discarded") {
+            this.sound?.play("discard");
         }
 
         if (actor) {
@@ -4210,13 +4243,21 @@ export class Game {
             if (told) {
                 this.hud.message(told, 3);
             }
+
+            // (Taken: written in the journal; done: the cue, and any gold paid)
+            const cue = { taken: "quill", done: "questDone", failed: "denied" }[change];
+
+            if (cue) {
+                this.sound?.play(cue);
+            }
         } else if (event.type === "standing") {
             this.hud.message(`You're ${/^[AEIOU]/.test(event.title) ? "an" : "a"} ${event.title} of your people now. ${STANDINGS[event.rank].opens}`, 4);
-            this.sound?.play("wake");
+            this.sound?.play("levelUp");
         } else if (event.type === "guild") {
-            // (Signed up at a guild, or a new rank in them: what the guilds give at it)
+            // (Signed up at a guild, their card written; or a new rank in them: what the guilds
+            // give at it)
             this.hud.message(event.change === "registered" ? `An adventurer of the guilds, ${event.title} rank: your card's good at every branch.` : `${event.title} rank in the Adventurers' Guild! ${GUILD_RANKS[event.rank].opens}`, 4);
-            this.sound?.play("wake");
+            this.sound?.play(event.change === "registered" ? "quill" : "levelUp");
         }
 
         this.#showGuild();
@@ -4285,6 +4326,7 @@ export class Game {
             this.closePack();
             this.closeSpellbook();
             this.#showJournal();
+            this.sound?.play("bookOpen");
         }
     }
 
@@ -4296,6 +4338,7 @@ export class Game {
             this.closePack();
             this.closeJournal();
             this.#showSpellbook();
+            this.sound?.play("bookOpen");
         }
     }
 
@@ -4462,11 +4505,17 @@ export class Game {
             this.closeJournal();
             this.closeSpellbook();
             this.#showPack();
+            this.sound?.play("packOpen");
         }
     }
 
     /** Close the pack (and stop trading). */
     closePack() {
+        // (Its strap buckled, if it was open)
+        if (this.pack?.open) {
+            this.sound?.play("packClose");
+        }
+
         this.shopping = null;
         this.pack?.hide();
 
@@ -4558,7 +4607,7 @@ export class Game {
                 const got = [event.got.gold ? `${event.got.gold} gold` : null, ...event.got.items.map(thingsOf)].filter(Boolean);
 
                 this.hud.message(`You trade with ${them}${got.length ? `: you get ${got.join(", ")}` : ""}.`, 3);
-                this.sound?.play("coins");
+                this.sound?.play("tradeDone");
                 this.hud.setGold(this.progress.gold);
                 this.onProgress(this.progress);
                 break;
@@ -4655,15 +4704,23 @@ export class Game {
     }
 
     // Something asked of the pack: done by the host, or why not said (with whoever's being traded
-    // with, buying or selling). Something thrown away can be taken back a moment after.
+    // with, buying or selling). Something thrown away can be taken back a moment after. A piece
+    // put on or taken off is heard by what it's made of (the piece known before the pack changes).
     #packCommand(asked) {
         const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" ? { ...asked, to: this.shopping?.keeper } : asked;
+        const worn = asked.type === "equip" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
 
         return this.#command(command, (result) => {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
-                this.sound?.play("denied");
+                this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
             } else {
+                const handled = worn ? wearSound(worn) : command.type === "undiscard" ? "pickup" : null;
+
+                if (handled) {
+                    this.sound?.play(handled);
+                }
+
                 // (The gold shown at once, and what's carried kept: the events it made are heard
                 // with the next step, and moving things about makes none)
                 this.hud.setGold(this.progress.gold);
@@ -4827,6 +4884,7 @@ export class Game {
 
             if (said) {
                 this.hud.message(said, 4);
+                this.sound?.play("newsHeard");
             }
         }
 
@@ -4844,6 +4902,7 @@ export class Game {
 
         this.enlisting.push(...ids);
         this.hud.message(kind === "raid" ? `Raiders of ${them} are coming for ${name}'s fields!` : `${them[0].toUpperCase()}${them.slice(1)} are storming ${name}!`, 4);
+        this.sound?.play("newsHeard");
     }
 
     // An envoy near the player at the end of their road, or waylaid on it: the player told
@@ -4851,6 +4910,7 @@ export class Game {
         const theirs = `The ${ADJECTIVES[people] ?? people} envoy`;
 
         this.hud.message(over === "arrived" ? `${theirs} has reached the ${peopleOf(to)}.` : `${theirs} to the ${peopleOf(to)} has been struck down${by ? ` by the ${peopleOf(by)}` : ""}!`, 4);
+        this.sound?.play("newsHeard");
     }
 
     // Start building a building the host's got ready: each floor and each of its folk, one to a
@@ -5522,6 +5582,11 @@ export class Game {
                 if (event.id === this.me) {
                     this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.`, lost: `${event.name} is left behind: back where you hired them, when you're next there.` }[event.change], 3);
                     this.hud.setGold(this.progress.gold);
+
+                    // (Hired, paid in gold; fallen, mourned as the player would be)
+                    if (event.change === "joined" || event.change === "fallen") {
+                        this.sound?.play(event.change === "joined" ? "coins" : "fallen");
+                    }
                     this.#mirror();
 
                     // (Kept with the character)
@@ -5628,7 +5693,7 @@ export class Game {
                 if (event.id === this.me) {
                     this.#wantSpells();
                     this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (your spellbook, B).`, 5);
-                    this.sound?.play("wake");
+                    this.sound?.play("levelUp");
                     this.onProgress(this.progress);
 
                     if (this.spellbook?.open) {
@@ -5655,6 +5720,7 @@ export class Game {
                 // (A spell that grows with use grown: Vampirism, Dodge, Poison)
                 if (event.id === this.me) {
                     this.hud.message(`${SPELLS[event.spell].label} grows stronger (${event.level} of 5).`, 3);
+                    this.sound?.play("levelUp");
                     this.onProgress(this.progress);
                 }
 
@@ -6882,6 +6948,7 @@ export class Game {
 
         open.done = true;
         this.wheel.mark(direction, "chosen");
+        this.sound?.play("wheelSelect");
         this.wheel.hide({ after: 180 });
         this.act(action, open.target, { refused: () => this.wheel.mark(direction, "refused") });
     }
@@ -7021,6 +7088,7 @@ export class Game {
         }
 
         this.quickBar?.mark(slot, "chosen");
+        this.sound?.play("quickAction");
 
         return this.act(key, offensive(key) ? target.id : "self", { refused: () => this.quickBar?.mark(slot, "refused") });
     }
