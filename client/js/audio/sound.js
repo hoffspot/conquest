@@ -99,7 +99,7 @@ const RECORDINGS = sampleFiles().length;
  * The sounds recorded rather than made (recorded.js: client/sounds), each variant's id ("name
  * variant") and where it's downloaded from.
  */
-export const recordedFiles = () => Object.entries(RECORDED).flatMap(([name, files]) => files.map((file, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
+export const recordedFiles = () => Object.entries(RECORDED).flatMap(([name, files]) => files.map(({ file }, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
 const DOWNLOADS = 6;
 
 // How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
@@ -200,8 +200,13 @@ export class Sound {
         this.buffers = new Map();
         this.instruments = new Map();
 
-        /** Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer]), played instead of the made ones once there are two. */
+        /**
+         * Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer], in
+         * recorded.js's order once they're all in), played instead of the made ones once there
+         * are two; and each one's as they come in (name → [buffer by variant]).
+         */
         this.recorded = new Map();
+        this.decoded = new Map();
 
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
@@ -661,12 +666,13 @@ export class Sound {
     /**
      * Play a sound (a SOUNDS name) from a point in the world ({ x, z } metres; null for
      * everywhere), `volume` times its own, starting `delay` seconds from now, `rate` times as fast
-     * (higher), heard no further off than `far` metres. Returns its source node, or null if it
-     * isn't played (off, too far, too many).
+     * (higher), heard no further off than `far` metres; its `variant` (by default any but the last
+     * played), and its `made` one rather than its recording (the sound studio's). Returns its
+     * source node, or null if it isn't played (off, too far, too many).
      */
-    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR } = {}) {
+    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR, variant = null, made = false } = {}) {
         const context = this.context;
-        const recorded = this.recorded.get(name);
+        const recorded = made ? null : this.recorded.get(name);
         const buffers = recorded?.length > 1 ? recorded : this.buffers.get(name);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
@@ -701,10 +707,10 @@ export class Sound {
         // mechanical)
         const last = this.played.get(name) ?? -1;
         const pick = Math.floor(Math.random() * (buffers.length - (last >= 0 && buffers.length > 1 ? 1 : 0)));
-        const variant = last >= 0 && buffers.length > 1 && pick >= last ? pick + 1 : pick;
+        const chosen = buffers[variant] ? variant : last >= 0 && buffers.length > 1 && pick >= last ? pick + 1 : pick;
 
-        this.played.set(name, variant);
-        source.buffer = buffers[variant];
+        this.played.set(name, chosen);
+        source.buffer = buffers[chosen];
         source.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
         level.gain.value = gain;
         source.connect(level);
@@ -751,9 +757,9 @@ export class Sound {
      * A footstep on a footing (audio/footing.js SURFACES), `delay` seconds from now, `volume`
      * times as loud: at `speed` (m/s: walking, faster louder; or running, louder still and
      * brighter), by one `size` big (a person's 1: FOOTSTEPS) on its `feet` (GAITS; null, none: it
-     * floats, and isn't heard).
+     * floats, and isn't heard); `variant` and `made` as play's.
      */
-    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1 } = {}) {
+    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1, variant = null, made = false } = {}) {
         const gait = GAITS[feet];
 
         if (!gait) {
@@ -767,7 +773,7 @@ export class Sound {
         const loud = (running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * pace) * big ** FOOTSTEPS.weight * gait.volume;
         const lilt = 1 + FOOTSTEPS.jitter * (2 * Math.random() - 1);
 
-        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25 });
+        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25, variant, made });
     }
 
     // Keep a sound's samples, and give the browser a copy if it's started
@@ -834,8 +840,16 @@ export class Sound {
         this.recordings.delete(id);
 
         if (RECORDED[name]) {
+            const variant = Number(id.split(" ")[1]);
+
             this.context.decodeAudioData(recording).then(
-                (buffer) => this.recorded.set(name, [...(this.recorded.get(name) ?? []), buffer]),
+                (buffer) => {
+                    const variants = this.decoded.get(name) ?? [];
+
+                    variants[variant] = buffer;
+                    this.decoded.set(name, variants);
+                    this.recorded.set(name, variants.filter(Boolean));
+                },
                 () => {},
             );
         } else {

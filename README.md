@@ -32,6 +32,12 @@ livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html
 The fire lab, showing every kind of fire (torches, a brazier, a camp fire, candles) lighting what's
 round it at night and the seven fire spells cast again and again, is at
 <https://hoffspot.github.io/conquest/fire-lab.html>.
+The sound studio, describing every sound the game makes (what it is, when the game plays it, and
+where it comes from: recorded, and by whom, or made in code) and playing each as the game plays it
+(each of its recordings and its made variants on its own, from as far off as you like, at the
+game's own levels), with the wind and the music in each place, is at
+<https://hoffspot.github.io/conquest/sound-studio.html>. It's kept up to date with the sounds:
+each is described in `client/js/audio/catalog.js`, and a test fails if one isn't.
 The motion check's contact sheet, drawing each place a motion goes wrong on some people's body (a
 joint past its range, something in the body, a foot sliding or in the ground, a hand off its haft)
 as it happened, is at <https://hoffspot.github.io/conquest/motion-sheet.html>. Choose a report
@@ -487,6 +493,7 @@ client/                 The game (static files served to the browser)
   creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)
+  sound-studio.html     The sound studio: every sound described and played (with sound-studio.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js)
@@ -584,7 +591,9 @@ client/                 The game (static files served to the browser)
   js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
                         and the town's sounds (worker.js away from the page); score.js writes
                         the town's music and tavern.js the tavern's; instruments.js and
-                        samples.js are the band's recordings; sound.js plays it all
+                        samples.js are the band's recordings; recorded.js lists the sounds
+                        recorded rather than made (client/sounds); sound.js plays it all;
+                        catalog.js describes every sound, for the sound studio
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
@@ -658,6 +667,7 @@ client/                 The game (static files served to the browser)
   js/lab/land.js        The land of a world plan painted as a picture, for the maps
   js/lab/building-lab.js  The building lab
   js/lab/fire-lab.js    The fire lab
+  js/lab/sound-studio.js  The sound studio
 server/                 A static file server for playing locally (npm start: parts of files as asked,
                         files asked for by hash kept a year), and the relay that games playing
                         together talk through (relay.js)

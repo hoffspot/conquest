@@ -235,6 +235,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      and the fit on every motion-check body. A rest whose left hand passes that hip must bring it
      over the hilt and scabbard, not through them (the sentry's `ARMED_*` rests). Or it can rest
      the hand on the pommel with `pommel: 1` in its keys.
+   - A sound added or changed (`SOUNDS` in `client/js/audio/synth.js`, or a recording in
+     `client/js/audio/recorded.js` by `npm run build:sounds`) is described in
+     `client/js/audio/catalog.js`: its group, its name, what it is and when the game plays it.
+     The sound studio (`client/sound-studio.html`) shows and plays it from there, so keep its
+     words true when the sound or where it plays changes. A recording names its source in
+     `SOURCES` (title, recordist, page, licence). `test/audio.test.js` fails if a sound isn't
+     described or a recording has no CC0 source.
 4. **Bump a version number when you change what it guards:**
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another

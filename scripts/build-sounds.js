@@ -207,7 +207,7 @@ async function main() {
             await writeFile(new URL(file, OUT), mp3);
             written.add(file);
             bytes += mp3.length;
-            list[name].push(file);
+            list[name].push({ file, from: id });
             console.log(`${file.padEnd(32)} ${String(mp3.length).padStart(6)} bytes  from ${RECORDINGS[id].name} (${(from / RATE).toFixed(3)} to ${(to / RATE).toFixed(3)} s)`);
         }
     }
@@ -219,7 +219,9 @@ async function main() {
         }
     }
 
-    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map((file) => `        ${JSON.stringify(file)},\n`).join("")}    ],`);
+    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from }) => `        { file: ${JSON.stringify(file)}, from: ${from} },\n`).join("")}    ],`);
+    const used = [...new Set(Object.values(list).flatMap((files) => files.map(({ from }) => from)))].sort((a, b) => a - b);
+    const sources = used.map((id) => `    ${id}: { title: ${JSON.stringify(RECORDINGS[id].name)}, by: "Nox_Sound", page: "https://freesound.org/s/${id}/", licence: "CC0" },`);
 
     await writeFile(LIST, `// Made by scripts/build-sounds.js (npm run build:sounds): don't edit it by hand.
 //
@@ -230,9 +232,14 @@ async function main() {
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};
 
-/** Each recorded sound's variants (a synth.js SOUNDS name → files in client/sounds). */
+/** Each recorded sound's variants (a synth.js SOUNDS name → [{ file in client/sounds, from: a SOURCES id }]). */
 export const RECORDED = Object.freeze({
 ${lines.join("\n")}
+});
+
+/** The recordings they're cut from, by Freesound id: what each is, who recorded it, where it is, its licence. */
+export const SOURCES = Object.freeze({
+${sources.join("\n")}
 });
 `);
     console.log(`${written.size} sounds, ${(bytes / 1024).toFixed(0)} KB`);
