@@ -58,10 +58,11 @@ export function builderOf(piece) {
 }
 
 /**
- * The hole the town's materials cut round the player: its middle on the screen (drawing buffer
- * pixels, from the bottom left) and depth (0 near to 1 far), and its radius in pixels (0: none).
+ * The holes the town's materials cut round the player, and round whoever they're fighting: each
+ * one's middle on the screen (drawing buffer pixels, from the bottom left) and depth (0 near to 1
+ * far), and its radius in pixels (0: none).
  */
-export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, radius: { value: 0 } });
+export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, radius: { value: 0 }, foeCentre: { value: new THREE.Vector3() }, foeRadius: { value: 0 } });
 
 // How far a building's roof reaches past its footprint (metres: the eaves)
 const EAVES = 0.4;
@@ -402,7 +403,8 @@ function within(corners, px, pz) {
 
 /**
  * Cut a hole round the player through the parts of a material nearer the camera than they are,
- * with a dithered edge (the shadows it casts stay whole): once for each material.
+ * and another round whoever they're fighting, with a dithered edge (the shadows it casts stay
+ * whole): once for each material.
  */
 export function cutAway(material) {
     if (material.userData.cutAway) {
@@ -418,14 +420,25 @@ export function cutAway(material) {
         before(shader, renderer);
         shader.uniforms.cutCentre = CUTAWAY.centre;
         shader.uniforms.cutRadius = CUTAWAY.radius;
+        shader.uniforms.cutFoeCentre = CUTAWAY.foeCentre;
+        shader.uniforms.cutFoeRadius = CUTAWAY.foeRadius;
         shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", "#include <common>\nuniform vec3 cutCentre;\nuniform float cutRadius;")
+            .replace("#include <common>", "#include <common>\nuniform vec3 cutCentre;\nuniform float cutRadius;\nuniform vec3 cutFoeCentre;\nuniform float cutFoeRadius;")
             .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
-if (cutRadius > 0.0 && gl_FragCoord.z < cutCentre.z) {
-    float r = length(gl_FragCoord.xy - cutCentre.xy) / cutRadius;
+{
     float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
 
-    if (r < 1.0 && dither > smoothstep(0.55, 1.0, r)) discard;
+    if (cutRadius > 0.0 && gl_FragCoord.z < cutCentre.z) {
+        float r = length(gl_FragCoord.xy - cutCentre.xy) / cutRadius;
+
+        if (r < 1.0 && dither > smoothstep(0.55, 1.0, r)) discard;
+    }
+
+    if (cutFoeRadius > 0.0 && gl_FragCoord.z < cutFoeCentre.z) {
+        float r = length(gl_FragCoord.xy - cutFoeCentre.xy) / cutFoeRadius;
+
+        if (r < 1.0 && dither > smoothstep(0.55, 1.0, r)) discard;
+    }
 }`);
     };
     material.customProgramCacheKey = () => `cutAway|${key}`;

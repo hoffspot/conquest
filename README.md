@@ -143,6 +143,10 @@ behind you. Pinch or scroll to zoom. In the town, when a building would stand be
 camera, it comes in closer than the building, or rises over it. Holding a phone upright, it looks
 down more steeply from further back, so you see more round you. Game options can turn its
 following off, change how far a drag turns it, invert its tilt, and stop spells shaking it.
+**In a fight** it keeps you and your foe both in view by itself, turning no more than it must,
+drawing back for a dragon or a foe far off, and cutting through trees or walls in the way of
+either of you; anyone attacking you from out of view has a red arrow at the screen's edge pointing
+to them.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left

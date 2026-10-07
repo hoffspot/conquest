@@ -41,6 +41,7 @@
     "pellagos.spec.js › every tavern can be gone into: got ready as the player comes near, its own room and folk inside; let go once they're far off, and built at once if they walk straight in": 49.2,
     "pellagos.spec.js › holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal": 90.4,
     "pellagos.spec.js › in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap in the top left corner, the buttons top right, its wedge the way the camera looks the same size however it's zoomed": 72.9,
+    "pellagos.spec.js › in a fight the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view": 37,
     "pellagos.spec.js › in the town, the camera comes in closer than a building in the way, or rises over it; a well in the way it sees round": 31.2,
     "pellagos.spec.js › loads everything, listing what it downloads, then shows the title": 4.2,
     "pellagos.spec.js › magic: the spellbook shows every school and the tomes; an element opened by its tome; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go": 86,

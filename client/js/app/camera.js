@@ -8,7 +8,9 @@
 // into the sky), and holds there while they stand; once they've walked a moment, it swings back
 // round behind them, and if it was looking up, down again to see where they're going. With
 // following turned off (Game options), it keeps the way it's turned and its tilt as they walk.
-// Its height and zoom are the view's (world/view.js).
+// In a fight, it doesn't swing round behind them as they go, but turns only as far as keeps them
+// and whoever they're fighting both in view (the camera study, recommendation 5: a soft lock,
+// framing the fight by itself). Its height and zoom are the view's (world/view.js).
 //
 // Pure maths on plain numbers (no Three.js), so it's tested in Node: the game (game.js) says
 // where the player is and how fast they're going, and puts the view's camera where this says.
@@ -43,6 +45,10 @@ const STEADY = 0.35;
 // then only the leash turns it, as they go by); and, let go after a drag, how long they walk
 // before it does (seconds)
 const BEHIND = Object.freeze({ full: (4 * Math.PI) / 9, none: (5 * Math.PI) / 9, after: 1 });
+
+// Keeping a foe in view: how far round it looks for the least turn that does (radians a step, so
+// many steps either way: all the way round)
+const KEEP = Object.freeze({ step: Math.PI / 36, steps: 36 });
 
 const ease = (rate, dt) => 1 - Math.exp(-rate * dt);
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -103,10 +109,12 @@ export class CameraFollow {
      * how fast they're going ({ vx, vz }, m/s); `aim`: where to look ({ x, z }: the player, or
      * towards whoever they're fighting); `lowest`: the lowest the camera may look from (degrees:
      * the view's, for how much of the sky it would show); `away`: how far it is from where it
-     * looks, across the ground (metres: the view's; none, no leash). Returns itself: `focus`,
-     * `yaw` and `pitch` are where the camera should be.
+     * looks, across the ground (metres: the view's; none, no leash); `keep`: who the player's
+     * fighting ({ x, z }, or null), kept within `half` radians of the middle of the view, seen from
+     * where the camera is (`away` off). Returns itself: `focus`, `yaw` and `pitch` are where the
+     * camera should be.
      */
-    update(dt, { player, aim = player, lowest = PITCH.least, away = Infinity }) {
+    update(dt, { player, aim = player, lowest = PITCH.least, away = Infinity, keep = null, half = Math.PI / 6 }) {
         const speed = Math.hypot(player.vx, player.vz);
         const heading = this.heading;
 
@@ -146,15 +154,68 @@ export class CameraFollow {
 
         // Round behind them, the way they're going (when it's clear which way that is, and they've
         // walked a moment since a drag let go), the harder the further they're walking from
-        // towards it; or, stood still, coming to a stop where it is
-        const going = speed > MOVING && Math.hypot(heading.x, heading.z) > 0.5 && this.waiting === 0;
-        const off = going ? wrap(Math.atan2(-heading.x, -heading.z) - this.yaw) : 0;
-        const hard = Math.max(0, Math.min(1, (BEHIND.none - Math.abs(off)) / (BEHIND.none - BEHIND.full)));
+        // towards it; or, stood still, coming to a stop where it is. In a fight, rather, as little
+        // as keeps their foe in view too (once a drag's let go of it a moment)
+        const fighting = keep && Number.isFinite(away);
+        const going = !fighting && speed > MOVING && Math.hypot(heading.x, heading.z) > 0.5 && this.waiting === 0;
+        const kept = fighting && this.waiting === 0 ? this.#keeping([keep, player], away, half) : null;
+        const off = kept !== null ? wrap(kept - this.yaw) : going ? wrap(Math.atan2(-heading.x, -heading.z) - this.yaw) : 0;
+        const hard = kept !== null ? 1 : Math.max(0, Math.min(1, (BEHIND.none - Math.abs(off)) / (BEHIND.none - BEHIND.full)));
+
+        if (fighting && speed <= MOVING) {
+            this.waiting = Math.max(0, this.waiting - dt);
+        }
 
         this.turning += (SPRING * SPRING * off * hard - 2 * SPRING * this.turning) * dt;
         this.turning = Math.max(-TURN_SPEED, Math.min(TURN_SPEED, this.turning));
         this.yaw = wrap(this.yaw + this.turning * dt);
 
         return this;
+    }
+
+    /**
+     * The way the camera should look from to keep points ({ x, z } each: the foe, the player)
+     * within `half` radians of the middle of its view, `away` metres from where it looks, turned
+     * as little as it can be; if no way round does, the way that keeps them nearest it (null:
+     * they're in view already, or nothing would be better).
+     */
+    #keeping(points, away, half) {
+        const offAt = (yaw) => {
+            const [cx, cz] = [this.focus.x + Math.sin(yaw) * away, this.focus.z + Math.cos(yaw) * away];
+
+            // (The angle between the way it looks, towards where it looks from where it is, and
+            // each point: the furthest)
+            return Math.max(
+                ...points.map(({ x, z }) => {
+                    const [dx, dz] = [x - cx, z - cz];
+
+                    return Math.abs(Math.atan2(-dx * Math.cos(yaw) + dz * Math.sin(yaw), -dx * Math.sin(yaw) - dz * Math.cos(yaw)));
+                }),
+            );
+        };
+        const now = offAt(this.yaw);
+
+        if (now <= half) {
+            return null;
+        }
+
+        let best = { yaw: null, off: now };
+
+        for (let k = 1; k <= KEEP.steps; k++) {
+            for (const way of [1, -1]) {
+                const yaw = this.yaw + way * k * KEEP.step;
+                const off = offAt(yaw);
+
+                if (off <= half) {
+                    return wrap(yaw);
+                }
+
+                if (off < best.off - 1e-6) {
+                    best = { yaw: wrap(yaw), off };
+                }
+            }
+        }
+
+        return best.yaw;
     }
 }
