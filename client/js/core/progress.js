@@ -20,7 +20,7 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
-import { disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
+import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -43,8 +43,9 @@ export const RANKS = Object.freeze([
  * The bonuses: melee, ranged (the share more damage their blows do), heal (more healed), stun
  * (longer stuns), hp, stamina (more of each), armor (the share of each blow taken off), dodge (the
  * chance of slipping a blow or a shot, not magic: one in twenty from the start, one in four at
- * the most), haggle (the share off what's bought, and on what's sold), persuade (M4, M7),
- * followers (M9).
+ * the most), block (the chance of catching a blow or a shot from in front on a shield carried, and
+ * a spell on a spellward: one in ten from the start, one in two at the most), haggle (the share
+ * off what's bought, and on what's sold), persuade (M4, M7), followers (M9).
  */
 export const TREES = Object.freeze({
     blade: { name: "Blade", grows: "landing blows up close", fighting: true, bonus: { melee: [0, 0.1, 0.2, 0.3, 0.45, 0.6], hp: [0, 0, 0, 10, 15, 20] }, abilities: { 2: "powerStrike" } },
@@ -52,6 +53,7 @@ export const TREES = Object.freeze({
     hexes: { name: "Hexes", grows: "stunning your foes", fighting: true, bonus: { stun: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "hold" } },
     endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: {} },
     evasion: { name: "Evasion", grows: "fighting with the body and slipping blows", fighting: false, bonus: { dodge: [0.05, 0.09, 0.13, 0.17, 0.21, 0.25] }, abilities: {} },
+    shield: { name: "Shield", grows: "blocking blows with a shield", fighting: false, bonus: { block: [0.1, 0.18, 0.26, 0.34, 0.42, 0.5] }, abilities: { 2: "shieldBash" } },
     trade: { name: "Trade", grows: "buying and selling", fighting: false, bonus: { haggle: [0, 0.05, 0.1, 0.15, 0.2, 0.25] }, abilities: {} },
     talk: { name: "Talk", grows: "talking with people", fighting: false, bonus: { persuade: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: {} },
     command: { name: "Command", grows: "leading your followers", fighting: false, bonus: { followers: [0, 1, 2, 3, 4, 6] }, abilities: {} },
@@ -63,6 +65,9 @@ export const TREES = Object.freeze({
  */
 export const ABILITIES = Object.freeze({
     powerStrike: { label: "Power strike", tree: "blade", blow: "melee", factor: 2, cooldown: 12000 },
+    // (The next blow up close slams the shield into them too: stunned `stun` ms, longer and
+    // harder for a shield made for it, `bash`; only with a shield in the other hand)
+    shieldBash: { label: "Shield bash", tree: "shield", blow: "melee", factor: 1, stun: 2000, cooldown: 15000, shield: true },
     aimedShot: { label: "Aimed shot", tree: "marksman", blow: "ranged", factor: 2, cooldown: 12000 },
     hold: { label: "Hold", tree: "hexes", spell: "hold" },
 });
@@ -120,20 +125,20 @@ export const ITEMS = Object.freeze({
  * What each shop sells: the things it keeps, and the best make it has of each. A smith sells its
  * own people's uniform too (core/gear.js UNIFORM), as does a castle's quartermaster (its armoury:
  * the arms and armour of war, the only place a legendary make's sold). A castle's arcanist sells
- * the arcane (wands, grimoires, the hats and jewels of those who cast) and draughts, better made
+ * the arcane (wands, grimoires, spellwards, the hats and jewels of those who cast) and draughts, better made
  * than a guild's; not tomes (a guild's). An abbey's herbalist sells its draughts and cures, holy
  * jewels and books of prayer; a people's watchtower's quartermaster (their own shop, not their
  * part's: host.js `#shopkeeper`) the garrison's plain arms and armour, up to fine.
  */
 export const SHOPS = Object.freeze({
-    smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
-    armoury: { items: ["sword", "hammer", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary" },
-    arcane: { items: ["wand", "grimoire", "staff", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork" },
+    smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "towerShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
+    armoury: { items: ["sword", "hammer", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "towerShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary" },
+    arcane: { items: ["wand", "grimoire", "staff", "spellward", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork" },
     abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork" },
     watch: { items: ["sword", "hammer", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
 });
 
 /**
@@ -262,7 +267,8 @@ export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ??
 // it is, what was rolled on it and its own name
 function thingOf(item) {
     const def = ITEMS[item.id];
-    const thing = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", ...(def?.magic ? { boost: boostOf(item) } : {}) };
+    const quality = QUALITIES[item.quality] ? item.quality : "common";
+    const thing = { id: item.id, quality, ...(def?.magic ? { boost: boostOf(item) } : def?.robust ? { boost: blockOf(item.id, quality, item.boost) } : {}) };
 
     if (def?.uniform) {
         thing.people = UNIFORM_PEOPLES.includes(item.people) ? item.people : "human";
@@ -286,6 +292,14 @@ function thingOf(item) {
 
 // A wand's or grimoire's boost: as it is, or (one made before they had them) a common one
 const boostOf = (item) => (Number.isFinite(item.boost) ? Math.max(0.1, Math.min(1, item.boost)) : STARTING_BOOST);
+
+// How much of a blow a shield takes: as it was rolled (no more than its make can), or (one made
+// before shields blocked) two thirds of the most its make can, the average roll's
+const blockOf = (id, quality, block) => {
+    const most = blockMost(id, quality);
+
+    return Number.isFinite(block) ? Math.max(0.01, Math.min(most, block)) : Math.round(most * (2 / 3) * 100) / 100;
+};
 
 const isSlot = (slot) => Number.isInteger(slot) && slot >= 0 && slot < PACK_SIZE;
 
@@ -328,23 +342,27 @@ function packOf(kept) {
 /**
  * A thing's name: gear's by its make and what was rolled on it ("Keen sword of the Bear", an
  * orcish helm; one made before bonuses were, its make's word: "Fine sword"); a wand or grimoire
- * with its boost: "Wand (+34% spells)".
+ * with its boost: "Wand (+34% spells)"; a shield with how much of a blow it takes: "Kite shield
+ * (blocks 32%)".
  */
 export function itemLabel(item) {
     const { id, quality = "common", boost = null } = item;
-    const { label, magic, slot } = ITEMS[id] ?? { label: id };
+    const { label, magic, robust, slot } = ITEMS[id] ?? { label: id };
     const made = QUALITIES[quality]?.label;
     const plain = !item.affixes?.length && !item.name;
     const named = slot ? gearName(item) : label;
     const name = made && plain ? `${made} ${named.charAt(0).toLowerCase()}${named.slice(1)}` : named;
 
-    return magic && boost ? `${name} (+${Math.round(boost * 100)}% spells)` : name;
+    return magic && boost ? `${name} (+${Math.round(boost * 100)}% spells)` : robust && boost ? `${name} (blocks ${Math.round(boost * 100)}%)` : name;
 }
+
+// How much more a thing's worth for what was rolled on it, once it's been made: a wand or a
+// grimoire the more it boosts spells, a shield the more of a blow it takes of the most it could
+const rolledWorth = ({ id, quality, boost }) => (!boost ? 1 : ITEMS[id]?.magic ? 1 + 4 * (boost - 0.1) : ITEMS[id]?.robust ? 1 + 2 * Math.max(0, boost / (blockMost(id, quality) || 1) - 0.5) : 1);
 
 /** What something costs (gold): its price by its make, less the haggling (or, sold, a share of it and more for haggling). */
 export function priceOf({ id, quality = "common", boost = null }, { haggle = 0, selling = false } = {}) {
-    // (A wand or grimoire worth the more the more it boosts spells: known once it's been made)
-    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1) * (ITEMS[id]?.magic && boost ? 1 + 4 * (boost - 0.1) : 1);
+    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1) * rolledWorth({ id, quality, boost });
 
     // (A creature's part sells for what it's worth: its price is what the guild pays)
     const share = ITEMS[id]?.part ? 1 : SELL_SHARE;
@@ -404,6 +422,9 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
 /** The most of each blow armour takes off, all of it together. */
 export const ARMOR_CAP = 0.6;
 
+/** The most chance of catching a blow on a shield there is (the Shield skill's half, and a shield's own bonus). */
+export const BLOCK_CAP = 0.6;
+
 /** The most might gear gives (with a fighting rank's: might()). */
 export const GEAR_MIGHT = 4;
 
@@ -422,14 +443,22 @@ function mightOf(piece, slot) {
     return made + 0.25 * Object.keys(piece.bonuses ?? {}).length;
 }
 
+/** The shield a new character starts with in the other hand, by the weapon they chose: a sword's a round shield, a wand's a spellward. */
+export const STARTING_SHIELDS = Object.freeze({ sword: "roundShield", wand: "spellward" });
+
+/** How much of a blow a new character's shield takes, of the most a common one can (an average roll's). */
+export const STARTING_BLOCK = 2 / 3;
+
 /**
  * What a new character starts with on: their weapon (none, if they fight in spiked boots alone:
- * the `boots` weapon), leather bracers and breeches, and boots (spiked, if they chose them).
+ * the `boots` weapon), a common shield with a sword or a wand (STARTING_SHIELDS), leather
+ * bracers and breeches, and boots (spiked, if they chose them).
  */
 export function startingGear({ weapon = "sword", boots = false } = {}) {
     const gear = Object.fromEntries(SLOT_IDS.map((slot) => [slot, null]));
 
     gear.mainHand = weapon !== "boots" && ITEMS[weapon]?.slot === "mainHand" ? thingOf({ id: weapon }) : null;
+    gear.offHand = STARTING_SHIELDS[weapon] ? thingOf({ id: STARTING_SHIELDS[weapon], quality: "common", boost: Math.round(STARTING_BLOCK * blockMost(STARTING_SHIELDS[weapon]) * 100) / 100 }) : null;
     gear.bracers = { id: "bracers", quality: "common" };
     gear.legs = { id: "breeches", quality: "common" };
     gear.boots = { id: boots || weapon === "boots" ? "boots" : "leatherBoots", quality: "common" };
@@ -632,7 +661,7 @@ export class Progress {
 
     /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haggle, persuade, followers }. */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, haggle: 0, persuade: 0, followers: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0 };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);
@@ -676,6 +705,8 @@ export class Progress {
             totals[stat] += value;
         }
 
+        // (A grimoire held open in both hands: all of it a quarter stronger again)
+        totals.spell = (1 + totals.spell) * (ITEMS[weapon?.id]?.spellTimes ?? 1) - 1;
         totals.armor = Math.min(ARMOR_CAP, totals.armor);
 
         return totals;
@@ -709,6 +740,18 @@ export class Progress {
 
             return people ? { id, people } : { id };
         });
+    }
+
+    /**
+     * The shield in the other hand, as the battle has it (core/battle.js `shield`): how often
+     * they catch a blow on it (their Shield skill and its bonuses: `bonus`, theirs by default),
+     * how much of it it takes, and whether it turns spells too (a spellward); null, none.
+     */
+    guard(bonus = this.bonuses()) {
+        const piece = this.gear.offHand;
+        const def = GEAR[piece?.id];
+
+        return def?.robust ? { chance: Math.min(BLOCK_CAP, bonus.block), share: blockOf(piece.id, piece.quality, piece.boost), spells: Boolean(def.spells) } : null;
     }
 
     /** Whether they kick (in spiked boots). */

@@ -356,10 +356,13 @@ describe("heroes (heroes.js)", () => {
 });
 
 describe("a hero's kit (game.js, creator.js)", () => {
-    it("wears leather boots, or spiked boots with any weapon or on their own", () => {
+    it("wears leather boots, or spiked boots with any weapon or on their own; a shield with a sword, a spellward with a wand", () => {
         // (Under their gear, a tunic and trousers; on it, what a new character starts with: leather
-        // bracers, breeches and boots, spiked if they chose them)
-        assert.deepEqual(heroEquipment("sword"), ["tunic", "trousers", "sword", "bracers", "breeches", "boots"]);
+        // bracers, breeches and boots, spiked if they chose them; with a sword a round shield, with
+        // a wand a spellward)
+        assert.deepEqual(heroEquipment("sword"), ["tunic", "trousers", "sword", "bracers", "breeches", "boots", "roundShield"]);
+        assert.deepEqual(heroEquipment("wand"), ["tunic", "trousers", "wand", "bracers", "breeches", "boots", "spellward"]);
+        assert.ok(!heroEquipment("grimoire").includes("spellward"), "(a grimoire, held open in both hands: none)");
         assert.deepEqual(heroEquipment("bow", new Progress({}, { weapon: "bow", boots: true }).worn()), ["tunic", "trousers", "bow", "quiver", "bracers", "breeches", "spikedBoots"]);
         assert.deepEqual(heroEquipment("boots"), ["tunic", "trousers", "spikedBoots", "bracers", "breeches"]);
         assert.deepEqual(heroEquipment("sword", [{ id: "helm", people: "elf" }, { id: "hauberk", people: "elf" }, { id: "ring" }], ["catEars"]), ["tunic", "trousers", "sword", "helm.elf", "mail.elf", "surcoat.elf", "catEars"]);
@@ -370,7 +373,7 @@ describe("a hero's kit (game.js, creator.js)", () => {
     it("says what a weapon does, and with spiked boots too, how kicks mix in", () => {
         assert.equal(weaponNumbers("sword"), "4–8 damage up close · 0.9 a second");
         assert.equal(weaponNumbers("sword", true), "3.5–7.5 damage up close (kicks or the weapon)");
-        assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 3–7 damage 13.5 m · 0.7 a second");
+        assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 5–10 damage 13.5 m · 0.7 a second");
         assert.equal(weaponNumbers("boots"), "3–7 damage up close · 1.0 a second");
     });
 });

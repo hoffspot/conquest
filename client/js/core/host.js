@@ -18,7 +18,7 @@ import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { offHandFree, rollGear } from "./gear.js";
+import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
@@ -93,16 +93,31 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
- * with, and what it costs to hire them (gold). How many a player can lead: one, and more as
- * their Command grows (progress.js TREES).
+ * with (a warrior, a shield too: NPC_SHIELDS), and what it costs to hire them (gold). How many a
+ * player can lead: one, and more as their Command grows (progress.js TREES).
  */
 export const HIRES = Object.freeze({
-    warrior: { weapon: "sword", price: 40 },
+    warrior: { weapon: "sword", price: 40, shield: true },
     ranger: { weapon: "bow", price: 40 },
     rogue: { weapon: "sword", price: 30 },
     mage: { weapon: "staff", price: 60 },
     cleric: { weapon: "hammer", price: 60 },
 });
+
+/**
+ * The shields others carry (core/battle.js `shield`): a people's soldiers with a one-handed blade
+ * (core/gear.js SHIELD_ARMS: their uniform's shield), their captains' better, and a hired
+ * warrior's: how often each catches a blow from in front on it, and how much of it the shield
+ * takes.
+ */
+export const NPC_SHIELDS = Object.freeze({
+    soldier: { chance: 0.15, share: 0.3, spells: false },
+    captain: { chance: 0.25, share: 0.45, spells: false },
+    follower: { chance: 0.2, share: 0.3, spells: false },
+});
+
+// A soldier's shield, if what they fight with leaves a hand for one (NPC_SHIELDS)
+const shieldOf = (weapon, rank) => (SHIELD_ARMS.includes(weapon) ? NPC_SHIELDS[rank] : null);
 
 /** How near (metres) a people's soldiers must be to see a player bring down their enemy, and owe them for it (M7). */
 export const FAVOUR_SIGHT = 25;
@@ -276,7 +291,7 @@ export const BOUGHT = Object.freeze({
 export const SAFETY = Object.freeze({ ms: 3000 });
 
 /** The skills' experience for each thing done, besides the damage done or taken, or healed. */
-const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5, evasion: 0.3, dodged: 20 });
+const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5, evasion: 0.3, dodged: 20, blocked: 20 });
 
 // The skills of the body: as each grows, Evasion grows by a share of it (XP.evasion)
 const BODILY = new Set(["blade", "marksman", "endurance"]);
@@ -300,6 +315,7 @@ export const REFUSALS = Object.freeze({
     unknown: "You haven't learnt that.",
     item: "You can't do that with it.",
     shield: "Not with that weapon.",
+    unshielded: "You need a shield in your other hand.",
     cooldown: "Not ready yet.",
     official: "They're not the one to ask.",
     stranger: "They've nothing for a stranger.",
@@ -1430,8 +1446,11 @@ export class Host {
                 break;
             }
             case "stunned":
-                // (Stunning with a hex: not a spell of the air's that stuns as it strikes)
-                if (!SPELLS[event.spell]?.school) {
+                // (Stunning with a hex: not a spell of the air's that stuns as it strikes; a shield
+                // bash grows the knack with a shield)
+                if (event.ability === "shieldBash") {
+                    this.#gain(by, "shield", XP.stun);
+                } else if (!SPELLS[event.spell]?.school) {
                     this.#gain(by, "hexes", XP.stun);
                 }
 
@@ -1442,6 +1461,10 @@ export class Host {
             case "dodged":
                 // (Slipping a blow, by the knack or a spell: the knack grows)
                 this.#gain(own, "evasion", XP.dodged);
+                break;
+            case "blocked":
+                // (Catching a blow on a shield: the knack grows)
+                this.#gain(own, "shield", XP.blocked);
                 break;
             case "death": {
                 const fallen = this.battle.actor(event.id);
@@ -1507,9 +1530,10 @@ export class Host {
             this.#event("disguise", { id: player.id, people: passing, change: passing ? "on" : "off" });
         }
 
-        actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell };
+        actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell, bash: 1 + bonus.bash };
         actor.armor = Math.min(ARMOR_CAP, bonus.armor);
         actor.dodge = bonus.dodge;
+        actor.shield = player.progress.guard(bonus);
 
         // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts)
         const breath = player.boons.reduce((times, { staminaTimes = 1 }) => times * staminaTimes, 1);
@@ -2104,9 +2128,14 @@ export class Host {
             return refuse("cooldown");
         }
 
-        // (A blow up close with a weapon for it; a shot from afar with one for that)
+        // (A blow up close with a weapon for it; a shot from afar with one for that; a shield
+        // bash, with a shield in the other hand)
         if (!WEAPONS[actor.weapon]?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === ability.blow)) {
             return refuse("item");
+        }
+
+        if (ability.shield && !actor.shield) {
+            return refuse("unshielded");
         }
 
         const foe = target === null ? null : this.battle.actor(target);
@@ -2123,7 +2152,10 @@ export class Host {
             return refuse(unshot);
         }
 
-        this.battle.empower(actor.id, ability.blow, ability.factor);
+        // (A shield bash: harder and longer, by as much, for a shield made for it)
+        const bash = ability.stun ? (actor.power?.bash ?? 1) : 1;
+
+        this.battle.empower(actor.id, ability.blow, ability.factor * bash, { stun: Math.round((ability.stun ?? 0) * bash) });
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
 
@@ -2387,7 +2419,7 @@ export class Host {
         const captain = /-0$|escort-1$/.test(id);
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
-        this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", ...orders });
+        this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", shield: shieldOf(weapon, captain ? "captain" : "soldier"), ...orders });
     }
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken
@@ -3250,7 +3282,7 @@ export class Host {
         const { weapon } = HIRES[one.calling] ?? HIRES.warrior;
 
         this.followers.set(id, { leader: player.id, name: one.name, calling: one.calling, sex: one.sex ?? "m", seed: one.seed ?? 1, people: one.people ?? "human", from: one.from ?? null, waiting: false });
-        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard" });
+        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", shield: (HIRES[one.calling] ?? HIRES.warrior).shield ? NPC_SHIELDS.follower : null });
         this.#event("follower", { id: player.id, follower: id, name: one.name, change: "joined" });
 
         return id;
@@ -4105,7 +4137,7 @@ export class Host {
 
             const weapon = weaponOf(player.progress);
             const held = ITEMS[weapon]?.slot === "mainHand" ? weapon : "sword";
-            const given = armouryGift(due, held, offHandFree(held), player.realm);
+            const given = armouryGift(due, held, offHandFits(held, "shield") === null, player.realm);
             const gift = this.#made(given);
 
             if (!player.progress.stow(gift)) {

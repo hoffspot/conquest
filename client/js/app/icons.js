@@ -220,6 +220,17 @@ export const ICONS = Object.freeze({
         <path d="${star(0, 4, 20, 7, 10)}" fill="#ffcc4d" opacity="0.55"/>
         <g transform="rotate(35)">${SWORD}</g>`,
 
+    // A round shield slammed forward, a burst behind it and stars: a shield bash
+    shieldBash: `
+        <path d="${star(4, 0, 21, 8, 9)}" fill="#ffcc4d" opacity="0.5"/>
+        <g transform="translate(-3 2) scale(0.78)">
+            <circle r="20" fill="url(#icon-wood)" stroke="#2b1a0d" stroke-width="1.6"/>
+            <circle r="18.5" fill="none" stroke="#8d949b" stroke-width="2.8"/>
+            <circle r="6" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/>
+        </g>
+        <path d="M-21,-12 L-14,-9 M-22,0 L-15,0 M-21,12 L-14,9" stroke="#f2e6cf" stroke-width="2" stroke-linecap="round"/>
+        <path d="${star(15, -14, 4.6, 2)}" fill="url(#icon-stun-star)" stroke="#a86b00" stroke-width="0.9"/>`,
+
     // An arrow in the middle of a target: an aimed shot
     aimedShot: `
         <circle r="18" fill="#f2e6cf" stroke="#6b1f1f" stroke-width="1.4"/>
@@ -839,6 +850,26 @@ export const ITEM_ICONS = Object.freeze({
         <circle r="6" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/>
         <circle cx="-2" cy="-2" r="1.6" fill="#ffffff" opacity="0.7"/>
         <g fill="#cfd5da"><circle cx="0" cy="-14" r="1.1"/><circle cx="14" cy="0" r="1.1"/><circle cx="0" cy="14" r="1.1"/><circle cx="-14" cy="0" r="1.1"/></g>`,
+
+    // A tower shield: tall boards bent round, banded and bossed in iron
+    towerShield: `
+        <rect x="-14" y="-21" width="28" height="42" rx="4" fill="url(#icon-wood)" stroke="#2b1a0d" stroke-width="1.4"/>
+        <path d="M-7,-20 L-7,20 M0,-21 L0,21 M7,-20 L7,20" stroke="#5e3a1c" stroke-width="0.9"/>
+        <rect x="-14" y="-21" width="28" height="42" rx="4" fill="none" stroke="#8d949b" stroke-width="2.2"/>
+        <path d="M-14,-12 L14,-12 M-14,12 L14,12" stroke="#6d6a66" stroke-width="3"/>
+        <circle r="5.5" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/>
+        <circle cx="-1.8" cy="-1.8" r="1.4" fill="#ffffff" opacity="0.7"/>`,
+
+    // A spellward: a mage's dark buckler, brass-rimmed, a ring of runes round a glowing crystal
+    spellward: `
+        <circle r="17" fill="#4b3020" stroke="#2b1a0d" stroke-width="1.3"/>
+        <circle r="15.5" fill="none" stroke="#c49a46" stroke-width="2.4"/>
+        <circle r="10.5" fill="none" stroke="#b9c2c9" stroke-width="0.9"/>
+        <g stroke="#dfe6ec" stroke-width="1.2" stroke-linecap="round">
+            <path d="M0,-12.5 L0,-8.5 M8.8,-8.8 L6,-6 M12.5,0 L8.5,0 M8.8,8.8 L6,6 M0,12.5 L0,8.5 M-8.8,8.8 L-6,6 M-12.5,0 L-8.5,0 M-8.8,-8.8 L-6,-6"/>
+        </g>
+        <circle r="7" fill="url(#icon-crystal-glow)" opacity="0.9"/>
+        <path d="M0,-6 L3.6,0 L0,6 L-3.6,0 Z" fill="#7fd8ff" stroke="#2a6fbf" stroke-width="0.8"/>`,
 
     // A kite shield, blue with a gold chevron
     kiteShield: `

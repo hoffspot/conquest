@@ -571,6 +571,71 @@ function kiteShield() {
     ], "shield");
 }
 
+function towerShield() {
+    // A tall, rounded-cornered shield of boards bent round the body (as a legionary's), about a
+    // metre high and 60 cm across, rimmed in iron, a boss over the grip and two iron bands
+    const shape = new THREE.Shape();
+    const [w, top, bottom, r] = [0.29, 0.42, -0.62, 0.06];
+
+    shape.moveTo(-w + r, bottom);
+    shape.lineTo(w - r, bottom);
+    shape.quadraticCurveTo(w, bottom, w, bottom + r);
+    shape.lineTo(w, top - r);
+    shape.quadraticCurveTo(w, top, w - r, top);
+    shape.lineTo(-w + r, top);
+    shape.quadraticCurveTo(-w, top, -w, top - r);
+    shape.lineTo(-w, bottom + r);
+    shape.quadraticCurveTo(-w, bottom, -w + r, bottom);
+
+    const body = new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.01, bevelSegments: 1, curveSegments: 6 });
+    const bend = (geometry) => {
+        const position = geometry.attributes.position;
+
+        for (let i = 0; i < position.count; i++) {
+            const x = position.getX(i);
+
+            position.setZ(i, position.getZ(i) - x * x * 0.9);
+        }
+
+        geometry.computeVertexNormals();
+
+        return geometry;
+    };
+    const band = (y) => bend(new THREE.BoxGeometry(w * 2 + 0.01, 0.035, 0.05, 12, 1, 1).translate(0, y, 0.02));
+
+    // (Bent round the arm, then faced outward, +x, as the others)
+    return assemble([
+        [at(bend(body), 0, 0, 0, 0, Math.PI / 2, 0), "wood"],
+        [at(band(top - 0.1), 0, 0, 0, 0, Math.PI / 2, 0), "iron"],
+        [at(band(bottom + 0.1), 0, 0, 0, 0, Math.PI / 2, 0), "iron"],
+        [at(new THREE.SphereGeometry(0.075, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0.045, -0.05, 0, 0, 0, -Math.PI / 2), "steel"],
+    ], "shield");
+}
+
+function spellward() {
+    // A mage's shield: a small buckler of dark wood, about 36 cm across, rimmed in brass, with a
+    // ring of runes in silver round a crystal set in its middle, that glows
+    const face = new THREE.SphereGeometry(0.4, 24, 5, 0, Math.PI * 2, 0, 0.47);
+
+    face.scale(1, 0.3, 1);
+    at(face, 0, -0.4 * 0.3 + 0.012, 0);
+
+    const runes = Array.from({ length: 8 }, (_, k) => {
+        const angle = (k / 8) * Math.PI * 2;
+
+        return [at(new THREE.BoxGeometry(0.006, 0.03, 0.012), 0.016, Math.cos(angle) * 0.12, Math.sin(angle) * 0.12, angle, 0, 0), "pewter"];
+    });
+
+    return assemble([
+        [at(face, 0, 0, 0, 0, 0, -Math.PI / 2), "darkWood"],
+        [at(new THREE.CylinderGeometry(0.178, 0.178, 0.01, 28), -0.005, 0, 0, 0, 0, Math.PI / 2), "darkWood"],
+        [at(new THREE.TorusGeometry(0.178, 0.009, 6, 36), 0, 0, 0, 0, Math.PI / 2, 0), "brass"],
+        [at(new THREE.TorusGeometry(0.12, 0.004, 4, 32), 0.012, 0, 0, 0, Math.PI / 2, 0), "pewter"],
+        ...runes,
+        [at(new THREE.OctahedronGeometry(0.04, 0).scale(0.6, 1.2, 1), 0.03, 0, 0), "crystal"],
+    ], "shield");
+}
+
 /** A helmet that fits a head of `radius` (metres), its origin at the head's middle. */
 function helmet(radius, style) {
     const r = radius * 1.08;
@@ -1297,6 +1362,10 @@ export function buildItem(model, fit = {}) {
             return roundShield();
         case "kiteShield":
             return kiteShield();
+        case "towerShield":
+            return towerShield();
+        case "spellward":
+            return spellward();
         case "nasalHelm":
         case "orcHelm": {
             const style = model === "orcHelm" ? "orc" : "nasal";

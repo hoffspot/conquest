@@ -338,9 +338,10 @@ export class Battle {
      * weapon drawn to start with; else it's put away), leash (a guard's: how far from its post,
      * its patrol's first point, it goes after an enemy, metres) }. It comes back to life where
      * it's added. The folk have a `role` (roles.js ROLES: how they rest). A patrol goes round its
-     * points in turn (a guard's one point: its post, facing out the way it's added facing).
+     * points in turn (a guard's one point: its post, facing out the way it's added facing). One
+     * carrying a shield has `shield` (#hit: { chance, share, spells }).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wild = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -372,6 +373,10 @@ export class Battle {
             power: { melee: 1, ranged: 1, heal: 1, stun: 1, ...power },
             armor,
             empowered: null,
+            // The shield it carries, if any: how often it catches a blow or a shot from in front
+            // on it (`chance`), how much of it the shield takes (`share`), and whether it turns
+            // spells too (`spells`: a spellward)
+            shield,
             // The map it's on, where it comes back to life, and the last link it went through
             // ({ link, from, to, time })
             map,
@@ -474,13 +479,14 @@ export class Battle {
 
     /**
      * Make a character's next blow of a kind ("melee" or "ranged") `factor` times as strong (a
-     * power strike, an aimed shot: core/progress.js ABILITIES).
+     * power strike, an aimed shot: core/progress.js ABILITIES), and stun whoever it lands on for
+     * `stun` ms if it's given (a shield bash: longer for a stronger stunner, `power.stun`).
      */
-    empower(id, blow, factor) {
+    empower(id, blow, factor, { stun = 0 } = {}) {
         const actor = this.actor(id);
 
         if (actor && !actor.dead) {
-            actor.empowered = { blow, factor };
+            actor.empowered = { blow, factor, ...(stun ? { stun } : {}) };
         }
     }
 
@@ -2667,6 +2673,40 @@ export class Battle {
         return struck.length;
     }
 
+    // Does a blow (a shot, a spell: `magic`) catch on its target's shield? One carried, from in
+    // front of them (within a right angle of the way they face), a spell only on a spellward;
+    // not on the ground's (a pool, a fire), nor while they're stunned or down; as often as their
+    // knack with it has it
+    #blocks(target, attacker, { magic, ground }) {
+        const shield = target.shield;
+
+        if (!shield || ground || !attacker || attacker === target || (magic && !shield.spells) || target.stunnedUntil > this.time || (target.downUntil ?? 0) > this.time) {
+            return false;
+        }
+
+        const facing = target.facing ?? 0;
+
+        return sin(facing) * (attacker.x - target.x) + cos(facing) * (attacker.y - target.y) >= 0 && this.random.chance(shield.chance);
+    }
+
+    // Stunned by a shield bash, for `ms`: whatever it was doing stops; a creature or a guard turns
+    // on whoever did it
+    #bashed(attacker, target, ms) {
+        target.stunnedUntil = Math.max(target.stunnedUntil, this.time + ms);
+        target.casting = null;
+
+        if (target.attack && !target.attack.struck) {
+            target.attack = null;
+        }
+
+        if (target.ai === "patrol" || target.ai === "wild") {
+            target.target = attacker.id;
+            target.lastSeen = this.time + ms;
+        }
+
+        this.#emit("stunned", { id: target.id, by: attacker.id, ability: "shieldBash", until: target.stunnedUntil });
+    }
+
     // Stunned by a spell, for `ms`: whatever it was doing stops; a creature or a guard turns on
     // whoever did it
     #stun(caster, target, id, ms) {
@@ -2864,19 +2904,38 @@ export class Battle {
         }
 
         const blow = attack.kind === "ranged" ? "ranged" : "melee";
-        const empowered = given === null && attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
+        const boosted = given === null && attacker?.empowered?.blow === blow ? attacker.empowered : null;
+        const empowered = boosted?.factor ?? 1;
         const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
         const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
         const warded = this.#warded(target, { school, element: spell ? null : elementOf(attack) });
         const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1);
-        const damage = factor === 1 ? base : Math.max(1, Math.round(base * factor));
+        const whole = factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
-        if (empowered > 1) {
+        if (boosted) {
             attacker.empowered = null;
         }
 
+        // Caught on a shield (one carried: `shield`): a blow or a shot from in front of them, and
+        // a spell on a spellward, as often as their knack with it has it, the shield taking its
+        // share of it; all of it, nothing gets through. Neither what lingers after it nor a
+        // knockdown, and a shorter stagger
+        const blocked = this.#blocks(target, attacker, { magic, ground }) ? target.shield.share : 0;
+        const damage = blocked ? Math.round(whole * (1 - blocked)) : whole;
+
+        if (blocked) {
+            this.#emit("blocked", { id: target.id, by: attacker.id, attack: attack.id, share: blocked, damage, of: whole, projectile, spell });
+
+            if (!damage) {
+                target.staggeredUntil = Math.max(target.staggeredUntil, this.time + Math.round(attack.stagger / 2));
+                this.#provoke(attacker, target);
+
+                return 0;
+            }
+        }
+
         target.hp = Math.max(0, target.hp - damage);
-        target.staggeredUntil = Math.max(target.staggeredUntil, this.time + attack.stagger);
+        target.staggeredUntil = Math.max(target.staggeredUntil, this.time + (blocked ? Math.round(attack.stagger / 2) : attack.stagger));
         this.#emit("hit", {
             id: target.id,
             by: attacker?.id ?? null,
@@ -2894,7 +2953,7 @@ export class Battle {
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
         // (warded against its school, less long)
-        if (attack.knockdown && target.hp > 0) {
+        if (attack.knockdown && !blocked && target.hp > 0) {
             const down = Math.round(attack.knockdown * (warded ? WARD : 1));
 
             target.stunnedUntil = Math.max(target.stunnedUntil, this.time + down);
@@ -2909,8 +2968,13 @@ export class Battle {
         }
 
         // A blow that leaves something lingering (venom, a web, fire...), sometimes
-        if (attack.afflict && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
+        if (attack.afflict && !blocked && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
             this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[spell ? "spell" : blow] ?? 1, look: attack.afflict.look ?? null });
+        }
+
+        // A shield bash: stunned as well (a stronger stunner's, longer)
+        if (boosted?.stun && target.hp > 0) {
+            this.#bashed(attacker, target, Math.round(boosted.stun * (attacker.power?.stun ?? 1)));
         }
 
         if (attacker) {

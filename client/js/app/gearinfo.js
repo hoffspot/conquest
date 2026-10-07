@@ -5,7 +5,7 @@
 // would change (better or worse), and what it's worth. Pure: from the player's progress
 // (core/progress.js), no DOM.
 
-import { disguiseOf, GEAR, GEAR_SLOTS, handsOf, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
+import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, handsOf, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { priceOf, QUALITIES } from "../core/progress.js";
 import { WEAPONS } from "../core/weapons.js";
@@ -31,6 +31,10 @@ function kindOf(id) {
 
     if (def.withBow) {
         return "Off hand, with a bow";
+    }
+
+    if (def.robust) {
+        return def.spells ? "Off hand: a mage's shield (with a wand or a sword)" : "Off hand: a shield (with a sword)";
     }
 
     return def.slot === "ring" ? "Ring" : (GEAR_SLOTS.find(({ takes }) => takes === def.slot)?.label ?? def.slot);
@@ -66,6 +70,20 @@ export function describe(item, progress, { index = null, label = item.id, haggle
 
     if (def.magic && item.boost) {
         lines.push({ text: `+${Math.round(item.boost * 100)}% spell power`, tone: "base" });
+    }
+
+    if (def.spellTimes) {
+        lines.push({ text: `Held in both hands: spells ${Math.round((def.spellTimes - 1) * 100)}% stronger again`, tone: "base" });
+    }
+
+    // (A shield: how much of a blow caught on it it takes, of the most one of its make can; and a
+    // spellward's spells)
+    if (def.robust) {
+        lines.push({ text: `Blocks ${Math.round((item.boost ?? 0) * 100)}% of a blow caught on it (up to ${Math.round(blockMost(item.id, quality) * 100)}% for its make)`, tone: "base" });
+
+        if (def.spells) {
+            lines.push({ text: "Catches spells as well as blows", tone: "base" });
+        }
     }
 
     if (def.kicks) {
@@ -144,6 +162,7 @@ export const REASONS = Object.freeze({
     twoHanded: "The weapon in hand takes both hands.",
     bow: "A bow's other hand takes only a quiver.",
     quiver: "A quiver goes only with a bow.",
+    ward: "A wand's other hand takes only a mage's shield, a spellward.",
     unarmed: "That would leave nothing to fight with: put on another weapon, or spiked boots.",
     full: "There's no room in the pack for what comes off.",
 });
@@ -154,10 +173,12 @@ export const REASONS = Object.freeze({
  */
 export function totals(progress, { hp = 50, stamina = 50 } = {}) {
     const bonus = progress.bonuses();
+    const shield = progress.guard(bonus);
     const pct = (value) => `${Math.round(value * 100)}%`;
     const rows = [
         { label: "Armour", value: `${pct(bonus.armor)} off each blow` },
         { label: "Dodge", value: `${pct(bonus.dodge)} of blows and shots` },
+        { label: "Block", value: shield ? `${pct(shield.chance)} of blows from in front${shield.spells ? " and spells" : ""}, ${pct(shield.share)} of each` : "No shield in hand" },
         { label: "Hit points", value: String(hp + bonus.hp) },
         { label: "Stamina", value: String(stamina + bonus.stamina) },
         { label: "Melee", value: `+${pct(bonus.melee)}` },

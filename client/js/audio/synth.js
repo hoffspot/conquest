@@ -171,6 +171,12 @@ export const SOUNDS = {
         volume: 0.9,
         make: (random) => add(add(thump(75, 38, 0.5, 0.14), burst(random, 0.35, "lowpass", 650, 0.8, 0.002, 0.08), 0.8), burst(random, 0.03, "highpass", 3000, 0.7, 0.0005, 0.006), 0.5),
     },
+    // A blow caught on a shield: the boards' thud, and the boss and rim ringing
+    block: {
+        variants: 3,
+        volume: 0.85,
+        make: (random) => add(add(thump(115, 60, 0.26, 0.07), burst(random, 0.16, "lowpass", 900, 0.8, 0.001, 0.035), 0.8), ring([[880, 0.16, 0.16], [1390, 0.11, 0.12], [2210, 0.07, 0.08]], 0.4)),
+    },
     pierce: {
         variants: 3,
         volume: 0.7,

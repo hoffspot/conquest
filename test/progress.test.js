@@ -65,7 +65,7 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(progress.toNext("blade").to, null);
     });
 
-    it("gives each tree's bonuses at its rank, and its abilities, every one a spell or a stronger blow", () => {
+    it("gives each tree's bonuses at its rank, and its abilities, every one a spell, a stronger blow or a stunning one", () => {
         const progress = new Progress({ skills: { blade: 300, hexes: 300, endurance: 2000, trade: 100 }, gear: { mainHand: { id: "sword" } } });
         const bonus = progress.bonuses();
 
@@ -80,7 +80,7 @@ describe("growing stronger (progress.js)", () => {
 
         for (const [id, ability] of Object.entries(ABILITIES)) {
             assert.ok(TREES[ability.tree].abilities[2] === id);
-            assert.ok(ability.spell ? SPELLS[ability.spell] : ability.factor > 1, id);
+            assert.ok(ability.spell ? SPELLS[ability.spell] : ability.factor > 1 || ability.stun > 0, id);
         }
     });
 
@@ -147,11 +147,15 @@ describe("growing stronger (progress.js)", () => {
             }
         }
 
-        // (The guild's: its wands and grimoires, its hats, its jewellery, its draughts and cures,
-        // its tomes; the common of each kind before the fine)
+        // (The guild's: its wands and grimoires, its spellwards, its hats, its jewellery, its
+        // draughts and cures, its tomes; the common of each kind before the fine)
         assert.deepEqual(
             [...new Set(wares("guild").sort(shopOrder).map(({ id }) => WARE_KINDS[wareKind(id)]))],
-            ["Weapons", "Clothes and armour", "Jewellery", "Food, drink and draughts", "Tomes and scrolls"],
+            ["Weapons", "Shields and off hand", "Clothes and armour", "Jewellery", "Food, drink and draughts", "Tomes and scrolls"],
+        );
+        assert.deepEqual(
+            wares("guild").filter(({ id }) => wareKind(id) === "offHand").map(({ id }) => id),
+            ["spellward", "spellward"],
         );
         assert.deepEqual(
             wares("guild").sort(shopOrder).filter(({ id }) => wareKind(id) === "weapon").map(({ id, quality }) => `${quality} ${id}`),
@@ -199,7 +203,7 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(progress.equip(4), "quiver", "a quiver only with a bow");
         assert.equal(progress.equip(0), null);
         assert.equal(progress.gear.offHand.id, "kiteShield");
-        assert.equal(progress.pack[0], null);
+        assert.deepEqual(progress.pack[0], { id: "roundShield", quality: "common", boost: 0.2, count: 1 }, "(the round shield a sword starts with, where the kite shield was)");
         assert.equal(progress.equip(1), null);
         assert.deepEqual(progress.gear.chest, { id: "mail", quality: "fine" });
         assert.deepEqual(progress.worn().map(({ id }) => id), ["chest", "bracers", "legs", "boots", "offHand"].map((slot) => progress.gear[slot].id));

@@ -4,7 +4,10 @@
 //  - head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and both hands;
 //  - a weapon in the main hand; one held in both hands (a staff, a war hammer, a bow, spiked
 //    gauntlets, a grimoire held open) leaves nothing for the other, except a bow, whose other
-//    hand takes a quiver; one-handed (a sword, a wand), the other takes a shield;
+//    hand takes a quiver; one-handed, the other takes a shield (a sword, any; a wand, only a
+//    mage's: a spellward);
+//  - each shield as robust as it's made (`robust`), and how much of a blow it takes when it's
+//    caught on it rolled when it's made, more the better made (BLOCK_MOST, rollBlock);
 //  - each piece as well made as it was (progress.js QUALITIES), and, the better made, with more
 //    bonuses rolled on it (a keen sword, a helm of the bear), and named for them;
 //  - each people's soldiers' pieces (their uniform: `people`), whose sets bring bonuses of their
@@ -51,16 +54,21 @@ export const UNIFORM_PEOPLES = Object.freeze(["human", "elf", "darkElf", "cat", 
 export const GEAR = Object.freeze({
     // Weapons (core/weapons.js WEAPONS: how they fight)
     sword: { label: "Sword", slot: "mainHand", hands: 1, price: 30 },
-    wand: { label: "Wand", slot: "mainHand", hands: 1, price: 40, magic: true },
+    wand: { label: "Wand", slot: "mainHand", hands: 1, price: 40, magic: true, ward: true },
     staff: { label: "Staff", slot: "mainHand", hands: 2, price: 20 },
     hammer: { label: "War hammer", slot: "mainHand", hands: 2, price: 35 },
     bow: { label: "Bow", slot: "mainHand", hands: 2, price: 35, quiver: true },
     gauntlets: { label: "Spiked gauntlets", slot: "mainHand", hands: 2, price: 25 },
-    grimoire: { label: "Grimoire", slot: "mainHand", hands: 2, price: 45, magic: true },
-    // The other hand: shields, with a one-handed weapon; a quiver, with a bow
-    roundShield: { label: "Round shield", slot: "offHand", armor: 0.06, price: 20 },
-    kiteShield: { label: "Kite shield", slot: "offHand", armor: 0.1, price: 45 },
-    shield: { label: "Shield", slot: "offHand", armor: 0.08, price: 40, uniform: true },
+    // (Held open in both hands, its spells a quarter stronger again than a wand's: `spellTimes`)
+    grimoire: { label: "Grimoire", slot: "mainHand", hands: 2, price: 45, magic: true, spellTimes: 1.25 },
+    // The other hand: shields, with a one-handed weapon (a wand's, only a spellward: `ward`); a
+    // quiver, with a bow. A shield's `robust`: how much of a blow it can take, as a share of
+    // what a tower shield can (BLOCK_MOST); a spellward turns spells too (`spells`)
+    roundShield: { label: "Round shield", slot: "offHand", armor: 0.06, price: 20, robust: 0.6 },
+    kiteShield: { label: "Kite shield", slot: "offHand", armor: 0.1, price: 45, robust: 0.8 },
+    towerShield: { label: "Tower shield", slot: "offHand", armor: 0.12, price: 70, robust: 1 },
+    spellward: { label: "Spellward", slot: "offHand", armor: 0.04, price: 50, robust: 0.5, spells: true, ward: true },
+    shield: { label: "Shield", slot: "offHand", armor: 0.08, price: 40, uniform: true, robust: 0.7 },
     quiver: { label: "Quiver", slot: "offHand", bonus: { ranged: 0.05 }, price: 15, withBow: true },
     // The head
     cap: { label: "Leather cap", slot: "head", armor: 0.02, price: 8 },
@@ -103,6 +111,33 @@ export const GEAR = Object.freeze({
 /** The pieces of each people's uniform (GEAR ids), as their soldiers wear them. */
 export const UNIFORM = Object.freeze(Object.keys(GEAR).filter((id) => GEAR[id].uniform));
 
+/** The weapons a people's soldier carries their uniform's shield with (one-handed blades: WEAPONS keys). */
+export const SHIELD_ARMS = Object.freeze(["sword", "cleaver"]);
+
+/** The shields (GEAR ids): each as robust as it is (`robust`). */
+export const SHIELDS = Object.freeze(Object.keys(GEAR).filter((id) => GEAR[id].robust));
+
+/**
+ * How much of a blow caught on a shield it can take at the most, by its make: a tower shield's
+ * (the most robust), the rest as much less as they're less robust (a spellward half of it). Each
+ * one made has its own, rolled (rollBlock).
+ */
+export const BLOCK_MOST = Object.freeze({ common: 0.5, fine: 0.65, masterwork: 0.8, legendary: 1 });
+
+/** The most a shield of a make can take of a blow (a share: BLOCK_MOST, as robust as it is). */
+export const blockMost = (id, quality = "common") => Math.round((BLOCK_MOST[quality] ?? BLOCK_MOST.common) * (GEAR[id]?.robust ?? 0) * 100) / 100;
+
+/**
+ * How much of a blow a shield takes when it's caught on it, rolled as it's made (random.js
+ * random): from half the most its make can (blockMost) to all of it, a whole percent, the higher
+ * the rarer.
+ */
+export function rollBlock(id, quality, random) {
+    const roll = random.next();
+
+    return Math.round(blockMost(id, quality) * (0.5 + 0.5 * roll * roll) * 100) / 100;
+}
+
 /** What each bonus is called, and how it's shown (`share`: a percentage). */
 export const STATS = Object.freeze({
     armor: { label: "Armour", share: true },
@@ -113,6 +148,8 @@ export const STATS = Object.freeze({
     spell: { label: "Spell power", share: true },
     heal: { label: "Healing", share: true },
     stun: { label: "Stun length", share: true },
+    block: { label: "Block chance", share: true },
+    bash: { label: "Shield bash", share: true },
     haggle: { label: "Haggling", share: true },
     persuade: { label: "Persuasion", share: true },
 });
@@ -132,11 +169,13 @@ export const AFFIXES = Object.freeze({
     sturdy: { prefix: "Sturdy", stat: "armor", range: [0.01, 0.025], on: [...ARMOUR_SLOTS, "amulet"] },
     keen: { prefix: "Keen", stat: "melee", range: [0.04, 0.1], on: [...MELEE_WEAPONS, "gloves", "bracers", ...JEWELS] },
     trueShot: { prefix: "True", stat: "ranged", range: [0.04, 0.1], on: ["bow", "quiver", "gloves", "bracers", ...JEWELS] },
-    arcane: { prefix: "Arcane", stat: "spell", range: [0.04, 0.1], on: [...MAGIC_WEAPONS, "head", "cloak", ...JEWELS] },
+    arcane: { prefix: "Arcane", stat: "spell", range: [0.04, 0.1], on: [...MAGIC_WEAPONS, "spellward", "head", "cloak", ...JEWELS] },
     tireless: { prefix: "Tireless", stat: "stamina", range: [5, 15], on: ["mainHand", "boots", "legs", "belt", "cloak", ...JEWELS] },
     bear: { suffix: "of the Bear", stat: "hp", range: [5, 15], on: ["mainHand", "chest", "head", "belt", "legs", "offHand", ...JEWELS] },
-    mending: { suffix: "of Mending", stat: "heal", range: [0.05, 0.15], on: ["staff", "wand", "head", "cloak", ...JEWELS] },
-    binding: { suffix: "of Binding", stat: "stun", range: [0.08, 0.2], on: [...MAGIC_WEAPONS, "gloves", ...JEWELS] },
+    mending: { suffix: "of Mending", stat: "heal", range: [0.05, 0.15], on: ["staff", "wand", "spellward", "head", "cloak", ...JEWELS] },
+    binding: { suffix: "of Binding", stat: "stun", range: [0.08, 0.2], on: [...MAGIC_WEAPONS, "spellward", "gloves", ...JEWELS] },
+    stalwart: { prefix: "Stalwart", stat: "block", range: [0.02, 0.05], on: SHIELDS },
+    ram: { suffix: "of the Ram", stat: "bash", range: [0.15, 0.35], on: SHIELDS.filter((id) => !GEAR[id].spells) },
     fox: { suffix: "of the Fox", stat: "haggle", range: [0.02, 0.06], on: ["gloves", "belt", ...JEWELS] },
     eloquence: { suffix: "of Eloquence", stat: "persuade", range: [0.05, 0.12], on: ["head", "cloak", ...JEWELS] },
 });
@@ -179,7 +218,8 @@ export const handsOf = (id) => GEAR[id]?.hands ?? 0;
 /**
  * Whether a piece can go in the other hand with a weapon (GEAR ids; none: bare-handed, or
  * kicking in spiked boots): null, or why not ("twoHanded": the weapon takes both hands; "quiver":
- * a quiver goes only with a bow; "bow": a bow's other hand takes only a quiver).
+ * a quiver goes only with a bow; "bow": a bow's other hand takes only a quiver; "ward": a wand's
+ * takes only a mage's shield, a spellward).
  */
 export function offHandFits(weapon, piece) {
     const def = GEAR[piece];
@@ -196,7 +236,11 @@ export function offHandFits(weapon, piece) {
         return "quiver";
     }
 
-    return handsOf(weapon) >= 2 ? "twoHanded" : null;
+    if (handsOf(weapon) >= 2) {
+        return "twoHanded";
+    }
+
+    return GEAR[weapon]?.ward && def?.robust && !def.spells ? "ward" : null;
 }
 
 /** Whether a weapon leaves the other hand free for anything (false: it's greyed out, or a quiver's only). */
@@ -217,7 +261,8 @@ const rounded = (stat, value) => (STATS[stat].share ? Math.round(value * 100) / 
 
 /**
  * A piece of gear as it's made (random.js random): { id, quality, people (a uniform's), bonuses
- * ({ stat: value }), affixes (AFFIXES keys, for its name), name (a legendary one's own) }. As many
+ * ({ stat: value }), affixes (AFFIXES keys, for its name), name (a legendary one's own), boost (a
+ * shield's: how much of a blow it takes, rollBlock) }. As many
  * bonuses as its make has (ROLLS; jewellery at least one), each different, stronger the better
  * made; a masterwork one's a word before its name and one after.
  */
@@ -259,6 +304,12 @@ export function rollGear(id, quality = "common", random, { people = null } = {})
 
             return [stat, rounded(stat, (least + random.next() * (most - least)) * strength)];
         }));
+    }
+
+    // (A shield: how much of a blow it takes, as `boost`, a wand's is how much it strengthens
+    // spells)
+    if (def.robust) {
+        item.boost = rollBlock(id, quality, random);
     }
 
     if (quality === "legendary") {
