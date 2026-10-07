@@ -1,18 +1,23 @@
 // Makes the game's recorded sounds (client/sounds, listed in client/js/audio/recorded.js), played
-// instead of synth.js's made ones of the same names once they're downloaded: footsteps on each
-// footing (audio/footing.js SURFACES), cut from recordings by Nox_Sound on Freesound, all CC0
-// (public domain: https://creativecommons.org/publicdomain/zero/1.0/), each sound's page saying so
-// (checked 2026-10-07). One recordist throughout, mostly in soft-soled mountain boots (no heel's
-// click), close and dry, so every footing sounds like the same walker.
+// instead of synth.js's made ones of the same names once they're downloaded (or with none made,
+// on their own), all CC0 or public domain (https://creativecommons.org/publicdomain/zero/1.0/),
+// each source's page saying so (checked 2026-10-07):
+//
+// - Footsteps on each footing (audio/footing.js SURFACES), cut from recordings by Nox_Sound on
+//   Freesound: one recordist throughout, mostly in soft-soled mountain boots (no heel's click),
+//   close and dry, so every footing sounds like the same walker (STEPS, below).
+// - The weapons', armour's and bodies' sounds (scripts/sounds/weapons.js): each a recipe of cuts
+//   of recordings, from Freesound, OpenGameArt's packs (Still North Media's, Jan Schupke's) and
+//   Kenney's, made by scripts/sounds/render.js.
 //
 //   npm run build:sounds
 //
-// Each recording is downloaded once (Freesound's public preview, an MP3: the originals need a
-// login; kept in .cache), made mono, its rumble under 40 Hz taken away (both ways, so nothing's
-// shifted), and each footfall cut from it where it starts to where it's died away (STEPS: picked
-// by ear and eye for being alike, clean, and on the beat). Each is faded in and out, made as
-// loud as the rest (LEVEL, by its loudest 30 ms, as synth.js's are), and saved as an MP3 named for
-// what's in it, so browsers and the service worker can keep them for good.
+// Each recording is downloaded once (into .cache: Freesound's public previews, MP3s, as the
+// originals need a login; a pack's archive whole), made mono, its rumble taken away (both ways,
+// so nothing's shifted), and each sound cut from it where it starts to where it's died away
+// (picked by ear and eye for being alike, clean, and on the beat). Each is faded in and out, made
+// as loud as the rest (LEVEL, by its loudest 30 ms, as synth.js's are), and saved as an MP3 named
+// for what's in it, so browsers and the service worker can keep them for good.
 
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -20,6 +25,9 @@ import { pathToFileURL } from "node:url";
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { MPEGDecoder } from "mpg123-decoder";
 import { loudness } from "../client/js/audio/dsp.js";
+import { decode, fetchSource } from "./sounds/sources.js";
+import { prepare, render } from "./sounds/render.js";
+import * as weapons from "./sounds/weapons.js";
 
 const CACHE = new URL("../.cache/freesound/", import.meta.url);
 const OUT = new URL("../client/sounds/", import.meta.url);
@@ -42,7 +50,10 @@ const HIGHPASS = 40;
 const FADE_IN = 0.002;
 const FADE_OUT = 0.015;
 
-// The recordings, by Freesound id: by Nox_Sound, CC0, each https://freesound.org/s/<id>/
+// The recorded sounds made from recipes (scripts/sounds), by what they are
+const AREAS = { weapons };
+
+// The footsteps' recordings, by Freesound id: by Nox_Sound, CC0, each https://freesound.org/s/<id>/
 const RECORDINGS = {
     490951: { name: "Footsteps_Walk.wav", preview: "490/490951_9250976-hq.mp3" },
     496420: { name: "Footsteps_Leaves_Stereo.wav", preview: "496/496420_9250976-hq.mp3" },
@@ -169,6 +180,9 @@ function footfall(samples, from, to, fadeOut) {
     return out.map((value) => value * gain);
 }
 
+// "swingSword" as "swing-sword", for its files
+const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+
 function encodeMp3(samples) {
     const encoder = new Mp3Encoder(1, RATE, BITRATE);
     const pcm = Int16Array.from(samples, (value) => Math.round(Math.max(-1, Math.min(1, value)) * 32767));
@@ -187,6 +201,7 @@ async function main() {
     const recordings = new Map();
     const list = {};
     const written = new Set();
+    const sources = {};
     let bytes = 0;
 
     await mkdir(OUT, { recursive: true });
@@ -207,8 +222,54 @@ async function main() {
             await writeFile(new URL(file, OUT), mp3);
             written.add(file);
             bytes += mp3.length;
-            list[name].push({ file, from: id });
+            list[name].push({ file, from: [String(id)] });
+            sources[id] = { title: RECORDINGS[id].name, by: "Nox_Sound", page: `https://freesound.org/s/${id}/`, licence: "CC0" };
             console.log(`${file.padEnd(32)} ${String(mp3.length).padStart(6)} bytes  from ${RECORDINGS[id].name} (${(from / RATE).toFixed(3)} to ${(to / RATE).toFixed(3)} s)`);
+        }
+    }
+
+    // The sounds made from recipes: each recording prepared once (by the channel and rumble it's
+    // wanted with)
+    const prepared = new Map();
+    const decoded = new Map();
+
+    for (const area of Object.values(AREAS)) {
+        for (const [name, variants] of Object.entries(area.SOUNDS)) {
+            list[name] = [];
+
+            for (const [k, recipe] of variants.entries()) {
+                for (const { from, channel = null, highpass = 40 } of recipe.layers) {
+                    const key = `${from} ${channel} ${highpass}`;
+
+                    if (!decoded.has(from)) {
+                        const source = area.SOURCES[from];
+
+                        decoded.set(from, await decode(await fetchSource(source), (source.member ?? new URL(source.url).pathname).split(".").pop().toLowerCase()));
+                    }
+
+                    if (!prepared.has(key)) {
+                        prepared.set(key, prepare(decoded.get(from), { channel, highpass }));
+                    }
+                }
+
+                const samples = render(recipe, ({ from, channel = null, highpass = 40 }) => prepared.get(`${from} ${channel} ${highpass}`));
+                const mp3 = encodeMp3(samples);
+                const file = `${kebab(name)}-${k + 1}.${createHash("sha256").update(mp3).digest("hex").slice(0, 8)}.mp3`;
+                const from = [...new Set(recipe.layers.map((layer) => layer.from))];
+
+                await writeFile(new URL(file, OUT), mp3);
+                written.add(file);
+                bytes += mp3.length;
+                list[name].push({ file, from, ...(recipe.peak !== undefined ? { peak: recipe.peak } : {}) });
+
+                for (const key of from) {
+                    const { title, by, page, licence } = area.SOURCES[key];
+
+                    sources[key] = { title, by, page, licence };
+                }
+
+                console.log(`${file.padEnd(32)} ${String(mp3.length).padStart(6)} bytes  ${(samples.length / RATE).toFixed(3)} s`);
+            }
         }
     }
 
@@ -219,27 +280,31 @@ async function main() {
         }
     }
 
-    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from }) => `        { file: ${JSON.stringify(file)}, from: ${from} },\n`).join("")}    ],`);
-    const used = [...new Set(Object.values(list).flatMap((files) => files.map(({ from }) => from)))].sort((a, b) => a - b);
-    const sources = used.map((id) => `    ${id}: { title: ${JSON.stringify(RECORDINGS[id].name)}, by: "Nox_Sound", page: "https://freesound.org/s/${id}/", licence: "CC0" },`);
+    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from, peak }) => `        { file: ${JSON.stringify(file)}, from: ${JSON.stringify(from)}${peak === undefined ? "" : `, peak: ${peak}`} },\n`).join("")}    ],`);
+    const credits = Object.entries(sources)
+        .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+        .map(([key, { title, by, page, licence }]) => `    ${JSON.stringify(key)}: { title: ${JSON.stringify(title)}, by: ${JSON.stringify(by)}, page: ${JSON.stringify(page)}, licence: ${JSON.stringify(licence)} },`);
 
     await writeFile(LIST, `// Made by scripts/build-sounds.js (npm run build:sounds): don't edit it by hand.
 //
 // The sounds recorded rather than made, in client/sounds, played instead of synth.js's of the same
-// names once they're downloaded: footsteps on each footing, cut from recordings by Nox_Sound on
-// Freesound (CC0: public domain), https://freesound.org/people/Nox_Sound/.
+// names once they're downloaded (or, with none made, on their own): footsteps on each footing, the
+// weapons', armour's and bodies'; all CC0 or public domain, each from the recordings in SOURCES.
 
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};
 
-/** Each recorded sound's variants (a synth.js SOUNDS name → [{ file in client/sounds, from: a SOURCES id }]). */
+/**
+ * Each recorded sound's variants (a name → [{ file in client/sounds, from: [SOURCES keys], peak:
+ * when a swing's loudest, s }]).
+ */
 export const RECORDED = Object.freeze({
 ${lines.join("\n")}
 });
 
-/** The recordings they're cut from, by Freesound id: what each is, who recorded it, where it is, its licence. */
+/** The recordings they're made from: what each is, who recorded it, where it is, its licence. */
 export const SOURCES = Object.freeze({
-${sources.join("\n")}
+${credits.join("\n")}
 });
 `);
     console.log(`${written.size} sounds, ${(bytes / 1024).toFixed(0)} KB`);

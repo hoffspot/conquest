@@ -3105,8 +3105,9 @@ else on the page is changing, with the game paused).
 
 ### Sound (audio/)
 
-The effects and the town's sounds are made in code as the game starts, the footsteps are
-recorded, and the music is played on recordings of real instruments. Every one of them can be
+The effects and the town's sounds are made in code as the game starts, the footsteps and the
+weapons', armour's and bodies' sounds are recorded, and the music is played on recordings of real
+instruments. Every one of them can be
 heard outside the game in the **sound studio** (`sound-studio.html`, `js/lab/sound-studio.js`):
 each sound described (`catalog.js`: what it is and when the game plays it) with where it comes
 from, played as the game plays it (through `sound.js`, at the game's levels, from as far off as
@@ -3137,6 +3138,29 @@ played at its own volume:
   arrows, bolts and fireballs; a **hit** for each reaction (a blade's ring for slashes, a knock
   for the staff, a heavy thump for the hammer, a thunk for arrows, a zap for arcane bolts, a
   roar for fire, a meaty thud for punches); a body **falling** as it hits the ground.
+- **Recorded weapons, armour and bodies** (`client/sounds`, made by `npm run build:sounds` from
+  the recipes in `scripts/sounds/weapons.js`): real recordings, all CC0, played instead of the
+  made swings, hits, draws and falls once they're in (for the made ones' places, from the start;
+  those with none made, `RECORDED_ONLY`, a made one in their place till then, or nothing):
+  - **Swings**: one sabre's cuts for the sword, the cleaver (broader) and the hammer (flat, low);
+    a bamboo staff; a sleeve's whoosh for a punch, a fighter's swish for a kick; a bamboo stick
+    flicked for a wand. Each recording's loudest moment is known (`peak`), so it's timed to land
+    with the blow.
+  - **The bow**: an arrow drawn from a leather quiver as the shot starts, the longbow's string
+    drawn back, and its thrum as it's loosed.
+  - **Hits**: wet slaps for a blade's bite (a sword's brighter, a cleaver's deeper), a wooden
+    staff's crack, a deep thud for the hammer, fists on a bag, a boot's thud, an arrow into a
+    target. A blow caught on a shield knocks on its boards, but a blade's rings on its iron
+    (`clash`).
+  - **Armour** (`ARMOUR`, by what's worn over the chest: `game.js` armourOf): under a weapon's
+    or a fist's blow (not a spell's), mail jangles, plate clanks, leather slaps. With each step,
+    a little under the footstep, mail's rings shift and plate knocks; leather swishes running.
+  - **Drawing and putting away**: a sword drawn from a leather sheath as it really is, a quiet
+    scrape (no film's ring); a strap's creak and a wooden knock for a staff, hammer, cleaver,
+    bow or wand; a shield's strap and boards as it's slung; a heavy book for a grimoire; leather
+    creaking as fists close.
+  - **Falls**: a body hitting the floor from its first heavy contact; mail rattling after it for
+    anyone in mail or plate; and an armed body's weapon clattering down just after.
 - **Spells**: a rising chime casting a heal and a warm chord as it lands; the bolt's crackle
   casting Stun and the other spells (a fireball's whoosh for fire's) and a zap and warble as a
   stun lands.

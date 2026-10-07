@@ -8,7 +8,7 @@ import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { BUSES, FOOTSTEPS, GAITS, gainOf, PLACES, recordedFiles, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -267,7 +267,7 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
     const described = (entry) => ["label", "about", "plays"].every((key) => typeof entry[key] === "string" && entry[key].length > 2);
 
     it("describes every sound the game makes, in one of its groups: what it is and when it plays", () => {
-        assert.deepEqual(Object.keys(CATALOG).sort(), Object.keys(SOUNDS).sort(), "a sound added, changed or taken out is described with it");
+        assert.deepEqual(Object.keys(CATALOG).sort(), [...Object.keys(SOUNDS), ...Object.keys(RECORDED_ONLY)].sort(), "a sound added, changed or taken out is described with it");
 
         for (const [name, entry] of [...Object.entries(CATALOG), ...Object.entries(LOOPS)]) {
             assert.ok(GROUPS.includes(entry.group), `${name}'s group`);
@@ -280,19 +280,31 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
         assert.ok(Object.values(MUSIC).every(described));
     });
 
-    it("says where every recording comes from, by whom, under CC0", () => {
+    it("says where every recording comes from, by whom, under CC0 or in the public domain", () => {
         for (const [name, files] of Object.entries(RECORDED)) {
-            assert.ok(SOUNDS[name], `${name} is played instead of a made sound`);
+            assert.ok(SOUNDS[name] || RECORDED_ONLY[name], `${name} is played instead of a made sound, or said to be recorded only`);
 
             for (const { file, from } of files) {
-                const source = SOURCES[from];
-
-                assert.ok(source, `${file}'s source`);
                 assert.match(file, /^[a-z-]+-\d+\.[0-9a-f]{8}\.mp3$/);
-                assert.equal(source.licence, "CC0", file);
-                assert.match(source.page, /^https:\/\/freesound\.org\/s\/\d+\/$/);
-                assert.ok(source.title && source.by, file);
+                assert.ok(from.length > 0, `${file}'s sources`);
+
+                for (const key of from) {
+                    const source = SOURCES[key];
+
+                    assert.ok(source, `${file}'s source ${key}`);
+                    assert.ok(["CC0", "public domain"].includes(source.licence), `${file}: ${source.licence}`);
+                    assert.match(source.page, /^https:\/\//);
+                    assert.ok(source.title && source.by, file);
+                }
             }
+        }
+
+        // (Each recorded-only sound recorded, as loud as it's said, and what plays in its place
+        // till then a made sound)
+        for (const [name, { volume, instead }] of Object.entries(RECORDED_ONLY)) {
+            assert.ok(RECORDED[name]?.length >= 2 && !SOUNDS[name], name);
+            assert.ok(volume > 0 && volume <= 1, name);
+            assert.ok(!instead || SOUNDS[instead], `${name} instead: ${instead}`);
         }
     });
 });
@@ -334,12 +346,12 @@ describe("playing sounds (sound.js)", () => {
 
         played.length = 0;
         sound.play("stepGrass", { volume: 0.5 });
-        sound.play("slash", { volume: 0.5 });
+        sound.play("anvil", { volume: 0.5 });
 
-        const [step, slash] = played;
+        const [step, anvil] = played;
 
         assert.ok(sound.recorded.get("stepGrass").includes(step.source.buffer), "the recording");
-        assert.ok(sound.buffers.get("slash").includes(slash.source.buffer), "a made sound where there's no recording");
+        assert.ok(sound.buffers.get("anvil").includes(anvil.source.buffer), "a made sound where there's no recording");
         assert.ok(Math.abs(route(sound, step.source).gain - 0.5 * SOUNDS.stepGrass.volume * (LEVEL / RECORDED_LEVEL)) < 1e-9, "played up to a made sound's loudness");
 
         // (Before the recordings are decoded, or if they couldn't be downloaded, the made ones)
@@ -357,13 +369,13 @@ describe("playing sounds (sound.js)", () => {
         sound.play("stepStone", { variant: 2 });
         sound.play("stepStone", { variant: 2 });
         sound.play("stepStone", { variant: 1, made: true });
-        sound.play("slash", { variant: SOUNDS.slash.variants - 1 });
+        sound.play("anvil", { variant: SOUNDS.anvil.variants - 1 });
 
         assert.equal(played[0].source.buffer, sound.recorded.get("stepStone")[2]);
         assert.equal(played[1].source.buffer, sound.recorded.get("stepStone")[2], "even twice running");
         assert.equal(played[2].source.buffer, sound.buffers.get("stepStone")[1]);
         assert.ok(Math.abs(route(sound, played[2].source).gain - SOUNDS.stepStone.volume) < 1e-9, "at the made one's own level");
-        assert.equal(played[3].source.buffer, sound.buffers.get("slash").at(-1));
+        assert.equal(played[3].source.buffer, sound.buffers.get("anvil").at(-1));
         sound.close();
     });
 
@@ -457,16 +469,52 @@ describe("playing sounds (sound.js)", () => {
         assert.ok(Math.abs(heard[0].volume - 0.5 * (FOOTSTEPS.walk + FOOTSTEPS.pace * 1.5)) < 1e-9);
     });
 
+    it("hears armour: mail jingling and plate clanking with each step, leather swishing running, and each under a blow but not a spell", async () => {
+        const { sound, played } = await started();
+        const heard = () => played.map(({ source: { buffer } }) => [...sound.recorded].find(([, buffers]) => buffers.includes(buffer))?.[0]);
+
+        played.length = 0;
+        sound.step("stone", null, { armour: "mail" });
+        sound.step("stone", null, { armour: "leather" });
+        sound.step("stone", null, { armour: "leather", speed: 5 });
+        sound.step("stone", null, { armour: "plate" });
+        assert.deepEqual(heard(), ["mailJingle", "stepStone", "stepStone", "clothRustle", "stepStone", "plateClank", "stepStone"]);
+
+        // (Under the step: as loud against it as ARMOUR says)
+        const [jingle, step] = played.map(({ source }) => route(sound, source).gain);
+
+        assert.ok(Math.abs(jingle / step - (ARMOUR.mail.with * RECORDED_ONLY.mailJingle.volume) / SOUNDS.stepStone.volume) < 0.25);
+
+        played.length = 0;
+        sound.hit("slash", null, "plate");
+        sound.hit("fire", null, "plate");
+        sound.hit("punch", null, null);
+        assert.deepEqual(heard(), ["hitPlate", "slash", undefined, "punch"]);
+        sound.close();
+    });
+
+    it("plays a recorded-only sound's made stand-in till its recordings are in, and nothing for one with none", async () => {
+        const { sound, played } = await started();
+
+        sound.recorded.delete("clash");
+        sound.recorded.delete("hitMail");
+        played.length = 0;
+        sound.play("clash");
+        assert.equal(sound.play("hitMail"), null);
+        assert.ok(sound.buffers.get("block").includes(played[0].source.buffer));
+        sound.close();
+    });
+
     it("never plays the same variant of a sound twice running", async () => {
         const { sound, played } = await started();
 
         // (Fewer than can sound at once: the browser's clock stands still here)
         for (let k = 0; k < 20; k++) {
-            sound.play("slash");
+            sound.play("anvil");
         }
 
         // (Leaving out the wind, started with the sound)
-        const buffers = sound.buffers.get("slash");
+        const buffers = sound.buffers.get("anvil");
         const variants = played.map(({ source }) => buffers.indexOf(source.buffer)).filter((variant) => variant >= 0);
 
         assert.equal(variants.length, 20);
@@ -540,9 +588,25 @@ describe("playing sounds (sound.js)", () => {
     it("times a swing to be loudest as the blow lands, and falls silent turned off or hidden", async () => {
         const { sound, played } = await started();
 
+        // (Recorded, by when the recording's said to be loudest; made, by synth.js's PEAKS)
         sound.attack("hammer", { x: 0, z: 0 }, 0.64);
-        assert.ok(Math.abs(played.at(-1).when - (10 + 0.64 - PEAKS.swingHammer)) < 1e-9);
-        assert.equal(sound.attack("bow", { x: 0, z: 0 }, 0.66), null, "bows twang when they let go, not when drawn");
+
+        const { source, when } = played.at(-1);
+
+        assert.ok(sound.recorded.get("swingHammer").includes(source.buffer));
+        assert.ok(source.buffer.peak > 0.05 && Math.abs(when - (10 + 0.64 - source.buffer.peak / source.playbackRate.value)) < 1e-9);
+        sound.play("swingHammer", { peakAt: 0.64, made: true });
+        assert.ok(Math.abs(played.at(-1).when - (10 + 0.64 - PEAKS.swingHammer / played.at(-1).source.playbackRate.value)) < 1e-9);
+
+        // A bow: an arrow taken from the quiver, then the string drawn back (its twang when it
+        // lets go: launch)
+        played.length = 0;
+        sound.attack("bow", { x: 0, z: 0 }, 0.66);
+        assert.deepEqual(
+            played.map(({ source: { buffer } }) => ["arrowQuiver", "bowDraw"].find((name) => sound.recorded.get(name).includes(buffer))),
+            ["arrowQuiver", "bowDraw"],
+        );
+        assert.ok(played[1].when > played[0].when);
 
         sound.setHidden(true);
         assert.equal(sound.play("lock"), null);
