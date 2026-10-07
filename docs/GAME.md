@@ -1170,6 +1170,14 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
   `threats`).
 
+**Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
+wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
+them, so whatever of them is nearer the camera than 1.5 metres, along the way it looks, is
+dithered away, the more the nearer, all of it nearer than 0.7 (`NEAR_FADE`: the camera study's
+recommendation 4, as Elden Ring fades what's near its camera). Each of their materials is made so
+once (by its shader: the fragment's own depth, so no transparency, nothing drawn out of order, and
+their shadows whole), as they're put on.
+
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
 follows** (on): off, it keeps the way it's turned and its tilt as the player walks, only keeping
 up with them; **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
@@ -3696,7 +3704,12 @@ it.
    adds up to, and the host still decides where they get to. Shift held along with a way runs, as
    a Shift-click does, and so does the stick pushed past seven tenths of its reach. The stick
    keeps to its corner rather than springing up under the thumb, and only its own circle takes
-   touches, so the rest of the view taps and drags as before. Thumb stick in Game options is what
+   touches, so the rest of the view taps and drags as before; or, with **Stick under your thumb**
+   (Game options, under Thumb stick, off until asked for), its zone is the bottom left of the
+   screen (up to 380 by 340 pixels) and the stick springs up wherever the thumb lands there, the
+   way it's pushed measured from that point, and goes back to its corner let go (the camera
+   study's recommendation 7: Apple's guidelines, and fewer glances and less drift measured with
+   it), tapping there walking the player no more. Thumb stick in Game options is what
    puts it there, and it's off until then, tapping being how the game has always been walked; the
    keys steer whether it's shown or not, nothing is said of the stick in the opening hint while
    it's off, and a pause lets go of whatever was held. The heads-up display
@@ -4082,7 +4095,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   swiping up from the player to go straight ahead (running),
   steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the
   thumb stick (not there till Game options asks for it, then walking pushed partway, running at
-  its rim, stopping let go, and gone again turned off, the keys still steering without it),
+  its rim, stopping let go, and gone again turned off, the keys still steering without it; asked to
+  float, springing up under the thumb where it lands, walking the way it's pushed from there, and
+  back to its corner let go),
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
