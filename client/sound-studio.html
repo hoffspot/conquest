@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#14110d">
+        <meta name="description" content="Sound studio: every sound in Pellagos described, where it plays, where it comes from, and played as the game plays it">
+
+        <title>Sound Studio</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="sound-studio.css">
+        <script type="module" src="js/lab/sound-studio.js"></script>
+    </head>
+    <body>
+        <header id="top">
+            <div class="title">
+                <h1>Sound Studio</h1>
+                <p class="muted">Every sound Pellagos makes: what it is, when the game plays it, where it comes from. Played here as the game plays it.</p>
+            </div>
+
+            <div class="controls">
+                <button type="button" id="start" class="primary">Start sound</button>
+                <p id="status" class="muted" role="status">Sound starts on a tap: browsers want one first.</p>
+
+                <div class="sliders">
+                    <label>Effects <input id="effects" type="range" min="0" max="1" step="0.05"></label>
+                    <label>Environment <input id="environment" type="range" min="0" max="1" step="0.05"></label>
+                    <label>Music <input id="music" type="range" min="0" max="1" step="0.05"></label>
+                    <label>How far off <input id="distance" type="range" min="0" max="40" step="1" value="2"> <output id="distanceOut">2 m</output></label>
+                    <label class="check"><input id="boost" type="checkbox"> Four times louder, to listen closely</label>
+                </div>
+
+                <input id="search" type="search" placeholder="Find a sound…" aria-label="Find a sound">
+                <nav id="groups" aria-label="Groups"></nav>
+            </div>
+        </header>
+
+        <main id="catalog" aria-live="off"></main>
+
+        <footer class="muted">
+            <p>Each sound's description is in <code>client/js/audio/catalog.js</code>; recordings and their sources in <code>client/js/audio/recorded.js</code> (made by <code>npm run build:sounds</code>); the made ones in <code>client/js/audio/synth.js</code>.</p>
+        </footer>
+    </body>
+</html>

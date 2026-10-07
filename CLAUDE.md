@@ -44,6 +44,12 @@ Others contribute too, so a green pull request can go stale (contribution.md, se
 - Merge only once CI is green on that up-to-date head and `main` hasn't moved since.
 - Use auto-merge where it's turned on.
 
+## Sounds: keep the sound studio current
+
+Whenever a sound is added, changed or taken out, or where the game plays it changes, update its
+entry in `client/js/audio/catalog.js` in the same pull request (contribution.md, section 3). The
+sound studio (`client/sound-studio.html`) shows every sound from there.
+
 ## Before every push
 
 - Docs only (nothing changed but Markdown files): run none of the checks below that run code

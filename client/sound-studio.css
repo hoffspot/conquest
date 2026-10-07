@@ -1,0 +1,264 @@
+/* The sound studio (sound-studio.html): parchment on dark oak, as the game's own screens */
+
+:root {
+    --bg: #14110d;
+    --panel: #1f1a14;
+    --card: #2a231b;
+    --line: #4a3d2e;
+    --ink: #efe4cf;
+    --muted: #b8a88e;
+    --accent: #d9a441;
+    --accent-ink: #1a1408;
+    --recorded: #7fb069;
+    --made: #8fa7c9;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+}
+
+body {
+    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px));
+}
+
+h1,
+h2,
+h3 {
+    font-weight: normal;
+    text-wrap: balance;
+    margin: 0;
+}
+
+h1 {
+    font-size: 1.8rem;
+    letter-spacing: 0.02em;
+}
+
+h2 {
+    font-size: 1.3rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    padding-block: 1.4rem 0.3rem;
+}
+
+h3 {
+    font-size: 1.08rem;
+}
+
+code {
+    font: 0.82rem/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted);
+}
+
+a {
+    color: var(--accent);
+}
+
+.muted {
+    color: var(--muted);
+}
+
+#top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 1;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding-block: 0.8rem;
+    display: grid;
+    gap: 0.6rem;
+}
+
+/* (On a phone the controls are half the screen: they scroll away with the page) */
+@media (max-width: 40rem) {
+    #top {
+        position: static;
+    }
+}
+
+.title p {
+    margin: 0.2rem 0 0;
+    max-width: 65ch;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: center;
+}
+
+.controls #status {
+    margin: 0;
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.sliders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    flex-basis: 100%;
+}
+
+.sliders label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--muted);
+}
+
+.sliders input[type="range"] {
+    width: 7rem;
+    accent-color: var(--accent);
+}
+
+output {
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+}
+
+#search {
+    flex: 1 1 14rem;
+    min-width: 0;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+}
+
+#groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    flex-basis: 100%;
+}
+
+#groups a {
+    font-size: 0.85rem;
+    text-decoration: none;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+}
+
+button {
+    font: inherit;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.3rem 0.65rem;
+    cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+    border-color: var(--accent);
+}
+
+button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+}
+
+button.small {
+    padding: 0.1rem 0.45rem;
+    min-width: 2rem;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+    gap: 0.8rem;
+    padding-block: 0.8rem;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.8rem 0.9rem;
+    display: grid;
+    gap: 0.45rem;
+    align-content: start;
+    min-width: 0;
+}
+
+.card header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card p {
+    margin: 0;
+}
+
+.badge {
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.05rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+}
+
+.badge.recorded {
+    color: var(--recorded);
+}
+
+.badge.made {
+    color: var(--made);
+}
+
+.plays {
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+}
+
+.row .label {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-right: 0.2rem;
+}
+
+.source {
+    font-size: 0.85rem;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+footer {
+    padding-block: 1.5rem 2rem;
+    font-size: 0.85rem;
+    max-width: 75ch;
+}

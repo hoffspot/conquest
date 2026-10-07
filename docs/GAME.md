@@ -3105,8 +3105,12 @@ else on the page is changing, with the game paused).
 
 ### Sound (audio/)
 
-The effects and the town's sounds are made in code as the game starts; the music is played on
-recordings of real instruments. `dsp.js` has the building blocks for the made ones: noise,
+The effects and the town's sounds are made in code as the game starts, the footsteps are
+recorded, and the music is played on recordings of real instruments. Every one of them can be
+heard outside the game in the **sound studio** (`sound-studio.html`, `js/lab/sound-studio.js`):
+each sound described (`catalog.js`: what it is and when the game plays it) with where it comes
+from, played as the game plays it (through `sound.js`, at the game's levels, from as far off as
+asked), each recording and each made variant on its own, the wind, and the music in each place. `dsp.js` has the building blocks for the made ones: noise,
 filters (biquads, sweeping for swings), envelopes, tones, and a plucked string (Karplus-Strong,
 tuned between samples with an all-pass filter so it's in tune at any pitch). `sound.js` plays
 it all with the Web Audio API, in three **buses**, each with its own volume (the sliders in Game
