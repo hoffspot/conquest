@@ -26,7 +26,7 @@
 import { createRandom } from "../core/random.js";
 import { add, count, filter, finish, hit, noise, pluck, shape, swell, tone } from "./dsp.js";
 
-export { loudness, SAMPLE_RATE } from "./dsp.js";
+export { LEVEL, loudness, SAMPLE_RATE } from "./dsp.js";
 
 const TAU = 2 * Math.PI;
 
