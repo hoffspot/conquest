@@ -314,7 +314,7 @@ the mouth yet:
   other shapes), a closing lid crumpled them: the cards sit a little out from the lids, and the
   skin nearest a card's tip is the lid's fold, which hardly moves. Now each column of a card is
   carried as the lid's edge is the same way round the eye and turned about its root by as much
-  as the edge turns about the eye's middle (up to 46°). The lid's edge is its skin nearest the
+  as the edge turns about the eye's middle (up to 45°). The lid's edge is its skin nearest the
   eye's opening (the skin is closed round the eye: past the edge it lines the lid, inwards).
 - **On the GPU, shared.** three.js's own morph targets keep a texture of every target's moves at
   every vertex for each geometry: each character has its own, so a quarter of a megabyte a shape
