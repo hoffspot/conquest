@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { Actions, ATTACKS, DODGES, DRAWS, FALLS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, DODGES, DRAWS, FALLS, EMOTE_WAYS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed, slung } from "../client/js/characters/character.js";
 import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
@@ -13,6 +13,8 @@ import { buildItem } from "../client/js/characters/items.js";
 import { limitRotation, Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.js";
+import { CHEERING, EMOTES, GREETINGS, greetingOf, isEmote } from "../client/js/core/emotes.js";
+import { FACES } from "../client/js/characters/expressions.js";
 import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { Avatar, POSING, posingEvery } from "../client/js/world/avatar.js";
@@ -143,7 +145,7 @@ describe("attacks (actions.js)", () => {
         }
     });
 
-    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack, a rest, a guard's sway, a flinch or a dodge", () => {
+    it("plays animators' clips as key poses: each baked clip's every key a value for every channel, timed from 0 through the blow to 2, and in an attack, a rest, an emote, a guard's sway, a flinch or a dodge", () => {
         assert.ok(CLIP_HEIGHT > 1.5 && CLIP_HEIGHT < 1.9);
 
         for (const [clip, { channels, keys, hit, seconds }] of Object.entries(CLIP_KEYS)) {
@@ -161,7 +163,7 @@ describe("attacks (actions.js)", () => {
             assert.ok(channels.filter((channel) => /(UpLeg|Leg|Foot|ToeBase)\./.test(channel)).every((channel) => channel.startsWith("Right")), `${clip}: only a kicking leg`);
         }
 
-        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat()].flatMap(({ clip }) => (clip ? [clip] : [])).concat(Object.values(GUARD_SWAYS).map(({ clip }) => clip), Object.values(REACTIONS).flatMap(({ clips = [] }) => clips), Object.values(DODGES));
+        const clipped = [...Object.values(ATTACKS).flatMap(({ variants }) => variants), ...Object.values(RESTS).flat(), ...Object.values(EMOTE_WAYS).flat()].flatMap(({ clip }) => (clip ? [clip] : [])).concat(Object.values(GUARD_SWAYS).map(({ clip }) => clip), Object.values(REACTIONS).flatMap(({ clips = [] }) => clips), Object.values(DODGES));
 
         assert.deepEqual([...new Set(clipped)].sort(), Object.keys(CLIP_KEYS).sort(), "every baked clip played");
     });
@@ -1205,6 +1207,109 @@ describe("resting (actions.js RESTS, roles.js)", () => {
 
             assert.ok(pelvis.y < standing.pelvis.y - 0.25, `${ROLES.patron.rests[way].name}: sitting`);
         }
+    });
+});
+
+describe("emotes (actions.js EMOTE_WAYS, core/emotes.js)", () => {
+    // Where the hands and head are at an emote's key moment, done a way, standing still (world
+    // metres), and where they were before it (and the right shoulder)
+    function emoting(name, way) {
+        const { character, walker, actions } = fighter();
+
+        walker.update(0);
+
+        const before = { head: world("Head", character), shoulder: world("RightArm", character) };
+
+        actions.emote(name, { variant: way });
+        walker.update(EMOTE_WAYS[name][way].hitAt ?? EMOTES[name].hitAt);
+
+        return { before, head: world("Head", character), right: world("RightHand", character), left: world("LeftHand", character) };
+    }
+
+    it("has ways for every emote, timed as its clips are, keyed from 0 through its moment to 2, each with a face or none; the folk's greetings and cheers among them", () => {
+        assert.deepEqual(Object.keys(EMOTE_WAYS), Object.keys(EMOTES));
+
+        for (const [name, { label, hitAt, duration, face }] of Object.entries(EMOTES)) {
+            assert.ok(label && isEmote(name), name);
+            assert.ok(face === null || FACES[face], `${name}: ${face}`);
+            assert.ok(hitAt > 0.3 && hitAt < duration && duration <= 5, name);
+
+            for (const way of EMOTE_WAYS[name]) {
+                const times = way.keys.map(([time]) => time);
+
+                assert.equal(times[0], 0, way.name);
+                assert.equal(times.at(-1), 2, way.name);
+                assert.ok(times.every((time, k) => k === 0 || time > times[k - 1]), `${way.name}: key times in order`);
+
+                if (way.clip) {
+                    assert.deepEqual([way.hitAt ?? hitAt, way.duration ?? duration], [CLIP_KEYS[way.clip].hit, CLIP_KEYS[way.clip].seconds], `${name}: ${way.name} timed as its clip`);
+                }
+            }
+        }
+
+        assert.equal(isEmote("toString"), false);
+        assert.equal(isEmote(null), false);
+        assert.ok([...Object.values(GREETINGS), ...CHEERING.ways].every(isEmote));
+        assert.equal(greetingOf("ruler", "folk"), "bow");
+        assert.equal(greetingOf("priest", "folk"), "bow");
+        assert.equal(greetingOf("guard", "soldier"), "nod");
+        assert.equal(greetingOf("guard", "follower"), "nod");
+        assert.equal(greetingOf("barmaid", "folk"), "wave");
+    });
+
+    it("shows an emote any way at first, then never the same way twice running, with its face; runs its course, eases out when told to stop, and gives way to anything else", () => {
+        const { walker, actions } = fighter();
+        const ways = [];
+
+        for (let k = 0; k < 20; k++) {
+            ways.push(actions.emote("wave"));
+        }
+
+        assert.ok(ways.every((way, k) => k === 0 || way !== ways[k - 1]));
+        assert.equal(new Set(ways).size, EMOTE_WAYS.wave.length);
+        assert.equal(actions.emote("dance"), null);
+        assert.equal(actions.emote("bow", { variant: 0 }), 0);
+        assert.equal(actions.emoting, "bow");
+        assert.equal(actions.attack.face, null);
+        actions.emote("cheer");
+        assert.equal(actions.attack.face, "smiling");
+
+        // (To its end, then done)
+        walker.update(EMOTES.cheer.duration + 0.1);
+        assert.equal(actions.attack, null);
+        assert.equal(actions.emoting, null);
+
+        // (Told to stop, it eases out, then it's done)
+        actions.emote("no");
+        walker.update(0.5);
+        actions.stopEmote(0.3);
+        assert.equal(actions.emoting, null);
+        walker.update(0.15);
+        assert.ok(actions.attack, "still easing out");
+        walker.update(0.2);
+        assert.equal(actions.attack, null);
+
+        // (Something else done meanwhile takes over)
+        actions.emote("puzzled");
+        actions.rest("adventurer");
+        assert.equal(actions.emoting, null);
+        assert.equal(actions.resting, true);
+    });
+
+    it("waves a hand raised to the shoulder or over the head, cheers with a hand over the head, and bows the head down and forward", () => {
+        for (let way = 0; way < EMOTE_WAYS.wave.length; way++) {
+            const { before, right, left } = emoting("wave", way);
+
+            assert.ok(Math.max(right.y, left.y) > before.shoulder.y - 0.1, `wave ${way}: ${right.y.toFixed(2)}, ${left.y.toFixed(2)}`);
+        }
+
+        const cheer = emoting("cheer", 0);
+
+        assert.ok(Math.max(cheer.right.y, cheer.left.y) > cheer.head.y + 0.1);
+
+        const bow = emoting("bow", 0);
+
+        assert.ok(bow.head.y < bow.before.head.y - 0.05 && bow.head.z > bow.before.head.z + 0.1, `head ${bow.head.toArray().map((v) => v.toFixed(2))}`);
     });
 });
 

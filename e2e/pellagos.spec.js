@@ -3383,10 +3383,13 @@ test("tapping someone walks the player up to talk: their name and what they are,
 
         game.advance(8);
 
-        return { map: game.battle.actor("player").map, order, name: game.world.folk.find(({ id }) => id === "barkeep").name, talking: game.battle.actor("barkeep").talkingTo };
+        // (Greeted as he's come up to: a wave, from a barkeep)
+        const greeted = game.avatars.get("barkeep").actions.variety.last.has("emote:wave");
+
+        return { map: game.battle.actor("player").map, order, name: game.world.folk.find(({ id }) => id === "barkeep").name, talking: game.battle.actor("barkeep").talkingTo, greeted };
     });
 
-    expect(tapped).toMatchObject({ map: "taproom", order: "approach", talking: "player" });
+    expect(tapped).toMatchObject({ map: "taproom", order: "approach", talking: "player", greeted: true });
 
     const talk = page.locator(".talk");
 
@@ -3396,9 +3399,10 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk.locator(".talk-line")).toContainText(tapped.name.split(" ")[0]);
     await expect(talk.locator(".talk-choice").last()).toHaveText(/Farewell/);
 
-    // Asking for news: he answers, with things to ask next
+    // Asking for news: he answers (with a nod), with things to ask next
     await talk.getByRole("button", { name: /news/ }).click();
     await expect(talk.getByRole("button", { name: /Thanks for that/ })).toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.avatars.get("barkeep").actions.variety.last.has("emote:nod"))).toBe(true);
 
     const news = await talk.locator(".talk-line").textContent();
 
@@ -3412,6 +3416,21 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk).toBeHidden();
     await expect(page.locator("#menu")).not.toHaveAttribute("open", "");
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
+
+    // Waving goodbye from the action wheel: the host's told, and the player's seen waving
+    const waved = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        const done = game.act("emote:wave", "self");
+
+        game.advance(0.5);
+
+        return { ok: done.ok, emoting: game.avatars.get("player").actions.emoting };
+    });
+
+    expect(waved).toEqual({ ok: true, emoting: "wave" });
 
     // News of a raid on the town, and a war declared far off; the barkeep tapped again
     await page.evaluate(() => {

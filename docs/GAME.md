@@ -2622,6 +2622,31 @@ of them, for 2 to 5 seconds at a time, then not for another 4 to 10 (`GAZE_NOTIC
 stared at); else ahead, glancing about now and then. They look at the other's eyes (93.5% of
 their height up). The dead don't look at anything.
 
+**Emotes** (core/emotes.js; the animations' ways in
+[CHARACTERS.md](CHARACTERS.md#emotes)). Eight: wave, bow, nod, shake the head, cheer, fist
+pump, puzzled and beckon.
+- **The player's**, from their own wheel or a quick action (each `emote:` and its name: a new
+  character has a wave, a bow, a nod and a cheer on wheel two). It's a command to the host
+  (`{ type: "emote", emote }`), so everyone they play with sees it (the host's `emote` event:
+  `{ id, emote }`, played on whoever's on the player's map). They stop where they were going to
+  show it; it's refused mid-blow or mid-spell ("Not in the middle of a blow or a spell."), down or
+  dead. It ends, eased out of, as soon as they're off somewhere, fighting or fall. `NET_VERSION`
+  60.
+- **The folk's greeting** as someone comes to talk to them (the host's `talk` event):
+  `greetingOf` their role or kind (`GREETINGS`): a bow from a ruler, steward, councillor, reeve
+  or priest; a nod from a sentry, a soldier or a follower; a wave from everyone else (sat down, a
+  nod). They nod at every other reply the player chooses.
+- **Cheering** (`cheering`): a foe falling within 12 metres of those standing about (not going
+  anywhere, fighting, talking or sat down), each of them cheers or pumps a fist 0.3 to 1.2
+  seconds after (by their ids and the fallen's: the same every time; `CHEERING`). The folk cheer
+  a creature of the wild or the orc falling at anyone's hand but another creature's; soldiers
+  and followers a foe of theirs falling at the hand of anyone who's no foe of theirs. A soldier
+  of the town struck down by a raider: only the raider's own cheer.
+
+Each emote shows its face (smiling for a wave, a cheer, a fist pump and a beckon; as they are for
+the rest). They're for the eyes only: nothing in the battle waits on them but the player's own
+stopping.
+
 **Everyone but a player** has their garments drawn all at once, one mesh with one picture of
 the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12
 to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what
@@ -3252,8 +3277,9 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
 
 **What's on them.** The player has two wheels to set, each with two sides (`SETTABLE`):
 - **Their own** (held on themselves): the heals and the spells cast on oneself or a friend
-  (docs/MAGIC.md), and things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
-  there are, and greyed out once none are left.
+  (docs/MAGIC.md), things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
+  there are, and greyed out once none are left, and the emotes (`emote:wave`...: *Emotes*,
+  under *Characters in the world*).
 - **An enemy's**: the elements' spells, Stun, and once learnt Hold and the tomes' spells cast at
   enemies, a power strike and an aimed shot (a blow for another kind of weapon than the one in
   hand is greyed out).
@@ -3261,7 +3287,8 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
 (picking a fight with them), and no other side.
 
-A new character's wheels have Vigor at N on their own, and Burn (N), Hurt (NE), Rumble (NW),
+A new character's wheels have Vigor at N on their own, Make camp at N on its other side with a
+wave (NW), a bow (NE), a nod (W) and a cheer (E) round it, and Burn (N), Hurt (NE), Rumble (NW),
 Blister (E) and Stun (W) on an enemy's (`WHEELS`: the elements' greyed until their tomes are
 read, docs/MAGIC.md, and a flick at one says where the tome's sold); everything else starts
 empty, until the player puts something there in **Game
@@ -3310,7 +3337,10 @@ used on ("On your foe", "On yourself").
 
 Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
 SVG, in colours that say what it does: a glowing green cross for Vigor, gold stars round a violet
-dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard). The icons' gradients
+dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard; for the
+emotes, in skin and cloth over a warm glow, a hand waving, a figure bowing, a head nodding or
+shaking, a figure with its arms flung up, a fist punched up, a head under a question mark, a
+hand calling over). The icons' gradients
 are put in the page once, where every icon finds them (`useDefs`).
 
 While a slice is cooling down (a spell's own cooldown, or a blow's own twelve seconds), it's

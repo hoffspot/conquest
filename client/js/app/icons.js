@@ -187,9 +187,79 @@ const SCROLL_OF_SAFETY = `
         <path d="M6,14 L4,22 L7,20.5 L9,23 L9,14 Z" fill="#b8202a" stroke="#5a0a10" stroke-width="0.8"/>
         <circle cx="7.5" cy="16" r="3" fill="#c8303a" stroke="#5a0a10" stroke-width="0.9"/>`;
 
+// The emotes' pictures (core/emotes.js), in skin and cloth over a warm glow: an open hand (palm
+// out, fingers up, thumb to its left), a head (its eyes), and a figure in strokes
+const EMOTE_GLOW = `<circle r="20" fill="#b07a2a" opacity="0.32"/>`;
+const OPEN_HAND = `
+    <g fill="#f0c9a0" stroke="#6a3f22" stroke-width="1.1">
+        <rect x="-7.4" y="-14" width="3.4" height="13" rx="1.7"/>
+        <rect x="-3.6" y="-17" width="3.4" height="16" rx="1.7"/>
+        <rect x="0.2" y="-16" width="3.4" height="15" rx="1.7"/>
+        <rect x="4" y="-12.5" width="3.2" height="11.5" rx="1.6"/>
+        <rect x="-13" y="-4" width="3.6" height="11" rx="1.8" transform="rotate(-38 -11.2 1.5)"/>
+        <rect x="-7.6" y="-4.5" width="15" height="15" rx="4.5"/>
+    </g>`;
+const HEAD = (x, y, r = 11) => `
+    <circle cx="${x}" cy="${y}" r="${r}" fill="#f0c9a0" stroke="#6a3f22" stroke-width="1.4"/>
+    <circle cx="${x - r * 0.36}" cy="${y - r * 0.1}" r="${r * 0.11}" fill="#3a2414"/>
+    <circle cx="${x + r * 0.36}" cy="${y - r * 0.1}" r="${r * 0.11}" fill="#3a2414"/>`;
+const FIGURE = (strokes) => `<g fill="none" stroke="#f2e6cf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${strokes}</g>`;
+const ARROW = (d, head) => `<path d="${d}" fill="none" stroke="#f2e6cf" stroke-width="2.6" stroke-linecap="round"/><path d="${head}" fill="#f2e6cf"/>`;
+
+const EMOTE_ICONS = {
+    // A hand raised, waving to and fro
+    wave: `${EMOTE_GLOW}
+        <g transform="translate(1 3) rotate(12)">${OPEN_HAND}</g>
+        <path d="M-15,-14 a16,16 0 0 0 -2,14 M-19,-17 a21,21 0 0 0 -3,20 M15,-17 a16,16 0 0 1 4,13 M19,-20 a21,21 0 0 1 5,19" fill="none" stroke="#f2e6cf" stroke-width="1.8" stroke-linecap="round"/>`,
+
+    // Someone bowing from the hips, head low
+    bow: `${EMOTE_GLOW}
+        ${FIGURE("<path d='M-5,20 L-4,5 M0,20 L-1,5'/><path d='M-3,5 L10,-6'/><path d='M9,-5 L11,7'/>")}
+        <circle cx="15" cy="-8" r="5" fill="#f2e6cf"/>`,
+
+    // A head nodding, up and down
+    nod: `${EMOTE_GLOW}${HEAD(-5, 3)}
+        <path d="M-10,8 q5,3.5 10,0" fill="none" stroke="#3a2414" stroke-width="1.4" stroke-linecap="round"/>
+        ${ARROW("M14,-11 L14,11", "M9.5,-10 L14,-17 L18.5,-10 Z M9.5,10 L14,17 L18.5,10 Z")}`,
+
+    // A head shaking, side to side
+    no: `${EMOTE_GLOW}${HEAD(0, 6)}
+        <path d="M-4.5,11 h9" stroke="#3a2414" stroke-width="1.4" stroke-linecap="round"/>
+        ${ARROW("M-12,-15 L12,-15", "M-11,-19.5 L-18,-15 L-11,-10.5 Z M11,-19.5 L18,-15 L11,-10.5 Z")}`,
+
+    // Someone with both arms flung up, and sparkles
+    cheer: `${EMOTE_GLOW}
+        ${FIGURE("<path d='M-5,20 L-1,6 M5,20 L1,6'/><path d='M0,6 L0,-5'/><path d='M0,-4 L-11,-17 M0,-4 L11,-17'/>")}
+        <circle cy="-11" r="5" fill="#f2e6cf"/>
+        <path d="${star(-15, 3, 4.4, 1.3, 4, 0)}" fill="#ffd27a"/>
+        <path d="${star(15, 1, 3.6, 1.1, 4, 0)}" fill="#ffd27a"/>`,
+
+    // A fist punched up into the air
+    fistPump: `${EMOTE_GLOW}
+        <rect x="-5" y="-4" width="10" height="24" rx="3" fill="url(#icon-cloth)" stroke="#6a4a2a" stroke-width="1.2"/>
+        <g stroke="#6a3f22" stroke-width="1.2">
+            <rect x="-8.5" y="-18" width="17" height="15" rx="4.5" fill="#f0c9a0"/>
+            <path d="M-4.2,-18 v6 M0,-18 v6 M4.2,-18 v6" fill="none"/>
+            <rect x="-8.5" y="-10" width="12" height="4.6" rx="2.3" fill="#e8bb8e"/>
+        </g>
+        <path d="M-14,-12 L-19,-15 M-14,-6 L-20,-6 M14,-12 L19,-15 M14,-6 L20,-6" stroke="#f2e6cf" stroke-width="1.8" stroke-linecap="round"/>`,
+
+    // A head, a question over it
+    puzzled: `${EMOTE_GLOW}${HEAD(-4, 6)}
+        <path d="M-8,12 q3,-2 7,0.5" fill="none" stroke="#3a2414" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M8,-13 a6,6 0 1 1 8.5,5.5 c-2.2,1 -3,2.2 -3,4.8" fill="none" stroke="#ffd27a" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="13.5" cy="3.5" r="1.9" fill="#ffd27a"/>`,
+
+    // A hand calling someone over, the way to come
+    beckon: `${EMOTE_GLOW}
+        <g transform="translate(6 4) rotate(-18) scale(0.88)">${OPEN_HAND}</g>
+        ${ARROW("M-19,-12 C-14,-2 -12,4 -7,9", "M-11.5,10.5 L-4,12 L-5.5,4.5 Z")}`,
+};
+
 /** Each action's icon: SVG drawn round 0, 0, about 44 across (the spells' own: spellicons.js). */
 export const ICONS = Object.freeze({
     ...SPELL_ICONS,
+    ...Object.fromEntries(Object.entries(EMOTE_ICONS).map(([name, icon]) => [`emote:${name}`, icon])),
 
     // A great green cross in a ring of light, with more sparkles: the greater heal
     greaterHeal: `

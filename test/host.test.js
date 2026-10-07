@@ -183,6 +183,33 @@ describe("the host (host.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "hellfire", target: "orc" }), { ok: false, reason: "unknown" });
     });
 
+    it("shows a player's emote to everyone, standing still for it: only an emote, and not while they're down, mid-blow or dead", () => {
+        const host = hosted();
+        const player = host.battle.actor(HOST_PLAYER);
+        const [x, y] = player.square;
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "dance" }), { ok: false, reason: "command" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "toString" }), { ok: false, reason: "command" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "move", to: [x + 3, y] }), { ok: true });
+        assert.ok(player.path.length);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "wave" }), { ok: true });
+        assert.equal(player.order, null);
+        assert.equal(player.path.length, 0, "stopped where they were going");
+        assert.deepEqual(
+            run(host, STEP_MS).filter(({ type }) => type === "emote").map(({ id, emote }) => ({ id, emote })),
+            [{ id: HOST_PLAYER, emote: "wave" }],
+        );
+
+        player.downUntil = host.battle.time + 1000;
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "bow" }), { ok: false, reason: "down" });
+        player.downUntil = 0;
+        player.attack = { attack: 0, target: "orc", start: host.battle.time, struck: false };
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "bow" }), { ok: false, reason: "midst" });
+        player.attack = null;
+        player.dead = true;
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "emote", emote: "bow" }), { ok: false, reason: "dead" });
+    });
+
     it("lets a player talk to one of the folk near them, and keeps what's done by talking", () => {
         const host = hosted();
         const one = world.folk.find(({ map }) => map === "taproom");
