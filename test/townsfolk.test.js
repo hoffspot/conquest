@@ -14,6 +14,7 @@ import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { ROLES } from "../client/js/core/roles.js";
 import { CALLINGS, countOut, errandsOf, LINGER, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
 import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
+import { LOOKS } from "../client/js/characters/peoples.js";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -243,5 +244,18 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
 
         assert.equal(treeFor({ id: "townsfolk:x/0", role: "townsfolk" }), TREES.townsfolk);
         assert.ok(ROLES.townsfolk.rests.length >= 5);
+    });
+
+    it("makes a look for everyone the folk can be, a man or a woman, of any people (a woman barkeep among them)", () => {
+        for (const role of Object.keys(ROLES)) {
+            for (const sex of ["f", "m"]) {
+                for (const people of ["human", ...Object.keys(LOOKS)]) {
+                    const look = folkLook({ role, sex, seed: 3, people });
+
+                    assert.ok(look.equipment.every((id) => EQUIPMENT[id]), `${role} ${sex} ${people}`);
+                    assert.ok(Object.values(look.shape.macro).every(Number.isFinite), `${role} ${sex} ${people}: ${JSON.stringify(look.shape.macro)}`);
+                }
+            }
+        }
     });
 });

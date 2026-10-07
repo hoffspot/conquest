@@ -2080,11 +2080,30 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         game.battle.command("player", { type: "move", to: [3, 3] });
         game.advance(8);
+
+        // (The footsteps heard from here: on what, and how long after they're played)
+        const step = game.sound.step.bind(game.sound);
+
+        game.heardSteps = [];
+        game.sound.step = (surface, at, options = {}) => {
+            game.heardSteps.push({ surface, delay: options.delay ?? 0 });
+
+            return step(surface, at, options);
+        };
     });
 
     const up = await through("taproom", "stairs", 6);
 
     expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 3], facing: Math.PI, minimap: "upstairs", heard: "upstairs" });
+
+    // Up them, a few treads heard on the boards one after another
+    const treads = await page.evaluate(() => window.pellagos.game.heardSteps.filter(({ delay }) => delay > 0));
+
+    expect(treads.map(({ delay, surface }) => [Math.round(delay * 100), surface])).toEqual([
+        [26, "wood"],
+        [52, "wood"],
+        [78, "wood"],
+    ]);
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
     expect(await page.evaluate(() => window.pellagos.game.avatars.get("madam").object.visible)).toBe(true);
 

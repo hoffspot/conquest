@@ -3117,12 +3117,13 @@ compressed, and limited just under full scale, so a busy fight turned up can't c
 | Music | The town's score, or the tavern's jig | 35% |
 
 The defaults are set for a phone at about 40% volume (a player's own setting): blows and spells
-reach about −31 to −37 dBFS at their loudest, footsteps about −52, and the music averages about
+reach about −31 to −37 dBFS at their loudest, footsteps about −56, and the music averages about
 −42, a little under the blows. Each slider has 9 to 18 dB of room to turn up. Settings saved on
 the earlier, louder scale (`volumeScale` other than 2) have their volumes forgotten, for these.
 
-**Effects** (`synth.js`), each in a few variants so repeats don't sound the same, and each made
-about as loud as the others (by its loudest 30 ms), then played at its own volume:
+**Effects** (`synth.js`), each in a few variants so repeats don't sound the same (never the same
+variant twice running), and each made about as loud as the others (by its loudest 30 ms), then
+played at its own volume:
 
 - **Swings** for each melee attack, timed so they're loudest as the blow lands; **launches** for
   arrows, bolts and fireballs; a **hit** for each reaction (a blade's ring for slashes, a knock
@@ -3131,14 +3132,35 @@ about as loud as the others (by its loudest 30 ms), then played at its own volum
 - **Spells**: a rising chime casting a heal and a warm chord as it lands; the bolt's crackle
   casting Stun and the other spells (a fireball's whoosh for fire's) and a zap and warble as a
   stun lands.
-- **Footsteps**, as each foot lands (the walker says when), on stone, dirt, grass or wooden
-  boards (upstairs in the tavern), soft, under the blows and the world round them (`FOOTSTEPS`:
-  a walk's about a ninth of a slash, a run's under a fifth), a little louder running; everyone's
-  alike, the player's, the other players', the folk's and the creatures'.
+- **Footsteps**, as each foot lands (the walker says when), on what it lands on (`footing.js`):
+  - **Laid ground** as it's laid: wooden boards (floors, a bridge's deck), stone (cobbles, flags);
+    a road's packed dirt, and ploughed soil's.
+  - **Out in the world, the land's own** (its biome): sand on a beach, snow in the snow and the
+    tundra, scree on mountains, badlands and the volcano's ash, mud in the marsh, leaf litter in
+    the woods, grass everywhere else. Up high, scree from 175 m and snow from 225 m, whatever the
+    land. A road in sand, snow or scree is as loose as the land; ploughed soil in the marsh is mud.
+  - **Through water**, splashing, where it's waded.
+  - Leather-soled, as medieval shoes were (flat, no heel: a heel's click is centuries off), a dull
+    pat with the ground's own sound (a stone's knock and grit, a board's hollow ring, snow's
+    squeaky crunch, scree's rattle, mud's slap and suck, leaves' crackle). Each has its weight in
+    the harmonics a phone's speaker plays, not only under 200 Hz.
+  - Barely heard, and never in the way (`FOOTSTEPS`): well under the blows and the world round
+    them (a walk's about a fourteenth of a slash, a run's about a ninth), a little louder and
+    brighter running, each step a little louder or softer than the last, and heard only within
+    15 metres (a blow's heard to 34), so a busy street doesn't patter.
+  - **Creatures** (`GAITS`, by their bodies: `beast.js`): as heavy as they're big (their height,
+    over a person's or, on all fours, over 1.2 m), louder and lower the bigger. A big stride's a
+    walk at a pace a small one runs at. Beasts on all fours step softer, on paws. A spider's legs
+    skitter, a slime squelches, a serpent slithers and a frog's webbed feet slap, whatever's under
+    them. Nothing's heard of what floats or flies in a swarm, of a dragon in the air or of anyone
+    Levitating.
+  - **Stairs**: four treads on the stairs' boards or stone as anyone goes up or down them, on the
+    player's floor (coming up, louder; going away, quieter).
 - **A door**: its latch lifting, its hinges creaking and it banging shut, when anyone goes through
   the tavern's door on the player's side of it (so the orc following them in is heard).
-- **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath, the action
-  wheel opening, and a flick refused.
+- **Cues**: a target chosen, an enemy slain (one the player or a follower felled, or one the
+  player fought in the last 30 s; not the folk and soldiers' own fights), falling, waking again,
+  out of breath, the action wheel opening, and a flick refused.
 
 They're heard from where they happen: full volume within 4 metres of the player, fading to
 nothing at 34, and panned left or right; at most 24 at once.

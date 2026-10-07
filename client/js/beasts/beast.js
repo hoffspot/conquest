@@ -59,6 +59,13 @@ export function sizeOf(id, seed) {
     return least + seeded(seed * 7919 + 13)() * (most - least);
 }
 
+// What each body steps on (audio/sound.js GAITS): a four-legged beast's paws or hooves, a
+// two-legged one's feet, a spider's many legs, a slime's belly, a serpent's scales, a frog's
+// webbed feet; nothing for what floats (spectres, wisps) or flies in a swarm. And how tall one of
+// it stands that's about as heavy as a person (m), to weigh its steps by: on all fours, lower
+const FEET = Object.freeze({ quadruped: "paws", biped: "feet", arachnid: "legs", blob: "slime", serpent: "scales", frog: "webbed" });
+const AS_HEAVY = Object.freeze({ person: 1.75, quadruped: 1.2 });
+
 /** A creature built in code, drawn and moved as an avatar is. */
 export class BeastAvatar {
     /**
@@ -143,6 +150,12 @@ export class BeastAvatar {
 
         /** Footfalls told (walker.onStep, as a person's walk tells them). */
         this.walker = { onStep: null };
+
+        /**
+         * How its footfalls sound (audio/sound.js step): as heavy as it's big (`size`, a person's
+         * 1: AS_HEAVY), on the feet it has (`feet`: FEET; none for what floats or flies in a swarm).
+         */
+        this.gait = { size: (this.plan.height * this.scale) / (AS_HEAVY[look.body] ?? AS_HEAVY.person), feet: FEET[look.body] ?? null };
 
         const doing = this.doing;
 
@@ -518,6 +531,9 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
 
     avatar.walker.update = (dt, { moved = null, ...rest } = {}) => walk(dt, { ...rest, moved: moved === null ? null : moved / scale });
     avatar.scale = scale;
+
+    // (Its footfalls as heavy as it's big: a goblin's lighter than a man's, a troll's heavier)
+    avatar.gait = { size: scale };
 
     // Standing a while, it passes the time as its kind does (actions.js's rests: a bandit as an
     // adventurer, the rest as a sentry), and stops when it moves or fights

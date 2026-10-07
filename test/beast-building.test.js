@@ -25,6 +25,7 @@ const { BeastAvatar, BUILDERS, dressingCreature } = await import("../client/js/b
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { fold, sculpting } = await import("../client/js/beasts/sculpt.js");
 const { seeded } = await import("../client/js/beasts/shapes.js");
+const { GAITS } = await import("../client/js/audio/sound.js");
 
 // Every mesh under a creature's model: what it is, its colour and every number of its geometry
 function meshesOf(object) {
@@ -125,5 +126,26 @@ describe("creatures built a step at a time (sculpt.js, beast.js)", () => {
         const boar = new BeastAvatar("boar", { seed: 3 });
 
         assert.ok(geometriesOf(boar.object).length > 1);
+    });
+});
+
+describe("creatures' footfalls (beast.js gait)", () => {
+    it("steps on the feet it has, as heavy as it's big; what floats or flies in a swarm isn't heard", () => {
+        const gaits = Object.fromEntries(
+            Object.entries(LOOKS)
+                .filter(([, { body }]) => body !== "humanoid")
+                .map(([id]) => [id, new BeastAvatar(id, { seed: 1 }).gait]),
+        );
+
+        for (const [id, { feet, size }] of Object.entries(gaits)) {
+            const floats = ["spectre", "wisp", "swarm"].includes(LOOKS[id].body);
+
+            assert.ok(floats ? feet === null : Boolean(GAITS[feet]), `${id}: ${feet}`);
+            assert.ok(size > 0 && Number.isFinite(size), `${id}: ${size}`);
+        }
+
+        assert.deepEqual([gaits.caveSpider.feet, gaits.slime.feet, gaits.snake.feet, gaits.bogFrog.feet, gaits.wolf.feet, gaits.skeleton.feet], ["legs", "slime", "scales", "webbed", "paws", "feet"]);
+        assert.ok(gaits.rat.size < gaits.wolf.size && gaits.wolf.size < gaits.bear.size && gaits.bear.size < gaits.dragon.size, ["rat", "wolf", "bear", "dragon"].map((id) => gaits[id].size.toFixed(2)).join());
+        assert.ok(Math.abs(gaits.skeleton.size - 1) < 0.1, "a skeleton's as heavy as a person");
     });
 });

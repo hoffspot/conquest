@@ -24,6 +24,7 @@
 // takes suspending it first), and if that doesn't help, it's made anew, the music carrying on
 // where it was.
 
+import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SCORE } from "./score.js";
 import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
@@ -128,17 +129,35 @@ const CLEAR = 20000;
 const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver" };
 const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "fireball" };
 
-// The footsteps on each kind of ground (setpieces/pieces.js GROUND: grass, road, cobbles, soil,
-// courtyard, planks)
-const STEPS = ["stepGrass", "stepDirt", "stepStone", "stepDirt", "stepStone", "stepWood"];
+// The footsteps on each footing (audio/footing.js SURFACES: "grass" → "stepGrass"...)
+const STEPS = Object.fromEntries(SURFACES.map((surface) => [surface, `step${surface[0].toUpperCase()}${surface.slice(1)}`]));
 
 /**
- * How loud a footstep is, everyone's alike (against its sound's own level: synth.js): walking,
- * `walk` and `pace` more for each metre a second; running, `run`. Soft, under the blows and the
- * world round them (a walk's about a ninth of a slash, a run's under a fifth): a third of what
- * they were.
+ * How loud a footstep is (against its sound's own level: synth.js), everyone's alike for their
+ * size: walking, `walk` and `pace` more for each metre a second; running (faster than `running`
+ * m/s, a person's), `run`. Barely heard, and never in the way: well under the blows and the world
+ * round them (a walk's about a fourteenth of a slash, a run's about a ninth), each a little louder
+ * or softer than the last (by up to `jitter` of it), and heard only near (gone `far` metres off,
+ * where a blow's heard to 34). The bigger (`size`: a person's 1), the louder (as the size to the
+ * power `weight`) and lower; and a big stride's a walk at a pace a small one runs at (the pace
+ * taken over the root of the size).
  */
-export const FOOTSTEPS = Object.freeze({ walk: 0.2, pace: 0.05, run: 0.42 });
+export const FOOTSTEPS = Object.freeze({ walk: 0.13, pace: 0.03, run: 0.26, running: 3, weight: 0.75, sizes: Object.freeze([0.3, 4]), jitter: 0.15, far: 15 });
+
+/**
+ * How each kind of feet sounds (beasts/beast.js gait.feet; a person's own when none's said),
+ * `volume` and `rate` times a person's: feet and paws step on the footing under them, paws softer
+ * and lighter; a spider's legs skitter, a slime squelches, a serpent's scales slither and a
+ * frog's webbed feet slap (`sound`), whatever's under them.
+ */
+export const GAITS = Object.freeze({
+    feet: { volume: 1, rate: 1 },
+    paws: { volume: 0.7, rate: 1.15 },
+    legs: { sound: "skitter", volume: 1, rate: 1 },
+    slime: { sound: "squelch", volume: 1, rate: 1 },
+    scales: { sound: "slither", volume: 1, rate: 1 },
+    webbed: { sound: "squelch", volume: 0.6, rate: 1.5 },
+});
 
 // How long between the hearth's crackles (seconds, from and to)
 const CRACKLES = [0.2, 0.9];
@@ -171,6 +190,9 @@ export class Sound {
         /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
         this.instruments = new Map();
+
+        /** The variant of each sound played last (name → variant), not to play it twice running. */
+        this.played = new Map();
 
         /** Where the player is (metres): sounds are heard from there. */
         this.listener = { x: 0, z: 0 };
@@ -627,9 +649,10 @@ export class Sound {
     /**
      * Play a sound (a SOUNDS name) from a point in the world ({ x, z } metres; null for
      * everywhere), `volume` times its own, starting `delay` seconds from now, `rate` times as fast
-     * (higher). Returns its source node, or null if it isn't played (off, too far, too many).
+     * (higher), heard no further off than `far` metres. Returns its source node, or null if it
+     * isn't played (off, too far, too many).
      */
-    play(name, { at = null, volume = 1, delay = 0, rate = 1 } = {}) {
+    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR } = {}) {
         const context = this.context;
         const buffers = this.buffers.get(name);
 
@@ -648,7 +671,7 @@ export class Sound {
             const dx = at.x - this.listener.x;
             const distance = Math.hypot(dx, at.z - this.listener.z);
 
-            gain *= Math.max(0, Math.min(1, 1 - (distance - NEAR) / (FAR - NEAR))) ** 2;
+            gain *= Math.max(0, Math.min(1, 1 - (distance - NEAR) / (far - NEAR))) ** 2;
             pan = Math.max(-MOST_PAN, Math.min(MOST_PAN, dx / SIDE));
         }
 
@@ -660,7 +683,14 @@ export class Sound {
         const level = context.createGain();
         const bus = this.buses[SOUNDS[name]?.bus ?? "effects"];
 
-        source.buffer = buffers[Math.floor(Math.random() * buffers.length)];
+        // (Any variant but the one played last: the same footstep or blow twice running sounds
+        // mechanical)
+        const last = this.played.get(name) ?? -1;
+        const pick = Math.floor(Math.random() * (buffers.length - (last >= 0 && buffers.length > 1 ? 1 : 0)));
+        const variant = last >= 0 && buffers.length > 1 && pick >= last ? pick + 1 : pick;
+
+        this.played.set(name, variant);
+        source.buffer = buffers[variant];
         source.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
         level.gain.value = gain;
         source.connect(level);
@@ -703,11 +733,27 @@ export class Sound {
         return SOUNDS[reaction] ? this.play(reaction, { at }) : null;
     }
 
-    /** A footstep on a kind of ground (GROUND), walking or running (faster: louder). */
-    step(ground, at, speed = 1.5) {
-        const running = speed > 3;
+    /**
+     * A footstep on a footing (audio/footing.js SURFACES), `delay` seconds from now, `volume`
+     * times as loud: at `speed` (m/s: walking, faster louder; or running, louder still and
+     * brighter), by one `size` big (a person's 1: FOOTSTEPS) on its `feet` (GAITS; null, none: it
+     * floats, and isn't heard).
+     */
+    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1 } = {}) {
+        const gait = GAITS[feet];
 
-        return this.play(STEPS[ground] ?? "stepDirt", { at, volume: running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * speed, rate: running ? 1.08 : 1 });
+        if (!gait) {
+            return null;
+        }
+
+        const [least, most] = FOOTSTEPS.sizes;
+        const big = Math.max(least, Math.min(most, size));
+        const pace = speed / Math.sqrt(big);
+        const running = pace > FOOTSTEPS.running;
+        const loud = (running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * pace) * big ** FOOTSTEPS.weight * gait.volume;
+        const lilt = 1 + FOOTSTEPS.jitter * (2 * Math.random() - 1);
+
+        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25 });
     }
 
     // Keep a sound's samples, and give the browser a copy if it's started

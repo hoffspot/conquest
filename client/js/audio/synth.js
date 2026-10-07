@@ -9,10 +9,11 @@
 //    inharmonic partials for blades, a knock for wood, a zap for magic, a roar for fire.
 //  - The bow: a plucked string (Karplus-Strong); spells: rising chimes and a whoosh.
 //  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
-//  - Footsteps on stone, dirt, grass and wooden boards; a body falling; a door opening and
-//    banging shut behind someone; in the tavern, tankards clinking and ale being drawn; in the
-//    smithy, the anvil ringing, the bellows, steam hissing off the trough, the grindstone; in the
-//    guild, paper rustling.
+//  - Footsteps on stone, dirt, grass, wooden boards, sand, snow, scree, mud, leaf litter and
+//    through water (leather-soled: no heel's click), and creatures' (a spider's legs, a slime, a
+//    serpent); a body falling; a door opening and banging shut behind someone; in the tavern,
+//    tankards clinking and ale being drawn; in the smithy, the anvil ringing, the bellows, steam
+//    hissing off the trough, the grindstone; in the guild, paper rustling.
 //  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
 //    wheel opening, and a slice that can't be used.
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
@@ -51,6 +52,10 @@ function whoosh(random, { length, from, top, to, peak = 0.55, q = 1.3, body = 0 
 // A thump: a sine falling from `from` to `to` Hz over `length` seconds
 const thump = (from, to, length, decay = length / 4) => shape(tone(length, (t) => to + (from - to) * Math.exp(-t / (length / 3))), hit(0.002, decay));
 
+// A thud: a thump with its second and third harmonics, so that a phone's speaker (which plays
+// little under 200 to 400 Hz) still gives its weight (the ear hears the missing low note in them)
+const thud = (from, to, length, decay = length / 4) => shape(tone(length, (t) => to + (from - to) * Math.exp(-t / (length / 3)), { harmonics: [[1, 1], [2, 0.5], [3, 0.3]] }), hit(0.002, decay));
+
 // A burst of noise through a filter, shaped as a hit
 const burst = (random, length, type, frequency, q, attack, decay) => shape(filter(noise(random, length), type, frequency, q), hit(attack, decay));
 
@@ -74,17 +79,108 @@ const swing = (settings) => {
     return (random) => whoosh(random, settings);
 };
 
-// A footstep: `kind` "stone", "dirt" or "grass"
-function step(random, kind) {
-    if (kind === "stone") {
-        const heel = add(burst(random, 0.05, "bandpass", 3200, 1.1, 0.0008, 0.012), thump(160, 90, 0.08, 0.018), 0.5);
+// Softened: the loudest moments eased down (a gentle saturation, `drive` times into it), so that
+// a sound of sharp clicks (a step's crunch, a spider's legs) can be made as loud as the rest
+// without its peaks clipping
+function softened(samples, drive = 2) {
+    const loudest = samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0) || 1;
+    const top = Math.tanh(drive);
 
-        return add(heel, burst(random, 0.04, "bandpass", 2600, 1.2, 0.0008, 0.01), 0.35, 0.03);
+    return samples.map((value) => Math.tanh((drive * value) / loudest) / top);
+}
+
+// Grains: `n` tiny clicks of noise strewn over `length` seconds (bunched towards its start the
+// more `bunch` is over 1), each band-passed somewhere between `low` and `high` Hz and gone in
+// `decay` seconds: the crunch of snow, the rattle of scree, dry leaves crackling
+function grains(random, length, n, low, high, { decay = 0.003, bunch = 1.4, q = 2 } = {}) {
+    let out = new Float32Array(count(length));
+
+    for (let k = 0; k < n; k++) {
+        const grain = burst(random, decay * 5, "bandpass", low + (high - low) * random.next(), q, 0.0003, decay);
+
+        out = add(out, grain, 0.4 + random.next() * 0.6, length * random.next() ** bunch);
+    }
+
+    return out;
+}
+
+// Bubbles: `n` short rising tones (a bubble's pitch climbs as it forms and pops) from `low` to
+// `high` Hz, strewn over `length` seconds
+function bubbles(random, length, n, low, high) {
+    let out = new Float32Array(count(length));
+
+    for (let k = 0; k < n; k++) {
+        const from = low + (high - low) * random.next();
+        const life = 0.015 + random.next() * 0.03;
+
+        out = add(out, shape(tone(life, (t) => from * (1 + (0.5 * t) / life)), hit(0.001, life / 3)), 0.3 + random.next() * 0.5, length * random.next());
+    }
+
+    return out;
+}
+
+// A footstep: `kind` "stone", "dirt", "grass", "wood", or out in the wild "sand", "snow",
+// "gravel" (scree, ash), "mud", "leaves" (leaf litter) or "water" (wading); each a heel and the
+// rest of the foot rolling onto it
+function step(random, kind) {
+    if (kind === "snow") {
+        // Snow packing down: a squeaky crunch of many small breaks, the heel's then the toe's,
+        // over a soft, muffled body
+        const heel = add(grains(random, 0.14, 34, 1400, 4800), burst(random, 0.12, "lowpass", 900, 0.7, 0.008, 0.04), 0.5);
+
+        return add(add(heel, grains(random, 0.1, 20, 1600, 4200), 0.6, 0.09), thud(95, 60, 0.07, 0.02), 0.25);
+    }
+
+    if (kind === "sand") {
+        // Sand giving: a dull, soft hiss with a little grit, hardly any knock
+        const give = burst(random, 0.16, "lowpass", 1700, 0.7, 0.012, 0.05);
+
+        return add(add(give, grains(random, 0.12, 10, 2200, 4200, { decay: 0.002 }), 0.25, 0.02), thud(85, 55, 0.07, 0.02), 0.25);
+    }
+
+    if (kind === "gravel") {
+        // Scree and loose stones: a sharp rattle of stones knocking, a heavier knock under it
+        const rattle = add(grains(random, 0.12, 26, 2400, 7000, { decay: 0.002, bunch: 1.8 }), burst(random, 0.05, "bandpass", 1400, 1.2, 0.0008, 0.014), 0.5);
+
+        return add(add(rattle, grains(random, 0.08, 12, 2400, 6000, { decay: 0.002 }), 0.5, 0.07), thud(130, 80, 0.08, 0.018), 0.4);
+    }
+
+    if (kind === "mud") {
+        // Mud: a wet slap as the foot sinks, and a suck as it pulls free
+        const sink = (from, to, length) => shape(filter(noise(random, length), "bandpass", (t) => from * (to / from) ** (t / length), 2.2), swell(length, 0.2));
+        const slap = add(sink(900, 260, 0.14), thud(80, 50, 0.08, 0.025), 0.5);
+
+        return add(add(slap, sink(300, 950, 0.1), 0.45, 0.13), bubbles(random, 0.2, 3, 250, 600), 0.25, 0.05);
+    }
+
+    if (kind === "leaves") {
+        // Leaf litter: dry leaves crackling and rustling under the foot, the soft ground under them
+        const crackle = add(grains(random, 0.18, 30, 3000, 8000, { bunch: 1.2 }), burst(random, 0.16, "bandpass", 3600, 0.6, 0.01, 0.05), 0.4);
+
+        return add(crackle, thud(90, 60, 0.07, 0.02), 0.2);
+    }
+
+    if (kind === "water") {
+        // Wading: a splash as the foot goes in, bubbles, and the water sloshing round the leg
+        const splash = burst(random, 0.2, "bandpass", 1200 + random.next() * 800, 0.6, 0.004, 0.06);
+        const slosh = shape(filter(noise(random, 0.3), "lowpass", 600), swell(0.3, 0.35));
+
+        return add(add(splash, bubbles(random, 0.28, 6, 350, 1100), 0.6, 0.02), slosh, 0.5, 0.05);
+    }
+
+    if (kind === "stone") {
+        // A leather sole on stone (flat, no heel: a heel's click is centuries off): a dull pat, the
+        // stone's short knock, grit scraping as the foot rolls off; now and then a cobble rocking
+        const pat = add(burst(random, 0.04, "bandpass", 1700, 0.9, 0.0015, 0.01), ring([[600 + random.next() * 200, 0.5, 0.012], [1300 + random.next() * 300, 0.3, 0.008]], 0.06), 0.4);
+        const scrape = shape(filter(noise(random, 0.09), "bandpass", 2400, 0.8), swell(0.09, 0.3));
+        const foot = add(add(pat, thud(170, 110, 0.08, 0.02), 0.5), scrape, 0.12, 0.07);
+
+        return random.next() < 0.3 ? add(foot, ring([[900 + random.next() * 400, 0.4, 0.008]], 0.03), 0.3, 0.01 + random.next() * 0.02) : foot;
     }
 
     if (kind === "wood") {
         // A hollow knock on a board, and the board's low ring under it
-        const knock = add(burst(random, 0.06, "bandpass", 1100, 1.3, 0.0008, 0.016), thump(150, 100, 0.1, 0.024), 0.7);
+        const knock = add(burst(random, 0.06, "bandpass", 1100, 1.3, 0.0008, 0.016), thud(150, 100, 0.1, 0.024), 0.7);
 
         return add(knock, shape(tone(0.14, 190 + random.next() * 30, { harmonics: [[1, 1], [2.3, 0.35]] }), hit(0.001, 0.035)), 0.45);
     }
@@ -93,12 +189,12 @@ function step(random, kind) {
         const scuff = burst(random, 0.12, "bandpass", 700, 0.8, 0.003, 0.03);
         const grit = shape(filter(noise(random, 0.1).map((value) => (random.next() < 0.01 ? value * 2 : 0)), "highpass", 2500), hit(0.002, 0.03));
 
-        return add(add(scuff, grit, 0.4), thump(110, 70, 0.08, 0.02), 0.35);
+        return add(add(scuff, grit, 0.4), thud(110, 70, 0.08, 0.02), 0.35);
     }
 
     const rustle = burst(random, 0.16, "bandpass", 2800, 0.6, 0.008, 0.04);
 
-    return add(add(rustle, burst(random, 0.12, "bandpass", 4200, 0.7, 0.006, 0.03), 0.5, 0.04), thump(90, 60, 0.07, 0.02), 0.2);
+    return add(add(rustle, burst(random, 0.12, "bandpass", 4200, 0.7, 0.006, 0.03), 0.5, 0.04), thud(90, 60, 0.07, 0.02), 0.2);
 }
 
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
@@ -227,10 +323,42 @@ export const SOUNDS = {
     },
 
     // Footsteps
-    stepStone: { variants: 4, volume: 0.3, make: (random) => step(random, "stone") },
-    stepDirt: { variants: 4, volume: 0.32, make: (random) => step(random, "dirt") },
-    stepGrass: { variants: 4, volume: 0.28, make: (random) => step(random, "grass") },
-    stepWood: { variants: 4, volume: 0.32, make: (random) => step(random, "wood") },
+    stepStone: { variants: 4, volume: 0.3, make: (random) => softened(step(random, "stone")) },
+    stepDirt: { variants: 4, volume: 0.32, make: (random) => softened(step(random, "dirt")) },
+    stepGrass: { variants: 4, volume: 0.28, make: (random) => softened(step(random, "grass")) },
+    stepWood: { variants: 4, volume: 0.32, make: (random) => softened(step(random, "wood")) },
+    stepSand: { variants: 4, volume: 0.26, make: (random) => softened(step(random, "sand")) },
+    stepSnow: { variants: 4, volume: 0.3, make: (random) => softened(step(random, "snow")) },
+    stepGravel: { variants: 4, volume: 0.3, make: (random) => softened(step(random, "gravel")) },
+    stepMud: { variants: 4, volume: 0.32, make: (random) => softened(step(random, "mud")) },
+    stepLeaves: { variants: 4, volume: 0.28, make: (random) => softened(step(random, "leaves")) },
+    stepWater: { variants: 4, volume: 0.34, make: (random) => softened(step(random, "water")) },
+
+    // Creatures' footfalls: a spider's many legs ticking down one after another; a slime's wet
+    // belly flopping along; a serpent's scales sliding over the ground
+    skitter: {
+        variants: 3,
+        volume: 0.26,
+        make: (random) => {
+            let out = new Float32Array(count(0.1));
+
+            for (let leg = 0; leg < 4; leg++) {
+                out = add(out, burst(random, 0.02, "bandpass", 2500 + random.next() * 1800, 1.6, 0.0004, 0.004), 0.6 + random.next() * 0.4, leg * (0.015 + random.next() * 0.012));
+            }
+
+            return softened(out, 4);
+        },
+    },
+    squelch: {
+        variants: 3,
+        volume: 0.32,
+        make: (random) => add(shape(filter(noise(random, 0.28), "bandpass", (t) => 700 * (200 / 700) ** (t / 0.28), 2), swell(0.28, 0.25)), bubbles(random, 0.3, 5, 180, 520), 0.5, 0.04),
+    },
+    slither: {
+        variants: 3,
+        volume: 0.24,
+        make: (random) => add(shape(filter(noise(random, 0.4), "bandpass", 2600, 0.9), swell(0.4, 0.5)), shape(filter(noise(random, 0.4), "lowpass", 300), swell(0.4, 0.5)), 0.5),
+    },
 
     // A door: the latch lifting, its hinges creaking as it swings, and it banging shut
     door: {

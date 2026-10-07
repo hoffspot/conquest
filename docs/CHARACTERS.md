@@ -1139,7 +1139,7 @@ standing, arms at the sides, palms facing the thighs.
 - **Styles.** A walk style sets lean, crouch, arm spread, stance width, toe-out, swagger, sway,
   head carriage and finger curl. The orc's is hunched, wide and heavy.
 - **Footsteps.** `onStep(foot, speed)` hears each foot land while moving (the game plays a
-  footstep for the ground it lands on).
+  footstep for what it lands on: audio/footing.js, and GAME.md's *Sound*).
 
 **Running** (`locomotion.js`, from `gait.js`'s sprinting curves): faster than people can walk
 (the walk-to-run speed, about 2.1 m/s for a 0.9 m leg), the walk blends into a sprint over the
