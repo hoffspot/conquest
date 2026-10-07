@@ -36,6 +36,7 @@ globalThis.document ??= {
 
 const { HumanData } = await import("../client/js/characters/body.js");
 const { Character } = await import("../client/js/characters/character.js");
+const { isMouth } = await import("../client/js/characters/mouth.js");
 const { buildHair, growingHair } = await import("../client/js/characters/hair.js");
 const { buildGarment, compositeGarments, compositingGarments, fittingGarment, GARMENTS, paintGarment, paintingGarment, texelMap } = await import("../client/js/characters/garments.js");
 const { folkLook } = await import("../client/js/characters/folk.js");
@@ -195,7 +196,7 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.ok(character.materials.lashes.alphaMap, "the lashes drawn as strands");
     });
 
-    it("moves its face with its expressions (a body with them): its skin and lashes by its own weights, from the kit's moves, made once", async () => {
+    it("moves its face with its expressions (a body with them): its skin, lashes and mouth's inside by its own weights, from the kit's moves, made once", async () => {
         const { expressionData } = await import("../client/js/characters/expressions.js");
         const character = new Character(kitOf(), options(wench));
         const other = new Character(kitOf(), options(soldier));
@@ -206,8 +207,34 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.equal(character.geometry.attributes.faceSlot.array, faces.slotOf);
         assert.notEqual(character.geometry.attributes.faceSlot, other.geometry.attributes.faceSlot, "each geometry its own attribute (they're let go of with it)");
 
-        // Its skin's and lashes' shaders add its expressions' moves before skinning
-        for (const material of [character.materials.body, character.materials.lashes]) {
+        // Its mouth's inside drawn (its own group, with its own material: not from afar, below)
+        const mouth = character.geometry.groups.find(({ materialIndex }) => character.mesh.material[materialIndex] === character.materials.mouth);
+
+        assert.equal(mouth?.count, human.renderIndices("mouth").length);
+        assert.ok(isMouth(character.materials.mouth) && !isMouth(character.materials.body));
+
+        // Darkening into its own throat (as the shader does: how far in, 0 to 1) from where its
+        // own mouth is, as it's shaped: its front teeth lit as they are, darkening a fifth of the
+        // way back, at its darkest past two fifths. On the heroine's face its mouth sits a
+        // centimetre behind the base body's; on the orc's two and a half in front
+        const { PRESETS } = await import("../client/js/characters/presets.js");
+        const inside = [...new Set(Array.from(human.renderIndices("mouth"), (r) => human.renderSource[r]))];
+
+        for (const name of ["heroine", "orc"]) {
+            other.setShape(PRESETS[name].shape);
+
+            const { front, depth } = other.materials.mouth.userData.shade;
+            const z = inside.map((v) => other.positions[v * 3 + 2]);
+            const [first, last] = [Math.max(...z), Math.min(...z)];
+            const shown = z.map((at) => [(first - at) / (first - last), Math.min(1, Math.max(0, (front.value - at) / depth.value))]);
+
+            assert.ok(shown.every(([back, dark]) => back > 0.1 || dark === 0), `${name}: the front teeth lit`);
+            assert.ok(shown.some(([back, dark]) => back > 0.15 && back < 0.3 && dark > 0 && dark < 1), `${name}: darkening a fifth of the way back`);
+            assert.ok(shown.every(([back, dark]) => back < 0.4 || dark === 1), `${name}: the throat at its darkest`);
+        }
+
+        // Its skin's, lashes' and mouth's shaders add its expressions' moves before skinning
+        for (const material of [character.materials.body, character.materials.lashes, character.materials.mouth]) {
             const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>\n#include <skinning_vertex>", fragmentShader: "void main() {}" };
 
             material.onBeforeCompile(shader, null);
@@ -249,7 +276,7 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.ok(character.lowBody.length / 3 < human.renderIndices("body").length / 3 / 3, `${character.lowBody.length / 3} body triangles from afar`);
         assert.ok(low[0].count > 0 && low[0].count < full[0].count, "fewer of the body's shown");
-        assert.equal(low.length, 2, "the body and eyes: no lashes");
+        assert.equal(low.length, 2, "the body and eyes: no lashes, nor the mouth's inside");
         assert.ok(outfit.userData.detail.low < outfit.userData.detail.full / 3, "fewer of the outfit's");
         assert.ok(Array.from(geometry.index.array).every((v) => v < vertices), "the same vertices");
 

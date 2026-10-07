@@ -39,8 +39,9 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "navigation", "code", "body", "skin", "fonts", "models"]);
 
         const paths = MANIFEST.flatMap(({ files }) => files.map(([path]) => path));
-        // (The game's body and every mask it names: body.js GAME_BODY)
-        const body = [`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`, ...readHumanFiles().manifest.masks.map((file) => `characters/${file}`)];
+        // (The game's body and every mask and picture it names: body.js GAME_BODY)
+        const { masks, pictures = {} } = readHumanFiles().manifest;
+        const body = [`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`, ...[...masks, ...Object.values(pictures)].map((file) => `characters/${file}`)];
 
         for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2", "models/jmi/chest.glb"]) {
             assert.ok(paths.includes(needed), needed);

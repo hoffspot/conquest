@@ -18,7 +18,7 @@
 import * as THREE from "three";
 
 /** The expressions a face can make, in the order their weights are kept. */
-export const EXPRESSIONS = Object.freeze(["blink", "squint", "smile", "angry", "sad", "frown", "browsUp", "browsKnit"]);
+export const EXPRESSIONS = Object.freeze(["blink", "squint", "smile", "angry", "sad", "frown", "browsUp", "browsKnit", "open", "snarl", "ah", "eh", "ee", "oo", "f"]);
 
 // How wide the texture of moves is (texels): a slot's moves for each expression, one after another
 const WIDTH = 2048;
@@ -34,19 +34,38 @@ const TURN_CUTOFF = 0.002;
 const EASE = 9;
 const BLINK = Object.freeze({ close: 0.06, shut: 0.04, open: 0.11, every: [1.8, 6], twice: 0.15, depth: 1.15 });
 
+// The mouth's shapes as it speaks (its visemes: a sound's shape of the mouth), how quickly the mouth
+// goes from one to the next (faster than the face: a syllable is a tenth of a second or so), and
+// speaking: phrases and the pauses between them (seconds), a syllable's length, and how far each
+// sound's shape is made
+const VISEMES = Object.freeze(["ah", "eh", "ee", "oo", "f"]);
+const MOUTH_EASE = 28;
+const SPEECH = Object.freeze({ phrase: [1.2, 3], pause: [0.4, 1.1], syllable: [0.08, 0.17], loud: [0.55, 1] });
+// How far the jaw drops with each sound (of the mouth opened wide): the shapes keep the jaw near
+// shut, and an "ah" is said with it dropped, an "f" with it all but closed
+const JAW = Object.freeze({ ah: 0.32, eh: 0.18, ee: 0.08, oo: 0.12, f: 0.02 });
+
+// A war cry, now and then as an attack starts: how often, for how long, how wide the mouth's open
+// (of the shape: wide open alone, it's round, as in surprise) and how far the lips are drawn back
+// from the teeth
+const SHOUT = Object.freeze({ chance: 0.3, hold: 0.55, open: 0.6, snarl: 0.9 });
+
 /**
- * What a face shows (weights), doing each thing: attacking, hurt (a flinch or knocked down),
- * talked to (with a lift of the brows now and then), smiling (a mood), and dead (its eyes left a
- * little open).
+ * What a face shows (weights), doing each thing: attacking (with a war cry now and then), hurt (a
+ * flinch or knocked down: a grimace, its teeth bared), talked to (speaking, in phrases, with a lift
+ * of the brows now and then), smiling (a mood), and dead (its eyes left a little open, its jaw
+ * slack).
  */
 export const FACES = Object.freeze({
     attacking: Object.freeze({ angry: 0.8, browsKnit: 0.45, squint: 0.3 }),
-    hurt: Object.freeze({ squint: 0.75, browsUp: 0.6, frown: 0.5, sad: 0.3 }),
+    hurt: Object.freeze({ squint: 0.75, browsUp: 0.6, frown: 0.5, sad: 0.3, ee: 0.35, snarl: 0.35, open: 0.08 }),
     talking: Object.freeze({ smile: 0.15 }),
     smiling: Object.freeze({ smile: 0.55 }),
-    dead: Object.freeze({ blink: 0.85 }),
+    dead: Object.freeze({ blink: 0.85, open: 0.22 }),
 });
 const TALK_BROWS = Object.freeze({ every: [1.4, 3.2], lift: 0.45, hold: 0.5 });
+// (The mouth's: eased faster)
+const MOUTH = new Set(["open", "snarl", ...VISEMES].map((name) => EXPRESSIONS.indexOf(name)));
 
 const shared = new WeakMap();
 
@@ -206,6 +225,16 @@ export class Expressions {
         this.blinking = -1;
         this.browsIn = 0;
         this.brows = 0;
+        // (Speaking: whether in a phrase, and how long it or the pause has left; the sound being
+        // made, how far, and how long it has left)
+        this.speaking = false;
+        this.speech = 0;
+        this.sound = null;
+        this.loud = 0;
+        this.syllable = 0;
+        // (The attack it last saw start, and how long its war cry has left)
+        this.attack = null;
+        this.shout = 0;
     }
 
     #between([low, high]) {
@@ -251,13 +280,33 @@ export class Expressions {
             }
 
             this.target[EXPRESSIONS.indexOf("browsUp")] += this.brows > 0 ? TALK_BROWS.lift : 0;
+            this.#speak(dt);
+        } else {
+            this.speaking = false;
+            this.speech = 0;
+        }
+
+        // A war cry as some attacks start
+        const attack = actions?.attack ?? null;
+
+        if (attack !== this.attack) {
+            this.attack = attack;
+            this.shout = state === "attacking" && this.random() < SHOUT.chance ? SHOUT.hold : 0;
+        }
+
+        this.shout = state === "attacking" ? Math.max(0, this.shout - dt) : 0;
+
+        if (this.shout > 0) {
+            this.target[EXPRESSIONS.indexOf("open")] += SHOUT.open;
+            this.target[EXPRESSIONS.indexOf("snarl")] += SHOUT.snarl;
         }
 
         const values = this.weights.value;
         const ease = 1 - Math.exp(-EASE * dt);
+        const mouthEase = 1 - Math.exp(-MOUTH_EASE * dt);
 
         for (let k = 0; k < values.length; k++) {
-            values[k] += (this.target[k] - values[k]) * ease;
+            values[k] += (this.target[k] - values[k]) * (MOUTH.has(k) ? mouthEase : ease);
         }
 
         // Blinking (not dead): shut fast, then open a little slower; now and then twice
@@ -289,5 +338,32 @@ export class Expressions {
                 this.blinking = -1;
             }
         }
+    }
+
+    // Speaking: in phrases, a sound's shape of the mouth each syllable, the jaw dropping a little with
+    // it; a closed mouth between phrases
+    #speak(dt) {
+        this.speech -= dt;
+
+        if (this.speech <= 0) {
+            this.speaking = !this.speaking;
+            this.speech = this.#between(this.speaking ? SPEECH.phrase : SPEECH.pause);
+            this.syllable = 0;
+        }
+
+        if (!this.speaking) {
+            return;
+        }
+
+        this.syllable -= dt;
+
+        if (this.syllable <= 0) {
+            this.syllable = this.#between(SPEECH.syllable);
+            this.sound = VISEMES[Math.floor(this.random() * VISEMES.length)];
+            this.loud = this.#between(SPEECH.loud);
+        }
+
+        this.target[EXPRESSIONS.indexOf(this.sound)] += this.loud;
+        this.target[EXPRESSIONS.indexOf("open")] += this.loud * JAW[this.sound];
     }
 }

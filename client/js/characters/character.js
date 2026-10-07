@@ -19,6 +19,7 @@ import { LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { expressionData, Expressions, expressive } from "./expressions.js";
 import { lashTexture, lashUVs } from "./lashes.js";
+import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { allAtOnce } from "../core/steps.js";
 
 /** How a character looks unless told otherwise. */
@@ -29,7 +30,7 @@ export const LOOK_DEFAULTS = Object.freeze({
 });
 
 // The parts of the base mesh, in the order they're drawn (with a material each)
-const DRAWN = ["body", "eyes", "lashes"];
+const DRAWN = ["body", "eyes", "lashes", "mouth"];
 
 // A skirt or robe hanging this far down (drapes.js `length`: 1 to the ankles) or further all the
 // way round has its wearer running with their heels kept low (Character.robed)
@@ -295,6 +296,8 @@ export class Character {
             hair: materials.hair ?? new HairMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
             // (Parts of their own in their skin's or fur's colour: a cat's ears and tail)
             tint: materials.tint ?? new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.8 }),
+            // (The mouth's inside, the kit's picture of it darkening into the throat: mouth.js)
+            mouth: materials.mouth ?? mouthMaterial(human),
         };
 
         // Its face's expressions and blinks (a body with them, Vitruvian's: expressions.js), on its
@@ -307,6 +310,7 @@ export class Character {
         if (faces) {
             expressive(this.materials.body, faces, this.expressions.weights);
             expressive(this.materials.lashes, faces, this.expressions.weights);
+            expressive(this.materials.mouth, faces, this.expressions.weights);
         }
 
         /** The hair and beard (null when bald and clean-shaven). */
@@ -1509,6 +1513,11 @@ export class Character {
         this.joints = joints;
         this.height = 0;
 
+        // (Its mouth's inside darkening from where its own mouth is)
+        if (isMouth(this.materials.mouth)) {
+            fitMouth(this.materials.mouth, this.human, positions);
+        }
+
         for (let v = 0; v < this.human.vertexCount; v++) {
             if (this.human.partOf[v] === 0) {
                 this.height = Math.max(this.height, positions[v * 3 + 1]);
@@ -1602,21 +1611,26 @@ export class Character {
 
         const eyes = human.renderIndices("eyes");
         const lashes = human.renderIndices("lashes");
-        const index = new Uint16Array(kept.length + eyes.length + lashes.length + low.length);
-        const lowAt = kept.length + eyes.length + lashes.length;
+        const mouth = human.renderIndices("mouth");
+        const mouthAt = kept.length + eyes.length + lashes.length;
+        const lowAt = mouthAt + mouth.length;
+        const index = new Uint16Array(lowAt + low.length);
 
         index.set(kept, 0);
         index.set(eyes, kept.length);
         index.set(lashes, kept.length + eyes.length);
+        index.set(mouth, mouthAt);
         index.set(low, lowAt);
 
         this.geometry.setIndex(new THREE.BufferAttribute(index, 1));
 
-        // Its groups drawn in full, and from afar: the lower-detail body and the eyes (not lashes)
+        // Its groups drawn in full, and from afar: the lower-detail body and the eyes (not lashes,
+        // nor the mouth's inside)
         const full = [
             { start: 0, count: kept.length, materialIndex: 0 },
             { start: kept.length, count: eyes.length, materialIndex: 1 },
             { start: kept.length + eyes.length, count: lashes.length, materialIndex: 2 },
+            ...(mouth.length ? [{ start: mouthAt, count: mouth.length, materialIndex: 3 }] : []),
         ];
 
         this.detail = { full, low: this.lowBody ? [{ start: lowAt, count: low.length, materialIndex: 0 }, full[1]] : full };
@@ -1753,7 +1767,8 @@ export class Character {
         this.#releaseEyes();
 
         for (const [name, material] of Object.entries(this.materials)) {
-            if (name !== "hair") {
+            // (The hair's and the mouth's pictures are shared)
+            if (name !== "hair" && !isMouth(material)) {
                 material.map?.dispose();
             }
 

@@ -124,9 +124,9 @@ export class HumanData {
         this.boneIndex = new Map(this.bones.map(({ name }, i) => [name, i]));
     }
 
-    /** A part's triangles (render vertex indices). */
+    /** A part's triangles (render vertex indices): none for a part the body hasn't. */
     renderIndices(part) {
-        const { start, count } = this.parts[part];
+        const { start, count } = this.parts[part] ?? { start: 0, count: 0 };
 
         return this.indices.subarray(start, start + count);
     }

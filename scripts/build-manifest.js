@@ -7,9 +7,9 @@
 //
 // The game's code is followed from its entry modules through their imports and the workers they
 // start (and the import map's "three" and "three/addons/" in index.html), leaving out what
-// main.js imports itself (it is already loaded when the loader starts). The character data and
-// masks, the fonts, and the navigation meshes' WebAssembly (Recast's glue fetches it itself), are
-// listed too. test/manifest.test.js checks both lists are up to date.
+// main.js imports itself (it is already loaded when the loader starts). The character data, masks
+// and pictures, the fonts, and the navigation meshes' WebAssembly (Recast's glue fetches it
+// itself), are listed too. test/manifest.test.js checks both lists are up to date.
 //
 // Data files (the body, its skin, the models) are listed with a hash of their bytes too, as is
 // every file in the catalog: they're fetched as path?h=hash, so each version is a different
@@ -31,7 +31,7 @@ const catalogInput = path.join(client, "models/assets.json");
 // What the loading screen says each body is (body.js BODIES)
 const BODY_DETAILS = {
     human: { body: "MakeHuman base mesh, skeleton and sliders", skin: "MakeHuman masks" },
-    vitruvian: { body: "CharMorph's Vitruvian, with MakeHuman's sliders", skin: "MakeHuman masks, carried over" },
+    vitruvian: { body: "CharMorph's Vitruvian, with MakeHuman's sliders", skin: "MakeHuman masks, carried over, and the mouth's inside" },
 };
 
 // The modules the game imports once everything is downloaded (main.js: import()), and those it
@@ -134,9 +134,9 @@ export async function manifestGroups() {
         navigation.push(...(await readdir(path.join(client, folder))).filter((name) => name.endsWith(".wasm")).map((name) => `${folder}/${name}`));
     }
 
-    // (The game's body, body.js GAME_BODY, and the masks its manifest names)
+    // (The game's body, body.js GAME_BODY, and the masks and pictures its manifest names)
     const body = JSON.parse(await readFile(path.join(client, `characters/${GAME_BODY}.json`), "utf8"));
-    const masks = body.masks.map((file) => `characters/${file}`).toSorted();
+    const masks = [...body.masks, ...Object.values(body.pictures ?? {})].map((file) => `characters/${file}`).toSorted();
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
     const groups = [
         { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },

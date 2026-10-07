@@ -169,7 +169,7 @@ walker.overlay = (dt, walking) => actions.apply(dt * fight.slow, walking);
 const face = { showing: params.get("expression") ?? "", amount: Number(params.get("amount") ?? 1) };
 // (What they're called)
 const FACE_LABELS = { attacking: "Attacking", hurt: "Hurt", talking: "Talked to", smiling: "Smiling", dead: "Dead" };
-const EXPRESSION_LABELS = { blink: "Blink", squint: "Squint", smile: "Smile", angry: "Angry", sad: "Sad", frown: "Frown", browsUp: "Brows raised", browsKnit: "Brows knit" };
+const EXPRESSION_LABELS = { blink: "Blink", squint: "Squint", smile: "Smile", angry: "Angry", sad: "Sad", frown: "Frown", browsUp: "Brows raised", browsKnit: "Brows knit", open: "Mouth wide open", snarl: "Lips drawn back", ah: "Saying \"ah\"", eh: "Saying \"eh\"", ee: "Saying \"ee\"", oo: "Saying \"oo\"", f: "Saying \"f\"" };
 
 function showFace() {
     if (character.expressions) {
