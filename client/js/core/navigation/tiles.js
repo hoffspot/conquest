@@ -16,10 +16,12 @@
 //    of none, so nothing can be stood on them (a roof is no floor), and so is the ground under
 //    them (nothing's walked inside them).
 //  - What stands about the settlements' open ground as it's drawn (overworld.js standingNear: a
-//    lamp post its foot, not the squares round it), their props and their yards' fences: each an
-//    outline, half a voxel wider (Recast takes in a voxel whose middle's inside it), whose ground
-//    the tile marks walked by no one (bake.js), so walkers are kept their radius from it. (As a
-//    box, a prop as wide as a well would be hollow: the ground inside walked, as an island.)
+//    lamp post its foot, not the squares round it), their props and their yards' fences, and
+//    their buildings as they stand (a house's lot, a landmark's but for the way up to its door:
+//    setpieces/standing.js buildingOutline, where their squares are only those well inside it):
+//    each an outline, half a voxel wider (Recast takes in a voxel whose middle's inside it), whose
+//    ground the tile marks walked by no one (bake.js), so walkers are kept their radius from it.
+//    (As a box, a prop as wide as a well would be hollow: the ground inside walked, as an island.)
 //  - Bridges: their decks, a strip of quads along each, at its height; and the plank walks over
 //    the lizard folk's lagoons, at their planks' (the town's ground round the lagoon, its bed dug
 //    down below them), the lagoon's water walked nowhere but on them.

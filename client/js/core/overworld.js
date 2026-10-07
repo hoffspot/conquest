@@ -46,7 +46,7 @@ import { rounded, wayOver } from "./terrain/ways.js";
 import { FLATS, flatSpot } from "./terrain/flats.js";
 import { metresOf } from "./terrain/curve.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
-import { fenceOutlines, propOutlines } from "./setpieces/standing.js";
+import { buildingOutline, fenceOutlines, propOutlines } from "./setpieces/standing.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { hypot } from "./exact.js";
@@ -136,6 +136,39 @@ const DECK_GROW = 0.5;
 // How far what stands about a settlement's open ground reaches from its middle (metres): a yard's
 // fences, at its widest
 const STANDING_REACH = 12;
+
+// How far a building's outline reaches from its middle (metres: setpieces/standing.js
+// buildingOutline): a capital's keep's or a city's church's lot, corner to corner
+const BUILDING_REACH = 32;
+
+/**
+ * How far from a building's walls someone's put to stand (metres, from its outline: setpieces/
+ * standing.js buildingOutline): as far as the navigation mesh keeps walkers from it (navigation/
+ * settings.js AGENT's radius, and the half voxel tiles.js grows it by), and a little more, so
+ * no one stands in its walls, or anywhere they couldn't walk away from.
+ */
+export const ROOM = 0.45;
+
+// Whether a point is within `reach` of a convex shape ([[x, y], ...]), or inside it
+function nearShape(corners, px, py, reach) {
+    let [ahead, behind] = [true, true];
+
+    for (let k = 0; k < corners.length; k++) {
+        const [[ax, ay], [bx, by]] = [corners[k], corners[(k + 1) % corners.length]];
+        const [dx, dy] = [bx - ax, by - ay];
+        const along = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+        const cross = dx * (py - ay) - dy * (px - ax);
+
+        if (hypot(px - ax - dx * along, py - ay - dy * along) < reach) {
+            return true;
+        }
+
+        ahead &&= cross >= 0;
+        behind &&= cross <= 0;
+    }
+
+    return ahead || behind;
+}
 
 // Trees: tried every TREE_GRID metres (and a random way in); how far (squares) they keep from
 // roads and water; how far (metres) from the town, and from the edges of the settlements, sites
@@ -394,6 +427,7 @@ export class Overworld {
             blocked: (x, y) => blocked(x, y) === 1,
             opaque: (x, y) => opaque(x, y) === 1,
             ground: read("ground", GROUND.grass),
+            roomy: (x, y) => this.roomy(x, y),
         };
 
         // (The humans' hill citadel set down at once, wherever the player is: its moat and the
@@ -1337,6 +1371,9 @@ export class Overworld {
             add(null, yard);
         }
 
+        // (And the buildings, walked round as they stand: their walls, not their squares)
+        shapes.push(...this.#buildingsIn(x0, y0, x1, y1));
+
         // (A settlement's, whose middles are in the chunks round the box: its widest's reach a
         // few metres from theirs)
         const reach = STANDING_REACH;
@@ -1351,6 +1388,68 @@ export class Overworld {
 
                 for (const yard of this.settlements.yardsIn(cx, cy)) {
                     add(null, yard);
+                }
+            }
+        }
+
+        return shapes;
+    }
+
+    /**
+     * Whether someone can be put to stand on a square (x, y): its middle ROOM or more from every
+     * building's walls as they're walked round (setpieces/standing.js buildingOutline), so they're
+     * not stood in a wall, or its plinth. (Its squares only say what can't be stood on at all.)
+     */
+    roomy(x, y) {
+        const [px, py] = [x + 0.5, y + 0.5];
+
+        return !this.buildingsNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK)).some((corners) => nearShape(corners, px, py, ROOM));
+    }
+
+    /**
+     * The buildings reaching within ROOM of a chunk (cx, cy), as they're walked round: the town's
+     * and the settlements' laid out, [[[x, y] x 4], ...] in the world's metres (setpieces/
+     * standing.js buildingOutline). Kept with the chunk once it's made (every settlement near it
+     * laid out first).
+     */
+    buildingsNear(cx, cy) {
+        const made = this.chunks.get(cy * CHUNKS + cx);
+
+        if (made?.buildings) {
+            return made.buildings;
+        }
+
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const found = this.#buildingsIn(x0 - ROOM, y0 - ROOM, x0 + CHUNK + ROOM, y0 + CHUNK + ROOM);
+
+        if (made) {
+            made.buildings = found;
+        }
+
+        return found;
+    }
+
+    // The buildings' outlines reaching into a box (metres): the town's own, and those of the
+    // settlements laid out whose middles are in the chunks round it (BUILDING_REACH)
+    #buildingsIn(x0, y0, x1, y1) {
+        const meets = (points) => points.some(([x]) => x >= x0) && points.some(([x]) => x <= x1) && points.some(([, y]) => y >= y0) && points.some(([, y]) => y <= y1);
+        const shapes = [];
+        const add = (piece) => {
+            const outline = buildingOutline(piece);
+
+            if (outline && meets(outline)) {
+                shapes.push(outline);
+            }
+        };
+
+        for (const piece of this.stamp.buildings ?? []) {
+            add(piece);
+        }
+
+        for (let cy = Math.max(0, Math.floor((y0 - BUILDING_REACH) / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor((y1 + BUILDING_REACH) / CHUNK)); cy++) {
+            for (let cx = Math.max(0, Math.floor((x0 - BUILDING_REACH) / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor((x1 + BUILDING_REACH) / CHUNK)); cx++) {
+                for (const piece of this.settlements.piecesIn(cx, cy)) {
+                    add(piece);
                 }
             }
         }
@@ -1965,9 +2064,10 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const yards = town.town.yards.map((yard) => ({ ...yard, x: yard.x + town.origin + at[0], y: yard.y + town.origin + at[1] }));
     // (Its trees' trunks, in the fields and in the town: where the navigation mesh walks round them)
     const trunks = [...town.trees, ...town.town.pieces.filter(({ kind }) => kind === "tree")].map(({ x, y }) => ({ x: x + town.origin + at[0], y: y + town.origin + at[1] }));
-    // (And its props, walked round as they're drawn: setpieces/standing.js)
+    // (And its props, walked round as they're drawn, and its buildings as they stand: setpieces/standing.js)
     const props = town.town.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
+    const buildings = town.town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, buildings, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
 
     // (Its fingerpost, by its main road out: Overworld's, in its own metres)
