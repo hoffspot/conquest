@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test("describes every sound, and plays each, its recordings and its made variants, once started", async ({ page }) => {
+test("describes every sound, and plays each, its recordings and its made variants (if it has any), once started", async ({ page }) => {
     await page.goto("/sound-studio.html");
 
     const cards = await page.evaluate(async () => {
@@ -31,11 +31,12 @@ test("describes every sound, and plays each, its recordings and its made variant
     const played = await page.evaluate(async () => {
         const { CATALOG } = await import("./js/audio/catalog.js");
         const { RECORDED } = await import("./js/audio/recorded.js");
+        const { SOUNDS } = await import("./js/audio/synth.js");
         const { sound, play } = window.soundStudio;
         const silent = [];
 
         for (const name of Object.keys(CATALOG)) {
-            const tries = [play(name), play(name, { variant: 0, made: true }), ...(RECORDED[name] ? [play(name, { variant: RECORDED[name].length - 1 })] : [])];
+            const tries = [play(name), ...(SOUNDS[name] ? [play(name, { variant: 0, made: true })] : []), ...(RECORDED[name] ? [play(name, { variant: RECORDED[name].length - 1 })] : [])];
 
             if (tries.some((source) => !source)) {
                 silent.push(name);

@@ -1,14 +1,16 @@
 // Every sound the game makes, described: what it is (`about`) and when the game plays it (`plays`),
 // in groups, for the sound studio (sound-studio.html, js/lab/sound-studio.js), where each can be
-// heard outside the game. Each of synth.js's SOUNDS has its entry here (test/audio.test.js says
-// so), so a sound added or changed is described with it; whether it's recorded, and by whom, is
-// recorded.js's (made by npm run build:sounds), and what it's made of in code is synth.js's.
+// heard outside the game. Each of synth.js's SOUNDS, and each recorded sound with none made
+// (sound.js RECORDED_ONLY), has its entry here (test/audio.test.js says so), so a sound added or
+// changed is described with it; whether it's recorded, and by whom, is recorded.js's (made by npm
+// run build:sounds), and what it's made of in code is synth.js's.
 
 /** The groups, in the order the studio shows them. */
 export const GROUPS = Object.freeze([
     "Footsteps",
     "Swings",
     "Hits",
+    "Armour",
     "Drawing and putting away",
     "Launches",
     "Spells",
@@ -18,7 +20,7 @@ export const GROUPS = Object.freeze([
     "Cues and the interface",
 ]);
 
-/** Each sound (a synth.js SOUNDS name): { group, label, about, plays }. */
+/** Each sound (a synth.js SOUNDS or sound.js RECORDED_ONLY name): { group, label, about, plays }. */
 export const CATALOG = Object.freeze({
     // Footsteps (sound.js step: audio/footing.js picks the footing)
     stepGrass: { group: "Footsteps", label: "Grass", about: "A footfall on grass: soft-soled boots brushing through the blades, a muffled thud under them.", plays: "Each foot landing on grass, meadow, farmland's pasture and most land out in the world." },
@@ -36,33 +38,47 @@ export const CATALOG = Object.freeze({
     slither: { group: "Footsteps", label: "Serpent", about: "Scales sliding over the ground.", plays: "A snake's footfalls, whatever the ground." },
 
     // Swings (sound.js attack: timed so each is loudest as the blow lands)
-    swingSword: { group: "Swings", label: "Sword", about: "A sword cutting through the air: short and bright.", plays: "Every sword blow, loudest as it lands." },
-    swingCleaver: { group: "Swings", label: "Cleaver", about: "A heavier, shorter cut through the air.", plays: "Every cleaver blow, loudest as it lands." },
-    swingStaff: { group: "Swings", label: "Staff", about: "A long wooden pole swung: lower and broader.", plays: "Every quarterstaff blow, loudest as it lands." },
-    swingHammer: { group: "Swings", label: "War hammer", about: "A heavy two-handed swing: low and slow.", plays: "Every war hammer blow, loudest as it lands." },
-    swingPunch: { group: "Swings", label: "Punch", about: "A fist thrown: a quick, light rush of air.", plays: "Every punch, loudest as it lands." },
-    swingKick: { group: "Swings", label: "Kick", about: "A leg swung: a short swish.", plays: "Every kick, loudest as it lands." },
+    swingSword: { group: "Swings", label: "Sword", about: "A sabre cutting the air edge first: short and bright.", plays: "Every sword blow, loudest as it lands." },
+    swingCleaver: { group: "Swings", label: "Cleaver", about: "The same sabre's broader cuts: a heavier swish.", plays: "Every cleaver blow, loudest as it lands." },
+    swingStaff: { group: "Swings", label: "Staff", about: "A bamboo staff whooshing round.", plays: "Every quarterstaff blow, loudest as it lands." },
+    swingHammer: { group: "Swings", label: "War hammer", about: "The sabre swung flat: a low, slow whomp.", plays: "Every war hammer blow, loudest as it lands." },
+    swingPunch: { group: "Swings", label: "Punch", about: "A sleeve whooshing as the fist's thrown.", plays: "Every punch, loudest as it lands." },
+    swingKick: { group: "Swings", label: "Kick", about: "A fighter's quick dodge and swing: a short swish of cloth.", plays: "Every kick, loudest as it lands." },
+    swingWand: { group: "Swings", label: "Wand", about: "A thin bamboo stick flicked through the air.", plays: "Every flick of a wand, as its bolt's let go." },
 
     // Hits (sound.js hit: by the blow's reaction, core/weapons.js)
-    slash: { group: "Hits", label: "Slash", about: "A blade biting: a sharp crack with a ring of steel.", plays: "A sword's cut landing on anyone." },
-    hack: { group: "Hits", label: "Hack", about: "A heavy blade chopping in: a deep chop and a dull ring.", plays: "A cleaver's blow landing." },
-    strike: { group: "Hits", label: "Strike", about: "Wood knocking hard on a body.", plays: "A staff's blow landing." },
-    crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep thud.", plays: "A war hammer's blow landing." },
-    block: { group: "Hits", label: "Block", about: "A blow caught on a shield: the boards' thud, the boss and rim ringing.", plays: "A blow taken on a shield." },
-    pierce: { group: "Hits", label: "Pierce", about: "An arrow thunking in.", plays: "An arrow striking anyone." },
-    punch: { group: "Hits", label: "Punch", about: "A fist landing: a meaty thud.", plays: "A punch landing." },
-    kick: { group: "Hits", label: "Kick", about: "A spiked boot driving in: a heavy thud, a crack of leather and the spikes biting.", plays: "A kick landing." },
+    slash: { group: "Hits", label: "Slash", about: "A blade biting: a sharp, wet slap (a wet towel on a bare back, its brighter half).", plays: "A sword's cut landing on anyone." },
+    hack: { group: "Hits", label: "Hack", about: "A heavy blade chopping in: a deeper, wet slap.", plays: "A cleaver's blow landing." },
+    strike: { group: "Hits", label: "Strike", about: "A wooden staff cracking on a body.", plays: "A staff's blow landing." },
+    crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep, meaty thud.", plays: "A war hammer's blow landing." },
+    block: { group: "Hits", label: "Block", about: "A blow caught on wood: a hard knock (a blade on an ash spear shaft).", plays: "A blow taken on a shield (a blade's rings on it instead: Clash)." },
+    clash: { group: "Hits", label: "Clash", about: "Steel ringing on steel (a sabre on a sword).", plays: "A sword's or a cleaver's blow, or a skeleton's rusty sword, caught on a shield's iron." },
+    pierce: { group: "Hits", label: "Pierce", about: "An arrow thunking into a body.", plays: "An arrow striking anyone." },
+    punch: { group: "Hits", label: "Punch", about: "A fist landing: a meaty thud (fists on a punching bag).", plays: "A punch landing." },
+    kick: { group: "Hits", label: "Kick", about: "A boot driving in: a heavy thud.", plays: "A kick landing." },
     arcane: { group: "Hits", label: "Arcane", about: "A bolt of magic striking: a bright zap.", plays: "An arcane bolt, and the spells without a hit of their own, landing on anyone." },
     fire: { group: "Hits", label: "Fire", about: "Fire bursting on a body: a roar of flame.", plays: "A fire spell landing on anyone." },
 
+    // Armour (sound.js ARMOUR: what's worn over the chest, game.js armourOf)
+    hitMail: { group: "Armour", label: "Blow on mail", about: "Mail's rings shaken by a blow: a short, bright jangle.", plays: "Under a weapon's or a fist's blow landing on anyone in a mail shirt." },
+    hitPlate: { group: "Armour", label: "Blow on plate", about: "Steel plate struck: a hard, flat clank.", plays: "Under a blow landing on anyone in a breastplate." },
+    hitLeather: { group: "Armour", label: "Blow on leather", about: "Thick leather struck: a dull slap.", plays: "Under a blow landing on anyone in a leather jerkin or a hide vest." },
+    mailJingle: { group: "Armour", label: "Mail on the move", about: "Mail's rings shifting with a step.", plays: "With each step of anyone in a mail shirt, a little under the footstep." },
+    plateClank: { group: "Armour", label: "Plate on the move", about: "Plates knocking together with a step (a knight walking in armour).", plays: "With each step of anyone in a breastplate, a little under the footstep." },
+    clothRustle: { group: "Armour", label: "Leather on the run", about: "A jacket swishing.", plays: "With each running step of anyone in a leather jerkin or a hide vest." },
+
     // Drawing and putting away (game.js #draw)
-    unsheathe: { group: "Drawing and putting away", label: "Draw a sword", about: "A blade drawn from its scabbard, ringing as it leaves.", plays: "Drawing a sword (after a shield's slung off the back)." },
-    sheathe: { group: "Drawing and putting away", label: "Sheathe a sword", about: "A blade slid home: a scrape and the click of the hilt.", plays: "Putting a sword away." },
-    unsling: { group: "Drawing and putting away", label: "Unsling", about: "Something taken off the back, or put back there: a strap's creak and a knock.", plays: "Drawing or putting away a staff, a hammer, a cleaver, a bow, a wand or a grimoire; a shield slung off the back or onto it." },
-    knuckles: { group: "Drawing and putting away", label: "Fists up", about: "Fists clenched: the knuckles cracking.", plays: "Raising the fists, or the boots' kicks, to fight." },
+    unsheathe: { group: "Drawing and putting away", label: "Draw a sword", about: "A blade drawn from a leather sheath: a quiet scrape, no film's ring.", plays: "Drawing a sword (after a shield's slung off the back)." },
+    sheathe: { group: "Drawing and putting away", label: "Sheathe a sword", about: "A blade slid home into leather.", plays: "Putting a sword away." },
+    unsling: { group: "Drawing and putting away", label: "Unsling", about: "Something taken off the back, or put back there: a strap's creak and a wooden knock.", plays: "Drawing or putting away a staff, a hammer, a cleaver, a bow or a wand." },
+    shieldSling: { group: "Drawing and putting away", label: "Shield slung", about: "A shield's strap creaking and its boards' thud as it's slung.", plays: "A shield slung off the back before a weapon's drawn, or onto it after it's put away." },
+    grimoire: { group: "Drawing and putting away", label: "Grimoire", about: "A heavy book handled: its cover and pages.", plays: "Drawing or putting away a grimoire." },
+    knuckles: { group: "Drawing and putting away", label: "Fists up", about: "Hands closing into fists: soft leather creaking.", plays: "Raising the fists, or the boots' kicks, to fight." },
 
     // Launches (sound.js launch)
-    arrow: { group: "Launches", label: "Arrow loosed", about: "A bowstring's thrum and the arrow leaving.", plays: "An arrow loosed from a bow." },
+    arrowQuiver: { group: "Launches", label: "Arrow from the quiver", about: "An arrow drawn from a leather quiver.", plays: "A bow's shot starting." },
+    bowDraw: { group: "Launches", label: "Bow drawn", about: "An English longbow drawn: the string and the wood creaking.", plays: "A bow's shot, as it's drawn back." },
+    arrow: { group: "Launches", label: "Arrow loosed", about: "An English longbow loosed: the string's thrum and the arrow leaving.", plays: "An arrow loosed from a bow." },
     bolt: { group: "Launches", label: "Bolt", about: "A crackling bolt of magic in flight.", plays: "Casting Stun and the spells without a sound of their own; creatures' venom, webs, curses, wails and the like flying." },
     fireball: { group: "Launches", label: "Fireball", about: "A ball of fire whooshing away.", plays: "Casting a fire spell; a creature's lava or flame flying." },
 
@@ -72,7 +88,9 @@ export const CATALOG = Object.freeze({
     stun: { group: "Spells", label: "Stunned", about: "A zap and a dizzy warble.", plays: "Someone stunned." },
 
     // Bodies and doors
-    fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground, and its gear after it.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
+    fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
+    fallArmoured: { group: "Bodies and doors", label: "An armoured body falling", about: "A body falling, with mail rattling down after it.", plays: "Anyone in mail or plate falling, as they hit the ground." },
+    dropWeapon: { group: "Bodies and doors", label: "A weapon dropped", about: "Iron clattering onto a hard floor.", plays: "Anyone armed falling dead: what they fought with, just after they hit the ground." },
     door: { group: "Bodies and doors", label: "A door", about: "The latch lifting, the hinges creaking as it swings, and it banging shut.", plays: "Anyone going through a door on the player's side of it." },
 
     // Folk at work (game.js ACTS: the folk's acts in the tavern, the smithy, the guild)

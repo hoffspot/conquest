@@ -75,7 +75,7 @@ function row(label, buttons) {
 
 // Where a recorded sound's recordings come from, each once
 function sourcesOf(name) {
-    const ids = [...new Set(RECORDED[name].map(({ from }) => from))];
+    const ids = [...new Set(RECORDED[name].flatMap(({ from }) => from))];
     const element = document.createElement("p");
 
     element.className = "source";
@@ -123,7 +123,7 @@ function card({ name, label, about, plays, recorded = false, made = 0, controls 
 function soundCard(name) {
     const { label, about, plays } = CATALOG[name];
     const recorded = RECORDED[name]?.length ?? 0;
-    const made = SOUNDS[name].variants;
+    const made = SOUNDS[name]?.variants ?? 0;
     const walking = SURFACE(name) || FEET[name];
     const controls = [
         row("Hear", [
@@ -136,7 +136,9 @@ function soundCard(name) {
         controls.push(row("Recordings", Array.from({ length: recorded }, (_, k) => button(String(k + 1), () => play(name, { variant: k }), "small"))));
     }
 
-    controls.push(row(recorded ? "Made in code, before" : "Variants", Array.from({ length: made }, (_, k) => button(String(k + 1), () => play(name, { variant: k, made: true }), "small"))));
+    if (made) {
+        controls.push(row(recorded ? "Made in code, before" : "Variants", Array.from({ length: made }, (_, k) => button(String(k + 1), () => play(name, { variant: k, made: true }), "small"))));
+    }
 
     if (recorded) {
         controls.push(sourcesOf(name));
