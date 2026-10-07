@@ -116,6 +116,7 @@ always be green.
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
 | `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
+| `npm run build:sounds` | Only when remaking the recorded footsteps (downloads ten CC0 recordings from Freesound once, into `.cache`) |
 | `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests, guards' sway, flinches and dodges (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list, baked on MakeHuman's body whichever the game plays on: `BAKE_BODY`; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
 | `npm run build:footprints` | After changing how a prop or a yard's fence looks (`client/js/world/art/kits/props.js`, `peoples/props.js`, `kits/yards.js`): measures what each stands on into `client/js/core/setpieces/outlines.js`, which the navigation mesh walks round. `test/footprints.test.js` fails until you do. Then `npm run build:manifest` |
 | `npm run vendor:three` | Only after changing the `three` version in `package.json`, or which of its add-ons the game uses (`ADDONS` in `scripts/vendor-three.js`). Then `npm run build:manifest` |
@@ -234,6 +235,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      and the fit on every motion-check body. A rest whose left hand passes that hip must bring it
      over the hilt and scabbard, not through them (the sentry's `ARMED_*` rests). Or it can rest
      the hand on the pommel with `pommel: 1` in its keys.
+   - A sound added or changed (`SOUNDS` in `client/js/audio/synth.js`, or a recording in
+     `client/js/audio/recorded.js` by `npm run build:sounds`) is described in
+     `client/js/audio/catalog.js`: its group, its name, what it is and when the game plays it.
+     The sound studio (`client/sound-studio.html`) shows and plays it from there, so keep its
+     words true when the sound or where it plays changes. A recording names its source in
+     `SOURCES` (title, recordist, page, licence). `test/audio.test.js` fails if a sound isn't
+     described or a recording has no CC0 source.
 4. **Bump a version number when you change what it guards:**
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another

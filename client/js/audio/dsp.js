@@ -191,11 +191,14 @@ export function loudness(samples) {
     return Math.sqrt(Math.max(0, loudest) / Math.min(window, samples.length));
 }
 
+/** How loud a made sound is made (its loudest 30 ms, as RMS: loudness): finish's. */
+export const LEVEL = 0.3;
+
 /**
  * Tidy a sound: no DC, a short fade at each end (no clicks), and `level` loud (by its loudest
  * 30 ms), as far as its loudest sample allows (`peak`).
  */
-export function finish(samples, { level = 0.3, peak = 0.95, fadeIn = 0.004, fadeOut = 0.004 } = {}) {
+export function finish(samples, { level = LEVEL, peak = 0.95, fadeIn = 0.004, fadeOut = 0.004 } = {}) {
     const out = filter(samples, "highpass", 25);
     const [start, end] = [count(fadeIn), count(fadeOut)];
     let loudest = 0;

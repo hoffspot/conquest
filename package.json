@@ -22,6 +22,7 @@
     "build:characters": "node scripts/build-characters.js",
     "build:vitruvian": "node scripts/build-vitruvian.js",
     "build:music": "node scripts/build-music.js",
+    "build:sounds": "node scripts/build-sounds.js",
     "build:clips": "node scripts/build-clips.js",
     "build:footprints": "node scripts/build-footprints.js",
     "vendor:recast": "node scripts/vendor-recast.js"
@@ -40,6 +41,7 @@
     "globals": "^16.5.0",
     "jpeg-js": "^0.4.4",
     "meshoptimizer": "^1.3.0",
+    "mpg123-decoder": "^1.0.3",
     "three": "0.186.0"
   }
 }

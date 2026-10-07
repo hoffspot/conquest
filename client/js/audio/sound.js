@@ -1,7 +1,8 @@
 // The game's sound, played with the Web Audio API in three buses, each with its own volume (the
 // sliders in Game options), all turned on or off together (the Sound switch):
 //
-//  - Sound effects: blows, spells, footsteps and cues (synth.js), each from where it happens:
+//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps recorded, once
+//    they're downloaded: recorded.js), each from where it happens:
 //    quieter the further it is from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
@@ -12,7 +13,8 @@
 //    through the floor.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
-// recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page
+// recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
+// downloaded meanwhile. Browsers only let a page
 // make sound once someone has tapped, clicked or pressed a key on it, so it starts on the first
 // one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
@@ -26,8 +28,9 @@
 
 import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
+import { RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORE } from "./score.js";
-import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
+import { LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 import { TAVERN } from "./tavern.js";
 
 /** The music: the town's, and the tavern's. */
@@ -91,6 +94,12 @@ const STALL = 1.5;
 
 // The music's recordings: how many there are, and how many are downloaded at once
 const RECORDINGS = sampleFiles().length;
+
+/**
+ * The sounds recorded rather than made (recorded.js: client/sounds), each variant's id ("name
+ * variant") and where it's downloaded from.
+ */
+export const recordedFiles = () => Object.entries(RECORDED).flatMap(([name, files]) => files.map(({ file }, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
 const DOWNLOADS = 6;
 
 // How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
@@ -190,6 +199,14 @@ export class Sound {
         /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
         this.instruments = new Map();
+
+        /**
+         * Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer], in
+         * recorded.js's order once they're all in), played instead of the made ones once there
+         * are two; and each one's as they come in (name → [buffer by variant]).
+         */
+        this.recorded = new Map();
+        this.decoded = new Map();
 
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
@@ -649,12 +666,14 @@ export class Sound {
     /**
      * Play a sound (a SOUNDS name) from a point in the world ({ x, z } metres; null for
      * everywhere), `volume` times its own, starting `delay` seconds from now, `rate` times as fast
-     * (higher), heard no further off than `far` metres. Returns its source node, or null if it
-     * isn't played (off, too far, too many).
+     * (higher), heard no further off than `far` metres; its `variant` (by default any but the last
+     * played), and its `made` one rather than its recording (the sound studio's). Returns its
+     * source node, or null if it isn't played (off, too far, too many).
      */
-    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR } = {}) {
+    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR, variant = null, made = false } = {}) {
         const context = this.context;
-        const buffers = this.buffers.get(name);
+        const recorded = made ? null : this.recorded.get(name);
+        const buffers = recorded?.length > 1 ? recorded : this.buffers.get(name);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
@@ -664,7 +683,8 @@ export class Sound {
             return null;
         }
 
-        let gain = volume * (SOUNDS[name]?.volume ?? 1);
+        // (A recording's made quieter than a made sound, for its sharper start: played up to match)
+        let gain = volume * (SOUNDS[name]?.volume ?? 1) * (buffers === recorded ? LEVEL / RECORDED_LEVEL : 1);
         let pan = 0;
 
         if (at) {
@@ -687,10 +707,10 @@ export class Sound {
         // mechanical)
         const last = this.played.get(name) ?? -1;
         const pick = Math.floor(Math.random() * (buffers.length - (last >= 0 && buffers.length > 1 ? 1 : 0)));
-        const variant = last >= 0 && buffers.length > 1 && pick >= last ? pick + 1 : pick;
+        const chosen = buffers[variant] ? variant : last >= 0 && buffers.length > 1 && pick >= last ? pick + 1 : pick;
 
-        this.played.set(name, variant);
-        source.buffer = buffers[variant];
+        this.played.set(name, chosen);
+        source.buffer = buffers[chosen];
         source.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
         level.gain.value = gain;
         source.connect(level);
@@ -737,9 +757,9 @@ export class Sound {
      * A footstep on a footing (audio/footing.js SURFACES), `delay` seconds from now, `volume`
      * times as loud: at `speed` (m/s: walking, faster louder; or running, louder still and
      * brighter), by one `size` big (a person's 1: FOOTSTEPS) on its `feet` (GAITS; null, none: it
-     * floats, and isn't heard).
+     * floats, and isn't heard); `variant` and `made` as play's.
      */
-    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1 } = {}) {
+    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1, variant = null, made = false } = {}) {
         const gait = GAITS[feet];
 
         if (!gait) {
@@ -753,7 +773,7 @@ export class Sound {
         const loud = (running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * pace) * big ** FOOTSTEPS.weight * gait.volume;
         const lilt = 1 + FOOTSTEPS.jitter * (2 * Math.random() - 1);
 
-        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25 });
+        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25, variant, made });
     }
 
     // Keep a sound's samples, and give the browser a copy if it's started
@@ -781,9 +801,10 @@ export class Sound {
         this.buffers.set(name, variants);
     }
 
-    // Download the music's recordings, a few at a time, and have the browser decode them once it's started
+    // Download the music's recordings and the recorded sounds, a few at a time, and have the
+    // browser decode them once it's started
     async #download() {
-        const files = sampleFiles();
+        const files = [...sampleFiles(), ...recordedFiles()];
         let next = 0;
 
         const worker = async () => {
@@ -803,8 +824,9 @@ export class Sound {
                         this.#decode(id, this.recordings.get(id));
                     }
                 } catch {
-                    // (Offline, say: the music just doesn't play, or plays without it)
-                    this.unplayable++;
+                    // (Offline, say: the music just doesn't play, or plays without it; a recorded
+                    // sound's made one plays instead)
+                    this.unplayable += RECORDED[id.split(" ")[0]] ? 0 : 1;
                 }
             }
         };
@@ -813,8 +835,26 @@ export class Sound {
     }
 
     #decode(id, recording) {
+        const [name] = id.split(" ");
+
         this.recordings.delete(id);
-        this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
+
+        if (RECORDED[name]) {
+            const variant = Number(id.split(" ")[1]);
+
+            this.context.decodeAudioData(recording).then(
+                (buffer) => {
+                    const variants = this.decoded.get(name) ?? [];
+
+                    variants[variant] = buffer;
+                    this.decoded.set(name, variants);
+                    this.recorded.set(name, variants.filter(Boolean));
+                },
+                () => {},
+            );
+        } else {
+            this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
+        }
     }
 
     #startWind() {
