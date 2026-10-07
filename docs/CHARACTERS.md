@@ -1928,8 +1928,8 @@ similar.
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
   everyone wearing it), or two for each outfit drawn all at once
 
-**From afar** (`lod.js`): anyone drawn all at once (everyone but a player) is drawn with a quarter
-of the triangles when they're under 140 pixels tall on the screen, and in full again over 170, so
+**From afar** (`lod.js`): everyone in the game but the player is drawn with a quarter of the
+triangles when they're under 140 pixels tall on the screen, and in full again over 170, so
 one at the edge doesn't flick between them. It's a second list of triangles over the same vertices
 (meshoptimizer's simplifier, `LOD`: about a quarter of them, none more than 2% of the mesh's size
 out of place, the texture's layout kept so its seams stay put), so the skin weights, pictures and
@@ -1938,8 +1938,33 @@ triangles to 6,688); a body triangle of it is drawn unless all its corners are u
 eyes are drawn, the lashes not. An outfit's is made once for everyone wearing it, as they all have
 the same triangles (a human soldier's about 25,400 to 6,300). They're made in a worker
 (`lod-worker.js`), 20 to 30 milliseconds each on a desktop, and until one's there the character is
-drawn in full. Hair and what's carried are drawn as they are (folk's hair is grown thinned
-already). Twenty-four of the uniform lab's figures from afar, their hair as in the game: 1.85
+drawn in full. The rest, from afar too (the terrain plan's M8):
+- **The eyes** with a tenth of their triangles (`FAR.eyes`: 2,048 to about 200), never more than a
+  millimetre out (the body's own limit would let an eye fold flat).
+- **The hair** grown a second time, far thinner (`FAR.hair`: 6% of the strands, wider, of fewer
+  segments; short hair too, which near keeps 40% of its strands as each is only a few triangles),
+  and drawn instead: 400 to 1,800 triangles where folk's thinned hair is 2,000 to 7,600. It's grown
+  with the other, a step at a time, for anyone to be drawn so (`far`; by default those drawn all at
+  once).
+- **Every garment**, not only an outfit drawn all at once: lace (drawn on its own, see-through),
+  skirts and cloaks (a skirt's has no picture's layout to keep), and a player's each. A garment's is
+  made once for everyone with the same triangles of it (`keyOf`: its name and a hash of its
+  triangles), whatever shape it's fitted to. A courtesan's lace, stockings and corset were 20,600
+  triangles from afar, drawn twice (see-through, both sides); now about 5,200.
+- What's carried is drawn as it is (a helm and shield, 3,000 triangles at most: each is drawn
+  faceted, its triangles not sharing corners, so there's nothing to simplify without rebuilding it).
+
+So a soldier, a townsman or a wild one from afar is 9,000 to 14,700 triangles (it was 10,900 to
+35,200, and a wild one, a bandit, was never lowered: 40,900). Characters are also drawn **into the
+shadow maps** with their lower detail, near or far, a player's too (`shadowpasses.js castCheaply`:
+three.js asks each mesh whether it's in a shadow map's view, and that's when it's handed what to
+draw there): the body's lower-detail triangles alone (no eyes, lashes or mouth: a character
+never lowered, its body alone in full), each garment's, and the far thinner hair. Where a
+shadow map's texels are a few centimetres across, the shadow's the same; a player casts 11,300 to
+11,900 triangles into the sun's shadows where it cast 45,600 to 49,100, a follower, the orc or a
+wild one 9,100 to 10,200 where they cast 40,900 to 42,500.
+
+Twenty-four of the uniform lab's figures from afar, their hair as in the game: 1.85
 million triangles a frame (with the sun's shadows) to 0.61 million, and in software rendering 2.1
 seconds a frame to 0.9. At the size they switch, 0.17% of the picture's pixels change by more than
 48 levels of 255, on trim, emblems and garments' edges. The simplifier is vendored

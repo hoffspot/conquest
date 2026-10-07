@@ -45,7 +45,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, allWaiting, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
 const { Skins } = await import("../client/js/characters/skins.js");
 const THREE = await import("three");
-const { LOD, Lods, lowerDetail } = await import("../client/js/characters/lod.js");
+const { FAR, LOD, Lods, lowerDetail } = await import("../client/js/characters/lod.js");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
 // back kept till it's delivered
@@ -266,8 +266,8 @@ describe("characters built a step at a time (Character.building)", () => {
         await Promise.all(lods.made.values());
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // (Made once each, the body's and the outfit's, for both of them)
-        assert.equal(asked, 2);
+        // (Made once each, the body's, the eyes' and the outfit's, for both of them)
+        assert.equal(asked, 3);
 
         const { geometry } = character;
         const outfit = character.garments.find(({ userData }) => userData.merged);
@@ -298,6 +298,71 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.ok(character.low, "out of view, as it was");
         character.fitDetail(LOD.near + 1);
         assert.ok(!character.low && geometry.groups === full && outfit.geometry.drawRange.start === 0);
+    });
+
+    it("from afar, its eyes, hair, lace and skirts drawn with fewer triangles too; into the shadow maps, everyone with their lower detail", async () => {
+        const lods = new Lods();
+        const courtesan = new Character(kitOf(), options(folkLook({ role: "courtesan", sex: "f", seed: 5 })));
+        const folk = new Character(kitOf(), options(wench));
+        // (A player's: not merged, a far hair grown only when it's asked for)
+        const hero = new Character(kitOf(), { ...options(wench, false), far: true });
+        const plain = new Character(kitOf(), options(wench, false));
+        const triangles = (geometry) => (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+
+        for (const character of [courtesan, folk, hero]) {
+            character.lowerDetail(lods);
+        }
+
+        await Promise.all(lods.made.values());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The eyes: a tenth or so
+        assert.ok(folk.lowEyes.length < human.renderIndices("eyes").length / 5, `${folk.lowEyes.length / 3} eye triangles`);
+        assert.equal(folk.detail.low[1].count, folk.lowEyes.length);
+
+        // Every garment: lace (not drawn at once with the rest), a skirt, a player's each
+        assert.ok(courtesan.garments.some(({ name }) => name.startsWith("lace")) && folk.garments.some(({ userData }) => userData.drape));
+
+        for (const character of [courtesan, folk, hero]) {
+            for (const mesh of character.garments) {
+                const { detail, cheaper } = mesh.userData;
+
+                assert.ok(detail && detail.low < detail.full, mesh.name);
+                assert.deepEqual(cheaper.range, { start: detail.full, count: detail.low }, "and into the shadow maps");
+            }
+
+            assert.ok(character.garments.reduce((low, { userData }) => low + userData.detail.low, 0) < character.garments.reduce((full, { userData }) => full + userData.detail.full, 0) / 3);
+        }
+
+        // The hair: grown far thinner, drawn instead from afar, and into the shadow maps
+        const { hairMesh, farHairMesh } = folk;
+
+        assert.ok(triangles(farHairMesh.geometry) < triangles(hairMesh.geometry) / 2);
+        assert.ok(hero.farHairMesh, "a player's, asked for");
+        assert.equal(plain.farHairMesh, null, "none if not");
+        assert.ok(hairMesh.visible && !farHairMesh.visible);
+        folk.setDetail(true);
+        assert.ok(!hairMesh.visible && farHairMesh.visible);
+        folk.setDetail(false);
+        assert.equal(hairMesh.userData.cheaper.geometry, farHairMesh.geometry);
+
+        // (Short hair too: near, it keeps more of its strands)
+        const short = buildHair(folk, "short", "none", { detail: 0.2 });
+        const far = buildHair(folk, "short", "none", { detail: FAR.hair, far: true });
+
+        assert.ok(triangles(far) < triangles(short) / 4, `${triangles(far)} of ${triangles(short)}`);
+
+        // The body into the shadow maps: its lower detail alone (no eyes, lashes or mouth); one
+        // never lowered, its body alone in full
+        for (const character of [courtesan, folk, hero]) {
+            assert.deepEqual(character.mesh.userData.cheaper.groups, [character.detail.low[0]]);
+        }
+
+        assert.deepEqual(plain.mesh.userData.cheaper.groups, [plain.detail.full[0]]);
+
+        for (const character of [courtesan, folk, hero, plain]) {
+            character.dispose();
+        }
     });
 
     it("simplifies a mesh to about a quarter of its triangles, keeping its vertices", async () => {

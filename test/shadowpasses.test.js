@@ -1,11 +1,12 @@
 // The shadow maps drawn with only what they need (client/js/world/shadowpasses.js; the terrain
 // plan's M7k): a merged mesh's buildings drawn into a lamp's shadows (and the sun's) only if they're
-// in its view, and something small into the sun's only if its shadow may be seen
+// in its view, something small into the sun's only if its shadow may be seen, and characters with
+// what they're drawn with from afar (M8)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 import { buildHouse, planHouse } from "../client/js/world/art/kits/house.js";
-import { castByRuns, runsOf, setShadowView, SHADOW_PASSES, watchShadows } from "../client/js/world/shadowpasses.js";
+import { castByRuns, castCheaply, runsOf, setShadowView, SHADOW_PASSES, watchShadows } from "../client/js/world/shadowpasses.js";
 import { joined, partsOf, PIXEL, placed } from "../client/js/world/town3d.js";
 
 // A shadow camera's view as three.js makes it, for a light watched or not
@@ -166,6 +167,60 @@ describe("only what's in a shadow map's view drawn into it (shadowpasses.js)", (
         // Not knowing where the camera looks, everyone
         setShadowView(null);
         assert.equal(someone(0, 40).intersectsFrustum(frustum), true);
+    });
+
+    it("draws a mesh more cheaply into the watched shadow maps (castCheaply): its groups, draw range or geometry, as it was again after", () => {
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        const box = new THREE.OrthographicCamera(-20, 20, 20, -20, 1, 200);
+
+        box.position.set(0, 100, 0);
+        box.lookAt(0, 0, 0);
+        sun.shadow.getFrustum(0).copy(frustumOf(box));
+        watchShadows({ sun });
+        setShadowView(null);
+
+        const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+
+        camera.position.set(0, 2, 10);
+        camera.lookAt(0, 1, 0);
+
+        // A body of six parts drawn with its first's alone (its groups); a garment with its second
+        // half (its draw range); hair with another (its geometry)
+        const body = new THREE.Mesh(new THREE.BoxGeometry(), Array.from({ length: 6 }, () => new THREE.MeshBasicMaterial()));
+        const groups = body.geometry.groups;
+        const shadowGroups = [{ start: 0, count: 6, materialIndex: 0 }];
+        const garment = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+        const hair = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+        const thinner = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const own = hair.geometry;
+
+        castCheaply(body, { groups: shadowGroups });
+        castCheaply(garment, { range: { start: 18, count: 18 } });
+        castCheaply(hair, { geometry: thinner });
+
+        for (const mesh of [body, garment, hair]) {
+            mesh.updateMatrixWorld();
+            assert.equal(mesh.intersectsFrustum(sun.shadow.getFrustum(0)), true);
+        }
+
+        assert.equal(body.geometry.groups, shadowGroups);
+        assert.deepEqual(garment.geometry.drawRange, { start: 18, count: 18 });
+        assert.equal(hair.geometry, thinner);
+
+        // (As it was once its last part's drawn)
+        body.onAfterShadow(null, null, null, null, body.geometry, null, shadowGroups[0]);
+        garment.onAfterShadow(null, null, null, null, garment.geometry, null, null);
+        hair.onAfterShadow(null, null, null, null, thinner, null, null);
+        assert.equal(body.geometry.groups, groups);
+        assert.deepEqual(garment.geometry.drawRange, { start: 0, count: Infinity });
+        assert.equal(hair.geometry, own);
+
+        // The camera's view: as it's drawn; and (null) none cheaper
+        assert.equal(hair.intersectsFrustum(frustumOf(camera)), true);
+        assert.equal(hair.geometry, own);
+        castCheaply(hair, null);
+        hair.intersectsFrustum(sun.shadow.getFrustum(0));
+        assert.equal(hair.geometry, own);
     });
 
     it("leaves a mesh drawn with several materials as it is", () => {
