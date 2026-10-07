@@ -1238,7 +1238,7 @@ export class Game {
     // A character for someone, built a step at a time (Character.building); null (and thrown away)
     // if they've gone from the battle meanwhile, or been drawn some other way
     *#built(actor, options) {
-        const character = yield* Character.building(this.kit, options);
+        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), ...options });
 
         if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
             character.dispose();
@@ -1246,8 +1246,9 @@ export class Game {
             return null;
         }
 
-        // (Anyone but a player drawn with fewer triangles when small on the screen: #posing)
-        if (options.merge && this.kit.lods) {
+        // (Drawn with fewer triangles when small on the screen, anyone but this player: #posing;
+        // and into the shadow maps, everyone)
+        if (this.kit.lods) {
             character.lowerDetail(this.kit.lods);
         }
 
@@ -1345,6 +1346,11 @@ export class Game {
         }
 
         avatar.character.sheathe(true);
+
+        // (One people-shaped drawn with fewer triangles when small on the screen, as folk are: #built)
+        if (!(avatar instanceof BeastAvatar) && this.kit.lods) {
+            avatar.character.lowerDetail(this.kit.lods);
+        }
 
         return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
     }

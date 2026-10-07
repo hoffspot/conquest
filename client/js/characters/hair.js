@@ -444,24 +444,25 @@ function sampleSurface(positions, triangles, count, next) {
 
 /**
  * A style with fewer, wider strands of fewer segments, `detail` (0 to 1) of the full count: seen
- * from further away, it looks the same for a fraction of the triangles.
+ * from further away, it looks the same for a fraction of the triangles. (`far`: for drawing only
+ * from afar, a few pixels across, where short hair needn't keep more and strands can be wider)
  */
-function thinned(style, detail) {
+function thinned(style, detail, far = false) {
     if (detail >= 1 || !style.strands) {
         return style;
     }
 
     // (Short hair keeps more of its strands: they're only a few triangles each)
-    detail = Math.min(1, Math.max(detail, style.length < 0.1 ? 0.4 : 0));
+    detail = Math.min(1, Math.max(detail, style.length < 0.1 && !far ? 0.4 : 0));
 
     const fewer = (count) => Math.max(24, Math.round(count * detail));
-    const wider = (width) => width / Math.sqrt(Math.max(detail, 0.15));
+    const wider = (width) => width / Math.sqrt(Math.max(detail, far ? 0.04 : 0.15));
 
     return {
         ...style,
         strands: fewer(style.strands),
         width: wider(style.width),
-        segments: Math.max(Math.min(style.segments, 5), Math.round(style.segments * (0.5 + 0.5 * detail))),
+        segments: Math.max(Math.min(style.segments, far ? 3 : 5), Math.round(style.segments * (0.5 + 0.5 * detail))),
         tail: style.tail && { ...style.tail, strands: fewer(style.tail.strands), width: wider(style.tail.width) },
         tails: style.tails && { ...style.tails, strands: fewer(style.tails.strands), width: wider(style.tails.width) },
     };
@@ -471,7 +472,7 @@ function thinned(style, detail) {
  * Build a character's hair and beard as one geometry, to skin to its rig (or null for none).
  * `character` is a Character; `style` and `beard` are keys of HAIRSTYLES and BEARDS. Under a
  * hat or helmet, `below` keeps only the hair growing below that height (face coordinates).
- * `detail` (0 to 1) thins the hair out for characters seen from afar.
+ * `detail` (0 to 1) thins the hair out for characters seen from afar (and `far`, further: thinned).
  */
 export function buildHair(character, style, beard, options) {
     return allAtOnce(growingHair(character, style, beard, options));
@@ -480,19 +481,15 @@ export function buildHair(character, style, beard, options) {
 // How many strands growingHair grows a step
 const STRANDS_A_STEP = 24;
 
-/** The same (buildHair), grown a step at a time (each a yield: a few dozen strands), returning it. */
-export function* growingHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1 } = {}) {
+/**
+ * Where hair grows on a character as it's shaped now: its face's frame, the head's triangles and
+ * shape, the neck's and body's shapes, what keeps strands off them, and where a crown, topknot and
+ * ties are (growingHair's).
+ */
+export function hairSetting(character) {
     const human = character.human;
     const positions = character.positions;
     const rig = character.rig;
-    const hair = thinned(HAIRSTYLES[style] ?? HAIRSTYLES.short, detail);
-    const whiskers = thinned(BEARDS[beard] ?? BEARDS.none, detail);
-
-    if (!hair.strands && !whiskers.strands) {
-        return null;
-    }
-
-    const next = random(seed);
     const face = faceFrame(human, positions);
     const at = (x, y, z) => new THREE.Vector3(...face.fromFace(x, y, z));
     const headBones = new Set([rig.index.get("Head")]);
@@ -523,7 +520,6 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
 
         return touching;
     };
-    const builder = new CardBuilder(rig, next);
 
     // Hanging hair faces out from the head, turning to face out from the body (round the neck)
     // as it falls past the jaw, and out of the body a little where it lies on it
@@ -542,6 +538,33 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
     const knot = at(0, 0.145, -0.085);
     const tie = at(0, 0.035, -0.17);
     const ties = { [-1]: at(-0.085, 0.07, -0.11), 1: at(0.085, 0.07, -0.11) };
+
+    return { human, positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, tie, ties };
+}
+
+/**
+ * The same (buildHair), grown a step at a time (each a yield: a few dozen strands), returning it.
+ * `shared`, an object it keeps where hair grows on the character as it's shaped now (hairSetting:
+ * the head's and body's shapes, some tens of milliseconds to work out), for growing it again
+ * (the far hair) without working that out twice.
+ */
+export function* growingHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1, far = false, shared = null } = {}) {
+    const hair = thinned(HAIRSTYLES[style] ?? HAIRSTYLES.short, detail, far);
+    const whiskers = thinned(BEARDS[beard] ?? BEARDS.none, detail, far);
+
+    if (!hair.strands && !whiskers.strands) {
+        return null;
+    }
+
+    const next = random(seed);
+    const setting = shared?.setting ?? hairSetting(character);
+
+    if (shared) {
+        shared.setting = setting;
+    }
+
+    const { positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, tie, ties } = setting;
+    const builder = new CardBuilder(rig, next);
 
     // A ponytail, twin tails or a topknot can't come out of a helmet
     const gathered = below < Infinity && (hair.tail || hair.tails || hair.knot);
