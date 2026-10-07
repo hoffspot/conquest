@@ -2138,7 +2138,9 @@ and once there, a talk opens: a panel across the bottom of the screen with their
 world named them) and title, what they're saying, and the player's replies, one button each
 (or its number on a keyboard). Escape, the cross, walking off (any other order), getting more
 than 4 squares apart, or an enemy in sight or after the player ends it. They stop what they
-were doing and face the player until it's over.
+were doing and face the player until it's over, whatever they were about (a patrol, their
+rounds, a seat), so none walks off mid-talk; a soldier who sees an enemy goes to fight it. A
+talk that ends in trading keeps them so till the trade's done (WAR.md *Shops*).
 
 A conversation is a tree (`TREES`, one for each class; `OWN_TREES` for folk with their own, by
 id, such as the greybeard's siege story; and for folk who talk as another class does, `talk`:

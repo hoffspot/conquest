@@ -2759,6 +2759,80 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
     expect(temple.place).toBe("temple");
 });
 
+test("trading with the guild's receptionist, she stays at her counter till it's done, though her rounds would take her off to the files and out of reach; done, or the player off to talk to someone else, she's back about her business", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    const traded = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Into the guild, and up to her counter to talk
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const receptionist = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "receptionist");
+        const adventurer = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "adventurer");
+        const talkedUp = () => {
+            game.approaching = receptionist.id;
+            game.battle.command("player", { type: "approach", target: receptionist.id });
+
+            for (let k = 0; k < 300 && !game.talking; k++) {
+                game.advance(0.1, { render: false });
+            }
+
+            // (Chosen as a tap on it does: the talk over, and her wares in the pack)
+            const { conversation } = game.talking;
+
+            game.talk.onChoose(conversation.choices.findIndex(({ text }) => text === "I'd like to buy or sell something."));
+        };
+
+        talkedUp();
+
+        // Trading: a minute on, she's still there, and the trade's still open
+        const at = [receptionist.x, receptionist.y];
+        let stayed = true;
+
+        for (let k = 0; k < 120; k++) {
+            game.advance(0.5, { render: false });
+            stayed &&= Boolean(game.shopping) && Math.hypot(receptionist.x - at[0], receptionist.y - at[1]) < 0.25 && receptionist.talkingTo === "player";
+        }
+
+        // Done (the pack closed): back to her rounds
+        game.closePack();
+
+        const done = receptionist.talkingTo;
+        let walked = false;
+
+        for (let k = 0; k < 60 && !walked; k++) {
+            game.advance(0.5, { render: false });
+            walked = Math.hypot(receptionist.x - at[0], receptionist.y - at[1]) > 1;
+        }
+
+        // Trading again, the player off to talk to an adventurer: the trade's over, and she's let go
+        talkedUp();
+
+        const again = { shopping: Boolean(game.shopping), talking: receptionist.talkingTo };
+
+        game.approaching = adventurer.id;
+        game.battle.command("player", { type: "approach", target: adventurer.id });
+
+        for (let k = 0; k < 300 && game.talking?.id !== adventurer.id; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        return { stayed, done, walked, again, after: { shopping: Boolean(game.shopping), talking: receptionist.talkingTo, to: game.talking?.id === adventurer.id } };
+    });
+
+    expect(traded).toEqual({ stayed: true, done: null, walked: true, again: { shopping: true, talking: "player" }, after: { shopping: false, talking: null, to: true } });
+});
+
 test("the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, she signs the player up, and gives them a package to carry off its board of four", async ({ page }) => {
     // (Seed 2's town's guild)
     await playing(page, "/?play&seed=2");
