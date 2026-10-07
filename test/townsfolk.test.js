@@ -235,7 +235,7 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
             }
         }
 
-        for (const thing of ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger", "strawHat", "coif", "hood", "smock", "habit", "habitSkirt", "brownTunic", "russetTunic", "blueKirtle", "brownSkirt"]) {
+        for (const thing of ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger", "hoe", "basket", "strawHat", "coif", "hood", "smock", "habit", "habitSkirt", "brownTunic", "russetTunic", "blueKirtle", "brownSkirt"]) {
             assert.ok(carried.has(thing), thing);
         }
 

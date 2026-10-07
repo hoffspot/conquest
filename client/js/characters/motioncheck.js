@@ -18,6 +18,7 @@ import { WEAPONS } from "../core/weapons.js";
 import { Actions, ATTACKS, DODGES, DRAWS, EMOTE_WAYS, REACTIONS } from "./actions.js";
 import { Character, hanging, placed, slung } from "./character.js";
 import { CLIP_KEYS } from "./clip-keys.js";
+import { EVERYDAY, theirs } from "./dress.js";
 import { EQUIPMENT, heldRound, secondGrip, SLING, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
 import { buildItem } from "./items.js";
@@ -728,18 +729,23 @@ const CARRYING = Object.freeze([
     ["broom", "sweeper", "hood"],
     ["walkingStaff", "friar", "hood"],
     ["ledger", "scribe", null],
+    ["hoe", "fieldhand", "strawHat"],
+    ["basket", "shopper", "coif"],
 ]);
-const CARRIED = new Set(CARRYING.map(([item]) => item));
-const HATS = new Set(CARRYING.map(([, , hat]) => hat).filter(Boolean));
+// (Each people's own of them: their baskets, their head-wear, dress.js)
+const ofEach = (ids) => new Set(ids.flatMap((id) => [id, ...Object.keys(EVERYDAY).map((people) => theirs(people, id))]).filter(Boolean));
+const CARRIED = ofEach(CARRYING.map(([item]) => item));
+const HATS = ofEach(CARRYING.map(([, , hat]) => hat).filter(Boolean));
 // (Their rests are played with each thing carried in a hand)
-const IN_HAND = ["jug", "pitchfork", "broom", "walkingStaff", "ledger"];
+const IN_HAND = ["jug", "pitchfork", "broom", "walkingStaff", "ledger", "hoe", "basket"];
 
-// One of the townsfolk of `body`'s people in `calling`, carrying `item` and wearing `hat`: their
-// look, but what they carry and wear on their heads these (null, as folk's)
+// One of the townsfolk of `body`'s people in `calling`, carrying `item` and wearing `hat` (their
+// people's own of each: dress.js): their look, but what they carry and wear on their heads these
+// (null, as folk's)
 const townsfolk = (body, calling, item, hat) => {
     try {
         const look = folkLook({ role: "townsfolk", look: calling, sex: body.sex, seed: 5, people: body.people });
-        const equipment = [...look.equipment.filter((id) => !CARRIED.has(id) && !HATS.has(id)), item, ...(hat && body.people !== "cat" ? [hat] : [])];
+        const equipment = [...look.equipment.filter((id) => !CARRIED.has(id) && !HATS.has(id)), theirs(body.people, item), hat && body.people !== "cat" ? theirs(body.people, hat) : null].filter(Boolean);
 
         return shaped({ ...look, equipment }, body);
     } catch {

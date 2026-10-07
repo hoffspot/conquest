@@ -52,6 +52,30 @@ export function itemMaterial(name) {
             apple: { color: 0xb3332a, roughness: 0.55 },
             greens: { color: 0x5f8a3a, roughness: 0.8 },
             bark: { color: 0x5a4532, roughness: 0.95 },
+            // (Each people's baskets, their weaves and what's in them: dress.js)
+            paleWicker: { color: 0xc9c6b4, roughness: 0.85 },
+            paleWood: { color: 0xd8d0bc, roughness: 0.7 },
+            silver: { color: 0xdde3ea, metalness: 1, roughness: 0.25 },
+            whiteBloom: { color: 0xf4f1ea, roughness: 0.7 },
+            violetBloom: { color: 0x9b7fd0, roughness: 0.7 },
+            blackReed: { color: 0x1d1a22, roughness: 0.75 },
+            amethyst: { color: 0x7a3fc4, emissive: 0x3a1080, emissiveIntensity: 0.6, roughness: 0.15 },
+            emerald: { color: 0x2f9a5a, emissive: 0x0a3a1a, emissiveIntensity: 0.5, roughness: 0.15 },
+            paleStalk: { color: 0xd9d4e6, roughness: 0.8 },
+            glowCap: { color: 0xb8a6ff, emissive: 0x6a4cff, emissiveIntensity: 0.9, roughness: 0.6 },
+            saffronWeave: { color: 0xe0a02a, roughness: 0.85 },
+            indigoWeave: { color: 0x2f3f95, roughness: 0.85 },
+            redWeave: { color: 0xb33224, roughness: 0.85 },
+            mango: { color: 0xe8952a, roughness: 0.55 },
+            lemon: { color: 0xe6d14a, roughness: 0.55 },
+            reed: { color: 0xb59a5c, roughness: 0.9 },
+            turquoiseWeave: { color: 0x2fb3a0, roughness: 0.85 },
+            crimsonWeave: { color: 0xa8322a, roughness: 0.85 },
+            maize: { color: 0xe8c040, roughness: 0.7 },
+            cacao: { color: 0x8a3a1e, roughness: 0.6 },
+            hide: { color: 0x8a6a48, roughness: 0.85 },
+            meat: { color: 0x8c2f24, roughness: 0.6 },
+            root: { color: 0x9a7a52, roughness: 0.9 },
         }[name] ?? dyed(name);
 
         // (Named, so that a character can find what's made of its skin)
@@ -1312,6 +1336,165 @@ function pitchfork() {
     return assemble(parts, "pitchfork");
 }
 
+// A hoe, carried over the shoulder: its ash handle up from the fist and back over the shoulder,
+// the iron blade at its far end, turned down behind
+function hoe() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.014, 0.016, 1.25, 8), 0, 0.46, 0), "wood"],
+        [at(new THREE.CylinderGeometry(0.022, 0.018, 0.06, 8), 0, 1.07, 0), "iron"],
+        [at(new THREE.BoxGeometry(0.15, 0.012, 0.13), 0, 1.09, -0.07), "iron"],
+    ], "hoe");
+}
+
+// A basket carried by its handle at the side, each people's own (characters/dress.js): in its
+// frame the fist's round the top of the handle, the basket hanging below it (+z, down as it's
+// carried), front to back along y, a little out from the leg (-x). Upright things (a body, a
+// band) are made along y and stood down into it (`hung`: their top up, centred `z` below the fist)
+const hung = (geometry, z, x = BASKET_OUT) => at(geometry, x, 0, z, -Math.PI / 2, 0, 0);
+
+// How far out from the leg a basket hangs (metres, -x: away from the body)
+const BASKET_OUT = -0.04;
+
+// An arched handle over a basket: from its rim at the front, up to the fist and down to its rim at
+// the back (`reach`: half its span, as high), `thick` thick
+const archOver = (reach, thick, segments = 14) => at(new THREE.TorusGeometry(reach, thick, 6, segments, Math.PI), BASKET_OUT, 0, reach, 0, -Math.PI / 2, Math.PI / 2);
+
+// What's heaped in a basket: [geometry, material, x, y, z] laid on its top, `top` below the fist
+const heaped = (top, things) => things.map(([geometry, material, x, y, z = 0]) => [at(geometry, BASKET_OUT + x, y, top + z), material]);
+
+// The humans': a round wicker market basket, its arched handle of bent ash, loaves and apples in it
+function basket() {
+    const top = 0.13;
+
+    return assemble([
+        [hung(new THREE.CylinderGeometry(0.13, 0.105, 0.15, 16, 1, true), top + 0.075), "wicker"],
+        [hung(new THREE.CylinderGeometry(0.105, 0.105, 0.012, 16), top + 0.145), "wicker"],
+        [hung(new THREE.TorusGeometry(0.13, 0.009, 6, 18).rotateX(Math.PI / 2), top), "darkWood"],
+        [archOver(top, 0.009), "wood"],
+        ...heaped(top, [
+            [new THREE.CapsuleGeometry(0.034, 0.09, 4, 8).rotateZ(Math.PI / 2), "bread", 0.02, -0.04, 0.005],
+            [new THREE.CapsuleGeometry(0.03, 0.07, 4, 8).rotateZ(Math.PI / 2.4), "bread", -0.03, 0.05, 0.01],
+            [new THREE.SphereGeometry(0.032, 10, 8), "apple", 0.05, 0.04],
+            [new THREE.SphereGeometry(0.03, 10, 8), "apple", -0.05, -0.05, 0.005],
+        ]),
+    ], "basket");
+}
+
+// The elves': shallow and long as a leaf, woven of pale peeled willow gone silver, its handle tall
+// and slender, a silver leaf where it's held; white and violet flowers in it on their leaves
+function elfBasket() {
+    const top = 0.17;
+    const body = new THREE.CylinderGeometry(0.11, 0.085, 0.07, 18, 1, true).scale(0.62, 1, 1.45);
+
+    return assemble([
+        [hung(body, top + 0.035), "paleWicker"],
+        [hung(new THREE.CylinderGeometry(0.085, 0.085, 0.01, 18).scale(0.62, 1, 1.45), top + 0.07), "paleWicker"],
+        [hung(new THREE.TorusGeometry(0.11, 0.007, 6, 24).rotateX(Math.PI / 2).scale(0.62, 1, 1.45), top), "silver"],
+        [archOver(top, 0.006, 18), "paleWood"],
+        [at(new THREE.SphereGeometry(0.02, 10, 6).scale(0.35, 1.6, 0.9), BASKET_OUT, 0.03, 0.01), "silver"],
+        ...heaped(top, [
+            [new THREE.SphereGeometry(0.06, 10, 6).scale(0.8, 1.6, 0.35), "greens", 0, 0, 0.01],
+            ...[[0.02, -0.06], [-0.02, -0.02], [0.015, 0.03], [-0.015, 0.07], [0.025, 0.1]].map(([x, y], k) => [new THREE.SphereGeometry(0.018, 8, 6), k % 2 ? "violetBloom" : "whiteBloom", x, y, -0.008]),
+        ]),
+    ], "elfBasket");
+}
+
+// The dark elves': six-sided, close-woven of black reed, its rim and its pointed handle silver (an
+// arch as their spires are), a violet stone at its point; pale mushrooms in it, glowing faintly
+function darkElfBasket() {
+    const top = 0.15;
+    const rim = 0.115;
+    // (The handle: two bars up from the rim, front and back, meeting over it in a point)
+    const [bar, lean] = [Math.hypot(rim, top), Math.atan2(top, rim)];
+
+    return assemble([
+        [hung(new THREE.CylinderGeometry(0.12, 0.095, 0.13, 6, 1, true), top + 0.065), "blackReed"],
+        [hung(new THREE.CylinderGeometry(0.095, 0.095, 0.012, 6), top + 0.13), "blackReed"],
+        [hung(new THREE.TorusGeometry(rim, 0.007, 4, 6).rotateX(Math.PI / 2), top), "silver"],
+        [at(new THREE.CylinderGeometry(0.006, 0.006, bar, 6), BASKET_OUT, rim / 2, top / 2, lean, 0, 0), "silver"],
+        [at(new THREE.CylinderGeometry(0.006, 0.006, bar, 6), BASKET_OUT, -rim / 2, top / 2, -lean, 0, 0), "silver"],
+        [at(new THREE.OctahedronGeometry(0.016), BASKET_OUT, 0, -0.012), "amethyst"],
+        ...heaped(top, [
+            ...[[0.03, -0.04], [-0.03, 0.01], [0.02, 0.05], [-0.02, -0.06]].flatMap(([x, y]) => [
+                [new THREE.CylinderGeometry(0.008, 0.01, 0.04, 6).rotateX(Math.PI / 2), "paleStalk", x, y, -0.005],
+                [new THREE.SphereGeometry(0.026, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-Math.PI / 2), "glowCap", x, y, -0.024],
+            ]),
+        ]),
+    ], "darkElfBasket");
+}
+
+// The cat folk's: wide and flaring as a bowl, woven in bands of saffron, indigo, red and the
+// grass's own colour, its handle bound in leather; ripe fruit heaped in it
+function catBasket() {
+    const top = 0.12;
+    // (As wide at its rim as the humans' at the most, to keep off the thigh as the weight shifts)
+    const bands = [["saffronWeave", 0.13, 0.118], ["indigoWeave", 0.118, 0.106], ["redWeave", 0.106, 0.094], ["straw", 0.094, 0.08]];
+    const parts = bands.map(([material, from, to], k) => [hung(new THREE.CylinderGeometry(from, to, 0.03, 18, 1, true), top + 0.015 + k * 0.03), material]);
+
+    return assemble([
+        ...parts,
+        [hung(new THREE.CylinderGeometry(0.08, 0.08, 0.01, 18), top + 0.12), "straw"],
+        [hung(new THREE.TorusGeometry(0.13, 0.01, 6, 20).rotateX(Math.PI / 2), top), "indigoWeave"],
+        [archOver(top, 0.011), "darkLeather"],
+        ...heaped(top, [
+            [new THREE.SphereGeometry(0.04, 10, 8).scale(1, 1.25, 1), "mango", 0.03, 0.05],
+            [new THREE.SphereGeometry(0.038, 10, 8).scale(1, 1.25, 1), "mango", -0.04, -0.03],
+            [new THREE.SphereGeometry(0.034, 10, 8), "apple", 0.04, -0.06, 0.005],
+            [new THREE.SphereGeometry(0.03, 10, 8), "lemon", -0.03, 0.07, 0.005],
+        ]),
+    ], "catBasket");
+}
+
+// The lizard folk's: tall and round, of reed, with stepped bands of turquoise and crimson round it,
+// carried by a loop of rope; ears of maize and cacao pods standing up in it
+function lizardBasket() {
+    const top = 0.14;
+    const parts = [
+        [hung(new THREE.CylinderGeometry(0.1, 0.09, 0.22, 14, 1, true), top + 0.11), "reed"],
+        [hung(new THREE.CylinderGeometry(0.09, 0.09, 0.012, 14), top + 0.22), "reed"],
+    ];
+
+    // (Its bands: turquoise, crimson, turquoise, stepped as their stone's frets are)
+    for (const [k, material] of ["turquoiseWeave", "crimsonWeave", "turquoiseWeave"].entries()) {
+        parts.push([hung(new THREE.CylinderGeometry(0.1 - k * 0.003 + 0.003, 0.1 - k * 0.003 + 0.002, 0.022, 14, 1, true), top + 0.035 + k * 0.05), material]);
+    }
+
+    return assemble([
+        ...parts,
+        [archOver(top, 0.007, 10), "string"],
+        ...heaped(top, [
+            ...[[0.03, -0.03], [-0.03, 0.02], [0.0, 0.05]].map(([x, y]) => [new THREE.CapsuleGeometry(0.018, 0.09, 4, 8).rotateX(Math.PI / 2), "maize", x, y, -0.03]),
+            [new THREE.SphereGeometry(0.03, 10, 8).scale(1, 1, 1.7), "cacao", -0.02, -0.05, -0.02],
+            [new THREE.SphereGeometry(0.06, 8, 6).scale(1, 1, 0.5), "greens", 0, 0, 0.02],
+        ]),
+    ], "lizardBasket");
+}
+
+// The orcs': squat and rough, of sticks lashed with hide, an iron band round its rim, its handle a
+// great bone; a haunch and roots in it
+function orcBasket() {
+    const top = 0.13;
+    const parts = [
+        [hung(new THREE.CylinderGeometry(0.135, 0.12, 0.13, 9, 1, true), top + 0.065), "bark"],
+        [hung(new THREE.CylinderGeometry(0.12, 0.12, 0.014, 9), top + 0.13), "bark"],
+        [hung(new THREE.TorusGeometry(0.137, 0.01, 5, 9).rotateX(Math.PI / 2), top + 0.005), "iron"],
+        [hung(new THREE.TorusGeometry(0.128, 0.006, 4, 9).rotateX(Math.PI / 2), top + 0.09), "hide"],
+        [archOver(top, 0.013, 8), "bone"],
+        [at(new THREE.SphereGeometry(0.022, 8, 6), BASKET_OUT, 0.128, top), "bone"],
+        [at(new THREE.SphereGeometry(0.022, 8, 6), BASKET_OUT, -0.128, top), "bone"],
+    ];
+
+    return assemble([
+        ...parts,
+        ...heaped(top, [
+            [new THREE.SphereGeometry(0.06, 10, 8).scale(1, 1.3, 0.8), "meat", 0.02, 0.01],
+            [new THREE.CylinderGeometry(0.01, 0.012, 0.08, 6).rotateX(Math.PI / 2.6), "bone", 0.02, -0.08, -0.02],
+            [new THREE.CapsuleGeometry(0.018, 0.05, 4, 6).rotateZ(1.2), "root", -0.05, 0.04, 0.005],
+            [new THREE.CapsuleGeometry(0.016, 0.04, 4, 6).rotateZ(-0.5), "root", -0.04, -0.04, 0.008],
+        ]),
+    ], "orcBasket");
+}
+
 function walkingStaff() {
     return assemble([
         [at(new THREE.CylinderGeometry(0.016, 0.019, 1.62, 8), 0, -0.05, 0), "wood"],
@@ -1360,13 +1543,62 @@ function coif(radius) {
     ], "helmet");
 }
 
-// A wool hood: over the head and a little down the back of it, open at the face (the front, +z)
-function hood(radius) {
+// A wool hood: over the head and a little down the back of it, open at the face (the front, +z);
+// the dark elves' of black
+function hood(radius, material = "wool") {
     const r = radius * 1.1;
     // (Round the head but for the face: from a quarter round each side of the front)
     const cowl = new THREE.SphereGeometry(r, 24, 14, Math.PI * 0.75, Math.PI * 1.5, 0, Math.PI * 0.58).scale(0.9, 0.97, 1.05);
 
-    return assemble([[cowl, "wool"]], "helmet");
+    return assemble([[cowl, material]], "helmet");
+}
+
+// A circlet round the brow: the elves' of silver, a leaf at its front with a green stone; the dark
+// elves' of black steel, a violet stone at its front between two spikes
+function circlet(radius, people) {
+    const r = radius * 1.04;
+    const metal = people === "elf" ? "silver" : "metal:#3c3844";
+    const parts = [[at(new THREE.CylinderGeometry(r * 0.92, r * 0.92, r * 0.06, 32, 1, true), 0, r * 0.36, 0), metal]];
+
+    if (people === "elf") {
+        parts.push([at(new THREE.SphereGeometry(r * 0.12, 10, 6).scale(0.45, 1.2, 0.25), 0, r * 0.44, r * 0.92, 0, 0, 0), "silver"]);
+        parts.push([at(new THREE.SphereGeometry(r * 0.035, 8, 6), 0, r * 0.36, r * 0.95), "emerald"]);
+    } else {
+        parts.push([at(new THREE.OctahedronGeometry(r * 0.06), 0, r * 0.37, r * 0.94), "amethyst"]);
+
+        for (const side of [-1, 1]) {
+            parts.push([at(new THREE.ConeGeometry(r * 0.025, r * 0.16, 6), side * r * 0.14, r * 0.45, r * 0.9, -0.15, 0, -side * 0.25), metal]);
+        }
+    }
+
+    return assemble(parts, "circlet");
+}
+
+// How high round the head (a share of its radius above its middle) the lizard folk's band goes
+const BAND_UP = 0.46;
+
+// The lizard folk's band of turquoise cloth round the brow, a disc of jade at its front, a fan of
+// feathers up from the back of the head, crimson, turquoise and green
+function featherBand(radius) {
+    const r = radius * 1.04;
+    // (High round the head, above the brow ridge, clear of a short snout's)
+    const band = r * BAND_UP;
+    const parts = [
+        [at(new THREE.CylinderGeometry(r * 0.93, r * 0.93, r * 0.1, 32, 1, true), 0, band, 0), clothOf("#2fb3a0")],
+        [at(new THREE.CylinderGeometry(r * 0.09, r * 0.09, r * 0.02, 12), 0, band + r * 0.01, r * 0.94, Math.PI / 2, 0, 0), paintOf("#3f8f5f")],
+    ];
+
+    // (Each rooted in the band at the back of the head, rising up and back from it, clear of the
+    // skull, fanned out)
+    for (let k = 0; k < 5; k++) {
+        const angle = -0.6 + (k * 1.2) / 4;
+        const [rise, length] = [0.75, r * 0.8];
+        const [x, y, z] = [Math.sin(angle) * r * 0.3, band + r * 0.02 + Math.cos(rise) * length * 0.5, -r * 0.95 - Math.sin(rise) * length * 0.5];
+
+        parts.push([at(new THREE.BoxGeometry(r * 0.1, length, r * 0.01), x, y, z, -rise, 0, -angle * 0.6), clothOf(["#a8322a", "#2fb3a0", "#3f8f5f"][k % 3])]);
+    }
+
+    return assemble(parts, "featherBand");
 }
 
 // How much room head-wear leaves over the skull (metres): its lining, and the hair pressed under it
@@ -1556,6 +1788,20 @@ export function buildItem(model, fit = {}) {
             return broom();
         case "walkingStaff":
             return walkingStaff();
+        case "hoe":
+            return hoe();
+        case "basket":
+            return basket();
+        case "elfBasket":
+            return elfBasket();
+        case "darkElfBasket":
+            return darkElfBasket();
+        case "catBasket":
+            return catBasket();
+        case "lizardBasket":
+            return lizardBasket();
+        case "orcBasket":
+            return orcBasket();
         case "ledger":
             return ledger();
         case "strawHat":
@@ -1563,7 +1809,14 @@ export function buildItem(model, fit = {}) {
         case "coif":
             return fitted(coif(headRadius), fit.skull, { across: headRadius * 1.04 * 0.9, up: headRadius * 1.04 * 0.95, back: headRadius * 1.04 * 1.04, rim: headRadius * 0.16 });
         case "hood":
-            return fitted(hood(headRadius), fit.skull, { across: headRadius * 1.1 * 0.9, up: headRadius * 1.1 * 0.97, back: headRadius * 1.1 * 1.05, rim: headRadius * 0.27 });
+        case "darkHood":
+            return fitted(hood(headRadius, model === "darkHood" ? "cloth:#1d1724" : "wool"), fit.skull, { across: headRadius * 1.1 * 0.9, up: headRadius * 1.1 * 0.97, back: headRadius * 1.1 * 1.05, rim: headRadius * 0.27 });
+        case "circletElf":
+        case "circletDark":
+            // (Fitted over its ornament's height too: the leaf, the spikes)
+            return fitted(circlet(headRadius, model === "circletElf" ? "elf" : "darkElf"), fit.skull, { across: headRadius * 1.04 * 0.92, band: [headRadius * 1.04 * 0.3, headRadius * 1.04 * 0.58], back: headRadius * 1.04 * 0.92 });
+        case "featherBand":
+            return fitted(featherBand(headRadius), fit.skull, { across: headRadius * 1.04 * 0.93, band: [headRadius * 1.04 * (BAND_UP - 0.07), headRadius * 1.04 * (BAND_UP + 0.07)], back: headRadius * 1.04 * 0.93 });
         case "smithHammer":
             return smithHammer();
         case "tongs":

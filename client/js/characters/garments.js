@@ -123,6 +123,10 @@ function segment(p, a, b) {
 
 const OUTSIDE = -1;
 
+// Where a tunic's hem and neck come on the base body (its height, metres: the trim's bands)
+const HEM_Y = 0.045;
+const NECK_Y = 0.585;
+
 /**
  * Up to the neck: a round neckline, dipping at the front and rising over the shoulders, out past
  * the neck's sides (level, it cut across shoulders that rise to the neck, as Vitruvian's do, and
@@ -273,6 +277,89 @@ const MADE = {
     },
 };
 
+// The base body's height (metres) of a tunic's hem, from how far above the hips it comes
+const hemAt = (above) => HEM_Y + 0.06 + above;
+
+// Round the neck down onto the shoulders, as a collar of beads lies (`deep`: metres down from the neck)
+const collar = (deep) => (v, l) => (v.region === "torso" ? Math.min(v.y - (l.neck - deep * (l.height / 1.7)), l.neck + 0.01 - v.y) : OUTSIDE);
+
+// The bust's band, as a chest wrap's
+const bustBand = band((l) => l.chest - 0.75 * (l.chest - l.waist), (l) => l.armpit + 0.02);
+
+/**
+ * Each people's everyday dress (dress.js): each piece's cut and work, and its colours: [colour,
+ * trim, accent] by name. Those only another colour of what's already made (`base`) are drawn
+ * with its picture, tinted.
+ */
+const EVERYDAY = {
+    // The elves': fine cloth, long and flowing, a vine in leaf worked round the neck and hem; a
+    // silk sash; soft boots
+    // (A tunic to the hips, over the leggings)
+    elfTunic: [{ label: "Elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.55, pattern: "vine", hem: hemAt(-0.06), inside: top((l) => l.hips - 0.06, 0.97, 0.045) }, { Moss: ["#4f6f4a", "#dde3ea"], Silver: ["#b9c0c4", "#3a8a55"], Dusk: ["#3d4f7a", "#dde3ea"] }],
+    elfBlouse: [{ label: "Elven blouse", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.008, smooth: 4, roughness: 0.55, pattern: "vine", hem: hemAt(-0.03), inside: top((l) => l.hips - 0.03, 0.97, 0.07) }, { Ivory: ["#e8e2d0", "#3a8a55"], Sage: ["#a9b9a2", "#f2f2ec"] }],
+    elfVest: [{ label: "Elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.55, pattern: "vine", hem: hemAt(-0.02), inside: top((l) => l.hips - 0.02, 0.03, 0.06) }, { Moss: ["#3e5a44", "#dde3ea"], Dusk: ["#2e3c60", "#dde3ea"] }],
+    elfBodice: [{ label: "Elven bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, roughness: 0.5, pattern: "laced", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) }, { Moss: ["#3e5a44", "#dde3ea"], Dusk: ["#2e3c60", "#dde3ea"] }],
+    elfSash: [{ label: "Silk sash", slot: "waist", layer: 4, thickness: 0.006, smooth: 6, roughness: 0.45, pattern: "cloth", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.1), l.waist - 0.01 - v.y) : OUTSIDE) }, { Silver: ["#c9ced6"], Green: ["#3a8a55"] }],
+    // The dark elves': close-fitted and high at the neck, black and violet, a silver web across
+    // the breast; tall boots to the knee
+    darkTunic: [{ label: "Dark elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.006, smooth: 4, roughness: 0.5, pattern: "web", hem: hemAt(-0.1), inside: top((l) => l.hips - 0.1, 0.97, 0.008) }, { Black: ["#1d1724", "#d6cfe6"], Violet: ["#3e2266", "#d6cfe6"], Plum: ["#4a2340", "#b8a6ff"] }],
+    darkVest: [{ label: "Dark elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.45, pattern: "web", hem: hemAt(-0.02), inside: top((l) => l.hips - 0.02, 0.03, 0.01) }, { Black: ["#16121b", "#8a5cc4"] }],
+    darkBodice: [{ label: "Dark elven bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, roughness: 0.45, pattern: "laced", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) }, { Black: ["#1d1724", "#8a5cc4"], Violet: ["#3e2266", "#d6cfe6"] }],
+    darkBoots: [{ label: "Tall boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, roughness: 0.45, pattern: "leather", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.48 : OUTSIDE) }, { Black: ["#121016"] }],
+    // The cat folk's: light wraps for the sun, bare at the arms, woven in bold zigzagged bands of
+    // saffron, indigo and red; collars of beads; bronze bangles; bare feet
+    catWrap: [{ label: "Wrap", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.85, pattern: "bands", inside: top((l) => l.hips - 0.04, 0.05, 0.075) }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"], Red: ["#b33224", "#1e1a18", "#e0a02a"] }],
+    catBandeau: [{ label: "Breast wrap", slot: "shirt", layer: 1, thickness: 0.003, smooth: 6, roughness: 0.85, pattern: "bands", inside: bustBand }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"] }],
+    beadedCollar: [{ label: "Beaded collar", slot: "neck", layer: 5, thickness: 0.006, smooth: 3, roughness: 0.4, pattern: "beads", inside: collar(0.1) }, { Bright: ["#b33224", "#efe2c4", "#2f6fb5"], Gold: ["#e0a02a", "#1e1a18", "#b33224"] }],
+    // (A man's: wide trousers to the calf, loose and light, and a banded sash)
+    catTrousers: [{ label: "Wide trousers", slot: "legs", layer: 1, thickness: 0.003, loose: 0.016, smooth: 4, roughness: 0.85, pattern: "cloth", inside: bottoms((l) => l.waist - 0.02, 0.78) }, { Indigo: ["#2f3f95"], Ochre: ["#c47a2c"], Red: ["#8e2a20"] }],
+    catSash: [{ label: "Banded sash", slot: "waist", layer: 4, thickness: 0.006, smooth: 6, roughness: 0.8, pattern: "bands", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.11), l.waist - 0.0 - v.y) : OUTSIDE) }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"] }],
+    bangles: [{ label: "Bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.35, metalness: 1, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.84, 0.93 - v.arm) : OUTSIDE) }, { Bronze: ["#b8863a"] }],
+    // The lizard folk's: white cotton with stepped frets round the neck and hem in turquoise and
+    // crimson, a row of diamonds over the breast; a short jacket; a loincloth; bangles of jade
+    huipil: [{ label: "Huipil", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.012, smooth: 4, roughness: 0.88, pattern: "fret", hem: hemAt(-0.1), inside: top((l) => l.hips - 0.1, 0.22, 0.06) }, { White: ["#ece6d6", "#2fb3a0", "#a8322a"], Ochre: ["#c9962e", "#a8322a", "#2fb3a0"], Turquoise: ["#2fb3a0", "#ece6d6", "#a8322a"] }],
+    xicolli: [{ label: "Xicolli", slot: "chest", layer: 2, thickness: 0.004, loose: 0.006, smooth: 4, roughness: 0.85, pattern: "fret", hem: hemAt(-0.03), inside: top((l) => l.hips - 0.03, 0.03, 0.06) }, { Crimson: ["#a8322a", "#2fb3a0", "#ece6d6"], White: ["#ece6d6", "#a8322a", "#2fb3a0"] }],
+    // (A man's: breeches of cotton to the knee)
+    lizardBreeches: [{ label: "Cotton breeches", slot: "legs", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.88, pattern: "cloth", inside: bottoms((l) => l.waist - 0.02, 0.5) }, { White: ["#ece6d6"], Ochre: ["#c9962e"] }],
+    maxtlatl: [{ label: "Maxtlatl", slot: "underwear", layer: 0, thickness: 0.003, smooth: 3, roughness: 0.9, pattern: "cloth", inside: bottoms((l) => l.hips + 0.03, 0.2) }, { White: ["#ece6d6"] }],
+    jadeBangles: [{ label: "Jade bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.3, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.84, 0.93 - v.arm) : OUTSIDE) }, { Green: ["#3f8f5f"] }],
+    // The orcs': hide, in patches stitched together, bare at the arms; a mantle of fur over the
+    // shoulders; a string of bones and teeth; bands of iron round the forearms
+    hideVest: [{ label: "Hide vest", slot: "chest", layer: 2, thickness: 0.008, loose: 0.004, smooth: 6, roughness: 0.8, pattern: "hide", inside: top((l) => l.hips - 0.02, 0.03, 0.08) }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"], Red: ["#7a2a1c", "#1b1614"] }],
+    // (A man's: trousers of patched hide)
+    hidePants: [{ label: "Hide trousers", slot: "legs", layer: 1, thickness: 0.006, loose: 0.006, smooth: 4, roughness: 0.82, pattern: "hide", inside: bottoms((l) => l.waist - 0.02, 0.95) }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"] }],
+    hideWrap: [{ label: "Hide wrap", slot: "shirt", layer: 1, thickness: 0.006, smooth: 6, roughness: 0.8, pattern: "hide", inside: bustBand }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"] }],
+    furMantle: [{ label: "Fur mantle", slot: "surcoat", layer: 4, thickness: 0.018, loose: 0.006, smooth: 6, roughness: 0.95, pattern: "fur", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.armpit - 0.03), neckline(v, l, 0)) : v.region === "arm" ? 0.2 - v.arm : OUTSIDE) }, { Grey: ["#6e6a64"], Brown: ["#5a4632"], Black: ["#2a2622"] }],
+    boneNecklace: [{ label: "Bone necklace", slot: "neck", layer: 5, thickness: 0.007, smooth: 3, roughness: 0.5, pattern: "beads", inside: collar(0.05) }, { Bone: ["#e8dcc0", "#8a2a1a", "#2a1a10"] }],
+    ironBands: [{ label: "Iron bands", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, roughness: 0.5, metalness: 0.8, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.64, 0.93 - v.arm) : OUTSIDE) }, { Iron: ["#4a4642"] }],
+};
+
+// The peoples' everyday dress (EVERYDAY), each piece in each of its colours; and what's only a
+// tint of what's made: leggings, boots and gloves in their colours
+function everyday() {
+    const garments = {};
+
+    for (const [id, [cut, colours]] of Object.entries(EVERYDAY)) {
+        for (const [name, [colour, trim, accent]] of Object.entries(colours)) {
+            garments[`${id}${name}`] = { ...cut, colour, ...(trim ? { trim } : {}), ...(accent ? { accent } : {}) };
+        }
+    }
+
+    return garments;
+}
+
+// (Tinted, as liveried's are, after MADE: those made from it)
+const TINTED = {
+    elfLeggingsGrey: ["trousers", "#6f7a6e"],
+    elfLeggingsGreen: ["trousers", "#3e5a44"],
+    elfBoots: ["boots", "#8f8470"],
+    darkLeggings: ["trousers", "#17131c"],
+    darkGloves: ["gloves", "#141118"],
+    darkBelt: ["belt", "#2a2430"],
+    hideLeggings: ["breeches", "#4e3826"],
+    hideBoots: ["boots", "#2e2216"],
+};
+
 /**
  * Each people's make of what their uniforms and livery are made of (characters/liveries.js),
  * `${id}.${people}`: in their colours and their metal; those that only differ in colour from the
@@ -313,7 +400,10 @@ function liveried(made) {
     return garments;
 }
 
-export const GARMENTS = Object.freeze({ ...MADE, ...liveried(MADE) });
+// Each people's everyday dress (characters/dress.js: who wears what), in their own cut, with their
+// own work on it (everydayAt's patterns: their vines, webs, bands, frets, patched hide and fur,
+// beads), each in a few of their colours (EVERYDAY: `${id}${colour}`), and what's only a tint
+export const GARMENTS = Object.freeze({ ...MADE, ...liveried(MADE), ...everyday(), ...Object.fromEntries(Object.entries(TINTED).map(([id, [base, colour]]) => [id, { ...MADE[base], colour, base }])) });
 
 /**
  * One colour of lingerie: a lace bra, briefs, a suspender belt and stockings, named for it
@@ -1580,6 +1670,10 @@ export function* paintingGarment(map, garment) {
     const trim = new THREE.Color(garment.trim ?? garment.colour);
     const pattern = garment.pattern ?? "cloth";
     const mark = garment.emblem ? { mark: garment.emblem.mark, colour: new THREE.Color(garment.emblem.colour), size: garment.emblem.size ?? 0.075 } : null;
+    // (A third colour, for the peoples' everyday dress: its bands' and beads' and frets'; and how
+    // far down its hem comes on the base body, if not a tunic's)
+    const accent = new THREE.Color(garment.accent ?? garment.trim ?? garment.colour);
+    const hem = garment.hem ?? HEM_Y;
 
     for (let i = 0; i < count; i++) {
         if (i % TEXELS_A_STEP === 0) {
@@ -1693,6 +1787,17 @@ export function* paintingGarment(map, garment) {
 
                 break;
             }
+            case "vine":
+            case "web":
+            case "bands":
+            case "fret":
+            case "hide":
+            case "fur":
+            case "beads":
+            case "bangles": {
+                [c, shade, height] = everydayAt(pattern, x, y, z, { colour, trim, accent, hem });
+                break;
+            }
             default: {
                 const weave = fbm(x * 160, y * 160, z * 160, 2);
 
@@ -1718,6 +1823,153 @@ export function* paintingGarment(map, garment) {
     dilate(map, data, bump);
 
     return { size, data, bump };
+}
+
+/**
+ * The peoples' everyday dress (dress.js): each one's own work on its cloth, at a point of the base
+ * body (x across, y up, z forward: metres), in its colours (`colour`, `trim`, `accent`) and down to
+ * its `hem`: [colour, shade, height]. Sized to show at the textures' few millimetres a texel.
+ *
+ *  - vine (the elves'): a trailing vine in leaf round the neck and the hem, on fine cloth;
+ *  - web (the dark elves'): a spider's web in silver thread across the chest from its middle, a
+ *    band round the neck;
+ *  - bands (the cat folk's): bold bands round the body, their edges zigzagged, in three colours;
+ *  - fret (the lizard folk's): stepped frets round the neck and hem in bands edged with the third
+ *    colour, a row of diamonds across the chest;
+ *  - hide (the orcs'): patches of hide each its own shade, stitched together;
+ *  - fur: long hair, streaked, its tips lighter;
+ *  - beads: rows of beads round the neck, by turns in the three colours;
+ *  - bangles: rings of metal round the wrists.
+ */
+function everydayAt(pattern, x, y, z, { colour, trim, accent, hem }) {
+    const weave = fbm(x * 160, y * 160, z * 160, 2);
+    const cloth = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
+    const round = Math.atan2(x, z);
+    const frac = (value) => value - Math.floor(value);
+
+    switch (pattern) {
+        case "vine": {
+            // (A band round the neck, and a vine in leaf below it, a leaf off its winding stem
+            // to either side by turns; the same round the hem)
+            const leafy = (across) => {
+                const stem = 0.009 * Math.sin(round * 7);
+                const turn = (round * 7) / (2 * Math.PI) + 0.25;
+                const side = Math.floor(turn) % 2 ? 1 : -1;
+                const [du, dv] = [(frac(turn) - 0.5) / 0.26, (across - stem - side * 0.013) / 0.008];
+
+                return Math.abs(across - stem) < 0.0035 || du * du + dv * dv < 1;
+            };
+
+            if (Math.abs(y - (NECK_Y - 0.018)) < 0.007 || leafy(y - (NECK_Y - 0.05)) || leafy(y - (hem + 0.035))) {
+                return [trim, 1, 0.65];
+            }
+
+            return [colour, cloth, 0.5 + 0.2 * (weave - 0.5)];
+        }
+        case "web": {
+            const [u, v] = [x, y - 0.4];
+            const reach = Math.hypot(u, v);
+            const spoke = Math.abs(Math.sin(Math.atan2(v, u) * 4)) * reach;
+            const ring = Math.abs(frac(reach / 0.04) - 0.5) * 0.04;
+
+            if (Math.abs(y - NECK_Y + 0.012) < 0.012 || (z > 0.03 && reach < 0.17 && (spoke < 0.0022 || ring < 0.0016))) {
+                return [trim, 1, 0.62];
+            }
+
+            return [colour, cloth * 0.95, 0.5 + 0.2 * (weave - 0.5)];
+        }
+        case "bands": {
+            // (Bands 3 cm deep, by turns the main colour, the trim, the main and the third, their
+            // edges zigzagging round the body)
+            const zig = 0.007 * Math.abs(frac(round * 6 / Math.PI) - 0.5) * 2;
+            const band = Math.floor((y + zig) / 0.03);
+            const of = ((band % 4) + 4) % 4;
+
+            return [[colour, trim, colour, accent][of], cloth, 0.5 + 0.2 * (weave - 0.5) + (of % 2 ? 0.08 : 0)];
+        }
+        case "fret": {
+            // (A band 4 cm deep at the neck and the hem, edged in the third colour, its frets
+            // stepping round: each step 1 cm, up and along by turns)
+            for (const at of [NECK_Y - 0.03, hem + 0.03]) {
+                const v = (y - at) / 0.02;
+
+                if (Math.abs(v) < 1) {
+                    if (Math.abs(v) > 0.78) {
+                        return [accent, 1, 0.62];
+                    }
+
+                    const step = Math.floor((round * 0.15) / 0.01);
+                    const rise = Math.floor((v + 0.78) / 0.39);
+
+                    return [(step + rise) % 4 < 2 ? trim : colour, cloth, 0.58];
+                }
+            }
+
+            // (A row of diamonds across the chest)
+            const [du, dv] = [Math.abs(frac(x / 0.035) - 0.5), Math.abs(y - 0.43) / 0.015];
+
+            if (z > 0.03 && du + dv * 0.5 < 0.5 && dv < 1) {
+                return [accent, 1, 0.6];
+            }
+
+            return [colour, cloth, 0.5 + 0.2 * (weave - 0.5)];
+        }
+        case "hide": {
+            // (Patches round seeds 8 cm apart: the nearest two's, and how near the edge between them)
+            const cell = 0.08;
+            const [ci, cj, ck] = [Math.floor(x / cell), Math.floor(y / cell), Math.floor(z / cell)];
+            let [first, second, which] = [Infinity, Infinity, 0];
+
+            for (let i = ci - 1; i <= ci + 1; i++) {
+                for (let j = cj - 1; j <= cj + 1; j++) {
+                    for (let k = ck - 1; k <= ck + 1; k++) {
+                        const seed = [hash3(i, j, k), hash3(j, k, i), hash3(k, i, j)];
+                        const d = Math.hypot(x - (i + seed[0]) * cell, y - (j + seed[1]) * cell, z - (k + seed[2]) * cell);
+
+                        if (d < first) {
+                            [second, first, which] = [first, d, seed[0]];
+                        } else if (d < second) {
+                            second = d;
+                        }
+                    }
+                }
+            }
+
+            const grain = fbm(x * 90, y * 90, z * 90, 3);
+
+            // (Stitched along the seams: a dash every centimetre)
+            if (second - first < 0.004) {
+                return frac((x + y + z) / 0.012) < 0.55 ? [trim, 1, 0.7] : [colour, 0.6, 0.3];
+            }
+
+            return [colour, 0.78 + 0.28 * which + 0.08 * (grain - 0.5), 0.5 + 0.25 * (grain - 0.5)];
+        }
+        case "fur": {
+            const streak = fbm(x * 260, y * 36, z * 260, 3);
+
+            return [colour, 0.62 + 0.62 * streak, 0.25 + 0.7 * streak];
+        }
+        case "beads": {
+            // (Rows a centimetre apart down from the neck, each a string of beads by turns in
+            // the three colours, dark between them)
+            const row = (NECK_Y + 0.01 - y) / 0.011;
+            const across = frac((round * 0.16) / 0.011);
+            const [du, dv] = [across - 0.5, frac(row) - 0.5];
+
+            if (du * du + dv * dv > 0.16) {
+                return [colour, 0.35, 0.2];
+            }
+
+            return [[colour, trim, accent][((Math.floor(row) % 3) + 3) % 3], 1.05, 0.8];
+        }
+        case "bangles": {
+            const ring = Math.abs(Math.sin(y * 520));
+
+            return [colour, 0.75 + 0.35 * ring, 0.3 + 0.6 * ring];
+        }
+        default:
+            return [colour, cloth, 0.5];
+    }
 }
 
 // Where the emblem goes on the chest (the base body's height, metres), and its shape: whether a
