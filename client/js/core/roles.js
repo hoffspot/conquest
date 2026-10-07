@@ -247,6 +247,19 @@ export const ROLES = Object.freeze({
             { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talkingSeated" },
         ],
     },
+    // The townsfolk out about their business in the streets (core/townsfolk.js: their calling's
+    // title theirs), at their ease a moment between errands: whatever they carry kept in their
+    // right hand, the left free
+    townsfolk: {
+        title: "Townsfolk",
+        rests: [
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "stretching the back", hitAt: 1, duration: 2.6 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "a glance back", hitAt: 1, duration: 2.2 },
+        ],
+    },
     sentry: {
         title: "Sentry",
         rests: [

@@ -709,6 +709,19 @@ vest laced in gold and a navy skirt to the knee; a mage a robe to the ankles),
 over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
 the bust, painted with a cord criss-crossing down the front).
 
+The townsfolk out in the streets (core/townsfolk.js, docs/GAME.md *Townsfolk*) wear homespun:
+brown and russet tunics, a field hand's linen smock (long and loose, to the thigh), a friar's brown
+habit with its skirt to the floor, a blue kirtle and a brown skirt; on their heads a straw hat
+(its crown tapering up well clear of the head, its brim across the head hidden within its band), a
+linen coif, or a wool hood open at the face (none over a cat's ears). They carry what their work
+wants (`equipment.js` ITEMS, `items.js`): on the back, as a pack is, a wicker pannier heaped with
+loaves, apples and greens, a sack tied at its mouth, or a bundle of firewood; a jug by its handle,
+as a tankard; a hay fork, a broom or a walking staff upright in the right hand, as a mage's staff;
+a ledger open on the right palm, as a grimoire. What's in a hand is always in the right, so the
+left's free for what they do at their ease. The motion check walks each of them with what they
+carry (`carry/<thing>`), and plays their rests with each thing in hand
+(`rest/townsfolk/<n>/<thing>`).
+
 **Lingerie** (`garments.js` `DESIGNS`) is modern lace with a nod to the period, worn by the
 courtesans upstairs. It isn't cut by its region, which only has to take it all in (the torso from
 the waist to the shoulders for a bra), but by a **design**: what fabric is at each point of the

@@ -201,6 +201,23 @@ export const ITEMS = Object.freeze({
     smithHammer: { label: "Smith's hammer", slot: "mainHand", model: "smithHammer", socket: "rightHand", grips: true, hold: HOLDS.hammer },
     // (The tongs' reins across the palm from its heel, so their jaws point along the forearm)
     tongs: { label: "Tongs", slot: "offHand", model: "tongs", socket: "leftHand", turn: [1.1, 0, 0], grips: true, hold: HOLDS.tongs },
+    // What the townsfolk carry about their business (core/townsfolk.js): on the back, as a pack
+    // is (a pannier of what's been bought, a sack, a bundle of firewood); a jug by its handle, as
+    // a tankard; a hay fork, a broom or a friar's walking staff upright in one hand, as a mage's
+    // staff; a ledger open on the palm, as a grimoire (in the right hand: the left's free for
+    // what they do at their ease, actions.js). And what they wear on their heads: a straw hat, a
+    // linen coif, a wool hood
+    pannier: { label: "Pannier", slot: "back", model: "pannier", socket: "back", garment: "straps" },
+    sack: { label: "Sack", slot: "back", model: "sack", socket: "back", garment: "straps" },
+    firewood: { label: "Firewood", slot: "back", model: "firewood", socket: "back", garment: "straps" },
+    jug: { label: "Jug", slot: "mainHand", model: "jug", socket: "rightHand", grips: true, hold: HOLDS.tankard },
+    pitchfork: { label: "Hay fork", slot: "mainHand", model: "pitchfork", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.staff },
+    broom: { label: "Broom", slot: "mainHand", model: "broom", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.015, hold: HOLDS.staff },
+    walkingStaff: { label: "Walking staff", slot: "mainHand", model: "walkingStaff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.017, hold: HOLDS.staff },
+    ledger: { label: "Ledger", slot: "mainHand", model: "ledger", socket: "rightHand", hold: HOLDS.book },
+    strawHat: { label: "Straw hat", slot: "head", model: "strawHat", socket: "head", hides: ["hair"] },
+    coif: { label: "Linen coif", slot: "head", model: "coif", socket: "head", hides: ["hair"] },
+    hood: { label: "Wool hood", slot: "head", model: "hood", socket: "head", hides: ["hair"] },
 });
 
 /** Every piece of equipment by id: { kind: "garment" | "drape" | "item", slot, label, ... }. */

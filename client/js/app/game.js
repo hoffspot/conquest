@@ -408,7 +408,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2753,22 +2753,25 @@ export class Game {
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
         const official = this.#officialOf(npc, building, names);
-        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
+        // (One of the townsfolk out in the streets: theirs, and the place they're of)
+        const out = !building ? this.host.folk.get(npc.id) : null;
+        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? ROLES[npc.role]?.title ?? "";
         Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
 
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
         names.keeper ??= names.innkeeper;
 
-        // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother")
-        names.town = building ? this.world.plan?.places.find(({ id }) => id === this.#townOf(building))?.name : undefined;
+        // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother"; out in
+        // the streets, the townsfolk's own)
+        names.town = building ? this.world.plan?.places.find(({ id }) => id === this.#townOf(building))?.name : out?.townName || undefined;
 
         if (building?.patron) {
             names.patron = GODS[building.patron].name;
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(building), this.#guildWords());
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null)), this.#guildWords());
 
         // (An adventurer who could be hired, and for how much; a follower waiting or following)
         const one = folk.find(({ id }) => id === npc.id);
@@ -4883,6 +4886,19 @@ export class Game {
             case "relieved":
                 // (A town's fallen soldiers' places taken: those who took them drawn)
                 this.enlisting.push(...event.ids);
+                break;
+            case "townsfolk":
+                // (A place's townsfolk out about their business, drawn nearest first; or home again)
+                if (event.change === "out") {
+                    this.enlisting.push(...event.ids);
+                } else {
+                    this.#unenlist(event.ids);
+
+                    for (const id of event.ids) {
+                        this.#undress(id);
+                    }
+                }
+
                 break;
             case "camp":
                 this.#pitch(event);

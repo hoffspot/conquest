@@ -129,7 +129,52 @@ const PARTS = {
         f: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["topknot", "bob"], build: { weight: [0.38, 0.6], muscle: [0.35, 0.48], bust: [0.35, 0.65] } },
     },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
+
+    // The townsfolk out about their business (core/townsfolk.js), by their calling: those out to
+    // market with a pannier on the back or a jug in the hand; porters under a sack or a bundle of
+    // firewood; field hands in straw hats with their hay forks; merchants in good cloth; sweepers
+    // with their brooms; friars in brown habits with their walking staffs or ledgers. And a
+    // castle's: its servants, its grooms with their forks, its scribes with their ledgers
+    shopper: {
+        m: { wear: [["tunic", "brownTunic", "russetTunic", "greenTunic", "blueTunic"], ["trousers", "breeches"], ["boots"], ["belt"], ["hood", null, "leatherCap", null], ["pannier", "sack", null]], hair: ["short", "swept", "buzz", "bald"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.4, 0.85], muscle: [0.4, 0.7], belly: [0, 0.7] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["kirtle", "blueKirtle", "brownSkirt", "skirt"], ["apron", null], ["boots"], ["coif", null], ["pannier", "jug", "pannier"]], hair: ["long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.75], muscle: [0.4, 0.55], bust: [0.45, 0.85] } },
+    },
+    porter: {
+        m: { wear: [["smock", "brownTunic", "shirt"], ["breeches", "trousers"], ["boots"], ["belt"], ["hood", null], ["sack", "firewood"]], hair: ["short", "buzz", "bald"], beard: ["full", "short", "stubble"], build: { weight: [0.55, 0.85], muscle: [0.6, 0.9], belly: [0, 0.4] } },
+        f: { wear: [["chemise"], ["brownSkirt", "skirt"], ["apron"], ["boots"], ["coif", null], ["sack", "firewood"]], hair: ["ponytail", "topknot", "bob"], build: { weight: [0.5, 0.75], muscle: [0.5, 0.7], bust: [0.4, 0.75] } },
+    },
+    fieldhand: {
+        m: { wear: [["smock", "shirt"], ["trousers", "breeches"], ["boots"], ["belt"], ["strawHat"], ["pitchfork"]], hair: ["short", "buzz", "swept"], beard: ["stubble", "short", "none"], build: { weight: [0.45, 0.7], muscle: [0.6, 0.85], belly: [0, 0.2] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["brownSkirt", "skirt"], ["apron"], ["boots"], ["strawHat"], ["pitchfork"]], hair: ["ponytail", "long", "topknot"], build: { weight: [0.42, 0.65], muscle: [0.5, 0.7], bust: [0.4, 0.75] } },
+    },
+    merchant: {
+        m: { wear: [["blueTunic", "russetTunic", "shirt"], ["jerkin"], ["breeches", "trousers"], ["boots"], ["belt"], ["gloves", null], ["leatherCap", null, null]], hair: ["short", "swept", "bald"], beard: ["short", "goatee", "full", "none"], build: { weight: [0.5, 0.85], muscle: [0.38, 0.6], belly: [0.2, 0.8] } },
+        f: { wear: [["chemise"], ["velvetBodice", "bodice"], ["gown", "blueKirtle", "kirtle"], ["boots"]], hair: ["topknot", "long", "bob"], build: { weight: [0.45, 0.75], muscle: [0.36, 0.5], bust: [0.45, 0.85] } },
+    },
+    sweeper: {
+        m: { wear: [["smock", "brownTunic"], ["trousers"], ["boots"], ["belt"], ["hood", null], ["broom"]], hair: ["short", "buzz", "bald"], beard: ["stubble", "none", "short"], build: { weight: [0.35, 0.65], muscle: [0.4, 0.6], belly: [0, 0.3] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["skirt", "brownSkirt"], ["apron"], ["boots"], ["coif"], ["broom"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.38, 0.65], muscle: [0.4, 0.55], bust: [0.4, 0.75] } },
+    },
+    friar: {
+        m: { wear: [["habit"], ["habitSkirt"], ["belt"], ["boots"], ["hood", null], ["walkingStaff", "ledger"]], hair: ["bald", "short", "buzz"], beard: ["full", "short", "none"], build: { weight: [0.4, 0.8], muscle: [0.35, 0.5], belly: [0.1, 0.7] } },
+        f: { wear: [["habit"], ["habitSkirt"], ["belt"], ["boots"], ["coif", "hood"], ["walkingStaff", "ledger"]], hair: ["topknot", "bob"], build: { weight: [0.38, 0.6], muscle: [0.35, 0.48], bust: [0.35, 0.65] } },
+    },
+    servant: {
+        m: { wear: [["shirt", "brownTunic"], ["trousers", "breeches"], ["boots"], ["belt"], ["apron", null], ["jug", "firewood"]], hair: ["short", "buzz", "swept"], beard: ["none", "stubble", "short"], build: { weight: [0.4, 0.7], muscle: [0.45, 0.7], belly: [0, 0.3] } },
+        f: { wear: [["chemise"], ["bodice"], ["kirtle", "skirt"], ["apron"], ["boots"], ["coif"], ["jug", "pannier"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.38, 0.65], muscle: [0.4, 0.55], bust: [0.4, 0.8] } },
+    },
+    groom: {
+        m: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["pitchfork"]], hair: ["short", "buzz", "swept"], beard: ["stubble", "short", "none"], build: { weight: [0.45, 0.7], muscle: [0.6, 0.85], belly: [0, 0.2] } },
+        f: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["pitchfork"]], hair: ["ponytail", "bob"], build: { weight: [0.4, 0.6], muscle: [0.5, 0.7], bust: [0.35, 0.65] } },
+    },
+    scribe: {
+        m: { wear: [["blueTunic", "shirt"], ["mageRobe"], ["boots"], ["belt"], ["ledger"]], hair: ["short", "swept", "bald"], beard: ["none", "goatee", "short"], build: { weight: [0.3, 0.55], muscle: [0.3, 0.45], belly: [0, 0.3] } },
+        f: { wear: [["chemise"], ["velvetBodice"], ["kirtle", "gown"], ["boots"], ["ledger"]], hair: ["topknot", "bob", "long"], build: { weight: [0.35, 0.55], muscle: [0.32, 0.45], bust: [0.4, 0.75] } },
+    },
 };
+
+/** The townsfolk's callings that have looks of their own (core/townsfolk.js CALLINGS'). */
+export const TOWNSFOLK_PARTS = Object.freeze(["shopper", "porter", "fieldhand", "merchant", "sweeper", "friar", "servant", "groom", "scribe"]);
 
 // A courtesan's lingerie: one colour, and what goes with it
 const LINGERIE = ["Black", "Crimson", "Emerald", "Ivory"];
@@ -144,7 +189,7 @@ const BRIGHT = Object.freeze({ irises: ["#3fa6e8", "#56c48a", "#9a6ae0", "#e0a03
 const GREY = ["grey", "white"];
 
 // What won't go on over a cat's ears (a crown sits between them; a helm opens round them: items.js)
-const OVER_EARS = new Set(["wizardHat"]);
+const OVER_EARS = new Set(["wizardHat", "strawHat", "coif", "hood"]);
 
 /**
  * A look for one of the folk: { shape, look, equipment, walk, sheathed } (as presets.js FOLK's),

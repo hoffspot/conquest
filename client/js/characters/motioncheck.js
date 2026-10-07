@@ -716,8 +716,42 @@ export const FRAME = 1 / 30;
 
 // A soldier of `body`'s people with `weapon`, shaped as the body is
 const soldier = (body, weapon) => shaped(soldierLook({ people: body.people, weapon, sex: body.sex, seed: 11, captain: body.sex === "m" }), body);
-// One of the folk in `role` of `body`'s people (null, if there are none of that sex in it)
+// What the townsfolk carry (core/townsfolk.js, characters/folk.js), each by a calling that does,
+// and what that calling wears on its head (a cat's ears take no hat: folk.js)
+const CARRYING = Object.freeze([
+    ["pannier", "shopper", "coif"],
+    ["sack", "porter", "hood"],
+    ["firewood", "porter", null],
+    ["jug", "servant", "coif"],
+    ["pitchfork", "fieldhand", "strawHat"],
+    ["broom", "sweeper", "hood"],
+    ["walkingStaff", "friar", "hood"],
+    ["ledger", "scribe", null],
+]);
+const CARRIED = new Set(CARRYING.map(([item]) => item));
+const HATS = new Set(CARRYING.map(([, , hat]) => hat).filter(Boolean));
+// (Their rests are played with each thing carried in a hand)
+const IN_HAND = ["jug", "pitchfork", "broom", "walkingStaff", "ledger"];
+
+// One of the townsfolk of `body`'s people in `calling`, carrying `item` and wearing `hat`: their
+// look, but what they carry and wear on their heads these (null, as folk's)
+const townsfolk = (body, calling, item, hat) => {
+    try {
+        const look = folkLook({ role: "townsfolk", look: calling, sex: body.sex, seed: 5, people: body.people });
+        const equipment = [...look.equipment.filter((id) => !CARRIED.has(id) && !HATS.has(id)), item, ...(hat && body.people !== "cat" ? [hat] : [])];
+
+        return shaped({ ...look, equipment }, body);
+    } catch {
+        return null;
+    }
+};
+// One of the folk in `role` of `body`'s people (null, if there are none of that sex in it): the
+// townsfolk with a jug in hand and a coif, else as their part has them
 const folk = (body, role) => {
+    if (role === "townsfolk") {
+        return townsfolk(body, "servant", "jug", "coif");
+    }
+
     try {
         return shaped(folkLook({ role, sex: body.sex, seed: 5, people: body.people }), body);
     } catch {
@@ -903,11 +937,9 @@ export function motions() {
 
     for (const [role, { rests, seated }] of Object.entries(ROLES)) {
         (rests ?? []).forEach(({ name: way, duration }, variant) => {
-            list.push({
-                id: `rest/${role}/${variant}`,
+            const rest = {
                 label: way,
                 group: "rest",
-                look: (body) => folk(body, role),
                 seconds: duration,
                 speed: 0,
                 sheathed: true,
@@ -916,8 +948,23 @@ export function motions() {
                     walker.update(1, { speed: 0 });
                     actions.rest(role, { variant });
                 },
-            });
+            };
+
+            list.push({ ...rest, id: `rest/${role}/${variant}`, look: (body) => folk(body, role) });
+
+            // (The townsfolk's with each thing they carry in a hand besides the jug)
+            for (const item of role === "townsfolk" ? IN_HAND.slice(1) : []) {
+                const [, calling, hat] = CARRYING.find(([each]) => each === item);
+
+                list.push({ ...rest, id: `rest/${role}/${variant}/${item}`, look: (body) => townsfolk(body, calling, item, hat) });
+            }
         });
+    }
+
+    // The townsfolk about their business, walking with each thing they carry (core/townsfolk.js:
+    // folk walk at 1.2 m/s, battle.js KINDS)
+    for (const [item, calling, hat] of CARRYING) {
+        list.push({ id: `carry/${item}`, group: "carry", look: (body) => townsfolk(body, calling, item, hat), seconds: 2, speed: 1.3, sheathed: true, start: ({ walker }) => pace(walker, 1.3) });
     }
 
     // (What's in the body's looked for every tenth of a second in quick motions, every 0.3 s in

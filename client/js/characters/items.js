@@ -40,6 +40,18 @@ export function itemMaterial(name) {
             skin: { color: 0xc8a080, roughness: 0.8 },
             earInner: { color: 0xd9a3a0, roughness: 0.75 },
             ruby: { color: 0xb3142a, emissive: 0x3a0008, emissiveIntensity: 0.6, roughness: 0.15 },
+            // (What the townsfolk carry and wear: wicker, sacking, straw, linen, wool, earthenware,
+            // and what's in a basket)
+            wicker: { color: 0xa47a45, roughness: 0.92 },
+            sacking: { color: 0x9b8660, roughness: 1 },
+            straw: { color: 0xd8bd74, roughness: 0.95 },
+            linen: { color: 0xece4d2, roughness: 0.9, side: THREE.DoubleSide },
+            wool: { color: 0x6a5238, roughness: 0.95, side: THREE.DoubleSide },
+            earthenware: { color: 0xa65a35, roughness: 0.8 },
+            bread: { color: 0xc58a46, roughness: 0.85 },
+            apple: { color: 0xb3332a, roughness: 0.55 },
+            greens: { color: 0x5f8a3a, roughness: 0.8 },
+            bark: { color: 0x5a4532, roughness: 0.95 },
         }[name] ?? dyed(name);
 
         // (Named, so that a character can find what's made of its skin)
@@ -1220,6 +1232,143 @@ function leatherCap(radius, open = false) {
     ], "helmet");
 }
 
+// --- What the townsfolk carry (core/townsfolk.js), and what they wear on their heads ---
+
+// A wicker basket worn on the back (a pannier: on the back's socket, as a pack is, its straps over
+// the shoulders), heaped with what's been bought: loaves, apples and greens
+function pannier() {
+    const parts = [
+        [at(new THREE.CylinderGeometry(0.15, 0.12, 0.34, 14, 1, true), 0, 0.02, -0.17), "wicker"],
+        [at(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 14), 0, -0.15, -0.17), "wicker"],
+        [at(new THREE.TorusGeometry(0.15, 0.012, 6, 16), 0, 0.19, -0.17, Math.PI / 2, 0, 0), "darkWood"],
+        [at(new THREE.TorusGeometry(0.135, 0.01, 6, 16), 0, -0.06, -0.17, Math.PI / 2, 0, 0), "darkWood"],
+        [at(new THREE.CapsuleGeometry(0.035, 0.09, 4, 8), -0.05, 0.2, -0.18, 0, 0, Math.PI / 2.4), "bread"],
+        [at(new THREE.CapsuleGeometry(0.03, 0.07, 4, 8), 0.06, 0.2, -0.14, 0.3, 0, -Math.PI / 2.2), "bread"],
+        [at(new THREE.SphereGeometry(0.032, 10, 8), 0.05, 0.205, -0.22), "apple"],
+        [at(new THREE.SphereGeometry(0.03, 10, 8), -0.02, 0.2, -0.25), "apple"],
+        [at(new THREE.SphereGeometry(0.05, 10, 6).scale(1, 0.6, 1), -0.07, 0.2, -0.24), "greens"],
+        [at(new THREE.BoxGeometry(0.03, 0.34, 0.004), -0.07, 0, -0.006), "darkLeather"],
+        [at(new THREE.BoxGeometry(0.03, 0.34, 0.004), 0.07, 0, -0.006), "darkLeather"],
+    ];
+
+    return assemble(parts, "pannier");
+}
+
+// A sack of grain or flour over the back, its mouth tied, hung from the shoulders by a cord
+function sack() {
+    const body = new THREE.SphereGeometry(0.15, 14, 10).scale(1.1, 1.45, 0.8);
+
+    return assemble([
+        [at(body, 0, 0, -0.135), "sacking"],
+        [at(new THREE.CylinderGeometry(0.03, 0.06, 0.08, 10), 0, 0.23, -0.135), "sacking"],
+        [at(new THREE.TorusGeometry(0.032, 0.008, 6, 12), 0, 0.22, -0.135, Math.PI / 2, 0, 0), "string"],
+        [at(new THREE.BoxGeometry(0.025, 0.34, 0.004), -0.07, 0, -0.006), "string"],
+        [at(new THREE.BoxGeometry(0.025, 0.34, 0.004), 0.07, 0, -0.006), "string"],
+    ], "sack");
+}
+
+// A bundle of firewood on the back: a dozen sticks bound with two cords, lying across the back
+function firewood() {
+    const parts = [];
+
+    for (let k = 0; k < 11; k++) {
+        const [row, along] = [k % 4, Math.floor(k / 4)];
+
+        parts.push([at(new THREE.CylinderGeometry(0.022 - (k % 3) * 0.003, 0.025, 0.62 - (k % 2) * 0.08, 6), (along - 1) * 0.012, row * 0.045 - 0.05, -0.06 - along * 0.045, 0, 0, Math.PI / 2 + (k % 3 - 1) * 0.05), "bark"]);
+    }
+
+    for (const x of [-0.17, 0.17]) {
+        parts.push([at(new THREE.TorusGeometry(0.1, 0.008, 6, 12).scale(0.5, 1.2, 1), x, 0.02, -0.105, 0, Math.PI / 2, 0), "string"]);
+    }
+
+    parts.push([at(new THREE.BoxGeometry(0.025, 0.34, 0.004), -0.07, 0, -0.006), "string"]);
+    parts.push([at(new THREE.BoxGeometry(0.025, 0.34, 0.004), 0.07, 0, -0.006), "string"]);
+
+    return assemble(parts, "firewood");
+}
+
+// An earthenware jug of water or milk, held by its handle as a tankard is: the handle along the
+// grip, the jug on the palm's side of it, its neck up
+function jug() {
+    const body = 0.07;
+
+    return assemble([
+        [at(new THREE.SphereGeometry(0.055, 14, 10).scale(1, 1.15, 1), body, -0.01, 0), "earthenware"],
+        [at(new THREE.CylinderGeometry(0.028, 0.04, 0.07, 14, 1, true), body, 0.07, 0), "earthenware"],
+        [at(new THREE.TorusGeometry(0.031, 0.006, 6, 14), body, 0.105, 0, Math.PI / 2, 0, 0), "earthenware"],
+        [at(new THREE.TorusGeometry(0.04, 0.008, 6, 12, Math.PI), 0.03, 0.03, 0, 0, 0, Math.PI / 2), "earthenware"],
+    ], "jug");
+}
+
+// A long-handled tool, held upright in one hand as a staff is (the grip at its middle): a hay
+// fork's three iron tines at its top, or a broom's birch twigs bound at its foot
+function pitchfork() {
+    const parts = [[at(new THREE.CylinderGeometry(0.014, 0.016, 1.5, 8), 0, 0.02, 0), "wood"], [at(new THREE.BoxGeometry(0.16, 0.018, 0.018), 0, 0.78, 0), "iron"]];
+
+    for (const x of [-0.07, 0, 0.07]) {
+        parts.push([at(new THREE.ConeGeometry(0.008, 0.26, 6), x, 0.92, 0), "iron"]);
+    }
+
+    return assemble(parts, "pitchfork");
+}
+
+function walkingStaff() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.016, 0.019, 1.62, 8), 0, -0.05, 0), "wood"],
+        [at(new THREE.SphereGeometry(0.03, 10, 8), 0, 0.77, 0), "darkWood"],
+    ], "walkingStaff");
+}
+
+function broom() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.014, 0.015, 1.3, 8), 0, -0.05, 0), "wood"],
+        [at(new THREE.ConeGeometry(0.09, 0.42, 12, 1, true), 0, -0.82, 0), "straw"],
+        [at(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 10), 0, -0.6, 0), "string"],
+    ], "broom");
+}
+
+// A ledger, open on the palm as a grimoire is (its frame: the spine along the fingers, the pages
+// facing away from the palm), plain calf and parchment
+function ledger() {
+    const half = (side) => [
+        [at(new THREE.BoxGeometry(0.007, 0.11, 0.18), 0.004, side * 0.058, 0.05, side * 0.12, 0, 0), "leather"],
+        [at(new THREE.BoxGeometry(0.012, 0.1, 0.17), -0.006, side * 0.056, 0.05, side * 0.12, 0, 0), "parchment"],
+    ];
+
+    return assemble([...half(1), ...half(-1), [at(new THREE.CylinderGeometry(0.008, 0.008, 0.18, 8), 0.004, 0, 0.05, Math.PI / 2, 0, 0), "leather"]], "ledger");
+}
+
+// A broad-brimmed straw hat, against the sun in the fields: its crown tapering up well clear of
+// the top of the head, a band round its foot
+function strawHat(radius) {
+    const r = radius * 1.08;
+
+    return assemble([
+        [at(new THREE.CylinderGeometry(r * 0.8, r * 1.0, r * 1.3, 24, 1), 0, r * 0.95, 0), "straw"],
+        [at(new THREE.CylinderGeometry(r * 2.15, r * 2.2, r * 0.035, 32), 0, r * 0.3 - 0.01, 0), "straw"],
+        [at(new THREE.CylinderGeometry(r * 1.01, r * 1.01, r * 0.13, 24, 1, true), 0, r * 0.4, 0), "darkLeather"],
+    ], "hat");
+}
+
+// A linen coif: a close cap over the hair, its band round the brow
+function coif(radius) {
+    const r = radius * 1.04;
+
+    return assemble([
+        [new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(0.9, 0.95, 1.04), "linen"],
+        [at(new THREE.CylinderGeometry(r * 0.98, r * 0.99, r * 0.12, 24, 1, true).scale(0.9, 1, 1.04), 0, -r * 0.1, 0), "linen"],
+    ], "helmet");
+}
+
+// A wool hood: over the head and a little down the back of it, open at the face (the front, +z)
+function hood(radius) {
+    const r = radius * 1.1;
+    // (Round the head but for the face: from a quarter round each side of the front)
+    const cowl = new THREE.SphereGeometry(r, 24, 14, Math.PI * 0.75, Math.PI * 1.5, 0, Math.PI * 0.58).scale(0.9, 0.97, 1.05);
+
+    return assemble([[cowl, "wool"]], "helmet");
+}
+
 // How much room head-wear leaves over the skull (metres): its lining, and the hair pressed under it
 const LINING = 0.006;
 
@@ -1393,6 +1542,28 @@ export function buildItem(model, fit = {}) {
             return tusks(fit.scale ?? 1);
         case "tankard":
             return tankard();
+        case "pannier":
+            return pannier();
+        case "sack":
+            return sack();
+        case "firewood":
+            return firewood();
+        case "jug":
+            return jug();
+        case "pitchfork":
+            return pitchfork();
+        case "broom":
+            return broom();
+        case "walkingStaff":
+            return walkingStaff();
+        case "ledger":
+            return ledger();
+        case "strawHat":
+            return fitted(strawHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.27 - 0.01, headRadius * 1.08 * 1.6], back: headRadius * 1.08 * 0.97 });
+        case "coif":
+            return fitted(coif(headRadius), fit.skull, { across: headRadius * 1.04 * 0.9, up: headRadius * 1.04 * 0.95, back: headRadius * 1.04 * 1.04, rim: headRadius * 0.16 });
+        case "hood":
+            return fitted(hood(headRadius), fit.skull, { across: headRadius * 1.1 * 0.9, up: headRadius * 1.1 * 0.97, back: headRadius * 1.1 * 1.05, rim: headRadius * 0.27 });
         case "smithHammer":
             return smithHammer();
         case "tongs":
