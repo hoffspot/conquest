@@ -5048,3 +5048,16 @@ converted data is to be measured in M8 against today's hm08 data.
     5,000 to 8,000 (its hair is as near, 2,000 to 7,600, and what's carried up to 3,400), the far
     level 4,800 to 12,900 where LOD2 is 1,500 to 2,500. The GPU's frame times can't be measured in
     software rendering here; the debug overlay's GPU timer on a phone says whether they need more.
+- **2026-10-07, gaze** (§10, step 5: blinks, gaze and expressions, now all done; docs/CHARACTERS.md
+  *Where it looks*, docs/GAME.md *Where they look*).
+  - Everyone's eyes and head turn towards what they're attending to: whoever they're fighting,
+    whoever they're talking with (the player and the one they talk to look at each other), the
+    player passing within 4.5 metres in front of them (for 2 to 5 seconds, then not for 4 to 10);
+    else ahead, glancing about every 1.2 to 4.5 seconds. Nothing behind them (past 110°), and the
+    dead don't look.
+  - The head takes 70% of a turn (up to 55° to a side), shared 40/60 by the neck and the head on
+    top of the pose, within their joints' ranges; the eyes the rest (up to 28°), getting there
+    first. The eyes turn in their own shader about each eye's middle (Vitruvian's Mixamo rig has
+    no eye bones), so they cost no bones and no morph targets.
+  - About 5 µs a character as often as it's posed. The character lab's *Face* tab has *Gaze*
+    (ahead, at you, or nowhere).

@@ -162,7 +162,19 @@ const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.l
 // rest: a role's, roles.js)
 const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
-walker.overlay = (dt, walking) => actions.apply(dt * fight.slow, walking);
+// Where it's looking (gaze.js): ahead, glancing about now and then (""), at you (the camera:
+// "camera"), or nowhere, its head and eyes left as posed ("off")
+const gazing = { at: params.get("gaze") ?? "" };
+
+walker.overlay = (dt, walking) => {
+    const planted = actions.apply(dt * fight.slow, walking);
+
+    if (!actions.fall) {
+        character.gaze?.turn();
+    }
+
+    return planted;
+};
 
 // Its face (a body with expressions: expressions.js): as it's doing (""), one of its faces (a key
 // of FACES), or one expression held (`amount` of it); and whether it blinks
@@ -288,6 +300,12 @@ function step(dt) {
 
     if (state.motion.path === "circle" && (speed > 0 || player)) {
         object.rotation.y += ((player?.speed ?? speed) / 3) * dt;
+    }
+
+    if (character.gaze) {
+        character.gaze.on = gazing.at !== "off";
+        character.gaze.at(gazing.at === "camera" ? camera.position : null);
+        character.gaze.update(dt * fight.slow);
     }
 
     // (A clip that doesn't move the character along plays standing still)
@@ -644,8 +662,15 @@ function faceTab() {
         }),
         check("Blinking", { get: () => character.expressions.blinks, set: (on) => (character.expressions.blinks = on) }),
     );
+    const looking = character.gaze && group(
+        "Gaze",
+        select("Looking", [["", "Ahead, glancing about"], ["camera", "At you"], ["off", "Nowhere (as posed)"]], {
+            get: () => gazing.at,
+            set: (value) => (gazing.at = value),
+        }),
+    );
 
-    return [group("Face", ...detailSliders("face")), ...(expression ? [expression] : [])];
+    return [group("Face", ...detailSliders("face")), ...(expression ? [expression] : []), ...(looking ? [looking] : [])];
 }
 
 function lookTab() {

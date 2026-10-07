@@ -18,6 +18,7 @@ import { HairMaterial, SkinMaterial } from "./surfaces.js";
 import { FAR, keyOf, LODS } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { expressionData, Expressions, expressive } from "./expressions.js";
+import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { allAtOnce } from "../core/steps.js";
@@ -315,6 +316,13 @@ export class Character {
             expressive(this.materials.body, faces, this.expressions.weights);
             expressive(this.materials.lashes, faces, this.expressions.weights);
             expressive(this.materials.mouth, faces, this.expressions.weights);
+        }
+
+        /** Where it's looking: its eyes and head turned towards it (gaze.js), or null (eyes not its own). */
+        this.gaze = materials.eyes ? null : new Gaze(this);
+
+        if (this.gaze) {
+            lookingEyes(this.materials.eyes, this.gaze.uniforms);
         }
 
         /** The hair and beard (null when bald and clean-shaven). */

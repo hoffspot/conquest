@@ -389,6 +389,43 @@ it, that the mouth's inside stays behind the lips on every people's bodies, the 
 blinking, speaking (the jaw dropping most for an "ah") and war cries (the teeth bared), and the
 faces; and the lashes' strands.
 
+**Where it looks** (`gaze.js`). A character's eyes and head turn towards what it's attending to,
+on top of whatever it's doing; with nothing to look at it looks ahead, glancing about now and
+then. Whatever it looks at (`Gaze.at`: a point in the world, or nothing) is the game's to say
+(GAME.md, *Characters in the world*; the character lab's *Face* tab, *Gaze*: ahead, at you or
+nowhere, and `?gaze=camera`).
+
+- **The head most of the way, the eyes the rest** (`GAZE`). The head takes 70% of the turn
+  (`share`), as far as 55° to either side, 22° up and 35° down; the eyes the rest from wherever
+  the head's got to, as far as 28° to either side, 18° up and 22° down. The eyes get there first
+  (most of the way in a tenth of a second, `ease` 22 a second), and the head follows (most of the
+  way in half a second, 5): a glance, then the head coming round.
+- **The neck and head share the head's turn**, 40% in the neck and the rest in the head
+  (`Rig.addAngles`: their anatomical angles, *turn* and *flex*, added to their pose's, within
+  their joints' ranges, 30° each way of turn). It's done in Actions' overlay, after the pose and
+  before the rig's applied, so it's on top of a walk, a rest or a blow. Not when it's down
+  (`actions.fall`); and dead, it doesn't look at anything, easing back to as it's posed.
+- **Not behind it.** Anything further round than 110° (`behind`) it doesn't look at: ahead
+  instead.
+- **Glancing** (`glance`): with nothing to look at, every 1.2 to 4.5 seconds it looks somewhere
+  new, half the time straight ahead, else up to 20° to either side, 6° up or 12° down.
+- **The eyes turn in their own shader** (`lookingEyes`): there are no bones for them (Mixamo's
+  rig has none). Each of the eyes' vertices is turned about the middle of the eye it's nearer
+  (two uniforms, the eyes' middles as the body's shaped; and a turn), before skinning, and its
+  normal with it. An eye's middle is the middle of its box across and up, and its eyeball's
+  radius (half as wide as it is) in from its back: the cornea bulges in front, and the middle of
+  its vertices is 2.5 mm in front of the eyeball's. They're found again whenever the body's
+  reshaped (from its eyes' 1,028 vertices: 0.2 to 1.2 ms). Only a character's own eyes look
+  about: a beast's, or eyes given to it (`materials.eyes`), don't.
+- **What it costs**: easing the turns 0.8 to 0.9 µs a character, turning the neck and head 3.5 to
+  4 µs, as often as it's posed (in Node, warmed up).
+
+`test/gaze.test.js` checks that the head takes 70% of a turn and the eyes the rest, turned in
+the shader by as much and the head drawn turned as far; that neither turns further than it can
+and the eyes get there first; that it looks ahead and glances about at what's behind it or with
+nothing to look at; that it doesn't look at anything when it's down, its pose left as it is; and
+the eyes' middles, one each side of the face, level, and found again as it's reshaped.
+
 **Its own skin** (`scripts/build-vitruvian.js` `skinPictures`, `skin.js` `ownSkin`): Vitruvian's
 skin is painted from its own pictures, as CharMorph paints it, with what the painter adds laid
 over them.
