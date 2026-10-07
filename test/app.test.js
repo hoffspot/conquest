@@ -11,7 +11,8 @@ import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
+import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -56,13 +57,15 @@ describe("saving (save.js)", () => {
         useStorage();
 
         const hero = { ...defaultHero(), name: "Wren", weapon: "bow" };
+        const made = { hero, seed: 99, created: "2026-10-07T10:00:00.000Z" };
 
-        assert.equal(writeSave({ hero, seed: 99 }), true);
+        assert.equal(writeSave(made), true);
+        assert.match(made.id, /^[a-z0-9]{8}$/, "given an id of its own");
 
         const save = loadSave(WEAPONS);
 
         assert.equal(save.version, SAVE_VERSION);
-        assert.equal(save.seed, 99);
+        assert.deepEqual([save.id, save.seed, save.created], [made.id, 99, made.created], "started when it was made (what's kept of it is marked so)");
         assert.deepEqual(save.hero, hero);
 
         clearSave();
@@ -72,15 +75,130 @@ describe("saving (save.js)", () => {
     it("sets aside saves it can't play: another version, a nameless hero, an unknown weapon", () => {
         const items = useStorage();
         const hero = { ...defaultHero(), name: "Wren" };
+        const id = "abcd1234";
+        const created = "2026-10-07T10:00:00.000Z";
 
-        for (const save of [{ version: 0, hero, seed: 1 }, { version: SAVE_VERSION, hero: { ...hero, name: "  " }, seed: 1 }, { version: SAVE_VERSION, hero: { ...hero, weapon: "rocket" }, seed: 1 }, { version: SAVE_VERSION, hero, seed: "x" }]) {
-            items.set("pellagos.save", JSON.stringify(save));
+        items.set("pellagos.characters", JSON.stringify({ ids: [id], last: id }));
+
+        for (const save of [{ version: 0, hero, seed: 1 }, { version: SAVE_VERSION, hero: { ...hero, name: "  " }, seed: 1 }, { version: SAVE_VERSION, hero: { ...hero, weapon: "rocket" }, seed: 1 }, { version: SAVE_VERSION, hero, seed: "x" }, { version: SAVE_VERSION, hero, seed: 1, id: "other123" }]) {
+            items.set(`pellagos.${id}.save`, JSON.stringify({ id, created, ...save }));
             assert.equal(loadSave(WEAPONS), null);
+            assert.deepEqual(loadCharacters(WEAPONS), []);
         }
 
-        items.set("pellagos.save", "{ not json");
+        items.set(`pellagos.${id}.save`, "{ not json");
         assert.equal(loadSave(WEAPONS), null);
         assert.equal(isHero(hero, WEAPONS), true);
+    });
+
+    it("keeps up to six characters, each apart from the others; carries on with the one played last; a seventh isn't kept till one's forgotten", () => {
+        useStorage();
+
+        const hero = (name) => ({ ...defaultHero(), name });
+        const made = ["Ash", "Briar", "Cole", "Dun", "Ember", "Fen"].map((name, i) => ({ hero: hero(name), seed: 10 + i, created: `2026-10-0${i + 1}T10:00:00.000Z` }));
+
+        for (const save of made) {
+            assert.equal(writeSave(save), true);
+        }
+
+        assert.equal(MOST_CHARACTERS, 6);
+        assert.equal(new Set(made.map(({ id }) => id)).size, 6);
+        assert.equal(loadSave(WEAPONS).hero.name, "Fen", "the last made, the last played");
+        assert.deepEqual(loadCharacters(WEAPONS).map(({ hero: { name } }) => name), ["Fen", "Ember", "Dun", "Cole", "Briar", "Ash"], "the one played last first");
+
+        // Each's own: what one's kept isn't another's
+        assert.equal(saveTalks(made[0], { memory: { barkeep: { talks: 1, flags: [] } }, knowledge: new Set() }), true);
+        assert.deepEqual(loadTalks(made[1]), { memory: {}, knowledge: [] });
+        assert.deepEqual(loadTalks(made[0]).memory, { barkeep: { talks: 1, flags: [] } });
+
+        // Played: the one carried on with
+        assert.equal(playedSave(made[2]), true);
+        assert.equal(loadSave(WEAPONS).hero.name, "Cole");
+        assert.equal(loadCharacters(WEAPONS)[0].hero.name, "Cole");
+
+        // A seventh: not till one's forgotten
+        const seventh = { hero: hero("Gale"), seed: 99, created: "2026-10-08T10:00:00.000Z" };
+
+        assert.equal(writeSave(seventh), false);
+        assert.equal(seventh.id, undefined);
+        assert.equal(loadCharacters(WEAPONS).length, 6);
+        assert.equal(forgetCharacter(made[0].id), true);
+        assert.equal(writeSave(seventh), true);
+        assert.deepEqual(loadCharacters(WEAPONS).map(({ hero: { name } }) => name).sort(), ["Briar", "Cole", "Dun", "Ember", "Fen", "Gale"]);
+        assert.equal(loadSave(WEAPONS).hero.name, "Gale");
+    });
+
+    it("forgets a character for good, everything kept of them and their world with it; carries on with the latest played of those left", () => {
+        const items = useStorage();
+        const [ash, briar] = [
+            { hero: { ...defaultHero(), name: "Ash" }, seed: 10, created: "2026-10-01T10:00:00.000Z", played: "2026-10-05T10:00:00.000Z" },
+            { hero: { ...defaultHero(), name: "Briar" }, seed: 11, created: "2026-10-02T10:00:00.000Z", played: "2026-10-06T10:00:00.000Z" },
+        ];
+
+        writeSave(ash);
+        writeSave(briar);
+        saveProgress(briar, new Progress({ gold: 30 }));
+        saveWorld(briar, { version: 1, seed: 11, turn: 3 });
+        savePlace(briar, { x: 1, y: 2, facing: 0 });
+        saveVitals(briar, { hp: 5 });
+        assert.ok([...items.keys()].some((key) => key.startsWith(`pellagos.${briar.id}.`)));
+
+        assert.equal(forgetCharacter(briar.id), true);
+        assert.deepEqual([...items.keys()].filter((key) => key.startsWith(`pellagos.${briar.id}.`)), [], "nothing of them left");
+        assert.equal(loadSave(WEAPONS).hero.name, "Ash");
+        assert.deepEqual([loadProgress(briar), loadWorld(briar), loadPlace(briar), loadVitals(briar)], [{}, null, null, null]);
+
+        // (One that isn't kept: nothing to forget)
+        assert.equal(forgetCharacter(briar.id), false);
+        assert.equal(forgetCharacter(ash.id), true);
+        assert.equal(loadSave(WEAPONS), null);
+    });
+
+    it("moves the one character kept before there could be several under an id of its own, all of it, even what was kept a moment out from it; once, however often what's under the old keys comes back", () => {
+        const items = useStorage();
+        const hero = { ...defaultHero(), name: "Wren" };
+        const old = { version: 1, hero, seed: 7, created: "2026-10-01T10:00:00.000Z" };
+
+        items.set("pellagos.save", JSON.stringify(old));
+        items.set("pellagos.progress", JSON.stringify({ created: old.created, seed: 7, format: 2, gold: 55, skills: { blade: 40 } }));
+        // (Kept a moment out from it, as a new character's first keys could be: its still)
+        items.set("pellagos.talks", JSON.stringify({ created: "2026-10-01T10:00:00.001Z", seed: 7, memory: { barkeep: { talks: 3, flags: [] } }, knowledge: ["orc"] }));
+        items.set("pellagos.world", encode({ created: old.created, seed: 7, war: { version: 1, seed: 7, turn: 12 } }));
+        // (Another world's: not its)
+        items.set("pellagos.place", JSON.stringify({ created: old.created, seed: 8, place: { x: 1, y: 2, facing: 0 } }));
+
+        const save = loadSave(WEAPONS);
+
+        assert.deepEqual([save.version, save.hero, save.seed, save.created], [SAVE_VERSION, hero, 7, old.created]);
+        assert.equal(loadProgress(save).gold, 55);
+        assert.deepEqual(loadTalks(save), { memory: { barkeep: { talks: 3, flags: [] } }, knowledge: ["orc"] });
+        assert.equal(loadWorld(save).turn, 12);
+        assert.equal(loadPlace(save), null);
+        assert.deepEqual([...items.keys()].filter((key) => /^pellagos\.[a-z]+$/.test(key)).sort(), ["pellagos.characters"], "the old keys let go");
+
+        // The old keys back again (as a page's script might put them): the same character, moved already
+        saveProgress(save, new Progress({ gold: 80 }));
+        items.set("pellagos.save", JSON.stringify(old));
+        items.set("pellagos.progress", JSON.stringify({ created: old.created, seed: 7, format: 2, gold: 55 }));
+
+        assert.deepEqual(loadCharacters(WEAPONS).map(({ id }) => id), [save.id]);
+        assert.equal(loadProgress(loadSave(WEAPONS)).gold, 80, "what it's grown into since kept");
+        assert.equal(items.has("pellagos.progress"), false);
+    });
+
+    it("keeps how a saved character was when it last stopped (host.js vitalsOf), to carry on so; not for another", () => {
+        useStorage();
+
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-07T10:00:00.000Z" };
+        const vitals = { hp: 30, stamina: 12, afflictions: [{ kind: "poison", left: 4000, damage: 1, look: null }], buffs: [], boons: [{ id: "blessing", left: 50000 }], abilities: {}, spell: 0, spells: {} };
+
+        assert.equal(loadVitals(save), null);
+        assert.equal(saveVitals(save, vitals), true);
+        assert.deepEqual(loadVitals(save), vitals);
+        assert.equal(loadVitals({ ...save, seed: 13 }), null);
+        assert.equal(loadVitals({ ...save, id: "other123" }), null);
+        assert.equal(saveVitals({ seed: 1 }, vitals), false, "a game not saved (?play) keeps nothing");
+        assert.equal(saveVitals(save, null), false);
     });
 
     it("remembers settings over their defaults", () => {
@@ -116,7 +234,7 @@ describe("saving (save.js)", () => {
 
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {
         const items = useStorage();
-        const save = { seed: 12, created: "2026-10-02T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-02T10:00:00.000Z" };
         const progress = new Progress({ schools: { fire: 160, healing: 40 }, spells: ["burn", "dodge"], spellXp: { dodge: 30 }, gold: 75 });
 
         assert.equal(saveProgress(save, progress), true);
@@ -127,23 +245,23 @@ describe("saving (save.js)", () => {
         assert.ok(again.knows("fireball") && again.opened("fire") && !again.opened("earth"));
 
         // (Kept before: no format, every element open as it was)
-        const before = JSON.parse(items.get("pellagos.progress"));
+        const before = JSON.parse(items.get("pellagos.abcd1234.progress"));
 
         delete before.format;
-        items.set("pellagos.progress", JSON.stringify({ ...before, spells: ["dodge"] }));
+        items.set("pellagos.abcd1234.progress", JSON.stringify({ ...before, spells: ["dodge"] }));
 
         const old = new Progress(loadProgress(save));
 
         assert.ok(["burn", "rumble", "hurt", "blister", "fireball", "dodge"].every((spell) => old.knows(spell)));
 
         // (Another game's: nothing)
-        assert.deepEqual(loadProgress({ seed: 13, created: save.created }), {});
+        assert.deepEqual(loadProgress({ ...save, seed: 13 }), {});
     });
 
     it("remembers what the folk remember of a saved character, and what it's learnt; not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
         const talks = { memory: { barkeep: { talks: 2, flags: ["askedPlace"] } }, knowledge: new Set(["orc"]) };
 
         assert.deepEqual(loadTalks(save), { memory: {}, knowledge: [] });
@@ -159,7 +277,7 @@ describe("saving (save.js)", () => {
     it("remembers what a saved character has found of its world: the buildings gone into, the chunks set foot in; not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
         const explored = new Explored();
 
         explored.enter("home:tavern");
@@ -182,7 +300,7 @@ describe("saving (save.js)", () => {
     it("keeps the war in a saved game's world apart from its character, as it was (never yet and all); not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
         const war = { version: 1, seed: 12, turn: 40, towns: [{ id: "human-town-1", raidedAt: -Infinity }] };
 
         assert.equal(loadWorld(save), null);
@@ -199,7 +317,7 @@ describe("saving (save.js)", () => {
     it("keeps where a saved game's character stands with their people, and what they've been asked; not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
         const standing = new Standing({ points: 75, claimed: [], requests: [{ kind: "wild", key: "wild", target: { wild: true, need: 2 }, state: "open", count: 1 }], next: 2 });
 
         assert.deepEqual(loadStanding(save), {});
@@ -212,7 +330,7 @@ describe("saving (save.js)", () => {
     it("keeps what a saved game's character has put on their action wheels; not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
         const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], quick: ["stun", null, "item:ale", "vigor"] };
 
         assert.equal(loadWheels(save), null);
@@ -226,7 +344,7 @@ describe("saving (save.js)", () => {
     it("keeps where a saved game's character was when it last stopped, to carry on there; not for another game", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-10-05T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-05T10:00:00.000Z" };
 
         assert.equal(loadPlace(save), null);
         assert.equal(savePlace(save, { x: 3190.25, y: 4892.75, facing: 1.5 }), true);
@@ -243,7 +361,7 @@ describe("saving (save.js)", () => {
     it("keeps where a saved game's character has pinned on the world map, and that they've taken it away; not for another", () => {
         useStorage();
 
-        const save = { seed: 12, created: "2026-10-03T10:00:00.000Z" };
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-03T10:00:00.000Z" };
 
         assert.equal(loadPin(save), null);
         assert.equal(savePin(save, [3190.5, 4892.5]), true);
@@ -254,7 +372,7 @@ describe("saving (save.js)", () => {
         assert.equal(savePin({ seed: 1 }, [1, 2]), false);
 
         // (Anything else kept there isn't a pin)
-        globalThis.localStorage.setItem("pellagos.pin", JSON.stringify({ ...save, pin: ["a", 2] }));
+        globalThis.localStorage.setItem("pellagos.abcd1234.pin", JSON.stringify({ ...save, pin: ["a", 2] }));
         assert.equal(loadPin(save), null);
     });
 

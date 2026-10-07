@@ -10,6 +10,8 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
+// A character kept as they were before there could be several (save.js SAVE_VERSION 1: moved in,
+// under an id of their own, the first time the game's opened)
 const SAVE = {
     version: 1,
     seed: 4242,
@@ -26,6 +28,14 @@ async function title(page) {
     await page.goto("/");
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 }
+
+// What's kept of a kind (save.js: "pellagos.<id>.<kind>") for the character played last, or null
+const keptOf = (page, kind) =>
+    page.evaluate((kind) => {
+        const id = JSON.parse(localStorage.getItem("pellagos.characters") ?? "null")?.last;
+
+        return id ? JSON.parse(localStorage.getItem(`pellagos.${id}.${kind}`) ?? "null") : null;
+    }, kind);
 
 // Open the game and wait for it to be playing (checking on a timer: a page with nothing changing
 // on it may draw no frames). If it isn't in time, what the loading screen says, and the page's
@@ -280,9 +290,9 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
             sheathed: character.sheathed,
             bowOn: character.items.find((item) => item.name === "bow").parent.name,
             inSquare: Math.hypot(player.x - (ox + cx), player.y - (oy + cy)) < 10,
-            saved: JSON.parse(localStorage.getItem("pellagos.save")),
         };
     });
+    const saved = await keptOf(page, "save");
 
     expect(game.weapon).toBe("bow");
     expect(game.boots).toBe(true);
@@ -291,9 +301,9 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     expect(game.sheathed).toBe(true);
     expect(game.bowOn).toBe("Spine2");
     expect(game.inSquare).toBe(true);
-    expect(game.saved.hero.name).toBe("Tamsin Rowe");
-    expect(game.saved.hero.weapon).toBe("bow");
-    expect(game.saved.hero.boots).toBe(true);
+    expect(saved.hero.name).toBe("Tamsin Rowe");
+    expect(saved.hero.weapon).toBe("bow");
+    expect(saved.hero.boots).toBe(true);
 });
 
 test("makes a character of another people: a cat folk's ears, tail and fur, their colours, random as one of them; played, they wake in a town of their people's, as one of them", async ({ page }) => {
@@ -341,10 +351,10 @@ test("makes a character of another people: a cat folk's ears, tail and fur, thei
     const played = await page.evaluate(() => {
         const { game } = window.pellagos;
 
-        return { start: game.world.start.race, team: game.battle.actor("player").team, realm: game.self.realm, equipment: [...game.avatars.get("player").character.equipment.values()], saved: JSON.parse(localStorage.getItem("pellagos.save")).hero.race };
+        return { start: game.world.start.race, team: game.battle.actor("player").team, realm: game.self.realm, equipment: [...game.avatars.get("player").character.equipment.values()] };
     });
 
-    expect(played).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
+    expect({ ...played, saved: (await keptOf(page, "save")).hero.race }).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
 });
 
 test("carries on with the saved character, in the same world", async ({ page }) => {
@@ -373,6 +383,194 @@ test("carries on with the saved character, in the same world", async ({ page }) 
     await expect(page.locator("#menu")).toBeVisible();
     await page.getByRole("button", { name: "Back to the title" }).click();
     await expect(page.locator("#title")).toBeVisible();
+});
+
+// Six characters kept (save.js), as they're kept now: each under an id of its own, the one played
+// last Fen. Kept once, the first time the page is opened (not again on going back to the title)
+const KEPT = ["Ash", "Briar", "Cole", "Dun", "Ember", "Fen"].map((name, i) => ({
+    version: 2,
+    id: `chara00${i}`,
+    seed: 4242 + i,
+    created: `2026-09-0${i + 1}T12:00:00.000Z`,
+    played: `2026-10-0${i + 1}T12:00:00.000Z`,
+    hero: { ...SAVE.hero, name, weapon: ["staff", "sword", "bow", "wand", "sword", "staff"][i] },
+}));
+
+async function keepSix(page) {
+    await page.addInitScript((kept) => {
+        if (!localStorage.getItem("pellagos.characters")) {
+            for (const save of kept) {
+                localStorage.setItem(`pellagos.${save.id}.save`, JSON.stringify(save));
+            }
+
+            localStorage.setItem(`pellagos.${kept[2].id}.progress`, JSON.stringify({ created: kept[2].created, seed: kept[2].seed, format: 2, skills: {}, gold: 75, pack: [], gear: { mainHand: { id: "hammer" } } }));
+            localStorage.setItem("pellagos.characters", JSON.stringify({ ids: kept.map(({ id }) => id), last: kept[5].id }));
+        }
+    }, KEPT);
+}
+
+test("up to six characters kept: Saved characters lists them, the one played last first; played, one's the one Continue as carries on with; deleted, asked first, it's gone for good", async ({ page }) => {
+    test.setTimeout(180000);
+    await keepSix(page);
+    await title(page);
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Fen");
+    await expect(page.locator("#savedbutton")).toHaveText("Saved characters (6)");
+
+    // Listed, the one played last first: each with their people, what they wield as they are now, their gold
+    await page.locator("#savedbutton").click();
+
+    const dialog = page.locator("#characters");
+    const cards = dialog.locator(".character");
+
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator("h2")).toHaveText("Saved characters");
+    await expect(cards.locator(".name")).toHaveText(["Fen", "Ember", "Dun", "Cole", "Briar", "Ash"]);
+    await expect(cards.filter({ hasText: "Cole" }).locator(".about")).toHaveText("Human · War hammer · 75 gold");
+    await expect(cards.filter({ hasText: "Cole" }).locator(".when")).toContainText("Last played");
+
+    // Cole played: their world, and the one Continue as carries on with since
+    await cards.filter({ hasText: "Cole" }).click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    expect(await page.evaluate(() => ({ seed: window.pellagos.game.world.seed, name: document.querySelector("#playerplate .name").textContent }))).toEqual({ seed: KEPT[2].seed, name: "Cole" });
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Back to the title" }).click();
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Cole");
+    await page.locator("#savedbutton").click();
+    await expect(cards.locator(".name").first()).toHaveText("Cole");
+
+    // Deleting Ash: asked first, that it's for good; kept, they're still there
+    const forget = page.locator("#forget");
+
+    await dialog.getByRole("button", { name: "Delete Ash" }).click();
+    await expect(forget).toBeVisible();
+    await expect(forget.locator("h2")).toHaveText("Delete Ash?");
+    await expect(forget.locator("#forgetnote")).toHaveText("Ash will be permanently deleted, with their world, what they carry and what they've learnt. This can't be undone.");
+    await forget.getByRole("button", { name: "Keep Ash" }).click();
+    await expect(forget).toBeHidden();
+    await expect(cards).toHaveCount(6);
+
+    // Deleted: gone, and everything kept of them
+    await dialog.getByRole("button", { name: "Delete Ash" }).click();
+    await forget.getByRole("button", { name: "Delete Ash" }).click();
+    await expect(cards.locator(".name")).toHaveText(["Cole", "Fen", "Ember", "Dun", "Briar"]);
+    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara000.")))).toEqual([]);
+    await dialog.getByRole("button", { name: "Back" }).click();
+    await expect(page.locator("#savedbutton")).toHaveText("Saved characters (5)");
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Cole");
+});
+
+test("with six characters kept, New character asks which is to make way, and to be sure; backed out of making them, the one chosen's kept; made, the new one takes their place", async ({ page }) => {
+    // Every step draws the character, which takes a while without a GPU
+    test.setTimeout(180000);
+    await keepSix(page);
+    await title(page);
+
+    const dialog = page.locator("#characters");
+    const forget = page.locator("#forget");
+    const replace = async (name) => {
+        await page.getByRole("button", { name: "New character" }).click();
+        await expect(dialog).toBeVisible();
+        await expect(dialog.locator("h2")).toHaveText("Make way for a new character");
+        await expect(dialog.locator(".character .name")).toHaveText(["Replace Fen", "Replace Ember", "Replace Dun", "Replace Cole", "Replace Briar", "Replace Ash"]);
+        await expect(dialog.locator(".forget")).toHaveCount(0);
+        await dialog.locator(".character").filter({ hasText: name }).click();
+        await expect(forget.locator("h2")).toHaveText(`Replace ${name}?`);
+        await expect(forget.locator("#forgetnote")).toHaveText(`${name} will be permanently deleted, with their world, what they carry and what they've learnt, once your new character is made. This can't be undone.`);
+        await forget.getByRole("button", { name: `Replace ${name}` }).click();
+        await expect(page.locator("#create")).toBeVisible();
+        await page.waitForFunction(() => window.pellagos.creator?.avatar);
+    };
+    const names = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`)).hero.name));
+
+    // Backed out of: Briar's kept
+    await replace("Briar");
+    await page.locator("#createback").click();
+    await expect(page.locator("#title")).toBeVisible();
+    expect(await names()).toEqual(["Ash", "Briar", "Cole", "Dun", "Ember", "Fen"]);
+
+    // Made: Briar's gone for good, and the new one's the one played last
+    await replace("Briar");
+    await page.getByRole("button", { name: "Next: weapon" }).click();
+    await page.getByRole("button", { name: "Next: name" }).click();
+    await page.locator("#nameinput").fill("Gale");
+    await page.getByRole("button", { name: "Begin" }).click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    expect(await names()).toEqual(["Ash", "Cole", "Dun", "Ember", "Fen", "Gale"]);
+    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara001.")))).toEqual([]);
+    expect((await keptOf(page, "save")).hero.name).toBe("Gale");
+});
+
+test("how the player is, kept with where they are: hurt and tired, poisoned, a spell on them, blessed, a power strike waiting; the next time, each as it was, with what was left of it", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    };
+    // (Within a few moments of what was asked: the world goes on while the menu's opened)
+    const near = (value, to, by = 3000) => {
+        expect(value).toBeLessThanOrEqual(to);
+        expect(value).toBeGreaterThan(to - by);
+    };
+
+    await continued();
+
+    // Hurt and tired, poisoned, Levitate and a blessing on them, their power strike waiting
+    const was = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const actor = game.battle.actor(game.me);
+        const player = game.host.players.get(game.me);
+        const now = game.battle.time;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(actor, { hp: actor.maxHp - 15, stamina: Math.round(actor.maxStamina / 3) });
+        game.battle.afflict(game.me, "poison", { damage: 1, ms: 8000 });
+        game.battle.buff(game.me, "levitate", { ms: 120000, by: game.me, level: 1 });
+        player.boons = [{ id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000, until: now + 400000 }];
+        player.readyAt = { powerStrike: now + 9000 };
+
+        return { hp: actor.hp, stamina: actor.stamina };
+    });
+
+    // Paused (the menu): kept, with where they are
+    await page.locator("#menubutton").click();
+    await expect(page.locator("#menu")).toBeVisible();
+
+    const kept = (await keptOf(page, "vitals")).vitals;
+
+    near(kept.hp, was.hp, 5);
+    expect(kept.stamina).toBeGreaterThanOrEqual(was.stamina);
+    expect(kept).toMatchObject({ afflictions: [{ kind: "poison", damage: 1 }], buffs: [{ kind: "levitate", level: 1, own: true }], boons: [{ id: "blessing" }] });
+    near(kept.afflictions[0].left, 8000);
+    near(kept.buffs[0].left, 120000);
+    near(kept.boons[0].left, 400000);
+    near(kept.abilities.powerStrike, 9000);
+
+    // The next time: as they were, each with what was left of it (the world's clock stood still meanwhile)
+    await page.getByRole("button", { name: "Back to the title" }).click();
+    await continued();
+
+    const back = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        return { vitals: game.vitals(), shown: [...document.querySelectorAll("#playerplate .ail")].map((icon) => icon.getAttribute("aria-label")) };
+    });
+
+    near(back.vitals.hp, kept.hp, 5);
+    expect(back.vitals.stamina).toBeGreaterThanOrEqual(kept.stamina);
+    expect(back.vitals.afflictions.map(({ kind }) => kind)).toEqual(["poison"]);
+    near(back.vitals.afflictions[0].left, kept.afflictions[0].left);
+    expect(back.vitals.buffs).toEqual([expect.objectContaining({ kind: "levitate", own: true })]);
+    near(back.vitals.buffs[0].left, kept.buffs[0].left);
+    expect(back.vitals.boons).toEqual([expect.objectContaining({ id: "blessing" })]);
+    near(back.vitals.boons[0].left, kept.boons[0].left);
+    near(back.vitals.abilities.powerStrike, kept.abilities.powerStrike);
+    expect(back.shown).toEqual(expect.arrayContaining(["Poisoned", "Blessed"]));
 });
 
 test("the player and the orc draw their weapons and fight when in reach, until one falls", async ({ page }) => {
@@ -3279,7 +3477,7 @@ test("where the player is is kept whenever the game stops (paused, the page clos
 
             return { x: player.x, y: player.y, facing: player.facing };
         }, by);
-    const kept = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.place"))?.place ?? null);
+    const kept = async () => (await keptOf(page, "place"))?.place ?? null;
 
     const first = await continued();
     const walked = await walk(10);
@@ -3410,7 +3608,7 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     await page.keyboard.press("Escape");
 
     // Kept with the character: with them again the next time
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.followers")));
+    const kept = await keptOf(page, "followers");
 
     expect(kept.followers.map(({ name }) => name)).toEqual([guild.name]);
     await title(page);
@@ -3805,7 +4003,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack).toBeHidden();
 
     // Kept for the next time (as it was read at the start): the blade trained, the gold, the ale
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.progress")));
+    const kept = await keptOf(page, "progress");
 
     expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27 });
     expect(kept.pack.slice(0, 3)).toEqual([{ id: "potion", quality: "common", count: 1 }, { id: "ale", quality: "common", count: 1 }, null]);

@@ -23,7 +23,7 @@ import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadFollowers, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -39,7 +39,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null, building: false };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null, building: false };
 
 window.pellagos = {
     get game() {
@@ -184,8 +184,8 @@ async function load() {
 
 function title() {
     const save = loadSave(WEAPONS);
+    const kept = loadCharacters(WEAPONS);
     const continueButton = $("#continuebutton");
-    const newButton = $("#newbutton");
     const note = $("#savenote");
 
     state.save = save;
@@ -193,31 +193,167 @@ function title() {
     $("#titlenote").hidden = true;
     continueButton.hidden = !save;
     note.hidden = !save;
-    newButton.textContent = "New character";
-    delete newButton.dataset.confirm;
+    $("#savedbutton").hidden = !kept.length;
+    $("#savedbutton").textContent = kept.length > 1 ? `Saved characters (${kept.length})` : "Saved character";
 
     if (save) {
         continueButton.textContent = `Continue as ${save.hero.name}`;
-        note.textContent = `${WEAPONS[save.hero.weapon].label}${save.hero.boots ? " and spiked boots" : ""}. Started ${new Date(save.created).toLocaleDateString()}.`;
+        note.textContent = describe(save).about;
         continueButton.focus();
     } else {
-        newButton.focus();
+        $("#newbutton").focus();
     }
 }
 
+// A kept character as the title's cards show them: their name, people, what they wield (as they
+// have now), their gold, and when they last played
+function describe(save) {
+    const progress = loadProgress(save);
+    const held = progress.gear?.mainHand?.id;
+    const weapon = WEAPONS[held] ? WEAPONS[held].label : `${WEAPONS[save.hero.weapon].label}${save.hero.boots ? " and spiked boots" : ""}`;
+    const people = peopleOf(save.hero);
+    const gold = Number.isFinite(progress.gold) ? ` · ${progress.gold} gold` : "";
+
+    return {
+        name: save.hero.name,
+        about: `${people[0].toUpperCase()}${people.slice(1)} · ${weapon}${gold}`,
+        when: `Last played ${new Date(save.played ?? save.created).toLocaleDateString()}`,
+    };
+}
+
+// A hero's people, as said ("human", "dark elf")
+const peopleOf = (hero) => (hero.race && hero.race !== "human" ? hero.race.replace(/([A-Z])/g, " $1").toLowerCase() : "human");
+
 $("#continuebutton").addEventListener("click", () => state.save && play(state.save));
 
-$("#newbutton").addEventListener("click", (event) => {
-    const button = event.currentTarget;
-
-    // Making a new character replaces the saved one: ask first
-    if (state.save && !button.dataset.confirm) {
-        button.dataset.confirm = "yes";
-        button.textContent = `Replace ${state.save.hero.name}? Tap again`;
+// Making a new character: with six kept, one's chosen to make way for them first
+$("#newbutton").addEventListener("click", () => {
+    if (loadCharacters(WEAPONS).length >= MOST_CHARACTERS) {
+        openCharacters("replace");
 
         return;
     }
 
+    create();
+});
+
+$("#savedbutton").addEventListener("click", () => openCharacters("play"));
+
+// --- The characters kept ---
+
+// Who's to be played (`mode` "play": or forgotten, each by its own button), replaced by a new
+// character ("replace"), or brought to someone's world ("join")
+function openCharacters(mode) {
+    const dialog = $("#characters");
+    const kept = loadCharacters(WEAPONS);
+
+    if (!kept.length) {
+        dialog.close();
+        title();
+
+        return;
+    }
+
+    dialog.dataset.mode = mode;
+    $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" ? "Who comes" : "Saved characters";
+    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" ? "Choose who comes with you." : `Choose who to play. Up to ${MOST_CHARACTERS} are kept.`;
+    $("#charactersnew").hidden = mode !== "join" || kept.length >= MOST_CHARACTERS;
+    $("#characterlist").replaceChildren(
+        ...kept.map((save) => {
+            const { name, about, when } = describe(save);
+            const row = document.createElement("li");
+            const pick = Object.assign(document.createElement("button"), { type: "button", className: "character" });
+
+            pick.dataset.id = save.id;
+            pick.append(Object.assign(document.createElement("span"), { className: "name", textContent: mode === "replace" ? `Replace ${name}` : name }), Object.assign(document.createElement("span"), { className: "about", textContent: about }), Object.assign(document.createElement("span"), { className: "when", textContent: when }));
+            pick.addEventListener("click", () => chosen(mode, save));
+            row.append(pick);
+
+            if (mode === "play") {
+                const forget = Object.assign(document.createElement("button"), { type: "button", className: "forget", textContent: "Delete", title: `Delete ${name}` });
+
+                forget.setAttribute("aria-label", `Delete ${name}`);
+                forget.addEventListener("click", () => askForget(save, "delete"));
+                row.append(forget);
+            }
+
+            return row;
+        }),
+    );
+
+    if (!dialog.open) {
+        dialog.showModal();
+    }
+
+    $("#characterlist button")?.focus();
+}
+
+// A kept character chosen: played; brought to someone's world; or, to make way for a new one,
+// asked about first
+function chosen(mode, save) {
+    if (mode === "replace") {
+        askForget(save, "replace");
+
+        return;
+    }
+
+    $("#characters").close();
+
+    if (mode === "join") {
+        state.joinAs = save;
+        showJoinWho();
+
+        return;
+    }
+
+    play(save);
+}
+
+// Asked before a character's forgotten for good ("delete": at once; "replace": once the new
+// character that takes their place is made)
+function askForget(save, why) {
+    const dialog = $("#forget");
+    const { name } = save.hero;
+
+    dialog.dataset.id = save.id;
+    dialog.dataset.why = why;
+    $("#forgettitle").textContent = why === "replace" ? `Replace ${name}?` : `Delete ${name}?`;
+    $("#forgetnote").textContent = `${name} will be permanently deleted, with their world, what they carry and what they've learnt${why === "replace" ? ", once your new character is made" : ""}. This can't be undone.`;
+    $("#forgetgo").textContent = why === "replace" ? `Replace ${name}` : `Delete ${name}`;
+    $("#forgetback").textContent = `Keep ${name}`;
+    dialog.showModal();
+    $("#forgetback").focus();
+}
+
+$("#forgetgo").addEventListener("click", () => {
+    const dialog = $("#forget");
+    const { id, why } = dialog.dataset;
+
+    dialog.close();
+
+    if (why === "replace") {
+        $("#characters").close();
+        create({ replacing: id });
+
+        return;
+    }
+
+    forgetCharacter(id);
+
+    if (state.joinAs?.id === id) {
+        state.joinAs = null;
+    }
+
+    title();
+    openCharacters("play");
+});
+
+$("#forgetback").addEventListener("click", () => $("#forget").close());
+$("#charactersback").addEventListener("click", () => $("#characters").close());
+$("#charactersnew").addEventListener("click", () => {
+    $("#characters").close();
+    $("#join").close();
+    state.joinAfter = $("#joincode").value.toUpperCase().replace(/[^A-Z]/g, "");
     create();
 });
 
@@ -238,7 +374,9 @@ $("#debugswitch").addEventListener("change", (event) => applySetting("debug", ev
 
 // --- Making a character ---
 
-async function create() {
+// (`replacing`: the id of the kept character the new one takes the place of, forgotten once
+// they're made: backed out of, they're kept)
+async function create({ replacing = null } = {}) {
     const { Creator } = state.modules;
     const { view, kit } = state.session;
 
@@ -261,9 +399,15 @@ async function create() {
 
     const save = { hero, seed: newSeed(), created: new Date().toISOString() };
 
+    if (replacing) {
+        forgetCharacter(replacing);
+    }
+
     if (!writeSave(save)) {
         console.warn("This browser won't keep the character: it will be forgotten when the page closes.");
     }
+
+    state.joinAs = save;
 
     // (Made to join someone's world: back to joining it)
     if (state.joinAfter !== null) {
@@ -331,6 +475,9 @@ function failed(error) {
 async function play(save) {
     state.building = true;
 
+    // (The one Continue as... carries on with, from now)
+    playedSave(save);
+
     try {
         await playing(save);
     } catch (error) {
@@ -382,9 +529,13 @@ async function playing(save) {
         pin: loadPin(save),
         onPin: (pin) => savePin(save, pin),
         place: loadPlace(save),
+        vitals: loadVitals(save),
     });
 
-    state.keepPlace = () => savePlace(save, game.place());
+    state.keepPlace = () => {
+        savePlace(save, game.place());
+        saveVitals(save, game.vitals());
+    };
 
     state.worldMap?.dispose();
     state.worldMap = null;
@@ -408,9 +559,9 @@ async function playing(save) {
     underway(game);
 }
 
-// Where the player is kept, to carry on there next time (save.js savePlace): whenever the game
-// stops, paused or quit, the page hidden (another app, on a phone) or closed, and each of the
-// war's turns besides
+// Where the player is and how, kept to carry on so next time (save.js savePlace, saveVitals):
+// whenever the game stops, paused or quit, the page hidden (another app, on a phone) or closed,
+// and each of the war's turns besides
 function keepPlace() {
     if (state.game && !state.game.remote) {
         state.keepPlace?.();
@@ -781,17 +932,26 @@ function closeInvite() {
     state.game?.start();
 }
 
-// Joining a world someone else has opened: its code (the saved character comes; with none, one's
-// made first)
+// Joining a world someone else has opened: its code, and who comes (the character played last,
+// or another kept, chosen: Change; with none kept, one's made first)
 function openJoin(code = "") {
-    const people = state.save?.hero.race && state.save.hero.race !== "human" ? state.save.hero.race : "human";
+    const kept = loadCharacters(WEAPONS);
 
+    state.joinAs = kept.find(({ id }) => id === state.joinAs?.id) ?? state.save;
     $("#joincode").value = String(code).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
-    $("#joinwho").textContent = state.save ? `You'll come as ${state.save.hero.name} (${people === "human" ? "human" : people.replace(/([A-Z])/g, " $1").toLowerCase()}): at peace or at war with whoever's there as your peoples are.` : "You'll make a character first.";
+    showJoinWho();
     $("#joinstatus").textContent = "";
     $("#joingo").disabled = false;
     $("#join").showModal();
     $("#joincode").focus();
+}
+
+// Who comes to the world joined, said; and, with any kept, a way to choose another (or a new one)
+function showJoinWho() {
+    const save = state.joinAs;
+
+    $("#joinwho").textContent = save ? `You'll come as ${save.hero.name} (${peopleOf(save.hero)}): at peace or at war with whoever's there as your peoples are.` : "You'll make a character first.";
+    $("#joinchange").hidden = !loadCharacters(WEAPONS).length;
 }
 
 async function join(event) {
@@ -805,7 +965,7 @@ async function join(event) {
         return;
     }
 
-    if (!state.save) {
+    if (!state.joinAs) {
         $("#join").close();
         state.joinAfter = code;
         create();
@@ -813,7 +973,12 @@ async function join(event) {
         return;
     }
 
-    const save = state.save;
+    const save = state.joinAs;
+
+    // (The one Continue as... carries on with, from now)
+    playedSave(save);
+    state.save = save;
+
     const { joinWorld, RELAY_ERRORS, NET_REFUSALS } = await import("./app/together.js");
 
     $("#joingo").disabled = true;
@@ -983,6 +1148,7 @@ function leftWorld(why) {
 $("#joinbutton").addEventListener("click", () => openJoin());
 $("#joinform").addEventListener("submit", join);
 $("#joincancel").addEventListener("click", () => $("#join").close());
+$("#joinchange").addEventListener("click", () => openCharacters("join"));
 $("#invitebutton").addEventListener("click", invite);
 $("#inviteback").addEventListener("click", closeInvite);
 $("#invitestop").addEventListener("click", () => {

@@ -1,10 +1,16 @@
-// What the game keeps between visits, in the browser's local storage: the player's character
-// (and the seed of the world it lives in), what the folk in it remember of them and what they've
+// What the game keeps between visits, in the browser's local storage: up to six characters, each
+// with the seed of the world it lives in, what the folk in it remember of them and what they've
 // learnt talking (core/dialogue.js), what they've found of the world (core/explored.js: the
-// buildings gone into, the chunks set foot in), where they were when the game last stopped, and
-// settings (the game options, debug mode,
-// drawing quality). Kept apart from the character: the world's own state, the war between its
-// peoples (core/war/war.js), as it's got to (docs/WAR.md: a world's save is its host's).
+// buildings gone into, the chunks set foot in), where they were when the game last stopped and
+// how they were (hurt, poisoned, blessed: core/host.js vitalsOf); and settings (the game options,
+// debug mode, drawing quality), the same whoever's played. Kept apart from each character: their
+// world's own state, the war between its peoples (core/war/war.js), as it's got to (docs/WAR.md:
+// a world's save is its host's).
+//
+// Each character's kept under keys of its own, "pellagos.<id>.<kind>" (its save, talks...), and
+// "pellagos.characters" says which there are and which was played last. Kept before there could
+// be several (SAVE_VERSION 1), the one character had the keys to itself ("pellagos.save"...): it's
+// moved under an id of its own the first time it's looked for (migrate).
 //
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
@@ -12,20 +18,25 @@
 import { ELEMENT_TOMES } from "../core/spells.js";
 import { decode, encode } from "../core/wire.js";
 
-const SAVE_KEY = "pellagos.save";
+const ROSTER_KEY = "pellagos.characters";
 const SETTINGS_KEY = "pellagos.settings";
-const TALKS_KEY = "pellagos.talks";
-const EXPLORED_KEY = "pellagos.explored";
-const WORLD_KEY = "pellagos.world";
-const PROGRESS_KEY = "pellagos.progress";
-const STANDING_KEY = "pellagos.standing";
-const FOLLOWERS_KEY = "pellagos.followers";
-const WHEELS_KEY = "pellagos.wheels";
-const PIN_KEY = "pellagos.pin";
-const PLACE_KEY = "pellagos.place";
 
-/** The save format's version: a save from another version is set aside, not misread. */
-export const SAVE_VERSION = 1;
+// What's kept of each character, each under its own key
+const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world"]);
+
+// A character's id: eight letters and digits
+const ID = /^[a-z0-9]{8}$/;
+
+const keyOf = (save, kind) => `pellagos.${save.id}.${kind}`;
+
+/** How many characters are kept at most: making another means replacing one of them. */
+export const MOST_CHARACTERS = 6;
+
+/**
+ * The save format's version: a save from another version is set aside, not misread. 2 since each
+ * character's kept under an id of its own (1: one character, its keys to itself; moved on).
+ */
+export const SAVE_VERSION = 2;
 
 /** Settings, and what they are until changed. */
 export const SETTINGS_DEFAULTS = Object.freeze({
@@ -91,21 +102,185 @@ function write(key, value) {
     }
 }
 
+function remove(key) {
+    try {
+        globalThis.localStorage?.removeItem(key);
+    } catch {
+        // Nothing to do
+    }
+}
+
+// What's kept of a saved character (one with an id) of a kind, if it's of their game (its seed,
+// and when it was started), or null
+function own(save, kind) {
+    const kept = save?.id ? read(keyOf(save, kind)) : null;
+
+    return kept && kept.created === save.created && kept.seed === save.seed ? kept : null;
+}
+
 /** Is this a hero the game can play: a name, a body, a look and a weapon it knows? */
 export function isHero(hero, weapons) {
     return Boolean(hero && typeof hero.name === "string" && hero.name.trim() && hero.shape?.macro && hero.look?.skin && hero.look?.hair && weapons[hero.weapon]);
 }
 
-/** The saved game ({ version, hero, seed, created }), or null for none (or one that's no good). */
-export function loadSave(weapons) {
-    const save = read(SAVE_KEY);
+// The characters kept ({ ids, last }: last, the one played last), the one kept before there
+// could be several moved in first
+function roster() {
+    migrate();
 
-    return save?.version === SAVE_VERSION && Number.isInteger(save.seed) && isHero(save.hero, weapons) ? save : null;
+    const kept = read(ROSTER_KEY);
+    const ids = Array.isArray(kept?.ids) ? [...new Set(kept.ids.filter((id) => typeof id === "string" && ID.test(id)))].slice(0, MOST_CHARACTERS) : [];
+
+    return { ids, last: ids.includes(kept?.last) ? kept.last : null };
 }
 
-/** Save a hero and the seed of its world. Returns false if the browser wouldn't store it. */
-export function writeSave({ hero, seed }) {
-    return write(SAVE_KEY, { version: SAVE_VERSION, hero, seed, created: new Date().toISOString() });
+// A new character's id: none of those kept
+function newId(ids, random = Math.random) {
+    let id;
+
+    do {
+        id = Array.from({ length: 8 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(random() * 36)]).join("");
+    } while (ids.includes(id));
+
+    return id;
+}
+
+// A character as kept ({ version, id, hero, seed, created, played }), or null (none, or one
+// that's no good)
+function characterOf(id, weapons) {
+    const save = read(`pellagos.${id}.save`);
+
+    return save?.version === SAVE_VERSION && save.id === id && Number.isInteger(save.seed) && typeof save.created === "string" && isHero(save.hero, weapons) ? save : null;
+}
+
+/** The characters kept that can be played ({ version, id, hero, seed, created, played }), the one played last first. */
+export function loadCharacters(weapons) {
+    const { ids } = roster();
+
+    return ids
+        .map((id) => characterOf(id, weapons))
+        .filter(Boolean)
+        .sort((a, b) => String(b.played ?? b.created).localeCompare(String(a.played ?? a.created)));
+}
+
+/**
+ * The character played last (Continue as...: { version, id, hero, seed, created, played }); or,
+ * if that one's gone, the latest played of those left; or null for none (or none any good).
+ */
+export function loadSave(weapons) {
+    const { last } = roster();
+
+    return (last && characterOf(last, weapons)) ?? loadCharacters(weapons)[0] ?? null;
+}
+
+/**
+ * Keep a character ({ hero, seed, created }, and `played`, when they last were), as the one played
+ * last. A new one (no `id` yet) is given its id and kept with the others, unless MOST_CHARACTERS
+ * are kept already (one of them must go first: forgetCharacter). Returns false if it isn't kept
+ * (that, or the browser wouldn't store it).
+ */
+export function writeSave(save) {
+    const { ids } = roster();
+
+    if (!save.id) {
+        if (ids.length >= MOST_CHARACTERS) {
+            return false;
+        }
+
+        save.id = newId(ids);
+    }
+
+    save.created ??= new Date().toISOString();
+
+    const kept = write(keyOf(save, "save"), { version: SAVE_VERSION, id: save.id, hero: save.hero, seed: save.seed, created: save.created, played: save.played ?? save.created });
+
+    return kept && write(ROSTER_KEY, { ids: ids.includes(save.id) ? ids : [...ids, save.id], last: save.id });
+}
+
+/** A kept character played (now): the one Continue as... carries on with. */
+export function playedSave(save) {
+    if (!save?.id) {
+        return false;
+    }
+
+    save.played = new Date().toISOString();
+
+    return writeSave(save);
+}
+
+/**
+ * Forget a character for good (by id): everything kept of them, their world with it. The one
+ * played last becomes the latest played of those left.
+ */
+export function forgetCharacter(id) {
+    const { ids, last } = roster();
+
+    if (!ids.includes(id)) {
+        return false;
+    }
+
+    for (const kind of KINDS) {
+        remove(`pellagos.${id}.${kind}`);
+    }
+
+    const left = ids.filter((each) => each !== id);
+    const latest = left.map((each) => read(`pellagos.${each}.save`)).filter(Boolean).sort((a, b) => String(b.played ?? b.created).localeCompare(String(a.played ?? a.created)))[0];
+
+    return write(ROSTER_KEY, { ids: left, last: last === id ? (latest?.id ?? null) : last });
+}
+
+// The one character kept before there could be several (SAVE_VERSION 1: "pellagos.save",
+// "pellagos.talks"... to itself), moved under an id of its own, as the one played last. What was
+// kept of it is its if it's of its world (its seed: kept before, a new character's first keys
+// could be a moment out from its own, and lost). Moved already (the same character: when it was
+// started, its seed), what's left under the old keys is let go; and with six kept already, it
+// waits.
+function migrate() {
+    const old = read("pellagos.save");
+
+    if (!old) {
+        return;
+    }
+
+    const usable = old.version === 1 && Number.isInteger(old.seed) && typeof old.created === "string" && old.hero && typeof old.hero === "object";
+    const kept = read(ROSTER_KEY);
+    const ids = Array.isArray(kept?.ids) ? kept.ids.filter((id) => typeof id === "string" && ID.test(id)) : [];
+    const moved = ids.some((id) => {
+        const save = read(`pellagos.${id}.save`);
+
+        return save?.created === old.created && save?.seed === old.seed;
+    });
+
+    if (usable && !moved) {
+        if (ids.length >= MOST_CHARACTERS) {
+            return;
+        }
+
+        const save = { id: newId(ids), seed: old.seed, created: old.created };
+
+        for (const kind of KINDS.filter((each) => each !== "save" && each !== "vitals")) {
+            try {
+                const text = globalThis.localStorage?.getItem(`pellagos.${kind}`);
+                const value = text ? (kind === "world" ? decode(text) : JSON.parse(text)) : null;
+
+                if (value?.seed === old.seed) {
+                    const again = { ...value, created: old.created };
+
+                    globalThis.localStorage?.setItem(keyOf(save, kind), kind === "world" ? encode(again) : JSON.stringify(again));
+                }
+            } catch {
+                // (Not kept: nothing of it)
+            }
+        }
+
+        if (!write(keyOf(save, "save"), { version: SAVE_VERSION, id: save.id, hero: old.hero, seed: old.seed, created: old.created, played: old.created }) || !write(ROSTER_KEY, { ids: [...ids, save.id], last: save.id })) {
+            return;
+        }
+    }
+
+    for (const kind of KINDS) {
+        remove(`pellagos.${kind}`);
+    }
 }
 
 /**
@@ -113,15 +288,14 @@ export function writeSave({ hero, seed }) {
  * learnt: { memory: { id: { talks, flags } }, knowledge: [...] }; nothing yet for another game.
  */
 export function loadTalks(save) {
-    const talks = read(TALKS_KEY);
-    const ours = talks && save?.created && talks.created === save.created && talks.seed === save.seed;
+    const talks = own(save, "talks");
 
-    return ours ? { memory: talks.memory ?? {}, knowledge: talks.knowledge ?? [] } : { memory: {}, knowledge: [] };
+    return talks ? { memory: talks.memory ?? {}, knowledge: talks.knowledge ?? [] } : { memory: {}, knowledge: [] };
 }
 
 /** Keep what's been said in a saved game (not in one that isn't saved: ?play). */
 export function saveTalks(save, { memory, knowledge }) {
-    return save?.created ? write(TALKS_KEY, { created: save.created, seed: save.seed, memory, knowledge: [...knowledge] }) : false;
+    return save?.id ? write(keyOf(save, "talks"), { created: save.created, seed: save.seed, memory, knowledge: [...knowledge] }) : false;
 }
 
 /**
@@ -129,15 +303,14 @@ export function saveTalks(save, { memory, knowledge }) {
  * Explored's toJSON: { entered, visited }); nothing yet for another game.
  */
 export function loadExplored(save) {
-    const explored = read(EXPLORED_KEY);
-    const ours = explored && save?.created && explored.created === save.created && explored.seed === save.seed;
+    const explored = own(save, "explored");
 
-    return ours ? { entered: explored.entered ?? [], visited: explored.visited ?? "" } : { entered: [], visited: "" };
+    return explored ? { entered: explored.entered ?? [], visited: explored.visited ?? "" } : { entered: [], visited: "" };
 }
 
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
 export function saveExplored(save, explored) {
-    return save?.created ? write(EXPLORED_KEY, { created: save.created, seed: save.seed, ...explored.toJSON() }) : false;
+    return save?.id ? write(keyOf(save, "explored"), { created: save.created, seed: save.seed, ...explored.toJSON() }) : false;
 }
 
 /**
@@ -152,10 +325,9 @@ export const PROGRESS_FORMAT = 2;
  * nothing yet for another game. (Kept before the elements' tomes: every element open, as it was)
  */
 export function loadProgress(save) {
-    const progress = read(PROGRESS_KEY);
-    const ours = progress && save?.created && progress.created === save.created && progress.seed === save.seed;
+    const progress = own(save, "progress");
 
-    if (!ours) {
+    if (!progress) {
         return {};
     }
 
@@ -174,7 +346,7 @@ export function loadProgress(save) {
 
 /** Keep what's grown and carried in a saved game (not in one that isn't saved: ?play). */
 export function saveProgress(save, progress) {
-    return save?.created ? write(PROGRESS_KEY, { created: save.created, seed: save.seed, format: PROGRESS_FORMAT, ...progress.toJSON() }) : false;
+    return save?.id ? write(keyOf(save, "progress"), { created: save.created, seed: save.seed, format: PROGRESS_FORMAT, ...progress.toJSON() }) : false;
 }
 
 /**
@@ -182,15 +354,14 @@ export function saveProgress(save, progress) {
  * guild card (core/standing.js Standing's toJSON), as kept: {} for none yet, or another game's.
  */
 export function loadStanding(save) {
-    const standing = read(STANDING_KEY);
-    const ours = standing && save?.created && standing.created === save.created && standing.seed === save.seed;
+    const standing = own(save, "standing");
 
-    return ours ? { points: standing.points, claimed: standing.claimed ?? [], requests: standing.requests ?? [], done: standing.done ?? [], next: standing.next, guild: standing.guild ?? null } : {};
+    return standing ? { points: standing.points, claimed: standing.claimed ?? [], requests: standing.requests ?? [], done: standing.done ?? [], next: standing.next, guild: standing.guild ?? null } : {};
 }
 
 /** Keep where the character stands in a saved game (not in one that isn't saved: ?play). */
 export function saveStanding(save, standing) {
-    return save?.created ? write(STANDING_KEY, { created: save.created, seed: save.seed, ...standing.toJSON() }) : false;
+    return save?.id ? write(keyOf(save, "standing"), { created: save.created, seed: save.seed, ...standing.toJSON() }) : false;
 }
 
 /**
@@ -198,15 +369,14 @@ export function saveStanding(save, standing) {
  * followers: [{ name, calling, sex, seed, people }]), as kept: none yet, or another game's.
  */
 export function loadFollowers(save) {
-    const kept = read(FOLLOWERS_KEY);
-    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+    const kept = own(save, "followers");
 
-    return ours && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && typeof one.name === "string" && typeof one.calling === "string") : [];
+    return kept && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && typeof one.name === "string" && typeof one.calling === "string") : [];
 }
 
 /** Keep the followers the character leads, in a saved game. */
 export function saveFollowers(save, followers) {
-    return save?.created ? write(FOLLOWERS_KEY, { created: save.created, seed: save.seed, followers }) : false;
+    return save?.id ? write(keyOf(save, "followers"), { created: save.created, seed: save.seed, followers }) : false;
 }
 
 /**
@@ -214,28 +384,26 @@ export function saveFollowers(save, followers) {
  * kept: null for nothing yet (what they start with), or another game's.
  */
 export function loadWheels(save) {
-    const kept = read(WHEELS_KEY);
-    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+    const kept = own(save, "wheels");
 
-    return ours && kept.wheels && typeof kept.wheels === "object" ? kept.wheels : null;
+    return kept && kept.wheels && typeof kept.wheels === "object" ? kept.wheels : null;
 }
 
 /** Keep what the character's put on their action wheels, in a saved game. */
 export function saveWheels(save, wheels) {
-    return save?.created ? write(WHEELS_KEY, { created: save.created, seed: save.seed, wheels }) : false;
+    return save?.id ? write(keyOf(save, "wheels"), { created: save.created, seed: save.seed, wheels }) : false;
 }
 
 /** Where the character's pinned on the world map, in a saved game ([x, z] metres), or null (none, or another game's). */
 export function loadPin(save) {
-    const kept = read(PIN_KEY);
-    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+    const kept = own(save, "pin");
 
-    return ours && Array.isArray(kept.pin) && kept.pin.length === 2 && kept.pin.every(Number.isFinite) ? kept.pin : null;
+    return kept && Array.isArray(kept.pin) && kept.pin.length === 2 && kept.pin.every(Number.isFinite) ? kept.pin : null;
 }
 
 /** Keep where the character's pinned on the world map (or that they've none: null), in a saved game. */
 export function savePin(save, pin) {
-    return save?.created ? write(PIN_KEY, { created: save.created, seed: save.seed, pin }) : false;
+    return save?.id ? write(keyOf(save, "pin"), { created: save.created, seed: save.seed, pin }) : false;
 }
 
 /**
@@ -243,16 +411,32 @@ export function savePin(save, pin) {
  * out in the world, radians), or null (none kept, or another game's): where it carries on.
  */
 export function loadPlace(save) {
-    const kept = read(PLACE_KEY);
-    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
-    const place = ours ? kept.place : null;
+    const kept = own(save, "place");
+    const place = kept ? kept.place : null;
 
     return place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
 }
 
 /** Keep where the character is in a saved game's world ({ x, y, facing }), to carry on there. */
 export function savePlace(save, place) {
-    return save?.created && place ? write(PLACE_KEY, { created: save.created, seed: save.seed, place: { x: place.x, y: place.y, facing: place.facing } }) : false;
+    return save?.id && place ? write(keyOf(save, "place"), { created: save.created, seed: save.seed, place: { x: place.x, y: place.y, facing: place.facing } }) : false;
+}
+
+/**
+ * How the character was in a saved game when it last stopped (core/host.js vitalsOf: their hit
+ * points and stamina, what lingered and lasted on them, their boons, their abilities' and spells'
+ * waits, each by what was left of it), or null (none kept, or another game's): how they carry
+ * on. (What's in it the game checks as it puts it back: host.js restoreVitals)
+ */
+export function loadVitals(save) {
+    const kept = own(save, "vitals");
+
+    return kept?.vitals && typeof kept.vitals === "object" ? kept.vitals : null;
+}
+
+/** Keep how the character is in a saved game (host.js vitalsOf), kept with where they are. */
+export function saveVitals(save, vitals) {
+    return save?.id && vitals ? write(keyOf(save, "vitals"), { created: save.created, seed: save.seed, vitals }) : false;
 }
 
 /**
@@ -261,10 +445,10 @@ export function savePlace(save, place) {
  */
 export function loadWorld(save) {
     try {
-        const text = globalThis.localStorage?.getItem(WORLD_KEY);
+        const text = save?.id ? globalThis.localStorage?.getItem(keyOf(save, "world")) : null;
         const world = text ? decode(text) : null;
 
-        return world && save?.created && world.created === save.created && world.seed === save.seed ? world.war : null;
+        return world && world.created === save.created && world.seed === save.seed ? world.war : null;
     } catch {
         return null;
     }
@@ -272,12 +456,12 @@ export function loadWorld(save) {
 
 /** Keep the war in a saved game's world (not in one that isn't saved: ?play). */
 export function saveWorld(save, war) {
-    if (!save?.created) {
+    if (!save?.id) {
         return false;
     }
 
     try {
-        globalThis.localStorage?.setItem(WORLD_KEY, encode({ created: save.created, seed: save.seed, war }));
+        globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war }));
 
         return true;
     } catch {
@@ -285,13 +469,15 @@ export function saveWorld(save, war) {
     }
 }
 
-/** Forget the saved game. */
+/** Forget every character kept (and the one kept before there could be several). */
 export function clearSave() {
-    try {
-        globalThis.localStorage?.removeItem(SAVE_KEY);
-    } catch {
-        // Nothing to do
+    const { ids } = roster();
+
+    for (const id of ids) {
+        forgetCharacter(id);
     }
+
+    remove(ROSTER_KEY);
 }
 
 /** The settings (defaults for anything not set). */
