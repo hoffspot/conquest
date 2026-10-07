@@ -11,10 +11,11 @@
 // (motion-sheet.html: each failure drawn as it happened) all use it. A body is made from
 // HumanData (body.js), so whatever body comes next (the plan's Vitruvian) is checked the same way.
 import * as THREE from "three";
+import { EMOTES } from "../core/emotes.js";
 import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { SPELLS } from "../core/spells.js";
 import { WEAPONS } from "../core/weapons.js";
-import { Actions, ATTACKS, DODGES, DRAWS, REACTIONS } from "./actions.js";
+import { Actions, ATTACKS, DODGES, DRAWS, EMOTE_WAYS, REACTIONS } from "./actions.js";
 import { Character, hanging, placed, slung } from "./character.js";
 import { CLIP_KEYS } from "./clip-keys.js";
 import { EQUIPMENT, heldRound, secondGrip, SLING, socketOn } from "./equipment.js";
@@ -935,6 +936,21 @@ export function motions() {
         });
     }
 
+    // Each way of each emote (core/emotes.js, actions.js EMOTE_WAYS), standing: by one of the
+    // folk with nothing in hand (a petitioner), and by a soldier with a weapon put away at the hip
+    // or on the back (the player's, out of a fight)
+    for (const [name, how] of Object.entries(EMOTES)) {
+        EMOTE_WAYS[name].forEach(({ duration = how.duration }, variant) => {
+            const emote = { group: "emote", seconds: duration + 0.2, speed: 0, sheathed: true, start: ({ actions, walker }) => {
+                walker.update(1, { speed: 0 });
+                actions.emote(name, { variant });
+            } };
+
+            list.push({ ...emote, id: `emote/${name}/${variant}`, look: (body) => folk(body, "petitioner") });
+            list.push({ ...emote, id: `emote/${name}/${variant}/armed`, look: (body) => soldier(body, first(body)) });
+        });
+    }
+
     for (const [role, { rests, seated }] of Object.entries(ROLES)) {
         (rests ?? []).forEach(({ name: way, duration }, variant) => {
             const rest = {
@@ -968,9 +984,9 @@ export function motions() {
     }
 
     // (What's in the body's looked for every tenth of a second in quick motions, every 0.3 s in
-    // slow ones: a fall, an act, a rest; the joints, feet and hands every frame)
+    // slow ones: a fall, an act, a rest, an emote; the joints, feet and hands every frame)
     for (const motion of list) {
-        motion.every = ["fall", "act", "rest"].includes(motion.group) ? 0.3 : 0.1;
+        motion.every = ["fall", "act", "rest", "emote"].includes(motion.group) ? 0.3 : 0.1;
     }
 
     return list;

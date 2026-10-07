@@ -7,6 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Actions, ATTACKS, REACTIONS } from "../characters/actions.js";
+import { EMOTES } from "../core/emotes.js";
 import { ROLES } from "../core/roles.js";
 import { ClipPlayer, gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
@@ -160,7 +161,7 @@ const actions = new Actions(character);
 const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.length), ...Object.values(ROLES).map(({ rests }) => rests.length));
 // (Which of an attack's ways: `way`, or null for any but the last, as in the game; and how to
 // rest: a role's, roles.js)
-const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
+const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer", emote: EMOTES[params.get("emote")] ? params.get("emote") : "wave" };
 
 // Where it's looking (gaze.js): ahead, glancing about now and then (""), at you (the camera:
 // "camera"), or nowhere, its head and eyes left as posed ("off")
@@ -875,6 +876,12 @@ function freeze(action, at) {
 
         rest();
         actions.attack.start = actions.time - elapsed;
+    } else if (action.startsWith("emote:") && EMOTES[action.slice(6)]) {
+        actions.emote(action.slice(6), { variant: fight.way });
+
+        const { hitAt, duration } = actions.attack;
+
+        actions.attack.start = actions.time - (at <= 1 ? at * hitAt : hitAt + (at - 1) * (duration - hitAt));
     } else if (REACTIONS[action]) {
         actions.react(action, { from: 0 });
         actions.reactions[0].start = actions.time - at * REACTIONS[action].length;
@@ -964,6 +971,10 @@ function motionTab() {
             element("div", { class: "buttons" },
                 element("button", { type: "button", class: "button", onclick: rest }, "Rest"),
                 element("button", { type: "button", class: "button", onclick: () => actions.setSeated(false) }, "Stand up"))),
+        group("Emotes",
+            element("p", { class: "note" }, "What a player can show of themselves (their own wheel, or a quick action), and the folk do on their own: a greeting as they're talked to, a nod at what's said, a cheer as a foe falls near them."),
+            select("Emote", Object.entries(EMOTES).map(([id, { label }]) => [id, label]), { get: () => fight.emote, set: (value) => (fight.emote = value) }),
+            element("div", { class: "buttons" }, element("button", { type: "button", class: "button", onclick: () => actions.emote(fight.emote) }, "Show"))),
         group("View",
             check("Skeleton", {
                 get: () => state.motion.skeleton,
@@ -1073,10 +1084,11 @@ function drawGait() {
     }
 }
 
-window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, rest, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, CHARACTERS, WALK_STYLES, ready: true };
+window.lab = { THREE, EMOTES, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, rest, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, CHARACTERS, WALK_STYLES, ready: true };
 
 // ?weapon=sword&action=attack&at=1 shows one moment of an action, frozen (for pictures);
 // ?action=rest&rest=barkeep&way=2&at=1 one of a class's rests
+// ?action=emote:wave&way=1&at=1 one of an emote's ways (core/emotes.js)
 if (fight.weapon) {
     arm(fight.weapon);
 }

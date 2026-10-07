@@ -44,6 +44,7 @@
 // the hands.
 
 import * as THREE from "three";
+import { EMOTES } from "../core/emotes.js";
 import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
 import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
@@ -765,6 +766,7 @@ export const ATTACKS = Object.freeze({
 
     // The tavern's folk (one way each)
     toast: {
+        face: "smiling",
         variants: [
             // Raising a tankard (held in the right hand by its handle) high in a toast, tipping back
             // as it rises (as one held high does), then drinking from it, key 1 at the top of it
@@ -777,6 +779,7 @@ export const ATTACKS = Object.freeze({
         ],
     },
     serve: {
+        face: null,
         variants: [
             // Putting a tankard down on a table in front, leaning over it (key 1 as it touches down)
             variant("serve", { right: tankard, ...spine({}), offset: [0, 0, 0] },
@@ -787,6 +790,7 @@ export const ATTACKS = Object.freeze({
     // The smithy's folk (one way each, key 1 at the moment that matters). Hammering: three blows
     // on the work on the anvil, the hammer raised and brought down flat, the tongs holding it
     forge: {
+        face: null,
         variants: [
             variant("forge", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
                 [0.5, { right: HAMMER_UP, left: TONGS_ON_ANVIL, ...spine({ flex: 18, turn: -6 }), Head: { flex: 16 }, offset: [0, -0.02, 0.03] }],
@@ -799,6 +803,7 @@ export const ATTACKS = Object.freeze({
     },
     // Heating the work: thrust into the forge's coals with the tongs, and turned there
     heat: {
+        face: null,
         variants: [
             variant("heat", { ...spine({}), offset: [0, 0, 0] },
                 [0.6, { left: { at: [-0.05, -0.45, 0.7], point: [0, 0, 1], edge: [-0.71, -0.71, 0] }, ...spine({ flex: 16 }), offset: [0, -0.02, 0.04] }],
@@ -808,6 +813,7 @@ export const ATTACKS = Object.freeze({
     },
     // Quenching it: plunged into the trough with the tongs, hissing, and held there
     quench: {
+        face: null,
         variants: [
             variant("quench", { ...spine({}), offset: [0, 0, 0] },
                 [0.6, { left: { at: [-0.05, -0.45, 0.62], point: [0, 0, 1], edge: [-0.71, -0.71, 0] }, ...spine({ flex: 14 }) }],
@@ -817,6 +823,7 @@ export const ATTACKS = Object.freeze({
     },
     // Working the bellows: both hands on the lever, pushing it down and letting it up, thrice
     pump: {
+        face: null,
         variants: [
             variant("pump", { ...spine({}) },
                 [0.5, { right: lever(1, -0.3), left: lever(-1, -0.3), ...spine({ flex: 8 }) }],
@@ -828,6 +835,7 @@ export const ATTACKS = Object.freeze({
     },
     // Turning the grindstone's crank, round and round, the other hand on the frame
     crank: {
+        face: null,
         variants: [
             variant("crank", { ...spine({}) },
                 ...[0.4, 0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.45, 1.6, 1.75].map((time, k) => [time, { right: crank(k / 4), left: { at: [-0.15, -0.62, 0.5], palm: [0, -1, 0], towards: [0, 0, 1], shape: "open" }, ...spine({ flex: 16 }) }])),
@@ -837,6 +845,7 @@ export const ATTACKS = Object.freeze({
     // down, twice), and filing it on the shelves behind (reaching up); an adventurer reading the
     // quest board (a finger along a notice, the other hand on the hip)
     stamp: {
+        face: null,
         variants: [
             variant("stamp", { ...spine({}), Head: { flex: 0 } },
                 [0.5, { right: { at: [0.1, -0.35, 0.55], palm: [0.3, -0.9, 0.2], towards: [0, 0, 1], shape: "grip" }, left: { at: [-0.12, -0.66, 0.62], palm: [0, -1, 0], towards: [0.25, 0, 1], shape: "open" }, ...spine({ flex: 12 }), Head: { flex: 16 } }],
@@ -846,6 +855,7 @@ export const ATTACKS = Object.freeze({
         ],
     },
     file: {
+        face: null,
         variants: [
             variant("file", { ...spine({}), Head: { flex: 0 } },
                 [0.6, { right: { at: [0.05, 0.45, 0.5], palm: [0, -0.2, 1], towards: [0, 1, 0.1], shape: "relaxed" }, ...spine({ flex: -6 }), Head: { flex: -16 } }],
@@ -854,6 +864,7 @@ export const ATTACKS = Object.freeze({
         ],
     },
     read: {
+        face: null,
         variants: [
             variant("read", { ...spine({}), Head: { flex: 0, turn: 0 } },
                 [0.6, { right: { at: [0.05, 0.05, 0.62], palm: [0.2, 0, 1], towards: [0, 1, 0.2], shape: "beckon", index: 0 }, left: akimbo(-1), ...spine({ flex: 4 }), Head: { flex: 4, turn: -6 } }],
@@ -865,6 +876,7 @@ export const ATTACKS = Object.freeze({
     // and across in the sign of the Hearth, the other on the chest), and lighting a candle at a
     // shrine (reaching forward to its wick, bowing a little)
     bless: {
+        face: null,
         variants: [
             variant("bless", { ...spine({}), Head: { flex: 0 } },
                 [0.6, { right: BLESSING, left: ON_CHEST, ...spine({ flex: -3 }), Head: { flex: -4 } }],
@@ -875,6 +887,7 @@ export const ATTACKS = Object.freeze({
         ],
     },
     light: {
+        face: null,
         variants: [
             variant("light", { ...spine({}), Head: { flex: 0 } },
                 [0.6, { right: { at: [0.08, -0.5, 0.6], palm: [0.2, -0.4, 0.9], towards: [0, 0.2, 1], shape: "relaxed" }, ...spine({ flex: 16 }), Head: { flex: 14 } }],
@@ -885,6 +898,7 @@ export const ATTACKS = Object.freeze({
     // Beckoning the player over (a courtesan, when she first sees them): facing them, a hand
     // held out palm up, the index finger curling "come here" three times, the other on the hip
     beckon: {
+        face: "smiling",
         variants: [
             variant("beckon", { ...spine({}), Head: { bend: 0, flex: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
                 [0.5, { right: BECKONING(10), left: akimbo(-1), Hips: { obliquity: 6, turn: -6 }, ...spine({ flex: -3, bend: -5 }), Head: { bend: 10, flex: 4 }, offset: [0.03, -0.01, 0] }],
@@ -897,6 +911,7 @@ export const ATTACKS = Object.freeze({
         ],
     },
     pour: {
+        face: null,
         variants: [
             // Drawing ale: both hands to a barrel's tap in front, the left holding the tankard under it
             variant("pour", { ...spine({}) },
@@ -1353,6 +1368,37 @@ const CLIP_RESTS = {
 };
 
 export const RESTS = Object.freeze(Object.fromEntries(Object.entries(KEYED_RESTS).map(([role, rests]) => [role, [...rests, ...(CLIP_RESTS[role] ?? [])]])));
+
+// A bow from the waist, the arms hanging as they are: down, held a moment, and up again
+const BOWING = variant("a bow", { ...spine({}), Head: { flex: 0 }, Hips: { tilt: 0 }, offset: [0, 0, 0] },
+    [0.55, { ...spine({ flex: 14 }), Head: { flex: 6 }, Hips: { tilt: 6 }, offset: [0, 0, -0.02] }],
+    [1, { ...spine({ flex: 28 }), Head: { flex: 12 }, Hips: { tilt: 12 }, offset: [0, -0.01, -0.04] }],
+    [1.45, { ...spine({ flex: 27 }), Head: { flex: 12 }, Hips: { tilt: 11 }, offset: [0, -0.01, -0.04] }]);
+
+// Beckoning, as a courtesan does (ATTACKS'), but standing square: the hips not swung
+const BECKONING_SQUARE = ATTACKS.beckon.variants.map((way) => ({ ...way, keys: way.keys.map(([time, { Hips: _hips, offset: _offset, ...pose }]) => [time, pose]) }));
+
+/**
+ * Each emote's ways (core/emotes.js EMOTES, which time them), as the animators' clips have them
+ * (clip-keys.js) but for the bow (keyed) and the beckon (ATTACKS', standing square): a hand raised
+ * in hello, or an arm up high waving someone over (the adventurer's, `mirror`ed: the left, clear
+ * of a blade at the left hip); a bow from the waist; a nod; a shake of the head, both hands up,
+ * palms out; a fist raised in a cheer, the other hand on the hip; a fist pumped; scratching the
+ * head, puzzled (the left hand, let go of early: clear of a blade at that hip as it comes down);
+ * beckoning. The hand that isn't in it hangs as it does walking (clear of a blade at the hip:
+ * Character.hung). Played over the walk's stance, the feet where they stand. A way timed
+ * otherwise than its emote says has its own `hitAt` and `duration` (its clip's).
+ */
+export const EMOTE_WAYS = Object.freeze({
+    wave: [clipped("waving hello", "greeting", { hands: { left: null } }), { ...HAILING, hitAt: 1, duration: 2.667, mirror: true }],
+    bow: [BOWING],
+    nod: [clipped("a nod", "headNod", { hands: { left: null } })],
+    no: [clipped("a shake of the head", "headShake", { hands: { left: null } })],
+    cheer: [clipped("a cheer", "cheer", { hands: { right: akimbo(1) } })],
+    fistPump: [clipped("a fist pumped", "fistPump", { hands: { left: null } })],
+    puzzled: [{ ...clipped("scratching the head", "headScratch", { hands: { left: null }, settle: 1.3 }), mirror: true }],
+    beckon: BECKONING_SQUARE,
+});
 
 // --- Reactions to being hit ---
 
@@ -2149,6 +2195,7 @@ function sample(times, values, n, time) {
 const COMPILED = new Map([
     ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
     ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
+    ...Object.entries(EMOTE_WAYS).map(([name, ways]) => [`emote:${name}`, ways.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
     ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [compile(draw.keys)]], [`sheathe:${name}`, [compile(sheathe.keys)]]]),
 ]);
 // (A guard's pelvis offset, its knees bent, isn't among them: it's let go of walking)
@@ -2497,9 +2544,47 @@ export class Actions {
         // (One cast with a staff or war hammer in the right hand: held upright out of the way)
         const upright = Boolean(attack.cast && holds.Right && ITEMS[this.character.equipment?.get("mainHand")]?.haft);
 
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) || righted, arms, upright };
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) || righted, arms, upright, face: attack.face };
 
         return way;
+    }
+
+    /**
+     * Show an emote (core/emotes.js EMOTES): one of its ways (EMOTE_WAYS: `variant`, or any but
+     * the one it showed last), timed as it says, with its face. Returns which way, or null (no
+     * such emote). Anything else started takes over from it; stopEmote eases out of it.
+     */
+    emote(name, { variant = null } = {}) {
+        const how = EMOTES[name];
+        const ways = EMOTE_WAYS[name];
+
+        if (!how || !ways) {
+            return null;
+        }
+
+        const key = `emote:${name}`;
+        const way = ways[variant] ? variant : this.variety.next(key, ways.length);
+
+        this.#swapped();
+        this.variety.last.set(key, way);
+
+        const { hitAt = how.hitAt, duration = how.duration, mirror = false } = ways[way];
+
+        this.attack = { name: key, variant: way, tracks: COMPILED.get(key)[way], start: this.time, hitAt, duration, mirror, emote: name, face: how.face, stopping: null };
+
+        return way;
+    }
+
+    /** The emote it's showing (an EMOTES key), or null (none, or already easing out of it). */
+    get emoting() {
+        return this.attack?.emote && !this.attack.stopping ? this.attack.emote : null;
+    }
+
+    /** Stop an emote, easing out of it over `seconds` (it's set off, or something's come up). */
+    stopEmote(seconds = 0.35) {
+        if (this.attack?.emote && !this.attack.stopping) {
+            this.attack.stopping = { start: this.time, length: seconds };
+        }
     }
 
     /**
@@ -2789,7 +2874,7 @@ export class Actions {
         }
 
         if (this.attack) {
-            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true, rest = false, upright = false } = this.attack;
+            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true, rest = false, emote = null, upright = false } = this.attack;
             const elapsed = this.time - start;
             const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
@@ -2807,7 +2892,8 @@ export class Actions {
                 const key = this.attack.held ? 1 : elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
                 const weight = this.attack.held ? 1 : smooth(0, 0.3, key) * (1 - smooth(tracks.settle, 2, key)) * easing;
 
-                this.#blend(tracks, key, weight, mirror, arms, rest, upright);
+                // (An emote's shown as a rest is: a shield carried on the forearm as it is)
+                this.#blend(tracks, key, weight, mirror, arms, rest || Boolean(emote), upright);
             }
         }
 

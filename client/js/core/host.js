@@ -16,6 +16,7 @@
 
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
+import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -349,11 +350,12 @@ export const REFUSALS = Object.freeze({
     settlement: "No camping in town: find an inn.",
     howLong: "Camp for an hour to a day, or till sundown or the morning.",
     hostiles: "Not with enemies about.",
+    midst: "Not in the middle of a blow or a spell.",
     fighting: "Not in the middle of a fight.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
-const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade", "camp"]);
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade", "camp", "emote"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -680,6 +682,7 @@ export class Host {
      *    their character in the battle (battle.js command), with run: true to run;
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
+     *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
      *  - { type: "effect", effect }: something done by talking (buying, paying, renting...), to
      *    whoever they're talking to (paid for in gold, if it has a price);
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
@@ -862,6 +865,8 @@ export class Host {
                 return this.#effect(player, actor, command.effect);
             case "camp":
                 return this.#camp(player, actor, command.until ?? null);
+            case "emote":
+                return this.#emote(actor, command.emote);
             case "trade":
                 return this.#trade(player, actor, command.with);
             case "offer":
@@ -3930,6 +3935,28 @@ export class Host {
         }
 
         this.battle.command(actor.id, order);
+
+        return OK;
+    }
+
+    // An emote (core/emotes.js: a wave, a bow, a cheer), shown to everyone (an "emote" event: {
+    // id, emote }): standing, so wherever they were going they stop; not while a blow or a spell's
+    // under way
+    #emote(actor, emote) {
+        if (!isEmote(emote)) {
+            return refuse("command");
+        }
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if (actor.attack || actor.casting) {
+            return refuse("midst");
+        }
+
+        this.#order(actor, { type: "stop" });
+        this.#event("emote", { id: actor.id, emote });
 
         return OK;
     }

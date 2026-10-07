@@ -1940,6 +1940,12 @@ at the hip). What was tried, on all 30 of the motion check's bodies:
 | `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
 | `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |
 | `Greeting`, `Cheering_Two_Hands`, `Victory Fist Pump` | Rest | Left out | Clean; the keyed wave and the adventurer's two clip rests cover them |
+| `Greeting` | Emote: *wave* | Kept | The other arm left hanging |
+| `Head Nod`, `Reject` | Emote: *nod*, *shake the head* | Kept | Likewise |
+| `Victory Fist Pump` | Emote: *fist pump* | Kept | Likewise |
+| `Bow` | Emote: *bow* | Left out | The hands brought together before the chest, hardly bowing: a bow from the waist is keyed |
+| `Victory` | Emote: *cheer* | Left out | One arm up, as `Cheer_One_arm`, and the shoulder 74 to 89° past its range on the tallest and bulkiest bodies |
+| `Angry` | Emote | Left out | The shoulder 13 to 20° past its range |
 | `Idle_ShakeOff`, `Sitting_Idle`, `Yes`, `Salute`, `Consume Item` | Rest | Left out | Hardly moves; reads as pointing; not with a sword in the hand (the sentries'); drinking from nothing |
 | dances, `Tired Hunched`, `Meditate`, `Power Up`, `Shivering` | Rest | Left out | Their legs are the motion (deep crouches, steps), and ours stand where they are |
 
@@ -1964,6 +1970,41 @@ where they're planted, *Movement*):
 
 (Seated, every rest's feet had been as far into the floor on the tallest 18 bodies as the bench
 put them, clip or keyed. Now they're brought onto it, the shin swung forward: Sitting, above.)
+
+### Emotes
+
+What a character shows of itself (`EMOTE_WAYS`, by emote: core/emotes.js `EMOTES`, which name and
+time them and give each its face): the player's, chosen from the action wheel (GAME.md *Emotes*),
+and the folk's greetings, nods and cheers. `emote(name)` plays one of an emote's ways, any at
+first and then any but the last, timed as its clip is (key 1 its moment: the top of a wave, the
+bottom of a bow), standing; anything else started takes over from it, and `stopEmote()` eases out
+of it (in 0.35 s). `emoting` is the one under way.
+
+| Emote | The ways | Face |
+| --- | --- | --- |
+| Wave | a hand raised and waved hello (`Greeting`), the other arm left hanging; an arm up high, waving someone over (the adventurer's rest, mirrored: the left, clear of a blade at the left hip) | smiling |
+| Bow | from the hips, the back and the head bowed (keyed: the hips 12°, the back 28°, the head 12°, the pelvis back 4 cm), held, and up again | as it is |
+| Nod | the head nodded once (`Head Nod`) | as it is |
+| Shake the head | the head shaken, both hands up, palms out (`Reject`) | as it is |
+| Cheer | a fist raised high (`Cheer_One_arm`, as the adventurer's rest), the other hand on the hip | smiling |
+| Fist pump | a fist pumped (`Victory Fist Pump`) | smiling |
+| Puzzled | scratching the head (`Confused`, as the clerk's rest, mirrored: the left hand, the right arm hanging clear of the hilt) | as it is |
+| Beckon | the courtesans' beckon, standing square (the hips and pelvis as they stand) | smiling |
+
+A face (expressions.js `FACES`) is shown while it's under way; one without (*as it is*) shows the
+character's mood, as a rest does. The folk's acts (serving, forging, reading, blessing and the
+rest) are the same: each has its face or none (a toast smiles), where before they all looked as
+angry as a blow.
+
+The motion check plays every way of every emote on all 30 bodies, plain and with a sword at the
+hip and a shield on the back (`emote/<name>/<way>` and `.../armed`): none past its limits.
+
+`test/actions.test.js` checks that every emote has its ways, timed as their clips and keyed from 0
+to 2, with a face or none; that it's shown any way at first and never the same way twice
+running, runs its course, eases out when told to stop and gives way to anything else; and that a
+wave raises a hand to the shoulder or over the head, a cheer a hand over the head, and a bow
+brings the head down and forward. The lab's Motion tab has them (Emotes: an emote, Show), and
+`?action=emote:bow&at=1` shows one frozen.
 
 ### Performance
 

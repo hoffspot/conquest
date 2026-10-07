@@ -264,11 +264,14 @@ describe("a character's face (Expressions)", () => {
         assert.ok(play(face, 10).slice(30).every((value) => value < 0.01));
     });
 
-    it("shows what it's doing: angry attacking, pained hurt, a smile talked to, eyes half shut dead", () => {
+    it("shows what it's doing: angry attacking, an emote's or an act's own face, pained hurt, a smile talked to, eyes half shut dead", () => {
         const attack = { attack: { weapon: "sword" } };
 
         assert.equal(new Expressions().state(attack), "attacking");
         assert.equal(new Expressions().state({ attack: { rest: true } }), null);
+        assert.equal(new Expressions().state({ attack: { emote: "wave", face: "smiling" } }), "smiling", "an emote's own face");
+        assert.equal(new Expressions().state({ attack: { emote: "bow", face: null } }), null, "or as it is");
+        assert.equal(new Expressions().state({ attack: { name: "serve", face: null } }), null, "one of the folk's acts: not angry");
         assert.equal(new Expressions().state({ reactions: [{}] }), "hurt");
         assert.equal(new Expressions().state({ fall: { end: 2 } }), "hurt");
         assert.equal(new Expressions().state({ fall: { end: Infinity } }), "dead");
