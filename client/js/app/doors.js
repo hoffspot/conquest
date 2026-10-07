@@ -14,6 +14,8 @@ import { STOREY } from "../world/interiors3d.js";
 const GLOW = Object.freeze({ core: 0.07, halo: 0.34, pulse: 1.6, fade: 5, least: 1.2 });
 const GREEN = 0x3dff78;
 
+const _hit = new THREE.Vector3();
+
 /**
  * A flat band round a closed loop of points (world metres), lying in the plane with normal
  * `normal`, `width` metres wide.
@@ -50,7 +52,8 @@ function glowMaterial(opacity) {
 }
 
 // The shape of one end of a link, in its map's own metres: { box: [x0, y0, z0, x1, y1, z1],
-// loop: [[x, y, z]...], normal: [x, y, z] }, or null
+// loop: [[x, y, z]...] (its face), normal: [x, y, z] (out of its face, towards whoever would go
+// through it), floor (how high the floor before it is; none for a face that's a floor) }, or null
 function shapeOf(world, link, end) {
     const map = world.maps[end.map];
 
@@ -74,6 +77,7 @@ function shapeOf(world, link, end) {
             box: [Math.min(...xs) - 0.3, bottom, Math.min(...zs) - 0.3, Math.max(...xs) + 0.3, top, Math.max(...zs) + 0.3],
             loop: corners,
             normal: [out[0], 0, out[1]],
+            floor: base + door.floor,
         };
     }
 
@@ -84,7 +88,7 @@ function shapeOf(world, link, end) {
         const z = map.height - 0.12;
         const corners = [[middle - 0.98, 0, z], [middle + 0.98, 0, z], [middle + 0.98, 2.5, z], [middle - 0.98, 2.5, z]];
 
-        return { box: [middle - 1.1, 0, z - 0.6, middle + 1.1, 2.6, map.height + 0.2], loop: corners, normal: [0, 0, -1] };
+        return { box: [middle - 1.1, 0, z - 0.6, middle + 1.1, 2.6, map.height + 0.2], loop: corners, normal: [0, 0, -1], floor: 0 };
     }
 
     // Stairs along the north wall: from below, round their side; from above, round the stairwell
@@ -104,6 +108,7 @@ function shapeOf(world, link, end) {
         box: [x0, 0, stair.y - 0.1, x1, STOREY + 0.4, z + 0.4],
         loop: [[x0, 0.03, z + 0.06], [x1, 0.03, z + 0.06], [x1, STOREY + 1, z + 0.06], [x0, 1.25, z + 0.06]],
         normal: [0, 0, 1],
+        floor: 0,
     };
 }
 
@@ -167,23 +172,41 @@ export class Doors {
         glow.name = `${link.id}-${end.map}`;
         this.object.add(glow);
 
-        this.targets.push({ link, end, map: end.map, box: new THREE.Box3(new THREE.Vector3(x0 + ox, y0, z0 + oz), new THREE.Vector3(x1 + ox, y1, z1 + oz)), glow, level: 0, litUntil: -Infinity });
+        this.targets.push({
+            link,
+            end,
+            map: end.map,
+            box: new THREE.Box3(new THREE.Vector3(x0 + ox, y0, z0 + oz), new THREE.Vector3(x1 + ox, y1, z1 + oz)),
+            face: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, loop[0]),
+            floor: shape.floor === undefined ? null : new THREE.Plane(new THREE.Vector3(0, 1, 0), -shape.floor),
+            glow,
+            level: 0,
+            litUntil: -Infinity,
+        });
     }
 
-    /** The nearest door or stairs on `map` a ray (from the camera, world metres) hits, or null. */
+    /**
+     * The nearest door or stairs on `map` a ray (from the camera, world metres) is on, or null:
+     * looking towards it, heading into its face, and coming first to its face or the floor just
+     * before it (within its box). Not one the ray only passes through on its way to the floor past
+     * it, from behind it or from inside its box (the camera over the wall behind a door, or by the
+     * stairs, looking into the room: the player turned from it, a tap round them is a step).
+     */
     at(ray, map) {
         let best = null;
         let bestDistance = Infinity;
-        const hit = new THREE.Vector3();
 
         for (const target of this.targets) {
-            if (target.map === map && ray.intersectBox(target.box, hit)) {
-                const distance = hit.distanceTo(ray.origin);
+            if (target.map !== map || ray.direction.dot(target.face.normal) > -1e-3) {
+                continue;
+            }
 
-                if (distance < bestDistance) {
-                    best = target;
-                    bestDistance = distance;
-                }
+            // (Its face, or the floor before it, whichever the ray comes to first)
+            const distance = Math.min(...[target.face, target.floor].map((plane) => (plane && ray.distanceToPlane(plane)) ?? Infinity).filter((along) => along >= 0));
+
+            if (distance < bestDistance && target.box.containsPoint(ray.at(distance, _hit).addScaledVector(ray.direction, -1e-4))) {
+                best = target;
+                bestDistance = distance;
             }
         }
 

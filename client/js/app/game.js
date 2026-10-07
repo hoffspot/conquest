@@ -71,7 +71,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { QUALITY } from "../world/view.js";
+import { QUALITY, ROOM_VIEW } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -3522,12 +3522,25 @@ export class Game {
     }
 
     // The player has come through a door or up or down the stairs (or woken elsewhere): the
-    // screen comes up from black on the map they're on, the camera behind them the way they face
+    // screen comes up from black on the map they're on, the camera behind them the way they face.
+    // Come into a room, it looks across it from under the ceiling (view.js ROOM_VIEW); back out of
+    // doors, as it did before they went in
     #arrive(actor) {
         const position = this.avatars.get(this.me).object.position;
+        const indoors = this.interiors.has(actor.map);
+        let pitch = this.cameraFollow?.pitch;
+
+        if (indoors) {
+            this.outdoorView ??= { distance: this.view.distance, pitch };
+            this.view.distance = ROOM_VIEW.distance;
+            pitch = ROOM_VIEW.pitch;
+        } else if (this.outdoorView) {
+            ({ distance: this.view.distance, pitch } = this.outdoorView);
+            this.outdoorView = null;
+        }
 
         this.#showMap(actor.map);
-        this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)), pitch: this.cameraFollow?.pitch });
+        this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)), pitch });
         this.#follow(0);
         this.effects.markerAge = Infinity;
 

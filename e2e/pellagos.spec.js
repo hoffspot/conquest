@@ -1890,7 +1890,7 @@ test("the bars over others are full size near the player, smaller and fainter ev
     expect(growing.filter(({ off }) => off > 12).every(({ share, off }) => Math.abs(share - (60 - off) / 48) < 0.05), "as big as its distance has it each frame").toBe(true);
 });
 
-test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
+test("tapping the tavern's door lights its edge green, and the player walks in: well inside, facing into the room, the camera behind them under the ceiling; up the stairs (where a courtesan beckons), down, and out, facing out; each time a tap round them is a step, not back through", async ({ page }) => {
     // (In and up and down and out, each map drawn as it's come to: a minute or more without a GPU)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -1949,7 +1949,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         const [doorX, doorY] = game.world.maps.taproom.marks.D[0];
 
-        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, inside: [doorX, doorY - 2], top: game.world.maps.upstairs.marks[">"][0] };
+        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, out: game.world.tavern.facing, inside: [doorX, doorY - 4], top: game.world.maps.upstairs.marks[">"][0] };
     });
 
     expect(outside.square).toEqual(outside.outside);
@@ -1977,7 +1977,24 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const inside = await through("town", "door", 5);
 
-    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: 0, minimap: "taproom", heard: "taproom" });
+    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
+
+    // Looking across the room from behind them, a little down, from under the ceiling, clear of
+    // its beams; inside the walls, the door behind it
+    expect(await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const view = session.view;
+        const { origin, width, height } = game.interiors.get("taproom").map;
+        const at = view.camera.position;
+        const looking = view.camera.getWorldDirection(at.clone());
+        const player = game.avatars.get("player").object.position;
+
+        return {
+            under: at.y > 2 && at.y <= 2.4 + 1e-6,
+            inside: at.x > origin[0] && at.x < origin[0] + width && at.z > player.z + 3 && at.z < origin[1] + height,
+            across: looking.z < -0.9 && looking.y < -0.3 && looking.y > -0.45,
+        };
+    })).toEqual({ under: true, inside: true, across: true });
 
     // Lit from all round by a warm room's light, not the sky's (out of doors, the sky's at the time
     // of day); going out and back in only changes which is read (the two the same size), so no
@@ -2094,7 +2111,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const up = await through("taproom", "stairs", 6);
 
-    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 3], facing: Math.PI, minimap: "upstairs", heard: "upstairs" });
+    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 4], facing: 0, minimap: "upstairs", heard: "upstairs" });
 
     // Up them, a few treads heard on the boards one after another
     const treads = await page.evaluate(() => window.pellagos.game.heardSteps.filter(({ delay }) => delay > 0));
@@ -2143,7 +2160,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);
 
-    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [1, 3], facing: Math.PI });
+    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [1, 4], facing: 0 });
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 
     // And out (from just inside it, so no one's in the way to tap instead), onto the square
@@ -2157,7 +2174,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const out = await through("taproom", "door", 6);
 
-    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
+    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, facing: outside.out, minimap: "town", heard: "town" });
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 

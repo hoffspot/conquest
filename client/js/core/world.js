@@ -153,11 +153,9 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
             maps.upstairs.people = people;
         }
 
-        // Coming out, just clear of the door, turned back to face it (so it's in view to tap, and
-        // a tap round the player isn't on it)
-        const back = tavern.facing > 0 ? tavern.facing - Math.PI : tavern.facing + Math.PI;
-
-        links.push({ id: "tavern-door", kind: "door", ends: [{ map: "town", squares: tavern.front, arrive: tavern.outside, facing: back }, floors.door] }, floors.stairs);
+        // Coming out, just clear of the door, facing out the way it does, the door behind (a tap
+        // on it counts only looking towards it: app/doors.js)
+        links.push({ id: "tavern-door", kind: "door", ends: [{ map: "town", squares: tavern.front, arrive: tavern.outside, facing: tavern.facing }, floors.door] }, floors.stairs);
     }
 
     return {

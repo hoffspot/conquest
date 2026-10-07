@@ -353,10 +353,15 @@ thing is one piece (a table, a bed, a stretch of wall), for the art and the mini
 are joined by links, `world.links`: the tavern's door (from the town's `front` squares to the
 taproom's `D` squares) and its stairs (from `<` to `>`). Each end of a link is `{ map, squares,
 arrive, facing }`: the squares that go through it, and where (and which way facing) whoever
-comes through it from the other end stands: a couple of steps clear of it, turned back to face
-it (two squares in from the door, before the foot of the stairs and before their top, and on the
-square outside the tavern), so that it's in view to tap, and a tap on the ground round the
-player is a step, not straight back through.
+comes through it from the other end stands, facing the way they're going, it behind them:
+straight in from the door, as far as the floor's clear, up to five steps (`COME_IN`) and no more
+than a third of the way across the floor (`comeIn`: four in the taproom, two in a watchtower's
+nine metres), facing into the room; a step clear of the foot of the stairs and of their top, on
+a floor big enough (`offStairs`), turned from them into the room; and on the square outside the
+tavern, facing out the way it does. So the camera behind them looks across the room, and a door
+or stairs behind them can't be tapped by mistake (app/doors.js counts a tap on one only looking
+towards it: see *Tapping a door or the stairs*), a tap on the ground round the player a step,
+not straight back through. (`NET_VERSION` 62: both ends of a game must agree where they come out.)
 `routeBetween` finds the links from one map to another (breadth first, looking only at the links
 of each map on the way: a list of them by map, made again when links are added).
 
@@ -1145,10 +1150,19 @@ further up, lower down). It tilts between 75 degrees (almost straight down) and,
 degrees *above* the horizon: looking up into the sky, the camera comes down behind the player to
 just over the ground (0.45 metres) and then tilts up from there, the player sinking down the
 picture and, at the last, out of it. Indoors it tilts up to 40 degrees above the horizon, to look
-up at the ceiling: anywhere over the ceiling the camera's free to be (looking down into the room,
-the ceiling's not drawn), but under it, it's kept inside the walls (0.35 metres in from them, and
-no nearer the player than a metre: view.js `roomReach`), coming in closer than a wall behind
-rather than going out through it, quickly in and slowly back out, as at a building outside.
+up at the ceiling: anywhere well over the ceiling the camera's free to be (0.25 metres over it,
+looking down into the room, the ceiling's not drawn), but under it, it's kept inside the walls
+(0.35 metres in from them) and 0.6 metres under the ceiling (clear of its deepest beams, 0.32
+metres, by more than the camera's near plane), no nearer the player than a metre (view.js
+`roomReach`), coming in closer than a wall behind or the ceiling over it rather than going out
+through it, quickly in and slowly back out, as at a building outside; going over the ceiling or
+back under it, it's there at once, never passing through it. (A room open to the sky, a broken
+tower's top, has no ceiling to keep under.) Coming into a room (through a door, or up or down
+the stairs), the camera looks across it from behind the player, 22 degrees down, from as far
+back as the ceiling and the wall behind allow (5.6 metres at most: `ROOM_VIEW`; just under the
+ceiling, about 4.3 metres back, in a room three metres high), the room's far side over the
+player's head; going back out of doors, it's as far off and tilted as it was before they went in
+(game.js `#arrive`). Zoomed out far enough, it goes over the ceiling, looking down into the room.
 While held, it doesn't turn itself; let go, it stays where it was
 turned while the player stands, and once they walk again, it swings back round behind them,
 facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
@@ -1993,6 +2007,14 @@ and a glow round its edge (new doors, as settlements are laid out and buildings 
 up by `sync`): a green ribbon with a softer band either side, drawn additively. A tap on
 one (after enemies, before the ground) tells the player to go through; it glows for at least
 1.2 s, and while the player's on their way, pulsing, then fades.
+
+**Tapping a door or the stairs** counts only looking towards it: the tap's ray heading into its
+face (out of which its `normal` points, towards whoever would go through), and coming first to
+its face or to the floor just before it, within its box (`at`). Not when the ray only passes
+through its box on its way to the floor past it: from over the wall behind a door, with the
+player come in and facing into the room; from by the stairs, inside their box, turned from them;
+over the stairwell upstairs, looking at the floor beyond it; or from over the roof behind the
+player come out of a building. Turned to look at it, a tap on it takes them through.
 
 **The folk in the game.** Wenches and Ale's are built at the start, like the player and the orc
 (their looks and clothes are `presets.js`'s `FOLK`), and every other building's as it's got
@@ -3664,8 +3686,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   following through the door and up the stairs and finding its way back, the player going after
   a target that goes through, respawning on the map started on, arrows fizzling; and the doors
   and stairs to tap: a target at each end, hit by a tap on it on its map only, glowing when
-  tapped and while the player makes for it; arriving a couple of steps clear of a door or the
-  stairs, facing it; and seeing the player indoors: the walls in the strip in front of them down
+  tapped and while the player makes for it; on one only looking towards it (not from behind it,
+  from over the wall behind a door, or from by the stairs, the tap passing through its box on
+  its way to the floor); coming in a few steps from a door (`comeIn`: as far as the floor's
+  clear, up to five steps, a third of the way across it) and a step off the stairs (`offStairs`),
+  facing into the room, and out facing out; and seeing the player indoors: the walls in the strip in front of them down
   (a whole square at a time, the outer walls as the square inside them), those to the side,
   behind or level with them standing, anything else cut only above head height, and the
   doorways found in the walls.
@@ -3845,9 +3870,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   behind them once they walk), dragged up to look into the sky (the camera over the ground, the
   sky drawn, birds flying by, drawn one mesh a kind) and looking down again once they walk, the
   camera clear of a building behind the player in the town, the
-  target ring, tapping the tavern's door (lit green) to walk in and come out a couple of steps
-  inside it facing the door (and at each door and stairs after, taps round the player walking
-  them, not taking them back through), the folk there (seen, without name plates, resting, not to be
+  target ring, tapping the tavern's door (lit green) to walk in and come out four steps inside it
+  facing into the room, the camera behind them under the ceiling looking across it (and at each
+  door and stairs after, taps round the player walking them, not taking them back through; up
+  and down the stairs, turned from them; out, facing out), the folk there (seen, without name plates, resting, not to be
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   another tavern got ready as the player comes near (its own taproom, sound, minimap and folk

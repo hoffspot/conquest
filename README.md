@@ -163,9 +163,11 @@ with full health; the orc comes back to its corner half a minute after it falls.
 **The tavern.** Facing the market square (or, where it can't, a street) stands *Wenches and Ale*,
 its name in gold blackletter on a red board along its front and, hanging from an iron bracket by
 the door, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
-glow traces round it, and you walk up to it and go in, coming out a couple of steps inside,
-turned back to face the door (so it's in view to tap, and tapping the floor round you walks you
-there rather than straight back out; the same at the stairs, and outside). The rooms are bigger
+glow traces round it, and you walk up to it and go in, coming out a few steps inside, facing
+into the room, the camera behind you under the ceiling looking across it (and the same off the
+stairs, turned from them; coming out of a building, you face the street). A door or the stairs
+behind you can't be tapped by mistake: a tap counts on them only when you're looking towards
+them, so tapping the floor round you walks you there rather than straight back out. The rooms are bigger
 inside than the tavern looks from the street, with room to walk about: two metres and more
 between the tables. Inside are long tables with benches, candles and tankards; the bar, with
 barrels on a rack behind it, each with a brass tap; a great stone hearth, its fire flickering

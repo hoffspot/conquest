@@ -7,7 +7,7 @@ import { readPlan, tavernFloors } from "../client/js/core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../client/js/core/insides.js";
 import { buildInterior, cutFor, cutsAway, daylightOf, shaftsOf, STOREY } from "../client/js/world/interiors3d.js";
 import { BOUNCE, fillOf, gather, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "../client/js/world/roomlight.js";
-import { View } from "../client/js/world/view.js";
+import { ROOM_VIEW, View } from "../client/js/world/view.js";
 
 const KINDS = Object.freeze({ taproom: tavernRooms, smithy: smithyRooms, temple: templeRooms, guild: guildRooms, hall: hallRooms, keep: keepRooms });
 
@@ -351,5 +351,21 @@ describe("the camera indoors (view.js)", () => {
 
         // (Never nearer than a metre, the wall right behind)
         assert.equal(reach(-20, 10.5, [109, 0, 14.9]), 1);
+    });
+
+    it("keeps the camera under the ceiling, clear of its beams, unless it's well over it; looking across the room from behind the player come in", () => {
+        const sin = (degrees) => Math.sin((degrees * Math.PI) / 180);
+
+        // (Looking a little down from further off than the ceiling allows: in under it, 0.6 m
+        // under, its point of view 0.8 m up; but not under a ceiling that isn't there)
+        assert.ok(Math.abs(reach(20, 5.5, [109, 0, 7]) - 1.6 / sin(20)) < 1e-9);
+        assert.equal(View.prototype.roomReach.call({ room: { ...room, open: true }, focus: new THREE.Vector3(109, 0, 7), yaw: 0 }, 20, 5.5), 5.5);
+
+        // (Come in four steps from the door, facing in, the camera behind them: under the ceiling,
+        // in from the wall behind, a few metres back)
+        const back = reach(ROOM_VIEW.pitch, ROOM_VIEW.distance, [108.5, 0, 10.5]);
+        const height = 0.8 + back * sin(ROOM_VIEW.pitch);
+
+        assert.ok(back > 4 && height <= STOREY - 0.6 + 1e-9 && 10.5 + back * Math.cos((ROOM_VIEW.pitch * Math.PI) / 180) <= 15 - 0.35 + 1e-9, `${back}, ${height}`);
     });
 });
