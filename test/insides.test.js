@@ -537,6 +537,24 @@ describe("the buildings (insides.js Interiors)", () => {
         }
     });
 
+    it("lights a dark elves' inside more than others': their hanging lamps lit by witchlight, amethyst shards glowing on the walls between them", () => {
+        const one = [...interiors.buildings.values()].find((each) => each.kind === "tavern" && each.key !== "home:tavern");
+
+        interiors.make(one.key);
+
+        const map = world.maps[one.maps[0]];
+        const [theirs, ours] = ["darkElf", "human"].map((people) => buildInterior({ ...map, people }));
+        const kinds = (interior) => interior.lights.map(({ kind }) => kind);
+        const brightness = (interior) => interior.lights.reduce((sum, { intensity }) => sum + intensity, 0);
+
+        assert.ok(kinds(theirs).includes("witchlight") && kinds(theirs).includes("shard"), kinds(theirs).join());
+        assert.ok(!kinds(ours).includes("witchlight") && !kinds(ours).includes("shard"));
+        assert.ok(brightness(theirs) > brightness(ours) * 1.3, `${brightness(theirs).toFixed(1)} against ${brightness(ours).toFixed(1)}`);
+        assert.ok(theirs.lights.length <= 16, "(no more than a room may have)");
+        theirs.dispose();
+        ours.dispose();
+    });
+
     it("builds a floor a step at a time (as a building's got ready while playing), the same as at once", () => {
         const one = [...interiors.buildings.values()].find((each) => each.kind === "tavern" && each.key !== "home:tavern");
 

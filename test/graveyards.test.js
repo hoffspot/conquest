@@ -92,14 +92,14 @@ describe("the old graveyards outside the start towns (worldplan/settle.js, place
         assert.ok(PLACE_BANDS.dead.relic && PLACE_BANDS.dead.leader === "wightLord");
     });
 
-    it("is laid out as an old churchyard: walled round, gone into between two piers, a flagstone path to a mausoleum or a tomb, a yew by the gate on its west side, the graves east and west whichever way it faces", () => {
+    it("is laid out as an old churchyard: walled round, gone into between two piers, a flagstone path to a chest tomb (seldom a mausoleum), a few tombs beside it, a yew by the gate on its west side, the graves close, east and west whichever way it faces, under half of them marked, the north side's fewest", () => {
         const [width, depth] = NEUTRAL.graveyard.map((plots) => plots * 4);
         const cx = width / 2;
         // (A direction in the yard, turned `facing` as sites.js sets it down, as the world has it)
         const world = ([u, v], facing) => [u * Math.cos(facing) + v * Math.sin(facing), -u * Math.sin(facing) + v * Math.cos(facing)];
         const shapes = new Set();
         const grounds = new Set();
-        let [west, all, north, south] = [0, 0, 0, 0];
+        let [west, all, north, south, northMarked, southMarked, graveCount, mausolea] = [0, 0, 0, 0, 0, 0, 0, 0];
 
         for (let seed = 1; seed <= 40; seed++) {
             const facing = ((seed * 7) % 24) * (Math.PI / 12);
@@ -109,7 +109,10 @@ describe("the old graveyards outside the start towns (worldplan/settle.js, place
             const [hx, hy] = laid.heart;
 
             assert.deepEqual(layoutNeutral({ kind: "graveyard", seed, facing }), laid, `${seed}: the same again`);
-            assert.ok(graves.length >= 15 && graves.length <= 60, `${seed}: ${graves.length} graves`);
+            assert.ok(graves.length >= 35 && graves.length <= 90, `${seed}: ${graves.length} graves`);
+            assert.ok(of("tomb").length >= GRAVEYARD.tombs[0] - 1 && of("tomb").length <= GRAVEYARD.tombs[1] + 1, `${seed}: ${of("tomb").length} tombs`);
+            graveCount += graves.length;
+            mausolea += of("mausoleum").length;
             assert.equal(of("gatepost").length, 2);
             assert.equal(of("flags").length, 1);
             assert.equal(of("tree").length, 1);
@@ -147,6 +150,8 @@ describe("the old graveyards outside the start towns (worldplan/settle.js, place
 
                 north += wy < -depth / 6 ? 1 : 0;
                 south += wy > depth / 6 ? 1 : 0;
+                northMarked += wy < -depth / 6 && grave.stone ? 1 : 0;
+                southMarked += wy > depth / 6 && grave.stone ? 1 : 0;
             }
 
             // (The yew on the path's west side, as the world lies)
@@ -158,12 +163,16 @@ describe("the old graveyards outside the start towns (worldplan/settle.js, place
             }
         }
 
-        // (Most headstones' faces to the west; every shape cut; every state of the ground; the
-        // north side the emptier)
+        // (Most headstones' faces to the west; every shape cut; every state of the ground; under
+        // half the graves marked, about thirty headstones a yard; the north side as full, but
+        // fewer of its graves marked; a mausoleum seldom)
         assert.ok(west > all * 0.55 && west < all * 0.85, `${west} of ${all} face west`);
         assert.deepEqual([...shapes].sort(), Object.keys(GRAVEYARD.stones).sort());
         assert.deepEqual([...grounds].sort(), Object.keys(GRAVEYARD.ground).sort());
-        assert.ok(north < south * 0.8, `${north} north, ${south} south`);
+        assert.ok(all < graveCount * 0.55 && all / 40 > 20, `${all} of ${graveCount} marked`);
+        assert.ok(north > south * 0.8, `${north} north, ${south} south`);
+        assert.ok(northMarked / north < (southMarked / south) * 0.6, `${northMarked} of ${north} marked north, ${southMarked} of ${south} south`);
+        assert.ok(mausolea <= 8, `${mausolea} mausolea in 40 yards`);
     });
 });
 
