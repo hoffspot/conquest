@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CameraFollow, PITCH } from "../client/js/app/camera.js";
-import { framed, PORTRAIT } from "../client/js/world/view.js";
+import { backFor, framed, PORTRAIT } from "../client/js/world/view.js";
 
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -295,6 +295,82 @@ describe("the camera following the player (camera.js)", () => {
     });
 });
 
+describe("the camera in a fight (camera.js keep)", () => {
+    // (Where a point is from the middle of the view, radians, the camera `away` metres off)
+    const offView = (camera, point, away) => {
+        const [cx, cz] = [camera.focus.x + Math.sin(camera.yaw) * away, camera.focus.z + Math.cos(camera.yaw) * away];
+        const [dx, dz] = [point.x - cx, point.z - cz];
+
+        return Math.abs(Math.atan2(dx * Math.cos(camera.yaw) - dz * Math.sin(camera.yaw), -dx * Math.sin(camera.yaw) - dz * Math.cos(camera.yaw)));
+    };
+    const fight = (camera, foe, seconds, { away = 10, half = 0.4, vx = 0, vz = 0 } = {}) => {
+        const player = { x: 0, z: 0, vx, vz };
+
+        for (let t = 0; t < seconds; t += FRAME) {
+            player.x += vx * FRAME;
+            player.z += vz * FRAME;
+            camera.update(FRAME, { player, away, keep: foe, half });
+        }
+    };
+
+    it("turns as little as keeps the foe in view, wherever they are; in view already, not at all", () => {
+        // (A foe off to the side of the camera itself, out of view: turned till they're in it,
+        // and no further)
+        const camera = new CameraFollow({ x: 0, z: 0 });
+        const foe = { x: 7, z: 8 };
+
+        assert.ok(offView(camera, foe, 10) > 0.4);
+        fight(camera, foe, 2);
+        assert.ok(offView(camera, foe, 10) <= 0.4 + 0.02 && offView(camera, foe, 10) > 0.3, `${offView(camera, foe, 10).toFixed(3)} from the middle, yaw ${camera.yaw.toFixed(2)}`);
+
+        // (Behind the camera, the other way: round the other way)
+        const behind = new CameraFollow({ x: 0, z: 0 });
+
+        fight(behind, { x: -2, z: 14 }, 3);
+        assert.ok(offView(behind, { x: -2, z: 14 }, 10) <= 0.42, `yaw ${behind.yaw.toFixed(2)}`);
+
+        // (Ahead of the player, in view: left be)
+        const ahead = new CameraFollow({ x: 0, z: 0 });
+
+        fight(ahead, { x: 1, z: -3 }, 2);
+        assert.equal(ahead.yaw, 0);
+    });
+
+    it("doesn't swing round behind the player as they move about in a fight", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        // (Stepping east, sideways to it, the foe ahead of them: no swinging round behind them)
+        fight(camera, { x: 1, z: -3 }, 1, { vx: 1.7 });
+        assert.ok(Math.abs(camera.yaw) < 0.25, `yaw ${camera.yaw.toFixed(2)}`);
+    });
+
+    it("dragged in a fight, holds where it's turned, and a moment after it's let go, brings the foe back into view", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+        const foe = { x: 0, z: -3 };
+
+        camera.grab();
+        camera.turn(Math.PI);
+        fight(camera, foe, 1);
+        assert.equal(camera.yaw, Math.PI, "held");
+
+        camera.release();
+        fight(camera, foe, 0.9);
+        assert.ok(Math.abs(wrap(camera.yaw - Math.PI)) < 1e-9, "still where it was let go");
+        fight(camera, foe, 2.5);
+        assert.ok(offView(camera, foe, 10) <= 0.42, `yaw ${camera.yaw.toFixed(2)}`);
+    });
+});
+
+describe("drawing back in a fight (world/view.js backFor)", () => {
+    it("draws back for a foe much taller than the player, or far from them, half as far again at most", () => {
+        assert.equal(backFor(1.8, 2), 1, "a man close by: not at all");
+        assert.ok(Math.abs(backFor(4.5, 2) - 1.3) < 1e-9, "a wyvern 4.5 m tall: 30%");
+        assert.equal(backFor(9, 2), 1.5, "a dragon: half as far again");
+        assert.equal(backFor(1.8, 12), 1.5, "an archer 12 m off: as far as it goes");
+        assert.ok(Math.abs(backFor(1.8, 8) - 1.28) < 1e-9, "8 m off: 28%");
+    });
+});
+
 describe("a phone held upright (world/view.js framed)", () => {
     const across = (fov, aspect) => (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
 
@@ -307,6 +383,9 @@ describe("a phone held upright (world/view.js framed)", () => {
         assert.deepEqual(framed(PITCH.start, 10.5, 1), { pitch: 50, distance: 13.65 });
         assert.equal(framed(17.5, 10.5, 1).pitch, 25);
         assert.equal(framed(-20, 10.5, 1).pitch, -20);
+
+        // (Drawn back for a big or far foe, as asked)
+        assert.deepEqual(framed(35, 10, 0, 1.5), { pitch: 35, distance: 15 });
 
         // (Half turned, half way)
         assert.ok(Math.abs(framed(35, 10, 0.5).pitch - 42.5) < 1e-9 && Math.abs(framed(35, 10, 0.5).distance - 11.5) < 1e-9);
