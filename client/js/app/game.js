@@ -132,10 +132,22 @@ export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? nul
 // The sound of drawing each kind of weapon and putting it away (at the moment the hand takes it
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
 // clenched
-const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null] };
+const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null], grimoire: ["grimoire", "grimoire"] };
+
+// What a character's armour sounds like (sound.js ARMOUR): what's worn over the chest, plate (a
+// breastplate), mail, or leather (a jerkin or a hide vest); none, cloth (or a beast)
+const ARMOUR_WORN = Object.freeze({ breastplate: "plate", mail: "mail", jerkin: "leather", hideVest: "leather" });
+
+const armourOf = (character) => ARMOUR_WORN[character?.equipment?.get("armour")] ?? ARMOUR_WORN[character?.equipment?.get("chest")] ?? null;
+
+// The blows that ring steel on a shield's iron (a blade's), not thud on its boards (sound.js clash)
+const RINGING = new Set(["slash", "hack"]);
 
 // How long after trading blows with the player a death's still theirs to be told of (s: #ours)
 const FOUGHT = 30;
+
+// How long after a body hits the ground what it fought with clatters down after it (s)
+const DROPPED = 0.15;
 
 // Going up or down the stairs: how many treads are heard, how far apart (s), and how fast they're
 // climbed (m/s, as a footstep's: a steady walk)
@@ -1406,7 +1418,7 @@ export class Game {
             const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
 
-            this.sound?.step(this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz), avatar.object.position, { speed, ...avatar.gait });
+            this.sound?.step(this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz), avatar.object.position, { speed, ...avatar.gait, armour: armourOf(avatar.character) });
         };
         character.object.name = id;
         this.view.scene.add(character.object);
@@ -3379,7 +3391,7 @@ export class Game {
         for (let tread = 0; tread < STAIRS.treads; tread++) {
             const near = (coming ? tread + 1 : STAIRS.treads - tread) / STAIRS.treads;
 
-            this.sound?.step(surface, at, { ...avatar.gait, speed: STAIRS.speed, delay: tread * STAIRS.apart, volume: near });
+            this.sound?.step(surface, at, { ...avatar.gait, armour: armourOf(avatar.character), speed: STAIRS.speed, delay: tread * STAIRS.apart, volume: near });
         }
     }
 
@@ -4955,7 +4967,10 @@ export class Game {
                     hud.damage(this.#screenAbove(event.id), "Blocked", { kind: "stun" });
                     avatar.actions.react("block", { from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
                     effects.impact(event.spell ? "arcane" : "sparks", at, by ? at.clone().sub(by.point(0.7)).setY(0).normalize() : null);
-                    this.sound?.play(event.spell ? "arcane" : "block", { at: avatar.object.position });
+                    // (A blade's blow rings on the shield's iron; anything else thuds on its boards)
+                    const blow = weaponOf(battle.actor(event.by)?.weapon)?.attacks.find(({ id }) => id === event.attack)?.reaction;
+
+                    this.sound?.play(event.spell ? "arcane" : RINGING.has(blow) ? "clash" : "block", { at: avatar.object.position });
                     break;
                 }
                 case "resisted":
@@ -4990,7 +5005,7 @@ export class Game {
                     const lands = avatar.actions.knockdown?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0, seconds: (event.until - battle.time) / 1000 }) ?? FALL_LANDS;
 
                     hud.damage(this.#screenAbove(event.id), "Knocked down", { kind: "stun" });
-                    this.sound?.play("fall", { at: avatar.object.position, delay: lands });
+                    this.sound?.play(["mail", "plate"].includes(armourOf(avatar.character)) ? "fallArmoured" : "fall", { at: avatar.object.position, delay: lands });
 
                     if (event.id === this.me) {
                         hud.message("Knocked off your feet!", 1.2);
@@ -5012,7 +5027,12 @@ export class Game {
                     avatar.lands = avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 }) ?? FALL_LANDS;
                     avatar.deadFor = 0;
                     effects.clearDaze(avatar.object);
-                    this.sound?.play("fall", { at: avatar.object.position, delay: avatar.lands });
+                    this.sound?.play(["mail", "plate"].includes(armourOf(avatar.character)) ? "fallArmoured" : "fall", { at: avatar.object.position, delay: avatar.lands });
+
+                    // (What they fought with falling from their hand after them)
+                    if (battle.actor(event.id)?.kind !== "beast" && !["punch", "kick"].includes(guardOf(battle.actor(event.id)?.weapon) ?? "punch")) {
+                        this.sound?.play("dropWeapon", { at: avatar.object.position, delay: avatar.lands + DROPPED });
+                    }
 
                     // Blood pools under their chest once they're down
                     if (this.#bleeds(battle.actor(event.id))) {
@@ -5455,7 +5475,7 @@ export class Game {
         }
 
         if (shield) {
-            this.sound?.play("unsling", { at: avatar.object.position, delay: (on ? 0 : (own?.duration ?? 0)) + shield.hitAt });
+            this.sound?.play("shieldSling", { at: avatar.object.position, delay: (on ? 0 : (own?.duration ?? 0)) + shield.hitAt });
         }
     }
 
@@ -5472,7 +5492,8 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
-        this.sound?.hit(event.reaction, victim.object.position);
+        // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like)
+        this.sound?.hit(event.reaction, victim.object.position, event.spell ? null : armourOf(victim.character));
 
         // (Struck by a spell: drawn with the rest it struck as it lands; or one turned back on
         // them, flashing from whoever turned it)

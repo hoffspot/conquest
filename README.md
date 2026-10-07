@@ -438,7 +438,7 @@ npm run vendor:three    # after changing the three version in package.json: copi
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
 npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body, from CharMorph's Vitruvian
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
-npm run build:sounds    # remakes client/sounds, the recorded footsteps, from Nox_Sound's CC0 recordings
+npm run build:sounds    # remakes client/sounds, the recorded sounds, from their CC0 recordings (scripts/sounds)
 npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
 
@@ -487,8 +487,9 @@ client/                 The game (static files served to the browser)
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
-  sounds/               Recorded footsteps on each footing, as MP3s (made by npm run build:sounds
-                        from Nox_Sound's recordings on Freesound, CC0)
+  sounds/               Recorded sounds, as MP3s: footsteps on each footing, the weapons', armour's
+                        and bodies' (made by npm run build:sounds from CC0 recordings: its
+                        recipes in scripts/sounds, their sources in client/js/audio/recorded.js)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
@@ -746,6 +747,13 @@ asset out of this public repository.
   (<https://github.com/freepats/spanish-classical-guitar>), CC0.
 - Footsteps: recordings by Nox_Sound on Freesound (<https://freesound.org/people/Nox_Sound/>),
   CC0, cut into single footfalls and made into MP3s by `scripts/build-sounds.js`.
+- The weapons', armour's and bodies' sounds: recordings, all CC0, by Still North Media (Ben
+  Jaszczak and Brian Nelson: their medieval weapon libraries on OpenGameArt), Jan Schupke (his
+  Fantasy Weapons and Apparel library on OpenGameArt), Kenney (Impact Sounds,
+  <https://kenney.nl>), and on Freesound by Nox_Sound, Vrymaa, Kinoton, JoeDinesSound,
+  Nightflame, kermite607, qubodup, eveninx and fabian13cz; cut, layered and made into MP3s by
+  `scripts/build-sounds.js` (each sound's sources and their pages in
+  `client/js/audio/recorded.js`, and in the sound studio).
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).

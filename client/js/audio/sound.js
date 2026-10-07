@@ -1,9 +1,9 @@
 // The game's sound, played with the Web Audio API in three buses, each with its own volume (the
 // sliders in Game options), all turned on or off together (the Sound switch):
 //
-//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps recorded, once
-//    they're downloaded: recorded.js), each from where it happens:
-//    quieter the further it is from the player, and to the left or right.
+//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps and the weapons',
+//    armour's and bodies' sounds recorded, once they're downloaded: recorded.js), each from
+//    where it happens: quieter the further it is from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
 //    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
@@ -135,7 +135,7 @@ const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
-const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver" };
+const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand" };
 const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "fireball" };
 
 // The footsteps on each footing (audio/footing.js SURFACES: "grass" → "stepGrass"...)
@@ -167,6 +167,45 @@ export const GAITS = Object.freeze({
     scales: { sound: "slither", volume: 1, rate: 1 },
     webbed: { sound: "squelch", volume: 0.6, rate: 1.5 },
 });
+
+/**
+ * The recorded sounds with nothing made in their place (recorded.js): how loud each is played (as
+ * synth.js's `volume`), and the made sound played `instead` until its recordings are in (none:
+ * nothing, till then).
+ */
+export const RECORDED_ONLY = Object.freeze({
+    swingWand: { volume: 0.4, instead: "swingStaff" },
+    bowDraw: { volume: 0.35 },
+    arrowQuiver: { volume: 0.3 },
+    clash: { volume: 0.75, instead: "block" },
+    hitMail: { volume: 0.45 },
+    hitPlate: { volume: 0.45 },
+    hitLeather: { volume: 0.4 },
+    shieldSling: { volume: 0.45, instead: "unsling" },
+    grimoire: { volume: 0.4, instead: "unsling" },
+    mailJingle: { volume: 0.3 },
+    plateClank: { volume: 0.3 },
+    clothRustle: { volume: 0.3 },
+    fallArmoured: { volume: 0.85, instead: "fall" },
+    dropWeapon: { volume: 0.5 },
+});
+
+/**
+ * What armour sounds like on the move and struck (a character's: game.js armourOf): what a step
+ * jingles or clanks with (`step`, as loud against the footstep: `with`; leather and cloth only
+ * running, a swish), and what's heard under a blow landing (`hit`).
+ */
+export const ARMOUR = Object.freeze({
+    mail: { step: "mailJingle", with: 0.8, hit: "hitMail" },
+    plate: { step: "plateClank", with: 0.8, hit: "hitPlate" },
+    leather: { step: "clothRustle", with: 0.6, running: true, hit: "hitLeather" },
+});
+
+// The blows a body's armour is heard under (weapons.js reactions: not spells, not fire)
+const STRUCK = new Set(["slash", "hack", "strike", "crush", "pierce", "punch", "kick"]);
+
+// A bow's shot: an arrow taken from the quiver as it starts, the string drawn back after (s)
+const DRAWN = 0.12;
 
 // How long between the hearth's crackles (seconds, from and to)
 const CRACKLES = [0.2, 0.9];
@@ -670,10 +709,10 @@ export class Sound {
      * played), and its `made` one rather than its recording (the sound studio's). Returns its
      * source node, or null if it isn't played (off, too far, too many).
      */
-    play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR, variant = null, made = false } = {}) {
+    play(name, { at = null, volume = 1, delay = 0, peakAt = null, rate = 1, far = FAR, variant = null, made = false } = {}) {
         const context = this.context;
         const recorded = made ? null : this.recorded.get(name);
-        const buffers = recorded?.length > 1 ? recorded : this.buffers.get(name);
+        const buffers = recorded?.length > 1 ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
@@ -684,7 +723,7 @@ export class Sound {
         }
 
         // (A recording's made quieter than a made sound, for its sharper start: played up to match)
-        let gain = volume * (SOUNDS[name]?.volume ?? 1) * (buffers === recorded ? LEVEL / RECORDED_LEVEL : 1);
+        let gain = volume * (SOUNDS[name] ?? RECORDED_ONLY[name] ?? SOUNDS[RECORDED_ONLY[name]?.instead])?.volume * (buffers === recorded ? LEVEL / RECORDED_LEVEL : 1);
         let pan = 0;
 
         if (at) {
@@ -724,7 +763,10 @@ export class Sound {
             level.connect(bus);
         }
 
-        const start = context.currentTime + Math.max(0, delay);
+        // (Timed to be loudest `peakAt` seconds from now, if asked: a recording's when it's said
+        // to be, a made one's as synth.js's PEAKS)
+        const loudest = buffers === recorded ? (source.buffer.peak ?? 0) : (PEAKS[SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead] ?? 0);
+        const start = context.currentTime + Math.max(0, peakAt === null ? delay : peakAt - loudest / source.playbackRate.value);
 
         this.sounding.push(start + source.buffer.duration / source.playbackRate.value);
         source.addEventListener("ended", () => {
@@ -736,11 +778,21 @@ export class Sound {
         return source;
     }
 
-    /** An attack starting: its swing, timed to be loudest `hitAt` seconds from now, when it lands. */
+    /**
+     * An attack starting: its swing, timed to be loudest `hitAt` seconds from now, when it lands;
+     * or a bow's, an arrow taken from the quiver and the string drawn back (the arrow loosed:
+     * launch).
+     */
     attack(animation, at, hitAt) {
+        if (animation === "bow") {
+            this.play("arrowQuiver", { at });
+
+            return this.play("bowDraw", { at, delay: DRAWN });
+        }
+
         const name = SWINGS[animation];
 
-        return name ? this.play(name, { at, delay: hitAt - PEAKS[name] }) : null;
+        return name ? this.play(name, { at, peakAt: hitAt }) : null;
     }
 
     /** A projectile let go ("arrow", "bolt" or "fireball"), higher or lower (`rate`) for its look. */
@@ -748,8 +800,15 @@ export class Sound {
         return LAUNCHES[kind] ? this.play(LAUNCHES[kind], { at, rate }) : null;
     }
 
-    /** A blow landing: the sound of its reaction (weapons.js: slash, strike, crush...). */
-    hit(reaction, at) {
+    /**
+     * A blow landing: the sound of its reaction (weapons.js: slash, strike, crush...), and under a
+     * weapon's or a fist's, the `armour` it lands on (ARMOUR: mail, plate, leather; none, flesh).
+     */
+    hit(reaction, at, armour = null) {
+        if (STRUCK.has(reaction) && ARMOUR[armour]) {
+            this.play(ARMOUR[armour].hit, { at });
+        }
+
         return SOUNDS[reaction] ? this.play(reaction, { at }) : null;
     }
 
@@ -757,9 +816,10 @@ export class Sound {
      * A footstep on a footing (audio/footing.js SURFACES), `delay` seconds from now, `volume`
      * times as loud: at `speed` (m/s: walking, faster louder; or running, louder still and
      * brighter), by one `size` big (a person's 1: FOOTSTEPS) on its `feet` (GAITS; null, none: it
-     * floats, and isn't heard); `variant` and `made` as play's.
+     * floats, and isn't heard), in its `armour` (ARMOUR: heard with the step); `variant` and
+     * `made` as play's.
      */
-    step(surface, at, { speed = 1.5, size = 1, feet = "feet", delay = 0, volume = 1, variant = null, made = false } = {}) {
+    step(surface, at, { speed = 1.5, size = 1, feet = "feet", armour = null, delay = 0, volume = 1, variant = null, made = false } = {}) {
         const gait = GAITS[feet];
 
         if (!gait) {
@@ -773,7 +833,15 @@ export class Sound {
         const loud = (running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * pace) * big ** FOOTSTEPS.weight * gait.volume;
         const lilt = 1 + FOOTSTEPS.jitter * (2 * Math.random() - 1);
 
-        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate: ((running ? 1.08 : 1) * gait.rate) / big ** 0.25, variant, made });
+        const rate = ((running ? 1.08 : 1) * gait.rate) / big ** 0.25;
+        const worn = ARMOUR[armour];
+
+        // (What they wear heard with it: mail's jingle, plate's clank; leather's swish running)
+        if (worn && (running || !worn.running)) {
+            this.play(worn.step, { at, volume: volume * loud * lilt * worn.with, delay, far: FOOTSTEPS.far, rate, made });
+        }
+
+        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate, variant, made });
     }
 
     // Keep a sound's samples, and give the browser a copy if it's started
@@ -846,6 +914,8 @@ export class Sound {
                 (buffer) => {
                     const variants = this.decoded.get(name) ?? [];
 
+                    // (A swing's loudest moment, to time it to the blow: play's peakAt)
+                    buffer.peak = RECORDED[name][variant].peak ?? 0;
                     variants[variant] = buffer;
                     this.decoded.set(name, variants);
                     this.recorded.set(name, variants.filter(Boolean));
