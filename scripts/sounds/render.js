@@ -11,7 +11,8 @@
 //    faded (`ramp`: from and to dB, the curve's power); faded in and out (`fadeIn`, `fadeOut`:
 //    ms, raised cosines); made `gain` dB louder; and placed `at` seconds in. Or, played as a tape
 //    is (`after`), sped up or slowed first and filtered after, the cut alone, by Butterworths of
-//    `order` (as the creatures' were made).
+//    `order` (as the creatures' were made). Or faded before it's sped up or slowed (`fadedFirst`:
+//    as the cues' notes were tuned).
 // 3. The layers summed; `trim` seconds taken off the front, cut to `cap` seconds; faded in
 //    (`fadeIn`: 2 ms unless said, 0 for a sound of one layer already faded) and out (`fadeOut`);
 //    and made `level` dBFS loud by its loudest 30 ms (−20 unless said), less if its peak would
@@ -61,7 +62,7 @@ export function prepare({ channels, rate }, { channel = null, highpass = 40 } = 
 }
 
 // One layer, shaped
-function layer(samples, { cut: [from, to], hp = null, lp = null, order = 2, after = false, reverse = false, rate = 1, ramp = null, fadeIn = 2, fadeOut = 15, gain = 0 }) {
+function layer(samples, { cut: [from, to], hp = null, lp = null, order = 2, after = false, fadedFirst = false, reverse = false, rate = 1, ramp = null, fadeIn = 2, fadeOut = 15, gain = 0 }) {
     to = Math.min(to, samples.length);
 
     let y;
@@ -107,6 +108,10 @@ function layer(samples, { cut: [from, to], hp = null, lp = null, order = 2, afte
         y.reverse();
     }
 
+    if (fadedFirst) {
+        fade(y, ms(fadeIn), ms(fadeOut));
+    }
+
     if (rate !== 1 && !after) {
         y = resamplePoly(y, ...limitDenominator(1 / rate, 1000));
     }
@@ -119,7 +124,9 @@ function layer(samples, { cut: [from, to], hp = null, lp = null, order = 2, afte
         }
     }
 
-    fade(y, ms(fadeIn), ms(fadeOut));
+    if (!fadedFirst) {
+        fade(y, ms(fadeIn), ms(fadeOut));
+    }
 
     return y.map((value) => value * 10 ** (gain / 20));
 }

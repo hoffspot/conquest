@@ -141,12 +141,13 @@ export class PackPanel {
          * What the player asks (the game does it): a command for the host (core/host.js: equip,
          * unequip, use, buy, sell, arrange, sort, split, discard, drop; trading with another
          * player, offer, agree and cancel), a thing to put on an action wheel (its id), the
-         * paperdoll turned (by an angle, radians), and to close.
+         * paperdoll turned (by an angle, radians), and to close; and a page turned (to hear it).
          */
         this.onCommand = () => {};
         this.onWheel = () => {};
         this.onTurn = () => {};
         this.onClose = () => {};
+        this.onPage = () => {};
     }
 
     get open() {
@@ -236,6 +237,10 @@ export class PackPanel {
         this.modes.replaceChildren(
             ...(this.view.shop ? [["buy", "Buy"], ["sell", "Sell"]] : []).map(([id, label]) => {
                 const mode = button(label, () => {
+                    if (this.trading !== id) {
+                        this.onPage();
+                    }
+
                     this.trading = id;
                     this.#showTabs();
                     this.#render();
@@ -253,6 +258,10 @@ export class PackPanel {
         this.tabs.replaceChildren(
             ...[["gear", "Gear"], ["skills", "Skills"]].map(([id, label]) => {
                 const tab = button(label, () => {
+                    if (this.tab !== id) {
+                        this.onPage();
+                    }
+
                     this.tab = id;
                     this.#showTabs();
                     this.#render();
@@ -504,6 +513,7 @@ export class PackPanel {
         }
 
         this.page = page;
+        this.onPage();
 
         for (const tab of this.panel.querySelectorAll(".pack-page")) {
             tab.setAttribute("aria-pressed", String(Number(tab.dataset.page) === page));

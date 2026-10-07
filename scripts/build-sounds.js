@@ -20,6 +20,10 @@
 //   world's one-shots (birds, beasts of the farm, bells, folk at work, doors), each one cut of one
 //   recording at its own gain, from Freesound, the NPS's and the VCSL's; downloaded as they're
 //   wanted where the player is.
+// - The items', the interface's and the cues' (scripts/sounds/items.js): coins, things picked up,
+//   put on, drunk, read and opened; the wheel's ticks, taps and talk; the cues in the music's
+//   key. The interface's and the cues' downloaded at the start, the items' once wanted (its
+//   ON_DEMAND), from Freesound, OpenGameArt's packs, Kenney's and the VCSL's.
 //
 //   npm run build:sounds
 //
@@ -40,6 +44,7 @@ import { decode, fetchSource } from "./sounds/sources.js";
 import { prepare, render } from "./sounds/render.js";
 import * as ambience from "./sounds/ambience.js";
 import * as creatures from "./sounds/creatures.js";
+import * as items from "./sounds/items.js";
 import * as spells from "./sounds/spells.js";
 import * as weapons from "./sounds/weapons.js";
 
@@ -67,8 +72,8 @@ const FADE_OUT = 0.015;
 // The recorded sounds made from recipes (scripts/sounds), by what they are; and those the game
 // downloads only once they're wanted (sound.js want), not at the start: the spells', the
 // creatures' and the ambience's, many, and big once decoded, each heard only by those who cast
-// it, meet them or come there
-const AREAS = { weapons, spells, creatures, ambience };
+// it, meet them or come there; and an area's own that are (its ON_DEMAND: the items')
+const AREAS = { weapons, spells, creatures, ambience, items };
 const ON_DEMAND = new Set([spells, creatures, ambience]);
 
 // The footsteps' recordings, by Freesound id: by Nox_Sound, CC0, each https://freesound.org/s/<id>/
@@ -256,7 +261,7 @@ async function main() {
         for (const [name, variants] of Object.entries(area.SOUNDS)) {
             list[name] = [];
 
-            if (ON_DEMAND.has(area)) {
+            if (ON_DEMAND.has(area) || area.ON_DEMAND?.includes(name)) {
                 wanted.push(name);
             }
 
@@ -315,8 +320,8 @@ async function main() {
 //
 // The sounds recorded rather than made, in client/sounds, played instead of synth.js's of the same
 // names once they're downloaded (or, with none made, on their own): footsteps on each footing, the
-// weapons', armour's and bodies', the spells', the creatures', the ambience; all CC0 or public
-// domain, each from the recordings in SOURCES.
+// weapons', armour's and bodies', the spells', the creatures', the ambience, the items', the
+// interface's and the cues'; all CC0 or public domain, each from the recordings in SOURCES.
 
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};
