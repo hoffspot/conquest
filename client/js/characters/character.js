@@ -658,7 +658,7 @@ export class Character {
         for (const id of drapeIds) {
             yield;
 
-            const { geometry, profile } = buildDrape(this, id, measures);
+            const { geometry, profile } = buildDrape(this, id, measures, drapeIds);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;

@@ -71,6 +71,12 @@ const HOLDS = {
     fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7, ...FIST_HAND },
     tankard: { Arm: { flex: 12, abduct: 8, rotate: 5 }, ForeArm: { flex: 88, pronate: -5 }, Hand: { flex: 0, deviate: 12 }, swing: 0.15 },
     tongs: { Arm: { flex: 10, abduct: 8, rotate: 5 }, ForeArm: { flex: 60, pronate: 10 }, Hand: { flex: 0, deviate: 5 }, swing: 0.2 },
+    // (A hoe over the shoulder: the upper arm down by the side, a little back and out, the forearm
+    // folded up, the fist before the shoulder, so the handle goes up from it and back over the
+    // top of the shoulder beside the neck, the blade behind)
+    shoulder: { Arm: { flex: -10, abduct: 15, rotate: 0 }, ForeArm: { flex: 138, pronate: 0 }, Hand: { flex: 5, deviate: -5 }, swing: 0.08 },
+    // (A basket by its handle at the side, the arm down and a little out to keep it off the hip)
+    basket: { Arm: { flex: 4, abduct: 14, rotate: 0 }, ForeArm: { flex: 14, pronate: 0 }, Hand: { flex: 0, deviate: 0 }, swing: 0.3 },
 };
 
 /**
@@ -215,9 +221,23 @@ export const ITEMS = Object.freeze({
     broom: { label: "Broom", slot: "mainHand", model: "broom", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.015, hold: HOLDS.staff },
     walkingStaff: { label: "Walking staff", slot: "mainHand", model: "walkingStaff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.017, hold: HOLDS.staff },
     ledger: { label: "Ledger", slot: "mainHand", model: "ledger", socket: "rightHand", hold: HOLDS.book },
+    hoe: { label: "Hoe", slot: "mainHand", model: "hoe", socket: "rightHand", turn: [-0.58, 0, 0], grips: true, round: 0.015, hold: HOLDS.shoulder },
+    // (A basket by its handle, each people's own: dress.js)
+    basket: { label: "Basket", slot: "mainHand", model: "basket", socket: "rightHand", grips: true, round: 0.009, hold: HOLDS.basket },
+    elfBasket: { label: "Willow basket", slot: "mainHand", model: "elfBasket", socket: "rightHand", grips: true, round: 0.007, hold: HOLDS.basket },
+    darkElfBasket: { label: "Black reed basket", slot: "mainHand", model: "darkElfBasket", socket: "rightHand", grips: true, round: 0.008, hold: HOLDS.basket },
+    catBasket: { label: "Banded basket", slot: "mainHand", model: "catBasket", socket: "rightHand", grips: true, round: 0.011, hold: HOLDS.basket },
+    lizardBasket: { label: "Reed basket", slot: "mainHand", model: "lizardBasket", socket: "rightHand", grips: true, round: 0.008, hold: HOLDS.basket },
+    orcBasket: { label: "Stick basket", slot: "mainHand", model: "orcBasket", socket: "rightHand", grips: true, round: 0.013, hold: HOLDS.basket },
     strawHat: { label: "Straw hat", slot: "head", model: "strawHat", socket: "head", hides: ["hair"] },
     coif: { label: "Linen coif", slot: "head", model: "coif", socket: "head", hides: ["hair"] },
     hood: { label: "Wool hood", slot: "head", model: "hood", socket: "head", hides: ["hair"] },
+    // (And each people's own on their heads, dress.js: the elves' silver circlet, the dark elves'
+    // black one and their black hood, the lizard folk's feathered band)
+    circletElf: { label: "Silver circlet", slot: "head", model: "circletElf", socket: "head" },
+    circletDark: { label: "Black circlet", slot: "head", model: "circletDark", socket: "head" },
+    darkHood: { label: "Black hood", slot: "head", model: "darkHood", socket: "head", hides: ["hair"] },
+    featherBand: { label: "Feathered band", slot: "head", model: "featherBand", socket: "head" },
 });
 
 /** Every piece of equipment by id: { kind: "garment" | "drape" | "item", slot, label, ... }. */

@@ -936,6 +936,47 @@ describe("clothing and armour (garments.js)", () => {
         }
     });
 
+    it("paints each people's everyday dress with its own work: the elves' vine, the dark elves' web, the cat folk's bands, the lizard folk's frets, the orcs' patched hide and fur, beads and bangles", () => {
+        const map = texelMap(human, 256);
+        const covered = map.covered.reduce((sum, each) => sum + (each ? 1 : 0), 0);
+        // (The share of the body's texels painted near `colour`: within a tenth of its brightness)
+        const share = (data, colour) => {
+            const [r, g, b] = new THREE.Color(colour).toArray().map((c) => c * 255);
+            let found = 0;
+
+            for (let i = 0; i < map.covered.length; i++) {
+                if (map.covered[i] && Math.abs(data[i * 4] - r) + Math.abs(data[i * 4 + 1] - g) + Math.abs(data[i * 4 + 2] - b) < 75) {
+                    found++;
+                }
+            }
+
+            return found / covered;
+        };
+
+        // ([id, how much of it's its own colour, and of each colour worked in it, at the least]: a
+        // collar's beads a third each)
+        for (const [id, most, least] of [["elfTunicMoss", 0.25, 0.004], ["darkTunicBlack", 0.25, 0.004], ["catWrapSaffron", 0.25, 0.08], ["huipilWhite", 0.25, 0.004], ["hideVestTan", 0.25, 0.004], ["beadedCollarBright", 0.08, 0.08]]) {
+            const garment = GARMENTS[id];
+            const { data } = paintGarment(map, garment);
+
+            assert.ok(share(data, garment.colour) > most, `${id}: its colour (${share(data, garment.colour).toFixed(3)})`);
+
+            for (const colour of [garment.trim, garment.accent].filter(Boolean)) {
+                assert.ok(share(data, colour) > least, `${id}: ${colour} worked in (${share(data, colour).toFixed(3)})`);
+            }
+        }
+
+        // (Fur and hide each patch or hair its own shade; bangles ringed)
+        for (const id of ["furMantleGrey", "hideVestDark", "banglesBronze"]) {
+            const { bump } = paintGarment(map, GARMENTS[id]);
+            const heights = [...bump].filter((_, i) => map.covered[i]);
+            const mean = heights.reduce((sum, h) => sum + h, 0) / heights.length;
+            const spread = Math.sqrt(heights.reduce((sum, h) => sum + (h - mean) ** 2, 0) / heights.length);
+
+            assert.ok(spread > 8, `${id}: its relief ${spread.toFixed(1)}`);
+        }
+    });
+
     it("paints lingerie from its design: clear where there's none, lace to see through, opaque where it's lined or a band, white to be tinted", () => {
         const map = texelMap(human, 512);
 
@@ -1481,12 +1522,13 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
     // How far the legs and boots come out through a drape (metres, the furthest each moment) as a
     // body in it walks or runs a stride (skinned as three.js does, with its own bones swung: a leg
     // is out through it where, followed from its hip joint to joint, it crosses the cloth an odd
-    // number of times; how far, to the cloth's nearest point)
-    const through = (shape, id, speed) => {
+    // number of times; how far, to the cloth's nearest point), walking as `style` has them, from
+    // `from` frames on (30: past setting off; 0: setting off too)
+    const through = (shape, id, speed, { style = WALK_STYLES.natural, from = 30 } = {}) => {
         const body = figure(shape);
         const built = buildDrape(body, id, measureBody(body));
         const skeleton = drapeSkeleton(body.rig, built.profile);
-        const walker = new Walker(body);
+        const walker = new Walker(body, style);
         const { geometry } = built;
         const position = geometry.attributes.position;
         const top = position.getY(3 * built.columns);
@@ -1521,7 +1563,7 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
             walker.update(1 / 30, { speed });
             body.object.updateMatrixWorld(true);
 
-            if (frame < 30) {
+            if (frame < from) {
                 continue;
             }
 
@@ -1580,6 +1622,46 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
             const { most: out } = through(shape, id, NATURAL_SPEED);
 
             assert.ok(out < most, `${id}: out ${(out * 100).toFixed(1)} cm`);
+        }
+    });
+
+    it("bands a drape round in colours, sharply at their edges; and lays an apron over the skirt under it, as far out as it flares", () => {
+        const { geometry } = buildDrape(f, "catShukaRed", measures);
+        const colour = geometry.attributes.color;
+        const [red, black] = ["#b33224", "#1e1a18"].map((each) => new THREE.Color(each));
+        // (Each vertex's colour, its pleat's shading taken off: nearer the red or the black)
+        const hues = Array.from({ length: colour.count }, (_, i) => {
+            const [r, g] = [colour.getX(i), colour.getY(i)];
+
+            return r > 0.3 && r / Math.max(g, 1e-3) > 2 ? "red" : r < 0.15 ? "black" : "other";
+        });
+
+        assert.ok(red.r > black.r);
+        assert.ok(hues.filter((hue) => hue === "red").length > colour.count / 2, "mostly red");
+        assert.ok(hues.filter((hue) => hue === "black").length > colour.count / 10, "with bands of black");
+        assert.equal(hues.filter((hue) => hue === "other").length, 0, "nothing between them: sharp edges");
+
+        // (An apron over a kirtle: its middle never inside the kirtle's front at its height; on its
+        // own, built to the body, the kirtle came out through it lower down)
+        const kirtle = vertices(buildDrape(f, "kirtle", measures).geometry);
+        const front = (points, y) => Math.max(...points.filter((p) => Math.abs(p.y - y) < 0.02 && Math.abs(p.x) < 0.04).map(({ z }) => z));
+        const apronOn = (under) => vertices(buildDrape(f, "apron", measures, under).geometry).filter(({ x }) => Math.abs(x) < 0.03);
+        const inside = (apron) => Math.max(...apron.map(({ y, z }) => front(kirtle, y) - z));
+
+        assert.ok(inside(apronOn(["kirtle", "apron"])) <= 0, `over it: ${(inside(apronOn(["kirtle", "apron"])) * 100).toFixed(1)} cm in`);
+        assert.ok(inside(apronOn([])) > 0.01, "on its own, the kirtle came through it");
+    });
+
+    it("keeps them in setting off with a long stride, the foot far behind taken in by the cloth's back, though the pelvis turned makes it seem off to the side", () => {
+        // (A tall orc in a kirtle to the ankles: on main the back foot came 11 cm out of the back of
+        // the hem as they set off, the back not swung for it, and 8 cm in a skirt)
+        const orc = peopleLook({ people: "orc", sex: "m", seed: 7 }).shape;
+        const tall = { ...orc, macro: { ...orc.macro, height: 0.74, weight: 0.85, muscle: 0.9 } };
+
+        for (const id of ["blueKirtle", "brownSkirt"]) {
+            const { most } = through(tall, id, 1.3, { style: WALK_STYLES.orc, from: 0 });
+
+            assert.ok(most < 0.015, `${id}: out ${(most * 100).toFixed(1)} cm`);
         }
     });
 

@@ -1255,6 +1255,21 @@
   "attack/sword/3|orc-shortest-f": {
    "slide": 0.0115
   },
+  "carry/basket|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/basket|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/basket|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/basket|orc-tallest-m": {
+   "joint": 3.1
+  },
+  "carry/basket|orc-thinnest-f": {
+   "joint": 6.53
+  },
   "carry/broom|orc-bulkiest-f": {
    "joint": 6.93
   },
@@ -1263,6 +1278,9 @@
   },
   "carry/broom|orc-shortest-f": {
    "joint": 7.83
+  },
+  "carry/broom|orc-tallest-m": {
+   "joint": 3.1
   },
   "carry/broom|orc-thinnest-f": {
    "joint": 6.53
@@ -1276,7 +1294,25 @@
   "carry/firewood|orc-shortest-f": {
    "joint": 7.83
   },
+  "carry/firewood|orc-tallest-m": {
+   "joint": 3.1
+  },
   "carry/firewood|orc-thinnest-f": {
+   "joint": 6.53
+  },
+  "carry/hoe|orc-bulkiest-f": {
+   "joint": 6.93
+  },
+  "carry/hoe|orc-bulkiest-m": {
+   "joint": 4.15
+  },
+  "carry/hoe|orc-shortest-f": {
+   "joint": 7.83
+  },
+  "carry/hoe|orc-tallest-m": {
+   "joint": 3.1
+  },
+  "carry/hoe|orc-thinnest-f": {
    "joint": 6.53
   },
   "carry/jug|orc-bulkiest-f": {
@@ -1287,6 +1323,9 @@
   },
   "carry/jug|orc-shortest-f": {
    "joint": 7.83
+  },
+  "carry/jug|orc-tallest-m": {
+   "joint": 3.1
   },
   "carry/jug|orc-thinnest-f": {
    "joint": 6.53
@@ -1300,6 +1339,9 @@
   "carry/ledger|orc-shortest-f": {
    "joint": 7.83
   },
+  "carry/ledger|orc-tallest-m": {
+   "joint": 3.1
+  },
   "carry/ledger|orc-thinnest-f": {
    "joint": 6.53
   },
@@ -1311,6 +1353,9 @@
   },
   "carry/pannier|orc-shortest-f": {
    "joint": 7.83
+  },
+  "carry/pannier|orc-tallest-m": {
+   "joint": 3.1
   },
   "carry/pannier|orc-thinnest-f": {
    "joint": 6.53
@@ -1324,6 +1369,9 @@
   "carry/pitchfork|orc-shortest-f": {
    "joint": 7.83
   },
+  "carry/pitchfork|orc-tallest-m": {
+   "joint": 3.1
+  },
   "carry/pitchfork|orc-thinnest-f": {
    "joint": 6.53
   },
@@ -1336,6 +1384,9 @@
   "carry/sack|orc-shortest-f": {
    "joint": 7.83
   },
+  "carry/sack|orc-tallest-m": {
+   "joint": 3.1
+  },
   "carry/sack|orc-thinnest-f": {
    "joint": 6.53
   },
@@ -1347,6 +1398,9 @@
   },
   "carry/walkingStaff|orc-shortest-f": {
    "joint": 7.83
+  },
+  "carry/walkingStaff|orc-tallest-m": {
+   "joint": 3.1
   },
   "carry/walkingStaff|orc-thinnest-f": {
    "joint": 6.53

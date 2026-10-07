@@ -2575,7 +2575,7 @@ test("the townsfolk go about their business in the start town: dressed for their
             .filter(({ id }) => id.startsWith("townsfolk:"))
             .map(({ id, x, y, neutral }) => ({ id, at: [x, y], neutral, drawn: game.avatars.has(id), calling: game.host.folk.get(id).look, title: game.host.folk.get(id).title, wearing: [...(game.avatars.get(id)?.character.equipment.values() ?? [])] }));
     });
-    const carried = ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger"];
+    const carried = ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger", "hoe", "basket"];
 
     expect(out.length).toBe(8);
     expect(out.every(({ drawn, neutral }) => drawn && neutral)).toBe(true);

@@ -188,6 +188,43 @@ test("fits a phone screen", async ({ browser }) => {
     await page.close();
 });
 
+test("dresses each people's townsfolk in their everyday dress: their own cut and colours, their own basket, a hoe over the shoulder", async ({ page }) => {
+    // (Each people's own: dress.js; drawn as the game draws them, garments all at once, skirts and
+    // what's carried apart)
+    const row = async (people) => {
+        await openLab(page, `/uniform-lab.html?people=${people}&show=townsfolk`);
+
+        return page.evaluate(() =>
+            window.lab.figures.map(({ label, character }) => ({
+                label,
+                worn: [...(character.garments.find((mesh) => mesh.name === "garments")?.userData.merged ?? []), ...character.garments.map((mesh) => mesh.name).filter((name) => name !== "garments")],
+                items: character.items.map((item) => item.name),
+            })),
+        );
+    };
+    const human = await row("human");
+    const cat = await row("cat");
+    const orc = await row("orc");
+
+    expect(human.map(({ label }) => label)).toEqual(["Shopper", "Field hand", "Porter", "Merchant", "Merchant", "Priest"]);
+    expect(human[0].items).toContain("basket");
+    expect(human[1].items).toContain("hoe");
+    expect(cat[0].items).toContain("catBasket");
+    expect(orc[0].items).toContain("orcBasket");
+
+    // (The cat folk's wraps and shukas, barefoot; the orcs' hide; none of the humans' homespun)
+    const homespun = ["chemise", "kirtle", "skirt", "tunic", "smock", "boots", "brownTunic", "russetTunic", "blueKirtle", "brownSkirt"];
+
+    expect(cat.flatMap(({ worn }) => worn).some((id) => /^cat(Wrap|Bandeau|Shuka|Sarong)/.test(id))).toBe(true);
+    expect(orc.flatMap(({ worn }) => worn).some((id) => /^hide/.test(id))).toBe(true);
+
+    for (const { worn } of [...cat, ...orc]) {
+        expect(worn.filter((id) => homespun.includes(id))).toEqual([]);
+    }
+
+    expect(cat.flatMap(({ worn }) => worn).filter((id) => /boots/i.test(id))).toEqual([]);
+});
+
 test("dresses each people's soldiers and officials, their garments drawn all at once as in the game", async ({ page }) => {
     const figures = async () =>
         page.evaluate(() =>

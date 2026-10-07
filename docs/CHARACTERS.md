@@ -767,7 +767,11 @@ cloth round the body:
   which are set apart as the body is built and come in as it stands, so they're built out as far
   as the legs are apart at their height: standing, it hangs as wide as it's meant to.
 - **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
-  under it.
+  under it: over a skirt, as far out as the skirt flares at each height, pleats and all (`under`:
+  the skirts worn with it), so the skirt never comes through it at its hem.
+- **Banded** (`bands`: [from, to, colour], shares of the way from the hips to the hem): rings
+  either side of each band's edges, a few millimetres apart, its colours in its vertices, so a
+  band of trim at the hem or stripes round a wrap change sharply.
 - **Skinned** like the body: the waist to the lower back and pelvis; below the hips, quickly
   onto the legs (all on them halfway down to the knees), then below the knees onto the shins (all
   on them a third of the way to the hem). Its sides go with their own legs; its front and back
@@ -782,12 +786,20 @@ cloth round the body:
     spare: halfway down each shin (7.5 cm), the ankles (6 cm), the backs of the heels and the
     tips of the toes (3.5 cm), measured against the cloth where it rests at each leg's place
     across the body (the drape's `profile`, ring by ring), never more than a radian, and never
-    for a heel kicked up above the knees.
+    for a heel kicked up above the knees. A leg further to the side than the cloth's that wide is
+    taken to be at its edge (`EDGE_ROUND`), not left out: a foot far behind at the end of a long
+    stride seems off to the side with the pelvis turned, and where the cloth goes half with the
+    back, half with that leg, it came 8 to 11 cm out of the back of the hem as a tall orc set off.
   - So a leg striding out takes the cloth before it along and a heel behind pushes the back out,
     rather than coming through them; sitting, it lies over the lap and falls down the shins.
     Walking, the legs and boots stay in an alb, a gown or a kirtle (at most 0.6 cm out on slim
     and average bodies, 2.4 cm a bigger man's toe at a heel strike; on main 4 to 10 cm, out
-    through every stride). Running, 1.5 to 2.3 cm on average (7 to 14 cm on main).
+    through every stride). Running, 1.5 to 2.3 cm on average (7 to 14 cm on main). Setting off,
+    walking and at their ease (the motion check's bodies at the ends of every people's builds,
+    every frame): the kirtles, the brown and wool skirts at most 0.8 cm on every body (on main 8
+    to 11 cm, a tall orc setting off); every people's women's skirts and gowns, and a friar's
+    habit, at most 0.9 cm on every woman's body; the velvet gown, to the floor, 1.1 to 1.3 cm an
+    orc woman's foot, else under 1 cm.
 - **Running in a robe** to the ankles or further all the way round (`Character.robed`), the
   heels aren't kicked up behind as high: the knee bent past 60° only 40% as far again (to about
   85° rather than 122°), as someone running in a long robe does.
@@ -802,16 +814,49 @@ the bust, painted with a cord criss-crossing down the front).
 
 The townsfolk out in the streets (core/townsfolk.js, docs/GAME.md *Townsfolk*) wear homespun:
 brown and russet tunics, a field hand's linen smock (long and loose, to the thigh), a friar's brown
-habit with its skirt to the floor, a blue kirtle and a brown skirt; on their heads a straw hat
+habit (with its skirt to the floor, a woman's; over trousers, a man's), a blue kirtle and a brown
+skirt; on their heads a straw hat
 (its crown tapering up well clear of the head, its brim across the head hidden within its band), a
 linen coif, or a wool hood open at the face (none over a cat's ears). They carry what their work
 wants (`equipment.js` ITEMS, `items.js`): on the back, as a pack is, a wicker pannier heaped with
 loaves, apples and greens, a sack tied at its mouth, or a bundle of firewood; a jug by its handle,
-as a tankard; a hay fork, a broom or a walking staff upright in the right hand, as a mage's staff;
-a ledger open on the right palm, as a grimoire. What's in a hand is always in the right, so the
-left's free for what they do at their ease. The motion check walks each of them with what they
-carry (`carry/<thing>`), and plays their rests with each thing in hand
-(`rest/townsfolk/<n>/<thing>`).
+as a tankard; a basket by its arched handle at the side, the arm down and a little out from the
+hip (`HOLDS.basket`: in its frame the fist round the top of the handle, the basket hanging below);
+a hoe over the shoulder (`HOLDS.shoulder`: the upper arm down by the side, the forearm folded up,
+the fist before the shoulder and the handle up from it over the top of the shoulder beside the
+neck, its blade behind; on every body its handle on the shoulder or up to 2.4 cm over it, as
+the motion check measures it); a hay fork, a broom or a walking staff upright in the right hand,
+as a mage's staff; a ledger open on the right palm, as a grimoire. What's in a hand is always in
+the right, so the left's free for what they do at their ease. The motion check walks each of them
+with what they carry (`carry/<thing>`), and plays their rests with each thing in hand
+(`rest/townsfolk/<n>/<thing>`), each people's own of it (`dress.js` `theirs`).
+
+#### Each people's everyday dress
+
+The other peoples' townsfolk, and the folk of their taverns and churches about their own business
+(patrons, worshippers), aren't in the humans' homespun but their own (`dress.js` `EVERYDAY`): each
+calling's dressed as a human of it would be (folk.js `PARTS`), then each piece of that a people
+has its own for is swapped for one of theirs, picked by the folk's own seed (one piece, several or
+none), one to a slot (`everydayDress`). So a porter's still a porter and a friar a priest, by
+their own people's ways. No man of any people wears a skirt: a robe that would be one is his
+people's trousers (and a human friar's habit is over trousers, a scribe in a tunic). Each piece comes in a few of their colours (garments.js `EVERYDAY`,
+`${piece}${colour}`), with their own work painted on it (`everydayAt`, sized to show at a few
+millimetres a texel), and each people has a basket of its own:
+
+| People | Their everyday dress | Their basket |
+| --- | --- | --- |
+| Humans | homespun, as above | round, of wicker, an arched handle of bent ash; loaves and apples |
+| Elves | the men's tunics over slim leggings, the women's blouses and long gowns banded at the hem; moss, silver and dusk blue, a band at the neck with a vine in leaf below it and round the hem; silk sashes, soft boots, silver circlets with a leaf | shallow and long as a leaf, of willow gone silver, a tall slender handle; white and violet flowers |
+| Dark elves | close-fitted and high at the neck, black, violet and plum, a silver spider's web across the breast; the men's black leggings, the women's laced bodices and narrow skirts to the floor banded in violet or silver; tall boots to the knee, black gloves; black hoods and black circlets with a violet stone between two spikes | six-sided, of black reed, a silver rim and a pointed silver handle with a violet stone; pale mushrooms glowing |
+| Cat folk | light wraps bare at the arms, or bare-chested in a collar of beads, in bold zigzagged bands of saffron, indigo and red; the men's wide trousers to the calf in indigo, ochre or red under a banded sash, the women's breast wraps, sarongs to the knee and shukas to the ankle, banded; bronze bangles; bare feet, and nothing on the head over their ears | wide and flaring, woven in bands of saffron, indigo and red, its handle bound in leather; mangoes, lemons |
+| Lizard folk | white cotton (huipils, short jackets, the women's wrap skirts) with stepped frets round the neck and hem in turquoise and crimson, a row of diamonds over the breast; men bare-chested or in a jacket, in a loincloth with its flap or cotton breeches to the knee; a cape knotted at the shoulder; jade bangles; bare feet; a band of turquoise high round the head, a fan of feathers up from the back of it | tall and round, of reed, stepped bands of turquoise and crimson, a rope handle; maize and cacao |
+| Orcs | patched hide stitched together, bare at the arms (vests, breast wraps); the men's trousers of patched hide or leggings, the women's skirts of hide strips edged in red ochre; fur mantles; strings of bone and teeth; bands of iron on the forearms; hide boots | squat, of sticks lashed with hide, an iron band at the rim, a great bone for its handle; a haunch and roots |
+
+Their priests about the town go by their people's own names (core/townsfolk.js `PRIESTS`): the
+elves' moon-priests, the dark elves' web-priests, the cat folk's sun-priests, the lizard folk's
+serpent-priests, the orcs' shamans. The uniform lab shows each people's townsfolk side by side
+(`uniform-lab.html?show=townsfolk`: a shopper with their basket, a field hand with a hoe over the
+shoulder, a porter, two merchants and a priest).
 
 **Lingerie** (`garments.js` `DESIGNS`) is modern lace with a nod to the period, worn by the
 courtesans upstairs. It isn't cut by its region, which only has to take it all in (the torso from
