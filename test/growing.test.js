@@ -415,7 +415,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         playing.boons = [];
         player.afflictions = [];
         rolled(true);
-        assert.deepEqual(playing.boons, [{ id: "afterglow", label: "Afterglow: stamina back 50% faster", recoveryTimes: 1.5, ms: COMPANY.ms, until: host.battle.time + COMPANY.ms }]);
+        assert.deepEqual(playing.boons, [{ id: "afterglow", label: "Afterglow: stamina back 50% faster", recoveryTimes: 1.5, faster: 50, ms: COMPANY.ms, until: host.battle.time + COMPANY.ms }]);
         assert.equal(COMPANY.ms, 60 * 60000, "an hour");
         player.stamina = 0;
         run(host, 1000);

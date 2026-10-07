@@ -533,8 +533,11 @@ export class Game {
      * @param {object} [options.place] - Where the player was out in the world when the game last
      *     stopped ({ x, y, facing }: save.js loadPlace), to carry on there; or null (where the
      *     world puts them: by their home town's tavern).
+     * @param {object} [options.vitals] - How the player was then (save.js loadVitals: core/host.js
+     *     vitalsOf: their hit points and stamina, what lingered and lasted on them, their boons,
+     *     their abilities' and spells' waits), to carry on so; or null (whole, nothing on them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -594,6 +597,9 @@ export class Game {
             if (actor && world.spawns?.player) {
                 actor.spawn = [...world.spawns.player];
             }
+
+            // (As they were: hurt, poisoned, blessed, a spell still on them)
+            this.host.restoreVitals(me, vitals);
         }
 
         this.onFollowers = onFollowers;
@@ -4301,6 +4307,14 @@ export class Game {
         const outside = entrance?.outside ?? this.world.tavern?.outside;
 
         return outside ? { x: outside[0] + 0.5, y: outside[1] + 0.5, facing: entrance?.facing ?? actor.facing } : null;
+    }
+
+    /**
+     * How the player is, to carry on so next time (core/host.js vitalsOf: kept with where they are,
+     * save.js saveVitals), or null (a world joined: kept by its host).
+     */
+    vitals() {
+        return this.remote ? null : this.host.vitalsOf(this.me);
     }
 
     // Where the player is in the world ([x, y] metres): out in it, or at the door of the building they're in
