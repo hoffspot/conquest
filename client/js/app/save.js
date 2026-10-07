@@ -167,14 +167,14 @@ export function saveProgress(save, progress) {
 }
 
 /**
- * Where a saved game's character stands with their people, and the requests they carry
- * (core/standing.js Standing's toJSON), as kept: {} for none yet, or another game's.
+ * Where a saved game's character stands with their people, the requests they carry, and their
+ * guild card (core/standing.js Standing's toJSON), as kept: {} for none yet, or another game's.
  */
 export function loadStanding(save) {
     const standing = read(STANDING_KEY);
     const ours = standing && save?.created && standing.created === save.created && standing.seed === save.seed;
 
-    return ours ? { points: standing.points, claimed: standing.claimed ?? [], requests: standing.requests ?? [], done: standing.done ?? [], next: standing.next } : {};
+    return ours ? { points: standing.points, claimed: standing.claimed ?? [], requests: standing.requests ?? [], done: standing.done ?? [], next: standing.next, guild: standing.guild ?? null } : {};
 }
 
 /** Keep where the character stands in a saved game (not in one that isn't saved: ?play). */

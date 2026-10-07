@@ -15,6 +15,14 @@
     --hostile: #d4533b;
     --stamina: #ec8a1c;
 
+    /* The adventurers' guilds' ranks, each its metal: light, middle and dark (core/standing.js GUILD_RANKS) */
+    --copper: #f0b48c, #c27a4a, #7a4524;
+    --iron: #c9ced3, #8d949b, #4f555b;
+    --bronze: #f1c98a, #c98f3e, #7c5420;
+    --silver: #ffffff, #cfd6dd, #8a939c;
+    --rank-gold: #fff0b8, #f0c75e, #a37a1c;
+    --mithril: #e6fbff, #9fdcec, #4f97ad;
+
     /* How wide the minimap is */
     --minimap-size: clamp(116px, 30vw, 188px);
 
@@ -1443,6 +1451,31 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--muted);
 }
 
+/* The player's guild card, talking to one of a guild's: their rank, and how near the next */
+.talk-card {
+    flex: none;
+    display: grid;
+    justify-items: end;
+    gap: 2px;
+    margin: 2px 0 0 auto;
+    text-align: right;
+}
+
+.talk-card[hidden] {
+    display: none;
+}
+
+.talk-card-label,
+.talk-card-next {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.talk-card-label {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 .talk-close {
     flex: none;
     width: 36px;
@@ -1558,6 +1591,66 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .plate .coins:empty {
     display: none;
+}
+
+/* The player's guild rank, on their card between their name and their gold: a chip of its metal */
+#playerplate.guilded {
+    grid-template-columns: 1fr auto auto;
+}
+
+.plate .guild,
+.talk-card-rank {
+    justify-self: end;
+    padding: 1px 8px 2px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    background: linear-gradient(180deg, var(--metal));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    color: #1d150c;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.5;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.plate .guild[hidden] {
+    display: none;
+}
+
+/* (Each rank's metal, wherever it's shown: on the card, the talk, the journal's bar) */
+[data-rank="copper"] {
+    --metal: var(--copper);
+}
+
+[data-rank="iron"] {
+    --metal: var(--iron);
+}
+
+[data-rank="bronze"] {
+    --metal: var(--bronze);
+}
+
+[data-rank="silver"] {
+    --metal: var(--silver);
+}
+
+[data-rank="gold"] {
+    --metal: var(--rank-gold);
+}
+
+[data-rank="mithril"] {
+    --metal: var(--mithril);
+}
+
+/* Not yet registered: no metal, just a dashed outline */
+.talk-card-rank[data-rank="none"] {
+    background: transparent;
+    border: 1px dashed var(--faint);
+    box-shadow: none;
+    color: var(--muted);
 }
 
 /* The pack: the player's skills, gear and what they carry (and a shop's wares, trading), in a
@@ -2669,6 +2762,11 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin: 0;
     font-size: 12px;
     color: var(--muted);
+}
+
+/* The guild card's bar, in its rank's metal */
+.journal-guild[data-rank] .journal-fill {
+    background: linear-gradient(90deg, var(--metal));
 }
 
 .journal-request {

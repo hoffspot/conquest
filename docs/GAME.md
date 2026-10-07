@@ -2023,10 +2023,15 @@ the adventurers drinking at a guild's tables are patrons who talk as adventurers
   world doesn't change yet: the game keeps the last 50 (`game.done`) for when it does.
 
 **The guild's talk.** The receptionist is cheerful and a little flustered: she welcomes a
-stranger to the town's branch of the guild, and signs the player up as an adventurer
-(remembered, and the player learns `guildMember`: "Rank: Copper. Everyone starts at Copper,
-don't pout!"), and tells of the quest board, the ranks (Copper, Iron, Bronze, Silver, Gold and
-Mithril) and the other branches. Asked what's on the board, she lists its notices, up to four
+stranger to the town's branch of the guild, and signs the player up as an adventurer (`{ guild:
+"register" }`: one card, good at every branch, kept with their standing; and the player learns
+`guildMember`: "Rank: Copper. Everyone starts at Copper, don't pout!"). Whether they're
+registered (`member`) is the game's, so every branch knows the card: one from another branch is
+greeted by its rank the first time she sees it, and no one's offered another. She tells of the
+quest board, their card ("How's my card looking?": their rank, `{guildRank}`, and how much more
+merit to the next and what it opens, `{guildNext}`), the ranks (Copper, Iron, Bronze, Silver,
+Gold and Mithril: merit for every job, and a rank earned kept: docs/WAR.md M8) and the other
+branches. Talking to her, the talk shows the player's rank by her name. Asked what's on the board, she lists its notices, up to four
 (`notice1` to `notice4`: what each asks in a few words, and what it pays: docs/WAR.md M8); one
 picked is read in full, and taken, or the player looks at the others. The adventurers are wry and give advice ("Be nice to
 {receptionist}. She decides who gets the good notices.").
@@ -3319,7 +3324,9 @@ it.
    puts it there, and it's off until then, tapping being how the game has always been walked; the
    keys steer whether it's shown or not, nothing is said of the stick in the opening hint while
    it's off, and a pause lets go of whatever was held. The heads-up display
-   (app/hud.js) shows the player's name and health in the bottom right corner (the thumb stick,
+   (app/hud.js) shows the player's name and health in the bottom right corner (and, once
+   they've registered with the adventurers' guilds, their rank there by their name: a chip of
+   its metal, Copper to Mithril, docs/WAR.md M8; the thumb stick,
    asked for, in the bottom left; the zoom buttons, which Game options also leaves off, take that
    right corner and send the card up above them; all of them go up over the quick actions in a
    fight, above), with an orange

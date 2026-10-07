@@ -679,7 +679,8 @@ that isn't its holders' seat has a governor on the throne. Only a player's own p
 (or their liege's) give them work.
 
 **Standing** is earned by what's done for their people, and lost by what's failed or given up
-(5 each):
+(5 each). Only their people's requests (the town halls' and the keep's) give or take it: the
+adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' ranks*).
 
 | Rank | Standing | Opens |
 | --- | --- | --- |
@@ -724,6 +725,8 @@ for 20 turns or until it's acted on:
 
 **The journal** (its button, top right, or J) shows:
 - the player's rank, how far to the next, and what each opens;
+- their card from the adventurers' guilds (M8): its rank, how much more merit to the next, and
+  what each gives; or that they've not registered, and where to;
 - each request they carry: who asked, what, how far it's come, which way and how far to go, and
   how long's left (each can be given up);
 - their people: who rules them and from where, whom they're at war with and allied to, how many
@@ -1031,7 +1034,8 @@ M4).
 
 **The adventurers' guild's board** (`standing.js` `offerBoard`, `offerContract`, `offerCourier`):
 its receptionist gives contracts to any registered adventurer, of whatever people (no standing
-needed, none given; paid in gold). The board has up to four notices up at once (`BOARD_SIZE`):
+needed, none given, none lost; paid in gold and the guilds' merit), as hard as their rank in the
+guilds asks (below). The board has up to four notices up at once (`BOARD_SIZE`):
 up to three contracts and the courier work. No two ask the same thing (`objectiveOf`: the same kind
 for the same beasts, people, part, camp, place or town), and none asks what the player carries
 already. Asked, the receptionist lists them in a few words with what each pays (`briefOf`: "Beasts
@@ -1039,16 +1043,55 @@ round Redemoor, for 24 gold."). The player reads one in full, then takes it or l
 What's on the board holds for the war's turn: a notice taken is gone from it, the rest stay, and a
 board emptied is put up afresh.
 
-Everything a contract asks for is within 1.5 km of the guild's town (`GUILD_REACH`):
+Everything a contract asks for is within 1.5 km of the guild's town (`GUILD_REACH`). What a
+Copper is asked and paid (a higher rank's: *The guilds' ranks*, below):
 
-| Contract | On the board | Done when | Pays |
-| --- | --- | --- | --- |
-| Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town | 10, and 7 for each |
-| A bounty | the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each |
-| The camp outside the walls | an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 |
-| Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for |
-| Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*) | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome |
-| A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km |
+| Contract | On the board | Done when | Pays | Merit |
+| --- | --- | --- | --- | --- |
+| Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town | 10, and 7 for each | 3 |
+| A bounty | from Iron; the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each | 4 |
+| The camp outside the walls | from Bronze; an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 | 6 |
+| Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for | 2 |
+| Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*): a small one for a Copper | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome | 4, 7 for a middling place, 12 for a great one |
+| A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km | 3 |
+
+**The guilds' ranks** (`GUILD_RANKS`): registering at any guild's counter gives the player one
+card, good at every branch: kept with their standing (`Standing.guild`: { merit }), never another
+(signing up again changes nothing). Every contract done earns its merit, and enough merit is the
+next rank. A contract failed or given up costs 2 merit (`GUILD_FAILED`), never a rank once
+earned, and never the player's standing with their people; their people's requests give the
+guilds no merit.
+
+| Rank | Merit | Opens | More asked | Beasts of level | Pay |
+| --- | --- | --- | --- | --- | --- |
+| Copper | 0 | Beasts on the roads, parts wanted, sealed packages, the small places to clear | — | any | ×1 |
+| Iron | 10 | Bounties | 1 more | any | ×1.1 |
+| Bronze | 30 | The camp outside the walls, the middling places to clear; the dearer parts | 1 more | 2 or more | ×1.25 |
+| Silver | 70 | — | 2 more | 3 or more | ×1.4 |
+| Gold | 140 | The great places to clear | 3 more | 4 or more | ×1.6 |
+| Mithril | 250 | — | 4 more | 5 or more | ×1.8 |
+
+So the higher the rank, the harder the work on the board, everywhere:
+- **More of it.** Beasts, bounties and parts ask for more of them (2 + more to 4 + more beasts or
+  soldiers; 3 + more to 5 + more of a cheap part, one fewer of a dearer one).
+- **Stronger beasts.** From Bronze, the beasts must be of a level (their card shows it) as the rank
+  asks, as near as the land within reach has them: the highest that a quarter of it has or more,
+  for whoever's asking, as far as it is from their home (`levelNear`). Near home, where there's
+  only the first level, any will do; the notice says the level when there is one ("4 of them,
+  level 3 or more"), and only those count.
+- **The dearer parts.** From Bronze (`GUILD_DEARER`), the guild wants only the dearer half of the
+  parts it wants, mostly the fiercer creatures'.
+- **Bigger places.** A place is given to clear only as big as the rank allows (`GUILD_SIZES`:
+  small from Copper, middling from Bronze, great from Gold), and of those near, only the biggest:
+  a Gold isn't sent to the graveyard while there's a ruin within reach.
+- **Better pay**, the rank's times what a Copper is paid, a package's too.
+
+The player's rank shows on their card by their name, a chip of its metal, once they've
+registered; on the talk with a guild's receptionist ("Your rank", and how much more merit to the
+next, or "Not registered"); and in the journal. The receptionist tells it too ("How's my card
+looking?"), and a card from another branch is known the first time she sees it. A player who
+registered before the guilds kept a card is given theirs, its merit from the guild work done in
+their journal (`meritOf`).
 
 A beast or soldier brought down counts for a guild's contract only with the player within 1.5 km
 of the town's middle (the host's `#felled`: the contract's `target.near`); the journal says so ("1
@@ -1207,6 +1250,7 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `ability` | A player used an ability. |
 | `request` | A player's request was taken, counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
 | `standing` | A player reached a new rank in their people. |
+| `guild` | A player registered with the adventurers' guilds (`registered`), or reached a new rank in them (`rank`). |
 | `gift`, `counsel` | A player had the armoury's gift, or gave counsel. |
 
 **Keeping it.** `snapshot()` gives all of it as plain data. `Host.restore(world, snapshot)` carries

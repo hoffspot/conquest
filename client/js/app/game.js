@@ -39,12 +39,12 @@ import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
+import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
-import { BOARD_SIZE, briefOf, COUNSEL, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
@@ -408,7 +408,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1144,6 +1144,7 @@ export class Game {
         this.hud.clear();
         this.hud.setPlayer(player);
         this.hud.setGold(this.progress.gold);
+        this.hud.setGuild(this.guildCard());
 
         for (const actor of this.battle.actors.filter((other) => other.id !== this.me && !other.neutral)) {
             this.hud.track(actor.id, { ...actor, hostile: this.battle.hostile(actor, player) });
@@ -2767,7 +2768,7 @@ export class Game {
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(building));
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(building), this.#guildWords());
 
         // (An adventurer who could be hired, and for how much; a follower waiting or following)
         const one = folk.find(({ id }) => id === npc.id);
@@ -2804,9 +2805,11 @@ export class Game {
                             ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
                             : "waiting" in condition
                               ? Boolean(following?.waiting) === condition.waiting
-                              : official
-                                ? official.check(condition)
-                                : true,
+                              : "member" in condition
+                                ? (this.standing.guildRank() !== null) === condition.member
+                                : official
+                                  ? official.check(condition)
+                                  : true,
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -2842,7 +2845,9 @@ export class Game {
         this.#talkingFace(npc.id, true);
         this.avatars.get(npc.id)?.actions.stopResting();
         this.avatars.get(this.me)?.actions.stopResting();
-        this.talk.show({ name: npc.name, title }, conversation);
+        // (One of a guild's: the player's rank in the guilds, on the talk's card)
+        this.talking.guild = OFFICIALS[npc.role]?.post === "guild";
+        this.talk.show({ name: npc.name, title, card: this.talking.guild ? this.guildCard() ?? { title: null } : null }, conversation);
         this.#keepTalks();
     }
 
@@ -2986,6 +2991,10 @@ export class Game {
 
                 state.reported = result.ok;
                 names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "courier" ? `The package from ${first.from.townName}! Seal unbroken, too.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
+            } else if (effect.guild) {
+                if (!result.ok) {
+                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                }
             } else if (effect.armoury) {
                 names.gift = result.ok && result.item ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : (REFUSALS[result.reason] ?? "There's nothing for you.");
             } else if (kind) {
@@ -2997,6 +3006,10 @@ export class Game {
             this.hud.setGold(this.progress.gold);
             this.onProgress(this.progress);
             this.onStanding(this.standing);
+
+            // (Signed up, or work done: their guild card's words as it now is)
+            Object.assign(names, this.#guildWords());
+            this.#showGuild();
 
             if (this.remote && this.talking?.id === npc.id) {
                 this.talking.conversation.retell();
@@ -3016,7 +3029,7 @@ export class Game {
 
                 return holds[key] ? holds[key]() === value : true;
             },
-            handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel),
+            handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel || effect.guild),
             effect: (effect) => {
                 const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
                 const chosen = kind && kind !== "rise" ? options[kind]?.[index - 1] : null;
@@ -3590,8 +3603,49 @@ export class Game {
 
     // --- Standing in their people (core/standing.js) ---
 
-    // A request taken, moved on, done, failed; a new rank; the armoury's gift; counsel given:
-    // told, shown in the journal, and kept
+    /**
+     * The player's card from the adventurers' guilds (core/standing.js GUILD_RANKS): { title,
+     * rank, merit, from, to (null at the top), opens, next (the next rank's row, or null) }; null
+     * if they've not registered.
+     */
+    guildCard() {
+        const rank = this.standing.guildRank();
+
+        if (rank === null) {
+            return null;
+        }
+
+        const { merit, from, to } = this.standing.guildNext();
+
+        return { title: GUILD_RANKS[rank].title, rank, merit, from, to, opens: GUILD_RANKS[rank].opens, next: GUILD_RANKS[rank + 1] ?? null };
+    }
+
+    // Their guild card in words, for a guild's talk: its rank ({guildRank}), and how much more
+    // merit to the next and what it opens ({guildNext})
+    #guildWords() {
+        const card = this.guildCard();
+        const next = card?.next;
+
+        return {
+            guildRank: card?.title ?? "No",
+            guildNext: !card ? "" : next ? `${card.to - card.merit} more merit and you're ${next.title}: ${next.opens.charAt(0).toLowerCase()}${next.opens.slice(1)}` : "Mithril! I've never stamped a Mithril card before. Can I... can I touch it?",
+        };
+    }
+
+    // Their guild card as it is now: on their plate, and on the talk's card while they're talking
+    // to one of a guild's
+    #showGuild() {
+        const card = this.guildCard();
+
+        this.hud.setGuild(card);
+
+        if (this.talking?.guild) {
+            this.talk.setCard(card ?? { title: null });
+        }
+    }
+
+    // A request taken, moved on, done, failed; a new rank (their people's, or the guilds'); the
+    // armoury's gift; counsel given: told, shown in the journal, and kept
     #stood(event) {
         if (event.id !== this.me) {
             return;
@@ -3606,7 +3660,7 @@ export class Game {
                 ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
                 there: `You're here to hold ${request.target.name}. Stay till they're gone.`,
                 done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}${event.reward?.tome ? ` And the Tome of ${SPELLS[event.reward.tome].label}.` : ""}`,
-                failed: `${request.title}: failed. Your standing suffers.`,
+                failed: `${request.title}: failed. ${request.from.post === "guild" ? "The guild marks it on your card." : "Your standing suffers."}`,
                 void: `${request.title}: it's come to nothing.`,
                 abandoned: `${request.title}: given up.`,
             }[change];
@@ -3617,7 +3671,13 @@ export class Game {
         } else if (event.type === "standing") {
             this.hud.message(`You're ${/^[AEIOU]/.test(event.title) ? "an" : "a"} ${event.title} of your people now. ${STANDINGS[event.rank].opens}`, 4);
             this.sound?.play("wake");
+        } else if (event.type === "guild") {
+            // (Signed up at a guild, or a new rank in them: what the guilds give at it)
+            this.hud.message(event.change === "registered" ? `An adventurer of the guilds, ${event.title} rank: your card's good at every branch.` : `${event.title} rank in the Adventurers' Guild! ${GUILD_RANKS[event.rank].opens}`, 4);
+            this.sound?.play("wake");
         }
+
+        this.#showGuild();
 
         this.hud.setGold(this.progress.gold);
         this.onProgress(this.progress);
@@ -3753,6 +3813,7 @@ export class Game {
 
         this.journal.show({
             standing: { title: standing.title(), points, from, to, opens: STANDINGS[rank].opens, next: STANDINGS[rank + 1] ?? null },
+            guild: this.guildCard(),
             requests: standing.requests.map((request) => {
                 const where = whereTo(request, war);
 
@@ -4935,6 +4996,7 @@ export class Game {
                 break;
             case "request":
             case "standing":
+            case "guild":
             case "gift":
             case "counsel":
                 this.#stood(event);

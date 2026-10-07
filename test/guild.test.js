@@ -13,14 +13,19 @@ import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
-import { SPOILS } from "../client/js/core/spoils.js";
-import { BOARD_SIZE, briefOf, GUILD_REACH, MOST_REQUESTS, objectiveOf, offerBoard, offerContract, offerCourier, progressOf, REQUESTS, SOLDIERS_OUT, WANTED_PARTS } from "../client/js/core/standing.js";
+import { PARTS, SPOILS } from "../client/js/core/spoils.js";
+import { bandOf, holderOf, placesOf } from "../client/js/core/places.js";
+import { BOARD_SIZE, briefOf, FAILED, GUILD_DEARER, GUILD_FAILED, GUILD_RANKS, GUILD_REACH, GUILD_SIZES, meritIn, MOST_REQUESTS, objectiveOf, offerBoard, offerContract, offerCourier, progressOf, REQUESTS, SOLDIERS_OUT, Standing, WANTED_PARTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { landAt, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const giver = Object.freeze({ id: "guild/receptionist", name: "Mirabel Wren", title: "" });
 const HALLED = ["town", "city", "capital"];
+
+// The guild ranks that open a bounty and the camp outside (standing.js GUILD_RANKS)
+const IRON = REQUESTS.hunt.rank;
+const BRONZE = REQUESTS.camp.rank;
 
 const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
@@ -36,11 +41,12 @@ function run(host, ms) {
 
 const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
-// What a guild's board offers, asked many times (by someone whose people start at `home`)
-const offers = (war, town, count = 200, seed = 3, home = undefined) => {
+// What a guild's board offers, asked many times (by someone whose people start at `home`, of a
+// rank in the guilds)
+const offers = (war, town, count = 200, seed = 3, home = undefined, guildRank = 0) => {
     const random = createRandom(seed);
 
-    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, home, random })).filter(Boolean);
+    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, home, guildRank, random })).filter(Boolean);
 };
 
 describe("the guilds' contracts, all within reach of their towns (standing.js offerContract)", () => {
@@ -54,14 +60,16 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
 
         assert.ok(far, "(a people far off)");
         war.relations[["human", far.id].sort().join("|")] = { state: "hostile", since: 0 };
-        assert.ok(!offers(war, town).some(({ kind }) => kind === "hunt"), "none while they're far off");
+        assert.ok(!offers(war, town, 200, 3, undefined, IRON).some(({ kind }) => kind === "hunt"), "none while they're far off");
 
-        // A camp of theirs, but not near: still none; near: a bounty, saying where they are
+        // A camp of theirs, but not near: still none; near: a bounty, saying where they are (to
+        // an adventurer of the rank that opens bounties: none to a Copper)
         war.forces.push({ id: "force-900", realm: far.id, kind: "camp", size: 20, at: [town.at[0] + GUILD_REACH, town.at[1]], path: [], leg: 0, target: "elsewhere", home: war.realm(far.id).capital, since: 0 });
-        assert.ok(!offers(war, town).some(({ kind }) => kind === "hunt"));
+        assert.ok(!offers(war, town, 200, 3, undefined, IRON).some(({ kind }) => kind === "hunt"));
         war.force("force-900").at = [town.at[0] + GUILD_REACH - SOLDIERS_OUT.camp - 200, town.at[1]];
+        assert.ok(!offers(war, town).some(({ kind }) => kind === "hunt"), "none for a Copper");
 
-        const hunts = offers(war, town).filter(({ kind }) => kind === "hunt");
+        const hunts = offers(war, town, 200, 3, undefined, IRON).filter(({ kind }) => kind === "hunt");
 
         assert.ok(hunts.length > 10, `${hunts.length} bounties`);
 
@@ -84,7 +92,7 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
 
         war.relations[["human", other.owner].sort().join("|")] = { state: "hostile", since: 0 };
 
-        const hunts = offers(war, town).filter(({ kind }) => kind === "hunt" && kind);
+        const hunts = offers(war, town, 200, 3, undefined, IRON).filter(({ kind }) => kind === "hunt" && kind);
 
         assert.ok(hunts.length > 5);
         assert.ok(hunts.every(({ target }) => target.realm === war.liege(other.owner)));
@@ -170,11 +178,12 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0], town.at[1] + GUILD_REACH + 100], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
-        assert.ok(!offers(war, town).some(({ kind }) => kind === "camp"));
+        assert.ok(!offers(war, town, 200, 3, undefined, BRONZE).some(({ kind }) => kind === "camp"));
 
         war.force("force-900").at = [town.at[0], town.at[1] + 400];
+        assert.ok(!offers(war, town).some(({ kind }) => kind === "camp"), "none for a Copper");
 
-        const camps = offers(war, town).filter(({ kind }) => kind === "camp");
+        const camps = offers(war, town, 200, 3, undefined, BRONZE).filter(({ kind }) => kind === "camp");
 
         assert.ok(camps.length > 10);
         assert.ok(camps.every(({ target, text }) => target.force === "force-900" && text.includes(`0.4 km south of ${town.name}`)));
@@ -317,6 +326,7 @@ describe("the guild's board at its counter (host.js, dialogue.js)", () => {
 
         put(host.battle.actor(HOST_PLAYER), receptionist.map, [receptionist.square[0], receptionist.square[1] + 2]);
         assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } }).ok, true);
 
         return { host, player: host.players.get(HOST_PLAYER), receptionist };
     };
@@ -462,5 +472,349 @@ describe("the guild's board at its counter (host.js, dialogue.js)", () => {
 
         assert.deepEqual(talk(2).choices.map(({ text }) => text), ["Notice 1, for 10 gold.", "Notice 2, for 20 gold.", "None of them, thanks."]);
         assert.deepEqual(talk(0).choices.map(({ text }) => text), ["I'll come back."]);
+    });
+});
+
+describe("the guilds' ranks: one card, good at every branch (standing.js GUILD_RANKS, Standing)", () => {
+    it("climbs from Copper to Mithril by merit, each rank asking more than the last; earned only by the guilds' work, and a rank earned kept", () => {
+        // (The ladder: as the receptionist tells it, each further than the last, each paying more,
+        // asking more and of stronger beasts, never less)
+        assert.deepEqual(GUILD_RANKS.map(({ title }) => title), ["Copper", "Iron", "Bronze", "Silver", "Gold", "Mithril"]);
+        assert.equal(GUILD_RANKS[0].merit, 0);
+
+        for (let rank = 1; rank < GUILD_RANKS.length; rank++) {
+            const [last, next] = [GUILD_RANKS[rank - 1], GUILD_RANKS[rank]];
+
+            assert.ok(next.merit - last.merit > (GUILD_RANKS[rank - 2] ? last.merit - GUILD_RANKS[rank - 2].merit : 0), `${next.title}: further than the last`);
+            assert.ok(next.pay > last.pay && next.more >= last.more && next.level >= last.level, next.title);
+            assert.ok(next.more > last.more || next.level > last.level || Object.values(REQUESTS).some(({ rank: opens }) => opens === rank) || Object.values(GUILD_SIZES).includes(rank), `${next.title}: harder work than ${last.title}'s`);
+        }
+
+        // (Every contract of the guilds' earns merit, and none of a people's)
+        for (const kind of ["beasts", "hunt", "camp", "parts", "courier", "clear"]) {
+            const merit = REQUESTS[kind].reward.merit;
+
+            assert.ok(Number.isFinite(merit) ? merit > 0 : Object.values(merit).every((each) => each > 0), kind);
+            assert.equal(REQUESTS[kind].reward.standing, 0, kind);
+        }
+
+        assert.equal(meritIn({ kind: "wild", from: { post: "hall" }, reward: { standing: 6, gold: 6 } }), 0);
+        assert.equal(meritIn({ kind: "beasts", from: { post: "guild" }, reward: { gold: 9 } }), REQUESTS.beasts.reward.merit, "one given before merit was kept: its kind's");
+
+        const standing = new Standing();
+
+        // Not registered: no card, no rank, no merit to earn
+        assert.equal(standing.guildRank(), null);
+        assert.equal(standing.guildTitle(), null);
+        assert.equal(standing.guildNext(), null);
+        assert.deepEqual(standing.earn(50), []);
+        assert.equal(standing.guild, null);
+
+        // Registered: Copper, once
+        assert.equal(standing.register(), true);
+        assert.equal(standing.register(), false);
+        assert.equal(standing.guildTitle(), "Copper");
+        assert.deepEqual(standing.guildNext(), { merit: 0, from: 0, to: GUILD_RANKS[1].merit });
+
+        // Merit: each rank reached told, two at once if it's so much
+        assert.deepEqual(standing.earn(GUILD_RANKS[1].merit - 1), []);
+        assert.deepEqual(standing.earn(1), [{ rank: 1, title: "Iron" }]);
+        assert.deepEqual(standing.earn(GUILD_RANKS[3].merit - GUILD_RANKS[1].merit), [
+            { rank: 2, title: "Bronze" },
+            { rank: 3, title: "Silver" },
+        ]);
+
+        // A contract failed costs merit, but never the rank earned; and never their people's standing
+        standing.earn(GUILD_FAILED + 1);
+        standing.earn(-GUILD_FAILED);
+        assert.equal(standing.guild.merit, GUILD_RANKS[3].merit + 1);
+        standing.earn(-GUILD_FAILED);
+        assert.equal(standing.guild.merit, GUILD_RANKS[3].merit);
+        assert.equal(standing.guildTitle(), "Silver");
+        assert.equal(standing.points, 0);
+
+        // To the top, and kept as it is
+        standing.earn(10000);
+        assert.equal(standing.guildTitle(), "Mithril");
+        assert.equal(standing.guildNext().to, null);
+        assert.deepEqual(new Standing(JSON.parse(JSON.stringify(standing))).toJSON(), standing.toJSON());
+        assert.deepEqual(new Standing({}).toJSON().guild, null);
+    });
+
+    it("gives harder work the higher the rank: more to bring down or in, stronger beasts, bigger places, bounties from Iron and camps from Bronze, and better pay", () => {
+        const plan = planWorld(3);
+        const war = new War(plan);
+        const home = startFor(plan, "human").at;
+        const towns = war.towns.filter(({ kind }) => HALLED.includes(kind)).sort((a, b) => apart(a.at, home) - apart(b.at, home));
+        const levels = [];
+
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+
+        // (Near home, and far out; a town with a camp outside it, of a people at war with its own)
+        for (const town of [towns[0], towns[Math.floor(towns.length / 2)], towns.at(-1)]) {
+            const foe = town.owner === "orc" ? "human" : "orc";
+
+            war.relations[[town.owner, foe].sort().join("|")] = { state: "hostile", since: 0 };
+            war.forces.push({ id: `force-${town.id}`, realm: foe, kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm(foe).capital, since: 0 });
+
+            // (The places near held by outlaws or the dead)
+            const held = placesOf(plan).filter((place) => apart(place.at, town.at) <= GUILD_REACH && bandOf(place, holderOf(plan, place, war.places?.[place.id], war.turn)));
+
+            for (let rank = 0; rank < GUILD_RANKS.length; rank++) {
+                const { more, level, pay } = GUILD_RANKS[rank];
+                const offered = offers(war, town, 120, 5, home, rank);
+                const kinds = new Set(offered.map(({ kind }) => kind));
+
+                assert.ok(offered.length > 50, `${town.name}, ${GUILD_RANKS[rank].title}: ${offered.length}`);
+
+                // (Only the work the rank opens; the camp outside from Bronze)
+                assert.ok(offered.every(({ kind }) => REQUESTS[kind].rank <= rank), [...kinds].join(", "));
+                assert.equal(kinds.has("camp"), rank >= REQUESTS.camp.rank, `${GUILD_RANKS[rank].title}: the camp`);
+
+                for (const contract of offered) {
+                    const { kind, target, reward } = contract;
+
+                    assert.equal(reward.standing, 0);
+                    assert.equal(reward.merit, kind === "clear" ? REQUESTS.clear.reward.merit[held.find(({ id }) => id === target.place).size] : REQUESTS[kind].reward.merit, kind);
+
+                    // (More of them, the higher the rank)
+                    if (kind === "beasts" || kind === "hunt") {
+                        assert.ok(target.need >= 2 + more && target.need <= 4 + more, `${kind}: ${target.need}`);
+                    }
+
+                    if (kind === "parts") {
+                        const least = PARTS[target.part].worth <= 4 ? 3 : 2;
+
+                        assert.ok(target.need >= least + more && target.need <= least + more + 2, `${kind}: ${target.need}`);
+                    }
+
+                    // (Beasts of the rank's level, as near as the land has them)
+                    if (kind === "beasts") {
+                        assert.ok(target.level >= 1 && target.level <= level, `level ${target.level}`);
+                        assert.equal(target.level > 1, contract.text.includes(`level ${target.level} or more`));
+                        levels[rank] = Math.max(levels[rank] ?? 0, target.level);
+                    }
+
+                    // (The biggest place near that the rank gives)
+                    if (kind === "clear") {
+                        const most = Math.max(...held.filter((place) => GUILD_SIZES[place.size] <= rank).map((place) => GUILD_SIZES[place.size]));
+                        const size = held.find(({ id }) => id === target.place).size;
+
+                        assert.equal(GUILD_SIZES[size], most, `${GUILD_RANKS[rank].title}: ${size}`);
+                    }
+
+                    // (Paid as the rank has it: the camp's, a fixed sum)
+                    if (kind === "camp") {
+                        assert.equal(reward.gold, Math.round(REQUESTS.camp.reward.gold * pay));
+                    }
+                }
+
+                // (From GUILD_DEARER, the dearer half of the parts wanted: never the cheapest)
+                const parts = new Set(offered.filter(({ kind }) => kind === "parts").map(({ target }) => target.part));
+                const all = new Set(offers(war, town, 120, 5, home, 0).filter(({ kind }) => kind === "parts").map(({ target }) => target.part));
+
+                if (rank >= GUILD_DEARER && all.size > 1) {
+                    const cheapest = Math.min(...[...all].map((part) => PARTS[part].worth));
+
+                    assert.ok([...parts].every((part) => PARTS[part].worth > cheapest || [...all].every((each) => PARTS[each].worth === cheapest)), [...parts].join(", "));
+                }
+            }
+        }
+
+        // (Stronger beasts asked for far out, by the higher ranks)
+        assert.ok(levels.every((each, rank) => rank === 0 || each >= levels[rank - 1]), levels.join(", "));
+        assert.ok(levels.at(-1) >= 4, levels.join(", "));
+    });
+});
+
+describe("the guilds' ranks at their counters (host.js)", () => {
+    // A world with its player before a town's guild's receptionist (the home town's, or the
+    // town's whose place is given), talking
+    const counter = (host, place = "home") => {
+        const guild = [...host.world.interiors.buildings.values()].find(({ kind, place: at }) => kind === "guild" && at === place);
+        const actor = host.battle.actor(HOST_PLAYER);
+
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        put(actor, "town", host.world.spawns.player);
+        host.command(HOST_PLAYER, { type: "enter", link: guild.door.id });
+        host.command(HOST_PLAYER, { type: "stop" });
+
+        // (At home, a while for its folk to settle; another town's, straight to its counter)
+        if (place === "home") {
+            run(host, 1000);
+        }
+
+        const receptionist = host.battle.actor(guild.folk.find(({ role }) => role === "receptionist").id);
+
+        put(actor, receptionist.map, [receptionist.square[0], receptionist.square[1] + 2]);
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
+
+        return receptionist;
+    };
+    const world = (character = {}) => {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO, ...character });
+        host.populate();
+
+        return { host, player: host.players.get(HOST_PLAYER) };
+    };
+
+    it("signs a player up once, and knows their card at every branch: work off any guild's board, of their rank there", () => {
+        const { host, player } = world();
+        const ask = () => host.command(HOST_PLAYER, { type: "effect", effect: { work: "ask" } });
+
+        counter(host);
+        assert.equal(ask().reason, "unregistered");
+
+        const events = [];
+        const signed = host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } });
+
+        events.push(...run(host, STEP_MS));
+        assert.equal(signed.ok, true);
+        assert.equal(player.standing.guildTitle(), "Copper");
+        assert.deepEqual(events.filter(({ type }) => type === "guild").map(({ change, title }) => [change, title]), [["registered", "Copper"]]);
+        assert.equal(ask().ok, true);
+
+        // At another town's guild: the same card, never another
+        const other = host.world.plan.places.find((place) => place.id !== host.world.start.id && HALLED.includes(place.kind));
+
+        host.world.maps.town.settlements.of(other);
+        player.standing.earn(GUILD_RANKS[2].merit);
+        counter(host, other.id);
+
+        const board = ask();
+
+        assert.equal(board.ok, true, JSON.stringify(board));
+        assert.ok(board.board.filter(({ kind }) => kind !== "courier").every(({ target }) => !target.need || target.need >= 2 + GUILD_RANKS[2].more), "a Bronze's work");
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } }).ok, true);
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[2].merit, "signed up again: the same card");
+        assert.ok(!run(host, STEP_MS).some(({ type }) => type === "guild"));
+
+        // (Signing up only at a guild)
+        assert.deepEqual(new Standing(player.standing.toJSON()).toJSON(), player.standing.toJSON());
+    });
+
+    it("earns the guilds' merit for their work, never standing; failed or given up, merit lost and never standing; a people's still costs standing", () => {
+        const { host, player } = world();
+        const home = host.war.town(host.world.start.id);
+        const guild = (kind, extra = {}) => ({ kind, title: kind, from: { id: "guild/receptionist", name: "Mira", title: "", town: home.id, townName: home.name, post: "guild" }, given: 0, state: "open", count: 0, until: 999, text: "", key: `${kind}-${home.id}-${extra.key ?? 0}`, target: { wild: true, need: 1, near: { town: home.id, name: home.name, at: [...home.at], reach: GUILD_REACH } }, reward: { standing: 0, gold: 10, merit: GUILD_RANKS[1].merit }, ...extra });
+
+        counter(host);
+        host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } });
+        run(host, STEP_MS);
+
+        // Done and told of: the merit, and a rank with it; their standing as it was
+        const done = player.standing.take(guild("beasts"));
+
+        done.state = "done";
+
+        const told = host.command(HOST_PLAYER, { type: "effect", effect: { report: true } });
+        const events = run(host, STEP_MS);
+
+        assert.equal(told.ok, true, JSON.stringify(told));
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit);
+        assert.equal(player.standing.points, 0);
+        assert.deepEqual(events.filter(({ type }) => type === "guild").map(({ change, title }) => [change, title]), [["rank", "Iron"]]);
+        assert.ok(!events.some(({ type }) => type === "standing"));
+
+        // Given up, and let run out: merit lost, but not the rank; never standing
+        player.standing.points = 50;
+        player.standing.earn(GUILD_FAILED * 2);
+
+        const given = player.standing.take(guild("beasts", { key: 1 }));
+
+        assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: given.id }).ok, true);
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit + GUILD_FAILED);
+        player.standing.take(guild("beasts", { key: 2, until: host.war.turn - 1 }));
+        run(host, 2000);
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit);
+        assert.equal(player.standing.guildTitle(), "Iron");
+        player.standing.take(guild("beasts", { key: 3 }));
+        assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: player.standing.requests[0].id }).ok, true);
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit, "never below Iron");
+        assert.equal(player.standing.points, 50);
+
+        // (A reeve's given up: standing lost, and no merit)
+        const reeve = player.standing.take({ ...guild("wild", { key: 4 }), from: { id: "hall/reeve", name: "Ida", title: "Reeve", town: home.id, townName: home.name, post: "hall" } });
+
+        assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: reeve.id }).ok, true);
+        assert.equal(player.standing.points, 50 - FAILED);
+        assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit);
+    });
+
+    it("counts only beasts of the level a contract asks for", () => {
+        const { host, player } = world();
+        const home = host.war.town(host.world.start.id);
+        const actor = host.battle.actor(HOST_PLAYER);
+        const near = { town: home.id, name: home.name, at: [...home.at], reach: GUILD_REACH };
+
+        player.standing.register();
+        player.standing.take({ kind: "beasts", title: "Beasts", from: { id: "guild/receptionist", name: "Mira", title: "", town: home.id, townName: home.name, post: "guild" }, given: 0, state: "open", count: 0, until: 999, text: "", key: home.id, target: { wild: true, need: 2, level: 3, near }, reward: { standing: 0, gold: 10, merit: 3 } });
+        put(actor, "town", host.world.spawns.player);
+        Object.assign(actor, { hp: 5000, maxHp: 5000 });
+
+        // (One too weak to count, then one strong enough)
+        for (const [id, tier] of [
+            ["weak", 2],
+            ["strong", 3],
+        ]) {
+            host.battle.add({ id, kind: "orc", name: "Orc", weapon: "cleaver", team: "orcs", square: [actor.square[0] + 1, actor.square[1]], wild: { creature: "orc", tier } });
+            host.battle.actor(id).hp = 1;
+            host.command(HOST_PLAYER, { type: "engage", target: id });
+            run(host, 20000);
+            assert.ok(host.battle.actor(id)?.dead ?? true, id);
+        }
+
+        assert.equal(player.standing.requests[0].count, 1);
+    });
+
+    it("gives a player who'd registered before the guilds kept a card theirs, with the merit of the guild work they'd done", () => {
+        const done = [
+            { id: "request-1", kind: "beasts", title: "Beasts", from: { post: "guild", town: "x", townName: "X" }, state: "done", target: { wild: true, need: 2 }, reward: { standing: 0, gold: 20 } },
+            { id: "request-2", kind: "clear", title: "Clear", from: { post: "guild", town: "x", townName: "X" }, state: "done", target: { place: "p" }, reward: { standing: 0, gold: 40 } },
+            { id: "request-3", kind: "hunt", title: "Hunt", from: { post: "guild", town: "x", townName: "X" }, state: "failed", target: { realm: "orc", need: 2 }, reward: { standing: 0, gold: 20 } },
+            { id: "request-4", kind: "wild", title: "Roads", from: { post: "hall", town: "x", townName: "X" }, state: "done", target: { wild: true, need: 2 }, reward: { standing: 20, gold: 20 } },
+        ];
+        const { player } = world({ talks: { memory: {}, knowledge: ["guildMember"] }, standing: { points: 30, done } });
+
+        assert.equal(player.standing.guild.merit, REQUESTS.beasts.reward.merit + REQUESTS.clear.reward.merit.small);
+        assert.equal(world({ standing: { points: 30, done } }).player.standing.guild, null, "never registered");
+        assert.equal(world({ talks: { knowledge: ["guildMember"] }, standing: { guild: { merit: 7 } } }).player.standing.guild.merit, 7, "a card kept: as it is");
+    });
+
+    it("talks of the player's card: registering only without one, the board and their rank with it", () => {
+        const tree = TREES.receptionist;
+        const talk = (member, met = true) => {
+            const conversation = new Conversation(tree, {
+                speaker: { id: "receptionist", name: "Mirabel Wren", title: "" },
+                player: { name: "Ada" },
+                names: { guildRank: "Bronze", guildNext: "40 more merit and you're Silver.", town: "Redemoor" },
+                memory: { talks: met ? 1 : 0, flags: [] },
+                check: (condition) => ("member" in condition ? condition.member === member : true),
+            });
+
+            return conversation;
+        };
+        const said = (conversation) => conversation.choices.map(({ text }) => text);
+
+        // (A card from another branch, the first time here: known)
+        assert.match(talk(true, false).line, /Bronze rank/);
+        assert.ok(!said(talk(true)).some((text) => text.includes("register")));
+        assert.ok(said(talk(true)).includes("Anything on the board for me?"));
+        assert.ok(said(talk(false)).includes("I'd like to register as an adventurer."));
+        assert.ok(!said(talk(false)).includes("Anything on the board for me?"));
+        assert.ok(!said(talk(false)).includes("How's my card looking?"));
+
+        const asked = talk(true);
+
+        asked.choose(said(asked).indexOf("How's my card looking?"));
+        assert.match(asked.line, /Bronze( rank)?! 40 more merit and you're Silver\.$/);
+
+        // (Signing up: the host told, besides what she and the player remember)
+        const signing = talk(false);
+
+        signing.choose(said(signing).indexOf("I'd like to register as an adventurer."));
+        assert.deepEqual(signing.choices[0].effects, [{ remember: "registered" }, { learn: "guildMember" }, { guild: "register" }]);
     });
 });
