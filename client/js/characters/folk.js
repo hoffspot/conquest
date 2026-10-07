@@ -29,7 +29,7 @@ const LINEAGES = [
 const PARTS = {
     barkeep: {
         m: { wear: [["shirt"], ["trousers", "breeches"], ["boots"], ["belt"], ["apron"]], hair: ["bald", "buzz", "short", "swept"], beard: ["full", "short", "stubble", "goatee"], build: { weight: [0.6, 0.9], muscle: [0.45, 0.65], belly: [0.3, 0.9] } },
-        f: { wear: [["chemise"], ["bodice"], ["kirtle", "skirt"], ["boots"], ["apron"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.55, 0.8], muscle: [0.45, 0.6] } },
+        f: { wear: [["chemise"], ["bodice"], ["kirtle", "skirt"], ["boots"], ["apron"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.55, 0.8], muscle: [0.45, 0.6], bust: [0.5, 0.85] } },
     },
     wench: { f: { wear: [["chemise"], ["bodice"], ["skirt", "greenSkirt", "kirtle"], ["boots"], ["tankard"]], hair: ["ponytail", "bob", "long", "topknot"], build: { weight: [0.38, 0.6], muscle: [0.38, 0.5], bust: [0.55, 0.9] } } },
     patron: {

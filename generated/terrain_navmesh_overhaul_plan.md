@@ -1065,6 +1065,8 @@ Android), so anything with many instances is also merged per chunk.
 6. **Animation.** Keep the procedural gait and actions. Add the Quaternius Universal Animation
    Library (CC0) through the existing retargeter for climbing, ledges, swimming, rolls and emotes;
    terrain makes climbing and slopes matter.
+   - **Decided (2026-10-07):** emotes only. Rolls, swimming, climbing and ledges are left out (see
+     the change log).
 7. **Budgets** (triangles and draw calls):
 
    | | Mid-range phone | Low-end phone |
@@ -5061,3 +5063,27 @@ converted data is to be measured in M8 against today's hm08 data.
     no eye bones), so they cost no bones and no morph targets.
   - About 5 µs a character as often as it's posed. The character lab's *Face* tab has *Gaze*
     (ahead, at you, or nowhere).
+- **2026-10-07, emotes** (§10, step 6; docs/CHARACTERS.md *Emotes*, docs/GAME.md *Emotes*).
+  - **Scope, the user's choice:** emotes only. A dodge roll, swimming and climbing (with ledges)
+    are left out of step 6; deep water stays blocked and nothing's climbed.
+  - Eight emotes (`core/emotes.js`): wave, bow, nod, shake the head, cheer, fist pump, puzzled
+    and beckon. Five from Mesh2Motion's clips (CC0, baked as the rests are: a greeting, a nod, a
+    shake of the head, a fist pump, and the cheer and head scratch already baked), a second wave
+    from the adventurers' hailing (mirrored, the scabbard's side kept clear), the bow keyed (the
+    clip's *Bow* barely bends: hands held before the chest), and the courtesans' beckon standing.
+    Left out of the bake: *Victory* (the shoulder 74° to 89° past its range) and *Angry* (13° to
+    20° past).
+  - The player shows them from their own wheel (the defaults on its second side: a wave, a bow, a
+    nod and a cheer round Make camp) or a quick action. They're a host command, so everyone they
+    play with sees them; they stop where they're going for it, and can't mid-blow, mid-spell,
+    down or dead. Walking off, fighting or falling ends one.
+  - The folk greet whoever comes to talk to them (a bow from a town's great and its priests, a
+    nod from soldiers and followers, a wave from everyone else), nod at every other reply, and
+    cheer (a cheer or a fist pump, 0.3 to 1.2 s after) a creature or the orc falling within 12 m
+    of them; soldiers and followers cheer a foe of theirs falling to a friend. Only those standing
+    about: not going anywhere, fighting, talking or sat down.
+  - Each shows its face: smiling for a wave, a cheer, a fist pump and a beckon. The folk's acts
+    (serving, forging, reading, blessing and the rest) no longer look angry: an act without its
+    own face shows the folk's mood, as a rest does.
+  - The motion check covers every way of every emote, on the plain and the sheathed-sword looks
+    (18 motions on 30 bodies): no regressions. `NET_VERSION` 60.

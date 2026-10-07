@@ -77,6 +77,12 @@ export const BAKES = [
     { name: "hitHead", from: [["base", "Hit_Head"]], hold: {}, hit: 0.2 },
     { name: "dodgeSide", from: [["addon", "Dodge_left"]], hold: {}, hit: 0.3 },
     { name: "dodgeBack", from: [["addon", "Dodge_back"]], hold: {}, hit: 0.5 },
+    // Emotes (actions.js EMOTE_WAYS: the player's, and the folk's greetings and cheers): a wave
+    // hello, a nod, a shake of the head (both hands up, palms out), and a fist pumped
+    { name: "greeting", from: [["addon", "Greeting"]], hold: {}, hit: 1.2 },
+    { name: "headNod", from: [["addon", "Head Nod"]], hold: {}, hit: 0.4 },
+    { name: "headShake", from: [["addon", "Reject"]], hold: {}, hit: 1 },
+    { name: "fistPump", from: [["addon", "Victory Fist Pump"]], hold: {}, hit: 0.9 },
 ];
 
 // Tried and left out (the motion check, every body: docs/CHARACTERS.md):
@@ -99,6 +105,10 @@ export const BAKES = [
 //    (Consume Item: from nothing, and the patrons drink from their tankards already), a salute
 //    (Salute: not with a sword in the hand, as the sentries have), sitting still (Sitting_Idle:
 //    hardly moves), and those with the legs' part in them (dances, a hunched rest, meditating);
+//  - for emotes: a bow (Bow: the hands brought together before the chest, hardly bowing: a bow
+//    from the waist is keyed instead), both arms flung up (Victory: one arm up, as the cheer, and
+//    the shoulder 74 to 89° past its range on the tallest and bulkiest bodies), and arms flung
+//    wide in anger (Angry: the shoulder 13 to 20° past its range);
 //  - for the guards' sway: a shield held up (Idle_Shield: hardly moves), a golfer's waggle
 //    (Golf_idle) and a pistol held out (Pistol_Idle);
 //  - for flinches and parries: knocked off the feet (Hit_Knockback), a crouched block (Defend) and

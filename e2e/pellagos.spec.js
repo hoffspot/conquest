@@ -2080,11 +2080,30 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         game.battle.command("player", { type: "move", to: [3, 3] });
         game.advance(8);
+
+        // (The footsteps heard from here: on what, and how long after they're played)
+        const step = game.sound.step.bind(game.sound);
+
+        game.heardSteps = [];
+        game.sound.step = (surface, at, options = {}) => {
+            game.heardSteps.push({ surface, delay: options.delay ?? 0 });
+
+            return step(surface, at, options);
+        };
     });
 
     const up = await through("taproom", "stairs", 6);
 
     expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 3], facing: Math.PI, minimap: "upstairs", heard: "upstairs" });
+
+    // Up them, a few treads heard on the boards one after another
+    const treads = await page.evaluate(() => window.pellagos.game.heardSteps.filter(({ delay }) => delay > 0));
+
+    expect(treads.map(({ delay, surface }) => [Math.round(delay * 100), surface])).toEqual([
+        [26, "wood"],
+        [52, "wood"],
+        [78, "wood"],
+    ]);
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
     expect(await page.evaluate(() => window.pellagos.game.avatars.get("madam").object.visible)).toBe(true);
 
@@ -3383,10 +3402,13 @@ test("tapping someone walks the player up to talk: their name and what they are,
 
         game.advance(8);
 
-        return { map: game.battle.actor("player").map, order, name: game.world.folk.find(({ id }) => id === "barkeep").name, talking: game.battle.actor("barkeep").talkingTo };
+        // (Greeted as he's come up to: a wave, from a barkeep)
+        const greeted = game.avatars.get("barkeep").actions.variety.last.has("emote:wave");
+
+        return { map: game.battle.actor("player").map, order, name: game.world.folk.find(({ id }) => id === "barkeep").name, talking: game.battle.actor("barkeep").talkingTo, greeted };
     });
 
-    expect(tapped).toMatchObject({ map: "taproom", order: "approach", talking: "player" });
+    expect(tapped).toMatchObject({ map: "taproom", order: "approach", talking: "player", greeted: true });
 
     const talk = page.locator(".talk");
 
@@ -3396,9 +3418,10 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk.locator(".talk-line")).toContainText(tapped.name.split(" ")[0]);
     await expect(talk.locator(".talk-choice").last()).toHaveText(/Farewell/);
 
-    // Asking for news: he answers, with things to ask next
+    // Asking for news: he answers (with a nod), with things to ask next
     await talk.getByRole("button", { name: /news/ }).click();
     await expect(talk.getByRole("button", { name: /Thanks for that/ })).toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.avatars.get("barkeep").actions.variety.last.has("emote:nod"))).toBe(true);
 
     const news = await talk.locator(".talk-line").textContent();
 
@@ -3412,6 +3435,21 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk).toBeHidden();
     await expect(page.locator("#menu")).not.toHaveAttribute("open", "");
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
+
+    // Waving goodbye from the action wheel: the host's told, and the player's seen waving
+    const waved = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        const done = game.act("emote:wave", "self");
+
+        game.advance(0.5);
+
+        return { ok: done.ok, emoting: game.avatars.get("player").actions.emoting };
+    });
+
+    expect(waved).toEqual({ ok: true, emoting: "wave" });
 
     // News of a raid on the town, and a war declared far off; the barkeep tapped again
     await page.evaluate(() => {
@@ -5167,14 +5205,15 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
-    // What can go on it: nothing, the healing spells known, and the draughts carried; a foe's
-    // has those, the elements' spells learnt (Fire's) and Stun, and no draughts
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Draught"]);
+    // What can go on it: nothing, the healing spells known, making camp, the emotes and the
+    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's) and Stun,
+    // and no draughts or emotes
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
-    // A draught at NE of wheel two (tapping S turns it over, as flicking it does)
+    // A draught at NE of wheel two, for the bow there (tapping S turns it over, as flicking it does)
     await setup.locator('.slice[data-direction="s"]').click();
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel two"]);
     await setup.locator('.slice[data-direction="ne"]').click();
@@ -5182,7 +5221,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await setup.locator('.wheels-choice[data-action="item:potion"]').click();
     await expect(setup.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
-    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", ne: "item:potion" }]);
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "item:potion", w: "emote:nod", e: "emote:cheer" }]);
 
     // Escape goes back a page, and again; then the game
     await page.keyboard.press("Escape");

@@ -30,12 +30,14 @@ import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
+import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
+import { footing } from "../audio/footing.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -131,6 +133,13 @@ export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? nul
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
 // clenched
 const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null] };
+
+// How long after trading blows with the player a death's still theirs to be told of (s: #ours)
+const FOUGHT = 30;
+
+// Going up or down the stairs: how many treads are heard, how far apart (s), and how fast they're
+// climbed (m/s, as a footstep's: a steady walk)
+const STAIRS = Object.freeze({ treads: 4, apart: 0.26, speed: 1.5 });
 
 // How long the dead lie once they've hit the ground before sinking out of sight (s), and how long
 // they take to sink
@@ -413,7 +422,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -696,6 +705,12 @@ export class Game {
          */
         this.lastInput = 0;
         this.restAt = null;
+
+        /** The folk about to cheer (#cheer): { id, at (the game's clock, s), emote }. */
+        this.cheers = [];
+
+        /** Who's traded blows with the player, and when last (the game's clock, s): #ours. */
+        this.fought = new Map();
 
         /**
          * Talking (core/dialogue.js): who hears what the folk remember of the player and what the
@@ -1369,15 +1384,21 @@ export class Game {
     #register(id, avatar, { wounds }) {
         const character = avatar.character;
 
-        // Footsteps, on whatever ground the foot lands on
+        // Footsteps, on whatever the foot lands on (audio/footing.js), as heavy as the one
+        // stepping (a creature's size) and as its feet are (`gait`: a beast's paws, a serpent's
+        // slither...); none off the ground (a creature in the air, someone Levitating)
         avatar.walker.onStep = (foot, speed) => {
-            const mapId = this.battle.actor(id)?.map ?? "town";
-            const map = this.world.maps?.[mapId] ?? this.world;
+            const actor = this.battle.actor(id);
+
+            if ((avatar.flight?.amount ?? 0) > 0.5 || (actor && this.battle.buffOf(actor, "levitate"))) {
+                return;
+            }
+
+            const mapId = actor?.map ?? "town";
             const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
-            const ground = squaresOf(map).ground(Math.floor(x - ox), Math.floor(z - oz));
 
-            this.sound?.step(ground, avatar.object.position, speed);
+            this.sound?.step(this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz), avatar.object.position, { speed, ...avatar.gait });
         };
         character.object.name = id;
         this.view.scene.add(character.object);
@@ -1928,6 +1949,7 @@ export class Game {
         TREE_WIND.time.value = this.clock;
         this.contacts?.begin();
         this.#crowding();
+        this.#cheered();
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -1955,6 +1977,12 @@ export class Game {
             }
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
+
+            // (An emote's over once they're off somewhere, or fighting)
+            if (avatar.actions.emoting && (actor.dead || actor.path.length || actor.attack || actor.casting)) {
+                avatar.actions.stopEmote();
+            }
+
             avatar.every = this.#posing(actor, avatar, dt, pixels);
             this.#gazing(actor, avatar, mine);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
@@ -3179,6 +3207,13 @@ export class Game {
 
         this.#keepTalks();
 
+        // (Heard: whoever they're talking with nods at every other reply)
+        this.talking.replies = (this.talking.replies ?? 0) + 1;
+
+        if (!conversation.ended && this.talking.replies % 2 === 1) {
+            this.avatars.get(this.talking.id)?.actions.emote?.("nod");
+        }
+
         if (conversation.ended) {
             this.#endTalk();
         } else {
@@ -3301,6 +3336,102 @@ export class Game {
         if (how.sound) {
             this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt, volume: how.volume ?? 1 });
         }
+    }
+
+    // What a foot at (x, z) (metres, on its map) lands on (audio/footing.js): the square's ground,
+    // and out in the world the land's, how high it is and whether it's waded through
+    #footingAt(map, x, z) {
+        const [sx, sz] = [Math.floor(x), Math.floor(z)];
+        const ground = squaresOf(map).ground(sx, sz);
+
+        if (!map.biomeAt) {
+            return footing(ground);
+        }
+
+        const chunk = map.chunkAt?.(sx, sz);
+        const k = chunk ? (sz - chunk.y0) * CHUNK + (sx - chunk.x0) : -1;
+
+        return footing(ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
+    }
+
+    // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
+    // treads on what's at the stairs' end (`at`, on the player's floor), coming up to it (`coming`)
+    // louder and louder, going away quieter and quieter
+    #climb(avatar, at, coming) {
+        const map = this.world.maps?.[this.mapId] ?? this.world;
+        const [ox, oz] = this.originOf(this.mapId);
+        const surface = this.#footingAt(map, at.x - ox, at.z - oz);
+
+        for (let tread = 0; tread < STAIRS.treads; tread++) {
+            const near = (coming ? tread + 1 : STAIRS.treads - tread) / STAIRS.treads;
+
+            this.sound?.step(surface, at, { ...avatar.gait, speed: STAIRS.speed, delay: tread * STAIRS.apart, volume: near });
+        }
+    }
+
+    // Whether a death's the player's to be told of ("slain!"): one fallen at their hand or a
+    // follower's, or one they'd traded blows with lately (FOUGHT); not the folk and soldiers
+    // falling in fights that aren't theirs
+    #ours({ id, by }) {
+        const killer = by ? this.battle.actor(by) : null;
+        const fought = this.clock - (this.fought.get(id) ?? -Infinity) < FOUGHT;
+
+        this.fought.delete(id);
+
+        return by === this.me || killer?.leader === this.me || fought;
+    }
+
+    // --- Emotes (core/emotes.js) ---
+
+    // Someone showing an emote (host.js "emote": a player's, from their wheel or a quick action):
+    // seen only on the player's map
+    #emote({ id, emote }) {
+        const actor = this.battle.actor(id);
+
+        if (isEmote(emote) && actor?.map === this.mapId && !actor.dead) {
+            this.avatars.get(id)?.actions.emote?.(emote);
+        }
+    }
+
+    // One of the folk (a soldier, a follower) greeting someone who's come to talk to them (host.js
+    // "talk"): bowing, nodding or waving, as befits what they are (GREETINGS); sat down, a nod
+    #greet({ with: other }) {
+        const npc = other ? this.battle.actor(other) : null;
+
+        if (npc && npc.kind !== "player" && npc.map === this.mapId) {
+            this.avatars.get(npc.id)?.actions.emote?.(npc.routine?.seated ? "nod" : greetingOf(npc.role, npc.kind));
+        }
+    }
+
+    // A foe fallen near those who'll be glad of it (core/emotes.js cheering): each of them cheers
+    // a moment after, seen on the player's map
+    #cheer({ id, by }) {
+        const fallen = this.battle.actor(id);
+
+        if (fallen?.map === this.mapId) {
+            this.cheers.push(...cheering(this.battle, fallen, by ? this.battle.actor(by) : null).map(({ id: who, after, emote }) => ({ id: who, at: this.clock + after, emote })));
+        }
+    }
+
+    // The folk whose moment to cheer has come (#cheer), if they're still standing about
+    #cheered() {
+        if (!this.cheers.length) {
+            return;
+        }
+
+        this.cheers = this.cheers.filter(({ id, at, emote }) => {
+            if (this.clock < at) {
+                return true;
+            }
+
+            const actor = this.battle.actor(id);
+
+            if (actor && !actor.dead && !actor.path.length && !actor.attack && actor.map === this.mapId) {
+                this.avatars.get(id)?.actions.emote?.(emote);
+            }
+
+            return false;
+        });
     }
 
     // One of the looks of a spell's light or a bolt (effects.js LOOKS), for a character: any at
@@ -4864,11 +4995,12 @@ export class Game {
                     if (event.id === this.me) {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
                         this.sound?.play("fallen");
-                    } else {
+                    } else if (this.#ours(event)) {
                         hud.message(`The ${battle.actor(event.id).name.toLowerCase()} is slain!`, 3);
                         this.sound?.play("slain", { delay: avatar.lands });
                     }
 
+                    this.#cheer(event);
                     this.onDeath(event);
                     break;
                 }
@@ -4910,9 +5042,16 @@ export class Game {
 
                     this.#safetyCrossed(event.id);
 
-                    // A door opening and banging shut, heard on the player's side of it
-                    if (event.kind === "door" && (event.to === this.mapId || event.from === this.mapId)) {
-                        this.sound?.play("door", { at: event.to === this.mapId ? avatar.object.position : was });
+                    // A door opening and banging shut, or treads on the stairs, heard on the player's
+                    // side of them
+                    if (event.to === this.mapId || event.from === this.mapId) {
+                        const at = event.to === this.mapId ? avatar.object.position : was;
+
+                        if (event.kind === "door") {
+                            this.sound?.play("door", { at });
+                        } else if (event.kind === "stairs") {
+                            this.#climb(avatar, at, event.to === this.mapId);
+                        }
                     }
 
                     break;
@@ -5006,6 +5145,12 @@ export class Game {
                 break;
             case "camp":
                 this.#pitch(event);
+                break;
+            case "emote":
+                this.#emote(event);
+                break;
+            case "talk":
+                this.#greet(event);
                 break;
             case "strike":
             case "sortied":
@@ -5267,17 +5412,32 @@ export class Game {
             return;
         }
 
+        // (A shield slung on the back: taken off it before the weapon's drawn, slung there again
+        // after it's put away, each step heard as it comes: Actions.draw)
+        const slung = guard !== "sling" && Boolean(avatar.character.slings);
+
         avatar.actions.draw(guard, on);
 
+        const way = on ? "draw" : "sheathe";
+        const own = DRAWS[guard]?.[way];
+        const shield = slung ? DRAWS.sling?.[way] : null;
         const sound = (DRAW_SOUNDS[guard] ?? ["unsling", "unsling"])[on ? 0 : 1];
 
         if (sound) {
-            this.sound?.play(sound, { at: avatar.object.position, delay: DRAWS[guard]?.[on ? "draw" : "sheathe"].hitAt ?? 0 });
+            this.sound?.play(sound, { at: avatar.object.position, delay: (on && shield ? shield.duration : 0) + (own?.hitAt ?? 0) });
+        }
+
+        if (shield) {
+            this.sound?.play("unsling", { at: avatar.object.position, delay: (on ? 0 : (own?.duration ?? 0)) + shield.hitAt });
         }
     }
 
     #hit(event) {
         const { battle, hud, effects } = this;
+
+        if (event.by && (event.by === this.me || event.id === this.me)) {
+            this.fought.set(event.by === this.me ? event.id : event.by, this.clock);
+        }
         const victim = this.avatars.get(event.id);
         const attacker = event.by ? this.avatars.get(event.by) : null;
         const reaction = REACTIONS[event.reaction];
@@ -6024,7 +6184,7 @@ export class Game {
     act(action, target, { refused = null } = {}) {
         this.#wake();
 
-        const { spell, order, ability, item } = actionOf(action) ?? {};
+        const { spell, order, ability, item, emote } = actionOf(action) ?? {};
         const on = target === "self" ? null : target;
 
         // (Somewhere to go, picked on the world map; someone to summon, chosen)
@@ -6041,7 +6201,7 @@ export class Game {
             return this.#chooseCamp();
         }
 
-        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : null;
+        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : emote ? { type: "emote", emote } : null;
 
         const heard = (result) => {
             // (Setting on someone: the lock heard, as a tap on an enemy)

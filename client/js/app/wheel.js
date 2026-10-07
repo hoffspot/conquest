@@ -7,9 +7,9 @@
 // one), opened again under the finger to flick from there. The player sets what's on each side's
 // other seven slices themselves (Game options, Action wheels: app/wheelsetup.js): for their own
 // wheel ("self": opened on themselves, or held on anyone else who isn't an enemy), their healing,
-// and things from their pack to use; for an enemy's, their attack spells, hexes and blows (and
-// healing: it can be cast on anyone). What's in each slice is an action (ACTIONS), or a thing to
-// use ("item:potion").
+// things from their pack to use, and emotes (a wave, a bow: core/emotes.js); for an enemy's,
+// their attack spells, hexes and blows (and healing: it can be cast on anyone). What's in each
+// slice is an action (ACTIONS), or a thing to use ("item:potion").
 //
 // While a slice's action is cooling down, the slice is greyed out over as much of it as the
 // cooldown has left, sweeping back as it passes. A thing to use shows how many there are.
@@ -19,6 +19,7 @@
 //
 // The wheel is SVG over the game; the game (game.js) follows the finger and says what to do.
 
+import { EMOTES } from "../core/emotes.js";
 import { ITEMS } from "../core/progress.js";
 import { RENAMED, SPELLS } from "../core/spells.js";
 import { ICONS, ITEM_ICONS, useDefs } from "./icons.js";
@@ -45,10 +46,11 @@ const ON = Object.freeze({ enemy: "enemy", any: "any", friend: "friend" });
 
 /**
  * What each action does: a spell (core/spells.js: each once they know it), an ability
- * (core/progress.js ABILITIES: learnt as the skills grow), or an order (core/host.js command); its
- * label; and whose wheel it goes on (`on`: the player's own ("self"), an enemy's, "any": either,
- * as healing, which can be cast on anyone, or "friend": the player's own, cast on them or on a
- * friend held on).
+ * (core/progress.js ABILITIES: learnt as the skills grow), an order (core/host.js command), or an
+ * emote ("emote:" and its name: core/emotes.js, shown to everyone they play with); its label;
+ * and whose wheel it goes on (`on`: the player's own ("self"), an enemy's, "any": either, as
+ * healing, which can be cast on anyone, or "friend": the player's own, cast on them or on a friend
+ * held on).
  */
 export const ACTIONS = Object.freeze({
     ...Object.fromEntries(Object.entries(SPELLS).map(([id, { label, target }]) => [id, { label, spell: id, learnt: id, on: ON[target] ?? "self" }])),
@@ -57,6 +59,7 @@ export const ACTIONS = Object.freeze({
     shieldBash: { label: "Shield bash", ability: "shieldBash", learnt: "shieldBash", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
     camp: { label: "Make camp", order: "camp", on: "self" },
+    ...Object.fromEntries(Object.entries(EMOTES).map(([name, { label }]) => [`emote:${name}`, { label, emote: name, on: "self" }])),
 });
 
 // Whether an action goes on a wheel
@@ -97,12 +100,13 @@ function lookOf(key) {
 
 /**
  * What's on each wheel until the player changes it: each side's slices (a direction and what's
- * in it). Vigor at the top of their own, and Make camp at the top of its other side; the four
- * elements' first spells and Stun on an enemy's; everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
+ * in it). Vigor at the top of their own, and Make camp at the top of its other side, with a wave,
+ * a bow, a nod and a cheer round it; the four elements' first spells and Stun on an enemy's;
+ * everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
  * pick a fight with them.)
  */
 export const WHEELS = Object.freeze({
-    self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp" })]),
+    self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" })]),
     enemy: Object.freeze([Object.freeze({ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }), Object.freeze({})]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
 });

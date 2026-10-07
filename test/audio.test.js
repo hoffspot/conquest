@@ -5,7 +5,8 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
-import { BUSES, FOOTSTEPS, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { SURFACES } from "../client/js/audio/footing.js";
+import { BUSES, FOOTSTEPS, GAITS, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -281,24 +282,112 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
-    it("plays footsteps softly, everyone's alike, under the blows: walking about a ninth of a slash, running under a fifth", () => {
+    it("plays footsteps barely heard, everyone's alike, well under the blows: walking about a fourteenth of a slash, running about a ninth", () => {
         const sound = new Sound({ fetch: fromDisk, enabled: false });
         const heard = [];
 
         sound.play = (name, { volume }) => heard.push({ name, loud: volume * SOUNDS[name].volume });
 
-        // (Grass and a road walking; cobbles and planks running)
-        sound.step(0, null, 1.5);
-        sound.step(1, null, 1.5);
-        sound.step(2, null, 4.5);
-        sound.step(5, null, 4.5);
+        // (Every footing has its own footsteps)
+        for (const surface of SURFACES) {
+            sound.step(surface, null, { speed: 1.5 });
+        }
 
-        const slash = SOUNDS.slash.volume;
+        assert.deepEqual(
+            heard.map(({ name }) => name),
+            SURFACES.map((surface) => `step${surface[0].toUpperCase()}${surface.slice(1)}`),
+        );
+        assert.ok(heard.every(({ name }) => SOUNDS[name]));
+        assert.ok(heard.every(({ loud }) => loud < SOUNDS.slash.volume / 11), `walking: ${heard.map(({ loud }) => (SOUNDS.slash.volume / loud).toFixed(1)).join()}`);
 
-        assert.deepEqual(heard.map(({ name }) => name), ["stepGrass", "stepDirt", "stepStone", "stepWood"]);
-        assert.ok(heard.slice(0, 2).every(({ loud }) => loud < slash / 8), "walking");
-        assert.ok(heard.slice(2).every(({ loud }) => loud < slash / 5), "running");
-        assert.ok(FOOTSTEPS.walk + FOOTSTEPS.pace * 1.5 <= (0.6 + 0.15 * 1.5) / 3 + 1e-9 && FOOTSTEPS.run <= 1.3 / 3, "a third of what they were");
+        // (Running on cobbles and boards)
+        heard.length = 0;
+        sound.step("stone", null, { speed: 4.5 });
+        sound.step("wood", null, { speed: 4.5 });
+        assert.ok(heard.every(({ loud }) => loud < SOUNDS.slash.volume / 7), "running");
+
+        // (Each a little louder or softer than the last, never by much)
+        heard.length = 0;
+
+        for (let k = 0; k < 40; k++) {
+            sound.step("grass", null, { speed: 1.5 });
+        }
+
+        const louds = heard.map(({ loud }) => loud);
+        const middle = (FOOTSTEPS.walk + FOOTSTEPS.pace * 1.5) * SOUNDS.stepGrass.volume;
+
+        assert.ok(new Set(louds).size > 30 && louds.every((loud) => Math.abs(loud / middle - 1) <= FOOTSTEPS.jitter + 1e-9));
+    });
+
+    it("hears footsteps only near, where a blow's heard further off", async () => {
+        const { sound } = await started();
+
+        sound.setListener(0, 0);
+        assert.ok(sound.step("grass", { x: 10, z: 0 }, { speed: 1.5 }), "10 m off");
+        assert.equal(sound.step("grass", { x: FOOTSTEPS.far, z: 0 }, { speed: 1.5 }), null, `${FOOTSTEPS.far} m off`);
+        assert.ok(sound.play("slash", { at: { x: FOOTSTEPS.far + 5, z: 0 } }), "a blow further off");
+        sound.close();
+    });
+
+    it("plays a creature's footfalls as heavy as it's big and as its feet sound, and none for what floats", (t) => {
+        const sound = new Sound({ fetch: fromDisk, enabled: false });
+        const heard = [];
+
+        // (Each step as loud as the middle of its jitter)
+        t.mock.method(Math, "random", () => 0.5);
+
+        sound.play = (name, { volume, rate, delay }) => heard.push({ name, volume, rate, delay });
+
+        // (A rat's paws, a person, a dragon's paws, walking at 1.5 m/s on grass)
+        sound.step("grass", null, { speed: 1.5, size: 0.28, feet: "paws" });
+        sound.step("grass", null, { speed: 1.5 });
+        sound.step("grass", null, { speed: 1.5, size: 3.1, feet: "paws" });
+
+        const [rat, person, dragon] = heard;
+
+        assert.ok(rat.volume < person.volume && person.volume < dragon.volume, heard.map(({ volume }) => volume.toFixed(3)).join());
+        assert.ok(rat.rate > person.rate && person.rate > dragon.rate, heard.map(({ rate }) => rate.toFixed(2)).join());
+
+        // (A dragon's long stride at 5 m/s is a walk, where a person's running)
+        heard.length = 0;
+        sound.step("grass", null, { speed: 5, size: 3.1, feet: "paws" });
+        sound.step("grass", null, { speed: 5 });
+        assert.ok(heard[0].volume < FOOTSTEPS.run * 3.1 ** FOOTSTEPS.weight * GAITS.paws.volume && heard[1].volume === FOOTSTEPS.run);
+
+        // (A spider skitters, a slime squelches, a serpent slithers, a frog's webbed feet slap,
+        // whatever's under them; what floats isn't heard)
+        heard.length = 0;
+
+        for (const feet of ["legs", "slime", "scales", "webbed"]) {
+            sound.step("stone", null, { speed: 1, feet });
+        }
+
+        assert.deepEqual(heard.map(({ name }) => name), ["skitter", "squelch", "slither", "squelch"]);
+        assert.equal(sound.step("grass", null, { speed: 1, feet: null }), null);
+
+        // (Later: up the stairs a tread at a time)
+        heard.length = 0;
+        sound.step("wood", null, { delay: 0.52, volume: 0.5 });
+        assert.equal(heard[0].delay, 0.52);
+        assert.ok(Math.abs(heard[0].volume - 0.5 * (FOOTSTEPS.walk + FOOTSTEPS.pace * 1.5)) < 1e-9);
+    });
+
+    it("never plays the same variant of a sound twice running", async () => {
+        const { sound, played } = await started();
+
+        // (Fewer than can sound at once: the browser's clock stands still here)
+        for (let k = 0; k < 20; k++) {
+            sound.play("stepGrass");
+        }
+
+        // (Leaving out the wind, started with the sound)
+        const buffers = sound.buffers.get("stepGrass");
+        const variants = played.map(({ source }) => buffers.indexOf(source.buffer)).filter((variant) => variant >= 0);
+
+        assert.equal(variants.length, 20);
+        assert.ok(variants.every((variant, k) => k === 0 || variant !== variants[k - 1]), variants.join());
+        assert.equal(new Set(variants).size, buffers.length, "and every one of them, in time");
+        sound.close();
     });
 
     it("plays no music without its recordings (offline, say), and doesn't mind", async () => {

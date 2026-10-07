@@ -253,8 +253,16 @@ export class Expressions {
 
         const attack = actions?.attack;
 
+        // (An attack's angry; one of the folk's acts or an emote shows its own face, or none:
+        // as it is)
         if (attack && !attack.rest && !attack.swap) {
-            return "attacking";
+            if (attack.face === undefined) {
+                return "attacking";
+            }
+
+            if (attack.face) {
+                return attack.face;
+            }
         }
 
         return this.talking ? "talking" : this.mood;
