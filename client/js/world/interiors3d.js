@@ -538,6 +538,10 @@ const FLAMES = Object.freeze({
     lamp: { each: 1.3, distance: 15, flicker: 0.06, colour: 0xffc27a, glow: 0.24 },
     sconce: { intensity: 1.8, distance: 6, flicker: 0.1, colour: 0xffa860, glow: 0.45 },
     lantern: { intensity: 4, distance: 11, flicker: 0.08, colour: 0xffbb70, glow: 0.6 },
+    // (The dark elves' own: the witchlight in their hanging lamps, cold and all but steady, and
+    // the amethyst shards in their iron cups on the walls, glowing)
+    witchlight: { intensity: 4, distance: 9, flicker: 0.03, colour: 0xbc9cff, glow: 0.55 },
+    shard: { intensity: 2.6, distance: 6, flicker: 0.02, colour: 0xa898ff, glow: 0.4 },
 });
 
 /**
@@ -3297,8 +3301,24 @@ const PALETTES = Object.freeze({
 // with logs, the lizard folk's with bamboo); the rest are plain: mud, stone, marble
 const FRAMED = new Set(["orc", "lizard"]);
 
-// The light each people's lamps give, in place of candlelight (their fires burn as anyone's)
-const LAMPLIGHT = Object.freeze({ orc: 0xffa060, elf: 0xcfe0ff, darkElf: 0xa47cff, lizard: 0xe8ffc8 });
+// The light each people's lamps give, in place of candlelight (their fires burn as anyone's; the
+// dark elves' a pale lavender, light enough to see their black stone by)
+const LAMPLIGHT = Object.freeze({ orc: 0xffa060, elf: 0xcfe0ff, darkElf: 0xd0b8ff, lizard: 0xe8ffc8 });
+
+// The dark elves' amethyst shards on their walls (interiors3d.js ACCENTS.darkElf): how high
+// their cups are (art pixels) and how far out from the wall, how far clear of a window's side
+// (metres), and each shard of a cluster (its offset along the wall and out, how tall and how wide
+// at its foot: metres)
+const DARK_SHARDS = Object.freeze({
+    high: m(1.95),
+    out: m(0.22),
+    clear: 0.45,
+    points: [
+        [0, 0, 0.3, 0.05],
+        [-0.06, 0.03, 0.2, 0.04],
+        [0.06, -0.02, 0.24, 0.04],
+    ],
+});
 
 // What each people puts up round its walls, high over the windows and the furniture: along each
 // run of wall (`at(s, y, d)`: s along it, y up, d out from it into the room; `along` and `out`
@@ -3374,8 +3394,9 @@ const ACCENTS = {
     },
 
     // The dark elves: fangs of obsidian along the top of the walls, webs in the corners, violet
-    // lamps hanging
-    darkElf(solid, { length, at, along, spots }) {
+    // lamps hanging, lit by witchlight, and between them amethyst shards in iron cups on the
+    // walls, glowing (their black stone and charred wood want more light than others' rooms)
+    darkElf(solid, { length, at, along, spots, clear }) {
         for (let s = m(0.3); s < length; s += m(0.5)) {
             solid.tube([at(s, m(2.97), 0.6), at(s, m(2.62), 0.8)], [m(0.06), 0], material("obsidian", WALL), { sides: 4 });
         }
@@ -3408,6 +3429,29 @@ const ACCENTS = {
 
             solid.tube([[x, m(2.95), z], [x, y + m(0.12), z]], m(0.012), material("iron-black", WALL), { sides: 3 });
             solid.lathe(x, z, [[0, y - m(0.12)], [m(0.11), y - m(0.05)], [m(0.12), y + m(0.02)], [m(0.08), y + m(0.1)], [0, y + m(0.13)]], material("glow-violet", WALL), { segments: 6 });
+            lit("witchlight", x, y, z);
+        }
+
+        // (Half a lamp's spacing on from each, an amethyst shard's cluster in an iron cup on a
+        // bracket, over the furniture at a sconce's height, clear of the windows)
+        const spacing = length / spots.length;
+
+        for (const s of spots.map((each) => each + spacing / 2).filter((each) => each < length - m(0.5) && clear(each, DARK_SHARDS.clear))) {
+            const [x, y, z] = at(s, DARK_SHARDS.high, DARK_SHARDS.out);
+            const [wx, , wz] = at(s, DARK_SHARDS.high, 0);
+            const iron = material("iron-black", WALL);
+            const glow = material("glow-violet", WALL);
+
+            solid.tube([[wx, y - m(0.08), wz], [x, y - m(0.08), z]], m(0.02), iron, { sides: 4 });
+            solid.lathe(x, z, [[0, y - m(0.12)], [m(0.09), y - m(0.06)], [m(0.1), y], [0, y]], iron, { segments: 6 });
+
+            for (const [aside, out, high, wide] of DARK_SHARDS.points) {
+                const [px, , pz] = at(s + m(aside), y, DARK_SHARDS.out + m(out));
+
+                solid.cone(px, pz, y - m(0.02), m(high), m(wide), glow, 4);
+            }
+
+            lit("shard", x, y + m(0.12), z);
         }
     },
 };
@@ -3416,12 +3460,12 @@ const ACCENTS = {
 function accents(solid, map, people) {
     const [w, h] = [m(map.width), m(map.height)];
     const runs = [
-        { from: [m(0.6), 0], to: [w - m(0.6), 0], out: [0, 1] },
-        { from: [0, m(0.6)], to: [0, h - m(0.6)], out: [1, 0] },
-        { from: [w, m(0.6)], to: [w, h - m(0.6)], out: [-1, 0] },
+        { side: "n", from: [m(0.6), 0], to: [w - m(0.6), 0], out: [0, 1] },
+        { side: "w", from: [0, m(0.6)], to: [0, h - m(0.6)], out: [1, 0] },
+        { side: "e", from: [w, m(0.6)], to: [w, h - m(0.6)], out: [-1, 0] },
     ];
 
-    for (const { from, to, out } of runs) {
+    for (const { side, from, to, out } of runs) {
         const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
         const along = [(to[0] - from[0]) / length, (to[1] - from[1]) / length];
         const at = (s, y, d = 0) => [from[0] + along[0] * s + out[0] * d, y, from[1] + along[1] * s + out[1] * d];
@@ -3429,6 +3473,10 @@ function accents(solid, map, people) {
         const spots = Array.from({ length: count }, (_, k) => ((k + 0.5) * length) / count);
 
         at.outward = [out[0], 0, out[1]];
+
+        // (Whether a place along it, `s`, is clear of its windows by `by` metres, either side: the
+        // room's, as it was walled in)
+        const clear = (s, by) => !lighting.panes.some((pane) => pane.side === side && Math.abs((side === "n" ? from[0] + s : from[1] + s) / M - pane.at) < PANE.half + by);
 
         // (A band along the wall from s0 to s1, y0 up to y1, `d` out; a disc of `count` corners)
         const box = (s0, s1, y0, y1, d, name) => {
@@ -3446,7 +3494,7 @@ function accents(solid, map, people) {
             solid.facing(points, at.outward, material(name, WALL));
         };
 
-        ACCENTS[people]?.(solid, { length, along, out, at, box, disc, spots });
+        ACCENTS[people]?.(solid, { length, along, out, at, box, disc, spots, clear });
     }
 }
 
