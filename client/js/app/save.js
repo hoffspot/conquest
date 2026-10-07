@@ -49,6 +49,14 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     zoom: false,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
+    // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
+    // walk; how far a drag turns and tilts it (1, as it's always been: half round across the
+    // screen, 60 degrees up or down it); whether dragging up looks down; whether the greater
+    // spells shake it
+    cameraFollows: true,
+    dragSpeed: 1,
+    invertTilt: false,
+    shake: true,
     sound: true,
     // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS), and the scale
     // they're on: volumes saved on another (louder) scale are forgotten, for the defaults

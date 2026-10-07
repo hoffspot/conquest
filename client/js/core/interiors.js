@@ -233,15 +233,58 @@ export function tavernFloors() {
     const taproom = readPlan("taproom", "Wenches and Ale", TAPROOM, { ground: GROUND.cobbles });
     const upstairs = readPlan("upstairs", "Upstairs at Wenches and Ale", UPSTAIRS, { ground: GROUND.planks });
 
-    // Coming through, a couple of steps clear of the door or stairs, turned back to face them (so
-    // they're in view to tap, and a tap round the player isn't on them): inside the front door;
-    // before the foot of the stairs, and before their top
-    const [doorX, doorY] = taproom.marks.D[0];
-    const door = { map: "taproom", squares: taproom.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s };
-    const foot = { map: "taproom", squares: taproom.marks["<"], arrive: [1, 3], facing: FACING.n };
-    const top = { map: "upstairs", squares: upstairs.marks[">"], arrive: [6, 3], facing: FACING.n };
+    // Coming through, facing into the room, the door or stairs behind (a tap on them counts only
+    // looking towards them: app/doors.js): well inside the front door; before the foot of the
+    // stairs, and before their top, a step clear of them, turned from them (comeIn, offStairs)
+    const door = { map: "taproom", squares: taproom.marks.D, ...comeIn(taproom) };
+    const foot = { map: "taproom", squares: taproom.marks["<"], ...offStairs(taproom, [1, 3]) };
+    const top = { map: "upstairs", squares: upstairs.marks[">"], ...offStairs(upstairs, [6, 3]) };
 
     return { taproom, upstairs, door, stairs: { id: "tavern-stairs", kind: "stairs", ends: [foot, top] } };
+}
+
+/**
+ * How many steps in from its front door someone coming into a floor stands, at most: far enough
+ * in for the camera behind them, under the ceiling, to look across the room (world/view.js
+ * ROOM_VIEW).
+ */
+export const COME_IN = 5;
+
+// From a square on a floor, `way` a square at a time (north, -1; south, 1), as far as the floor's
+// clear (no door's or stair's square), `most` steps at most: the square come to
+function onFrom(map, [x, y], way, most) {
+    const ways = new Set(["D", "<", ">"].flatMap((char) => (map.marks[char] ?? []).map(([i, j]) => j * map.width + i)));
+    const clear = (j) => j >= 0 && j < map.height && !map.blocked[j][x] && !ways.has(j * map.width + x);
+    let steps = 0;
+
+    while (steps < most && clear(y + way * (steps + 1))) {
+        steps++;
+    }
+
+    return [x, y + way * steps];
+}
+
+/**
+ * Where someone coming in at a floor's front door (its `D` squares, in its south wall) stands:
+ * straight in from it, as many steps as the floor's clear that way, up to COME_IN, and no more
+ * than a third of the way across the floor, the door's square and theirs counted (a small floor's
+ * too small for the camera to look across it from behind them, and those holding it keep clear of
+ * where anyone comes in: insides.js WAY_IN_CLEAR); at least one; facing into the room.
+ * { arrive: [x, y], facing }.
+ */
+export function comeIn(map) {
+    const [doorX, doorY] = map.marks.D[0];
+
+    return { arrive: onFrom(map, [doorX, doorY - 1], -1, Math.min(COME_IN, Math.floor(map.height / 3) - 1) - 1), facing: FACING.n };
+}
+
+/**
+ * Where someone coming up or down the stairs (along a floor's north wall) stands: before them at
+ * `from`, or further off them, south, as far as the floor's clear, up to a third of the way across
+ * the floor (as comeIn); turned from them, facing into the room. { arrive: [x, y], facing }.
+ */
+export function offStairs(map, from) {
+    return { arrive: onFrom(map, from, 1, Math.max(0, Math.floor(map.height / 3) - 1 - from[1])), facing: FACING.s };
 }
 
 /**

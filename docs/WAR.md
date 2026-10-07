@@ -639,7 +639,10 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - **Dropped**, things lie on the ground where the player stands, a cloth bundle with their
     icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
-    (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
+    (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack. A tap counts
+    within 40 pixels of it anywhere from where it lies up to its top, its icon over it
+    (drops3d.js `at`): a chest stands well up off the ground, and seen close, as indoors, its
+    lid is far up the screen from where it stands.
   - **Trading** with a shopkeeper, Buy and Sell tabs run across its top, and it opens on Buy:
     the shop's wares under their kinds (weapons, shields and the off hand, clothes and armour,
     jewellery, food, drink and draughts, tomes and scrolls: core/progress.js `WARE_KINDS`), the commoner made

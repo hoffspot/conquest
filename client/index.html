@@ -248,6 +248,26 @@
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="switch option">
+                        <span class="text">Camera follows<small>Swings round behind you as you walk away or across its view; off, it stays turned the way you leave it</small></span>
+                        <input type="checkbox" id="followswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="level" id="dragoption">
+                        <span class="text">Camera turning<small>How far dragging across the screen turns and tilts the camera</small></span>
+                        <input type="range" id="dragslider" min="50" max="200" step="25">
+                        <output for="dragslider" id="dragname"></output>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Invert tilt<small>Dragging up looks down, and dragging down looks up</small></span>
+                        <input type="checkbox" id="invertswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Screen shake<small>The greatest spells shake the view</small></span>
+                        <input type="checkbox" id="shakeswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
                         <span class="text">Resist all summons<small>Another player's Summon: said no to, without asking</small></span>
                         <input type="checkbox" id="resistswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>

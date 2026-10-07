@@ -1890,7 +1890,7 @@ test("the bars over others are full size near the player, smaller and fainter ev
     expect(growing.filter(({ off }) => off > 12).every(({ share, off }) => Math.abs(share - (60 - off) / 48) < 0.05), "as big as its distance has it each frame").toBe(true);
 });
 
-test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
+test("tapping the tavern's door lights its edge green, and the player walks in: well inside, facing into the room, the camera behind them under the ceiling; up the stairs (where a courtesan beckons), down, and out, facing out; each time a tap round them is a step, not back through", async ({ page }) => {
     // (In and up and down and out, each map drawn as it's come to: a minute or more without a GPU)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -1949,7 +1949,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         const [doorX, doorY] = game.world.maps.taproom.marks.D[0];
 
-        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, inside: [doorX, doorY - 2], top: game.world.maps.upstairs.marks[">"][0] };
+        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, out: game.world.tavern.facing, inside: [doorX, doorY - 4], top: game.world.maps.upstairs.marks[">"][0] };
     });
 
     expect(outside.square).toEqual(outside.outside);
@@ -1977,7 +1977,24 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const inside = await through("town", "door", 5);
 
-    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: 0, minimap: "taproom", heard: "taproom" });
+    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
+
+    // Looking across the room from behind them, a little down, from under the ceiling, clear of
+    // its beams; inside the walls, the door behind it
+    expect(await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const view = session.view;
+        const { origin, width, height } = game.interiors.get("taproom").map;
+        const at = view.camera.position;
+        const looking = view.camera.getWorldDirection(at.clone());
+        const player = game.avatars.get("player").object.position;
+
+        return {
+            under: at.y > 2 && at.y <= 2.4 + 1e-6,
+            inside: at.x > origin[0] && at.x < origin[0] + width && at.z > player.z + 3 && at.z < origin[1] + height,
+            across: looking.z < -0.9 && looking.y < -0.3 && looking.y > -0.45,
+        };
+    })).toEqual({ under: true, inside: true, across: true });
 
     // Lit from all round by a warm room's light, not the sky's (out of doors, the sky's at the time
     // of day); going out and back in only changes which is read (the two the same size), so no
@@ -2094,7 +2111,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const up = await through("taproom", "stairs", 6);
 
-    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 3], facing: Math.PI, minimap: "upstairs", heard: "upstairs" });
+    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 4], facing: 0, minimap: "upstairs", heard: "upstairs" });
 
     // Up them, a few treads heard on the boards one after another
     const treads = await page.evaluate(() => window.pellagos.game.heardSteps.filter(({ delay }) => delay > 0));
@@ -2143,7 +2160,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);
 
-    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [1, 3], facing: Math.PI });
+    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [1, 4], facing: 0 });
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 
     // And out (from just inside it, so no one's in the way to tap instead), onto the square
@@ -2157,7 +2174,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const out = await through("taproom", "door", 6);
 
-    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
+    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, facing: outside.out, minimap: "town", heard: "town" });
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
@@ -4025,9 +4042,17 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
     expect(hall.map).toBe("home:hall-1/chamber");
     expect(hall.roles).toEqual(expect.arrayContaining(["reeve", "clerk"]));
 
-    // The reeve: work, taken on
+    // The reeve: work, taken on. (Turned to look at him behind his desk first, as the player would
+    // to tap him: indoors the camera's close behind them, under the ceiling, and they came up to it
+    // stepping east)
     const reeve = await page.evaluate(() => {
         const { game, session } = window.pellagos;
+        const [player, at] = [game.battle.actor("player"), game.battle.actor("home:hall-1/reeve")];
+        const toward = Math.atan2(at.x - player.x, at.y - player.y);
+
+        game.cameraFollow.yaw = Math.atan2(-Math.sin(toward), -Math.cos(toward));
+        game.advance(0.5);
+
         const spot = session.view.toScreen(game.avatars.get("home:hall-1/reeve").point(0.6));
 
         game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
@@ -4814,6 +4839,81 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(minimap).toBeHidden();
     expect(await page.evaluate(() => ({ enabled: window.pellagos.session.sound.enabled, music: window.pellagos.session.sound.volumes.music }))).toEqual({ enabled: false, music: 0.6 });
     await expect(page.locator("#musicvolume")).toHaveValue("60");
+});
+
+test("Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
+    // (The game started twice: more than the usual time)
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // As they've always been: following, a drag turning it as far as ever, shaking
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+
+    const follows = page.getByRole("switch", { name: /Camera follows/ });
+    const invert = page.getByRole("switch", { name: /Invert tilt/ });
+    const shake = page.getByRole("switch", { name: /Screen shake/ });
+
+    await expect(follows).toBeChecked();
+    await expect(invert).not.toBeChecked();
+    await expect(shake).toBeChecked();
+    await expect(page.locator("#dragslider")).toHaveValue("100");
+    await expect(page.locator("#dragname")).toHaveText("100%");
+
+    // Following off, tilt inverted, no shaking, a drag turning it twice as far
+    await page.locator("label:has(#followswitch)").click();
+    await page.locator("label:has(#invertswitch)").click();
+    await page.locator("label:has(#shakeswitch)").click();
+    await page.locator("#dragslider").fill("200");
+    await page.locator("#dragslider").dispatchEvent("change");
+    await expect(page.locator("#dragname")).toHaveText("200%");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
+
+    // Walking east, the camera keeps the way it's turned; and the greatest spells' shake is let be
+    const walked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const before = { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch };
+        const [x, y] = player.square;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "move", to: [x + 8, y] });
+        game.advance(5);
+        game.spellFx.onShake(1);
+
+        return { settings: game.cameraSettings, before, after: { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch }, moved: player.square[0] - x, shaking: game.shaking };
+    });
+
+    expect(walked.settings).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    expect(walked.moved).toBeGreaterThan(0);
+    expect(walked.after).toEqual(walked.before);
+    expect(walked.shaking).toBe(0);
+
+    // Dragged 150 pixels right and 60 down: turned twice as far as it used to be, and tilted up
+    // (down, inverted)
+    await page.evaluate(() => window.pellagos.game.start());
+
+    const box = await page.locator("#view").boundingBox();
+    const before = await page.evaluate(() => ({ yaw: window.pellagos.game.cameraFollow.yaw, pitch: window.pellagos.game.cameraFollow.pitch }));
+    const [x, y] = [box.x + box.width * 0.7, box.y + box.height * 0.35];
+
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 150, y + 60, { steps: 6 });
+    await page.mouse.up();
+
+    const after = await page.evaluate(() => ({ yaw: window.pellagos.game.cameraFollow.yaw, pitch: window.pellagos.game.cameraFollow.pitch }));
+    const turned = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
+
+    expect(turned).toBeCloseTo((-150 / box.width) * Math.PI * 2, 2);
+    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 2, 1);
+
+    // Remembered next time
+    await playing(page, "/?play&seed=1");
+    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    await expect(page.locator("#dragslider")).toHaveValue("200");
 });
 
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {
