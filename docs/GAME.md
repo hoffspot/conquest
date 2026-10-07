@@ -2613,6 +2613,15 @@ throws them onto their back, and they get up as the battle lets them. The thud, 
 pooling under them and their shadow fading wait till they hit the ground (`die` and `knockdown`
 say when).
 
+**Where they look** (`#gazing`; characters/gaze.js, described in
+[CHARACTERS.md](CHARACTERS.md#the-vitruvian-body)). Everyone's eyes and head turn towards whoever they're
+fighting (their attack's target, or the one they're set on, alive and on the same map); else
+whoever they're talking with (the player and the one they're talking to look at each other);
+else, for anyone but the player, the player when they come within 4.5 metres and 100° of ahead
+of them, for 2 to 5 seconds at a time, then not for another 4 to 10 (`GAZE_NOTICE`: noticed, not
+stared at); else ahead, glancing about now and then. They look at the other's eyes (93.5% of
+their height up). The dead don't look at anything.
+
 **Everyone but a player** has their garments drawn all at once, one mesh with one picture of
 the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12
 to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what

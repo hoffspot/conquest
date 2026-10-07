@@ -272,6 +272,11 @@ const TOGETHER = Object.freeze({
 // How far away (metres, either way) anyone's drawn out in the world: another player far off, and
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
+// Someone looking at the player passing near (#noticing): within `near` metres and `round` degrees
+// of ahead, for `look` seconds (from, to), then not for `rest` more; and where on someone they look
+// (a share of their height: their eyes)
+const GAZE_NOTICE = Object.freeze({ near: 4.5, round: 100, look: [2, 5], rest: [4, 10] });
+const GAZE_EYES = 0.935;
 
 // Passing for one of a people's soldiers (core/host.js "disguise" events), in words
 const DISGUISES = Object.freeze({
@@ -425,6 +430,7 @@ const GROUNDS = Object.freeze({
 const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 
 const _focus = new THREE.Vector3();
+const _gazeAt = new THREE.Vector3();
 const _lean = new THREE.Vector3();
 const _looking = new THREE.Vector3();
 const _head = new THREE.Vector3();
@@ -1950,6 +1956,7 @@ export class Game {
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
             avatar.every = this.#posing(actor, avatar, dt, pixels);
+            this.#gazing(actor, avatar, mine);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             // (Where they're drawn, which trails where they are a little)
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
@@ -2229,6 +2236,54 @@ export class Game {
         avatar.character.fitDetail(tall, this.crowded && !this.crowd.has(actor.id) ? 1 : 0);
 
         return posingEvery(tall, (avatar.motion * dt * tall) / height);
+    }
+
+    // Where someone's looking (characters/gaze.js): whoever they're fighting, or talking with; the
+    // player passing near and in front of them, now and then (not staring: GAZE_NOTICE); else
+    // ahead, glancing about
+    #gazing(actor, avatar, mine) {
+        const gaze = avatar.character?.gaze;
+
+        if (!gaze) {
+            return;
+        }
+
+        gaze.on = !actor.dead;
+
+        const battle = this.battle;
+        const fighting = actor.attack?.target ?? actor.target;
+        const foe = fighting === null || fighting === undefined ? null : battle.actor(fighting);
+        const talking = this.talking && (actor === mine ? battle.actor(this.talking.id) : actor.id === this.talking.id ? mine : null);
+        const other = (foe && !foe.dead && foe.map === actor.map ? foe : null) ?? talking ?? (actor !== mine ? this.#noticing(actor, avatar, mine) : null);
+        const seen = other && this.avatars.get(other.id);
+
+        gaze.at(seen && !actor.dead ? seen.point(GAZE_EYES, _gazeAt) : null);
+    }
+
+    // The player, if they're near and in front of someone (not one fighting them), for a few
+    // seconds at a time, then not for a while
+    #noticing(actor, avatar, mine) {
+        const notice = (avatar.notice ??= { until: 0, again: 0 });
+
+        if (!mine || mine.dead || actor.map !== mine.map || Math.hypot(actor.x - mine.x, actor.y - mine.y) > GAZE_NOTICE.near) {
+            return null;
+        }
+
+        const seen = this.avatars.get(mine.id);
+
+        if (!seen || Math.abs(avatar.angleTo(seen.object.position.x, seen.object.position.z)) > (GAZE_NOTICE.round * Math.PI) / 180) {
+            return null;
+        }
+
+        if (this.clock >= notice.until && this.clock >= notice.again) {
+            const [low, high] = GAZE_NOTICE.look;
+            const [rest, longer] = GAZE_NOTICE.rest;
+
+            notice.until = this.clock + low + Math.random() * (high - low);
+            notice.again = notice.until + rest + Math.random() * (longer - rest);
+        }
+
+        return this.clock < notice.until ? mine : null;
     }
 
     // The crowd drawn in full: only so many of those in view can be (QUALITY crowd), the biggest on

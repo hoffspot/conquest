@@ -502,6 +502,8 @@ const NUDGES = [0, -0.2, 0.2, -0.45, 0.45];
 
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
+const _angles = {};
+
 /** A skeleton for the body, posed with joint rotations. */
 export class Rig {
     /**
@@ -607,6 +609,22 @@ export class Rig {
         const { kind, side } = this.joints[i];
 
         jointRotation(kind, side, angles, this.rotations[i]);
+    }
+
+    /**
+     * Turn a joint further by anatomical angles in degrees ({ turn, flex }: gaze.js), on top of how
+     * it's posed now (limited to its range).
+     */
+    addAngles(name, angles) {
+        const i = this.index.get(name);
+        const { kind, side } = this.joints[i];
+        const now = jointAngles(kind, side, this.rotations[i], _angles);
+
+        for (const axis in angles) {
+            now[axis] = (now[axis] ?? 0) + angles[axis];
+        }
+
+        jointRotation(kind, side, now, this.rotations[i]);
     }
 
     /**

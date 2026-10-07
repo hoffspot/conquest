@@ -82,7 +82,16 @@ export class Avatar {
         this.walker = new Walker(character, WALK_STYLES[walk] ?? WALK_STYLES.natural);
         this.actions = new Actions(character);
         this.actions.setWeapon(guard);
-        this.walker.overlay = (dt, walking) => this.actions.apply(dt, walking);
+        // (Its head turned to where it's looking, on top of whatever it's doing, unless it's down)
+        this.walker.overlay = (dt, walking) => {
+            const planted = this.actions.apply(dt, walking);
+
+            if (!this.actions.fall) {
+                character.gaze?.turn();
+            }
+
+            return planted;
+        };
         this.walker.freed = (side) => this.actions.free[side];
         this.walker.afterPose = () => this.actions.place();
         this.facing = 0;
@@ -148,6 +157,7 @@ export class Avatar {
 
         if (unposed.frames >= this.every) {
             this.actions.keepClear = this.every <= POSING.clear;
+            this.character.gaze?.update(unposed.dt);
             this.walker.update(unposed.dt, { moved: unposed.moved });
             this.character.expressions?.update(unposed.dt, this.actions);
             Object.assign(unposed, { frames: 0, dt: 0, moved: 0 });
