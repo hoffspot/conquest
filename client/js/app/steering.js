@@ -10,7 +10,9 @@
 //
 // The stick stays in its corner rather than springing up under the thumb, so it's always in the
 // same place and only its own circle takes touches — the rest of the view still taps and drags as
-// it did.
+// it did. Or, asked for in Game options (`floating`), it springs up under the thumb wherever it
+// lands in the bottom left of the screen, as Apple's guidelines and the camera study's
+// recommendation 7 have it: fewer glances down to find it, less drift off it.
 
 // How far the way has to turn before the order's given again (radians, about 7 degrees), and how
 // often it's given again anyway while the input's held (ms), in case they stopped short of the
@@ -49,6 +51,7 @@ export class Steering {
      * @param {object} how
      * @param {HTMLElement} how.zone - The stick's circle, where a thumb going down works it.
      * @param {HTMLElement} how.knob - The knob inside it, moved as the thumb moves.
+     * @param {HTMLElement} [how.ring] - The stick's circle, moved under the thumb when it floats.
      * @param {() => number | null} how.looking - Which way the camera looks over the ground
      *   (radians, as core/battle.js means "facing"), or null while there's nobody to steer.
      * @param {(facing: number, run: boolean) => void} how.go - Send them straight ahead that way.
@@ -56,6 +59,9 @@ export class Steering {
      */
     constructor(how) {
         this.#how = how;
+
+        /** Whether the stick springs up under the thumb wherever it lands in its zone (Game options). */
+        this.floating = false;
 
         this.#on(document, "keydown", (event) => this.#key(event, true));
         this.#on(document, "keyup", (event) => this.#key(event, false));
@@ -152,10 +158,17 @@ export class Steering {
         }
 
         // The stick stays put, so the way it's pushed is measured from its middle, wherever the
-        // thumb went down inside it (down on the rim is already pointing that way)
+        // thumb went down inside it (down on the rim is already pointing that way); floating, it
+        // comes to the thumb, its middle where it went down
         const rect = this.#how.zone.getBoundingClientRect();
+        const ring = this.#how.ring;
+        const [x, y] = this.floating ? [event.clientX, event.clientY] : [rect.x + rect.width / 2, rect.y + rect.height / 2];
 
-        this.#stick = { id: event.pointerId, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, right: 0, forward: 0, far: 0 };
+        if (this.floating && ring) {
+            Object.assign(ring.style, { left: `${x - rect.x - ring.offsetWidth / 2}px`, top: `${y - rect.y - ring.offsetHeight / 2}px`, bottom: "auto" });
+        }
+
+        this.#stick = { id: event.pointerId, x, y, right: 0, forward: 0, far: 0 };
         this.#how.zone.setPointerCapture?.(event.pointerId);
         this.#how.zone.classList.add("held");
 
@@ -202,6 +215,11 @@ export class Steering {
         this.#how.zone.classList.remove("held");
         this.#stick = null;
         this.#knobAt(0, 0);
+
+        // (Floating, back to where it waits)
+        if (this.#how.ring) {
+            Object.assign(this.#how.ring.style, { left: "", top: "", bottom: "" });
+        }
     }
 
     #knobAt(across, down) {

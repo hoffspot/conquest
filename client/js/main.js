@@ -224,6 +224,7 @@ $("#newbutton").addEventListener("click", (event) => {
 $("#debugswitch").checked = settings.debug;
 $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
+$("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
 $("#followswitch").checked = settings.cameraFollows;
@@ -395,6 +396,7 @@ async function playing(save) {
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     showStick(settings.stick);
+    floatStick(settings.stickFloats);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     applyCamera();
@@ -943,6 +945,7 @@ async function playingJoined(save, welcome, joining) {
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     showStick(settings.stick);
+    floatStick(settings.stickFloats);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     applyCamera();
@@ -1003,6 +1006,7 @@ $("#quickbutton").addEventListener("click", () => openQuick(0));
 $("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 $("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
+$("#floatswitch").addEventListener("change", (event) => applySetting("stickFloats", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
@@ -1152,6 +1156,8 @@ function applySetting(key, value) {
         showMinimap(value);
     } else if (key === "stick") {
         showStick(value);
+    } else if (key === "stickFloats") {
+        floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
     } else if (key === "resistSummons") {
@@ -1187,6 +1193,13 @@ function showMinimap(on) {
 function showStick(on) {
     document.body.dataset.stick = on ? "on" : "off";
     state.game?.showStick(on);
+}
+
+// The thumb stick springing up under the thumb, or waiting in its corner (styles.css: its zone the
+// bottom left of the screen, floating)
+function floatStick(on) {
+    document.body.dataset.stickFloat = on ? "on" : "off";
+    state.game?.floatStick(on);
 }
 
 // The zoom buttons; shown, the player's card sits above them rather than under them (styles.css)

@@ -791,10 +791,33 @@ input[type="range"] {
     bottom: calc(var(--safe-bottom) + 16px + var(--quick-height) + 10px);
 }
 
-/* Off until Game options asks for it, and then nothing is said of it either */
+/* Off until Game options asks for it, and then nothing is said of it either (nor whether it
+   floats) */
 body[data-stick="off"] #hud .stickzone,
-body[data-stick="off"] .stick-only {
+body[data-stick="off"] .stick-only,
+body[data-stick="off"] .stick-option {
     display: none;
+}
+
+/* Floating (Game options: "Stick under your thumb"), its zone is the bottom left of the screen, and
+   its circle waits in the corner as ever, coming to the thumb where it lands (app/steering.js) */
+body[data-stick-float="on"] #hud .stickzone {
+    left: var(--safe-left);
+    bottom: var(--safe-bottom);
+    width: min(48vw, 380px);
+    height: min(42vh, 340px);
+}
+
+body[data-stick-float="on"] #hud.quick-up .stickzone {
+    bottom: calc(var(--safe-bottom) + var(--quick-height) + 10px);
+}
+
+body[data-stick-float="on"] #hud .stick {
+    inset: auto;
+    left: 16px;
+    bottom: 16px;
+    width: var(--stick-size);
+    height: var(--stick-size);
 }
 
 /* The zoom buttons, off unless asked for in Game options: pinching and the mouse wheel zoom
