@@ -788,8 +788,14 @@ the view answers for the sun and the lamps (`watchShadows`):
   40 m, longer the lower the sun). A creature out of view behind the camera cost 40,000 to
   80,000 triangles in the sun's shadows. The lamps' shadows, drawn only every few frames, keep
   everyone in reach, so the shadows don't lag when the camera turns.
+- **Characters** (the terrain plan's M8) are drawn into them with their lower detail, near or far
+  (`castCheaply`, characters/character.js): the body's lower-detail triangles alone, each
+  garment's, and a far thinner hair. A player cast 45,600 to 49,100 triangles into the sun's
+  shadows and casts 11,300 to 11,900; a follower, the orc or a wild one about 10,000 where they
+  cast 41,000.
 - **What's seen is the same:** what's left out lies outside a shadow map's view, or casts where
-  the camera doesn't look.
+  the camera doesn't look; characters' shadows are drawn from fewer of the same triangles, a few
+  millimetres out where the shadow map's texels are centimetres across.
 
 **The far land and the haze** (world/far/, world/fog.js; the terrain plan's M6a). Outdoors the
 world's drawn twice over each frame:
@@ -2580,11 +2586,12 @@ never taken to be out of view. Creatures are posed every frame: they cost 10 to 
 drawn only in view, and the wight lord's cape is blown about only in view (WILDS.md, *Drawn
 only in view*).
 
-**Fewer triangles from afar.** By the same measure, anyone but a player is drawn with a quarter of
-its body's and outfit's triangles under 140 pixels tall, and in full again over 170
-(`Character.fitDetail`, characters/lod.js, described in [CHARACTERS.md](CHARACTERS.md#performance)):
-the same vertices, pictures and bones, a second list of triangles made once for everyone in a
-worker.
+**Fewer triangles from afar.** By the same measure, anyone but the player is drawn with a quarter
+of its body's and garments' triangles under 140 pixels tall, and in full again over 170, its eyes
+with a tenth and a far thinner hair (`Character.fitDetail`, characters/lod.js, described in
+[CHARACTERS.md](CHARACTERS.md#performance)): the same vertices, pictures and bones, a second list
+of triangles made once for everyone in a worker. Everyone, the player too, is drawn into the
+shadow maps so, near or far (below, *Shadow maps drawn with only what they need*).
 
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an

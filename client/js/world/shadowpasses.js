@@ -14,6 +14,9 @@
 //   shadow lies, from it as far down the sun's light as it could fall.
 // Neither changes a shadow that's seen: what's left out lies outside a shadow map's view, or casts
 // where the camera doesn't look.
+// And characters (the terrain plan's M8): drawn into them with what they're drawn with from afar
+// (castCheaply: a quarter of the body's triangles, none of the eyes', a far thinner hair), where
+// the map's texels, a few centimetres across, don't tell them apart.
 //
 // three.js asks each mesh whether it's in a shadow camera's view (Mesh.intersectsFrustum, with that
 // light's own frustum), which is where this is answered; the frustums known are the lights' that
@@ -112,6 +115,19 @@ export function runsOf(parts) {
     return runs.map(({ start, count, box }) => ({ start, count, sphere: box.getBoundingSphere(new THREE.Sphere()) }));
 }
 
+/**
+ * Draw a mesh into the watched shadow maps more cheaply: `cheaper` says with what, in place of its
+ * own, any of `groups` (a list of groups: its material's a list), `range` (a draw range: { start,
+ * count }) and `geometry` (another, skinned the same); or (null) as it's drawn.
+ */
+export function castCheaply(mesh, cheaper) {
+    restore(mesh);
+    mesh.userData.cheaper = cheaper;
+    mesh.onAfterShadow = cheaper ? afterShadow : THREE.Object3D.prototype.onAfterShadow;
+
+    return mesh;
+}
+
 /** Draw only the runs (runsOf's) of a mesh in a watched shadow map's view into it. */
 export function castByRuns(mesh, runs) {
     if (!runs || Array.isArray(mesh.material)) {
@@ -143,7 +159,36 @@ function inView(frustum) {
         return byRuns(this, frustum);
     }
 
-    return pass.kind !== "sun" || !seen.set || shadowSeen(this);
+    if (pass.kind === "sun" && seen.set && !shadowSeen(this)) {
+        return false;
+    }
+
+    if (this.userData.cheaper) {
+        cheaply(this);
+    }
+
+    return true;
+}
+
+// What's drawn of a mesh made what it's drawn with into the shadow maps (castCheaply), what it was
+// kept to put back (restore)
+function cheaply(mesh) {
+    const { groups, range, geometry } = mesh.userData.cheaper;
+    const own = (mesh.userData.own = { geometry: mesh.geometry, groups: null, range: null });
+
+    if (geometry) {
+        mesh.geometry = geometry;
+    }
+
+    if (groups) {
+        own.groups = mesh.geometry.groups;
+        mesh.geometry.groups = groups;
+    }
+
+    if (range) {
+        own.range = { ...mesh.geometry.drawRange };
+        mesh.geometry.setDrawRange(range.start, range.count);
+    }
 }
 
 // Whether something's shadow may fall where the camera looks: round it and as far down the sun's
@@ -218,6 +263,21 @@ function restore(mesh) {
         mesh.geometry.groups = mesh.userData.groups;
         mesh.userData.drawn = null;
         mesh.userData.groups = null;
+    }
+
+    const own = mesh.userData.own;
+
+    if (own) {
+        if (own.groups) {
+            mesh.geometry.groups = own.groups;
+        }
+
+        if (own.range) {
+            mesh.geometry.setDrawRange(own.range.start, own.range.count);
+        }
+
+        mesh.geometry = own.geometry;
+        mesh.userData.own = null;
     }
 }
 

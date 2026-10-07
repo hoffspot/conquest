@@ -1076,6 +1076,12 @@ Android), so anything with many instances is also merged per chunk.
    Outfits are merged into one skinned mesh per character; baked normal maps; shadows from the low
    LOD only.
 
+   **The hero's row, decided 2026-10-07** (the user: "The detail should be as high as possible
+   within the measured timeframe budget"): not a count of triangles, but as much detail as the
+   measured frame time allows. The hero is drawn in full, its hair by the quality level, and the
+   frame time is kept by the governor (docs/GAME.md *Keeping up*: 60 frames a second aimed at,
+   never staying under 30). Its shadow is from its low detail.
+
 ### 10.1 Getting movement and clipping right the first time
 
 The last round of arm and clipping work took several passes. The causes were:
@@ -4997,3 +5003,26 @@ converted data is to be measured in M8 against today's hm08 data.
     fur, stripes, scales and painted hair as before. Its roughness picture and its relief take the
     place of the painted T-zone, creases and pores.
   - MakeHuman's body is painted as before.
+- **2026-10-07, characters from afar, and into the shadow maps** (§10, step 7; docs/CHARACTERS.md
+  *Performance*, docs/GAME.md *Shadow maps drawn with only what they need*).
+  - From afar (under 140 pixels tall), besides the body and an outfit drawn at once: the eyes with
+    a tenth of their triangles; a far thinner hair grown with the other (6% of the strands, short
+    hair too) and drawn instead; every garment lowered, lace, skirts and cloaks too, made once for
+    everyone with the same triangles of it. Wild people-shaped creatures (bandits and the like)
+    were never lowered, and are now; so are other players' heroes. A soldier, a townsman or a
+    wild one from afar is 9,000 to 14,700 triangles (10,900 to 35,200 before; a courtesan's lace,
+    drawn twice, was most of the 35,200).
+  - Shadows from the low detail only, as step 7 has it: three.js asks each mesh whether it's in a
+    shadow map's view, and characters are handed then what to draw there (`castCheaply`): the
+    body's lower detail alone (no eyes, lashes or mouth), each garment's, the far hair. The player
+    casts 11,300 to 11,900 triangles into the sun's shadows (45,600 to 49,100 before), a follower,
+    the orc or a wild one about 10,000 (41,000).
+  - **The hero** (step 7's row decided by the user: as much detail as the measured frame time
+    allows): drawn in full as before (45,600 to 49,100 triangles, its hair by the quality level),
+    its shadow from its low detail now. The frame times, measured on the phone profile with the
+    middle level in, say whether it needs anything more.
+  - **Still over step 7's budgets:** far characters are 9,000 to 14,700 triangles where LOD2 is
+    1,500 to 2,500, and there's no LOD1 (5,000 to 8,000) between them and the full 41,000 to
+    57,000; what's carried isn't lowered (up to 3,400 triangles: drawn faceted, nothing to
+    simplify without rebuilding it). Next: the middle level and a crowd cap, and the frame times
+    measured with them.

@@ -15,12 +15,13 @@ import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
-import { LOD } from "./lod.js";
+import { FAR, keyOf, LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { expressionData, Expressions, expressive } from "./expressions.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { allAtOnce } from "../core/steps.js";
+import { castCheaply } from "../world/shadowpasses.js";
 
 /** How a character looks unless told otherwise. */
 export const LOOK_DEFAULTS = Object.freeze({
@@ -264,14 +265,17 @@ export class Character {
      *   characters seen from afar: hair.js).
      * @param {boolean} [options.merge] - Draw its garments all at once (one mesh, one picture of
      *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
+     * @param {boolean} [options.far] - Whether it'll be drawn with fewer triangles from afar or
+     *   into shadows (lowerDetail): its hair's grown far thinner too (by default, if it's merged).
      */
     constructor(kit, options = {}, later = null) {
-        const { materials = {}, hairDetail = 1, merge = false } = options;
+        const { materials = {}, hairDetail = 1, merge = false, far = merge } = options;
         const human = kit.human;
 
         this.kit = kit;
         this.hairDetail = hairDetail;
         this.merge = merge;
+        this.far = far;
 
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
@@ -315,6 +319,8 @@ export class Character {
 
         /** The hair and beard (null when bald and clean-shaven). */
         this.hairMesh = null;
+        /** The same far thinner, drawn instead from afar and into shadows (FAR.hair: if it's to be, `far`), or null. */
+        this.farHairMesh = null;
 
         /** What it wears and carries: slot -> EQUIPMENT id. */
         this.equipment = new Map();
@@ -337,6 +343,7 @@ export class Character {
         // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail)
         this.low = false;
         this.lowBody = null;
+        this.lowEyes = null;
         this.lods = null;
 
         this.geometry = this.#createGeometry();
@@ -345,6 +352,7 @@ export class Character {
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
         this.mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+        castCheaply(this.mesh, { groups: this.detail.shadow });
         this.object.add(this.mesh);
 
         /** Body triangles hidden under clothing (indices of the body part's triangles). */
@@ -610,7 +618,7 @@ export class Character {
 
             // (Dressed again: its new outfit's lower detail too)
             if (this.lods) {
-                this.#lowerOutfit(mesh);
+                this.#lowerGarment(mesh);
             }
         }
 
@@ -625,6 +633,10 @@ export class Character {
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
+
+            if (this.lods) {
+                this.#lowerGarment(mesh);
+            }
         }
 
         this.setHidden(hidden);
@@ -650,6 +662,10 @@ export class Character {
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
+
+            if (this.lods) {
+                this.#lowerGarment(mesh);
+            }
         }
 
         // Items on their sockets (where they're held or worn: `home`), and weapons' places put
@@ -1426,22 +1442,42 @@ export class Character {
     // The same, a step at a time (each a yield: hair.js growingHair's)
     *#growingHair() {
         const { style, beard } = this.look.hair;
-        const geometry = yield* growingHair(this, style, beard, { below: this.hairHidden ? 0.0 : Infinity, detail: this.hairDetail });
+        const below = this.hairHidden ? 0.0 : Infinity;
+        // (Where it grows worked out once for both)
+        const shared = {};
+        const geometry = yield* growingHair(this, style, beard, { below, detail: this.hairDetail, shared });
+        // (And for those drawn with fewer triangles from afar, a far thinner one: setDetail)
+        const far = this.far ? yield* growingHair(this, style, beard, { below, detail: FAR.hair, far: true, shared }) : null;
 
-        if (this.hairMesh) {
-            this.hairMesh.geometry.dispose();
-            this.object.remove(this.hairMesh);
-            this.hairMesh = null;
+        for (const mesh of [this.hairMesh, this.farHairMesh]) {
+            if (mesh) {
+                mesh.geometry.dispose();
+                this.object.remove(mesh);
+            }
         }
 
-        if (geometry) {
-            this.hairMesh = new THREE.SkinnedMesh(geometry, this.materials.hair);
-            this.hairMesh.name = "hair";
-            this.hairMesh.castShadow = true;
-            this.hairMesh.bind(this.rig.skeleton, new THREE.Matrix4());
-            this.hairMesh.boundingSphere = this.mesh.boundingSphere;
-            this.object.add(this.hairMesh);
+        this.hairMesh = geometry && this.#hairMesh(geometry, "hair");
+        this.farHairMesh = far && this.#hairMesh(far, "farHair");
+
+        // (Into the shadow maps, near too: shadowpasses.js)
+        if (this.hairMesh && far) {
+            castCheaply(this.hairMesh, { geometry: far });
         }
+
+        this.setDetail(this.low);
+    }
+
+    // Hair grown (growingHair's geometry) on its head, skinned to its rig
+    #hairMesh(geometry, name) {
+        const mesh = new THREE.SkinnedMesh(geometry, this.materials.hair);
+
+        mesh.name = name;
+        mesh.castShadow = true;
+        mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+        mesh.boundingSphere = this.mesh.boundingSphere;
+        this.object.add(mesh);
+
+        return mesh;
     }
 
     /**
@@ -1612,29 +1648,40 @@ export class Character {
         const eyes = human.renderIndices("eyes");
         const lashes = human.renderIndices("lashes");
         const mouth = human.renderIndices("mouth");
+        const lowEyes = this.lowEyes ?? [];
         const mouthAt = kept.length + eyes.length + lashes.length;
         const lowAt = mouthAt + mouth.length;
-        const index = new Uint16Array(lowAt + low.length);
+        const lowEyesAt = lowAt + low.length;
+        const index = new Uint16Array(lowEyesAt + lowEyes.length);
 
         index.set(kept, 0);
         index.set(eyes, kept.length);
         index.set(lashes, kept.length + eyes.length);
         index.set(mouth, mouthAt);
         index.set(low, lowAt);
+        index.set(lowEyes, lowEyesAt);
 
         this.geometry.setIndex(new THREE.BufferAttribute(index, 1));
 
-        // Its groups drawn in full, and from afar: the lower-detail body and the eyes (not lashes,
-        // nor the mouth's inside)
+        // Its groups drawn in full, and from afar: the lower-detail body and eyes (as far as it has
+        // them; not lashes, nor the mouth's inside)
         const full = [
             { start: 0, count: kept.length, materialIndex: 0 },
             { start: kept.length, count: eyes.length, materialIndex: 1 },
             { start: kept.length + eyes.length, count: lashes.length, materialIndex: 2 },
             ...(mouth.length ? [{ start: mouthAt, count: mouth.length, materialIndex: 3 }] : []),
         ];
+        const farEyes = this.lowEyes ? { start: lowEyesAt, count: lowEyes.length, materialIndex: 1 } : full[1];
 
-        this.detail = { full, low: this.lowBody ? [{ start: lowAt, count: low.length, materialIndex: 0 }, full[1]] : full };
+        const lowBody = this.lowBody ? { start: lowAt, count: low.length, materialIndex: 0 } : null;
+
+        // (And into the shadow maps, the body alone, from afar's as far as it has it: shadowpasses.js)
+        this.detail = { full, low: lowBody ? [lowBody, farEyes] : full, shadow: [lowBody ?? full[0]] };
         this.geometry.groups = this.low ? this.detail.low : this.detail.full;
+
+        if (this.mesh) {
+            castCheaply(this.mesh, { groups: this.detail.shadow });
+        }
     }
 
     /**
@@ -1657,18 +1704,32 @@ export class Character {
             },
             () => {},
         );
+        // (And its eyes: a few pixels from afar, a tenth of their triangles is plenty)
+        lods.of("eyes", () => ({ indices: human.renderIndices("eyes"), positions: this.geometry.attributes.position.array, uvs: human.uvs, ...FAR.eyes })).then(
+            (low) => {
+                if (!this.disposed && !this.lowEyes) {
+                    this.lowEyes = low;
+                    this.#updateIndex();
+                }
+            },
+            () => {},
+        );
 
-        for (const mesh of this.garments.filter(({ userData }) => userData.merged)) {
-            this.#lowerOutfit(mesh);
+        for (const mesh of this.garments) {
+            this.#lowerGarment(mesh);
         }
     }
 
-    // An outfit's lower-detail triangles put after its own, drawn instead of them from afar
-    #lowerOutfit(mesh) {
+    // A garment's lower-detail triangles put after its own, drawn instead of them from afar and
+    // into the shadow maps: an outfit's (its garments drawn all at once) the same for all who wear
+    // it, a garment's or skirt's for all with the same triangles of it
+    #lowerGarment(mesh) {
         const { index, attributes } = mesh.geometry;
-        const key = `outfit:${mesh.userData.merged.join("+")}`;
+        const key = mesh.userData.merged ? `outfit:${mesh.userData.merged.join("+")}` : keyOf(mesh.name, index.array);
+        // (A skirt's has no picture's layout to keep)
+        const uvs = attributes.uv?.array ?? new Float32Array(attributes.position.count * 2);
 
-        this.lods.of(key, () => ({ indices: index.array, positions: attributes.position.array, uvs: attributes.uv.array })).then(
+        this.lods.of(key, () => ({ indices: index.array, positions: attributes.position.array, uvs })).then(
             (low) => {
                 if (this.disposed || !this.garments.includes(mesh) || mesh.userData.detail) {
                     return;
@@ -1681,6 +1742,7 @@ export class Character {
                 both.set(low, full.length);
                 mesh.geometry.setIndex(new THREE.BufferAttribute(both, 1));
                 mesh.userData.detail = { full: full.length, low: low.length };
+                castCheaply(mesh, { range: { start: full.length, count: low.length } });
                 this.setDetail(this.low);
             },
             () => {},
@@ -1693,6 +1755,15 @@ export class Character {
 
         if (this.detail) {
             this.geometry.groups = low ? this.detail.low : this.detail.full;
+        }
+
+        // (Its far thinner hair from afar: the lods aren't asked for it, it's grown with the other)
+        if (this.farHairMesh) {
+            this.farHairMesh.visible = low;
+
+            if (this.hairMesh) {
+                this.hairMesh.visible = !low;
+            }
         }
 
         for (const { geometry, userData } of this.garments) {
@@ -1750,6 +1821,7 @@ export class Character {
         // (The skeleton's bone texture, made when it was first drawn)
         this.rig.skeleton.dispose();
         this.hairMesh?.geometry.dispose();
+        this.farHairMesh?.geometry.dispose();
 
         for (const mesh of this.garments) {
             mesh.geometry.dispose();
