@@ -500,19 +500,23 @@ a village's mostly shoppers and field hands, a town's and a city's shoppers, por
 sweepers, friars and a few field hands; a castle's servants, grooms and scribes. They're named
 and seeded from the place's id and the world's seed (`townsfolkOf`), so the same folk are out
 whenever a player comes back, in every copy of the world, and their ids are
-`townsfolk:<place>/<n>`. A shopper is a townsman or a townswoman, or in a village a villager.
+`townsfolk:<place>/<n>`. A shopper is a townsman or a townswoman, or in a village a villager; a
+friar of another people is their own priest (`PRIESTS`: the elves' moon-priests, the dark elves'
+web-priests, the cat folk's sun-priests, the lizard folk's serpent-priests, the orcs' shamans).
+What each calling wears below is a human's: each other people's are in their own everyday dress
+(characters/dress.js, docs/CHARACTERS.md *Each people's everyday dress*), with their own basket.
 
 | Calling | Wears and carries (characters/folk.js) | Goes to |
 | --- | --- | --- |
-| Shopper | tunics, kirtles and skirts, an apron, a coif or a hood; a pannier on the back, or a jug | stalls, tradesmen's houses, the well, houses, the market, the church |
+| Shopper | tunics, kirtles and skirts, an apron, a coif or a hood; a pannier on the back, a basket, or a jug | stalls, tradesmen's houses, the well, houses, the market, the church |
 | Porter | a smock or tunic, a hood or coif; a sack or a bundle of firewood on the back | tradesmen's houses, stalls, yards, the ways out, the market |
-| Field hand | a smock, a straw hat; a hay fork | the ways out (the fields), yards, the well, the market, houses |
+| Field hand | a smock, a straw hat; a hoe over the shoulder or a hay fork | the ways out (the fields), yards, the well, the market, houses |
 | Merchant | good cloth: a jerkin over a dyed tunic, or a velvet bodice and a gown | the market, stalls, the guild, the hall, the tavern, tradesmen's houses |
 | Sweeper | a smock and apron, a hood or coif; a broom | the market, stalls, the church, the tavern, the hall, houses |
-| Friar | a brown habit, a hood; a walking staff or a ledger | the church, the market, houses, the well |
+| Friar | a brown habit (a man's over trousers, a woman's with its skirt), a hood; a walking staff or a ledger | the church, the market, houses, the well |
 | Servant (a castle's) | a chemise and kirtle or a shirt, an apron, a coif; a jug, a pannier or firewood | the courtyard, the keep's door, the wards' heart |
 | Groom (a castle's) | a jerkin and breeches; a hay fork | the wards' heart, the courtyard |
-| Scribe (a castle's) | a robe or a gown; a ledger | the keep's door, the courtyard |
+| Scribe (a castle's) | a tunic (and a jerkin) over trousers, or a gown; a ledger | the keep's door, the courtyard |
 
 **Where.** A settlement's errands are found on its layout (`errandsOf`): its market's middle and
 round it, in front of each stall, round its well, in front of its tradesmen's houses and the other

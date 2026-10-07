@@ -217,7 +217,7 @@ export function townsfolkOf({ place, kind, people = "human", name = "", errands,
         folk.push({
             id: `townsfolk:${place}/${k}`,
             local: calling,
-            title: titleOf(calling, kind, sex),
+            title: titleOf(calling, kind, sex, people),
             role: "townsfolk",
             look: calling,
             sex,
@@ -242,8 +242,17 @@ export function countOut(kind, night = false) {
     return night ? Math.max(day ? 1 : 0, Math.ceil(day * NIGHT_SHARE)) : day;
 }
 
-// A calling's title: a shopper's by where they live and who they are
-function titleOf(calling, kind, sex) {
+// Each people's own name for a friar's calling (their priests about the town, characters/dress.js
+// their dress): the elves' moon-priests, the dark elves' web-priests, the cat folk's sun-priests,
+// the lizard folk's serpent-priests, the orcs' shamans; [a man's, a woman's]
+const PRIESTS = Object.freeze({ elf: ["Moon-priest", "Moon-priestess"], darkElf: ["Web-priest", "Web-priestess"], cat: ["Sun-priest", "Sun-priestess"], lizard: ["Serpent-priest", "Serpent-priestess"], orc: ["Shaman", "Shaman"] });
+
+// A calling's title: a shopper's by where they live and who they are, a friar's by their people
+function titleOf(calling, kind, sex, people) {
+    if (calling === "friar" && PRIESTS[people]) {
+        return PRIESTS[people][sex === "f" ? 1 : 0];
+    }
+
     if (calling !== "shopper") {
         return CALLINGS[calling].title;
     }

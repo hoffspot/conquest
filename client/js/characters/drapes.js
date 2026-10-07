@@ -20,7 +20,8 @@ import { LIVERIES } from "./liveries.js";
  * Every drape: its slot, how far down it hangs (`length`: 0 at the hips, 1 at the ankle), how
  * much it flares out by the hem (a share of the hips' width), how many pleats go round it, how
  * far round it goes (`arc`: 1 all the way, less for an apron at the front) and how far out from
- * what's under it (`over`, metres), and its look.
+ * what's under it (`over`, metres), and its look: its colour, and bands of others round it
+ * (`bands`: [from, to, colour], shares of the way from the hips to the hem).
  */
 export const DRAPES = Object.freeze({
     skirt: { label: "Wool skirt", slot: "legs", length: 0.95, flare: 0.45, pleats: 14, colour: "#5d4a34", roughness: 0.92 },
@@ -34,6 +35,28 @@ export const DRAPES = Object.freeze({
     blueKirtle: { label: "Blue kirtle", slot: "legs", length: 1, flare: 0.55, pleats: 16, colour: "#3a4f7a", roughness: 0.88 },
     brownSkirt: { label: "Brown skirt", slot: "legs", length: 0.95, flare: 0.45, pleats: 14, colour: "#6b5236", roughness: 0.92 },
     habitSkirt: { label: "Habit (its skirt)", slot: "legs", length: 1.06, flare: 0.5, pleats: 18, colour: "#5a4330", roughness: 0.95 },
+    // Each people's everyday dress (characters/dress.js): the elves' long gowns, a silver or green
+    // band at the hem; the dark elves' skirts to the floor, close at the hips, a band of violet or silver; the
+    // cat folk's wraps, a sarong to the knee or a shuka to the ankle, banded boldly; the lizard
+    // folk's cotton wrap skirt with turquoise and crimson at its hem, and the flap of a loincloth,
+    // and a cape knotted at the shoulder; the orcs' skirts of hide strips, edged in red ochre (a
+    // woman's: no man wears a skirt, dress.js)
+    elfGownSage: { label: "Elven gown", slot: "legs", length: 1.02, flare: 0.6, pleats: 20, colour: "#8fa58a", roughness: 0.6, sheen: true, bands: [[0.92, 0.96, "#dde3ea"]] },
+    elfGownDusk: { label: "Elven gown", slot: "legs", length: 1.02, flare: 0.6, pleats: 20, colour: "#3d4f7a", roughness: 0.6, sheen: true, bands: [[0.92, 0.96, "#dde3ea"]] },
+    elfGownIvory: { label: "Elven gown", slot: "legs", length: 1.02, flare: 0.6, pleats: 20, colour: "#e8e2d0", roughness: 0.6, sheen: true, bands: [[0.92, 0.96, "#3a8a55"]] },
+    darkSkirtBlack: { label: "Dark elven skirt", slot: "legs", length: 0.98, flare: 0.42, pleats: 12, colour: "#1d1724", roughness: 0.5, sheen: true, bands: [[0.9, 0.95, "#5e2f8c"]] },
+    darkSkirtViolet: { label: "Dark elven skirt", slot: "legs", length: 0.98, flare: 0.42, pleats: 12, colour: "#3a1e5c", roughness: 0.5, sheen: true, bands: [[0.9, 0.95, "#d6cfe6"]] },
+    catSarongSaffron: { label: "Sarong", slot: "legs", length: 0.62, flare: 0.3, pleats: 8, colour: "#e0a02a", roughness: 0.85, bands: [[0.25, 0.33, "#2f3f95"], [0.6, 0.68, "#b33224"], [0.86, 1, "#2f3f95"]] },
+    catSarongOchre: { label: "Sarong", slot: "legs", length: 0.62, flare: 0.3, pleats: 8, colour: "#c47a2c", roughness: 0.85, bands: [[0.3, 0.38, "#efe2c4"], [0.62, 0.7, "#b33224"], [0.88, 1, "#efe2c4"]] },
+    catShukaRed: { label: "Shuka", slot: "legs", length: 1, flare: 0.35, pleats: 10, colour: "#b33224", roughness: 0.85, bands: [[0.2, 0.24, "#1e1a18"], [0.5, 0.54, "#1e1a18"], [0.86, 0.93, "#1e1a18"]] },
+    catShukaIndigo: { label: "Shuka", slot: "legs", length: 1, flare: 0.35, pleats: 10, colour: "#2f3f95", roughness: 0.85, bands: [[0.2, 0.25, "#e0a02a"], [0.5, 0.55, "#e0a02a"], [0.85, 0.93, "#e0a02a"]] },
+    cueitlWhite: { label: "Wrap skirt", slot: "legs", length: 0.85, flare: 0.3, pleats: 10, colour: "#ece6d6", roughness: 0.88, bands: [[0.76, 0.82, "#2fb3a0"], [0.85, 0.89, "#a8322a"], [0.92, 1, "#2fb3a0"]] },
+    cueitlTurquoise: { label: "Wrap skirt", slot: "legs", length: 0.85, flare: 0.3, pleats: 10, colour: "#2fb3a0", roughness: 0.88, bands: [[0.8, 0.86, "#ece6d6"], [0.9, 1, "#a8322a"]] },
+    loinFlapCrimson: { label: "Loincloth's flap", slot: "apron", length: 0.42, flare: 0.05, pleats: 3, arc: 0.32, over: 0.03, colour: "#a8322a", roughness: 0.85, bands: [[0.82, 1, "#2fb3a0"]] },
+    loinFlapWhite: { label: "Loincloth's flap", slot: "apron", length: 0.42, flare: 0.05, pleats: 3, arc: 0.32, over: 0.03, colour: "#ece6d6", roughness: 0.85, bands: [[0.82, 1, "#a8322a"]] },
+    tilmatli: { label: "Tilmatli", slot: "cloak", cape: true, length: 0.5, flare: 0.25, pleats: 6, colour: "#ece6d6", trim: "#2fb3a0", roughness: 0.9 },
+    hideSkirtTan: { label: "Hide skirt", slot: "legs", length: 0.85, flare: 0.35, pleats: 18, colour: "#8a6a48", roughness: 0.85, bands: [[0.9, 1, "#8a2a1a"]] },
+    hideSkirtDark: { label: "Hide skirt", slot: "legs", length: 0.85, flare: 0.35, pleats: 18, colour: "#4e3826", roughness: 0.85, bands: [[0.9, 1, "#8a2a1a"]] },
     guildSkirt: { label: "Guild skirt", slot: "legs", length: 0.55, flare: 0.55, pleats: 16, colour: "#23365e", roughness: 0.8 },
     mageRobe: { label: "Mage's robe", slot: "legs", length: 1.05, flare: 0.55, pleats: 16, colour: "#2e3f78", roughness: 0.85 },
     // A cloak (`cape`), from the shoulders down the back to below the knees, behind the arms,
@@ -49,6 +72,10 @@ export const DRAPES = Object.freeze({
 // Round the body in this many steps; down it in this many rings below the hips
 const AROUND = 48;
 const DOWN = 12;
+
+// How far either side of a band's edge (a share of the way down) its rings go, so the colours
+// change in a few millimetres there
+const BAND_EDGE = 0.004;
 
 // How loose it is at the waist and over the hips (metres)
 const EASE = { waist: 0.012, hips: 0.03 };
@@ -145,9 +172,10 @@ function outline(character, measures, bottom, top, centre = null) {
 /**
  * Build a drape on a character: its geometry (positions, normals, colours for the pleats'
  * shading, skin indices and weights on the character's skeleton), in the body's rest pose.
- * `measures` is garments.js's measureBody(character).
+ * `measures` is garments.js's measureBody(character); `under`, the skirts worn under it (an
+ * apron's: it lies over them, as far out as they flare).
  */
-export function buildDrape(character, id, measures) {
+export function buildDrape(character, id, measures, under = []) {
     const drape = DRAPES[id];
 
     if (drape.cape) {
@@ -177,13 +205,38 @@ export function buildDrape(character, id, measures) {
         rings.push([waistY + (hipsY - waistY) * t, 0, (k) => waist.reach[k] + EASE.waist + (hips.reach[k] + EASE.hips - waist.reach[k] - EASE.waist) * t]);
     }
 
-    for (let r = 1; r <= DOWN; r++) {
-        const t = r / DOWN;
+    // (Below the hips, DOWN rings evenly, and more either side of each band's edges, so its
+    // colours change sharply there)
+    const edges = (drape.bands ?? []).flatMap(([from, to]) => [from - BAND_EDGE, from + BAND_EDGE, to - BAND_EDGE, to + BAND_EDGE]);
+    const downs = [...Array.from({ length: DOWN }, (_, r) => (r + 1) / DOWN), ...edges].filter((t) => t > 0 && t <= 1).sort((a, b) => a - b);
 
-        rings.push([hipsY + (hemY - hipsY) * t, t, (k) => {
+    // (How far out a skirt worn under it reaches at height `y`, `k` round, pleats and all: the
+    // furthest of them, or none below its hem)
+    const skirts = under.filter((each) => each !== id && !DRAPES[each].cape && (DRAPES[each].arc ?? 1) >= 1).map((each) => DRAPES[each]);
+    const underAt = (y, k) => {
+        let most = 0;
+
+        for (const skirt of skirts) {
+            const hem = hipsY + (l.ankle - 0.03 * scale - hipsY) * skirt.length;
+            const t = (y - hipsY) / (hem - hipsY);
+
+            if (t > 0 && t <= 1) {
+                const round = hips.reach[k] + (average - hips.reach[k]) * smoothstep(0, 0.6, t);
+
+                most = Math.max(most, (round + EASE.hips) * (1 + skirt.flare * t) * (1 + PLEAT_DEPTH * t));
+            }
+        }
+
+        return most;
+    };
+
+    for (const t of downs.filter((each, k) => k === 0 || each - downs[k - 1] > 1e-6)) {
+        const y = hipsY + (hemY - hipsY) * t;
+
+        rings.push([y, t, (k) => {
             const round = hips.reach[k] + (average - hips.reach[k]) * smoothstep(0, 0.6, t);
 
-            return (round + EASE.hips) * (1 + drape.flare * t);
+            return Math.max((round + EASE.hips) * (1 + drape.flare * t), underAt(y, k));
         }]);
     }
 
@@ -212,6 +265,10 @@ export function buildDrape(character, id, measures) {
     const colours = [];
     const skinIndex = [];
     const skinWeight = [];
+    // (Its colour at each ring, banded: in its vertices, its material white; else in its material)
+    const cloth = new THREE.Color(drape.colour);
+    const bands = (drape.bands ?? []).map(([from, to, colour]) => [from, to, new THREE.Color(colour)]);
+    const tintAt = (t) => (bands.length ? (bands.find(([from, to]) => t >= from && t < to)?.[2] ?? cloth) : null);
 
     // (Round it, how much goes with the front or back's bones, and how much with its side's leg)
     const legsAt = (angle) => {
@@ -249,8 +306,10 @@ export function buildDrape(character, id, measures) {
             const x = hips.middle.x + Math.sin(angle) * out + side * Math.sin(angle) ** 2 * (r === 0 ? 0 : onLegs(y)) * Math.max(0, splay(side, y));
             const shade = 0.86 + 0.14 * (0.5 + 0.5 * Math.sin(angle * drape.pleats)) * Math.min(1, t * 3) + (t === 0 ? 0.14 : 0) * (1 - Math.min(1, r / 2));
 
+            const tint = tintAt(t);
+
             positions.push(x, y, z);
-            colours.push(shade, shade, shade);
+            colours.push(...(tint ? [tint.r * shade, tint.g * shade, tint.b * shade] : [shade, shade, shade]));
 
             // The waist bends with the lower back; below the hips, more and more with the legs
             // down to the knees (its sides with their own, its front and back with the legs
@@ -493,6 +552,10 @@ const CLEAR = { knee: 0.07, shin: 0.075, ankle: 0.06, heel: 0.035, toes: 0.035 }
 // a thigh swings it as far as it goes)
 const SWING = 1;
 
+// How far round the front or back a leg past the cloth's sides is taken to be (the ellipse's
+// 1 - (aside / wide)², its least): near its edge
+const EDGE_ROUND = 0.2;
+
 // How far forward a line from one point to another leans (radians, from straight down; in the
 // pelvis's frame, `back` its turn undone), and how long it is in that plane (into `out`)
 const lean = (from, to, back = null, out = null) => {
@@ -546,9 +609,12 @@ export function drapeSkeleton(rig, profile = []) {
             }
 
             const reach = way > 0 ? ring.front : ring.back;
-            const round = 1 - (aside / ring.wide) ** 2;
+            // (A leg further to the side than it's wide, as one far behind seems with the pelvis
+            // turned in a long stride, kept in as if at its edge: else nothing swings for it, and
+            // where the cloth goes half with the back, half with that leg, it comes out)
+            const round = Math.max(EDGE_ROUND, 1 - (aside / ring.wide) ** 2);
 
-            if (reach < 0.02 || round <= 0) {
+            if (reach < 0.02) {
                 return last?.angle ?? null;
             }
 
@@ -652,9 +718,11 @@ export function drapeMaterial(drape) {
         return new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: drape.roughness, vertexColors: true, side: THREE.DoubleSide });
     }
 
+    // (A banded one's colours are in its vertices too)
+    const color = drape.bands ? 0xffffff : drape.colour;
     const material = drape.sheen
-        ? new THREE.MeshPhysicalMaterial({ color: drape.colour, roughness: drape.roughness, sheen: 0.6, sheenColor: new THREE.Color(drape.colour).offsetHSL(0, -0.2, 0.12), sheenRoughness: 0.5 })
-        : new THREE.MeshStandardMaterial({ color: drape.colour, roughness: drape.roughness });
+        ? new THREE.MeshPhysicalMaterial({ color, roughness: drape.roughness, sheen: 0.6, sheenColor: new THREE.Color(drape.colour).offsetHSL(0, -0.2, 0.12), sheenRoughness: 0.5 })
+        : new THREE.MeshStandardMaterial({ color, roughness: drape.roughness });
 
     material.vertexColors = true;
     material.side = THREE.DoubleSide;
