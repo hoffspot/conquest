@@ -12,9 +12,12 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# (Each job is ended at about twice the longest it's taken, the build 8 minutes and the deploy
+# under 3, rather than held to GitHub's six hours if it hangs)
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -43,6 +46,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       pages: write
       id-token: write

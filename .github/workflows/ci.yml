@@ -18,9 +18,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Lint and the unit tests
+  # Lint and the unit tests: about 7½ minutes
   test:
     runs-on: ubuntu-latest
+    # (Twenty minutes is more than twice the longest it's taken; a job hung longer is ended rather
+    # than held to GitHub's six hours, as the e2e jobs are below)
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -35,10 +38,12 @@ jobs:
 
   # The motion check (scripts/motion-check.js): every motion on each people's bodies at the ends
   # of their builds, failing on anything worse than the baseline kept with it
-  # (test/motion-baseline.json). About 5 minutes on a runner's 4 threads; its report is kept
+  # (test/motion-baseline.json). About 10 minutes on a runner's 4 threads; its report is kept
   # with the run, for the contact sheet (motion-sheet.html, "Report")
   motion:
     runs-on: ubuntu-latest
+    # (Twice the longest it's taken, 11 minutes, and a little more)
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
@@ -60,14 +65,14 @@ jobs:
 
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
   # others' (scripts/e2e-shard.js: by how long each test took, e2e/durations.json). Eight jobs
-  # take about 4½ minutes each (and another 40 s or so getting ready): more would be quicker,
+  # take about 8 minutes each (and another 40 s or so getting ready): more would be quicker,
   # down to the longest test's 1¾ minutes, but a run is then 10 jobs (with the unit tests and the
   # motion check), and two runs at once (a merge's and the next pull request's) stay within
   # GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
-    # (Twenty minutes is four times a job's usual; a job hung longer is ended rather than held to
-    # GitHub's six hours)
+    # (Twenty minutes is twice a job's usual, and half as long again as the longest; a job hung
+    # longer is ended rather than held to GitHub's six hours)
     timeout-minutes: 20
     strategy:
       fail-fast: false
