@@ -2,10 +2,10 @@
 // core/host.js; docs/WILDS.md): poison, disease, wither, burning, bleeding and being slowed, each
 // hurting now and then or hindering till it wears off; brought on by the blows the creatures'
 // weapons say, sometimes; ended at once by the cures the adventurers' guild sells; kept with the
-// world.
+// world. (And the pox, caught at a bordello: tests/growing.test.js.)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AFFLICTIONS, CURES, shareOf } from "../client/js/core/afflictions.js";
+import { AFFLICTIONS, CURES, curedWith, shareOf } from "../client/js/core/afflictions.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -47,13 +47,18 @@ describe("what lingers after some blows (afflictions.js)", () => {
         for (const [kind, { label, about, ms, every, damage, cure }] of creatures) {
             assert.ok(label && about && ms > 0, kind);
             assert.ok(every === undefined || (every > 0 && damage > 0 && every <= ms), `${kind}: hurts now and then, or not at all`);
-            assert.equal(CURES[cure]?.cure, kind, `${kind}: its cure`);
-            assert.deepEqual(ITEMS[cure].use, { cure: kind });
+            assert.ok(curedWith(CURES[cure]?.cure).includes(kind), `${kind}: its cure`);
+            assert.deepEqual(ITEMS[cure].use, { cure: CURES[cure].cure });
             assert.ok(SHOPS.guild.items.includes(cure), `${kind}: its cure at the guild`);
             assert.ok(wares("guild").some(({ id }) => id === cure));
         }
 
-        assert.deepEqual(Object.keys(CURES).sort(), creatures.map(([, { cure }]) => cure).sort(), "a cure for each, and only those");
+        assert.deepEqual(Object.keys(CURES).sort(), [...new Set(creatures.map(([, { cure }]) => cure))].sort(), "a cure for each, and only those");
+
+        // (The pox, the one draught's as the wild's sickness is: only those two)
+        assert.deepEqual(curedWith("disease"), ["disease", "pox"]);
+        assert.deepEqual(curedWith("poison"), ["poison"]);
+        assert.deepEqual(curedWith("fear"), []);
         assert.equal(ITEMS.antidote.label, "Cure poison draught");
         assert.equal(ITEMS.cureDisease.label, "Cure disease draught");
         assert.equal(ITEMS.invigorate.label, "Invigorating draught");
@@ -63,7 +68,7 @@ describe("what lingers after some blows (afflictions.js)", () => {
 
         assert.ok(afflicting.length >= 20);
         assert.ok(afflicting.every(({ afflict }) => AFFLICTIONS[afflict.kind] && afflict.chance > 0 && afflict.chance <= 1));
-        assert.deepEqual(new Set(afflicting.map(({ afflict }) => afflict.kind)), new Set(creatures.map(([kind]) => kind)), "every kind brought on by something");
+        assert.deepEqual(new Set(afflicting.map(({ afflict }) => afflict.kind)), new Set(creatures.map(([kind]) => kind).filter((kind) => kind !== "pox")), "every kind brought on by something (but the pox: a bordello's)");
     });
 
     it("hurts now and then till it wears off, as strong as whoever did it", () => {

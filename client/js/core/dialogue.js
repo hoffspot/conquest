@@ -280,6 +280,7 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "A room for the night. (10 gold)", next: "room", do: [{ rent: "room", price: 10 }] },
                     { say: "What sort of house is this?", next: "house" },
+                    { say: "What do your ladies offer?", next: "ladies" },
                     { say: "Just looking.", next: "looking" },
                     FAREWELL,
                 ],
@@ -291,6 +292,22 @@ export const TREES = Object.freeze({
             house: {
                 say: "The respectable sort, darling. Warm rooms, good company and better discretion. Mostly the discretion.",
                 choices: [{ say: "I see.", next: "more" }, FAREWELL],
+            },
+            // (What a courtesan's company does for a caller: hinted at, host.js COMPANY)
+            ladies: {
+                say: [
+                    "Company, darling, the best this side of the river. Twenty gold, and you'll go down my stairs with a spring in your step: my regulars swear they get their wind back twice as fast for an hour after. Pick a door; any of my girls will see to you.",
+                    "A warm fire, a warm bed and warmer company. Ask the soldiers who come up here before a long march: an hour with one of my girls, and they say they could run to the next town and not stop for breath.",
+                ],
+                choices: [
+                    { say: "Is it safe?", next: "safe" },
+                    { say: "I'll think about it.", next: "more" },
+                    FAREWELL,
+                ],
+            },
+            safe: {
+                say: "I keep a clean house, darling. Mostly. And if a caller should go home with more than they came for, the adventurers' guild sells a draught for that.",
+                choices: "more",
             },
             looking: {
                 say: "Looking's free, darling. Everything else has a price.",
@@ -1172,7 +1189,8 @@ export const TREES = Object.freeze({
         },
     },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
-    // dance, what she hears from her callers, a favour to be done) is handed to the game to do
+    // dance, what she hears from her callers, a favour to be done) is handed to the game to do;
+    // her company's afterglow (host.js COMPANY) is hinted at, as it is by the madam
     courtesan: {
         start: "greet",
         nodes: {
@@ -1186,6 +1204,7 @@ export const TREES = Object.freeze({
                             "Don't hover in the doorway, it lets the warm out. I'm {name}. Sit, if you like. The bed's softer than the chair.",
                         ],
                     },
+                    { if: { flag: "company" }, lines: ["{player}! Back for more? Still got your wind from last time?", "There's my favourite caller. Did you run all the way here, {player}? You're hardly out of breath."] },
                     { if: { flag: "danced" }, lines: ["{player}! Come to tread on my toes again?", "Back for another dance, {player}? My feet have only just forgiven you."] },
                     { lines: ["{player}, I was hoping you'd come back.", "Back again, {player}? I'll start to think you like me.", "Ah, my favourite face. Come in, {player}, come in."] },
                 ],
@@ -1223,15 +1242,21 @@ export const TREES = Object.freeze({
                 choices: "more",
             },
             offer: {
-                say: "Company, sweetling. A fire, a glass of something red, a pair of warm hands for your aching shoulders, and a listening ear. Whatever happens after that, {madam} doesn't ask and I don't tell.",
+                say: [
+                    "Company, sweetling. A fire, a glass of something red, a pair of warm hands for your aching shoulders, and a listening ear. My callers swear they have the wind of a boy of sixteen for an hour after. Whatever happens after that, {madam} doesn't ask and I don't tell.",
+                    "Company, sweetling, and a little of my magic. A captain told me he ran up the keep's stairs after an hour with me, and had his breath back before the top. Whatever happens after that, {madam} doesn't ask and I don't tell.",
+                ],
                 choices: [
-                    { say: "Your company for the evening. (20 gold)", next: "company", do: [{ hire: "company", price: 20 }] },
+                    { say: "Your company for the evening. (20 gold)", next: "company", do: [{ company: true, price: 20 }, { remember: "company" }] },
                     { say: "Just a dance, then.", next: "dance", do: [{ remember: "danced" }] },
                     { say: "Just talk.", next: "more" },
                 ],
             },
             company: {
-                say: ["Then close the door behind you, sweetling, and let me take care of the rest.", "Good choice. Mind the bedpost. And your manners."],
+                say: [
+                    "Then close the door behind you, sweetling, and let me take care of the rest. You'll go down those stairs lighter than you came up.",
+                    "Good choice. Mind the bedpost. And your manners. You'll thank me the next time you've a hill to run up.",
+                ],
                 choices: [{ say: "(Close the door.)", next: null }],
             },
             dance: {
