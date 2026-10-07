@@ -38,7 +38,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/creator.js", 27453],
             ["js/app/doors.js", 9133],
             ["js/app/fate.js", 4610],
-            ["js/app/game.js", 290477],
+            ["js/app/game.js", 290597],
             ["js/app/gearinfo.js", 9215],
             ["js/app/governor.js", 6328],
             ["js/app/heroes.js", 7619],
