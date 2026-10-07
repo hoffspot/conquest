@@ -6,9 +6,10 @@ import { describe, it } from "node:test";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
-import { BUSES, FOOTSTEPS, GAITS, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { RECORDED, RECORDED_LEVEL } from "../client/js/audio/recorded.js";
+import { BUSES, FOOTSTEPS, GAITS, gainOf, recordedFiles, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
-import { loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
+import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { createRandom } from "../client/js/core/random.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
@@ -262,7 +263,7 @@ async function started(options) {
 }
 
 describe("playing sounds (sound.js)", () => {
-    it("makes every sound (here without a worker), downloads the music's recordings, and plays nothing before it's unlocked", async () => {
+    it("makes every sound (here without a worker), downloads the music's recordings and the recorded sounds, and plays nothing before it's unlocked", async () => {
         await making;
         await made.downloading;
 
@@ -271,14 +272,46 @@ describe("playing sounds (sound.js)", () => {
         }
 
         assert.ok(made.samples.has("wind"));
-        assert.deepEqual([...made.recordings.keys()].sort(), sampleFiles().map(([id]) => id).sort());
+        assert.deepEqual([...made.recordings.keys()].sort(), [...sampleFiles(), ...recordedFiles()].map(([id]) => id).sort());
         assert.equal(made.play("slash"), null, "no sound until the browser allows it");
 
         // Unlocked, the browser decodes them all
         const { sound } = await started();
 
         assert.equal(sound.instruments.size, sampleFiles().length);
+
+        for (const [name, files] of Object.entries(RECORDED)) {
+            assert.equal(sound.recorded.get(name)?.length, files.length, name);
+        }
+
         assert.equal(sound.recordings.size, 0, "and they're let go once decoded");
+        sound.close();
+    });
+
+    it("has a recording of a footstep on every footing, a few of each, played instead of the made ones, as loud", async () => {
+        for (const surface of SURFACES) {
+            const name = `step${surface[0].toUpperCase()}${surface.slice(1)}`;
+
+            assert.ok(RECORDED[name]?.length >= 4 && SOUNDS[name], name);
+        }
+
+        const { sound, played } = await started();
+
+        played.length = 0;
+        sound.play("stepGrass", { volume: 0.5 });
+        sound.play("slash", { volume: 0.5 });
+
+        const [step, slash] = played;
+
+        assert.ok(sound.recorded.get("stepGrass").includes(step.source.buffer), "the recording");
+        assert.ok(sound.buffers.get("slash").includes(slash.source.buffer), "a made sound where there's no recording");
+        assert.ok(Math.abs(route(sound, step.source).gain - 0.5 * SOUNDS.stepGrass.volume * (LEVEL / RECORDED_LEVEL)) < 1e-9, "played up to a made sound's loudness");
+
+        // (Before the recordings are decoded, or if they couldn't be downloaded, the made ones)
+        sound.recorded.clear();
+        played.length = 0;
+        sound.play("stepGrass");
+        assert.ok(sound.buffers.get("stepGrass").includes(played[0].source.buffer));
         sound.close();
     });
 
@@ -377,11 +410,11 @@ describe("playing sounds (sound.js)", () => {
 
         // (Fewer than can sound at once: the browser's clock stands still here)
         for (let k = 0; k < 20; k++) {
-            sound.play("stepGrass");
+            sound.play("slash");
         }
 
         // (Leaving out the wind, started with the sound)
-        const buffers = sound.buffers.get("stepGrass");
+        const buffers = sound.buffers.get("slash");
         const variants = played.map(({ source }) => buffers.indexOf(source.buffer)).filter((variant) => variant >= 0);
 
         assert.equal(variants.length, 20);

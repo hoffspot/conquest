@@ -1,7 +1,8 @@
 // The game's sound, played with the Web Audio API in three buses, each with its own volume (the
 // sliders in Game options), all turned on or off together (the Sound switch):
 //
-//  - Sound effects: blows, spells, footsteps and cues (synth.js), each from where it happens:
+//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps recorded, once
+//    they're downloaded: recorded.js), each from where it happens:
 //    quieter the further it is from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
@@ -12,7 +13,8 @@
 //    through the floor.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
-// recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page
+// recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
+// downloaded meanwhile. Browsers only let a page
 // make sound once someone has tapped, clicked or pressed a key on it, so it starts on the first
 // one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
@@ -26,8 +28,9 @@
 
 import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
+import { RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORE } from "./score.js";
-import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
+import { LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 import { TAVERN } from "./tavern.js";
 
 /** The music: the town's, and the tavern's. */
@@ -91,6 +94,12 @@ const STALL = 1.5;
 
 // The music's recordings: how many there are, and how many are downloaded at once
 const RECORDINGS = sampleFiles().length;
+
+/**
+ * The sounds recorded rather than made (recorded.js: client/sounds), each variant's id ("name
+ * variant") and where it's downloaded from.
+ */
+export const recordedFiles = () => Object.entries(RECORDED).flatMap(([name, files]) => files.map((file, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
 const DOWNLOADS = 6;
 
 // How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
@@ -190,6 +199,9 @@ export class Sound {
         /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
         this.instruments = new Map();
+
+        /** Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer]), played instead of the made ones once there are two. */
+        this.recorded = new Map();
 
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
@@ -654,7 +666,8 @@ export class Sound {
      */
     play(name, { at = null, volume = 1, delay = 0, rate = 1, far = FAR } = {}) {
         const context = this.context;
-        const buffers = this.buffers.get(name);
+        const recorded = this.recorded.get(name);
+        const buffers = recorded?.length > 1 ? recorded : this.buffers.get(name);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
@@ -664,7 +677,8 @@ export class Sound {
             return null;
         }
 
-        let gain = volume * (SOUNDS[name]?.volume ?? 1);
+        // (A recording's made quieter than a made sound, for its sharper start: played up to match)
+        let gain = volume * (SOUNDS[name]?.volume ?? 1) * (buffers === recorded ? LEVEL / RECORDED_LEVEL : 1);
         let pan = 0;
 
         if (at) {
@@ -781,9 +795,10 @@ export class Sound {
         this.buffers.set(name, variants);
     }
 
-    // Download the music's recordings, a few at a time, and have the browser decode them once it's started
+    // Download the music's recordings and the recorded sounds, a few at a time, and have the
+    // browser decode them once it's started
     async #download() {
-        const files = sampleFiles();
+        const files = [...sampleFiles(), ...recordedFiles()];
         let next = 0;
 
         const worker = async () => {
@@ -803,8 +818,9 @@ export class Sound {
                         this.#decode(id, this.recordings.get(id));
                     }
                 } catch {
-                    // (Offline, say: the music just doesn't play, or plays without it)
-                    this.unplayable++;
+                    // (Offline, say: the music just doesn't play, or plays without it; a recorded
+                    // sound's made one plays instead)
+                    this.unplayable += RECORDED[id.split(" ")[0]] ? 0 : 1;
                 }
             }
         };
@@ -813,8 +829,18 @@ export class Sound {
     }
 
     #decode(id, recording) {
+        const [name] = id.split(" ");
+
         this.recordings.delete(id);
-        this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
+
+        if (RECORDED[name]) {
+            this.context.decodeAudioData(recording).then(
+                (buffer) => this.recorded.set(name, [...(this.recorded.get(name) ?? []), buffer]),
+                () => {},
+            );
+        } else {
+            this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
+        }
     }
 
     #startWind() {

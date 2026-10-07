@@ -3140,10 +3140,17 @@ played at its own volume:
     the woods, grass everywhere else. Up high, scree from 175 m and snow from 225 m, whatever the
     land. A road in sand, snow or scree is as loose as the land; ploughed soil in the marsh is mud.
   - **Through water**, splashing, where it's waded.
-  - Leather-soled, as medieval shoes were (flat, no heel: a heel's click is centuries off), a dull
+  - **Recorded** (`client/sounds`, listed in `recorded.js`, made by `npm run build:sounds`): four to
+    six footfalls on each footing, cut from recordings by one recordist, Nox_Sound on Freesound
+    (CC0), so every footing sounds like the same walker. Soft-soled boots, close and dry: a dull
+    thud and the ground's own sound, no heel's click (medieval shoes were flat). They're
+    downloaded with the music's recordings (about 215 KB in all), made about −20 dBFS loud (their
+    sharp starts are far louder than the rest of them) and played up to match the made sounds'
+    loudness, and they're played instead of synth.js's made footsteps once decoded; until then,
+    or if they can't be downloaded, the made ones play. The made ones are leather-soled, a dull
     pat with the ground's own sound (a stone's knock and grit, a board's hollow ring, snow's
-    squeaky crunch, scree's rattle, mud's slap and suck, leaves' crackle). Each has its weight in
-    the harmonics a phone's speaker plays, not only under 200 Hz.
+    squeaky crunch, scree's rattle, mud's slap and suck, leaves' crackle), with their weight in
+    the harmonics a phone's speaker plays.
   - Barely heard, and never in the way (`FOOTSTEPS`): well under the blows and the world round
     them (a walk's about a fourteenth of a slash, a run's about a ninth), a little louder and
     brighter running, each step a little louder or softer than the last, and heard only within
