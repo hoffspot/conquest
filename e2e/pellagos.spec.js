@@ -2453,6 +2453,10 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         const conversation = game.talking?.conversation;
         // (What she offers: to trade, buying or selling, and what the guild buys)
         const offers = conversation?.choices.map(({ text }) => text) ?? [];
+        // (The player's guild card on the talk, and on their own card: none yet)
+        const card = () => document.querySelector(".talk-card:not([hidden])")?.textContent ?? null;
+        const chip = () => document.querySelector("#playerplate .guild:not([hidden])")?.textContent ?? null;
+        const unregistered = { card: card(), chip: chip() };
 
         conversation?.choose(conversation.choices.findIndex(({ text }) => text === "What does the guild buy?"));
 
@@ -2465,6 +2469,9 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
 
         // What's on the board: its notices, the package among them, read and taken
         conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Thank you!"));
+
+        const signed = { card: card(), chip: chip(), rank: game.standing.guildTitle(), to: game.guildCard()?.to };
+
         conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Anything on the board for me?"));
 
         const notices = conversation?.choices.map(({ text }) => text) ?? [];
@@ -2489,6 +2496,8 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
             roles: folk.map(({ role }) => role),
             acts,
             registered,
+            unregistered,
+            signed,
             place: session.sound.place,
         };
     });
@@ -2503,6 +2512,11 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.offers).toEqual(expect.arrayContaining(["I'd like to buy or sell something.", "What does the guild buy?"]));
     expect(guild.buys).toMatch(/^Anything you drag back from the wild! Pelts, fangs, scales/);
     expect(guild.registered).toMatch(/^Wonderful! Name: .+\. Rank: Copper\./);
+
+    // Their rank on the talk with her, and on their own card once they've one (the same card at
+    // every branch: core/standing.js GUILD_RANKS)
+    expect(guild.unregistered).toEqual({ card: "Your rankNot registered", chip: null });
+    expect(guild.signed).toEqual({ card: `Your rankCopper${guild.signed.to} merit to Iron`, chip: "Copper", rank: "Copper", to: expect.any(Number) });
     expect(guild.place).toBe("guild");
 
     // Four notices on the board (docs/WAR.md M8), each in a few words and what it pays, the package
@@ -3943,6 +3957,7 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
     await expect(journal.locator(".journal-request-title")).toHaveText([taken[0].title]);
     await expect(journal.locator(".journal-done")).toContainText(["A letter to carry"]);
     await expect(journal.locator(".journal-people")).toContainText("Ruled by");
+    await expect(journal.locator(".journal-guild")).toContainText("Not registered");
 
     // Given up: set down, and the journal closed with its button
     await journal.getByRole("button", { name: `Give up ${taken[0].title}` }).click();

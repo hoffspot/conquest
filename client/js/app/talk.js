@@ -1,7 +1,8 @@
 // The talk: a panel across the bottom of the screen while the player talks to someone
 // (core/dialogue.js): who they are (their name, and what they are under it), what they're
 // saying, and what the player can say back, one button each (or its number on a keyboard).
-// Choosing one says it; the last of a talk, or the cross, ends it.
+// Choosing one says it; the last of a talk, or the cross, ends it. Talking to one of an
+// adventurers' guild's, the player's rank in the guilds is on it too, by who they're talking to.
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -26,8 +27,11 @@ export class TalkPanel {
         this.close.title = "Stop talking (Esc)";
         this.close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.close.addEventListener("click", () => this.onClose());
+        // (The player's guild card: its rank, and how near the next)
+        this.card = element("p", "talk-card");
+        this.card.hidden = true;
         who.append(this.name, this.title);
-        header.append(who, this.close);
+        header.append(who, this.card, this.close);
 
         this.line = element("p", "talk-line");
         this.line.id = "talkline";
@@ -46,12 +50,38 @@ export class TalkPanel {
         return !this.panel.hidden;
     }
 
-    /** Show a talk with someone ({ name, title }), at what they're saying now. */
-    show({ name, title }, said) {
+    /**
+     * Show a talk with someone ({ name, title, card (the player's guild card, talking to one of a
+     * guild's: setCard; none otherwise) }), at what they're saying now.
+     */
+    show({ name, title, card = null }, said) {
         this.name.textContent = name;
         this.title.textContent = title;
+        this.setCard(card);
         this.panel.hidden = false;
         this.update(said);
+    }
+
+    /**
+     * Show the player's guild card by who they're talking to: its rank ({ title, merit, to, next }:
+     * game.js guildCard), "Not registered" ({ title: null }), or nothing (null).
+     */
+    setCard(card) {
+        this.card.hidden = !card;
+        this.card.replaceChildren();
+
+        if (!card) {
+            return;
+        }
+
+        const rank = element("span", "talk-card-rank", card.title ?? "Not registered");
+
+        rank.dataset.rank = card.title?.toLowerCase() ?? "none";
+        this.card.append(element("span", "talk-card-label", "Your rank"), rank);
+
+        if (card.title) {
+            this.card.append(element("span", "talk-card-next", card.next ? `${card.to - card.merit} merit to ${card.next.title}` : "The highest there is"));
+        }
     }
 
     /** What they're saying now ({ line, choices: [{ text, ends }] }), and the replies to it. */

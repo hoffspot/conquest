@@ -1,6 +1,8 @@
 // The journal: a panel over the game (opened with its button, or J) telling the player where they
 // stand with their people (core/standing.js):
 // - their rank, how far to the next, and what each opens;
+// - their card from the adventurers' guilds (one, good at every branch): its rank, how much more
+//   merit to the next, and what each gives;
 // - the requests they carry: who asked, what, how far it's come, where to go and how long's left
 //   (each can be given up);
 // - their people: who rules, whom they're at war with and allied to, how many towns they hold,
@@ -97,12 +99,13 @@ export class JournalPanel {
 
     /**
      * Show (or show again) where the player stands: { standing: { title, points, from, to, opens,
-     * next }, requests: [{ id, title, from, text, progress, where, left }], people: { name,
+     * next }, guild (their card from the adventurers' guilds: { title, merit, from, to, opens,
+     * next }, or null till they register), requests: [{ id, title, from, text, progress, where, left }], people: { name,
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }] }.
      */
-    show({ standing, requests, people, done, company = [], most = 1 }) {
+    show({ standing, guild = null, requests, people, done, company = [], most = 1 }) {
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
         this.panel.hidden = false;
 
@@ -121,6 +124,27 @@ export class JournalPanel {
             element("p", "journal-note", standing.next ? `${standing.to - standing.points} more standing to ${standing.next.title}: ${standing.next.opens}` : "There's no higher to rise."),
         );
         sections.push(this.#section("Standing", rank));
+
+        // Their rank in the adventurers' guilds, and the next (or how to sign up)
+        const card = element("div", "journal-standing journal-guild");
+
+        if (guild) {
+            const guildBar = element("div", "journal-bar");
+            const guildFill = element("div", "journal-fill");
+
+            guildFill.style.width = `${guild.to === null ? 100 : Math.round(((guild.merit - guild.from) / (guild.to - guild.from)) * 100)}%`;
+            guildBar.append(guildFill);
+            card.append(
+                element("p", "journal-line", `${guild.title} rank: ${guild.opens}`),
+                guildBar,
+                element("p", "journal-note", guild.next ? `${guild.to - guild.merit} more merit to ${guild.next.title}: ${guild.next.opens}` : "Mithril: there's no higher rank."),
+            );
+            card.dataset.rank = guild.title.toLowerCase();
+        } else {
+            card.append(element("p", "journal-note", "Not registered. Any guild's receptionist will sign you up: one card, good at every branch."));
+        }
+
+        sections.push(this.#section("Adventurers' Guild", card));
 
         // What they've been asked
         const list = element("ul", "journal-list requests");
@@ -144,7 +168,7 @@ export class JournalPanel {
         );
 
         if (!requests.length) {
-            list.append(element("li", "journal-empty", "Nothing asked of you. The reeves at the town halls have work for those who want it."));
+            list.append(element("li", "journal-empty", "Nothing asked of you. The reeves at the town halls have work for those who want it, and the guilds' boards for adventurers."));
         }
 
         sections.push(this.#section("Requests", list));

@@ -29,7 +29,7 @@ import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, RISING, War } from "./war/war.js";
@@ -320,6 +320,7 @@ export const REFUSALS = Object.freeze({
     official: "They're not the one to ask.",
     stranger: "They've nothing for a stranger.",
     rank: "They won't hear that from you. Not yet.",
+    unregistered: "Register at the guild's counter first.",
     work: "They've nothing for you just now.",
     requests: "You've enough to be getting on with.",
     due: "You've nothing to tell them.",
@@ -358,6 +359,17 @@ const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
 const isSquare = (value) => Array.isArray(value) && value.length === 2 && value.every(whole);
 const refuse = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
+
+// A player's standing as kept, with their guild card: one registered at a guild before the guilds
+// kept a card (the player knew `guildMember`, from the receptionist's talk) given theirs now, its
+// merit from the guild work they've done
+function cardOf(standing, { knowledge = [] } = {}) {
+    if (standing?.guild || ![...knowledge].includes("guildMember")) {
+        return standing;
+    }
+
+    return { ...standing, guild: { merit: meritOf(Array.isArray(standing?.done) ? standing.done : []) } };
+}
 
 export class Host {
     /**
@@ -575,7 +587,7 @@ export class Host {
             talks: { memory: talks.memory ?? {}, knowledge: new Set(talks.knowledge ?? []) },
             explored: explored instanceof Explored ? explored : new Explored(explored),
             progress: progress instanceof Progress ? progress : new Progress(progress, hero),
-            standing: standing instanceof Standing ? standing : new Standing(standing),
+            standing: standing instanceof Standing ? standing : new Standing(cardOf(standing, talks)),
             // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
             boons: [],
             readyAt: {},
@@ -3839,8 +3851,9 @@ export class Host {
             return refuse("talking");
         }
 
-        // (Work asked for or taken on, word of it brought, the armoury, counsel: an official's)
-        if (effect.work || effect.report || effect.armoury || effect.counsel) {
+        // (Work asked for or taken on, word of it brought, the armoury, counsel, signing up at a
+        // guild: an official's)
+        if (effect.work || effect.report || effect.armoury || effect.counsel || effect.guild) {
             return this.#official(player, actor, effect);
         }
 
@@ -4019,7 +4032,8 @@ export class Host {
     }
 
     // Something asked of an official the player's talking to: work (offered, then taken on), word
-    // of what's done (rewarded), the armoury's gift for their rank, or counsel to their rulers
+    // of what's done (rewarded), the armoury's gift for their rank, counsel to their rulers, or
+    // signing up at an adventurers' guild
     #official(player, actor, effect) {
         const post = this.postOf(actor.talkingTo);
 
@@ -4031,14 +4045,31 @@ export class Host {
         const rank = standing.rank();
         const own = this.war.liege(post.owner) === this.war.liege(player.realm);
 
+        // (Signed up at a guild's counter, of any people: one card, good at every branch)
+        if (effect.guild === "register") {
+            if (post.post !== "guild") {
+                return refuse("official");
+            }
+
+            if (standing.register()) {
+                this.#event("guild", { id: player.id, change: "registered", rank: 0, title: standing.guildTitle() });
+            }
+
+            return { ok: true, guild: { ...standing.guild } };
+        }
+
         if (effect.work === "ask" || effect.work === "accept") {
             if (!post.work) {
                 return refuse("official");
             }
 
-            // (The guild's board is for anyone, of any people)
+            // (The guild's board is for anyone, of any people, once they've registered)
             if (!own && post.post !== "guild") {
                 return refuse("stranger");
+            }
+
+            if (post.post === "guild" && standing.guildRank() === null) {
+                return refuse("unregistered");
             }
 
             if (post.post === "keep" && rank < OPENS.keep) {
@@ -4057,7 +4088,7 @@ export class Host {
             if (effect.work === "ask") {
                 // (The parts a guild wants are what's found near it for them: as strong as it is
                 // that far from their home)
-                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, home: this.#homeOf(player), held: standing.requests, random: this.random };
+                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, guildRank: standing.guildRank() ?? 0, home: this.#homeOf(player), held: standing.requests, random: this.random };
                 const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? offerBoard(asked) : [offerRequest(asked)].filter(Boolean);
 
                 player.offers[post.id] = { turn: this.war.turn, board };
@@ -4192,7 +4223,8 @@ export class Host {
         return refuse("command");
     }
 
-    // A request done and told of: set down, its reward paid (gold, standing: any rank it brings told of)
+    // A request done and told of: set down, its reward paid (gold; standing, for a people's; the
+    // guilds' merit, for a guild's: any rank it brings told of)
     #rewarded(player, request) {
         const { standing } = player;
         const { reward } = request;
@@ -4209,6 +4241,10 @@ export class Host {
 
         for (const up of standing.gain(reward.standing)) {
             this.#event("standing", { id: player.id, ...up });
+        }
+
+        for (const up of standing.earn(meritIn(request))) {
+            this.#event("guild", { id: player.id, change: "rank", ...up });
         }
 
         // (Done for their own people while they serve another, or from a guild's board: their people stirred)
@@ -4278,7 +4314,7 @@ export class Host {
         }
     }
 
-    // A request given up: a little standing lost
+    // A request given up: a little lost (standing, for a people's; the guilds' merit, for a guild's)
     #abandon(player, id) {
         const request = player.standing.close(id, "abandoned");
 
@@ -4286,15 +4322,15 @@ export class Host {
             return refuse("request");
         }
 
-        player.standing.gain(-FAILED);
+        this.#failed(player, request);
         this.#event("request", { id: player.id, change: "abandoned", request: structuredClone(request) });
 
         return OK;
     }
 
     // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the
-    // wild (a guild's, only near its town: standing.js GUILD_REACH). One of their oppressors'
-    // soldiers stirs their people (M10)
+    // wild (a guild's, only near its town: standing.js GUILD_REACH; and only of the level it asks
+    // for, if it asks for one). One of their oppressors' soldiers stirs their people (M10)
     #felled(player, fallen) {
         if (fallen.kind === "soldier" && this.war?.oppressor(player.realm) && this.war.liege(fallen.team) === this.war.oppressor(player.realm)) {
             this.#stir(player, STIR.soldier);
@@ -4321,7 +4357,7 @@ export class Host {
             const counts =
                 request.kind === "bounty" || request.kind === "hunt"
                     ? fallen.kind === "soldier" && this.war?.liege(fallen.team) === request.target.realm
-                    : (request.kind === "wild" || request.kind === "beasts") && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team);
+                    : (request.kind === "wild" || request.kind === "beasts") && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team) && (fallen.wild?.tier ?? 1) >= (request.target.level ?? 1);
 
             if (counts) {
                 request.count += 1;
@@ -4461,7 +4497,7 @@ export class Host {
         }
     }
 
-    // A request moved on: counted, done (to be told of), failed (standing lost) or come to nothing
+    // A request moved on: counted, done (to be told of), failed (a little lost) or come to nothing
     #settle(player, request, change) {
         if (change === "ready") {
             request.state = "done";
@@ -4469,11 +4505,21 @@ export class Host {
             player.standing.close(request.id, change);
 
             if (change === "failed") {
-                player.standing.gain(-FAILED);
+                this.#failed(player, request);
             }
         }
 
         this.#event("request", { id: player.id, change, request: structuredClone(request) });
+    }
+
+    // A request failed or given up: a people's costs a little standing with them; a guild's, a
+    // little of the guilds' merit (never their standing: guild work neither gives nor takes it)
+    #failed(player, request) {
+        if (request.from.post === "guild") {
+            player.standing.earn(-GUILD_FAILED);
+        } else {
+            player.standing.gain(-FAILED);
+        }
     }
 
     // --- The buildings near the players ---
