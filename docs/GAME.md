@@ -2061,8 +2061,10 @@ over the stairwell upstairs, looking at the floor beyond it; or from over the ro
 player come out of a building. Turned to look at it, a tap on it takes them through.
 
 **The folk in the game.** Wenches and Ale's are built at the start, like the player and the orc
-(their looks and clothes are `presets.js`'s `FOLK`), and every other building's as it's got
-ready, each of the people whose place it is (docs/WAR.md M5: a cat folk's town's are cat folk,
+(their looks and clothes are `presets.js`'s `FOLK`; a start town of another people's tavern's folk
+are of that people, made up as any other building's are: `world.js` `peoplesOwn`), and every other
+building's as it's got ready, each of the people whose place it is (the people who founded it,
+whoever holds it now) (docs/WAR.md M5: a cat folk's town's are cat folk,
 named in their own tongue) and looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
 their height, build and face, their forebears' skin, eyes and hair, how they wear their hair and
 beard, and what their part wears: the barkeep's apron, a wench's bodice and skirt, a patron's
