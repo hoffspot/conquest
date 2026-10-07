@@ -76,37 +76,44 @@ const MASKS = ["lips", "ears", "eyelids", "aureolae", "fingernails", "toenails",
 /**
  * Load MakeHuman's masks, as one channel each at `size`: from `paths` (the body's manifest's:
  * the MakeHuman body's client/characters/masks/*.jpg; another body's, carried over into its
- * texture layout), in MASKS' order.
+ * texture layout), in MASKS' order. And the body's own skin pictures, if it has them (`skin`: its
+ * manifest's, { light, dark, height, roughness }), as `skin`: the colours three channels a texel,
+ * the height and roughness one.
  */
-export async function loadMasks(base, size, fetch = globalThis.fetch.bind(globalThis), paths = MASKS.map((name) => `masks/${name}.jpg`)) {
-    const masks = {};
+export async function loadMasks(base, size, fetch = globalThis.fetch.bind(globalThis), paths = MASKS.map((name) => `masks/${name}.jpg`), skin = null) {
     const canvas = new OffscreenCanvas(size, size);
     const context = canvas.getContext("2d", { willReadFrequently: true });
-
-    await Promise.all(MASKS.map(async (name, k) => {
-        const blob = await (await fetch(new URL(paths[k], base).href)).blob();
-        const bitmap = await createImageBitmap(blob);
-
-        masks[name] = bitmap;
-    }));
-
-    for (const name of MASKS) {
+    const bitmap = async (path) => createImageBitmap(await (await fetch(new URL(path, base).href)).blob());
+    const [bitmaps, pictures] = await Promise.all([Promise.all(paths.map(bitmap)), Promise.all(Object.entries(skin ?? {}).map(async ([name, path]) => [name, await bitmap(path)]))]);
+    // (Each drawn at `size`, its channels taken: the first `channels` of each texel's four)
+    const read = (image, channels) => {
         context.clearRect(0, 0, size, size);
-        context.drawImage(masks[name], 0, 0, size, size);
-        masks[name].close();
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, size, size);
+        image.close();
 
         const { data } = context.getImageData(0, 0, size, size);
-        const channel = new Uint8Array(size * size);
+        const out = new Uint8Array(size * size * channels);
 
-        for (let i = 0; i < channel.length; i++) {
-            channel[i] = data[i * 4];
+        for (let i = 0; i < size * size; i++) {
+            for (let k = 0; k < channels; k++) {
+                out[i * channels + k] = data[i * 4 + k];
+            }
         }
 
-        masks[name] = channel;
+        return out;
+    };
+    const masks = Object.fromEntries(MASKS.map((name, k) => [name, read(bitmaps[k], 1)]));
+
+    if (pictures.length) {
+        masks.skin = Object.fromEntries(pictures.map(([name, image]) => [name, read(image, SKIN_PICTURE_CHANNELS[name] ?? 1)]));
     }
 
     return masks;
 }
+
+// (The body's own skin pictures' channels: the colours' three, the others' one)
+const SKIN_PICTURE_CHANNELS = { light: 3, dark: 3 };
 
 /**
  * Where every texel of the body's texture is on the body, and what's there. Build once per
@@ -142,6 +149,11 @@ export class SkinAtlas {
         }
 
         this.fields.brow.fill(255);
+
+        // (The body's own skin pictures, if it has them: as they are, being in its layout)
+        if (masks.skin) {
+            Object.assign(this.fields, { skinLight: masks.skin.light, skinDark: masks.skin.dark, skinHeight: masks.skin.height, skinRoughness: masks.skin.roughness });
+        }
 
         this.#analyse(human, masks);
     }
@@ -386,6 +398,13 @@ export class SkinAtlas {
             // Freckles on the shoulders and upper chest
             set("freckles", (p[1] > joints.armpits[0][1] - 0.15 && n[2] > 0.1 ? 0.6 : 0) * smoothstep(0.62, 0.8, fbm(p[0] * 700, p[1] * 700, p[2] * 700, 2)));
 
+            // (Down the neck, where the triangles are the chest's, the beard's and the scalp's
+            // edges fade as on the head, rather than stopping along the triangles)
+            if (ax < 0.09) {
+                set("beard", beardAmount(fx, fy, fz) * (1 - mask("ears")));
+                set("scalp", smoothstep(-0.005, 0.005, aboveHairline(fx, fy, fz)) * (1 - smoothstep(0.35, 0.6, nearEar(fx, fy, fz))) * (1 - mask("ears")));
+            }
+
             return;
         }
 
@@ -509,17 +528,24 @@ export function rgb(hex) {
  */
 export const SKIN_ROUGHNESS = Object.freeze({ skin: 0.56, oily: 0.4, crease: 0.72, lips: 0.32, nails: 0.28, hair: 0.8, paint: 0.5, fur: 0.84, scales: 0.38, cracks: 0.75 });
 
-// (A texel's: `hollow` how far into a crease, -0.5 to 0.5; the painted hair's amounts)
-function roughness(f, i, look, { fine, hollow, stubble, browAlpha }) {
+// (A texel's: `hollow` how far into a crease, -0.5 to 0.5; the painted hair's amounts; `own`, the
+// body's own pictures' (ownSkin), whose roughness picture has its oily and creased places)
+function roughness(f, i, look, { fine, hollow, stubble, browAlpha, own }) {
     const R = SKIN_ROUGHNESS;
-    let rough = R.skin + 0.05 * fine;
+    let rough;
 
-    if (f.oily[i]) {
-        rough += (R.oily - R.skin) * (f.oily[i] / 255);
-    }
+    if (own) {
+        rough = R.skin + f.skinRoughness[i] / 255 - own.roughness;
+    } else {
+        rough = R.skin + 0.05 * fine;
 
-    if (hollow > 0) {
-        rough += (R.crease - R.skin) * Math.min(1, hollow * 3);
+        if (f.oily[i]) {
+            rough += (R.oily - R.skin) * (f.oily[i] / 255);
+        }
+
+        if (hollow > 0) {
+            rough += (R.crease - R.skin) * Math.min(1, hollow * 3);
+        }
     }
 
     if (f.lips[i]) {
@@ -549,6 +575,61 @@ function roughness(f, i, look, { fine, hollow, stubble, browAlpha }) {
     }
 
     return Math.min(1, Math.max(0.05, rough));
+}
+
+/**
+ * How much of each painted layer goes over a body's own skin pictures (ownSkin), which have their
+ * own: their redness and shading, the lips, areolae and eyelids their colour, the creases
+ * shaded. (Palms, soles and nails aren't painted over them at all.) And how much of their fine
+ * relief (the height picture's bytes from 128) is the bump map's.
+ */
+export const OVER_OWN = Object.freeze({ blush: 0.5, dark: 0.5, areolae: 0.5, eyelids: 0, cavity: 0.5, relief: 0.6 });
+
+// sRGB bytes as linear; linear, in 4096ths, as sRGB (0 to 1)
+const LINEAR = Float32Array.from({ length: 256 }, (_, b) => (b / 255 <= 0.04045 ? b / 255 / 12.92 : ((b / 255 + 0.055) / 1.055) ** 2.4));
+const SRGB = Float32Array.from({ length: 4097 }, (_, k) => (k / 4096 <= 0.0031308 ? (12.92 * k) / 4096 : 1.055 * (k / 4096) ** (1 / 2.4) - 0.055));
+const ownAverages = new WeakMap();
+
+/**
+ * A body's own skin pictures (the atlas's skinLight and skinDark: its light and its dark skin's
+ * colours) for a tone ("#rrggbb"): `dark`, how far from the light to the dark (mixed linearly, as
+ * they're made to be) for the skin's average to be as bright as the tone, and `gain`, what each
+ * channel's then multiplied by (linear) for it to be the tone's colour; `roughness`, the
+ * roughness picture's average. Null if the body has none.
+ */
+export function ownSkin(atlas, tone) {
+    const f = atlas.fields;
+
+    if (!f.skinLight) {
+        return null;
+    }
+
+    if (!ownAverages.has(f.skinLight)) {
+        const light = [0, 0, 0];
+        const dark = [0, 0, 0];
+        let [roughness, count] = [0, 0];
+
+        for (let i = 0; i < atlas.covered.length; i++) {
+            if (atlas.covered[i]) {
+                for (let k = 0; k < 3; k++) {
+                    light[k] += LINEAR[f.skinLight[i * 3 + k]];
+                    dark[k] += LINEAR[f.skinDark[i * 3 + k]];
+                }
+
+                roughness += f.skinRoughness[i] / 255;
+                count++;
+            }
+        }
+
+        ownAverages.set(f.skinLight, { light: light.map((c) => c / count), dark: dark.map((c) => c / count), roughness: roughness / count });
+    }
+
+    const { light, dark, roughness } = ownAverages.get(f.skinLight);
+    const target = rgb(tone).map((c) => LINEAR[Math.round(c * 255)]);
+    const brightness = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const toDark = Math.min(1, Math.max(0, (brightness(light) - brightness(target)) / (brightness(light) - brightness(dark))));
+
+    return { dark: toDark, gain: target.map((c, k) => c / (light[k] + (dark[k] - light[k]) * toDark)), roughness };
 }
 
 /**
@@ -584,6 +665,9 @@ export function* paintingSkin(atlas, settings = {}) {
     const paint = look.warpaint ? rgb(look.warpaint) : null;
     const stripeColour = look.stripeColour ? rgb(look.stripeColour) : tone.map((c) => c * 0.45);
     const image = look.image;
+    // (The body's own skin pictures, if it has them, matched to the tone: what's painted over)
+    const own = image ? null : ownSkin(atlas, look.tone);
+    const over = (layer) => (own ? OVER_OWN[layer] : 1);
     const colour = [0, 0, 0];
     // (Towards a colour, r g b: not an array, as this is done a few dozen times a texel)
     const mix = (r, g, b, amount) => {
@@ -618,46 +702,62 @@ export function* paintingSkin(atlas, settings = {}) {
             colour[1] = image.data[at + 1] / 255;
             colour[2] = image.data[at + 2] / 255;
         } else {
-            const shade = 1 + look.variation * (0.07 * coarse + 0.06 * fine);
+            if (own) {
+                // Its own skin: its light and dark pictures mixed, made the tone's colour; its
+                // blotches as much more or less as `variation`
+                for (let k = 0; k < 3; k++) {
+                    const light = LINEAR[f.skinLight[i * 3 + k]];
+                    const linear = (light + (LINEAR[f.skinDark[i * 3 + k]] - light) * own.dark) * own.gain[k];
 
-            colour[0] = tone[0] * shade;
-            colour[1] = tone[1] * shade;
-            colour[2] = tone[2] * shade;
+                    colour[k] = SRGB[Math.min(4096, Math.round(linear * 4096))];
 
-            // Patches a little redder or yellower
-            mix(colour[0] * 1.04, colour[1] * 0.92, colour[2] * 0.9, Math.max(0, coarse) * 0.4 * look.variation);
+                    if (look.variation !== 1) {
+                        colour[k] = Math.max(0, tone[k] + (colour[k] - tone[k]) * look.variation);
+                    }
+                }
+            } else {
+                const shade = 1 + look.variation * (0.07 * coarse + 0.06 * fine);
+
+                colour[0] = tone[0] * shade;
+                colour[1] = tone[1] * shade;
+                colour[2] = tone[2] * shade;
+
+                // Patches a little redder or yellower
+                mix(colour[0] * 1.04, colour[1] * 0.92, colour[2] * 0.9, Math.max(0, coarse) * 0.4 * look.variation);
+            }
 
             // (Each of what follows only where its field has any: most have none on most of the
             // skin, and mixing none in changes nothing)
 
             // Redness, stronger on lighter skin
             if (f.red[i]) {
-                mix(colour[0] * 1.08, colour[1] * 0.8, colour[2] * 0.8, (f.red[i] / 255) * look.blush * (0.35 + 0.5 * luminance));
+                mix(colour[0] * 1.08, colour[1] * 0.8, colour[2] * 0.8, (f.red[i] / 255) * look.blush * (0.35 + 0.5 * luminance) * over("blush"));
             }
 
             if (f.dark[i]) {
-                mix(colour[0] * 0.7, colour[1] * 0.62, colour[2] * 0.66, (f.dark[i] / 255) * 0.25);
+                mix(colour[0] * 0.7, colour[1] * 0.62, colour[2] * 0.66, (f.dark[i] / 255) * 0.25 * over("dark"));
             }
 
             // Palms and soles: lighter, more so on darker skin
-            if (f.light[i]) {
+            if (f.light[i] && !own) {
                 mix(Math.min(1, tone[0] * 1.15 + 0.12), Math.min(1, tone[1] * 1.1 + 0.08), Math.min(1, tone[2] * 1.1 + 0.07), (f.light[i] / 255) * (0.25 + 0.55 * (1 - luminance)));
             }
 
-            if (f.lips[i]) {
+            // (Over its own pictures, only a colour they're given: theirs is their own lips')
+            if (f.lips[i] && (!own || look.lips)) {
                 mixTo(lip, (f.lips[i] / 255) * 0.7);
             }
 
             if (f.areolae[i]) {
-                mix(colour[0] * 0.72, colour[1] * 0.55, colour[2] * 0.52, (f.areolae[i] / 255) * 0.8);
+                mix(colour[0] * 0.72, colour[1] * 0.55, colour[2] * 0.52, (f.areolae[i] / 255) * 0.8 * over("areolae"));
             }
 
-            if (f.nails[i]) {
+            if (f.nails[i] && !own) {
                 mix(Math.min(1, tone[0] * 0.5 + 0.48), Math.min(1, tone[1] * 0.45 + 0.4), Math.min(1, tone[2] * 0.45 + 0.4), (f.nails[i] / 255) * 0.75);
             }
 
             if (f.eyelids[i]) {
-                mix(colour[0] * 0.8, colour[1] * 0.7, colour[2] * 0.75, (f.eyelids[i] / 255) * 0.35);
+                mix(colour[0] * 0.8, colour[1] * 0.7, colour[2] * 0.75, (f.eyelids[i] / 255) * 0.35 * over("eyelids"));
             }
 
             if (f.freckles[i]) {
@@ -704,9 +804,9 @@ export function* paintingSkin(atlas, settings = {}) {
         const hollow = f.cavity[i] / 255 - 0.5;
 
         if (hollow > 0) {
-            mix(colour[0] * 0.7, colour[1] * 0.58, colour[2] * 0.58, Math.min(0.3, hollow));
+            mix(colour[0] * 0.7, colour[1] * 0.58, colour[2] * 0.58, Math.min(0.3, hollow) * over("cavity"));
         } else {
-            mix(Math.min(1, colour[0] * 1.08), Math.min(1, colour[1] * 1.08), Math.min(1, colour[2] * 1.06), Math.min(0.4, -hollow));
+            mix(Math.min(1, colour[0] * 1.08), Math.min(1, colour[1] * 1.08), Math.min(1, colour[2] * 1.06), Math.min(0.4, -hollow) * over("cavity"));
         }
 
         // Hair painted on: stubble, scalp, brows
@@ -731,9 +831,12 @@ export function* paintingSkin(atlas, settings = {}) {
         data[i * 4] = colour[0] * 255;
         data[i * 4 + 1] = colour[1] * 255;
         data[i * 4 + 2] = colour[2] * 255;
-        data[i * 4 + 3] = roughness(f, i, look, { fine, hollow, stubble, browAlpha }) * 255;
+        data[i * 4 + 3] = roughness(f, i, look, { fine, hollow, stubble, browAlpha, own }) * 255;
 
-        bump[i] = 128 + 40 * fine + 14 * (grain - 0.5) + 40 * (f.warts[i] / 255) * look.warts + 25 * browAlpha + 12 * stubble - 30 * (f.lips[i] / 255) * fine + (look.fur ? 30 * look.fur * (f.fur[i] / 255 - 0.5) : 0) - (look.scales ? 55 * look.scales * (f.scales[i] / 255) : 0);
+        // (Over its own pictures, their fine relief in place of the painted pores and lip lines)
+        const relief = own ? OVER_OWN.relief * (f.skinHeight[i] - 128) : 40 * fine - 30 * (f.lips[i] / 255) * fine;
+
+        bump[i] = 128 + relief + 14 * (grain - 0.5) + 40 * (f.warts[i] / 255) * look.warts + 25 * browAlpha + 12 * stubble + (look.fur ? 30 * look.fur * (f.fur[i] / 255 - 0.5) : 0) - (look.scales ? 55 * look.scales * (f.scales[i] / 255) : 0);
     }
 
     // Seams: copy each gutter texel from its neighbour
