@@ -11,7 +11,7 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../client/js/core/places.js";
-import { GUILD_REACH, MOST_REQUESTS, offerContract, progressOf } from "../client/js/core/standing.js";
+import { GUILD_REACH, GUILD_SIZES, MOST_REQUESTS, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { rumourOfRuler, rumoursAt, tell } from "../client/js/core/war/news.js";
 import { TURN_MS, War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -104,19 +104,21 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
         const giver = { id: "guild/receptionist", name: "Mirabel Wren", title: "" };
         const random = createRandom(2);
-        const kinds = () => new Set(Array.from({ length: 60 }, () => offerContract({ war, town: town.id, giver, random })?.kind));
-        // (A place near held by outlaws or the dead: to be cleared)
-        const occupied = placesOf(plan).some((place) => Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= GUILD_REACH && PLACE_BANDS[holderOf(plan, place, undefined, war.turn)]);
-        const clear = occupied ? ["clear"] : [];
+        // (Offered to a Copper, or to the rank that opens a bounty and the camp outside)
+        const opens = Math.max(REQUESTS.hunt.rank, REQUESTS.camp.rank);
+        const kinds = (guildRank = 0) => new Set(Array.from({ length: 60 }, () => offerContract({ war, town: town.id, giver, guildRank, random })?.kind));
+        // (A place near held by outlaws or the dead, no bigger than the rank gives: to be cleared)
+        const clear = (guildRank) => (placesOf(plan).some((place) => Math.hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]) <= GUILD_REACH && PLACE_BANDS[holderOf(plan, place, undefined, war.turn)] && GUILD_SIZES[place.size] <= guildRank) ? ["clear"] : []);
 
-        assert.deepEqual([...kinds()].sort(), ["beasts", ...clear, "parts"].sort());
+        assert.deepEqual([...kinds()].sort(), ["beasts", ...clear(0), "parts"].sort());
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
-        assert.deepEqual([...kinds()].sort(), ["beasts", "camp", ...clear, "hunt", "parts"].sort());
+        assert.deepEqual([...kinds()].sort(), ["beasts", ...clear(0), "parts"].sort(), "not for a Copper");
+        assert.deepEqual([...kinds(opens)].sort(), ["beasts", "camp", ...clear(opens), "hunt", "parts"].sort());
 
         for (let k = 0; k < 30; k++) {
-            const contract = offerContract({ war, town: town.id, giver, random });
+            const contract = offerContract({ war, town: town.id, giver, guildRank: opens, random });
 
             assert.equal(contract.from.post, "guild");
             assert.equal(contract.from.title, "Guild receptionist");
@@ -158,6 +160,10 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         Object.assign(me, { x: me.square[0] + 0.5, y: me.square[1] + 0.5 });
         assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
 
+        // (Registered first: nothing off the board before)
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { work: "ask" } }).reason, "unregistered");
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } }).ok, true);
+
         const offered = host.command(HOST_PLAYER, { type: "effect", effect: { work: "ask" } });
 
         assert.equal(offered.ok, true, JSON.stringify(offered));
@@ -180,6 +186,8 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         assert.equal(told.ok, true, JSON.stringify(told));
         assert.equal(player.progress.gold, gold + taken.reward.gold);
         assert.equal(player.standing.points, points);
+        assert.ok(taken.reward.merit > 0);
+        assert.equal(player.standing.guild.merit, taken.reward.merit);
         assert.ok(!player.standing.find(taken.id));
         run(host, TURN_MS / 60);
     });

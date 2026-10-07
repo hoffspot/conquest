@@ -13,7 +13,7 @@ import { ITEMS, PACK_SIZE, priceOf, Progress } from "../client/js/core/progress.
 import { createRandom } from "../client/js/core/random.js";
 import { rollTome, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tomeOf } from "../client/js/core/spells.js";
 import { PARTS, rollSpoils, TOME_DROP } from "../client/js/core/spoils.js";
-import { GUILD_TOMES, offerContract } from "../client/js/core/standing.js";
+import { GUILD_TOMES, offerContract, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 
@@ -155,7 +155,9 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
 
-        const offered = Array.from({ length: 400 }, () => offerContract({ war, town: town.id, giver, random }));
+        // (Offered to the rank that opens the camp outside, and a bounty)
+        const guildRank = Math.max(REQUESTS.camp.rank, REQUESTS.hunt.rank);
+        const offered = Array.from({ length: 400 }, () => offerContract({ war, town: town.id, giver, guildRank, random }));
         const share = (kind) => offered.filter((each) => each.kind === kind && each.reward.tome).length / offered.filter((each) => each.kind === kind).length;
 
         assert.equal(share("camp"), GUILD_TOMES.camp);
@@ -187,6 +189,7 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
 
         Object.assign(me, { map: receptionist.map, square: [receptionist.square[0], receptionist.square[1] + 2], path: [], order: null });
         Object.assign(me, { x: me.square[0] + 0.5, y: me.square[1] + 0.5 });
+        player.standing.register();
 
         // A contract taken, done, with a tome to it
         const contract = (tome) => {

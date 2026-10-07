@@ -191,7 +191,7 @@ describe("standing (standing.js)", () => {
         assert.equal(back.take(offer).id, "request-4");
 
         // (Nonsense kept is let go)
-        assert.deepEqual(new Standing({ points: -4, requests: [{ kind: "nonsense" }], claimed: ["x", 2] }).toJSON(), { points: 0, claimed: [2], requests: [], done: [], next: 1 });
+        assert.deepEqual(new Standing({ points: -4, requests: [{ kind: "nonsense" }], claimed: ["x", 2], guild: { merit: "lots" } }).toJSON(), { points: 0, claimed: [2], requests: [], done: [], next: 1, guild: { merit: 0 } });
     });
 
     it("reads requests kept when the money was coppers as gold", () => {

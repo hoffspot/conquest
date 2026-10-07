@@ -6,6 +6,8 @@
 // blessing) on a sapphire tile, darkening round as it wears off: in one row as wide as the bars,
 // the last that won't fit an ellipsis, all of them shown while the player's card is held. A choice
 // to be made (who to summon; whether to go to someone summoning them) asked in a small panel.
+// Once they've registered with the adventurers' guilds, their rank shows on their card by their
+// name, a chip of its metal (Copper to Mithril).
 
 import { ICONS } from "./icons.js";
 
@@ -133,6 +135,30 @@ export class Hud {
         this.tracked.set(id, plate);
         this.setHealth(id, hp, maxHp);
         this.setStamina(id, stamina, maxStamina);
+    }
+
+    /**
+     * Show the player's rank in the adventurers' guilds on their card, by their name: a chip of
+     * its metal (`card`: game.js guildCard, { title, merit, to, next }), or none till they register.
+     */
+    setGuild(card) {
+        const chip = this.plate.querySelector(".guild");
+
+        if (!chip) {
+            return;
+        }
+
+        chip.hidden = !card;
+        this.plate.classList.toggle("guilded", Boolean(card));
+
+        if (card) {
+            const told = `Adventurers' Guild: ${card.title} rank${card.next ? `, ${card.to - card.merit} merit to ${card.next.title}` : ""}`;
+
+            chip.textContent = card.title;
+            chip.dataset.rank = card.title.toLowerCase();
+            chip.title = told;
+            chip.setAttribute("aria-label", told);
+        }
     }
 
     /** Show how much gold the player has, under their name. */

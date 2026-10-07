@@ -57,17 +57,45 @@ export const REQUESTS = Object.freeze({
     rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, gold: 40 } },
     escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, gold: 40 } },
     waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, gold: 50 } },
-    // The adventurers' guild's contracts (M8): open to anyone, paid in gold
-    beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, gold: 10, each: { standing: 0, gold: 7 } } },
-    hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 } } },
-    camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, gold: 70 } },
-    parts: { title: "Wanted at the guild", rank: 0, turns: 60, reward: { standing: 0, gold: 4, share: 1.6 } },
+    // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
+    // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
+    // rank each is first offered at (GUILD_RANKS)
+    beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, gold: 10, each: { standing: 0, gold: 7 }, merit: 3 } },
+    hunt: { title: "A bounty", rank: 1, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 }, merit: 4 } },
+    camp: { title: "The camp outside the walls", rank: 2, turns: 40, reward: { standing: 0, gold: 70, merit: 6 } },
+    parts: { title: "Wanted at the guild", rank: 0, turns: 60, reward: { standing: 0, gold: 4, share: 1.6, merit: 2 } },
     // (A sealed package to another town's guild, on the way to strangers: offerCourier)
-    courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 8, perKm: { standing: 0, gold: 6 } } },
+    courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 8, perKm: { standing: 0, gold: 6 }, merit: 3 } },
     // (A place held by outlaws or the dead put to the sword: more for a bigger place, and more for
-    // each tier of its land's danger)
-    clear: { title: "Put them to the sword", rank: 0, turns: 90, reward: { standing: 0, gold: 30, size: { small: 0, medium: 25, large: 60 }, tier: 9 } },
+    // each tier of its land's danger; its merit by its size)
+    clear: { title: "Put them to the sword", rank: 0, turns: 90, reward: { standing: 0, gold: 30, size: { small: 0, medium: 25, large: 60 }, tier: 9, merit: { small: 4, medium: 7, large: 12 } } },
 });
+
+/**
+ * The adventurers' guilds' ranks (docs/WAR.md M8): one card, good at every branch, earned by the
+ * merit of the guilds' contracts done (and only by them: a people's requests give standing, the
+ * guilds' merit). Each rank's title, the merit it takes, and what the guilds give at it: the work
+ * it opens (REQUESTS' `rank`, and the biggest place to clear, GUILD_SIZES), how many more foes or
+ * parts each contract asks for than a Copper's (`more`), the least level of beasts asked for
+ * (`level`: as near as the land has them), and what it pays, times the Copper's (`pay`).
+ */
+export const GUILD_RANKS = Object.freeze([
+    { title: "Copper", merit: 0, more: 0, level: 1, pay: 1, opens: "Beasts on the roads, parts wanted at the guild, sealed packages, and the small places to clear." },
+    { title: "Iron", merit: 10, more: 1, level: 1, pay: 1.1, opens: "Bounties on the soldiers of a people at war, and more of everything asked." },
+    { title: "Bronze", merit: 30, more: 1, level: 2, pay: 1.25, opens: "The camps outside the walls, the middling places to clear, and beasts of level 2 or more." },
+    { title: "Silver", merit: 70, more: 2, level: 3, pay: 1.4, opens: "Beasts of level 3 or more, and more of everything asked." },
+    { title: "Gold", merit: 140, more: 3, level: 4, pay: 1.6, opens: "The great places to clear, beasts of level 4 or more, and more of everything asked." },
+    { title: "Mithril", merit: 250, more: 4, level: 5, pay: 1.8, opens: "The hardest work the guilds have, beasts of level 5 or more, and the best pay." },
+]);
+
+/** The guild rank at which each size of place held is first given to clear (and from it, the biggest near). */
+export const GUILD_SIZES = Object.freeze({ small: 0, medium: 2, large: 4 });
+
+/** The guild rank from which the guilds want the dearer half of the parts they want (dearest). */
+export const GUILD_DEARER = 2;
+
+/** A guild's contract failed (let run out) or given up: merit lost (never a rank earned). */
+export const GUILD_FAILED = 2;
 
 /**
  * How far from its town (m) everything a guild's contract asks for is: the beasts and soldiers
@@ -376,22 +404,26 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
  *   start town's middle, the wild tamest near it: creatures.js tierAt); the town's own if not given.
  * @param {object[]} [options.held] - The requests they carry.
  * @param {object[]} [options.also] - What's on the board already (none of it offered twice).
+ * @param {number} [options.guildRank] - Their rank in the guilds (GUILD_RANKS): the work it opens,
+ *   and how hard it is.
  * @param {object} options.random - Random numbers (random.js).
  */
-export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], random }) {
+export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], guildRank = 0, random }) {
     const town = war.town(townId);
 
     if (!town || held.length >= MOST_REQUESTS) {
         return null;
     }
 
+    const grade = gradeOf(guildRank);
+    const opened = (kind) => REQUESTS[kind].rank <= grade.rank;
     const has = (kind, key) => [...held, ...also].some((request) => request.kind === kind && request.key === key);
     const holders = war.liege(town.owner);
-    const soldiers = soldiersNear(war, town);
+    const soldiers = opened("hunt") ? soldiersNear(war, town) : new Map();
     const foes = war.enemiesOf(holders).filter((foe) => soldiers.has(foe) && !has("hunt", foe));
-    const camps = war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && apart(force.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", force.id));
-    const wanted = wantedNear(war, town, home ?? town.at).filter((part) => !has("parts", part));
-    const occupied = heldNear(war, town).filter(({ place }) => !has("clear", place.id));
+    const camps = opened("camp") ? war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && apart(force.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", force.id)) : [];
+    const wanted = dearest(wantedNear(war, town, home ?? town.at), grade.rank >= GUILD_DEARER).filter((part) => !has("parts", part));
+    const occupied = biggest(heldNear(war, town).filter(({ place }) => GUILD_SIZES[place.size] <= grade.rank)).filter(({ place }) => !has("clear", place.id));
     const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : [])];
 
     if (!kinds.length) {
@@ -401,20 +433,26 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
     const kind = random.pick(kinds);
     const { title, turns, reward } = REQUESTS[kind];
     const base = { kind, title, from: guildOf(town, giver), given: war.turn, state: "open", count: 0 };
-    const pay = (gold) => ({ standing: 0, gold: Math.round(gold) });
+    // (Paid as the rank has it, and the contract's merit to the guild)
+    const pay = (gold, merit = reward.merit) => ({ standing: 0, gold: Math.round(gold * grade.pay), merit });
+    // (How many of the foes or parts asked for: a few, and more for a higher rank)
+    const asked = (least) => least + grade.more + random.int(0, 2);
     // (Where the foes brought down count: within the guild's reach of its town)
     const near = { town: town.id, name: town.name, at: [...town.at], reach: GUILD_REACH };
     const within = `within ${GUILD_REACH / 1000} km of ${town.name}`;
 
     switch (kind) {
         case "beasts": {
-            const need = 2 + random.int(0, 2);
+            // (Of the level the rank asks for, as near as the land within reach has it)
+            const level = grade.level > 1 ? Math.min(grade.level, levelNear(war.plan, town.at, home ?? town.at)) : 1;
+            const need = asked(2);
+            const strong = level > 1 ? `, level ${level} or more` : "";
 
-            return { ...base, key: town.id, target: { wild: true, need, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them, ${within}, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
+            return { ...base, key: town.id, target: { wild: true, need, level, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them${strong}, ${within}, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
         }
         case "hunt": {
             const foe = random.pick(foes);
-            const need = 2 + random.int(0, 2);
+            const need = asked(2);
             const tome = random.chance(GUILD_TOMES.hunt) ? rollTome(random) : null;
             const [nearest] = soldiers.get(foe);
             const where = nearest.camp ? `They have a camp ${wayOf(town, nearest.at)}.` : `They hold ${nearest.name}, ${wayOf(town, nearest.at)}.`;
@@ -433,10 +471,10 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
             // than the guild would give for them over the counter)
             const part = random.pick(wanted);
             const { label, worth } = PARTS[part];
-            const need = (worth <= 4 ? 3 : 2) + random.int(0, 2);
-            const gold = reward.gold + worth * need * reward.share;
+            const need = asked(worth <= 4 ? 3 : 2);
+            const paid = pay(reward.gold + worth * need * reward.share);
 
-            return { ...base, key: part, target: { part, name: label, need }, text: `Wanted at the guild in ${town.name}: ${need} ${many(label)}, for the makers who use them. What they come off lives round here. ${Math.round(gold)} gold for the lot, brought in.`, until: war.turn + turns, reward: pay(gold) };
+            return { ...base, key: part, target: { part, name: label, need }, text: `Wanted at the guild in ${town.name}: ${need} ${many(label)}, for the makers who use them. What they come off lives round here. ${paid.gold} gold for the lot, brought in.`, until: war.turn + turns, reward: paid };
         }
         case "camp": {
             const camp = random.pick(camps);
@@ -460,7 +498,7 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
                 target: { place: place.id, holder, at: [...place.at], name, kind: place.kind },
                 text: `${text}${tome ? ` ${fromTheLibrary(tome)}` : ""}`,
                 until: war.turn + turns,
-                reward: { ...pay(reward.gold + reward.size[place.size] + reward.tier * tier), ...(tome ? { tome } : {}) },
+                reward: { ...pay(reward.gold + reward.size[place.size] + reward.tier * tier, reward.merit[place.size]), ...(tome ? { tome } : {}) },
             };
         }
         default:
@@ -482,8 +520,9 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
  * @param {string} options.town - The town the guild's in (an id).
  * @param {object} options.giver - Who's at the counter: { id, name, title }.
  * @param {object[]} [options.held] - The requests they carry.
+ * @param {number} [options.guildRank] - Their rank in the guilds (GUILD_RANKS): what it pays.
  */
-export function offerCourier({ war, realm, town: townId, giver, held = [] }) {
+export function offerCourier({ war, realm, town: townId, giver, held = [], guildRank = 0 }) {
     const town = war.town(townId);
     const to = town && war.realm(realm) && held.length < MOST_REQUESTS && !held.some(({ kind }) => kind === "courier") ? courierTo(war, realm, town) : null;
 
@@ -505,7 +544,7 @@ export function offerCourier({ war, realm, town: townId, giver, held = [] }) {
         target: { town: to.town.id, name: to.town.name, at: [...to.town.at], post: "guild", towards: to.towards.id },
         text: `The guild in ${to.town.name} wants this package, sealed, by someone who'll get it there: ${wayOf(town, to.town.at)}, on the way to ${war.realm(to.towards.owner).name} at ${to.towards.name}.`,
         until: war.turn + Math.ceil(turns + km * perKm),
-        reward: { standing: 0, gold: Math.round(reward.gold + reward.perKm.gold * km) },
+        reward: { standing: 0, gold: Math.round((reward.gold + reward.perKm.gold * km) * gradeOf(guildRank).pay), merit: reward.merit },
     };
 }
 
@@ -518,12 +557,12 @@ export const BOARD_SIZE = 4;
  * the player carries already. Empty if there's nothing.
  * @param {object} options - As offerContract's and offerCourier's.
  */
-export function offerBoard({ war, realm, town, giver, home = null, held = [], random }) {
-    const courier = offerCourier({ war, realm, town, giver, held });
+export function offerBoard({ war, realm, town, giver, home = null, held = [], guildRank = 0, random }) {
+    const courier = offerCourier({ war, realm, town, giver, held, guildRank });
     const board = [];
 
     while (board.length < BOARD_SIZE - (courier ? 1 : 0)) {
-        const contract = offerContract({ war, town, giver, home, held, also: board, random });
+        const contract = offerContract({ war, town, giver, home, held, also: board, guildRank, random });
 
         if (!contract) {
             break;
@@ -547,7 +586,7 @@ export function briefOf(request) {
 
     switch (kind) {
         case "beasts":
-            return `Beasts round ${target.near?.name ?? request.from.townName}`;
+            return `${target.level > 1 ? `Beasts of level ${target.level}+` : "Beasts"} round ${target.near?.name ?? request.from.townName}`;
         case "hunt":
             return `A bounty on ${soldiersOf(target.realm)}`;
         case "parts":
@@ -585,6 +624,54 @@ function courierTo(war, realm, town) {
 
 // Who a guild's work is from: its receptionist, at its counter in a town
 const guildOf = (town, giver) => ({ id: giver.id, name: giver.name, title: giver.title || "Guild receptionist", town: town.id, townName: town.name, post: "guild" });
+
+// A guild rank's row (GUILD_RANKS), and its index (`rank`): Copper's for none or no such rank
+const gradeOf = (rank) => {
+    const at = Number.isInteger(rank) ? Math.max(0, Math.min(GUILD_RANKS.length - 1, rank)) : 0;
+
+    return { ...GUILD_RANKS[at], rank: at };
+};
+
+// The parts a guild wants: from GUILD_DEARER up (`dearer`), only the dearer half of them (those of
+// the fiercer creatures, mostly), the dearest first; else all of them
+function dearest(parts, dearer) {
+    if (!dearer || parts.length < 2) {
+        return parts;
+    }
+
+    return [...parts].sort((a, b) => PARTS[b].worth - PARTS[a].worth).slice(0, Math.ceil(parts.length / 2));
+}
+
+// The places held near a town that a guild gives to clear: the biggest of them (by GUILD_SIZES)
+function biggest(occupied) {
+    const most = Math.max(...occupied.map(({ place }) => GUILD_SIZES[place.size]));
+
+    return occupied.filter(({ place }) => GUILD_SIZES[place.size] === most);
+}
+
+// The level of beasts a guild can ask for near its town (GUILD_RANKS' `level`), for whoever's
+// asking: the highest that a quarter of the land within its reach has, or more (creatures.js
+// tierAt: as far as it is from their `home`), so there are beasts of it about to be found
+function levelNear(plan, [x, y], home) {
+    if (!plan) {
+        return 1;
+    }
+
+    const tiers = [];
+    const steps = Math.floor(GUILD_REACH / LAND_STEP);
+
+    for (let j = -steps; j <= steps; j++) {
+        for (let i = -steps; i <= steps; i++) {
+            if (i * i + j * j <= steps * steps) {
+                const at = [x + i * LAND_STEP, y + j * LAND_STEP];
+
+                tiers.push(tierAt(at, [home], landAt(plan, ...at).biome));
+            }
+        }
+    }
+
+    return tiers.sort((a, b) => b - a)[Math.floor(tiers.length / 4)];
+}
 
 // Which way a place is from a town, in words: "0.8 km north-east of Oakford"
 const wayOf = (town, at) => `${Math.round(apart(at, town.at) / 100) / 10} km ${compass(town.at, at)} of ${town.name}`;
@@ -793,13 +880,47 @@ function inGold(request) {
     return kept;
 }
 
-/** A player's standing: their points, their rank from them, the requests they carry, and those done. */
+/**
+ * The guilds' merit a request earns done: a guild's contract's (its reward's `merit`; one given
+ * before they had any, its kind's, the smallest place's for a place cleared), none for a people's.
+ */
+export function meritIn(request) {
+    if (request?.from?.post !== "guild") {
+        return 0;
+    }
+
+    if (Number.isFinite(request.reward?.merit)) {
+        return request.reward.merit;
+    }
+
+    const merit = REQUESTS[request.kind]?.reward.merit;
+
+    return Number.isFinite(merit) ? merit : (merit?.small ?? 0);
+}
+
+/**
+ * The merit of the guilds' contracts among those done (`done`: requests as kept), for a card the
+ * guilds gave before they kept merit (Standing's `guild`: host.js join).
+ */
+export function meritOf(done) {
+    return done.filter(({ state }) => state === "done").reduce((sum, request) => sum + meritIn(request), 0);
+}
+
+/**
+ * A player's standing: their points, their rank from them, the requests they carry, and those
+ * done; and their card from the adventurers' guilds, its merit and rank (one card, good at every
+ * branch: GUILD_RANKS).
+ */
 export class Standing {
     /**
-     * @param {object} [kept] - As kept (toJSON): { points, claimed, requests, done, next }.
+     * @param {object} [kept] - As kept (toJSON): { points, claimed, requests, done, next, guild
+     *   (null till they register at a guild: { merit }) }.
      */
-    constructor({ points = 0, claimed = [], requests = [], done = [], next = 1 } = {}) {
+    constructor({ points = 0, claimed = [], requests = [], done = [], next = 1, guild = null } = {}) {
         this.points = Math.max(0, Number.isFinite(points) ? points : 0);
+
+        /** Their guild card: null till they register; { merit } after. */
+        this.guild = guild && typeof guild === "object" ? { merit: Math.max(0, Number.isFinite(guild.merit) ? Math.round(guild.merit) : 0) } : null;
 
         /** The ranks whose armoury gift has been had. */
         this.claimed = claimed.filter((rank) => Number.isInteger(rank));
@@ -842,6 +963,59 @@ export class Standing {
         return reached;
     }
 
+    /** Sign up at a guild (once: the card's good at every branch). Returns whether it's new. */
+    register() {
+        if (this.guild) {
+            return false;
+        }
+
+        this.guild = { merit: 0 };
+
+        return true;
+    }
+
+    /** Their rank in the guilds (an index into GUILD_RANKS), or null if they've not registered. */
+    guildRank() {
+        return this.guild ? GUILD_RANKS.findLastIndex(({ merit }) => this.guild.merit >= merit) : null;
+    }
+
+    /** Their guild rank's title ("Copper"...), or null if they've not registered. */
+    guildTitle() {
+        const rank = this.guildRank();
+
+        return rank === null ? null : GUILD_RANKS[rank].title;
+    }
+
+    /** How far to the next guild rank: { merit, from, to } (to: null at the top); null if they've not registered. */
+    guildNext() {
+        const rank = this.guildRank();
+
+        return rank === null ? null : { merit: this.guild.merit, from: GUILD_RANKS[rank].merit, to: GUILD_RANKS[rank + 1]?.merit ?? null };
+    }
+
+    /**
+     * Gain (or lose) the guilds' merit: lost, never below the rank they have (a rank earned is
+     * kept). Returns the guild ranks newly reached: [{ rank, title }] (none if they've not
+     * registered).
+     */
+    earn(amount) {
+        const before = this.guildRank();
+
+        if (before === null || !Number.isFinite(amount)) {
+            return [];
+        }
+
+        this.guild.merit = Math.max(GUILD_RANKS[before].merit, Math.round(this.guild.merit + amount));
+
+        const reached = [];
+
+        for (let rank = before + 1; rank <= this.guildRank(); rank++) {
+            reached.push({ rank, title: GUILD_RANKS[rank].title });
+        }
+
+        return reached;
+    }
+
     /** Take a request on (given an id). Returns it, or null (carrying too many). */
     take(request) {
         if (this.requests.length >= MOST_REQUESTS) {
@@ -876,6 +1050,6 @@ export class Standing {
     }
 
     toJSON() {
-        return { points: this.points, claimed: [...this.claimed], requests: structuredClone(this.requests), done: structuredClone(this.done), next: this.next };
+        return { points: this.points, claimed: [...this.claimed], requests: structuredClone(this.requests), done: structuredClone(this.done), next: this.next, guild: this.guild ? { ...this.guild } : null };
     }
 }

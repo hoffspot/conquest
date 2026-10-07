@@ -648,14 +648,18 @@ export const TREES = Object.freeze({
             },
         },
     },
-    // An adventurers' guild's receptionist: bright, eager, a little flustered, very proud of her guild
+    // An adventurers' guild's receptionist: bright, eager, a little flustered, very proud of her
+    // guild. Whether the player's registered (`member`), and their rank ({guildRank}: Copper to
+    // Mithril, standing.js GUILD_RANKS) and how near the next ({guildNext}), are the game's: one
+    // card, good at every branch
     receptionist: {
         start: "greet",
         nodes: {
             greet: {
                 say: [
+                    { if: { met: false, member: true }, lines: ["Oh! A card from another branch! {guildRank} rank, {player}. Welcome to the {town} branch! I'm {name}, and the counter's mine.", "Welcome to the {town} branch of the Adventurers' Guild! I'm {name}. And you're... {player}, {guildRank} rank. Your card's good here too, of course!"] },
                     { if: { met: false }, lines: ["Welcome to the Adventurers' Guild! I'm {name}, and I look after the counter. Oh! Are you new? You look new. Not in a bad way!", "Hello, hello! Welcome to the {town} branch of the Adventurers' Guild! I'm {name}. How can I help you today?"] },
-                    { if: { flag: "registered" }, lines: ["{player}! You're back! And all your fingers still on, too. What can I do for you?", "Welcome back, {player}! The board's got new notices, if you're looking."] },
+                    { if: { member: true }, lines: ["{player}! You're back! And all your fingers still on, too. What can I do for you?", "Welcome back, {player}! {guildRank} rank, and the board's got new notices, if you're looking."] },
                     { lines: ["Oh, it's you again! Have you thought about registering?", "Hello again! The counter's all yours."] },
                 ],
                 choices: "more",
@@ -665,9 +669,10 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "I'd like to buy or sell something.", next: null, do: [{ shop: "guild" }] },
                     { say: "What does the guild buy?", next: "buys" },
-                    { if: { notFlag: "registered" }, say: "I'd like to register as an adventurer.", next: "register" },
+                    { if: { member: false }, say: "I'd like to register as an adventurer.", next: "register" },
                     { if: { due: true }, say: "I've finished a job from the board.", next: "reported", do: [{ report: true }] },
-                    { if: { all: [{ flag: "registered" }, { room: true }] }, say: "Anything on the board for me?", next: "offer", do: [{ work: "ask" }] },
+                    { if: { all: [{ member: true }, { room: true }] }, say: "Anything on the board for me?", next: "offer", do: [{ work: "ask" }] },
+                    { if: { member: true }, say: "How's my card looking?", next: "card" },
                     { say: "What's the quest board?", next: "board" },
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
@@ -676,7 +681,12 @@ export const TREES = Object.freeze({
             },
             register: {
                 say: "Wonderful! Name: {player}. Rank: Copper. Everyone starts at Copper, don't pout! Here's your card. Don't lose it; the replacement fee is terrible, and I have to fill in the form.",
-                choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }] }],
+                choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }, { guild: "register" }] }],
+            },
+            // (Their rank, and how near the next: the game's words)
+            card: {
+                say: ["Let me see... {player}, {guildRank} rank! {guildNext}", "Ooh, give it here. {guildRank}! {guildNext}"],
+                choices: "more",
             },
             board: {
                 say: "That's where the jobs go up! Beasts on the roads, camps outside the walls, bounties from whoever's paying. Register, ask me what's up, and bring me word when it's done. Gold on the counter, straight away!",
@@ -726,7 +736,7 @@ export const TREES = Object.freeze({
                 choices: "more",
             },
             ranks: {
-                say: "Copper, Iron, Bronze, Silver, Gold, and then Mithril, which only three people have: one of them's a legend and the other two won't stop talking about it. Finish jobs to rank up!",
+                say: "Copper, Iron, Bronze, Silver, Gold, and then Mithril, which only three people have: one of them's a legend and the other two won't stop talking about it. Every job off the board puts merit on your card, and enough merit's the next rank: harder jobs, better pay! Fail one and it's marked against you, but a rank you've earned is yours to keep.",
                 choices: "more",
             },
             branches: {
