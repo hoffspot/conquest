@@ -100,6 +100,12 @@ export class HumanData {
             deltas: decodeSection(buffer, detail.deltas),
             joints: detail.joints,
         }]));
+        // The face's expressions (a body with its own: Vitruvian's), sparse as the details are:
+        // expressions.js plays them on the GPU
+        this.expressions = new Map((manifest.expressions ?? []).map((expression) => [expression.name, {
+            vertices: decodeSection(buffer, expression.vertices),
+            deltas: decodeSection(buffer, expression.deltas),
+        }]));
 
         // Texture coordinates were stored as 16-bit fractions
         const uvs = section("uvs");

@@ -17,6 +17,8 @@ import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
 import { LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
+import { expressionData, Expressions, expressive } from "./expressions.js";
+import { lashTexture, lashUVs } from "./lashes.js";
 import { allAtOnce } from "../core/steps.js";
 
 /** How a character looks unless told otherwise. */
@@ -285,14 +287,27 @@ export class Character {
             // (Skin's roughness is painted with it, and light wraps a little round it: surfaces.js)
             body: materials.body ?? new SkinMaterial(),
             eyes: materials.eyes ?? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
-            // (Both sides in one pass: three.js draws a transparent two-sided material's back and
-            // front apart unless told not to, and a lash is too thin for its order to show)
-            lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
+            // (Strands, drawn over the cards: lashes.js. Both sides in one pass: three.js draws a
+            // transparent two-sided material's back and front apart unless told not to, and a lash
+            // is too thin for its order to show)
+            lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, alphaMap: lashTexture(), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
             // (Its highlights bands across the strands: surfaces.js)
             hair: materials.hair ?? new HairMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
             // (Parts of their own in their skin's or fur's colour: a cat's ears and tail)
             tint: materials.tint ?? new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.8 }),
         };
+
+        // Its face's expressions and blinks (a body with them, Vitruvian's: expressions.js), on its
+        // own skin and lashes (not a beast's hide), or null
+        const faces = materials.body || materials.lashes ? null : expressionData(human);
+
+        /** Its face: blinking, and showing what it's doing (expressions.js), or null. */
+        this.expressions = faces ? new Expressions() : null;
+
+        if (faces) {
+            expressive(this.materials.body, faces, this.expressions.weights);
+            expressive(this.materials.lashes, faces, this.expressions.weights);
+        }
 
         /** The hair and beard (null when bald and clean-shaven). */
         this.hairMesh = null;
@@ -1538,9 +1553,18 @@ export class Character {
 
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-        geometry.setAttribute("uv", new THREE.BufferAttribute(human.uvs, 2));
+        // (Its eyelashes' laid out for their strands: lashes.js)
+        geometry.setAttribute("uv", new THREE.BufferAttribute(lashUVs(human), 2));
         geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
         geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4, true));
+
+        // (Where each vertex's moves are kept for its face's expressions: the kit's, shared)
+        const faces = expressionData(human);
+
+        if (faces) {
+            geometry.setAttribute("faceSlot", new THREE.BufferAttribute(faces.slotOf, 1));
+        }
+
         this.geometry = geometry;
         this.hidden = new Set();
         this.#updateIndex();
