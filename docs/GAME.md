@@ -1134,14 +1134,25 @@ change) greyed the lamplit taproom and dulled the painted colours, and Khronos N
 taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
-with them and turns round to look from behind them, the way they're going, at the same height
-and zoom. It turns on a spring, gathering speed and slowing smoothly, never faster than 4.2
-radians a second: a half turn (the player turning back towards it) is three-quarters done in
-0.8 s and done in about 1.2 s. The way they're going is averaged over a third of a second, so a
-path's corners don't swing it about. Stood still, it stays where it's turned. Put somewhere else
-(coming back to life), it catches them up without turning. It leans towards whoever the player
-is fighting, so both stay in view. The minimap stays north up; the wedge showing which way the
-camera looks turns on it.
+with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
+keeping them in view at its distance (the camera study's recommendation 2, as Cinemachine's lazy
+follow does). Walking across its view, it swings round after them; walking towards it, it backs
+away rather than turning round, coming round only as they go by it. Walking away from it or
+across it (within 80 degrees of away from it, fading out by 100), it also turns round to look
+from behind them, the way they're going, on a spring, gathering speed and slowing smoothly, never
+faster than 4.2 radians a second: a quarter turn (they set off across its view) is three-quarters
+done in 0.7 s and done in about 1.2 s. The way they're going is averaged over a third of a second,
+so a path's corners don't swing it about. Stood still, it stays where it's turned. Put somewhere
+else (coming back to life), it catches them up without turning (its leash only on while they
+walk, and within 3 metres of them). It leans towards whoever the player is fighting, so both
+stay in view. The minimap stays north up; the wedge showing which way the camera looks turns on
+it.
+
+**The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
+follows** (on): off, it keeps the way it's turned and its tilt as the player walks, only keeping
+up with them; **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
+**Invert tilt** (off): dragging up looks down; **Screen shake** (on): off, the greater spells
+don't shake it.
 
 **Turning it by hand.** A drag (a finger, or the mouse held down) turns the camera round the
 player: across the screen's width, half round, the view turning the way the drag goes (dragged
@@ -1164,9 +1175,10 @@ ceiling, about 4.3 metres back, in a room three metres high), the room's far sid
 player's head; going back out of doors, it's as far off and tilted as it was before they went in
 (game.js `#arrive`). Zoomed out far enough, it goes over the ceiling, looking down into the room.
 While held, it doesn't turn itself; let go, it stays where it was
-turned while the player stands, and once they walk again, it swings back round behind them,
-facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
-eases back down to 35 to see where they're going).
+turned while the player stands, and once they've walked a second, it swings back round behind
+them, facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down:
+then it eases back down to 35 to see where they're going); turned round in front of them, as
+they go by it.
 A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead the way
 the camera looks), not a turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).

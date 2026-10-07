@@ -18,6 +18,7 @@
     "character-lab.spec.js › sizes a woman's bust, and not a man's": 15.7,
     "character-lab.spec.js › switches to the orc, changes gear and looks": 26.3,
     "downloads.spec.js › downloads a file a part at a time, checks it and keeps it, has it from there the next time, and says so in debug mode": 6.1,
+    "pellagos.spec.js › Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered": 109.4,
     "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops": 14.3,
     "pellagos.spec.js › a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been": 55.5,
     "pellagos.spec.js › a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns": 23.2,

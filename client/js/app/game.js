@@ -630,6 +630,14 @@ export class Game {
         /** Whether another player's Summon is said no to at once, not asked (Game options). */
         this.resistSummons = false;
 
+        /**
+         * How the camera's turned and shaken (Game options): whether it follows round behind the
+         * player as they walk (app/camera.js `follows`), whether the greater spells shake it,
+         * how far a drag turns and tilts it (times DRAG_TURN and DRAG_TILT), and whether dragging
+         * up tilts it down rather than up.
+         */
+        this.cameraSettings = { follows: true, shake: true, drag: 1, invert: false };
+
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
         this.groundsAt = new Map();
@@ -1103,7 +1111,7 @@ export class Game {
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
         this.spellFx = new SpellFx(this.effects, view.scene, { lights: [] });
         this.spellFx.camera = view.camera;
-        this.spellFx.onShake = (amount) => (this.shaking = Math.max(this.shaking, amount));
+        this.spellFx.onShake = (amount) => (this.shaking = this.cameraSettings.shake ? Math.max(this.shaking, amount) : 0);
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
         this.spellFx.warm();
         this.#setGround(this.groundOf(this.battle.actor(this.me).map));
@@ -2428,10 +2436,16 @@ export class Game {
             _focus.add(lean.clampLength(0, LEAN.most));
         }
 
+        // (On its leash at how far it is now from where it looks, across the ground)
+        const eye = this.view.camera.position;
+
+        this.cameraFollow.follows = this.cameraSettings.follows;
+
         const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
             lowest: this.view.lowestPitch(),
+            away: Math.hypot(eye.x - this.view.focus.x, eye.z - this.view.focus.z),
         });
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
@@ -5958,7 +5972,9 @@ export class Game {
             if (pointer.drag && this.cameraFollow) {
                 const rect = canvas.getBoundingClientRect();
 
-                this.cameraFollow.turn((-(pointer.x - pointer.drag.x) / rect.width) * DRAG_TURN, ((pointer.y - pointer.drag.y) / rect.height) * DRAG_TILT, this.view.lowestPitch());
+                const { drag, invert } = this.cameraSettings;
+
+                this.cameraFollow.turn((-(pointer.x - pointer.drag.x) / rect.width) * DRAG_TURN * drag, ((pointer.y - pointer.drag.y) / rect.height) * DRAG_TILT * drag * (invert ? -1 : 1), this.view.lowestPitch());
                 pointer.drag.x = pointer.x;
                 pointer.drag.y = pointer.y;
             }
