@@ -2531,9 +2531,11 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
 });
 
 test("the townsfolk go about their business in the start town: dressed for their callings, carrying what they carry, walking from errand to errand; tapped, they talk of their town", async ({ page }) => {
+    // (Everyone in the town drawn, a step at a time: more than the usual time)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=2");
 
-    // Out as soon as the game's played, and drawn a few at a time
+    // Out as soon as the game's played, and drawn a few at a time, after the town's soldiers
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -2545,7 +2547,7 @@ test("the townsfolk go about their business in the start town: dressed for their
         const { game } = window.pellagos;
 
         return !game.enlistees.size && !game.enlisting.length;
-    })).toBe(true);
+    }, { seconds: 90 })).toBe(true);
 
     const out = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -2746,7 +2748,7 @@ test.describe("drawn at the screen's own pixels", () => {
         await playing(page, "/?play&seed=2");
 
         // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by
-        // each road (drawn over a few seconds, a step at a time)
+        // each road (drawn over a few seconds, a step at a time; before the townsfolk out too)
         await page.evaluate(() => {
             const { game } = window.pellagos;
 
@@ -2756,8 +2758,9 @@ test.describe("drawn at the screen's own pixels", () => {
         });
         expect(await playUntil(page, () => {
             const { game } = window.pellagos;
+            const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
-            return !game.enlistees.size && !game.enlisting.length;
+            return soldiers.length > 0 && soldiers.every(({ id }) => game.avatars.has(id));
         })).toBe(true);
 
         const out = await page.evaluate(() => {

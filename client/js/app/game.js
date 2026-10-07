@@ -3440,17 +3440,25 @@ export class Game {
 
     // Of those to be drawn, the one to take the next step of: the nearest the player (on their map
     // before any on another), begun if it isn't yet, and none of those put by this frame (waiting
-    // on their skins, painted elsewhere). { actor, steps }, or null if there's none
-    #nextEnlistee(put) {
+    // on their skins, painted elsewhere). The townsfolk after everyone else, and none of them while
+    // a building's being got ready (`busy`), as Wenches and Ale's folk: only there to be seen about,
+    // they keep no one waiting, the soldiers and creatures nor a building's folk behind them in the
+    // skins worker. { actor, steps }, or null if there's none
+    #nextEnlistee(put, busy = false) {
         const me = this.battle.actor(this.me);
         const far = (actor) => (me && actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity);
+        const later = (actor) => this.host.folk.get(actor.id)?.role === "townsfolk";
         let nearest = null;
 
         // (Those gone, or drawn some other way meanwhile, off the list)
         this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.avatars.has(id) && !this.enlistees.has(id));
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
-            if (!put.has(actor.id) && (!nearest || far(actor) < far(nearest))) {
+            if (put.has(actor.id) || (busy && later(actor))) {
+                continue;
+            }
+
+            if (!nearest || (later(nearest) && !later(actor)) || (later(nearest) === later(actor) && far(actor) < far(nearest))) {
                 nearest = actor;
             }
         }
@@ -3487,11 +3495,11 @@ export class Game {
         }
 
         // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,
-        // the nearest the player first; a creature's bar over it
+        // the nearest the player first, then the townsfolk; a creature's bar over it
         const put = new Set();
 
         while (performance.now() < until) {
-            const next = this.#nextEnlistee(put);
+            const next = this.#nextEnlistee(put, busy);
 
             if (!next) {
                 break;

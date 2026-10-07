@@ -534,6 +534,12 @@ a glance back), the left hand's alone, what's in the right kept there. Tapped, t
 No one fights them. The host keeps them in its snapshot (`townsfolk`: each place's, their looks
 and errands with them; `SNAPSHOT_VERSION` 5).
 
+**Drawn.** A step at a time, as the soldiers and the wild's creatures are (app/game.js
+`#nextEnlistee`), but after them, the nearest the player first, and none while a building's being
+got ready: only there to be seen about, they keep neither the town's guards waiting to be drawn
+nor a tavern's folk waiting on their skins (seed 2's start town: its 6 guards drawn as soon as
+before, its 8 townsfolk within a few seconds after).
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
