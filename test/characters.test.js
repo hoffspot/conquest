@@ -24,9 +24,10 @@ import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
 import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointAngles, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
-import { paintEye, paintSkin, SKIN_ROUGHNESS, SkinAtlas } from "../client/js/characters/skin.js";
+import { OVER_OWN, ownSkin, paintEye, paintSkin, SKIN_ROUGHNESS, SKIN_TONES, SkinAtlas } from "../client/js/characters/skin.js";
 import { HAIR_SHINE, HairMaterial, SKIN_WRAP, SkinMaterial } from "../client/js/characters/surfaces.js";
 import { readHumanData, readHumanFiles } from "../scripts/lib/human-data.js";
+import jpeg from "jpeg-js";
 
 // The real body data the build script makes (client/characters)
 // (The game's body: body.js GAME_BODY)
@@ -1672,6 +1673,27 @@ describe("faces and skin (face.js, skin.js)", () => {
         assert.equal(beardAmount(0, 0.02, 0.03), 0, "the brow doesn't");
     });
 
+    it("fades a beard out down the neck, rather than stopping it along the triangles there", () => {
+        // (No texel of skin without a beard beside one with a full one: the neck's triangles are
+        // the head's and the chest's by turns, and a beard painted on the head's alone stopped in
+        // a jagged line along them)
+        const atlas = new SkinAtlas(human, {}, 256);
+        const { size, covered, fields } = atlas;
+        let hard = 0;
+
+        for (let y = 1; y < size - 1; y++) {
+            for (let x = 1; x < size - 1; x++) {
+                const i = y * size + x;
+
+                if (covered[i] && !fields.beard[i] && [i - 1, i + 1, i - size, i + size].some((j) => covered[j] && fields.beard[j] > 160)) {
+                    hard++;
+                }
+            }
+        }
+
+        assert.equal(hard, 0);
+    });
+
     it("paints the skin in its colour, all over the body's texture", () => {
         const atlas = new SkinAtlas(human, {}, 128);
         const covered = atlas.covered.reduce((sum, value) => sum + value, 0) / atlas.covered.length;
@@ -1718,6 +1740,114 @@ describe("faces and skin (face.js, skin.js)", () => {
         for (let g = 0; g < atlas.gutter.length; g += 2) {
             assert.equal(skin[atlas.gutter[g] * 4 + 3], skin[atlas.gutter[g + 1] * 4 + 3]);
         }
+    });
+
+    it("paints a body's own skin pictures (Vitruvian's), as bright and as coloured on average as the tone, from light skin's to dark skin's", () => {
+        // (Its pictures as loadMasks has them, at the atlas's size: each texel the average of those
+        // it covers)
+        const size = 128;
+        const pictures = Object.fromEntries(Object.entries(manifest.skin).map(([name, file]) => {
+            const { width, data } = jpeg.decode(readFileSync(new URL(`../client/characters/${file}`, import.meta.url)), { useTArray: true });
+            const channels = ["light", "dark"].includes(name) ? 3 : 1;
+            const step = width / size;
+            const out = new Uint8Array(size * size * channels);
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    for (let k = 0; k < channels; k++) {
+                        let sum = 0;
+
+                        for (let j = 0; j < step; j++) {
+                            for (let i = 0; i < step; i++) {
+                                sum += data[((y * step + j) * width + x * step + i) * 4 + k];
+                            }
+                        }
+
+                        out[(y * size + x) * channels + k] = Math.round(sum / (step * step));
+                    }
+                }
+            }
+
+            return [name, out];
+        }));
+        const atlas = new SkinAtlas(human, { skin: pictures }, size);
+        const linear = (byte) => ((byte / 255 + 0.055) / 1.055) ** 2.4;
+        // (Average linear colour, over the skin but its lips, nails and areolae)
+        const plain = (i) => atlas.covered[i] && !atlas.fields.lips[i] && !atlas.fields.nails[i] && !atlas.fields.areolae[i];
+        const average = (data) => {
+            const sum = [0, 0, 0];
+            let count = 0;
+
+            for (let i = 0; i < atlas.covered.length; i++) {
+                if (plain(i)) {
+                    for (let k = 0; k < 3; k++) {
+                        sum[k] += linear(data[i * 4 + k]);
+                    }
+
+                    count++;
+                }
+            }
+
+            return sum.map((c) => c / count);
+        };
+        const bare = { blush: 0, brows: 0, stubble: 0, scalp: 0 };
+
+        // Light skin's picture alone for the lightest, dark skin's for the darkest; between, both
+        assert.equal(ownSkin(atlas, SKIN_TONES.fair).dark, 0);
+        assert.equal(ownSkin(atlas, SKIN_TONES.deep).dark, 1);
+        assert.ok(ownSkin(atlas, SKIN_TONES.olive).dark > 0.2 && ownSkin(atlas, SKIN_TONES.olive).dark < 0.8);
+        assert.equal(ownSkin(new SkinAtlas(human, {}, size), SKIN_TONES.fair), null, "no pictures, none");
+
+        // Each tone (a human's, an orc's, a dark elf's) on average its own colour
+        for (const tone of [SKIN_TONES.light, SKIN_TONES.olive, SKIN_TONES.deep, SKIN_TONES.orc, "#8a8698"]) {
+            const got = average(paintSkin(atlas, { tone, ...bare }).data);
+            const want = [1, 3, 5].map((at) => linear(Number.parseInt(tone.slice(at, at + 2), 16)));
+
+            got.forEach((c, k) => assert.ok(Math.abs(c / want[k] - 1) < 0.15, `${tone}: channel ${k} ${c.toFixed(3)} for ${want[k].toFixed(3)}`));
+        }
+
+        // Its blotches, lips, palms and the like as its pictures have them: brighter and darker
+        // where they are
+        const painted = paintSkin(atlas, { tone: SKIN_TONES.light, ...bare }).data;
+        const brightness = (data, i, channels) => data[i * channels] + data[i * channels + 1] + data[i * channels + 2];
+        const pairs = [];
+
+        for (let i = 0; i < atlas.covered.length; i++) {
+            if (plain(i)) {
+                pairs.push([brightness(painted, i, 4), brightness(atlas.fields.skinLight, i, 3)]);
+            }
+        }
+
+        const mean = (k) => pairs.reduce((sum, pair) => sum + pair[k], 0) / pairs.length;
+        const [a, b] = [mean(0), mean(1)];
+        const correlation = pairs.reduce((sum, [x, y]) => sum + (x - a) * (y - b), 0) / Math.sqrt(pairs.reduce((sum, [x]) => sum + (x - a) ** 2, 0) * pairs.reduce((sum, [, y]) => sum + (y - b) ** 2, 0));
+
+        assert.ok(correlation > 0.8, `as its light picture: ${correlation.toFixed(3)}`);
+
+        // Its roughness its roughness picture's (about the skin's on average), and its bumps its
+        // fine relief
+        const rough = (i) => painted[i * 4 + 3] / 255;
+        let [sum, count, same] = [0, 0, 0];
+
+        for (let i = 0; i < atlas.covered.length; i++) {
+            if (plain(i)) {
+                sum += rough(i);
+                count++;
+            }
+        }
+
+        assert.ok(Math.abs(sum / count - SKIN_ROUGHNESS.skin) < 0.03, `roughness ${sum / count}`);
+
+        const { bump } = paintSkin(atlas, { tone: SKIN_TONES.light, ...bare });
+
+        for (let i = 0; i < atlas.covered.length; i++) {
+            if (plain(i) && Math.abs(atlas.fields.skinHeight[i] - 128) > 20) {
+                same += Math.sign(bump[i] - 128) === Math.sign(atlas.fields.skinHeight[i] - 128) ? 1 : -1;
+            }
+        }
+
+        assert.ok(same > 50, `bumps where its relief is: ${same}`);
+        assert.ok(OVER_OWN.relief > 0);
     });
 
     it("lights skin from its picture's roughness, wrapping round, red furthest; and hair in bands along its strands", () => {

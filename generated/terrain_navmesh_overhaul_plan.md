@@ -4980,8 +4980,20 @@ converted data is to be measured in M8 against today's hm08 data.
     every other vertex and the sliders' principal components are worked out without it, so every
     body is as it was to the bit (the motion check unchanged). Closed, it stays behind the lips on
     every people's bodies.
-  - Six more of Vitruvian's shapes: the mouth opened wide, and five visemes. Folk talked to speak
-    in phrases, a sound's shape every syllable; three attacks in ten start with a war cry; the hurt
-    bare their teeth, the dead's jaws are slack.
-  - The GPU layout updates only the triangles round the vertices an expression moves (3,800 slots,
-    1.6 MB). The download is 200 KB more.
+  - Seven more of Vitruvian's shapes: the mouth opened wide, the lips drawn back, and five
+    visemes. Folk talked to speak in phrases, a sound's shape every syllable; three attacks in ten
+    start with a war cry; the hurt bare their teeth, the dead's jaws are slack.
+  - The expressions' GPU texture holds 3,842 vertices (1.78 MB), laid out as before. The download
+    is 200 KB more.
+- **2026-10-07, Vitruvian's own skin** (§10, step 4; docs/CHARACTERS.md *The Vitruvian body*,
+  *Its own skin*).
+  - Its 4K skin pictures (light and dark skin's colours, its height, its roughness) brought down
+    into the game's texture layout at 1024 texels as JPEGs, the height to its fine relief: 492 KB
+    more of the download (10.5 MB in all). Loaded with the masks, at the skin's size.
+  - Skin's painted from them as CharMorph paints it: light and dark mixed linearly as far as
+    makes the skin as bright as the tone, each channel then brought to the tone's colour (orcs
+    green, dark elves grey-violet). Its own blotches, redness, lips, palms and nails stay; the
+    painted redness and shading go over them at half strength; freckles, veins, warts, war paint,
+    fur, stripes, scales and painted hair as before. Its roughness picture and its relief take the
+    place of the painted T-zone, creases and pores.
+  - MakeHuman's body is painted as before.
