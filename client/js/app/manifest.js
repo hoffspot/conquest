@@ -34,11 +34,11 @@ export const MANIFEST = Object.freeze([
         label: "Game code",
         detail: "Pellagos",
         files: [
-            ["js/app/camera.js", 5451],
+            ["js/app/camera.js", 7820],
             ["js/app/creator.js", 27453],
             ["js/app/doors.js", 10332],
             ["js/app/fate.js", 4610],
-            ["js/app/game.js", 291176],
+            ["js/app/game.js", 292036],
             ["js/app/gearinfo.js", 9215],
             ["js/app/governor.js", 6328],
             ["js/app/heroes.js", 7619],
