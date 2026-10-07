@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
-import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
+import { COME_IN, comeIn, FACING, linkAt, MAP_ORIGINS, offStairs, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
 import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld, nearestFree } from "../client/js/core/world.js";
@@ -131,7 +131,7 @@ describe("going in and out (battle.js)", () => {
         return { world, battle, player: battle.actor("player") };
     }
 
-    it("walks to the door and comes out a couple of steps inside it, facing back to it; up the stairs and down, likewise; and out again", () => {
+    it("walks to the door and comes out well inside it, facing into the room; up the stairs and down, turned from them into the room; and out again, facing out", () => {
         const { world, battle, player } = tavern();
 
         battle.command("player", { type: "move", to: world.spawns.player });
@@ -144,32 +144,60 @@ describe("going in and out (battle.js)", () => {
         assert.deepEqual([cross.from, cross.to, cross.link], ["town", "taproom", "tavern-door"]);
         const [doorX, doorY] = world.maps.taproom.marks.D[0];
 
+        // (Four steps in, the door behind them: the taproom's fifteen metres deep)
         assert.equal(player.map, "taproom");
-        assert.deepEqual(player.square, [doorX, doorY - 2]);
-        assert.equal(player.facing, 0);
+        assert.deepEqual(player.square, [doorX, doorY - 4]);
+        assert.equal(player.facing, FACING.n);
         assert.equal(player.order, null);
         assert.equal(linkAt(world.links, "taproom", player.square), null, "not on the door");
 
-        // Up and down the stairs: before their top, and before their foot, facing them
+        // Up and down the stairs (along the north wall): before their top, and before their foot,
+        // a step clear of them, turned from them
         battle.command("player", { type: "enter", link: "tavern-stairs", run: true });
         run(battle, 8000);
         assert.equal(player.map, "upstairs");
-        assert.deepEqual(player.square, [6, 3]);
-        assert.equal(player.facing, Math.PI);
+        assert.deepEqual(player.square, [6, 4]);
+        assert.equal(player.facing, FACING.s);
         assert.equal(linkAt(world.links, "upstairs", player.square), null, "not on the stairs");
 
         battle.command("player", { type: "enter", link: "tavern-stairs" });
         run(battle, 3000);
         assert.equal(player.map, "taproom");
-        assert.deepEqual(player.square, [1, 3]);
-        assert.equal(player.facing, Math.PI);
+        assert.deepEqual(player.square, [1, 4]);
+        assert.equal(player.facing, FACING.s);
 
-        // Out, onto the square outside the door, facing back to it
+        // Out, onto the square outside the door, facing out the way the tavern does
         battle.command("player", { type: "enter", link: "tavern-door" });
         run(battle, 12000);
         assert.equal(player.map, "town");
         assert.deepEqual(player.square, world.tavern.outside);
-        assert.ok(Math.abs(Math.cos(player.facing - world.tavern.facing) + 1) < 1e-9, "facing the tavern");
+        assert.ok(Math.abs(Math.cos(player.facing - world.tavern.facing) - 1) < 1e-9, "facing out");
+    });
+
+    it("comes in at a door straight in from it, facing into the room: as far as the floor's clear, up to five steps, no more than a third of the way across it", () => {
+        // (A floor `deep` squares deep, its door in the south wall; `thing` across the way in, `at` squares in)
+        const floor = (deep, at = null) => readPlan("floor", "A floor", Array.from({ length: deep }, (_, y) => (y === deep - 1 ? "....DD...." : y === deep - 1 - at ? "...TTTT..." : "..........")));
+
+        assert.equal(COME_IN, 5);
+        assert.deepEqual(comeIn(floor(18)), { arrive: [4, 12], facing: FACING.n });
+        assert.deepEqual(comeIn(floor(15)).arrive, [4, 10], "four steps in: no further than a third of the way");
+        assert.deepEqual(comeIn(floor(9)).arrive, [4, 6], "a small floor: two steps in");
+        assert.deepEqual(comeIn(floor(18, 3)).arrive, [4, 15], "short of a table in the way");
+        assert.deepEqual(comeIn(floor(18, 2)).arrive, [4, 16], "a step in, at least");
+
+        // (The taproom's, the way the town's door comes in)
+        const { taproom, door } = tavernFloors();
+
+        assert.deepEqual(door.arrive, comeIn(taproom).arrive);
+        assert.ok(!taproom.blocked[door.arrive[1]][door.arrive[0]]);
+
+        // Off the stairs along the north wall, likewise, turned from them: a step clear of where
+        // they're come off, on a floor big enough; on a small one, where they're come off
+        const north = (deep) => readPlan("floor", "A floor", Array.from({ length: deep }, (_, y) => (y < 2 ? "<SSSS>...." : y === deep - 1 ? "....DD...." : "..........")));
+
+        assert.deepEqual(offStairs(north(15), [1, 3]), { arrive: [1, 4], facing: FACING.s });
+        assert.deepEqual(offStairs(north(18), [6, 3]).arrive, [6, 5]);
+        assert.deepEqual(offStairs(north(9), [6, 3]).arrive, [6, 3]);
     });
 
     it("won't go through a link that isn't where they are, and moves on the map they're on", () => {
@@ -655,6 +683,34 @@ describe("the doors and stairs to tap (doors.js)", () => {
         assert.equal(doors.at(rayAt(tx + dx + 1, 0.8, tz + taproom.height - 0.3, [0, -6]), "taproom")?.link.id, "tavern-door");
         assert.equal(doors.at(rayAt(tx + 3, 1.5, tz + 1, [0, 6]), "taproom")?.link.id, "tavern-stairs");
         assert.equal(doors.at(rayAt(ux + 3, 0, uz + 0.5, [0, 6]), "upstairs")?.link.id, "tavern-stairs");
+    });
+
+    it("is on the door or stairs only looking towards them: not when the ray only passes through them from behind them, or from by them, on its way to the floor past them", () => {
+        const { taproom, upstairs } = world.maps;
+        const [tx, tz] = taproom.origin;
+        const [ux, uz] = upstairs.origin;
+        const [dx] = taproom.marks.D[0];
+        const ray = (from, to) => new THREE.Ray(new THREE.Vector3(...from), new THREE.Vector3(...to).sub(new THREE.Vector3(...from)).normalize());
+
+        // (Coming in, turned to the room, the camera over the wall behind them: tapping the floor
+        // by the player passes through the door's box, and isn't the door)
+        assert.equal(doors.at(ray([tx + dx + 1, 4.5, tz + taproom.height + 2], [tx + dx + 1, 0, tz + taproom.height - 2.5]), "taproom"), null);
+
+        // (The camera inside, looking at the door, or at the floor just before it: the door)
+        assert.equal(doors.at(ray([tx + dx + 1, 2.4, tz + taproom.height - 6], [tx + dx + 1, 0, tz + taproom.height - 0.3]), "taproom")?.link.id, "tavern-door");
+
+        // (Turned from the stairs at their foot, the camera by them, in their box: tapping the floor
+        // ahead isn't the stairs; nor upstairs, the camera over the stairwell)
+        assert.equal(doors.at(ray([tx + 2, 2.4, tz + 0.6], [tx + 2, 0, tz + 4]), "taproom"), null);
+        assert.equal(doors.at(ray([ux + 4, 2.4, uz + 0.6], [ux + 4, 0, uz + 3.5]), "upstairs"), null);
+        assert.equal(doors.at(ray([ux + 4, 2.4, uz + 4], [ux + 4, 0, uz + 1]), "upstairs")?.link.id, "tavern-stairs");
+
+        // (Come out of the tavern, facing out, the camera behind them over its roof: tapping the
+        // ground ahead isn't its door)
+        const { door } = world.tavern;
+        const out = [Math.sin(door.facing), Math.cos(door.facing)];
+
+        assert.equal(doors.at(ray([door.x - out[0] * 4, 6, door.z - out[1] * 4], [door.x + out[0] * 1.5, 0, door.z + out[1] * 1.5]), "town"), null);
     });
 
     it("glows when tapped, and while the player makes for it, then fades", () => {
