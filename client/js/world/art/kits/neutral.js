@@ -41,10 +41,32 @@ const MEGALITH = Object.freeze({ human: "rock", elf: "rock-pale", darkElf: "obsi
 // lands it's in, each grave's one of them, `tone`: the humans' grey limestone, buff sandstone and
 // grey granite)
 const HEADSTONES = Object.freeze({ human: ["dressed-old", "rock-pale", "rock"], elf: ["rock-pale", "dressed-old", "rock"], darkElf: ["obsidian", "rock-dark", "rock-dark"], cat: ["rock-red", "rock-pale", "rock-red"], lizard: ["rock-pale", "dressed-old", "rock"], orc: ["rock-dark", "rock", "rock-dark"] });
-const stoneOf = (people, tone = 0) => material((HEADSTONES[people] ?? HEADSTONES.human)[tone]);
+const headstoneOf = (people, tone = 0) => (HEADSTONES[people] ?? HEADSTONES.human)[tone];
+const stoneOf = (people, tone = 0) => material(headstoneOf(people, tone));
 
 /**
- * A grave as it's drawn (metres): its headstone set `deep` into the ground; a cross's upright and
+ * What grows on a graveyard's stones, by the stone (HEADSTONES' materials): its colour over the
+ * stone's (a multiplier), how much of it there is on a stone (from and to), and where it grows
+ * most: on the faces to the west, where the weather comes from, and on the tops, where the birds
+ * perch (`west`, `top`), the rest of it scattered. Limestone takes the orange lichens, sandstone
+ * grey-green ones all over, granite grey crusts and the yellow-green of map lichen, sparser; dark
+ * glassy stone hardly any. On every stone green algae on the faces to the east and the north
+ * (`GREEN`: its colour, and how much on each).
+ */
+export const LICHENS = Object.freeze({
+    "dressed-old": { colour: [1.25, 0.9, 0.42], amount: [0.3, 0.85], west: 1, top: 0.9 },
+    "rock-pale": { colour: [0.86, 0.96, 0.8], amount: [0.35, 0.9], west: 0.5, top: 0.6 },
+    "rock-red": { colour: [0.86, 0.96, 0.8], amount: [0.3, 0.8], west: 0.5, top: 0.6 },
+    rock: { colour: [0.98, 1.06, 0.68], amount: [0.1, 0.45], west: 0.5, top: 0.5 },
+    "rock-dark": { colour: [0.92, 0.97, 0.86], amount: [0.05, 0.3], west: 0.4, top: 0.4 },
+    obsidian: { colour: [0.92, 0.97, 0.9], amount: [0, 0.1], west: 0.3, top: 0.3 },
+});
+const GREEN = Object.freeze({ colour: [0.6, 0.74, 0.48], east: 0.5, north: 0.35 });
+
+/**
+ * A grave as it's drawn (metres): its headstone set into the ground a third of its whole length
+ * (half as deep as it stands above it), never less than `deep`; the graveyard's wall narrowing by
+ * `batter` of its thickness each metre it rises; a cross's upright and
  * its arm (`cross`: the upright's width, the arm's width and height, how far its middle is below the
  * top) and its ring (`ring`: how big round, how thick); a footstone (`footstone`: how high, wide
  * and thick); the mound over it (`mound`: how high, how much narrower than the grave, how far its
@@ -55,6 +77,7 @@ const stoneOf = (people, tone = 0) => material((HEADSTONES[people] ?? HEADSTONES
  */
 export const GRAVE = Object.freeze({
     deep: 0.35,
+    batter: 0.16,
     cross: { upright: 0.17, arm: [0.58, 0.15, 0.32] },
     ring: { radius: 0.22, thick: 0.035 },
     footstone: { high: [0.25, 0.4], wide: 0.32, thick: 0.08 },
@@ -694,7 +717,9 @@ const BUILD = {
         const [w, d] = [m(part.x1 - part.x0), m(part.y1 - part.y0)];
         const alongX = w >= d;
         const [length, thick] = alongX ? [w, d] : [d, w];
-        const at = alongX ? (u, y, v) => [cx + u, y, cz + v] : (u, y, v) => [cx + v, y, cz + u];
+        // (Narrowing as it rises, as a wall of field stone laid dry is built: GRAVE.batter)
+        const narrow = (y, v) => v * (1 - (GRAVE.batter * Math.max(0, y)) / m(1));
+        const at = alongX ? (u, y, v) => [cx + u, y, cz + narrow(y, v)] : (u, y, v) => [cx + narrow(y, v), y, cz + u];
         const top = brokenTop(random, length, m(part.h * 0.6), m(part.h), { stone: m(1.1), course: m(0.15), breaches: 0.06 });
 
         crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(0.4), stone, { core: stone });
@@ -707,7 +732,7 @@ const BUILD = {
         const stone = stoneOf(piece.people);
         const [r, h] = [m(part.w ?? 0.5) / 2, m(part.h)];
 
-        solid.tone = lichened(part.seed ?? 5, northOf(piece));
+        solid.tone = lichened(part.seed ?? 5, northOf(piece), headstoneOf(piece.people));
         solid.box(cx - r, -m(0.4), cz - r, cx + r, h, cz + r, stone);
         solid.box(cx - r - m(0.06), h, cz - r - m(0.06), cx + r + m(0.06), h + m(0.12), cz + r + m(0.06), stone);
         solid.pyramid(cx - r * 0.8, cz - r * 0.8, cx + r * 0.8, cz + r * 0.8, h + m(0.12), r * 0.9, stone);
@@ -793,7 +818,7 @@ const BUILD = {
         const [long, wide, h] = [m(part.long), m(part.wide), m(part.h)];
         const [lid, over] = [m(0.12), m(0.08)];
 
-        solid.tone = lichened(part.seed ?? 7, northOf(piece));
+        solid.tone = lichened(part.seed ?? 7, northOf(piece), headstoneOf(piece.people));
 
         if (part.kind === "table") {
             solid.turnedBox(cx, cz, long / 2 + m(0.1), wide / 2 + m(0.1), -m(0.3), m(0.12), angle, stone);
@@ -840,7 +865,7 @@ const BUILD = {
         const base = m(0.36);
         const [dw, dh] = [m(1), m(1.9)];
 
-        solid.tone = lichened(part.seed ?? 9, northOf(piece));
+        solid.tone = lichened(part.seed ?? 9, northOf(piece), headstoneOf(piece.people));
 
         // Its steps, its walls, the pilasters at its front corners and the cornice round its top
         solid.box(x0 - m(0.25), -m(0.4), z0 - m(0.25), x1 + m(0.25), m(0.18), z1 + m(0.25), stone);
@@ -887,7 +912,7 @@ const BUILD = {
         const h = m(part.h);
         const top = h * 0.92;
 
-        solid.tone = lichened(part.seed ?? 11, northOf(piece));
+        solid.tone = lichened(part.seed ?? 11, northOf(piece), headstoneOf(piece.people));
         solid.box(cx - m(0.5), -m(0.3), cz - m(0.5), cx + m(0.5), m(0.18), cz + m(0.5), stone);
         solid.box(cx - m(0.36), m(0.18), cz - m(0.36), cx + m(0.36), m(0.85), cz + m(0.36), stone);
         solid.box(cx - m(0.42), m(0.85), cz - m(0.42), cx + m(0.42), m(0.95), cz + m(0.42), stone);
@@ -912,7 +937,7 @@ const BUILD = {
         const along = [nx, 0, nz];
         const across = [ax, 0, az];
 
-        solid.tone = lichened(part.seed ?? 3, northOf(piece));
+        solid.tone = lichened(part.seed ?? 3, northOf(piece), headstoneOf(piece.people, part.tone ?? 0));
 
         if (part.stone) {
             const look = [Math.cos(part.look ?? 0), 0, Math.sin(part.look ?? 0)];
@@ -1006,16 +1031,17 @@ function hump(solid, on, u, v, hw, hl, high, soil, tone, random = null) {
 // Which way north is in a piece, as it's built (x, z): its site's turned so (sites.js)
 const northOf = (piece) => [Math.sin(piece.facing ?? 0), -Math.cos(piece.facing ?? 0)];
 
-// A gravestone's weathering (weathered's: dark at its foot, moss on what faces up), green on what
-// faces north (`north`: which way that is, x and z), and on the faces the sun reaches lichen's
-// orange and gold in patches, more on some stones than others
-function lichened(seed, north) {
+// A gravestone's weathering (weathered's: dark at its foot, moss on what faces up) and what grows
+// on it, as its stone has it (LICHENS: `stone`, a material's name): lichen in patches, most on the
+// faces to the west (`north`: which way north is, x and z; the west a quarter turn from it) and
+// on its top, more on some stones than others; green algae on the faces to the east and north
+function lichened(seed, north, stone = "dressed-old") {
     const random = createRandom((seed ^ 0x11c4e) >>> 0);
     const base = weathered(random.int(1, 1e6), { moss: 0.45, dirt: 0.35 });
-    const amount = random.range(0.15, 0.8);
+    const growth = LICHENS[stone] ?? LICHENS["dressed-old"];
+    const amount = random.range(...growth.amount);
     const [phase, scale] = [random.range(0, 100), random.range(0.12, 0.22)];
-    const gold = [1.25, 0.9, 0.42];
-    const mossy = [0.6, 0.74, 0.48];
+    const west = [-north[1], north[0]].map((v) => -v);
 
     return Object.assign(
         (point, normal, own) => {
@@ -1025,12 +1051,14 @@ function lichened(seed, north) {
                 return shade;
             }
 
-            const northward = Math.max(0, normal[0] * north[0] + normal[2] * north[1]);
+            const [northward, westward] = [north, west].map(([x, z]) => normal[0] * x + normal[2] * z);
+            const upward = Math.max(0, normal[1]);
             const patch = Math.max(0, Math.sin(point[0] * scale + phase) * Math.sin(point[2] * scale * 1.3 + phase * 0.7) + Math.sin(point[1] * scale * 1.7 + phase * 0.3) * 0.5);
-            const lichen = Math.min(0.85, amount * (1 - northward) * patch * 1.6);
-            const green = northward * 0.55;
+            const where = 0.25 + growth.west * Math.max(0, westward) + growth.top * upward;
+            const lichen = Math.min(0.85, amount * where * patch * 1.6);
+            const green = GREEN.east * Math.max(0, -westward) + GREEN.north * Math.max(0, northward);
 
-            return shade.map((c, k) => c * (1 - lichen + lichen * gold[k]) * (1 - green + green * mossy[k]));
+            return shade.map((c, k) => c * (1 - lichen + lichen * growth.colour[k]) * (1 - green + green * GREEN.colour[k]));
         },
         { bands: base.bands },
     );
@@ -1053,7 +1081,7 @@ function headstone(solid, spec, stone, foot, along, across) {
     const thick = m(spec.thick);
     const base = fallen ? thick / 2 + m(0.02) : -m(spec.sunk ?? 0);
     const at = (u, y, v) => [foot[0] + side[0] * u + up[0] * y + towards[0] * v, foot[1] + base + side[1] * u + up[1] * y + towards[1] * v, foot[2] + side[2] * u + up[2] * y + towards[2] * v];
-    const [hw, h, y0] = [m(spec.broad) / 2, m(spec.tall), fallen ? 0 : -m(GRAVE.deep)];
+    const [hw, h, y0] = [m(spec.broad) / 2, m(spec.tall), fallen ? 0 : -m(Math.max(GRAVE.deep, spec.tall / 2))];
     // (A slab of an outline (convex, round from its foot), `thick` through: its two faces and its
     // edges, all but its foot's under the ground)
     const slab = (outline, depth = thick) => {

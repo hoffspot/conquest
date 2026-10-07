@@ -36,21 +36,27 @@ export const NEUTRAL = Object.freeze({
  * An old graveyard, as old churchyards are (docs/GAME.md, *The sites no people keeps*; the
  * research behind it: graves run east and west, their headstones at their heads, at the west;
  * metres):
- * - its wall of field stone (`wall`: how thick, how high at its least and most), its way in at the
- *   middle of its front between two piers (`gate`: how wide between them, the piers how wide and
- *   how high), iron gates hanging open or fallen;
- * - a path of flagstones (`path` wide) from there to what stands at its back: a family's
- *   mausoleum (`mausoleum` of them), or a chest tomb; one or two tombs more beside the path
- *   (`tombs`), chest or table tombs, the grander graves; now and then an obelisk (`obelisk`) and
- *   a grave railed round (`railing`); a yew by the gate, on the path's west side;
- * - the graves (`grave`: `long` by `wide`, in rows `row` apart along them and `across` apart
- *   side by side, set off their places by up to `jitter` and turned by up to `yaw`), east and west
- *   as the world lies, whichever way the yard faces; some of the plots empty (`keep` of them
- *   used), fewer on the north side (`north` of those there left empty: the side no one wanted);
- * - a headstone at most graves' heads (`marked` of them; the rest unmarked), shaped as it was cut
- *   (`stones`: how often each), its face to the west mostly (`faces`: west, east, or turned to the
- *   path); leaning forward over the grave as the ground sinks under it, sunk, fallen or snapped
- *   (`lean`); a footstone at some graves' feet (`footstone`);
+ * - its wall of field stone (`wall`: how thick at its foot, how high at its least and most,
+ *   narrowing as it rises: art/kits/neutral.js), its way in at the middle of its front between
+ *   two piers (`gate`: how wide between them, the piers how wide and how high), iron gates
+ *   hanging open or fallen;
+ * - a path of flagstones (`path` wide) from there to what stands at its back: a chest tomb mostly,
+ *   a family's mausoleum seldom (`mausoleum` of them: a few hundred stand in all of Britain's
+ *   twenty thousand churchyards); a few tombs more beside the path (`tombs`), chest or table
+ *   tombs, the grander graves; seldom an obelisk (`obelisk`), and a grave railed round now and
+ *   then (`railing`); a yew by the gate, on the path's west side;
+ * - the graves, close as an old yard's are (`grave`: `long` by `wide`, in rows `row` apart along
+ *   them and `across` apart side by side, set off their places by up to `jitter` and turned by up
+ *   to `yaw`), east and west as the world lies, whichever way the yard faces; nearly every plot
+ *   used (`keep` of them), the north side's too, but fewer of those marked (the side no one
+ *   wanted a stone on: `north`, the share of the rest's marked there; that no one was buried there
+ *   at all is a myth);
+ * - a headstone at under half of the graves' heads (`marked` of them; the rest unmarked mounds, as
+ *   most of an old yard's are), shaped as it was cut (`stones`: how often each), as tall as it was
+ *   cut (`tall`: from and to, the taller the rarer; a cross the tallest), its face to the west
+ *   mostly (`faces`: west, east, or turned to the path); leaning over the grave as the coffin under
+ *   it gives way and the ground sinks (back from its face, for one looking west), sunk, fallen or
+ *   snapped (`lean`); a footstone at some graves' feet (`footstone`);
  * - over each, a mound gone to grass, the earth freshly turned, nothing (sunk level), or the
  *   grave broken open where its dead have risen (`ground`: how often each).
  */
@@ -58,19 +64,20 @@ export const GRAVEYARD = Object.freeze({
     wall: { thick: 0.6, low: 0.9, high: 1.4 },
     gate: { wide: 2.2, pier: 0.55, high: [1.8, 2.1] },
     path: 1.4,
-    mausoleum: 0.6,
-    tombs: [1, 2],
-    obelisk: 0.35,
-    railing: 0.35,
-    grave: { long: 2.3, wide: 0.9, row: 3.1, across: 1.25, jitter: 0.25, yaw: 0.14 },
-    keep: 0.86,
-    north: 0.55,
-    marked: 0.86,
+    mausoleum: 0.08,
+    tombs: [2, 4],
+    obelisk: 0.12,
+    railing: 0.3,
+    grave: { long: 2.2, wide: 0.85, row: 2.7, across: 0.98, jitter: 0.22, yaw: 0.14 },
+    keep: 0.92,
+    north: 0.35,
+    marked: 0.62,
     stones: { round: 3, segmental: 2, shouldered: 2, pointed: 1.5, flat: 1.5, cross: 1 },
+    tall: [0.55, 1.3],
     faces: { west: 0.7, east: 0.2, path: 0.1 },
     lean: { forward: 0.45, sunk: 0.25, fallen: 0.07, snapped: 0.04 },
     footstone: 0.25,
-    ground: { mound: 0.42, fresh: 0.15, open: 0.16, flat: 0.27 },
+    ground: { mound: 0.5, fresh: 0.12, open: 0.13, flat: 0.25 },
 });
 
 // A rectangle `long` along `along` ([x, y], a unit vector) and `wide` across it, round (x, y): its
@@ -467,8 +474,8 @@ const LAYOUTS = {
             }
         }
 
-        // What stands at its back, the path's end: a family's mausoleum, its door to the path;
-        // or a chest tomb
+        // What stands at its back, the path's end: a chest tomb; seldom a family's mausoleum, its
+        // door to the path
         const along = (yaw = 0) => [cos(facing + yaw), sin(facing + yaw)];
         // (A grave's or a tomb's turn, as the art takes it: its across, a quarter turn back from
         // along it)
@@ -495,8 +502,8 @@ const LAYOUTS = {
         parts.push({ part: "flags", x0: cx - path / 2, y0: end, x1: cx + path / 2, y1: y1 + wall.thick / 2, seed: random.seed() });
         kept.push([cx - path / 2 - 0.45, y0, cx + path / 2 + 0.45, depth]);
 
-        // The yew by the gate, on the path's west side (as the world lies); a tomb or two beside
-        // the path, now and then an obelisk
+        // The yew by the gate, on the path's west side (as the world lies); a few tombs beside
+        // the path, seldom an obelisk
         const west = east[0] > 0.2 ? -1 : east[0] < -0.2 ? 1 : random.pick([-1, 1]);
         const yew = [cx + west * random.range(3.6, 4.6), y1 - random.range(2.8, 3.6)];
 
@@ -537,8 +544,9 @@ const LAYOUTS = {
             kept.push(box(...obelisk, 1.8, 1.8));
         }
 
-        // The graves, row on row east and west as the world lies, their places set off a little
-        // and turned (an old yard's, not laid out with a line); the north side mostly left empty
+        // The graves, row on row east and west as the world lies, close, their places set off a
+        // little and turned (an old yard's, not laid out with a line); the north side's as full,
+        // but fewer of its graves marked
         const middle = [(inner[0] + inner[2]) / 2, (inner[1] + inner[3]) / 2];
         const northmost = Math.max(...cornersOf(...middle, [1, 0], inner[2] - inner[0], inner[3] - inner[1]).map(([x, y]) => (x - middle[0]) * north[0] + (y - middle[1]) * north[1]));
         const room = grown(inner, -0.35);
@@ -554,21 +562,21 @@ const LAYOUTS = {
                 const way = along(yaw);
                 const corners = cornersOf(x, y, way, grave.long, grave.wide);
                 const bounds = boundsOf(corners);
-                const keep = random.chance(GRAVEYARD.keep) && !(aside > northmost * 0.3 && random.chance(GRAVEYARD.north));
+                const keep = random.chance(GRAVEYARD.keep);
 
                 if (!keep || corners.some(([px, py]) => px < room[0] || py < room[1] || px > room[2] || py > room[3]) || kept.some((rect) => overlaps(rect, bounds))) {
                     continue;
                 }
 
-                graves.push({ x, y, yaw, way, bounds });
+                graves.push({ x, y, yaw, way, bounds, northern: aside > northmost * 0.3 });
             }
         }
 
         // (A grave railed round, now and then: one by the path)
         const railed = random.chance(GRAVEYARD.railing) ? graves.reduce((best, each) => (!best || Math.abs(each.x - cx) < Math.abs(best.x - cx) ? each : best), null) : null;
 
-        for (const { x, y, yaw, way, bounds } of graves) {
-            const marked = random.chance(GRAVEYARD.marked);
+        for (const { x, y, yaw, way, bounds, northern } of graves) {
+            const marked = random.chance(GRAVEYARD.marked * (northern ? GRAVEYARD.north : 1));
             const stone = marked ? pick(GRAVEYARD.stones) : null;
             const look = pick(GRAVEYARD.faces);
             const forward = random.chance(GRAVEYARD.lean.forward);
@@ -582,13 +590,13 @@ const LAYOUTS = {
                 w: grave.wide,
                 d: grave.long,
                 turn: turnOf(yaw),
-                // (Its headstone: shaped, how tall, broad and thick, which way its face looks (west,
-                // east, or to the path: an angle, in the yard), leaning forward over the grave
-                // (`sag`) and to a side (`lean`), sunk, fallen or snapped; and its stone, one of the
-                // land's few)
+                // (Its headstone: shaped, how tall (the taller the rarer), broad and thick, which way
+                // its face looks (west, east, or to the path: an angle, in the yard), leaning over
+                // the grave (`sag`) and to a side (`lean`), sunk, fallen or snapped; and its stone,
+                // one of the land's few)
                 stone,
                 ring: stone === "cross" && random.chance(0.4),
-                tall: stone === "cross" ? random.range(0.9, 1.3) : random.range(0.55, 1),
+                tall: stone === "cross" ? random.range(0.9, GRAVEYARD.tall[1]) : tallOf(random),
                 broad: random.range(0.45, 0.75),
                 thick: random.range(0.08, 0.15),
                 look: look === "west" ? facing + yaw + PI : look === "east" ? facing + yaw : x < cx ? 0 : PI,
@@ -641,6 +649,14 @@ const LAYOUTS = {
 
 // A rectangle w by d round (x, y): [x0, y0, x1, y1]
 const box = (x, y, w, d) => [x - w / 2, y - d / 2, x + w / 2, y + d / 2];
+
+// How tall a headstone was cut (GRAVEYARD.tall): the taller the rarer
+const tallOf = (random) => {
+    const [least, most] = GRAVEYARD.tall;
+    const roll = random.next();
+
+    return least + (most - least) * roll * roll;
+};
 
 // A graveyard's tomb at (x, y), east and west as its graves are (`along`, `turnOf`: the
 // graveyard's), a chest tomb (its lid shoved askew, or cracked, or whole) or a table tomb (a slab

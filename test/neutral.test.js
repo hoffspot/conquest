@@ -34,7 +34,7 @@ const { Shapes, siteShapes } = await import("../client/js/world/far/shapes.js");
 const { createRandom } = await import("../client/js/core/random.js");
 const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { archOf, brokenRim, brokenTop, buttress, crumbledWall, stringCourse, talus, topAt } = await import("../client/js/world/art/kits/decay.js");
-const { HALL, hallWindows } = await import("../client/js/world/art/kits/neutral.js");
+const { GRAVE, HALL, hallWindows, LICHENS } = await import("../client/js/world/art/kits/neutral.js");
 const { brokenCart, fallenTimbers, oldBarrel, oldBeam, oldCrate } = await import("../client/js/world/art/kits/leftovers.js");
 const { IVY, ivyAlong, ivyCurtain, ivyMaterial, ringFace, wallFace } = await import("../client/js/world/art/kits/ivy.js");
 const { hedgeMaterials } = await import("../client/js/world/art/kits/hedges.js");
@@ -202,6 +202,60 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         assert.ok(forms.hillside >= 10 && forms.pit >= 3, JSON.stringify(forms));
     });
 
+    it("builds a graveyard's wall narrowing as it rises, its headstones a third of their length in the ground, lichen as its stones grow it", () => {
+        const yard = sites.find(({ kind }) => kind === "graveyard");
+        const pieces = overworld.sites.set.get(yard.id).pieces;
+        const near = (a, b, within) => Math.abs(a - b) < within;
+        const pointsOf = (object) => {
+            const points = [];
+
+            object.traverse((node) => {
+                if (node.isMesh) {
+                    const position = node.geometry.attributes.position;
+
+                    for (let k = 0; k < position.count; k++) {
+                        points.push([position.getX(k), position.getY(k), position.getZ(k)]);
+                    }
+                }
+            });
+
+            return points;
+        };
+
+        // (A stretch of its wall: as thick as it's built at its foot, narrower at its top)
+        const wallPiece = pieces.find(({ part }) => part?.part === "lowWall" && Math.abs(part.x1 - part.x0) > 4);
+        const points = pointsOf(builderOf(wallPiece)(wallPiece));
+        const top = Math.max(...points.map(([, y]) => y));
+        const thin = Math.abs(wallPiece.part.x1 - wallPiece.part.x0) > Math.abs(wallPiece.part.y1 - wallPiece.part.y0) ? 2 : 0;
+        const across = (keep) => {
+            const values = points.filter(keep).map((point) => point[thin]);
+
+            return Math.max(...values) - Math.min(...values);
+        };
+        const [foot, crest] = [across(([, y]) => y <= 0), across(([, y]) => y >= top * 0.9)];
+
+        assert.ok(crest < foot * 0.9 && crest > foot * 0.6, `its foot ${foot.toFixed(2)} across, its top ${crest.toFixed(2)}`);
+        assert.equal(GRAVE.batter, 0.16);
+
+        // (A tall headstone set deeper than a short one, a third of its whole length down)
+        const grave = pieces.find(({ part }) => part?.part === "grave" && part.stone && part.stone !== "cross");
+        const depthOf = (tall) => {
+            const piece = { ...grave, part: { ...grave.part, tall, state: "standing", sag: 0, lean: 0, sunk: 0, footstone: false, railed: false, ground: "flat" } };
+
+            return -Math.min(...pointsOf(builderOf(piece)(piece)).map(([, y]) => y));
+        };
+
+        assert.ok(near(depthOf(1.2) / depthOf(0.6), 0.6 / GRAVE.deep, 0.05), `${depthOf(1.2)} and ${depthOf(0.6)} deep`);
+
+        // (Orange lichen on limestone, grey-green on sandstone, little on dark glassy stone)
+        const [r, g, b] = LICHENS["dressed-old"].colour;
+        const [sr, sg, sb] = LICHENS["rock-pale"].colour;
+
+        assert.ok(r > g && g > b, "limestone's orange");
+        assert.ok(sg > sr && sg > sb, "sandstone's grey-green");
+        assert.ok(LICHENS.obsidian.amount[1] < LICHENS["rock-pale"].amount[0]);
+    });
+
     it("shapes a face cut into a hill to it, the rock going back under the hill: none standing out above it", () => {
         let checked = 0;
 
@@ -248,7 +302,7 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // (A hall's ruins with its windows through its walls, its courses and its buttresses, and
         // a ruined keep with its rows of windows and its courses: M7b-3b, about 700 and 900 more;
         // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
-        // (An old graveyard's forty graves or so, its walls, gates, path, tombs and mausoleum: as much as
+        // (An old graveyard's sixty graves or so, its walls, gates, path, tombs and mausoleum: as much as
         // a house)
         const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, graveyard: 6000 };
         const most = new Map();
