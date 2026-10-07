@@ -1,9 +1,11 @@
 // What stands about a settlement's open ground that's walked round as it's drawn, rather than by
 // the squares it blocks (core/navigation/tiles.js: a lamp post's foot, not the two metres square
 // round it): its props, each its outline (outlines.js, measured from the art), and its yards'
-// fences, along their runs, as thick as its people's are.
+// fences, along their runs, as thick as its people's are; and its buildings, each the ground its
+// walls stand on (a house's lot; a landmark's, but for the way up to its door).
 
 import { cos, sin } from "../exact.js";
+import { ENTRANCES } from "../insides.js";
 import { FENCE_BANDS, PROP_OUTLINES } from "./outlines.js";
 import { PLOT } from "./pieces.js";
 
@@ -55,4 +57,39 @@ export function fenceOutlines(yard, [ox, oy] = [0, 0]) {
     const runs = (yard.fence ?? []).flatMap((runs, k) => runs.filter(([a, b]) => b - a > 0.2).map(([a, b]) => sides[k](a - past, b + past)));
 
     return [...runs, rectangle(from, d, w - from, d + HOUSE_REACH)];
+}
+
+/**
+ * How far in front of a landmark's door its outline stops (metres, past ENTRANCES' depth: the
+ * door's in from its lot's front): the way up to it, its step and its porch, left to its squares
+ * (town.js), so it's walked up to as it always has been.
+ */
+export const DOOR_CLEAR = 0.5;
+
+/**
+ * Where a building stands (a layout's piece: x, y its middle, metres, from `origin` [x, y]), as it's
+ * walked round: the four corners of the ground its walls stand on, or null for a piece that isn't
+ * a building. A house's is its whole lot: every people's kit draws its walls inside it (house.js
+ * a quarter of a metre in, the plinth five centimetres proud of them), where its squares are only
+ * those well inside it (town.js INSET), and its walls would be walked into. A landmark's is its lot
+ * too, as far forward as its door (ENTRANCES' depth, and DOOR_CLEAR more) for one with a door, so
+ * its sides and back are walked round, and its door up to as before. (Walls, towers and gatehouses
+ * stand on their squares, a gatehouse's street going through it; a people's own places are their
+ * kits' own shapes.)
+ */
+export function buildingOutline(piece, [ox, oy] = [0, 0]) {
+    if (piece.kind !== "house" && piece.kind !== "landmark") {
+        return null;
+    }
+
+    const [w, d] = [piece.w * PLOT, piece.h * PLOT];
+    const entrance = piece.kind === "landmark" ? ENTRANCES[piece.name] : null;
+    const front = d / 2 - (entrance ? entrance.depth + DOOR_CLEAR : 0);
+
+    return [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, front],
+        [-w / 2, front],
+    ].map(([u, v]) => turned(ox + piece.x, oy + piece.y, piece.facing ?? 0, u, v));
 }
