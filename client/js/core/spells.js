@@ -95,12 +95,16 @@ export const GROWTH_XP = Object.freeze([0, 60, 200, 500, 1200]);
  * Healing restores less as damage is dealt more: tier 1 of either is weak, as a new adventurer is.
  */
 export const SPELLS = Object.freeze({
-    // --- Healing: five tiers, each on anyone (friend, neutral or foe: it never starts a fight) ---
+    // --- Healing: five tiers, each on anyone (friend, neutral or foe: it never starts a fight).
+    // Each one past Vigor heals more at once, for an emergency, but no more over a fight than
+    // Vigor does on its own (its cooldown the longer): cast all in turn, they heal about three
+    // times what Vigor does, not five, so that three set on someone together are beaten by
+    // fighting, stunning and healing, not by healing alone ---
     vigor: healing(1, "Vigor", { about: "A breath of strength: heals a little.", castTime: 500, cooldown: 4000, heal: [8, 12] }),
-    mendWounds: healing(2, "Mend Wounds", { about: "Knits cuts and bruises: heals a fair deal.", castTime: 700, cooldown: 6000, heal: [16, 24] }),
-    detraumatize: healing(3, "Detraumatize", { about: "Soothes body and mind: heals well, and stops bleeding.", castTime: 900, cooldown: 9000, heal: [28, 40], cures: ["bleed"] }),
-    renewal: healing(4, "Renewal", { about: "Renews the flesh: heals greatly, and purges poison, sickness and bleeding.", castTime: 1100, cooldown: 14000, heal: [45, 65], cures: ["bleed", "poison", "disease"] }),
-    astralHeal: healing(5, "Astral Heal", { about: "Light from beyond the stars: heals fully, and ends everything lingering.", castTime: 1400, cooldown: 45000, full: true, cures: "all" }),
+    mendWounds: healing(2, "Mend Wounds", { about: "Knits cuts and bruises: heals a fair deal.", castTime: 700, cooldown: 12000, heal: [16, 24] }),
+    detraumatize: healing(3, "Detraumatize", { about: "Soothes body and mind: heals well, and stops bleeding.", castTime: 900, cooldown: 24000, heal: [28, 40], cures: ["bleed"] }),
+    renewal: healing(4, "Renewal", { about: "Renews the flesh: heals greatly, and purges poison, sickness and bleeding.", castTime: 1100, cooldown: 45000, heal: [45, 65], cures: ["bleed", "poison", "disease"] }),
+    astralHeal: healing(5, "Astral Heal", { about: "Light from beyond the stars: heals fully, and ends everything lingering.", castTime: 1400, cooldown: 180000, full: true, cures: "all" }),
 
     // --- Fire: burning ---
     burn: attack("fire", 1, "Burn", { about: "A lick of flame: may set them burning.", castTime: 450, cooldown: 2500, damage: [9, 15], effect: { kind: "burn", chance: 0.2 }, reaction: "fire" }),
