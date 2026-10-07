@@ -7,11 +7,12 @@ import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
-import { RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
+import { ARMOUR, BUSES, FOOTSTEPS, GAITS, gainOf, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { createRandom } from "../client/js/core/random.js";
+import { SPELLS } from "../client/js/core/spells.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
 const peakOf = (samples) => samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
@@ -209,7 +210,7 @@ function fakeAudio() {
             const source = node({
                 playbackRate: param(1),
                 addEventListener() {},
-                start: (when = 0) => played.push({ source, when }),
+                start: (when = 0, offset = 0) => played.push({ source, when, offset }),
                 stop() {},
             });
 
@@ -322,13 +323,13 @@ describe("playing sounds (sound.js)", () => {
         assert.deepEqual([...made.recordings.keys()].sort(), [...sampleFiles(), ...recordedFiles()].map(([id]) => id).sort());
         assert.equal(made.play("slash"), null, "no sound until the browser allows it");
 
-        // Unlocked, the browser decodes them all
+        // Unlocked, the browser decodes them all (but those downloaded once they're wanted: the spells')
         const { sound } = await started();
 
         assert.equal(sound.instruments.size, sampleFiles().length);
 
         for (const [name, files] of Object.entries(RECORDED)) {
-            assert.equal(sound.recorded.get(name)?.length, files.length, name);
+            assert.equal(sound.recorded.get(name)?.length, ON_DEMAND.includes(name) ? undefined : files.length, name);
         }
 
         assert.equal(sound.recordings.size, 0, "and they're let go once decoded");
@@ -502,6 +503,114 @@ describe("playing sounds (sound.js)", () => {
         sound.play("clash");
         assert.equal(sound.play("hitMail"), null);
         assert.ok(sound.buffers.get("block").includes(played[0].source.buffer));
+        sound.close();
+    });
+
+    it("downloads the spells' recordings only once they're wanted, what's made playing in their place till then", async () => {
+        const { sound, played } = await started();
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        assert.ok(ON_DEMAND.includes("fire") && ON_DEMAND.includes("castFireLow") && !ON_DEMAND.includes("stepGrass"));
+        assert.ok(!sound.recorded.has("fire") && !sound.recorded.has("castFireLow"), "none at the start");
+
+        // (Played before it's in: the made one, and it's asked for, for next time)
+        played.length = 0;
+        sound.play("fire");
+        assert.ok(sound.buffers.get("fire").includes(played[0].source.buffer));
+        assert.ok(sound.wanted.has("fire"));
+        sound.play("castFireLow");
+        assert.ok(sound.buffers.get("fireball").includes(played[1].source.buffer), "a recorded-only one's stand-in meanwhile");
+
+        await sound.want(["fire", "castFireLow"]);
+        await tick();
+        assert.equal(sound.recorded.get("fire")?.length, RECORDED.fire.length);
+        assert.equal(sound.recorded.get("castFireLow")?.length, RECORDED.castFireLow.length);
+
+        played.length = 0;
+        sound.play("fire");
+        assert.ok(sound.recorded.get("fire").includes(played[0].source.buffer), "then its recording");
+
+        // (Asked for again: not downloaded again)
+        const fetched = sound.wanted.get("fire");
+
+        await sound.want("fire");
+        assert.equal(sound.wanted.get("fire"), fetched);
+        sound.close();
+    });
+
+    it("gives every spell its sounds: each school's by its tier, cast, missile and landing; the rest by what they do", () => {
+        const exists = (name) => Boolean(SOUNDS[name] || RECORDED_ONLY[name]);
+
+        for (const id of Object.keys(SPELLS)) {
+            const { cast, missile, land } = spellSounds(id);
+
+            assert.ok(cast && exists(cast), `${id}'s cast: ${cast}`);
+            assert.ok(!missile || exists(missile), `${id}'s missile: ${missile}`);
+            assert.ok(!land || exists(land), `${id}'s landing: ${land}`);
+        }
+
+        assert.deepEqual(spellSounds("burn"), { cast: "castFireLow", missile: "fireball", land: "impactFireLow" });
+        assert.deepEqual(spellSounds("earthquake"), { cast: "castEarthMid", missile: null, land: "impactEarthMid" });
+        assert.deepEqual(spellSounds("absoluteZero"), { cast: "castWaterHigh", missile: null, land: "impactWaterHigh" });
+        assert.equal(spellSounds("stoneCrush").missile, "stoneShot");
+        assert.equal(spellSounds("shockbolt").land, "shockbolt", "Shockbolt's own");
+        assert.equal(spellSounds("renewal").land, "impactHealingMid");
+        assert.equal(spellSounds("astralHeal").cast, "castHealingHigh", "healing's fifth its greatest");
+        assert.deepEqual(spellSounds("stun"), { cast: "bolt", missile: null, land: null }, "the made stun kept, heard as it stuns");
+        assert.equal(spellSounds("resistFire").land, "ward");
+        assert.equal(spellSounds("curePoison").cast, "castHealingLow", "a friend's or one's own tome spell cast with a healing's swell");
+        assert.equal(spellSounds("teleport").land, null, "carried off: heard going and coming");
+
+        // (Every spell sound recorded used)
+        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane"]);
+
+        assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), []);
+    });
+
+    it("swells a cast to its release, loudest as it's let go, part way in if it's let go sooner; its missile flying the last of it; cut short if it's broken off", async () => {
+        const { sound, played } = await started();
+
+        await sound.want(["castFireLow", "fireball", "castAirMid", "teleportOut", "teleportIn", "ward"]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        played.length = 0;
+        sound.cast("fireball", null, 2, { travel: 0.3 });
+
+        const [missile, cast] = played;
+
+        assert.ok(sound.recorded.get("fireball").includes(missile.source.buffer) && sound.recorded.get("castFireLow").includes(cast.source.buffer));
+        assert.ok(Math.abs(cast.when + cast.source.buffer.peak / cast.source.playbackRate.value - 12) < 1e-9, "loudest at the release");
+        assert.ok(Math.abs(missile.when + missile.source.buffer.peak / missile.source.playbackRate.value - (12 - 0.15)) < 1e-9, "the missile loudest halfway through its flight");
+        assert.equal(cast.offset, 0);
+
+        // (Let go sooner than it swells to its loudest: started at once, that far in)
+        played.length = 0;
+
+        const quick = sound.cast("shockbolt", null, 0.1);
+        const [early] = played;
+
+        assert.equal(early.when, 10);
+        assert.ok(early.offset > 0 && early.offset <= quick.buffer.duration, `${early.offset}`);
+
+        // (Broken off: faded out at once)
+        sound.cut(quick);
+        assert.equal(route(sound, quick).gain, 0);
+
+        // (Carried off by magic: gone with a pop, come with one; the player's own heard wherever)
+        played.length = 0;
+        sound.carried(null, null, { mine: true });
+        assert.deepEqual(played.map(({ when }) => when), [10, 10.35]);
+
+        played.length = 0;
+        sound.carried({ x: 100, z: 0 }, { x: 2, z: 0 });
+        assert.equal(played.length, 1, "gone too far off to hear, come near");
+
+        // (Vanishing from sight: a hush of the same)
+        played.length = 0;
+        sound.landed("invisibility", null);
+        sound.landed("resistFire", null);
+        assert.equal(played.length, 2);
+        assert.ok(Math.abs(route(sound, played[0].source).gain - 0.5 * RECORDED_ONLY.teleportOut.volume * (LEVEL / RECORDED_LEVEL)) < 1e-9);
         sound.close();
     });
 

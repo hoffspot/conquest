@@ -1,9 +1,10 @@
 // The game's sound, played with the Web Audio API in three buses, each with its own volume (the
 // sliders in Game options), all turned on or off together (the Sound switch):
 //
-//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps and the weapons',
-//    armour's and bodies' sounds recorded, once they're downloaded: recorded.js), each from
-//    where it happens: quieter the further it is from the player, and to the left or right.
+//  - Sound effects: blows, spells, footsteps and cues (synth.js; footsteps, the weapons',
+//    armour's and bodies' sounds and the spells' recorded, once they're downloaded:
+//    recorded.js), each from where it happens: quieter the further it is from the player, and
+//    to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
 //    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
@@ -14,7 +15,9 @@
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
 // recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
-// downloaded meanwhile. Browsers only let a page
+// downloaded meanwhile, but for the spells', each downloaded only once it's wanted (want: those
+// the player can cast, as they come to know them; anyone else's the first time it's heard,
+// what's made playing in its place till then). Browsers only let a page
 // make sound once someone has tapped, clicked or pressed a key on it, so it starts on the first
 // one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
@@ -28,7 +31,8 @@
 
 import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
-import { RECORDED, RECORDED_LEVEL } from "./recorded.js";
+import { SPELLS } from "../core/spells.js";
+import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORE } from "./score.js";
 import { LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 import { TAVERN } from "./tavern.js";
@@ -97,10 +101,15 @@ const RECORDINGS = sampleFiles().length;
 
 /**
  * The sounds recorded rather than made (recorded.js: client/sounds), each variant's id ("name
- * variant") and where it's downloaded from.
+ * variant") and where it's downloaded from: those downloaded at the start (all but recorded.js's
+ * ON_DEMAND), or those `names`.
  */
-export const recordedFiles = () => Object.entries(RECORDED).flatMap(([name, files]) => files.map(({ file }, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
+export const recordedFiles = (names = Object.keys(RECORDED).filter((name) => !LATER.has(name))) => names.flatMap((name) => RECORDED[name].map(({ file }, variant) => [`${name} ${variant}`, new URL(`../../sounds/${file}`, import.meta.url)]));
+const LATER = new Set(ON_DEMAND);
 const DOWNLOADS = 6;
+
+// Sounds wanted later downloaded this many at a time (not to hold up what else is downloading)
+const WANTED_DOWNLOADS = 3;
 
 // How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
 // to), and how near a tree has to be to be heard (metres)
@@ -188,7 +197,129 @@ export const RECORDED_ONLY = Object.freeze({
     clothRustle: { volume: 0.3 },
     fallArmoured: { volume: 0.85, instead: "fall" },
     dropWeapon: { volume: 0.5 },
+    ...spellsRecorded(),
 });
+
+// The spells' recorded sounds with nothing made (scripts/sounds/spells.js): each school's casts
+// (swelling, as loud as a swing), landings (as loud as a blow) and missiles, Low, Mid and High;
+// healing's as soft as its made ones; and the tome spells'
+function spellsRecorded() {
+    const each = {};
+    const SCHOOL_STAND_INS = {
+        Fire: { cast: "fireball", impact: "fire" },
+        Earth: { cast: "bolt", impact: "crush" },
+        Air: { cast: "bolt", impact: "arcane" },
+        Water: { cast: "bolt", impact: "arcane" },
+        Healing: { cast: "castHeal", impact: "healed" },
+    };
+
+    for (const [stem, { cast, impact }] of Object.entries(SCHOOL_STAND_INS)) {
+        for (const band of ["Low", "Mid", "High"]) {
+            each[`cast${stem}${band}`] = { volume: stem === "Healing" ? 0.45 : 0.5, instead: cast };
+            each[`impact${stem}${band}`] = { volume: stem === "Healing" ? 0.5 : 0.8, instead: impact };
+        }
+    }
+
+    return {
+        ...each,
+        stoneShot: { volume: 0.55, instead: "bolt" },
+        shockbolt: { volume: 0.6, instead: "bolt" },
+        waterbolt: { volume: 0.55, instead: "bolt" },
+        buff: { volume: 0.45 },
+        ward: { volume: 0.45 },
+        cure: { volume: 0.45, instead: "healed" },
+        hex: { volume: 0.55, instead: "arcane" },
+        fear: { volume: 0.6 },
+        teleportOut: { volume: 0.55 },
+        teleportIn: { volume: 0.55 },
+        summon: { volume: 0.65 },
+        polymorph: { volume: 0.55 },
+        lightSpell: { volume: 0.4 },
+        fizzle: { volume: 0.45 },
+        spellCircle: { volume: 0.5 },
+    };
+}
+
+// A school's spells' sounds tier by tier (core/spells.js): Low for its first two tiers, Mid for
+// the next three, High for its greatest two (healing's greatest, its fifth, High too)
+const bandOf = (school, tier) => (tier <= 2 ? "Low" : tier >= (school === "healing" ? 5 : 6) ? "High" : "Mid");
+
+// The spells that throw a missile (world/spellfx.js), and what it sounds like flying: the fire
+// spells' a fireball's roar, a stone's whoosh, water's splash, poison's the arcane bolt (Hurt's
+// gust and the ice blade are heard landing)
+const MISSILES = { burn: "fireball", fireball: "fireball", burstflame: "fireball", stoneCrush: "stoneShot", blister: "waterbolt", waterbolt: "waterbolt", poison: "bolt" };
+
+// What the spells with no school sound like landing: strength and speed given (buff), a ward
+// raised (ward), something ended (cure), a curse (hex), terror, a creature come, a shape changed,
+// a light lit, someone gone from sight; and Shockbolt its own, a spark's crack and a coil's buzz.
+// (A stun's heard as it stuns; the spells that carry someone off, as they go and come: carried)
+const LANDINGS = {
+    shockbolt: "shockbolt",
+    embolden: "buff",
+    swole: "buff",
+    surge: "buff",
+    dodge: "buff",
+    levitate: "buff",
+    resistFire: "ward",
+    resistWater: "ward",
+    resistAir: "ward",
+    resistEarth: "ward",
+    resistMagic: "ward",
+    resistPoison: "ward",
+    resistDisease: "ward",
+    reflect: "ward",
+    inertialBarrier: "ward",
+    curePoison: "cure",
+    cureSickness: "cure",
+    liftCurse: "cure",
+    quench: "cure",
+    staunch: "cure",
+    unbind: "cure",
+    pacify: "cure",
+    poison: "hex",
+    vampirism: "hex",
+    fear: "fear",
+    summon: "summon",
+    attraction: "summon",
+    zombify: "summon",
+    polymorph: "polymorph",
+    light: "lightSpell",
+    invisibility: "teleportOut",
+};
+
+// How loud a landing is against its own sound, where softer (vanishing from sight: a hush)
+const HUSHED = { invisibility: 0.5 };
+
+/**
+ * A spell's sounds (core/spells.js): its cast, swelling to its release (`cast`); its missile's
+ * flight, if it throws one (`missile`); and its landing (`land`). A school's spells each its
+ * school's, by its tier; the rest cast with the arcane bolt (at an enemy) or a healing's swell
+ * (at a friend or themselves), and landing as LANDINGS. Any of them null: none.
+ */
+export function spellSounds(id) {
+    const spell = SPELLS[id];
+
+    if (!spell) {
+        return { cast: null, missile: null, land: null };
+    }
+
+    const stem = spell.school ? spell.school[0].toUpperCase() + spell.school.slice(1) : null;
+    const band = stem ? bandOf(spell.school, spell.tier) : null;
+
+    return {
+        cast: stem ? `cast${stem}${band}` : spell.target === "enemy" ? "bolt" : "castHealingLow",
+        missile: MISSILES[id] ?? null,
+        land: LANDINGS[id] ?? (stem ? `impact${stem}${band}` : null),
+    };
+}
+
+// A sound started part way in, to be loudest on time, faded in over this long (s); one cut
+// short, faded out over this long
+const JOIN = 0.006;
+const CUT = 0.08;
+
+// Carried off by magic: gone with a pop, and come with one this long after (s)
+const ARRIVED = 0.35;
 
 /**
  * What armour sounds like on the move and struck (a character's: game.js armourOf): what a step
@@ -246,6 +377,12 @@ export class Sound {
          */
         this.recorded = new Map();
         this.decoded = new Map();
+
+        /**
+         * The recorded sounds downloaded only once wanted (recorded.js ON_DEMAND) asked for so
+         * far, each with its download (name → promise): want.
+         */
+        this.wanted = new Map();
 
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
@@ -712,6 +849,11 @@ export class Sound {
     play(name, { at = null, volume = 1, delay = 0, peakAt = null, rate = 1, far = FAR, variant = null, made = false } = {}) {
         const context = this.context;
         const recorded = made ? null : this.recorded.get(name);
+
+        // (Wanted later, and not asked for yet: asked for now, for next time)
+        if (!made && LATER.has(name)) {
+            this.want(name);
+        }
         const buffers = recorded?.length > 1 ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
@@ -764,18 +906,70 @@ export class Sound {
         }
 
         // (Timed to be loudest `peakAt` seconds from now, if asked: a recording's when it's said
-        // to be, a made one's as synth.js's PEAKS)
+        // to be, a made one's as synth.js's PEAKS; too soon for it to swell to it, started that
+        // far in, faded in, so it's loudest on time all the same: a cast quicker than its sound)
         const loudest = buffers === recorded ? (source.buffer.peak ?? 0) : (PEAKS[SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead] ?? 0);
-        const start = context.currentTime + Math.max(0, peakAt === null ? delay : peakAt - loudest / source.playbackRate.value);
+        const lead = peakAt === null ? delay : peakAt - loudest / source.playbackRate.value;
+        const start = context.currentTime + Math.max(0, lead);
+        const into = Math.min(Math.max(0, -lead) * source.playbackRate.value, source.buffer.duration);
 
-        this.sounding.push(start + source.buffer.duration / source.playbackRate.value);
+        if (into > 0) {
+            level.gain.setValueAtTime(0, start);
+            level.gain.linearRampToValueAtTime(gain, start + JOIN);
+        }
+
+        this.sounding.push(start + (source.buffer.duration - into) / source.playbackRate.value);
         source.addEventListener("ended", () => {
             source.disconnect();
             level.disconnect();
         });
-        source.start(start);
+        source.start(start, into);
+        source.level = level;
 
         return source;
+    }
+
+    /**
+     * Download recorded sounds wanted later (recorded.js ON_DEMAND: the spells'), those `names`
+     * (a name, or a list), so they're in for when they're played (what's made playing in their
+     * place till then, or nothing); any already asked for, or downloaded at the start, aren't
+     * again. Resolves once they're all downloaded (each decoded once the browser's sound starts).
+     */
+    want(names) {
+        const asked = [names].flat().filter((name) => LATER.has(name));
+        const fresh = asked.filter((name) => !this.wanted.has(name));
+
+        if (fresh.length) {
+            const downloading = this.fetch ? this.#download(recordedFiles(fresh), WANTED_DOWNLOADS) : Promise.resolve();
+
+            for (const name of fresh) {
+                this.wanted.set(name, downloading);
+            }
+        }
+
+        return Promise.all(asked.map((name) => this.wanted.get(name))).then(() => {});
+    }
+
+    /**
+     * Cut a sound short (play's source: a cast broken off), fading it out quickly; nothing if
+     * it's none.
+     */
+    cut(source) {
+        const now = this.context?.currentTime;
+
+        if (!source?.level || now === undefined) {
+            return;
+        }
+
+        source.level.gain.cancelScheduledValues(now);
+        source.level.gain.setValueAtTime(source.level.gain.value, now);
+        source.level.gain.linearRampToValueAtTime(0, now + CUT);
+
+        try {
+            source.stop(now + CUT);
+        } catch {
+            // (Ended already)
+        }
     }
 
     /**
@@ -810,6 +1004,46 @@ export class Sound {
         }
 
         return SOUNDS[reaction] ? this.play(reaction, { at }) : null;
+    }
+
+    /**
+     * A spell being cast (core/spells.js) from `at`, landing `castTime` seconds from now: its
+     * cast swelling to then, loudest as it's let go, and its missile, if it throws one (spellSounds),
+     * flying the last `travel` seconds of it, loudest halfway. Its landing's wanted now too (if
+     * not in yet). Returns the cast's source, to cut short if the cast is broken off (cut).
+     */
+    cast(spell, at, castTime, { travel = null } = {}) {
+        const { cast, missile, land } = spellSounds(spell);
+
+        this.want([cast, missile, land].filter(Boolean));
+
+        if (missile && travel !== null) {
+            this.play(missile, { at, peakAt: Math.max(0, castTime - travel / 2) });
+        }
+
+        return cast ? this.play(cast, { at, peakAt: castTime }) : null;
+    }
+
+    /** A spell landing at `at` (its target): what it sounds like there (spellSounds), if anything. */
+    landed(spell, at) {
+        const { land } = spellSounds(spell);
+
+        return land ? this.play(land, { at, volume: HUSHED[spell] ?? 1 }) : null;
+    }
+
+    /**
+     * Someone carried off by magic (Teleport, Word of Recall, Wizard's Walk, a summons, a Scroll
+     * of Safety): gone from `from` with a pop, come to `to` with one a moment later (null where
+     * it isn't heard; the player's own, `mine`, heard wherever they go).
+     */
+    carried(from, to, { mine = false } = {}) {
+        if (mine || from) {
+            this.play("teleportOut", { at: mine ? null : from });
+        }
+
+        if (mine || to) {
+            this.play("teleportIn", { at: mine ? null : to, delay: ARRIVED });
+        }
     }
 
     /**
@@ -869,10 +1103,9 @@ export class Sound {
         this.buffers.set(name, variants);
     }
 
-    // Download the music's recordings and the recorded sounds, a few at a time, and have the
-    // browser decode them once it's started
-    async #download() {
-        const files = [...sampleFiles(), ...recordedFiles()];
+    // Download the music's recordings and the recorded sounds (or those `files`), `count` at a
+    // time, and have the browser decode them once it's started
+    async #download(files = [...sampleFiles(), ...recordedFiles()], count = DOWNLOADS) {
         let next = 0;
 
         const worker = async () => {
@@ -899,7 +1132,7 @@ export class Sound {
             }
         };
 
-        await Promise.all(Array.from({ length: DOWNLOADS }, worker));
+        await Promise.all(Array.from({ length: count }, worker));
     }
 
     #decode(id, recording) {
