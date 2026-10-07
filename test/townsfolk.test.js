@@ -10,7 +10,7 @@ import { treeFor, TREES } from "../client/js/core/dialogue.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { ROLES } from "../client/js/core/roles.js";
 import { CALLINGS, countOut, errandsOf, LINGER, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
 import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
@@ -200,6 +200,24 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
             assert.ok(["servant", "groom", "scribe"].includes(one.look), one.look);
             assert.ok(one.routine.stops.every(({ group }) => ["court", "keep", "heart"].includes(group)));
         }
+    });
+
+    it("goes on past a castle that couldn't be set down, with no one out there", () => {
+        const host = hosted();
+        const sites = host.world.maps.town.sites;
+        // (Seed 2's dark elves' castle: no room for it where it's planned)
+        const castle = host.world.plan.sites.find(({ id }) => id === "castle-9");
+        const [x, y] = castle.at.map(Math.floor);
+
+        sites.settle(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+        assert.ok(sites.set.has(castle.id) && sites.set.get(castle.id) === null, "(set down as none)");
+
+        put(host.battle.actor(HOST_PLAYER), [x, y + 40]);
+
+        const out = run(host, 2000).filter(({ type }) => type === "townsfolk");
+
+        assert.ok(out.every(({ place }) => place !== castle.id));
+        assert.ok(![...host.folk.keys()].some((id) => id.startsWith(`townsfolk:${castle.id}/`)));
     });
 
     it("dresses each calling for its work, carrying what it carries, and talks as the townsfolk do", () => {

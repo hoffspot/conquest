@@ -2286,8 +2286,9 @@ export class Host {
             }
         }
 
+        // (Not those that couldn't be set down: sites.js keeps them, as null)
         for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
-            if ((set.site.kind === "castle" || set.citadel) && places.some(([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
+            if (set && (set.site.kind === "castle" || set.citadel) && places.some(([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
                 found.push(this.#peopledAt(set.site.id));
             }
         }
