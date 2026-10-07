@@ -5186,14 +5186,15 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
-    // What can go on it: nothing, the healing spells known, and the draughts carried; a foe's
-    // has those, the elements' spells learnt (Fire's) and Stun, and no draughts
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Draught"]);
+    // What can go on it: nothing, the healing spells known, making camp, the emotes and the
+    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's) and Stun,
+    // and no draughts or emotes
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
-    // A draught at NE of wheel two (tapping S turns it over, as flicking it does)
+    // A draught at NE of wheel two, for the bow there (tapping S turns it over, as flicking it does)
     await setup.locator('.slice[data-direction="s"]').click();
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel two"]);
     await setup.locator('.slice[data-direction="ne"]').click();
@@ -5201,7 +5202,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await setup.locator('.wheels-choice[data-action="item:potion"]').click();
     await expect(setup.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
-    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", ne: "item:potion" }]);
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "item:potion", w: "emote:nod", e: "emote:cheer" }]);
 
     // Escape goes back a page, and again; then the game
     await page.keyboard.press("Escape");
