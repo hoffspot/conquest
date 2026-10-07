@@ -26,6 +26,9 @@ export const GROUPS = Object.freeze([
     "Voices",
     "Folk at work",
     "The world",
+    "Birds",
+    "Town and farm",
+    "Indoors",
     "Cues and the interface",
 ]);
 
@@ -157,10 +160,14 @@ export const CATALOG = Object.freeze({
     fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
     fallArmoured: { group: "Bodies and doors", label: "An armoured body falling", about: "A body falling, with mail rattling down after it.", plays: "Anyone in mail or plate falling, as they hit the ground." },
     dropWeapon: { group: "Bodies and doors", label: "A weapon dropped", about: "Iron clattering onto a hard floor.", plays: "Anyone armed falling dead: what they fought with, just after they hit the ground." },
-    door: { group: "Bodies and doors", label: "A door", about: "The latch lifting, the hinges creaking as it swings, and it banging shut.", plays: "Anyone going through a door on the player's side of it." },
+    door: { group: "Bodies and doors", label: "A door", about: "An old wooden door: a creak or the latch, then it shutting. kyles's rattly old door, on Freesound.", plays: "Anyone going through a house's, a tavern's, a smithy's or a guild's door on the player's side of it." },
     deathThudSmall: { group: "Bodies and doors", label: "A small body falling", about: "A small body dropping onto leaves.", plays: "A small creature (a rat, a porcupine, an adder, a spider, a scorpion, a frog) falling dead, as it hits the ground." },
     deathThudMid: { group: "Bodies and doors", label: "A beast falling", about: "A body falling to the ground, on leaves or a carpet.", plays: "A wolf, a dire wolf, a black shuck, a hyena, a boar, a puma or a shadow stalker falling dead, as it hits the ground." },
     deathThudBig: { group: "Bodies and doors", label: "A great beast falling", about: "A heavy body falling on dirt, slowed.", plays: "A bear, a crocodile, a rock tusker, a wyvern or a dragon falling dead, as it hits the ground." },
+    doorHeavy: { group: "Bodies and doors", label: "A heavy door", about: "A big wooden door swinging open and shut with a deep thud: Denis Chapon's, and LampEight's theatre door.", plays: "Going in or out of a keep, a castle's undercroft, a temple, a town hall or a watchtower." },
+    gate: { group: "Bodies and doors", label: "An iron gate", about: "A cemetery's iron gate rattling open and clanging shut: launemax's.", plays: "Going in or out of a ruined keep's great hall." },
+    trapdoor: { group: "Bodies and doors", label: "A trapdoor", about: "A wooden shutter opened and slammed shut (kyles's), standing in for a hatch.", plays: "Going down into a crypt, or up out of one." },
+    stairs: { group: "Bodies and doors", label: "Wooden stairs", about: "Three or four creaking treads of an old wooden stair, no feet between: NachtmahrTV's, played a little quicker.", plays: "Anyone going up or down wooden stairs (a tavern's), under their footsteps." },
 
     // Beasts (sound.js CREATURE_VOICES: each creature its family's, at its own pitch)
     wolfCall: { group: "Beasts", label: "Wolf calling", about: "A lone wolf's howl rising and falling, a creek echoing it: an NPS acoustician's in Wrangell–St. Elias, and one from Denali.", plays: "A wolf (a dire wolf lower, a black shuck lower still, a hyena a little higher) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
@@ -251,18 +258,61 @@ export const CATALOG = Object.freeze({
     humanRoughDeath: { group: "Voices", label: "A rough man dying", about: "A rough man's growl and agony.", plays: "The bandit chief (a man) dying." },
 
     // Folk at work (game.js ACTS: the folk's acts in the tavern, the smithy, the guild)
-    clink: { group: "Folk at work", label: "Tankards", about: "Pewter tankards knocked together in a toast, or one set down.", plays: "A patron's toast; a serving wench setting down a tankard." },
-    pour: { group: "Folk at work", label: "Ale poured", about: "Ale drawn from a barrel's tap into a tankard, gurgling as it fills.", plays: "The barkeep pouring." },
-    anvil: { group: "Folk at work", label: "Anvil", about: "A hammer on hot iron on the anvil: a bright ring over a dull knock.", plays: "The smith forging, three blows at a time." },
-    hiss: { group: "Folk at work", label: "Quenching", about: "Hot iron plunged in the trough: a hiss of steam dying away.", plays: "The smith quenching the work." },
-    bellows: { group: "Folk at work", label: "Bellows", about: "The bellows' breath.", plays: "The smith's assistant pumping the bellows; the forge's fire stirred." },
-    grind: { group: "Folk at work", label: "Grindstone", about: "A blade on the grindstone, rasping as it turns.", plays: "The smith's assistant cranking the grindstone." },
-    rustle: { group: "Folk at work", label: "Papers", about: "A few dry crinkles of paper: a notice taken down or filed, a page turned.", plays: "The guild's receptionist filing, and the folk reading." },
+    clink: { group: "Folk at work", label: "Tankards", about: "Mugs knocked together, or one set down: sidequesting's ceramic mugs (one a double clink).", plays: "A patron's toast; a serving wench setting down a tankard." },
+    pour: { group: "Folk at work", label: "Ale poured", about: "Beer poured into a glass, gurgling as it fills: from a tap (zembacraftworks's), and from a bottle (Kinoton's).", plays: "The barkeep pouring." },
+    anvil: { group: "Folk at work", label: "Anvil", about: "A hammer on an anvil: a bright ring over the knock. The Versilian Community Sample Library's anvil, struck in the studio.", plays: "The smith forging, three blows at a time." },
+    hiss: { group: "Folk at work", label: "Quenching", about: "Hot iron plunged in water, hissing as the steam dies away: rabban625's hot shovel quenched, and TRP's water on hot sauna stones.", plays: "The smith quenching the work." },
+    bellows: { group: "Folk at work", label: "Bellows", about: "A great leather bellows' breath, its flaps fluttering: noisymichael's, in an old mill.", plays: "The smith's assistant pumping the bellows; the forge's fire stirred." },
+    grind: { group: "Folk at work", label: "Grindstone", about: "A knife drawn over a turning grindstone, three or four strokes: florianreichelt's.", plays: "The smith's assistant cranking the grindstone." },
+    rustle: { group: "Folk at work", label: "Papers", about: "A few dry crinkles of paper: keweldog's.", plays: "The guild's receptionist filing, and the folk reading." },
+    distantHammer: { group: "Folk at work", label: "The smith at work, off", about: "A blacksmith hand-hammering at the smithy, recorded there by ldezem; heard from the street, through a low-pass filter.", plays: "By day, near a town's smithy: three or four blows every 5 to 12 seconds, from the smithy." },
 
-    // The world (the environment's bus)
-    bird: { group: "The world", label: "A bird", about: "A bird's chirp.", plays: "Out in the world, now and then (every 4 to 14 seconds), somewhere round the player." },
-    leaves: { group: "The world", label: "Leaves", about: "Leaves rustling in the wind.", plays: "From a tree within 22 metres, now and then." },
-    crackle: { group: "The world", label: "Hearth", about: "A few pops and snaps over the soft rush of the flames.", plays: "From the tavern's hearth, every 0.2 to 0.9 seconds." },
+    // The world (the environment's bus: ambience.js's beds, each looped round and round, and the
+    // leaves; the made bird in place of a recorded one till it's in)
+    bird: { group: "Birds", label: "A bird (made)", about: "A bird's chirp, made in code.", plays: "In the place of a recorded bird's song until it's downloaded." },
+    leaves: { group: "The world", label: "Leaves", about: "A gust through a tree's leaves, swelling and dying away: bruno.auzet's.", plays: "From a tree within 22 metres, now and then (every 2.5 to 7 seconds)." },
+    crackle: { group: "The world", label: "Hearth", about: "A few pops of a quiet fire: SKrafft's night campfire.", plays: "From the tavern's hearth, every 0.2 to 0.9 seconds." },
+    windOpen: { group: "The world", label: "Wind over open land", about: "Dry grass rustling in the wind on an open plain: felix.blume's, in the Chilean desert. A 29-second loop.", plays: "Out on open land (meadow, farmland, heath, savannah, the badlands, the marsh, by the sea), always, under everything; half as loud in a town." },
+    windForest: { group: "The world", label: "Wind in the trees", about: "Gusts through the trees of a wood: Nox_Sound's. A 37-second loop.", plays: "In the woods, the dark wood, the elves' wood and the jungle." },
+    windHigh: { group: "The world", label: "Wind up high", about: "Wind singing over a mountain, a faint cricket under it: felix.blume's. A 31-second loop.", plays: "Up the mountains, on the snow and the tundra, and anywhere above 175 m; in a ruined keep and a watchtower." },
+    nightLoop: { group: "The world", label: "Crickets", about: "Crickets in the night, calm and regular: Nox_Sound's. A 23-second loop.", plays: "After dark, rising as the light goes, on any land but the snow, the mountains and the sea; quieter in a town." },
+    frogsLoop: { group: "The world", label: "Frogs", about: "A chorus of boreal chorus frogs: the National Park Service's (Neal Herbert). A 31-second loop.", plays: "After dark, in the marsh and round a lake." },
+    streamLoop: { group: "The world", label: "A stream", about: "A calm stream running over stones: Nox_Sound's. A 23-second loop.", plays: "Within 35 metres of a stream or a narrow river, louder nearer." },
+    riverLoop: { group: "The world", label: "A river", about: "A large, fast mountain river: Auxide_Audio's. A 33-second loop.", plays: "Within 60 metres of a river, louder nearer." },
+    waterfallLoop: { group: "The world", label: "A waterfall", about: "A waterfall's roar: Nox_Sound's. A 25-second loop.", plays: "Within 90 metres of a river falling over a lip." },
+    surfLoop: { group: "The world", label: "The sea", about: "Waves breaking on a beach in Portugal, three to a loop: VMan533's. A 37-second loop.", plays: "Within 120 metres of the sea." },
+    lakeLapping: { group: "The world", label: "A lake", about: "Gentle waves lapping at a lake's edge: TRP's. A 28-second loop.", plays: "Within 45 metres of a lake." },
+    creakTree: { group: "The world", label: "A tree creaking", about: "A tree creaking deep in the wind: felix.blume's, in Patagonia.", plays: "In the woods, from a tree near, every 25 to 70 seconds." },
+    campfireLoop: { group: "The world", label: "A camp fire", about: "A small camp fire crackling: kyles's. A 31-second loop.", plays: "Within 16 metres of a camp fire." },
+    brazierLoop: { group: "The world", label: "A brazier", about: "A close fire's roar: Nox_Sound's camp fire. An 11-second loop.", plays: "Within 10 metres of a lit brazier (at a guard post, at night); in a smithy, its forge; in a castle's undercroft." },
+    rainLoop: { group: "The world", label: "Rain", about: "Light rain in the country: jmbphilmes's. A 34-second loop.", plays: "Not yet: there's no weather. In the studio." },
+    thunder: { group: "The world", label: "Thunder", about: "Distant thunder rolling: richwise's and Fission9's.", plays: "Not yet: there's no weather. In the studio." },
+
+    // Birds (the environment's bus: ambience.js CALLS)
+    birdDay: { group: "Birds", label: "Birdsong", about: "A blackbird, a robin, a firecrest, a blackcap and a chaffinch, each singing alone: richwise's blackbird and Sacha.Julien's birdsong study.", plays: "By day, every 4 to 14 seconds, somewhere round the player: more often in the woods, less in a town or on dry land, none up high or on the snow." },
+    birdDawn: { group: "Birds", label: "The dawn chorus", about: "Birds at first light, many at once: the National Park Service's dawn chorus at Mammoth Hot Springs (Jennifer Jerrett).", plays: "From first light until five minutes after sunrise, every 2.5 to 7 seconds." },
+    crow: { group: "Birds", label: "A crow", about: "A crow calling from a cherry tree: Setuniman's.", plays: "By day over open land (farmland, meadow, heath, savannah, the badlands), every 20 to 50 seconds; now and then up high." },
+    gull: { group: "Birds", label: "A gull", about: "A herring gull calling from a rooftop: Canardo55's.", plays: "By day within 150 metres of the sea, every 8 to 22 seconds." },
+    owl: { group: "Birds", label: "An owl", about: "An owl hooting: Gerent's.", plays: "At night in the woods, and on open land (less often), every 25 to 60 seconds." },
+
+    // Town and farm (ambience.js)
+    townLoop: { group: "Town and farm", label: "A town", about: "The bustle of a narrow town: voices, children, footsteps (bushtobazaar's, in Chefchaouen, where no car can go). A 33-second loop.", plays: "In a town or a settlement, as much of it as is round the player; quieter at night." },
+    marketLoop: { group: "Town and farm", label: "A market", about: "Craftsmen and voices in a medina: scholzn's, in Tunis. A 29-second loop.", plays: "By day, within 45 metres of a market's middle." },
+    dogBark: { group: "Town and farm", label: "A dog", about: "A big dog barking (ScouseMouseJB's malamute), heard from a way off.", plays: "In a town, every 18 to 55 seconds (less often at night)." },
+    chickens: { group: "Town and farm", label: "Hens", about: "Hens clucking: evsecrets's.", plays: "By day in a town, every 25 to 70 seconds." },
+    rooster: { group: "Town and farm", label: "A cock crowing", about: "A cock crowing: lonemonk's.", plays: "At dawn, in a town or on farmland, every 12 to 35 seconds." },
+    horseWhinny: { group: "Town and farm", label: "A horse", about: "A horse whinnying: 3bagbrew's and dontwanttobehere's.", plays: "By day in a town, every 45 to 120 seconds." },
+    cowMoo: { group: "Town and farm", label: "Cattle", about: "A cow mooing: felix.blume's in the Limousin, and Mystikuum's.", plays: "By day on farmland and meadow, every 25 to 70 seconds, from far off; seldom in a town." },
+    sheepBleat: { group: "Town and farm", label: "Sheep", about: "A sheep bleating out of doors: Yuval's.", plays: "By day on farmland and meadow, every 20 to 60 seconds; seldom in a town." },
+    churchBell: { group: "Town and farm", label: "A church bell", about: "A church bell struck, ringing on: Nox_Sound's.", plays: "In a town at the hours of prayer (6, 9, 12, 15 and 18 o'clock), three strokes, from the church somewhere off." },
+
+    // Indoors (ambience.js INDOORS)
+    tavernLoop: { group: "Indoors", label: "A tavern", about: "A lively pub's crowd: ondondvo's, in Czechia. A 29-second loop.", plays: "In a tavern's taproom; quieter upstairs and in an adventurers' guild." },
+    hearthLoop: { group: "Indoors", label: "A hearth", about: "A fire crackling gently: florianreichelt's. A 26-second loop.", plays: "In a tavern's taproom, louder nearer the hearth." },
+    templeLoop: { group: "Indoors", label: "A temple", about: "The hush of an old church: its air and a low rumble (composingatnight's). A 21.5-second loop.", plays: "In a temple or an abbey; quieter in a town hall." },
+    cryptLoop: { group: "Indoors", label: "A crypt", about: "A cellar's still air: kyles's. A 27-second loop.", plays: "In a crypt and a castle's undercroft; quieter in a keep." },
+    caveDrips: { group: "Indoors", label: "Drips in a cave", about: "Water dripping in a small cave: Selector's. A 32-second loop.", plays: "In a cave; quieter in a crypt and a ruined keep." },
+    lairLoop: { group: "Indoors", label: "The dragon's lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the dragon's lair." },
 
     // Cues and the interface
     wheel: { group: "Cues and the interface", label: "Action wheel", about: "A quick swish and a soft note.", plays: "The action wheel opening." },
@@ -277,7 +327,7 @@ export const CATALOG = Object.freeze({
 
 /** What else the studio can play, not one of SOUNDS: the wind, and the music in each place. */
 export const LOOPS = Object.freeze({
-    wind: { group: "The world", label: "The wind", about: "A quiet wind, a ten-second loop without a seam.", plays: "Out in the world, always, under everything." },
+    wind: { group: "The world", label: "The wind (made)", about: "A quiet wind made in code, a ten-second loop without a seam.", plays: "Out in the world, until a recorded wind is downloaded and blowing." },
 });
 
 /** The music, by where it's heard (each of sound.js's PLACES). */

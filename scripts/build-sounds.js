@@ -16,6 +16,10 @@
 // - The creatures' (scripts/sounds/creatures.js): each family's call, attack, hurt and death, wings,
 //   fire breath, falls and the player's breath, the same way, from Freesound, OpenGameArt's packs
 //   and the National Park Service's. Downloaded only once they're wanted, too.
+// - The ambience (scripts/sounds/ambience.js): beds that loop (wind, water, night, rooms) and the
+//   world's one-shots (birds, beasts of the farm, bells, folk at work, doors), each one cut of one
+//   recording at its own gain, from Freesound, the NPS's and the VCSL's; downloaded as they're
+//   wanted where the player is.
 //
 //   npm run build:sounds
 //
@@ -34,6 +38,7 @@ import { MPEGDecoder } from "mpg123-decoder";
 import { loudness } from "../client/js/audio/dsp.js";
 import { decode, fetchSource } from "./sounds/sources.js";
 import { prepare, render } from "./sounds/render.js";
+import * as ambience from "./sounds/ambience.js";
 import * as creatures from "./sounds/creatures.js";
 import * as spells from "./sounds/spells.js";
 import * as weapons from "./sounds/weapons.js";
@@ -60,10 +65,11 @@ const FADE_IN = 0.002;
 const FADE_OUT = 0.015;
 
 // The recorded sounds made from recipes (scripts/sounds), by what they are; and those the game
-// downloads only once they're wanted (sound.js want), not at the start: the spells' and the
-// creatures', many, and big once decoded, each heard only by those who cast it or meet them
-const AREAS = { weapons, spells, creatures };
-const ON_DEMAND = new Set([spells, creatures]);
+// downloads only once they're wanted (sound.js want), not at the start: the spells', the
+// creatures' and the ambience's, many, and big once decoded, each heard only by those who cast
+// it, meet them or come there
+const AREAS = { weapons, spells, creatures, ambience };
+const ON_DEMAND = new Set([spells, creatures, ambience]);
 
 // The footsteps' recordings, by Freesound id: by Nox_Sound, CC0, each https://freesound.org/s/<id>/
 const RECORDINGS = {
@@ -195,8 +201,8 @@ function footfall(samples, from, to, fadeOut) {
 // "swingSword" as "swing-sword", for its files
 const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 
-function encodeMp3(samples) {
-    const encoder = new Mp3Encoder(1, RATE, BITRATE);
+function encodeMp3(samples, bitrate = BITRATE) {
+    const encoder = new Mp3Encoder(1, RATE, bitrate);
     const pcm = Int16Array.from(samples, (value) => Math.round(Math.max(-1, Math.min(1, value)) * 32767));
     const parts = [];
 
@@ -273,14 +279,14 @@ async function main() {
                 }
 
                 const samples = render(recipe, ({ from, channel = null, highpass = 40 }) => prepared.get(`${from} ${channel} ${highpass}`));
-                const mp3 = encodeMp3(samples);
+                const mp3 = encodeMp3(samples, recipe.bitrate);
                 const file = `${kebab(name)}-${k + 1}.${createHash("sha256").update(mp3).digest("hex").slice(0, 8)}.mp3`;
                 const from = [...new Set(recipe.layers.map((layer) => layer.from))];
 
                 await writeFile(new URL(file, OUT), mp3);
                 written.add(file);
                 bytes += mp3.length;
-                list[name].push({ file, from, ...(recipe.peak !== undefined ? { peak: recipe.peak } : {}) });
+                list[name].push({ file, from, ...(recipe.peak !== undefined ? { peak: recipe.peak } : {}), ...(recipe.loop ? { loop: recipe.loop } : {}) });
 
                 for (const key of from) {
                     const { title, by, page, licence } = area.SOURCES[key];
@@ -300,7 +306,7 @@ async function main() {
         }
     }
 
-    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from, peak }) => `        { file: ${JSON.stringify(file)}, from: ${JSON.stringify(from)}${peak === undefined ? "" : `, peak: ${peak}`} },\n`).join("")}    ],`);
+    const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from, peak, loop }) => `        { file: ${JSON.stringify(file)}, from: ${JSON.stringify(from)}${peak === undefined ? "" : `, peak: ${peak}`}${loop ? `, loop: ${JSON.stringify(loop)}` : ""} },\n`).join("")}    ],`);
     const credits = Object.entries(sources)
         .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
         .map(([key, { title, by, page, licence }]) => `    ${JSON.stringify(key)}: { title: ${JSON.stringify(title)}, by: ${JSON.stringify(by)}, page: ${JSON.stringify(page)}, licence: ${JSON.stringify(licence)} },`);
@@ -309,15 +315,16 @@ async function main() {
 //
 // The sounds recorded rather than made, in client/sounds, played instead of synth.js's of the same
 // names once they're downloaded (or, with none made, on their own): footsteps on each footing, the
-// weapons', armour's and bodies', the spells', the creatures'; all CC0 or public domain, each from
-// the recordings in SOURCES.
+// weapons', armour's and bodies', the spells', the creatures', the ambience; all CC0 or public
+// domain, each from the recordings in SOURCES.
 
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};
 
 /**
  * Each recorded sound's variants (a name → [{ file in client/sounds, from: [SOURCES keys], peak:
- * when it's loudest, s, for a swing or a cast to be timed by }]).
+ * when it's loudest, s, for a swing or a cast to be timed by; loop: [length, crossfade], s, for
+ * a bed played round and round, its file the crossfade longer (sound.js) }]).
  */
 export const RECORDED = Object.freeze({
 ${lines.join("\n")}

@@ -320,7 +320,8 @@ export class Overworld {
      * @param {object} options.stamp - The town set into it: { at: [x, y] (its north-west square),
      *   width, height, blocked, opaque, ground, standing (its rows), yards (layoutTown's, in the
      *   world's metres), trunks ([{ x, y }]: its trees'), props (its pieces that are: both in the
-     *   world's metres) }.
+     *   world's metres), middle and radius (its edge's), market (its market's middle: [x, y],
+     *   the world's metres) }.
      * @param {object} options.start - The plan's settlement the town stands for.
      */
     constructor({ plan, stamp, start }) {
@@ -2067,7 +2068,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     // (And its props, walked round as they're drawn, and its buildings as they stand: setpieces/standing.js)
     const props = town.town.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
     const buildings = town.town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, buildings, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, buildings, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius, market: town.town.market && [town.town.market.centre[0] + town.origin + at[0], town.town.market.centre[1] + town.origin + at[1]] };
     const overworld = new Overworld({ plan, stamp, start });
 
     // (Its fingerpost, by its main road out: Overworld's, in its own metres)
