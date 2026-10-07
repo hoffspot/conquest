@@ -570,6 +570,10 @@ export class Game {
         this.battle = this.host.battle;
         this.avatars = new Map();
         this.previous = new Map();
+        // (Those in view who can be drawn in full this frame, the crowd biggest on the screen, if
+        // there are more than that: #crowding)
+        this.crowd = new Set();
+        this.crowded = false;
         this.running = false;
         this.accumulator = 0;
         this.lastFrame = 0;
@@ -1917,6 +1921,7 @@ export class Game {
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
         this.contacts?.begin();
+        this.#crowding();
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -2219,10 +2224,40 @@ export class Game {
         const { height, mesh } = avatar.character;
         const tall = this.view.heightOnScreen(position, height, pixels, { anywhere: mesh.castShadow });
 
-        // (And drawn with fewer triangles if it's small: Character.fitDetail)
-        avatar.character.fitDetail(tall);
+        // (And drawn with fewer triangles if it's small, or one of a crowd but not among the biggest
+        // on the screen: Character.fitDetail)
+        avatar.character.fitDetail(tall, this.crowded && !this.crowd.has(actor.id) ? 1 : 0);
 
         return posingEvery(tall, (avatar.motion * dt * tall) / height);
+    }
+
+    // The crowd drawn in full: only so many of those in view can be (QUALITY crowd), the biggest on
+    // the screen as the world was last drawn; the rest at most at the middle level (lod.js)
+    #crowding() {
+        const cap = this.view.quality.crowd ?? Infinity;
+        const pixels = this.view.pixelsPerMetre();
+        const seen = [];
+
+        for (const [id, avatar] of this.avatars) {
+            if (id !== this.me && avatar instanceof Avatar && avatar.object.visible && avatar.character) {
+                const tall = this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels);
+
+                if (tall > 0) {
+                    seen.push([tall, id]);
+                }
+            }
+        }
+
+        this.crowded = seen.length > cap;
+        this.crowd.clear();
+
+        if (this.crowded) {
+            seen.sort((a, b) => b[0] - a[0]);
+
+            for (let k = 0; k < cap; k++) {
+                this.crowd.add(seen[k][1]);
+            }
+        }
     }
 
     // Someone drawn, the ground darkened under them (contacts.js), less as they rise off it (by

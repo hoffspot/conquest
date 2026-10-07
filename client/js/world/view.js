@@ -41,15 +41,16 @@ import { WATER_DETAIL } from "./water.js";
  * ripples, water.js WATER_DETAIL; `fields`: 1 for the fields seen from afar, ground.js FAR_FIELDS;
  * `far`: how many levels the far land has, far/levels.js, so how
  * far off it reaches: 1, 2 or 4 km; `cliffs`: 1 for the cliffs of rock standing out of the ground
- * too steep to climb, kits/cliffs.js), and how often (`frameRate`: at most, a second,
- * app/pacing.js: 60 at every level, the game's target, however fast the screen; 0 would be as
- * often as it refreshes). Game options' Visual quality chooses among them, lowest first; Adaptive
+ * too steep to climb, kits/cliffs.js; `crowd`: how many of those in view, the biggest on the
+ * screen, can be drawn in full at once, the rest with fewer triangles: app/game.js,
+ * characters/lod.js), and how often (`frameRate`: at most, a second, app/pacing.js: 60 at every
+ * level, the game's target, however fast the screen; 0 would be as often as it refreshes). Game options' Visual quality chooses among them, lowest first; Adaptive
  * (app/governor.js) draws a level or two lower, or fewer pixels, while a device can't keep up.
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, cliffs: 0, frameRate: 60 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, frameRate: 60 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, cliffs: 0, crowd: 2, frameRate: 60 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, crowd: 4, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, crowd: 6, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
