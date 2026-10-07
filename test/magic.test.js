@@ -39,6 +39,21 @@ function field(foes = [], { weapon = "sword" } = {}) {
 }
 
 describe("magic (spells.js)", () => {
+    it("heals more at once each tier of healing past Vigor, but no more over a fight than Vigor on its own: all of them cast in turn about three times Vigor", () => {
+        const heals = SCHOOLS.healing.tiers.map((id) => SPELLS[id]);
+        // (How much one heals a second, cast as soon as it's ready: on someone of 70 hit points)
+        const perSecond = ({ heal, full, castTime, cooldown }) => (full ? 70 : (heal[0] + heal[1]) / 2) / ((castTime + cooldown) / 1000);
+        const [vigor, ...rest] = heals;
+
+        assert.deepEqual(heals.map(({ cooldown }) => cooldown), [4000, 12000, 24000, 45000, 180000]);
+        assert.ok(rest.every((spell, k) => (spell.full ? 70 : spell.heal[1]) > (k ? rest[k - 1].heal[1] : vigor.heal[1])), "each heals more at once");
+        assert.ok(rest.every((spell) => perSecond(spell) < perSecond(vigor)), "each no more over a fight than Vigor");
+
+        const together = heals.reduce((sum, spell) => sum + perSecond(spell), 0);
+
+        assert.ok(together < perSecond(vigor) * 3.5, `all together ${together.toFixed(1)} a second, Vigor ${perSecond(vigor).toFixed(1)}`);
+    });
+
     it("has Healing's five tiers and each element's seven, each tier its own spell, stronger and slower than the last", () => {
         assert.deepEqual(SCHOOLS.healing.tiers.map((id) => SPELLS[id].label), ["Vigor", "Mend Wounds", "Detraumatize", "Renewal", "Astral Heal"]);
         assert.deepEqual(SCHOOLS.fire.tiers.map((id) => SPELLS[id].label), ["Burn", "Fireball", "Burstflame", "Immolate", "Flamefill", "Inferno", "Hellfire"]);

@@ -64,10 +64,19 @@ On anyone at all, friend, neutral or foe: it never counts as an attack.
 | Spell | Casts in | Cooldown | Heals | Also |
 | --- | --- | --- | --- | --- |
 | Vigor | 500 ms | 4 s | 8–12 | |
-| Mend Wounds | 700 ms | 6 s | 16–24 | |
-| Detraumatize | 900 ms | 9 s | 28–40 | stops bleeding |
-| Renewal | 1100 ms | 14 s | 45–65 | ends bleeding, poison and disease |
-| Astral Heal | 1400 ms | 45 s | all | ends everything lingering |
+| Mend Wounds | 700 ms | 12 s | 16–24 | |
+| Detraumatize | 900 ms | 24 s | 28–40 | stops bleeding |
+| Renewal | 1100 ms | 45 s | 45–65 | ends bleeding, poison and disease |
+| Astral Heal | 1400 ms | 3 min | all | ends everything lingering |
+
+Each heal past Vigor heals more at once, for an emergency, but over a fight no more than Vigor does
+on its own (about 2.2 hit points a second; Mend Wounds 1.6, Detraumatize 1.5, Renewal 1.3, Astral
+Heal 0.5, for one of 70 hit points): all of them cast in turn heal about 6.7 a second, three times
+Vigor (they were 12.3, five and a half times, with cooldowns of 6, 9, 14 and 45 seconds). So three
+creatures set on someone together aren't beaten by healing alone, but by fighting them, stunning
+one and healing between: in the battle's own play, three of a player's own tier killed a player
+who only fought and healed more often than not by the middle of the game, and almost never one
+who stunned one of them as well (`Stun`'s 3 seconds every 3 can hold one of three out of it).
 
 ### The elements
 
