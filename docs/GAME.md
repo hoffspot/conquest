@@ -3101,7 +3101,7 @@ metres off (back as many as ever the next time, unless it's been cleared).
 key: marked the first time they cross into one of its floors) and the chunks of the world they've
 set foot in (64 metres square; the chunk they're standing in is marked as they go, out in the
 world). The chunks are a bit each, 128 by 128 of them in 2 KB; kept with a saved game in
-`pellagos.explored` (`{ created, seed, entered, visited }`, the chunks as base64), for that
+`pellagos.<id>.explored` (`{ created, seed, entered, visited }`, the chunks as base64), for that
 character only, as the talks are.
 
 ### The world map (app/worldmap.js)
@@ -3537,7 +3537,7 @@ empty, until the player puts something there in **Game
 options, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel and which side;
 the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
 (`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as
-flicking it does. What's on the wheels is kept with the character (save.js `pellagos.wheels`),
+flicking it does. What's on the wheels is kept with the character (save.js `pellagos.<id>.wheels`),
 and read back safely (`readWheels`: only what goes on each wheel, in its seven slices). A skill
 ranking up with an ability says to put it on a wheel.
 
@@ -3553,7 +3553,7 @@ at once if the player falls.
 **What's in them.** Each holds anything a wheel's slice can (a spell, a blow, a thing to use;
 not Fight): Vigor, Stun, Burn and a healing draught to start with (`QUICK`), shown with its icon
 and name, a count for a thing to use, and a line along its foot saying who it's used on (red,
-the foe; green, the player). They're kept with the wheels (`pellagos.wheels`'s `quick`, read
+the foe; green, the player). They're kept with the wheels (`pellagos.<id>.wheels`'s `quick`, read
 back safely by `readWheels`: four, each something that can be one, or empty).
 
 **Tapped** (or 1 to 4 on a keyboard), a slot's used at once, with no wheel to open:
@@ -3623,9 +3623,21 @@ it.
    a release that changes a file changes its address. It keeps a copy only once its bytes match
    the hash, and lets go of what no release in use lists: the newest's, and that of each page
    still open on an older one (generated/asset_streaming_plan.md, section 5).
-2. **The title.** Continue with the saved character, or make a new one (which asks before
-   replacing a saved one), join a world someone else has opened (its code: docs/WAR.md M11), and
-   the debug mode switch.
+2. **The title.** **Continue as** the character played last; make a **New character**; choose
+   another of those kept (**Saved characters**, up to six); join a world someone else has opened
+   (its code: docs/WAR.md M11); and the debug mode switch.
+   - **Saved characters** lists those kept, the one played last first, each with their people,
+     what they wield (as they have it now), their gold and when they last played. Tapped, one's
+     played, and is the one Continue carries on with from then. Each has a **Delete** button,
+     which asks first: "Ash will be permanently deleted, with their world, what they carry and
+     what they've learnt. This can't be undone." Kept, nothing changes; deleted, everything kept
+     of them goes (save.js `forgetCharacter`).
+   - **New character**, with six kept already (save.js `MOST_CHARACTERS`), first asks which of
+     them is to make way, then to be sure ("...permanently deleted, ... once your new character is
+     made"). They're deleted only once the new character's made: backed out of making one, they're
+     kept.
+   - **Joining** brings the character played last; **Change who comes** chooses another kept, or
+     a new one (with fewer than six).
 3. **Making a character** (app/creator.js): the character stands on a plinth, lit from the front
    and edged in blue light from behind, while the panel beside it (below it on an upright phone)
    changes them. The camera frames what each tab changes: the whole body, the face close up, the
@@ -3707,21 +3719,49 @@ light the materials reflect, the shadows) is made again and the shaders compiled
 message goes. A frame whose work throws an error is told once in the console, and the world is
 still drawn; a piece of a settlement that fails to build is left out, the rest built without it.
 
-The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
-seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
-weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
-`pellagos.settings`; what the character's found of the world, in `pellagos.explored`.
+Up to six characters are kept in the browser's local storage (save.js), each under an id of its
+own (eight letters and digits): `pellagos.<id>.save` is `{ version, id, hero, seed, created,
+played }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair }, weapon }`;
+and beside it, under `pellagos.<id>.` too, what they've grown into and carry (`progress`), what's
+been said (`talks`), what they've found of the world (`explored`), where they stand (`standing`),
+their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), and their
+world's war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
+last. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
+controls) are in `pellagos.settings`, the same whoever's played.
 
-**Where they were** is kept in `pellagos.place` (save.js `savePlace`: `{ x, y, facing }`, metres out
+Kept before there could be several (`SAVE_VERSION` 1), the one character had the keys to itself
+(`pellagos.save`, `pellagos.progress`...). It's moved under an id of its own the first time the
+title's shown, as the one played last, with everything kept of its world (by its seed: a new
+character's first keys could be marked a moment out from it, and were lost on loading; not now,
+nor for the one moved). If what's under the old keys comes back, as the same character (when it
+was started, its seed), it's let go.
+
+**Where they were** is kept in `<id>.place` (save.js `savePlace`: `{ x, y, facing }`, metres out
 in the world) whenever the game stops: paused (the menu), quit to the title, the page hidden (another
 app on a phone, another tab) or closed (`pagehide`), and every turn of the war (a minute of play)
 besides, should it stop some other way. Inside a building, it's the step outside its door; down,
 it's where they'll get up. The next time, they carry on there (game.js `place`; the land's built
 round it as it loads), facing as they were, or on the nearest square that can be stood on within
 eight; if none can, where the world puts them. They still get up at home if they fall. A world
-joined to someone else's keeps nothing of this: it's theirs. A save of another
-version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
-browser won't store anything (private browsing), the game still plays, it just forgets.
+joined to someone else's keeps nothing of this: it's theirs.
+
+**How they were** is kept with where they were, at the same moments, in `<id>.vitals` (host.js
+`vitalsOf`, save.js `saveVitals`): their hit points and stamina; what lingers on them after blows
+(poison, a burn, a bleed...: each's kind, how hard it hurts, how it shows); the spells lasting on
+them (Levitate, a ward, Reflect...: and how far grown, and whether they cast it themselves); their
+boons (a sharpening, a blessing, a Stamina Boost); and how long till each ability and spell can be
+used again. Each's kept by what's left of it, in the world's own time, which stands still while
+the game's stopped: so the next time, it's as long as it was, however long they were away. It's
+put back as they join (host.js `restoreVitals`): their boons first (a Stamina Boost doubles the
+breath they can have), then their hit points and stamina (no more than they can have now), the
+rest with what was left of it. Anything the game no longer knows is let go, and nothing lasts
+longer than it can (a boon its own time, an ability its wait); a boon's what the game says it
+is, not what was kept. Fallen when kept, they get up whole, at home. A Scroll of Safety being read
+isn't kept: read again. A world joined to someone else's keeps nothing of this either.
+
+A save of another version, or one naming a weapon the game doesn't know, is ignored rather than
+misread; if the browser won't store anything (private browsing), the game still plays, it just
+forgets.
 
 ## Debug mode
 

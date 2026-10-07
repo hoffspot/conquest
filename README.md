@@ -63,8 +63,10 @@ the host works, the spellbook, and how every spell looks.
 
 **Loading.** The first screen lists everything the game downloads (about 3 MB: the 3D engine,
 the game's code, the body characters are made from, its skin details, and the props),
-with a bar for each and one for the whole. Then the title screen offers to **Continue** with your
-character, or make a **New character**.
+with a bar for each and one for the whole. Then the title screen offers to **Continue as** the
+character you played last, make a **New character**, or choose another of your **Saved
+characters**: up to six are kept. With six, a new one takes the place of one you choose, after
+asking you to be sure, as they're deleted for good; and any can be deleted from the list.
 
 **Making a character** takes three steps:
 
@@ -99,7 +101,8 @@ character, or make a **New character**.
    leg in turn.
 3. **Name.** Type one, or ask for a suggestion, and **Begin**.
 
-Your character is saved in the browser, with the town they live in.
+Your characters are saved in the browser, each with their own world: where they were and how,
+hurt, poisoned or blessed, a spell still on them, all carried on the next time as it was.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
 **an enemy** to go and fight them: a red ring round it marks it as your target, and its name
@@ -544,8 +547,9 @@ client/                 The game (static files served to the browser)
                         another, fallen, risen
     together.js         Playing together: a world opened to others, or another's joined, through
                         the relay (a WebSocket)
-    save.js             The saved character, what they've grown into and carry, what's been
-                        said and found, and settings (local storage)
+    save.js             The saved characters (up to six), what they've grown into and carry,
+                        what's been said and found, where they were and how; and settings
+                        (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
