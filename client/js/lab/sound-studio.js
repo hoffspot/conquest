@@ -8,7 +8,7 @@
 // window.soundStudio is there for tests ({ sound, play }).
 
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../audio/catalog.js";
-import { RECORDED, SOURCES } from "../audio/recorded.js";
+import { ON_DEMAND, RECORDED, SOURCES } from "../audio/recorded.js";
 import { GAITS, Sound } from "../audio/sound.js";
 import { SOUNDS } from "../audio/synth.js";
 
@@ -30,6 +30,9 @@ const sound = new Sound({ volumes: VOLUMES });
 
 sound.setListener(0, 0);
 sound.prepare();
+
+// (Every recording, those the game downloads only once they're wanted too: the spells')
+const wanted = sound.want(ON_DEMAND);
 
 const status = (text) => ($("#status").textContent = text);
 const at = () => ({ x: Number($("#distance").value), z: 0 });
@@ -243,7 +246,7 @@ function wire() {
         $("#start").hidden = true;
         status("Making the sounds…");
         sound.ready.then(() => status("Downloading the recordings…"));
-        Promise.all([sound.ready, sound.downloading]).then(() => status(`Ready: ${Object.keys(CATALOG).length} sounds, ${Object.values(RECORDED).reduce((sum, files) => sum + files.length, 0)} recordings. Tap any to hear it.`));
+        Promise.all([sound.ready, sound.downloading, wanted]).then(() => status(`Ready: ${Object.keys(CATALOG).length} sounds, ${Object.values(RECORDED).reduce((sum, files) => sum + files.length, 0)} recordings. Tap any to hear it.`));
     });
 }
 

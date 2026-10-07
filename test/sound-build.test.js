@@ -1,12 +1,13 @@
 // Making the recorded sounds (scripts/build-sounds.js): the sums they're made with
 // (scripts/sounds/dsp.js, as SciPy's, which they were first made and auditioned with), a recipe
-// made into a sound (render.js), and the recipes themselves (weapons.js)
+// made into a sound (render.js), and the recipes themselves (weapons.js, spells.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { butter, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "../scripts/sounds/dsp.js";
 import { LEVEL, prepare, render } from "../scripts/sounds/render.js";
+import * as spells from "../scripts/sounds/spells.js";
 import * as weapons from "../scripts/sounds/weapons.js";
-import { RECORDED } from "../client/js/audio/recorded.js";
+import { ON_DEMAND, RECORDED } from "../client/js/audio/recorded.js";
 import { CATALOG } from "../client/js/audio/catalog.js";
 
 const tone = (hz, seconds, rate = RATE, level = 0.5) => Float64Array.from({ length: Math.round(seconds * rate) }, (_, n) => level * Math.sin((2 * Math.PI * hz * n) / rate));
@@ -90,19 +91,25 @@ describe("a recipe made into a sound (scripts/sounds/render.js)", () => {
 
 describe("the recipes (scripts/sounds)", () => {
     it("gives every recipe's sound its recordings, each from a known source, and describes each", () => {
-        for (const [name, variants] of Object.entries(weapons.SOUNDS)) {
-            assert.equal(RECORDED[name]?.length, variants.length, `${name}: npm run build:sounds`);
-            assert.ok(CATALOG[name], `${name} described`);
+        for (const area of [weapons, spells]) {
+            for (const [name, variants] of Object.entries(area.SOUNDS)) {
+                assert.equal(RECORDED[name]?.length, variants.length, `${name}: npm run build:sounds`);
+                assert.ok(CATALOG[name], `${name} described`);
 
-            for (const { layers } of variants) {
-                assert.ok(layers.length && layers.every(({ from, cut }) => weapons.SOURCES[from] && cut[1] > cut[0]), name);
+                for (const { layers } of variants) {
+                    assert.ok(layers.length && layers.every(({ from, cut }) => area.SOURCES[from] && cut[1] > cut[0]), name);
+                }
             }
+
+            // (Every source used, each with where to get it, CC0 or in the public domain)
+            const used = new Set(Object.values(area.SOUNDS).flatMap((variants) => variants.flatMap(({ layers }) => layers.map(({ from }) => from))));
+
+            assert.deepEqual([...used].sort(), Object.keys(area.SOURCES).sort());
+            assert.ok(Object.values(area.SOURCES).every((source) => (source.url || source.itch) && ["CC0", "public domain"].includes(source.licence)));
         }
 
-        // (Every source used, each with where to get it)
-        const used = new Set(Object.values(weapons.SOUNDS).flatMap((variants) => variants.flatMap(({ layers }) => layers.map(({ from }) => from))));
-
-        assert.deepEqual([...used].sort(), Object.keys(weapons.SOURCES).sort());
-        assert.ok(Object.values(weapons.SOURCES).every((source) => (source.url || source.itch) && source.licence === "CC0"));
+        // (The spells' downloaded only once they're wanted; a cast timed by when it's loudest)
+        assert.deepEqual([...ON_DEMAND].sort(), Object.keys(spells.SOUNDS).sort());
+        assert.ok(Object.keys(spells.SOUNDS).filter((name) => name.startsWith("cast")).every((name) => RECORDED[name].every(({ peak }) => peak > 0)));
     });
 });

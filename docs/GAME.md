@@ -3205,9 +3205,41 @@ played at its own volume:
     creaking as fists close.
   - **Falls**: a body hitting the floor from its first heavy contact; mail rattling after it for
     anyone in mail or plate; and an armed body's weapon clattering down just after.
-- **Spells**: a rising chime casting a heal and a warm chord as it lands; the bolt's crackle
-  casting Stun and the other spells (a fireball's whoosh for fire's) and a zap and warble as a
-  stun lands.
+- **Spells** (`sound.js` spellSounds, cast, landed, carried; `game.js` on each cast, landing and
+  carrying-off): recorded (`scripts/sounds/spells.js`, all CC0 or public domain), real things
+  standing in for magic. Each school keeps its sound up its tiers, growing longer, denser and
+  lower rather than louder: **Low** (tiers 1–2), **Mid** (3–5), **High** (6–7; healing's fifth):
+  - **A cast** swells from the first moment to its release, loudest as it's let go (each
+    recording's `peak`); one cast quicker than its sound swells starts part way in. Fire's a
+    match's flare to a wildfire's roar; earth's a slab grinding to a rockfall; air's a gust,
+    then a Tesla coil's sizzle and sparks; water's bubbling, then boiling and ice; healing's a
+    singing bowl under rising chimes. Stun, Hold and the other spells cast at an enemy have the
+    arcane bolt's whoosh and bowed cymbal; a tome's spell on a friend or oneself, healing's swell.
+  - **A missile** flies the last of the cast, loudest halfway: Burn's, Fireball's and
+    Burstflame's fire, Stone Crush's stone, Blister's and Waterbolt's water, Poison's bolt.
+  - **A landing** starts at once: a fire catching to a great burst; a rock's knock to a boulder
+    and a rockfall over the ground's rumble; a cutting gust, then lightning's crack and thunder;
+    a splash, steam, ice cracking, a mud pot festering; healing's chimes, a chord, a tubular
+    bell. Shockbolt has its own (a spark's crack and a coil's buzz). A spell's blow is heard as
+    it lands, not as the blow it feels like (no armour under it); the fire it leaves on the
+    ground, and a spell turned back by Reflect, sound as they always have.
+  - **The tome spells** as they land: strength given (Embolden, Swole, Surge, Dodge, Levitate:
+    chimes sweeping up to a glockenspiel's note), a ward raised (the Resist spells, Reflect,
+    Inertial Barrier: a rubbed wine glass), a cure (and Pacify: a singing bowl struck softly), a
+    hex (Poison, Vampirism: whispering over bowed metal), Fear, a creature summoned (Summon,
+    Attraction, Zombify), Polymorph's flexatone warble, Light's flare and note.
+  - **Carried off by magic** (Teleport, Word of Recall, Wizard's Walk, a summons, a Scroll of
+    Safety): gone with a bottle's uncorking pop where they were, come with one where they arrive
+    (the player's own heard wherever they go); Invisibility, a hushed going.
+  - **A Scroll of Safety**'s circle: a cymbal rolled up to a crescendo, loudest as they're
+    carried off. **A spell broken off** before it's let go (stunned, knocked down) is cut short
+    and fizzles (a match that won't catch); a Scroll of Safety with nowhere to take them too.
+  - **The stun's** zap and warble are kept, made, as a stun lands.
+  - **Downloaded only once wanted** (recorded.js `ON_DEMAND`, about 1 MB in all, 24 MB
+    decoded): the player's own spells' as they come to know them (and a broken-off spell's,
+    the Scroll of Safety's and carrying-off's from the start); anyone else's the first time it's
+    heard, what's made playing in its place till then (the made bolt, fireball, heal...), or
+    nothing.
 - **Footsteps**, as each foot lands (the walker says when), on what it lands on (`footing.js`):
   - **Laid ground** as it's laid: wooden boards (floors, a bridge's deck), stone (cobbles, flags);
     a road's packed dirt, and ploughed soil's.
