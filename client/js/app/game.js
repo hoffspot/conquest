@@ -5465,7 +5465,8 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
-        this.sound?.hit(event.reaction, victim.object.position, armourOf(victim.character));
+        // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like)
+        this.sound?.hit(event.reaction, victim.object.position, event.spell ? null : armourOf(victim.character));
 
         // (Struck by a spell: drawn with the rest it struck as it lands; or one turned back on
         // them, flashing from whoever turned it)
