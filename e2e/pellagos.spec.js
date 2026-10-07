@@ -4841,6 +4841,81 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(page.locator("#musicvolume")).toHaveValue("60");
 });
 
+test("Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
+    // (The game started twice: more than the usual time)
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // As they've always been: following, a drag turning it as far as ever, shaking
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+
+    const follows = page.getByRole("switch", { name: /Camera follows/ });
+    const invert = page.getByRole("switch", { name: /Invert tilt/ });
+    const shake = page.getByRole("switch", { name: /Screen shake/ });
+
+    await expect(follows).toBeChecked();
+    await expect(invert).not.toBeChecked();
+    await expect(shake).toBeChecked();
+    await expect(page.locator("#dragslider")).toHaveValue("100");
+    await expect(page.locator("#dragname")).toHaveText("100%");
+
+    // Following off, tilt inverted, no shaking, a drag turning it twice as far
+    await page.locator("label:has(#followswitch)").click();
+    await page.locator("label:has(#invertswitch)").click();
+    await page.locator("label:has(#shakeswitch)").click();
+    await page.locator("#dragslider").fill("200");
+    await page.locator("#dragslider").dispatchEvent("change");
+    await expect(page.locator("#dragname")).toHaveText("200%");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
+
+    // Walking east, the camera keeps the way it's turned; and the greatest spells' shake is let be
+    const walked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const before = { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch };
+        const [x, y] = player.square;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "move", to: [x + 8, y] });
+        game.advance(5);
+        game.spellFx.onShake(1);
+
+        return { settings: game.cameraSettings, before, after: { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch }, moved: player.square[0] - x, shaking: game.shaking };
+    });
+
+    expect(walked.settings).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    expect(walked.moved).toBeGreaterThan(0);
+    expect(walked.after).toEqual(walked.before);
+    expect(walked.shaking).toBe(0);
+
+    // Dragged 150 pixels right and 60 down: turned twice as far as it used to be, and tilted up
+    // (down, inverted)
+    await page.evaluate(() => window.pellagos.game.start());
+
+    const box = await page.locator("#view").boundingBox();
+    const before = await page.evaluate(() => ({ yaw: window.pellagos.game.cameraFollow.yaw, pitch: window.pellagos.game.cameraFollow.pitch }));
+    const [x, y] = [box.x + box.width * 0.7, box.y + box.height * 0.35];
+
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 150, y + 60, { steps: 6 });
+    await page.mouse.up();
+
+    const after = await page.evaluate(() => ({ yaw: window.pellagos.game.cameraFollow.yaw, pitch: window.pellagos.game.cameraFollow.pitch }));
+    const turned = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
+
+    expect(turned).toBeCloseTo((-150 / box.width) * Math.PI * 2, 2);
+    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 2, 1);
+
+    // Remembered next time
+    await playing(page, "/?play&seed=1");
+    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    await expect(page.locator("#dragslider")).toHaveValue("200");
+});
+
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {
     // (Held three times, with the world played on between: more than the usual time, with others
     // running beside it)

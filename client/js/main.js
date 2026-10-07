@@ -226,6 +226,11 @@ $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
 $("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
+$("#followswitch").checked = settings.cameraFollows;
+$("#invertswitch").checked = settings.invertTilt;
+$("#shakeswitch").checked = settings.shake;
+$("#dragslider").value = Math.round(settings.dragSpeed * 100);
+$("#dragname").textContent = `${Math.round(settings.dragSpeed * 100)}%`;
 $("#adaptiveswitch").checked = settings.adaptive;
 $("#soundswitch").checked = settings.sound;
 $("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
@@ -392,6 +397,7 @@ async function playing(save) {
     showStick(settings.stick);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
+    applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
     debug.watch({ game });
@@ -938,6 +944,7 @@ async function playingJoined(save, welcome, joining) {
     showStick(settings.stick);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
+    applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
     debug.watch({ game });
@@ -997,6 +1004,11 @@ $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap"
 $("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
+$("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
+$("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
+$("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
+$("#dragslider").addEventListener("input", (event) => ($("#dragname").textContent = `${event.target.value}%`));
+$("#dragslider").addEventListener("change", (event) => applySetting("dragSpeed", Number(event.target.value) / 100));
 
 // Visual quality, Low to High (world/view.js QUALITY): the level named as the slider moves, chosen
 // when it's let go; and Adaptive (app/governor.js)
@@ -1145,11 +1157,22 @@ function applySetting(key, value) {
         if (state.game) {
             state.game.resistSummons = value;
         }
+    } else if (CAMERA_SETTINGS.includes(key)) {
+        applyCamera();
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
         showVolumes(value);
     } else {
         applyViewSettings();
+    }
+}
+
+// The camera's settings (Game options), as the game takes them (app/game.js cameraSettings)
+const CAMERA_SETTINGS = ["cameraFollows", "dragSpeed", "invertTilt", "shake"];
+
+function applyCamera() {
+    if (state.game) {
+        state.game.cameraSettings = { follows: settings.cameraFollows, shake: settings.shake, drag: settings.dragSpeed, invert: settings.invertTilt };
     }
 }
 

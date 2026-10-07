@@ -10,14 +10,15 @@ import { framed, PORTRAIT } from "../client/js/world/view.js";
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
-// Walk a player for `seconds` at a velocity (m/s), from `from`, with the camera following
-function walk(camera, { from, vx, vz, seconds, lowest }) {
+// Walk a player for `seconds` at a velocity (m/s), from `from`, with the camera following (`away`
+// metres off across the ground, on its leash; none, off it)
+function walk(camera, { from, vx, vz, seconds, lowest, away }) {
     const player = { ...from, vx, vz };
 
     for (let t = 0; t < seconds; t += FRAME) {
         player.x += vx * FRAME;
         player.z += vz * FRAME;
-        camera.update(FRAME, { player, lowest });
+        camera.update(FRAME, { player, lowest, away });
     }
 
     return player;
@@ -49,19 +50,47 @@ describe("the camera following the player (camera.js)", () => {
         assert.ok(Math.hypot(player.x - camera.focus.x, player.z - camera.focus.z) < 0.5, "close behind");
     });
 
-    it("walked away from, doesn't turn; walked towards, turns all the way round", () => {
+    it("walked away from, doesn't turn; walked towards, straight or on a slant, doesn't swing round: it backs away, only its leash turning it as they go by", () => {
         const away = new CameraFollow({ x: 0, z: 0 });
 
         walk(away, { from: { x: 0, z: 0 }, vx: 0, vz: -1.7, seconds: 3 });
         assert.ok(Math.abs(away.yaw) < 0.01, "already behind them");
 
+        // (Straight towards it, from 10 m off: it doesn't turn at all)
         const towards = new CameraFollow({ x: 0, z: 0 });
 
-        walk(towards, { from: { x: 0, z: 0 }, vx: 0, vz: 1.7, seconds: 3 });
-        assert.ok(Math.abs(wrap(towards.yaw - Math.PI)) < 0.05, `yaw ${towards.yaw.toFixed(2)}`);
+        walk(towards, { from: { x: 0, z: 0 }, vx: 0, vz: 1.7, seconds: 3, away: 10 });
+        assert.ok(Math.abs(towards.yaw) < 0.01, `yaw ${towards.yaw.toFixed(2)}`);
+
+        // (On a slant towards it, 130 degrees from walking away: turned a little, by its leash)
+        const slant = new CameraFollow({ x: 0, z: 0 });
+        const way = (130 * Math.PI) / 180;
+
+        walk(slant, { from: { x: 0, z: 0 }, vx: -Math.sin(way) * 1.7, vz: -Math.cos(way) * 1.7, seconds: 1, away: 10 });
+        assert.ok(Math.abs(slant.yaw) < 0.2, `yaw ${slant.yaw.toFixed(2)}`);
     });
 
-    it("eases round, taking about a second to turn half round and never snapping", () => {
+    it("on a leash, stays where it was as they go, but for keeping them in view at its distance", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+        const way = (130 * Math.PI) / 180;
+        let player = { x: 0, z: 0 };
+
+        // (Each step on a slant towards it, where it stood is still on its line to where it looks:
+        // it's turned only as far as that asks, and backed off along the line)
+        for (let k = 0; k < 60; k++) {
+            const stood = { x: camera.focus.x + Math.sin(camera.yaw) * 10, z: camera.focus.z + Math.cos(camera.yaw) * 10 };
+
+            player = walk(camera, { from: player, vx: -Math.sin(way) * 1.7, vz: -Math.cos(way) * 1.7, seconds: FRAME, away: 10 });
+
+            const [dx, dz] = [stood.x - camera.focus.x, stood.z - camera.focus.z];
+
+            assert.ok(Math.abs(dx * Math.cos(camera.yaw) - dz * Math.sin(camera.yaw)) < 1e-9, `${dx}, ${dz}`);
+        }
+
+        assert.ok(Math.abs(camera.yaw) > 0.03, "turned as they went by");
+    });
+
+    it("eases round as they turn across its view, about a second to come round behind them, and never snapping", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
         let from = { x: 0, z: 0 };
         let last = camera.yaw;
@@ -69,20 +98,21 @@ describe("the camera following the player (camera.js)", () => {
         let threeQuarters = null;
         let settled = null;
 
+        // (Walking east, from the south where the camera starts: round to the west of them)
         for (let t = 0; t < 3; t += FRAME) {
-            from = walk(camera, { from, vx: 0, vz: 1.7, seconds: FRAME });
+            from = walk(camera, { from, vx: 1.7, vz: 0, seconds: FRAME, away: 10 });
             most = Math.max(most, Math.abs(wrap(camera.yaw - last)));
             last = camera.yaw;
 
-            const off = Math.abs(wrap(camera.yaw - Math.PI));
+            const off = Math.abs(wrap(camera.yaw + Math.PI / 2));
 
-            threeQuarters ??= off < Math.PI / 4 ? t : null;
+            threeQuarters ??= off < Math.PI / 8 ? t : null;
             settled ??= off < 0.05 ? t : null;
         }
 
         assert.ok(most < 0.075, `never more than ${most.toFixed(3)} radians a frame`);
-        assert.ok(threeQuarters > 0.5 && threeQuarters < 1.2, `three-quarters of the way round after ${threeQuarters?.toFixed(2)} s`);
-        assert.ok(settled < 1.8, `round after ${settled?.toFixed(2)} s`);
+        assert.ok(threeQuarters > 0.4 && threeQuarters < 0.9, `three-quarters of the way round after ${threeQuarters?.toFixed(2)} s`);
+        assert.ok(settled < 1.4, `round after ${settled?.toFixed(2)} s`);
     });
 
     it("keeps steady through a path's corners, going on the way it's heading", () => {
@@ -180,19 +210,48 @@ describe("the camera following the player (camera.js)", () => {
         assert.equal(camera.pitch, pitch);
     });
 
-    it("held by a drag, doesn't turn itself even while the player walks; let go, swings back round behind them", () => {
+    it("let go after a drag, waits till they've walked a moment, then swings back round behind them", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        camera.grab();
+        camera.turn(1.2);
+        camera.release();
+
+        const player = walk(camera, { from: { x: 0, z: 0 }, vx: 0, vz: -1.7, seconds: 0.9 });
+
+        assert.equal(camera.yaw, 1.2, "still where it was turned");
+        walk(camera, { from: player, vx: 0, vz: -1.7, seconds: 2 });
+        assert.ok(Math.abs(wrap(camera.yaw)) < 0.05, `behind them: yaw ${camera.yaw.toFixed(2)}`);
+    });
+
+    it("with following turned off, keeps the way it's turned and its tilt as they walk, on a leash or not", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        camera.follows = false;
+        camera.turn(0.4, -55);
+
+        const player = walk(camera, { from: { x: 0, z: 0 }, vx: 1.7, vz: 0, seconds: 3, away: 10 });
+
+        assert.equal(camera.yaw, 0.4);
+        assert.equal(camera.pitch, -20);
+        assert.ok(Math.hypot(camera.focus.x - player.x, camera.focus.z - player.z) < 0.5, "still keeping up with them");
+    });
+
+    it("held by a drag, doesn't turn itself even while the player walks; let go, swings back round behind them as they walk on by it", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
         camera.grab();
         camera.turn(2);
 
-        const player = walk(camera, { from: { x: 0, z: 0 }, vx: 0, vz: -1.7, seconds: 1 });
+        const player = walk(camera, { from: { x: 0, z: 0 }, vx: 0, vz: -1.7, seconds: 1, away: 10 });
 
         assert.equal(camera.yaw, 2, "held");
         assert.ok(camera.focus.z < -1, "still keeping up with them");
 
+        // (Turned round in front of them, 10 m off, more than half round: they walk towards it, by
+        // it, and on, and it comes round behind them as they pass)
         camera.release();
-        walk(camera, { from: player, vx: 0, vz: -1.7, seconds: 2 });
+        walk(camera, { from: player, vx: 0, vz: -1.7, seconds: 3.5, away: 10 });
         assert.ok(Math.abs(wrap(camera.yaw)) < 0.05, `behind them again: yaw ${camera.yaw.toFixed(2)}`);
     });
 
@@ -214,12 +273,15 @@ describe("the camera following the player (camera.js)", () => {
         assert.ok(Math.abs(wrap(camera.yaw)) < 0.05, `yaw ${camera.yaw.toFixed(2)}`);
     });
 
-    it("catches them up without turning when they're put somewhere else (coming back to life)", () => {
+    it("catches them up without turning when they're put somewhere else (coming back to life), its leash let go of till it has", () => {
         const camera = new CameraFollow({ x: 0, z: 0, yaw: 1 });
 
-        stand(camera, { x: 30, z: 40 }, 2);
+        for (let t = 0; t < 2; t += FRAME) {
+            camera.update(FRAME, { player: { x: 30, z: 40, vx: 0, vz: 0 }, away: 10 });
+        }
+
         assert.ok(Math.hypot(camera.focus.x - 30, camera.focus.z - 40) < 0.25);
-        assert.equal(camera.yaw, 1);
+        assert.ok(Math.abs(camera.yaw - 1) < 0.05, `yaw ${camera.yaw.toFixed(3)}`);
     });
 
     it("looks where it's asked (leaning towards a foe)", () => {
