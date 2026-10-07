@@ -206,8 +206,17 @@ const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.f
 const LIGHT_REACH = 30;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
-// up to so many metres
-const LEAN = { share: 0.4, most: 4.5 };
+// up to so many metres, and no more than `away` of how far the camera is from where it looks
+// across the ground (so the player isn't leant out of the bottom of the picture by a foe far
+// off); and how it keeps them in view (camera.js keep): within `margin` of the way from the
+// middle of the view to its side, for `hold` seconds after they stop being who the player's
+// fighting (a moment's lull, a blow from another)
+const LEAN = { share: 0.4, most: 4.5, away: 0.25 };
+const FIGHT_VIEW = Object.freeze({ margin: 0.6, hold: 2 });
+// Arrows at the screen's edge for those attacking the player out of view: the nearest `most`, so
+// far in from its sides and top (pixels), and from its bottom, clear of the quick actions risen in
+// a fight
+const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
 
 // The tavern's folk: how much hair they grow (at most: less than the player, as there are more
 // of them), and what each of their acts is: its animation's timing (s: core/roles.js ACT_TIMES)
@@ -637,6 +646,9 @@ export class Game {
          * up tilts it down rather than up.
          */
         this.cameraSettings = { follows: true, shake: true, drag: 1, invert: false };
+
+        // (Who the camera's kept in view in a fight, and till when after: #kept)
+        this.fightView = null;
 
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
@@ -2424,8 +2436,12 @@ export class Game {
         }
 
         const position = player.object.position;
-        const foe = this.#foe();
+        const foe = this.#kept();
         const chest = player.point(0.55);
+
+        // (On its leash at how far it is now from where it looks, across the ground)
+        const eye = this.view.camera.position;
+        const away = Math.hypot(eye.x - this.view.focus.x, eye.z - this.view.focus.z);
 
         _focus.copy(position);
 
@@ -2433,20 +2449,28 @@ export class Game {
             const [ox, oz] = this.originOf(foe.map);
             const lean = _lean.set(ox + foe.x - position.x, 0, oz + foe.y - position.z).multiplyScalar(LEAN.share);
 
-            _focus.add(lean.clampLength(0, LEAN.most));
+            _focus.add(lean.clampLength(0, Math.min(LEAN.most, LEAN.away * away)));
         }
-
-        // (On its leash at how far it is now from where it looks, across the ground)
-        const eye = this.view.camera.position;
 
         this.cameraFollow.follows = this.cameraSettings.follows;
 
+        // (In a fight, whoever it is kept in view: within so much of the way from the middle of the
+        // view to its side, as wide as the screen is)
+        const [ox, oz] = foe ? this.originOf(foe.map) : [0, 0];
+        const lens = this.view.camera;
+        const across = 2 * Math.atan(Math.tan((lens.fov * Math.PI) / 360) * lens.aspect);
         const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
             lowest: this.view.lowestPitch(),
-            away: Math.hypot(eye.x - this.view.focus.x, eye.z - this.view.focus.z),
+            away,
+            keep: foe ? { x: ox + foe.x, z: oz + foe.y } : null,
+            half: (across / 2) * FIGHT_VIEW.margin,
         });
+        const seen = foe && this.avatars.get(foe.id);
+
+        this.view.setFoe(seen ? seen.point(0.55) : null, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
+        this.#threats();
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
         // never lagging far under it, climbing)
@@ -2830,6 +2854,63 @@ export class Game {
     }
 
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
+    // Those attacking the player out of view: an arrow at the screen's edge for each, pointing the
+    // way to them across the ground (in front, up; behind, down), the nearest THREATS.most (the
+    // camera study, recommendation 6)
+    #threats() {
+        const player = this.battle.actor(this.me);
+        const arrows = [];
+
+        if (player && !player.dead) {
+            const view = this.view;
+            const rect = view.rect ?? view.canvas.getBoundingClientRect();
+            const near = (actor) => Math.hypot(actor.x - player.x, actor.y - player.y);
+            const after = this.battle.actors
+                .filter((actor) => !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player) && this.avatars.has(actor.id))
+                .sort((a, b) => near(a) - near(b))
+                .slice(0, THREATS.most);
+
+            for (const actor of after) {
+                const at = this.avatars.get(actor.id).point(0.5);
+                const spot = view.toScreen(at);
+
+                if (spot && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom) {
+                    continue;
+                }
+
+                // (Which way, against the way the camera looks across the ground)
+                const [dx, dz] = [at.x - view.camera.position.x, at.z - view.camera.position.z];
+                const [fx, fz] = [-Math.sin(view.yaw), -Math.cos(view.yaw)];
+                const angle = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
+                const [ux, uy] = [Math.sin(angle), -Math.cos(angle)];
+                const [halfX, halfY] = [rect.width / 2 - THREATS.inset, rect.height / 2 - (uy > 0 ? THREATS.bottom : THREATS.inset)];
+                const reach = Math.min(Math.abs(ux) > 1e-6 ? halfX / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-6 ? halfY / Math.abs(uy) : Infinity);
+
+                arrows.push({ x: rect.left + rect.width / 2 + ux * reach, y: rect.top + rect.height / 2 + uy * reach, angle });
+            }
+        }
+
+        this.hud.threats(arrows);
+    }
+
+    // Whoever the camera keeps in view in a fight: who the player's fighting (#foe), or who they
+    // were, for a moment after (FIGHT_VIEW.hold: a lull, a blow from another), while they're on
+    // the same map and standing
+    #kept() {
+        const foe = this.#foe();
+        const player = this.battle.actor(this.me);
+
+        if (foe) {
+            this.fightView = { id: foe.id, until: this.clock + FIGHT_VIEW.hold };
+
+            return foe;
+        }
+
+        const was = this.fightView && this.clock < this.fightView.until ? this.battle.actor(this.fightView.id) : null;
+
+        return was && !was.dead && player && was.map === player.map ? was : null;
+    }
+
     #foe() {
         const battle = this.battle;
         const player = battle.actor(this.me);

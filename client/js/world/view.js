@@ -93,11 +93,23 @@ export const PORTRAIT = Object.freeze({ fov: 58, pitch: 15, distance: 1.3, ease:
  * asked for (the follow camera's, the zoom's), `upright` of the way (0 to 1) to a phone held
  * upright's framing (PORTRAIT).
  */
-export function framed(pitch, distance, upright) {
+export function framed(pitch, distance, upright, back = 1) {
     return {
         pitch: pitch + PORTRAIT.pitch * upright * Math.max(0, Math.min(1, pitch / PITCH)),
-        distance: distance * (1 + (PORTRAIT.distance - 1) * upright),
+        distance: distance * (1 + (PORTRAIT.distance - 1) * upright) * back,
     };
+}
+
+// Fighting something much taller than the player (a wyvern, a dragon), or far from them (an
+// archer, a caster), out of doors, the camera draws back to keep both in the picture: by `per` of
+// its distance for each metre the foe stands over `over` metres, or by `far` for each metre it's
+// further than `from` metres off; `most` times as far at most, eased at `ease` a second (the
+// camera study, recommendation 5)
+export const BIG_FOE = Object.freeze({ over: 2.5, per: 0.15, from: 4, far: 0.07, most: 1.5, ease: 1.5 });
+
+/** How much further back the camera draws for a foe `tall` metres tall, `apart` metres off (BIG_FOE). */
+export function backFor(tall, apart = 0) {
+    return Math.min(BIG_FOE.most, Math.max(1, 1 + (tall - BIG_FOE.over) * BIG_FOE.per, 1 + (apart - BIG_FOE.from) * BIG_FOE.far));
 }
 
 // The layer the player's drawn on for the pack's paperdoll, and what's behind them there
@@ -381,8 +393,11 @@ export class View {
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
 
-        // How far it's come to a phone held upright's framing (0 to 1: PORTRAIT), eased as it's turned
+        // How far it's come to a phone held upright's framing (0 to 1: PORTRAIT), eased as it's
+        // turned; and how much further back it draws for a big foe (BIG_FOE: asked, and eased to)
         this.upright = 0;
+        this.drawBack = 1;
+        this.back = 1;
 
         /**
          * Which way the camera looks from, in radians: 0 from the south, looking north, growing
@@ -405,6 +420,10 @@ export class View {
         this.lifted = 0;
         this.subject = null;
         this.cut = 0;
+        // (And whoever the player's fighting, and how tall: setFoe; its hole's as cut)
+        this.foe = null;
+        this.foeTall = 1.8;
+        this.foeCut = 0;
         this.lastRender = performance.now();
 
         // What the camera saw when the world was last drawn (for heightOnScreen; none yet, all's
@@ -713,6 +732,7 @@ export class View {
         this.yaw = yaw;
         this.pitch = pitch;
         this.upright += ((this.camera.aspect < 1 ? 1 : 0) - this.upright) * (1 - Math.exp(-PORTRAIT.ease * dt));
+        this.back += (this.drawBack - this.back) * (1 - Math.exp(-BIG_FOE.ease * dt));
         this.#clear(dt);
         this.#place();
     }
@@ -720,7 +740,7 @@ export class View {
     // The pitch and distance the camera's placed by: those asked for, held upright looked down more
     // steeply from further back, out of doors (framed, PORTRAIT)
     #framed() {
-        return framed(this.pitch, this.distance, this.room ? 0 : this.upright);
+        return framed(this.pitch, this.distance, this.room ? 0 : this.upright, this.room ? 1 : this.back);
     }
 
     /**
@@ -846,6 +866,17 @@ export class View {
     /** The point to keep in view through anything in the way (the player's chest), or null. */
     setFocus(point) {
         this.subject = point ? (this.subject ?? new THREE.Vector3()).copy(point) : null;
+    }
+
+    /**
+     * Whoever the player's fighting, kept in view through anything in the way too: their chest
+     * (or null), and how tall they are (metres: the hole's as big); and out of doors drawn back
+     * from for a big one, or one far from the player (`apart` metres: BIG_FOE).
+     */
+    setFoe(point, tall = 1.8, apart = 0) {
+        this.foe = point ? (this.foe ?? new THREE.Vector3()).copy(point) : null;
+        this.foeTall = tall;
+        this.drawBack = point ? backFor(tall, apart) : 1;
     }
 
     /** How many drawing buffer pixels a metre is, a metre from the camera (for sizing particles). */
@@ -1447,24 +1478,32 @@ export class View {
 
     // Open a hole through whatever hides the player (or close it when nothing does)
     #cutAway(dt) {
-        const subject = this.subject;
+        this.cut = this.#hole(this.subject, this.cut, 1, CUTAWAY.centre, CUTAWAY.radius, dt);
+        this.foeCut = this.#hole(this.foe, this.foeCut, Math.max(1, this.foeTall / 1.8), CUTAWAY.foeCentre, CUTAWAY.foeRadius, dt);
+    }
+
+    // A hole round `subject` (a point, or null: its chest), opened (`cut`, 0 to 1, as it was) while
+    // anything hides it, `size` times as big as a man's, into `centre` and `radius`: how far open
+    // it is now
+    #hole(subject, cut, size, centre, radius, dt) {
         const ground = subject && this.ground ? this.ground(subject.x, subject.z) : 0;
         const hidden = subject !== null && (this.hidden(subject) || this.hidden(_up.copy(subject).setY(ground + (subject.y - ground) * 1.6)));
+        const open = cut + Math.sign((hidden ? 1 : 0) - cut) * Math.min(Math.abs((hidden ? 1 : 0) - cut), dt * CUT_SPEED);
 
-        this.cut += Math.sign((hidden ? 1 : 0) - this.cut) * Math.min(Math.abs((hidden ? 1 : 0) - this.cut), dt * CUT_SPEED);
+        if (open <= 0 || !subject) {
+            radius.value = 0;
 
-        if (this.cut <= 0 || !subject) {
-            CUTAWAY.radius.value = 0;
-
-            return;
+            return open;
         }
 
         const { x: width, y: height } = this.renderer.getDrawingBufferSize(_size);
-        const centre = _point.copy(subject).project(this.camera);
+        const middle = _point.copy(subject).project(this.camera);
         const top = _up.copy(subject).setY(subject.y + 1).project(this.camera);
-        const pixels = Math.abs(top.y - centre.y) * 0.5 * height;
+        const pixels = Math.abs(top.y - middle.y) * 0.5 * height;
 
-        CUTAWAY.centre.value.set((centre.x * 0.5 + 0.5) * width, (centre.y * 0.5 + 0.5) * height, centre.z * 0.5 + 0.5);
-        CUTAWAY.radius.value = pixels * CUT_SIZE * (0.35 + 0.65 * this.cut);
+        centre.value.set((middle.x * 0.5 + 0.5) * width, (middle.y * 0.5 + 0.5) * height, middle.z * 0.5 + 0.5);
+        radius.value = pixels * CUT_SIZE * size * (0.35 + 0.65 * open);
+
+        return open;
     }
 }

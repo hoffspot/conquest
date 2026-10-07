@@ -1144,9 +1144,31 @@ faster than 4.2 radians a second: a quarter turn (they set off across its view) 
 done in 0.7 s and done in about 1.2 s. The way they're going is averaged over a third of a second,
 so a path's corners don't swing it about. Stood still, it stays where it's turned. Put somewhere
 else (coming back to life), it catches them up without turning (its leash only on while they
-walk, and within 3 metres of them). It leans towards whoever the player is fighting, so both
-stay in view. The minimap stays north up; the wedge showing which way the camera looks turns on
-it.
+walk, and within 3 metres of them). The minimap stays north up; the wedge showing which way the
+camera looks turns on it.
+
+**In a fight** (the camera study's recommendations 5 and 6: framing the fight by itself, as
+touch suits, not a lock the player turns on). Whoever the player's fighting (the one they're set
+on, or else the nearest coming for them; and the last of those for 2 seconds after, through a
+lull: game.js `#kept`, `FIGHT_VIEW`):
+- **The camera doesn't swing round behind the player** as they move about, but turns only as far
+  as keeps both of them within 60% of the way from the middle of the view to its side (camera.js
+  `keep`: the least turn, 5 degrees at a time, either way round; if none does, the one that keeps
+  them nearest it). A drag holds it, as ever, and a second after it's let go, it brings the foe
+  back into view.
+- **It leans towards the foe:** 40% of the way, up to 4.5 metres, and no more than a quarter of
+  the camera's distance across the ground (`LEAN`), so a foe far off doesn't lean the player out
+  of the bottom of the picture.
+- **Out of doors it draws back** for a foe much taller than the player (a wyvern, a dragon: 15%
+  for each metre over 2.5) or far from them (an archer: 7% for each metre past 4), up to half as
+  far again, easing there over a second or so (view.js `BIG_FOE`, `backFor`).
+- **What's in the way of the foe is cut through** too: a second dithered hole round them, as
+  big as they are (town3d.js `CUTAWAY`), through the town's buildings and trees and, now, the
+  world's woods (chunks3d.js: the woodland's bark and leaves cut as the town's are).
+- **Those attacking the player out of view** each have a red arrow at the screen's edge,
+  pointing the way to them across the ground (in front of the camera, up; behind it, down), the
+  nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
+  `threats`).
 
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
 follows** (on): off, it keeps the way it's turned and its tilt as the player walks, only keeping

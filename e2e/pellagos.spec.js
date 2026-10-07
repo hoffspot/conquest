@@ -966,6 +966,70 @@ test("the camera follows from the first step, swinging round behind the player",
     expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.3);
 });
 
+test("in a fight the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The orc on the player from behind the camera (which looks south: the orc north of them, past
+    // it), stunned where it stands
+    const before = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const [x, y] = [0, 1, -1, 2, -2, 3, -3].map((dx) => [px + dx, py - 12]).find(([sx, sy]) => !squares.blocked(sx, sy));
+
+        game.stop();
+        Object.assign(orc, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
+        game.avatars.get("orc").place(x + 0.5, y + 0.5, 0);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.cameraFollow.yaw = Math.PI;
+        game.advance(0.05);
+
+        const arrows = [...document.querySelectorAll(".threat:not([hidden])")];
+        const view = session.view;
+        const spot = view.toScreen(game.avatars.get("orc").point(0.5));
+        const rect = view.canvas.getBoundingClientRect();
+
+        return {
+            seen: Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom,
+            arrows: arrows.length,
+            // (Pointing down the screen, the way behind the camera; near its bottom edge)
+            turned: Number(arrows[0]?.style.transform.match(/rotate\(([-\d.]+)rad\)/)?.[1]),
+            low: arrows[0] ? arrows[0].getBoundingClientRect().top > rect.top + rect.height * 0.75 : false,
+        };
+    });
+
+    expect(before.seen).toBe(false);
+    expect(before.arrows).toBe(1);
+    expect(Math.abs(Math.abs(before.turned) - Math.PI)).toBeLessThan(0.6);
+    expect(before.low).toBe(true);
+
+    // A moment on: the camera's turned to keep it in view, by no more than it had to, and the arrow's gone
+    const after = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        game.advance(3);
+
+        const view = session.view;
+        const spot = view.toScreen(game.avatars.get("orc").point(0.5));
+        const rect = view.canvas.getBoundingClientRect();
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+        return {
+            seen: Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom,
+            arrows: document.querySelectorAll(".threat:not([hidden])").length,
+            turned: Math.abs(wrap(game.cameraFollow.yaw - Math.PI)),
+        };
+    });
+
+    expect(after.seen).toBe(true);
+    expect(after.arrows).toBe(0);
+    expect(after.turned).toBeGreaterThan(0.3);
+    expect(after.turned).toBeLessThan(Math.PI - 0.3);
+});
+
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and swings back behind them once they walk", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

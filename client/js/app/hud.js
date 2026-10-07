@@ -328,6 +328,40 @@ export class Hud {
     }
 
     /**
+     * Arrows at the screen's edge for those attacking the player out of view, each pointing the
+     * way to them: [{ x, y (client pixels), angle (radians, clockwise from pointing up) }]; the
+     * rest hidden.
+     */
+    threats(arrows) {
+        this.arrows ??= [];
+
+        // (Their own layer, over the buttons and the quick actions: styles.css #threats)
+        if (!this.threatLayer) {
+            this.threatLayer = element("div", "");
+            this.threatLayer.id = "threats";
+            this.threatLayer.setAttribute("aria-hidden", "true");
+            this.root.append(this.threatLayer);
+        }
+
+        while (this.arrows.length < arrows.length) {
+            const arrow = element("div", "threat");
+
+            this.threatLayer.append(arrow);
+            this.arrows.push(arrow);
+        }
+
+        this.arrows.forEach((arrow, k) => {
+            const at = arrows[k];
+
+            arrow.hidden = !at;
+
+            if (at) {
+                arrow.style.transform = `translate3d(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px, 0) translate(-50%, -50%) rotate(${at.angle.toFixed(3)}rad)`;
+            }
+        });
+    }
+
+    /**
      * A number rising from a point on the screen: the damage a blow did (or "Miss"), or `kind`
      * "heal" (green: hit points back) or "stun" (the word, in gold).
      */

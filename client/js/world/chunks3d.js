@@ -126,6 +126,11 @@ export class Chunks {
         FIELDS_CLEAR.value.set(citadel?.x ?? 0, citadel?.y ?? 0, citadel?.clearing ?? 0);
         this.woodland = new Woodland();
 
+        // (Cut through where they hide the player, or whoever the player's fighting, as the town's
+        // trees are: town3d.js cutAway)
+        cutAway(this.woodland.wood.material);
+        cutAway(this.woodland.leaves.material);
+
         // (The settlements a little further off laid out ahead, off the page's thread; and the
         // land's heights)
         this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;

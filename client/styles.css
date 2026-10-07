@@ -1125,6 +1125,50 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     pointer-events: none;
 }
 
+/* Arrows at the screen's edge pointing the way to those attacking the player out of view
+   (app/hud.js threats), over the buttons and quick actions (under dialogs), pulsing (still, asked for less
+   motion) */
+#threats {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.threat {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 18px solid var(--hostile);
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+    animation: threat-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.threat[hidden] {
+    display: none;
+}
+
+@keyframes threat-pulse {
+    from {
+        opacity: 0.6;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .threat {
+        animation: none;
+    }
+}
+
 /* (Shrunk, by app/hud.js plateScale, about the point it stands on) */
 .floater {
     position: absolute;
