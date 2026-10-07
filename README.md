@@ -492,8 +492,9 @@ client/                 The game (static files served to the browser)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
   sounds/               Recorded sounds, as MP3s: footsteps on each footing, the weapons', armour's
-                        and bodies' (made by npm run build:sounds from CC0 recordings: its
-                        recipes in scripts/sounds, their sources in client/js/audio/recorded.js)
+                        and bodies', the spells' (made by npm run build:sounds from CC0 and
+                        public-domain recordings: its recipes in scripts/sounds, their sources
+                        in client/js/audio/recorded.js)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
@@ -758,6 +759,15 @@ asset out of this public repository.
   Nightflame, kermite607, qubodup, eveninx and fabian13cz; cut, layered and made into MP3s by
   `scripts/build-sounds.js` (each sound's sources and their pages in
   `client/js/audio/recorded.js`, and in the sound studio).
+- The spells' sounds: recordings, CC0, from the Versilian Community Sample Library's percussion
+  (Versilian Studios, <https://github.com/sgossner/VCSL>), lentikula's Basic Spell Impacts
+  (<https://lentikula.itch.io/freecc0-basic-spell-impacts-sfx>), rubberduck's and Jan
+  Schupke's packs on OpenGameArt, and on Freesound by Nox_Sound, AlanCat, bassimat, betchkal,
+  DaniloSFX, DarkShroom, ecfike, follytowers, geoneo0, hnhnh, hollandm, inoshirodesign, JoseDu,
+  joseph.larralde, kev_durr, kingsrow, NahuelMartinez, PostProdDog, radwoc, Renjility,
+  rucisko, TheLittleCrow, timbreknight, vero.marengere and wubitog; and the National Park
+  Service's Yellowstone sound library (public domain); cut, layered and made into MP3s by
+  `scripts/build-sounds.js`.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).

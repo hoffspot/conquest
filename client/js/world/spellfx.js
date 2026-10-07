@@ -2433,3 +2433,9 @@ const RECIPES = {
 
 /** Each spell's look, cast and landing (for tests: every spell has one). */
 export const SPELL_LOOKS = RECIPES;
+
+/**
+ * How long a spell's missile flies (s), cast over `castTime` (ms): thrown to land as the spell
+ * does (SpellFx cast); null if it throws none.
+ */
+export const missileTravel = (spell, castTime) => (RECIPES[spell]?.missile ? Math.min(RECIPES[spell].missile.travel ?? 0.3, (castTime / 1000) * 0.8) : null);

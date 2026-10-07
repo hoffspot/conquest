@@ -38,6 +38,7 @@ import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { footing } from "../audio/footing.js";
+import { spellSounds } from "../audio/sound.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -69,7 +70,7 @@ import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
-import { SpellFx } from "../world/spellfx.js";
+import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { QUALITY, ROOM_VIEW } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
@@ -675,6 +676,10 @@ export class Game {
         // circle (spellfx.js underfoot) }), and those carried home by one, not yet arrived
         this.reading = new Map();
         this.homeward = new Set();
+
+        // Casts heard as they swell (by the caster's id: { source (sound.js play's), spell, until
+        // (the battle's time it's let go) }), to be cut short if they're broken off
+        this.castSounds = new Map();
 
         /** What's to happen a little later (the game's clock, s): [{ at, then }]. */
         this.later = [];
@@ -1468,6 +1473,15 @@ export class Game {
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
         this.sound?.setPaused(false);
+        this.#wantSpells();
+    }
+
+    // The sounds of the spells the player can cast downloaded now (audio/sound.js want), so
+    // they're in before they're first cast; and a spell breaking off's, and a Scroll of Safety's
+    #wantSpells() {
+        const known = Object.keys(SPELLS).filter((id) => this.progress.knows?.(id));
+
+        this.sound?.want(["fizzle", "spellCircle", "teleportOut", "teleportIn", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))]);
     }
 
     /** Stop: nothing moves until start() again. */
@@ -2081,6 +2095,7 @@ export class Game {
 
         this.sound?.setListener(me.object.position.x, me.object.position.z);
         this.sound?.update(dt);
+        this.#castsHeard();
 
         // The enemy the player is set to fight, ringed, with its bar lit
         const target = this.#target();
@@ -3667,11 +3682,24 @@ export class Game {
     // A Scroll of Safety read (its circle growing under the reader as they read it), or lost
     // (they fell first, or there was nowhere to take them: the circle gone at once)
     #safety({ id, change, ms = SAFETY.ms, why = null }) {
-        this.reading.get(id)?.circle?.end();
+        const was = this.reading.get(id);
+        const avatar = this.battle.actor(id)?.map === this.mapId ? this.avatars.get(id) : null;
+
+        was?.circle?.end();
         this.reading.delete(id);
 
+        // (Its sound swelling as the circle grows, loudest as they're carried off; lost, cut
+        // short, fizzling out if there was nowhere to take them)
+        if (was && change !== "reading") {
+            this.sound?.cut(was.sound);
+
+            if (why !== "fell") {
+                this.sound?.play("fizzle", { at: avatar?.object.position ?? null });
+            }
+        }
+
         if (change === "reading") {
-            this.reading.set(id, { until: this.battle.time + ms, ms, circle: this.#safetyCircle(id, { from: 0, to: 2, life: ms / 1000 }) });
+            this.reading.set(id, { until: this.battle.time + ms, ms, circle: this.#safetyCircle(id, { from: 0, to: 2, life: ms / 1000 }), sound: avatar ? this.sound?.play("spellCircle", { at: avatar.object.position, peakAt: ms / 1000 }) : null });
         }
 
         if (id === this.me) {
@@ -5010,7 +5038,11 @@ export class Game {
                     }
 
                     avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
-                    this.sound?.play(kind === "heal" ? "castHeal" : kind === "fireball" ? "fireball" : "bolt", { at: avatar.object.position });
+
+                    // (Its sound swelling to its release, its missile's flying the last of it)
+                    const heard = this.sound?.cast(event.spell, avatar.object.position, event.castTime / 1000, { travel: missileTravel(event.spell, event.castTime) });
+
+                    this.castSounds.set(event.id, { source: heard ?? null, spell: event.spell, until: battle.time + event.castTime });
                     break;
                 }
                 case "healed": {
@@ -5020,7 +5052,12 @@ export class Game {
                     effects.heal(avatar.object.position, avatar.character.height, this.#landing(event.id, "heal"));
                     hud.damage(this.#screenAbove(event.id), event.amount || !event.cured?.length ? `+${event.amount}` : "Cured", { kind: "heal" });
                     hud.setHealth(event.id, actor.hp, actor.maxHp);
-                    this.sound?.play("healed", { at: avatar.object.position });
+
+                    // (A spell's healing or cure heard as it lands, its own: #spellLanded)
+                    if (!spellSounds(event.spell).land) {
+                        this.sound?.play("healed", { at: avatar.object.position });
+                    }
+
                     break;
                 }
                 case "spell":
@@ -5398,8 +5435,10 @@ export class Game {
                 this.#traded(event);
                 break;
             case "tier":
-                // (A school of magic come to its next tier: its spell known now, and kept)
+                // (A school of magic come to its next tier: its spell known now, and kept; its
+                // sounds downloaded)
                 if (event.id === this.me) {
+                    this.#wantSpells();
                     this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (your spellbook, B).`, 5);
                     this.sound?.play("wake");
                     this.onProgress(this.progress);
@@ -5411,8 +5450,9 @@ export class Game {
 
                 break;
             case "learnt":
-                // (A spell learnt from a tome: known now, and kept)
+                // (A spell learnt from a tome: known now, and kept; its sounds downloaded)
                 if (event.id === this.me) {
+                    this.#wantSpells();
                     this.hud.message(`You've learnt ${SPELLS[event.spell].label}! Put it on an action wheel (your spellbook, B).`, 5);
                     this.sound?.play("wake");
                     this.onProgress(this.progress);
@@ -5441,7 +5481,14 @@ export class Game {
             case "summons":
                 this.#summons(event);
                 break;
-            case "carried":
+            case "carried": {
+                // (Gone with a pop from where they were, and come with one where they come to,
+                // each if it's heard here; the player's own heard wherever they go)
+                const [fx, fz] = event.from?.map === this.mapId ? this.originOf(event.from.map) : [];
+                const [tx, tz] = event.map === this.mapId && event.square ? this.originOf(event.map) : [];
+
+                this.sound?.carried(fx === undefined ? null : { x: fx + event.from.x, z: fz + event.from.y }, tx === undefined ? null : { x: tx + event.square[0] + 0.5, z: tz + event.square[1] + 0.5 }, { mine: event.id === this.me });
+
                 // (Read home by a Scroll of Safety: its circle gone from where they were, a burst
                 // of its light there, and it under them where they come to: #safetyCrossed)
                 if (event.why === "safety") {
@@ -5468,6 +5515,7 @@ export class Game {
                 }
 
                 break;
+            }
             case "polymorphed": {
                 // (Made again as what it is now, in a puff of smoke)
                 const actor = this.battle.actor(event.id);
@@ -5573,8 +5621,12 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
-        // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like)
-        this.sound?.hit(event.reaction, victim.object.position, event.spell ? null : armourOf(victim.character));
+        // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like;
+        // a spell's blow heard as it lands, its own, unless it's the fire it left on the ground or
+        // it's turned back: #spellLanded)
+        if (!(event.spell && !event.ground && !event.reflected && spellSounds(event.spell).land)) {
+            this.sound?.hit(event.reaction, victim.object.position, event.spell ? null : armourOf(victim.character));
+        }
 
         // (Struck by a spell: drawn with the rest it struck as it lands; or one turned back on
         // them, flashing from whoever turned it)
@@ -5704,18 +5756,40 @@ export class Game {
 
     // A spell lands (battle.js "spell"): drawn where it lands, each its own, with those it struck
     // (told as "hit" first), on the player's map
+    // Casts heard as they swell: one broken off before it's let go (its caster stunned, knocked
+    // down, struck dead) cut short, fizzling out if they're still standing
+    #castsHeard() {
+        for (const [id, { source, spell, until }] of this.castSounds) {
+            const actor = this.battle.actor(id);
+
+            if (this.battle.time >= until) {
+                this.castSounds.delete(id);
+            } else if (actor?.casting?.spell !== spell) {
+                this.castSounds.delete(id);
+                this.sound?.cut(source);
+
+                if (actor && !actor.dead && actor.map === this.mapId) {
+                    this.sound?.play("fizzle", { at: this.avatars.get(id)?.object.position ?? null });
+                }
+            }
+        }
+    }
+
     #spellLanded(event, avatar) {
         const key = `${event.id}:${event.spell}`;
         const struck = this.struck.get(key) ?? [];
         const target = this.avatars.get(event.target);
 
         this.struck.delete(key);
+        this.castSounds.delete(event.id);
 
         if (!target || this.battle.actor(event.target)?.map !== this.mapId) {
             this.spellFx.stop(event.id);
 
             return;
         }
+
+        this.sound?.landed(event.spell, target.object.position);
 
         const where = (one) => ({ feet: () => one.object.position, point: () => one.point(0.6), hand: () => one.hand("Left") });
         const others = struck.filter((id) => id !== event.target && this.avatars.has(id)).map((id) => where(this.avatars.get(id)));

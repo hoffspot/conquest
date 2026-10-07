@@ -14,6 +14,12 @@ export const GROUPS = Object.freeze([
     "Drawing and putting away",
     "Launches",
     "Spells",
+    "Fire spells",
+    "Earth spells",
+    "Air spells",
+    "Water spells",
+    "Healing spells",
+    "Tome spells",
     "Bodies and doors",
     "Folk at work",
     "The world",
@@ -56,8 +62,8 @@ export const CATALOG = Object.freeze({
     pierce: { group: "Hits", label: "Pierce", about: "An arrow thunking into a body.", plays: "An arrow striking anyone." },
     punch: { group: "Hits", label: "Punch", about: "A fist landing: a meaty thud (fists on a punching bag).", plays: "A punch landing." },
     kick: { group: "Hits", label: "Kick", about: "A boot driving in: a heavy thud.", plays: "A kick landing." },
-    arcane: { group: "Hits", label: "Arcane", about: "A bolt of magic striking: a bright zap.", plays: "An arcane bolt, and the spells without a hit of their own, landing on anyone." },
-    fire: { group: "Hits", label: "Fire", about: "Fire bursting on a body: a roar of flame.", plays: "A fire spell landing on anyone." },
+    arcane: { group: "Hits", label: "Arcane", about: "A Nepalese hand bell's ping, a burst of whoosh, and a cymbal's shimmer or scrape.", plays: "Magic striking without a landing of its own (a creature's bolt, a spell turned back by Reflect), and a spell caught on a spellward." },
+    fire: { group: "Hits", label: "Fire", about: "A short fwump of flame, with a sizzle or crackle.", plays: "Fire striking anyone but as a fire spell lands (that has its own): a creature's breath or lava, burning ground." },
 
     // Armour (sound.js ARMOUR: what's worn over the chest, game.js armourOf)
     hitMail: { group: "Armour", label: "Blow on mail", about: "Mail's rings shaken by a blow: a short, bright jangle.", plays: "Under a weapon's or a fist's blow landing on anyone in a mail shirt." },
@@ -79,13 +85,70 @@ export const CATALOG = Object.freeze({
     arrowQuiver: { group: "Launches", label: "Arrow from the quiver", about: "An arrow drawn from a leather quiver.", plays: "A bow's shot starting." },
     bowDraw: { group: "Launches", label: "Bow drawn", about: "An English longbow drawn: the string and the wood creaking.", plays: "A bow's shot, as it's drawn back." },
     arrow: { group: "Launches", label: "Arrow loosed", about: "An English longbow loosed: the string's thrum and the arrow leaving.", plays: "An arrow loosed from a bow." },
-    bolt: { group: "Launches", label: "Bolt", about: "A crackling bolt of magic in flight.", plays: "Casting Stun and the spells without a sound of their own; creatures' venom, webs, curses, wails and the like flying." },
-    fireball: { group: "Launches", label: "Fireball", about: "A ball of fire whooshing away.", plays: "Casting a fire spell; a creature's lava or flame flying." },
+    bolt: { group: "Launches", label: "Bolt", about: "A whoosh carrying a bowed cymbal's shimmer: magic in flight.", plays: "Casting Stun, Hold and the other spells cast at an enemy without a school; Poison flying; creatures' venom, webs, curses, wails and the like flying." },
+    fireball: { group: "Launches", label: "Fireball", about: "A ball of fire flying: a whoosh (a pencil swept over paper) over flame's arching roar and crackle.", plays: "Burn's, Fireball's and Burstflame's fire flying; a creature's lava or flame." },
+    stoneShot: { group: "Launches", label: "Stone", about: "A heavy stone whooshing through the air, a little grit as it's thrown.", plays: "Stone Crush's stone flying." },
+    waterbolt: { group: "Launches", label: "Water", about: "Water flying: a whoosh over a sustained splash.", plays: "Blister's and Waterbolt's water flying." },
 
     // Spells
-    castHeal: { group: "Spells", label: "Casting a heal", about: "A rising shimmer.", plays: "Casting a healing spell." },
-    healed: { group: "Spells", label: "Healed", about: "A warm swell as the healing lands.", plays: "A heal landing on someone; a priest's blessing." },
+    castHeal: { group: "Spells", label: "Casting a heal (made)", about: "A rising shimmer, made in code.", plays: "In place of the healing casts' recordings, until they're downloaded." },
+    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); and in place of the healing landings' recordings, until they're downloaded." },
     stun: { group: "Spells", label: "Stunned", about: "A zap and a dizzy warble.", plays: "Someone stunned." },
+
+    // Fire spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
+    castFireLow: { group: "Fire spells", label: "Casting, tiers 1–2", about: "A small flame gathering: a match's flare, or a flame's whoosh drawn in backwards, with a little crackle, swelling to the release.", plays: "Casting Burn or Fireball, swelling until it's let go." },
+    impactFireLow: { group: "Fire spells", label: "Landing, tiers 1–2", about: "A fire catching: a fwoomp of flame, and crackle after.", plays: "Burn or Fireball landing on whoever it's cast at." },
+    castFireMid: { group: "Fire spells", label: "Casting, tiers 3–5", about: "Fire gathering: flames' whooshes drawn in over a wildfire's swelling roar and crackle.", plays: "Casting Burstflame, Immolate or Flamefill, swelling until it's let go." },
+    impactFireMid: { group: "Fire spells", label: "Landing, tiers 3–5", about: "A burst of fire, its roar, and a crackling tail.", plays: "Burstflame, Immolate or Flamefill landing on whoever it's cast at." },
+    castFireHigh: { group: "Fire spells", label: "Casting, tiers 6–7", about: "A wildfire's roar building from far down, dense crackle, and a flame's whoosh drawn in to the release.", plays: "Casting Inferno or Hellfire, swelling until it's let go." },
+    impactFireHigh: { group: "Fire spells", label: "Landing, tiers 6–7", about: "A great burst of fire with a wildfire's roar under it and a long, crackling tail.", plays: "Inferno or Hellfire landing on whoever it's cast at." },
+
+    // Earth spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
+    castEarthLow: { group: "Earth spells", label: "Casting, tiers 1–2", about: "A stone slab grinding, swelling, with stone-on-stone grit.", plays: "Casting Rumble or Stone Crush, swelling until it's let go." },
+    impactEarthLow: { group: "Earth spells", label: "Landing, tiers 1–2", about: "A rock knocking onto a pile, with a short clatter.", plays: "Rumble or Stone Crush landing on whoever it's cast at." },
+    castEarthMid: { group: "Earth spells", label: "Casting, tiers 3–5", about: "Heavier grinding, and rubble beginning to slide.", plays: "Casting Shatterstone, Engulf or Earthquake, swelling until it's let go." },
+    impactEarthMid: { group: "Earth spells", label: "Landing, tiers 3–5", about: "A boulder crashing down, and a rock's knock.", plays: "Shatterstone, Engulf or Earthquake landing on whoever it's cast at." },
+    castEarthHigh: { group: "Earth spells", label: "Casting, tiers 6–7", about: "Two stones grinding, a rockfall and a boulder's rumble, all building.", plays: "Casting Acidify or Disintegrate, swelling until it's let go." },
+    impactEarthHigh: { group: "Earth spells", label: "Landing, tiers 6–7", about: "A boulder and a rockfall, with the ground's deep rumble under them (thunder, far down).", plays: "Acidify or Disintegrate landing on whoever it's cast at." },
+
+    // Air spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
+    castAirLow: { group: "Air spells", label: "Casting, tiers 1–2", about: "A gust of wind swelling, a whoosh drawn in.", plays: "Casting Hurt or Dustgust, swelling until it's let go." },
+    impactAirLow: { group: "Air spells", label: "Landing, tiers 1–2", about: "A cutting whoosh; some with grit in it (Dustgust's).", plays: "Hurt or Dustgust landing on whoever it's cast at." },
+    castAirMid: { group: "Air spells", label: "Casting, tiers 3–5", about: "Electricity gathering: a Tesla coil's sizzle and sparks crowding in.", plays: "Casting Shockbolt, Lightning or Thunderbolt, swelling until it's let go." },
+    impactAirMid: { group: "Air spells", label: "Landing, tiers 3–5", about: "Lightning striking: its crack, sparks spitting, and thunder or a sizzle.", plays: "Shockbolt, Lightning or Thunderbolt landing on whoever it's cast at." },
+    castAirHigh: { group: "Air spells", label: "Casting, tiers 6–7", about: "Wind roaring up round lightning's crackling build, a coil's buzz and sparks.", plays: "Casting Tornado or Ionize, swelling until it's let go." },
+    impactAirHigh: { group: "Air spells", label: "Landing, tiers 6–7", about: "A strike, thunder rolling, a gust and sparks.", plays: "Tornado or Ionize landing on whoever it's cast at." },
+    shockbolt: { group: "Air spells", label: "Shockbolt", about: "A spark's crack, then a Tesla coil's buzz.", plays: "Shockbolt striking, in place of the lightning's landing." },
+
+    // Water spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
+    castWaterLow: { group: "Water spells", label: "Casting, tiers 1–2", about: "Water bubbling, and a wash drawn in.", plays: "Casting Blister or Waterbolt, swelling until it's let go." },
+    impactWaterLow: { group: "Water spells", label: "Landing, tiers 1–2", about: "A splash into a lake, with a scald's sizzle.", plays: "Blister or Waterbolt landing on whoever it's cast at." },
+    castWaterMid: { group: "Water spells", label: "Casting, tiers 3–5", about: "Water coming to the boil, steam hissing up, and an ice tick drawn in.", plays: "Casting Steamblast, Bloodboil or Iceblade, swelling until it's let go." },
+    impactWaterMid: { group: "Water spells", label: "Landing, tiers 3–5", about: "Steam bursting over a plunge, boiling water, or ice cracking with a hiss.", plays: "Steamblast, Bloodboil or Iceblade landing on whoever it's cast at." },
+    castWaterHigh: { group: "Water spells", label: "Casting, tiers 6–7", about: "A mud pot's deep bubbling and hiss, thin ice ringing, and ice building to the release.", plays: "Casting Putrify or Absolute Zero, swelling until it's let go." },
+    impactWaterHigh: { group: "Water spells", label: "Landing, tiers 6–7", about: "Freezing and festering: ice cracking over a mud pot's bubbling, or foul water boiling under a burst of steam.", plays: "Putrify or Absolute Zero landing on whoever it's cast at." },
+
+    // Healing spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
+    castHealingLow: { group: "Healing spells", label: "Casting, tiers 1–2", about: "A singing bowl's rim swelling under a rising shimmer of chimes (a mark tree).", plays: "Casting Vigor or Mend Wounds, swelling until it's let go; and casting a tome's spell on a friend or yourself." },
+    impactHealingLow: { group: "Healing spells", label: "Landing, tiers 1–2", about: "One warm hand chime, and a falling shimmer.", plays: "Vigor or Mend Wounds landing on whoever's healed." },
+    castHealingMid: { group: "Healing spells", label: "Casting, tiers 3–4", about: "The bowl and the rising shimmer, with a hand chime drawn in backwards.", plays: "Casting Detraumatize or Renewal, swelling until it's let go." },
+    impactHealingMid: { group: "Healing spells", label: "Landing, tiers 3–4", about: "A chord of three hand chimes (or the bowl with two).", plays: "Detraumatize or Renewal landing on whoever's healed." },
+    castHealingHigh: { group: "Healing spells", label: "Casting, tier 5", about: "A chord of chimes drawn in backwards, a tubular bell under it.", plays: "Casting Astral Heal, swelling until it's let go." },
+    impactHealingHigh: { group: "Healing spells", label: "Landing, tier 5", about: "A tubular bell under the chord, the bowl and the chimes falling.", plays: "Astral Heal landing on whoever's healed." },
+
+    // Tome spells (sound.js spellSounds: what each does, as it lands)
+    buff: { group: "Tome spells", label: "Strength given", about: "A shimmer of chimes sweeping up to a glockenspiel's note, with a triangle's roll or a cymbal's swell.", plays: "Embolden, Swole, Surge, Dodge or Levitate landing." },
+    ward: { group: "Tome spells", label: "A ward raised", about: "A rubbed wine glass singing over a bowed cymbal.", plays: "A Resist spell, Reflect or Inertial Barrier landing." },
+    cure: { group: "Tome spells", label: "Cured", about: "A singing bowl struck softly, a glockenspiel's or a hand bell's note, and a faint falling shimmer.", plays: "A cure (Cure Poison, Cure Sickness, Lift Curse, Quench, Staunch, Unbind) or Pacify landing." },
+    hex: { group: "Tome spells", label: "Hexed", about: "Whispering voices over a bowed brake drum, slowed, and a scraped gong.", plays: "Poison or Vampirism landing." },
+    fear: { group: "Tome spells", label: "Fear", about: "A slow whoosh, a scraped gong, bowed metal rising, and a whisper.", plays: "Fear landing." },
+    teleportOut: { group: "Tome spells", label: "Carried off", about: "A whoosh and a cymbal's swell drawn up into a bottle's uncorking pop, then gone.", plays: "Anyone carried off by magic (Teleport, Word of Recall, Wizard's Walk, a summons, a Scroll of Safety), as they go; Invisibility landing, hushed." },
+    teleportIn: { group: "Tome spells", label: "Arriving", about: "The pop first, then the whoosh blowing out, and a faint shimmer.", plays: "Anyone carried by magic arriving." },
+    summon: { group: "Tome spells", label: "Summoned", about: "A scraped gong or a bowed cymbal swelling in, then a rock's knock or a boulder's crash arriving in a gust of dust.", plays: "Summon, Attraction or Zombify landing." },
+    polymorph: { group: "Tome spells", label: "Polymorph", about: "A flexatone's warped warble with a shimmer of chimes and a bowed cymbal.", plays: "Polymorph landing." },
+    lightSpell: { group: "Tome spells", label: "Light", about: "A match flaring (without its strike), a glockenspiel's note, and a faint triangle roll.", plays: "Light lit over the shoulder, or put out." },
+    fizzle: { group: "Tome spells", label: "Fizzle", about: "A match that won't catch, and a puff of steam.", plays: "A spell broken off before it's let go (its caster stunned or knocked down), or a Scroll of Safety with nowhere to take you." },
+    spellCircle: { group: "Tome spells", label: "Scroll of Safety", about: "A cymbal rolled up to a crescendo under a bowed cymbal, a climbing shimmer of chimes and a triangle's roll.", plays: "Reading a Scroll of Safety: swelling as its circle grows, loudest as you're carried off." },
 
     // Bodies and doors
     fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
