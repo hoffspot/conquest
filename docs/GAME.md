@@ -2462,9 +2462,14 @@ a city's chunks of each people, and less garbage to collect.
 Each has its own well and stalls on its market (props.js), and builds its insides of its own
 stuff (world/interiors3d.js: the cat folk's mud and laterite, the orcs' basalt, hides and logs,
 the lizard folk's lime and bamboo, the elves' marble and heartwood, the dark elves' black stone
-and charred planks), lighting its lamps its own way (firelight, pale moonlight, violet) and
+and charred planks), lighting its lamps its own way (firelight, pale moonlight, lavender) and
 dressing its walls (sun discs, horned skulls, a Maya fret, a vine with moon buds, obsidian fangs
-and webs).
+and webs). The dark elves' black stone wants more light than others' rooms, so theirs have more
+of it, their own way: their violet lamps hanging round the walls are lit with witchlight (cold,
+all but steady: `FLAMES.witchlight`), and half a lamp's spacing on from each, clear of the
+windows, a cluster of amethyst shards glows in an iron cup on a bracket at a sconce's height
+(`DARK_SHARDS`, `FLAMES.shard`); their candles and wheels burn a pale lavender (`LAMPLIGHT`). A
+taproom of theirs is about half as bright again as it was.
 
 **Their trees** (kits/trees.js, `HOME_TREES`): in each people's homeland most of the trees
 (seven in ten) are their own, and in their settlements three in five: the cat folk's acacia (a
