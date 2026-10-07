@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { ambienceOf, CALLS, doorOf, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
@@ -12,8 +13,10 @@ import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, FOOTSTEPS, GAITS, gainO
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
+import { DAY, HOUR } from "../client/js/core/daytime.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
+import { BIOMES } from "../client/js/core/worldplan/plan.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
 const peakOf = (samples) => samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
@@ -128,7 +131,7 @@ describe("making sounds (synth.js)", () => {
 // A stand-in for the browser's Web Audio: records what's played, how loud, where and on which bus
 function fakeAudio() {
     const played = [];
-    const param = (value) => ({ value, cancelScheduledValues() {}, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; } });
+    const param = (value) => ({ value, curves: [], cancelScheduledValues() {}, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; }, setValueCurveAtTime(curve, at, duration) { this.curves.push({ curve, at, duration }); } });
 
     // A node remembers what it's connected to, so a sound can be followed to its bus
     const node = (extra = {}) => {
@@ -212,7 +215,7 @@ function fakeAudio() {
                 playbackRate: param(1),
                 addEventListener() {},
                 start: (when = 0, offset = 0) => played.push({ source, when, offset }),
-                stop() {},
+                stop: (when = 0) => (source.stopped = when),
             });
 
             return source;
@@ -303,8 +306,9 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
 
         // (Each recorded-only sound recorded, as loud as it's said, and what plays in its place
         // till then a made sound)
+        // (Two recordings at least, to vary it; a bed, looped, one)
         for (const [name, { volume, instead }] of Object.entries(RECORDED_ONLY)) {
-            assert.ok(RECORDED[name]?.length >= 2 && !SOUNDS[name], name);
+            assert.ok(RECORDED[name]?.length >= (RECORDED[name]?.[0].loop ? 1 : 2) && !SOUNDS[name], name);
             assert.ok(volume > 0 && volume <= 1, name);
             assert.ok(!instead || SOUNDS[instead], `${name} instead: ${instead}`);
         }
@@ -563,10 +567,17 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(spellSounds("teleport").land, null, "carried off: heard going and coming");
 
         // (Every sound downloaded once it's wanted used: the spells', and the creatures' and the
-        // player's breath)
-        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath"]);
+        // player's breath; the ambience's anywhere, at any time of day, and its doors, a tavern's
+        // stairs and hearth, a church's bell; all but the rain and thunder, with no weather yet,
+        // heard only in the sound studio)
+        const heard = everywhere().flatMap((facts) => {
+            const { beds, calls, wants } = ambienceOf(facts);
 
-        assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), []);
+            return [...Object.keys(beds), ...Object.keys(calls), ...wants];
+        });
+        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath", ...heard, ...Object.keys(PLACES).map(doorOf), "crackle", "churchBell"]);
+
+        assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), ["rainLoop", "thunder"]);
     });
 
     it("swells a cast to its release, loudest as it's let go, part way in if it's let go sooner; its missile flying the last of it; cut short if it's broken off", async () => {
@@ -1080,6 +1091,215 @@ describe("keeping the sound going (sound.js)", () => {
         // (The stand-in never says a sound has ended)
         sound.context.currentTime += 5;
         assert.ok(sound.play("slash"), "once they're over, more play");
+        sound.close();
+    });
+});
+
+// The facts (app/surroundings.js) of every kind of place: indoors, each place; out of doors, every
+// land, high or not, by night, at dawn and by day, in the wild and in a town, beside every water,
+// a market, a smithy and fires
+function everywhere() {
+    const times = [DAY.night + HOUR, DAY.dawn + HOUR / 2, DAY.day + HOUR];
+    const near = { water: { stream: 0, river: 0, falls: 0, sea: 0, lake: 0 }, market: 0, fire: 0, brazier: 0, smithy: { x: 0, z: 0, far: 0 } };
+    const indoors = Object.keys(INDOORS).map((place) => ({ place, time: DAY.day, hearth: 0 }));
+    const outdoors = BIOMES.flatMap(({ id }) => times.flatMap((time) => [false, true].flatMap((high) => [0, 1].flatMap((settled) => [{ place: "town", land: id, high, time, settled }, { place: "town", land: id, high, time, settled, ...near }]))));
+
+    return [...indoors, ...outdoors];
+}
+
+describe("the ambience (ambience.js)", () => {
+    const at = (facts) => ambienceOf({ place: "town", time: DAY.day + HOUR, ...facts });
+
+    it("blows the land's own wind: over open land, in the trees, up high; less of it in a town", () => {
+        assert.deepEqual(Object.keys(at({ land: "meadow" }).beds), ["windOpen"]);
+        assert.deepEqual(Object.keys(at({ land: "woods" }).beds), ["windForest"]);
+        assert.deepEqual(Object.keys(at({ land: "meadow", high: true }).beds), ["windHigh"]);
+        assert.ok(at({ land: "meadow", settled: 1 }).beds.windOpen === at({ land: "meadow" }).beds.windOpen / 2);
+    });
+
+    it("hears water near, louder nearer, and none past its reach", () => {
+        const river = (far) => at({ land: "meadow", water: { river: far } }).beds.riverLoop ?? 0;
+
+        assert.ok(river(0) === 1 && river(10) > river(30) && river(30) > 0 && river(70) === 0);
+        assert.ok(at({ land: "beach", water: { sea: 20 } }).beds.surfLoop > 0.5 && at({ land: "beach", water: { sea: 20 } }).calls.gull, "the surf, and gulls");
+        assert.ok(at({ land: "mountain", water: { stream: 5, falls: 20 } }).beds.waterfallLoop > 0.5);
+        assert.ok(at({ land: "meadow", water: { lake: 10 } }).beds.lakeLapping > 0);
+    });
+
+    it("sings by the time of day: birds by day, the dawn chorus and the cock at first light, crickets and an owl at night", () => {
+        const day = at({ land: "woods" });
+        const dawn = at({ land: "woods", time: DAY.dawn + HOUR / 2 });
+        const night = at({ land: "woods", time: DAY.night + HOUR });
+
+        assert.ok(day.calls.birdDay && !day.calls.owl && !day.beds.nightLoop && day.calls.creakTree);
+        assert.ok(dawn.calls.birdDawn && at({ land: "meadow", settled: 1, time: DAY.dawn + HOUR / 2 }).calls.rooster);
+        assert.ok(!night.calls.birdDay && night.calls.owl && night.beds.nightLoop > 0.7);
+        assert.ok(at({ land: "marsh", time: DAY.night + HOUR }).beds.frogsLoop, "frogs in the marsh at night");
+        assert.ok(!at({ land: "snow", time: DAY.night + HOUR }).beds.nightLoop && !at({ land: "snow" }).calls.birdDay, "none on the snow");
+        assert.ok(at({ land: "woods" }).calls.birdDay.often > at({ land: "woods", settled: 1 }).calls.birdDay.often, "fewer in a town");
+    });
+
+    it("hears a town's bustle, its market by day, its dogs, hens and horses, a smithy's hammer from the smithy", () => {
+        const smithy = { x: 30, z: 40, far: 20 };
+        const town = at({ land: "meadow", settled: 1, market: 10, smithy });
+        const night = at({ land: "meadow", settled: 1, market: 10, smithy, time: DAY.night + HOUR });
+
+        assert.ok(town.beds.townLoop > night.beds.townLoop && town.beds.marketLoop > 0 && !night.beds.marketLoop);
+        assert.ok(town.calls.dogBark && town.calls.chickens && town.calls.horseWhinny);
+        assert.deepEqual(town.calls.distantHammer.at, smithy);
+        assert.ok(town.calls.distantHammer.muffle, "heard through the air from off");
+        assert.ok(!night.calls.distantHammer && !night.calls.chickens && night.calls.dogBark);
+        assert.ok(town.wants.includes("churchBell") && town.wants.includes("door"));
+        assert.ok(at({ land: "farmland" }).calls.cowMoo && at({ land: "farmland" }).calls.sheepBleat && !at({ land: "woods" }).calls.cowMoo);
+    });
+
+    it("hears a fire close by: a camp fire's crackle, a brazier's roar", () => {
+        assert.ok(at({ land: "heath", fire: 4 }).beds.campfireLoop > 0.3 && !at({ land: "heath", fire: 20 }).beds.campfireLoop);
+        assert.ok(at({ land: "heath", brazier: 2 }).beds.brazierLoop > 0.3);
+    });
+
+    it("hears each place indoors its own way, its hearth louder nearer, its folk at work's sounds downloaded", () => {
+        const taproom = (hearth) => ambienceOf({ place: "taproom", time: DAY.day, hearth });
+
+        assert.ok(taproom(1).beds.tavernLoop && taproom(1).beds.hearthLoop > taproom(8).beds.hearthLoop);
+        assert.deepEqual(Object.keys(taproom(Infinity).beds), ["tavernLoop"]);
+        assert.ok(["clink", "pour", "door"].every((name) => taproom(1).wants.includes(name)));
+        assert.deepEqual(ambienceOf({ place: "cave", time: DAY.day }).beds, { caveDrips: 1 });
+        assert.deepEqual(ambienceOf({ place: "smithy", time: DAY.night }).calls, {}, "no birds indoors");
+        assert.ok(ambienceOf({ place: "smithy", time: DAY.day }).wants.includes("anvil"));
+        assert.ok(Object.keys(PLACES).every((place) => place === "town" || INDOORS[place]), "every place indoors heard");
+    });
+
+    it("hears each building's door: a keep's heavy one, a ruin's iron gate, a crypt's trapdoor, none into a cave", () => {
+        assert.equal(doorOf("taproom"), "door");
+        assert.equal(doorOf("keep"), "doorHeavy");
+        assert.equal(doorOf("temple"), "doorHeavy");
+        assert.equal(doorOf("ruin"), "gate");
+        assert.equal(doorOf("crypt"), "trapdoor");
+        assert.equal(doorOf("cave"), null);
+    });
+
+    it("rings a church's bell at the hours of prayer, once as each comes", () => {
+        assert.ok(tolled(5.9 * HOUR, 6.1 * HOUR));
+        assert.ok(!tolled(6.1 * HOUR, 6.4 * HOUR));
+        assert.ok(!tolled(23.9 * HOUR, 0.1 * HOUR) && tolled(17.5 * HOUR, 0.5 * HOUR), "round midnight");
+        assert.deepEqual(TOLLS.hours, [6, 9, 12, 15, 18]);
+    });
+
+    it("names only recorded sounds, downloaded where they're heard: each bed a loop on the environment's bus, each call a sound of its own", () => {
+        for (const facts of everywhere()) {
+            const { beds, calls, wants } = ambienceOf(facts);
+
+            for (const name of Object.keys(beds)) {
+                assert.ok(RECORDED[name]?.[0].loop && RECORDED_ONLY[name]?.bus === "environment" && ON_DEMAND.includes(name), name);
+                assert.ok(beds[name] > 0 && beds[name] <= 1.1, `${name}: ${beds[name]}`);
+            }
+
+            for (const [name, call] of Object.entries(calls)) {
+                assert.ok(CALLS[name] && RECORDED[name] && ON_DEMAND.includes(name) && call.volume > 0 && call.often > 0, name);
+            }
+
+            assert.ok(wants.every((name) => RECORDED[name]), wants.join());
+        }
+    });
+});
+
+describe("the ambience played (sound.js setAmbience)", () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("loops a bed once it's in, each copy crossfading into the next (equal power), as loud as it's asked; the made wind until a recorded one blows", async () => {
+        const { sound, played: all } = await started();
+        const [length, crossfade] = RECORDED.windOpen[0].loop;
+        // (The bed's copies, not the music's notes)
+        const played = { get list() { return all.filter(({ source }) => sound.recorded.get("windOpen")?.includes(source.buffer)); } };
+
+        sound.setAmbient(true);
+        assert.ok(sound.wind && sound.wind.level.gain.value === 0.2, "the made wind blowing");
+        sound.setAmbience({ beds: { windOpen: 0.8 } });
+        assert.ok(sound.wanted.has("windOpen") && !sound.beds.get("windOpen").level, "asked for; nothing till it's in");
+
+        await sound.want("windOpen");
+        await tick();
+        sound.tick();
+
+        const bed = sound.beds.get("windOpen");
+        const [first] = played.list;
+
+        assert.equal(played.list.length, 1);
+        assert.ok(sound.recorded.get("windOpen").includes(first.source.buffer));
+        assert.ok(Math.abs(bed.level.gain.value - 0.8 * RECORDED_ONLY.windOpen.volume * (LEVEL / RECORDED_LEVEL)) < 1e-9, "as loud as asked");
+        assert.equal(sound.wind.level.gain.value, 0, "the made wind gone");
+
+        // (Its copy fading out over the crossfade at the loop's end, and stopped after it)
+        const envelope = first.source.outputs[0];
+
+        assert.equal(envelope.gain.curves.length, 1);
+        assert.ok(Math.abs(envelope.gain.curves[0].at - (first.when + length)) < 1e-9 && envelope.gain.curves[0].duration === crossfade);
+        assert.ok(Math.abs(first.source.stopped - (first.when + length + crossfade)) < 1e-9);
+
+        // (Not started again till the next's near: then fading in as the first fades out)
+        sound.tick();
+        assert.equal(played.list.length, 1);
+        sound.context.currentTime = first.when + length - 1;
+        sound.tick();
+        assert.equal(played.list.length, 2);
+
+        const next = played.list[1];
+        const [rise, fall] = next.source.outputs[0].gain.curves;
+
+        assert.ok(Math.abs(next.when - (first.when + length)) < 1e-9);
+        assert.ok(Math.abs(rise.at - next.when) < 1e-9 && rise.duration === crossfade && Math.abs(fall.at - (next.when + length)) < 1e-9);
+
+        // (Equal power: the two together as loud as either, all through the crossfade)
+        for (let k = 0; k < rise.curve.length; k++) {
+            assert.ok(Math.abs(rise.curve[k] ** 2 + envelope.gain.curves[0].curve[k] ** 2 - 1) < 1e-6);
+        }
+
+        sound.close();
+    });
+
+    it("fades a bed out when it's not heard, stops it, and in a while lets its recording go, downloaded again if it's wanted again", async () => {
+        const { sound, played } = await started();
+
+        sound.setAmbience({ beds: { caveDrips: 1 } });
+        await sound.want("caveDrips");
+        await tick();
+        sound.tick();
+
+        const copy = played.find(({ source }) => sound.recorded.get("caveDrips").includes(source.buffer)).source;
+
+        sound.setAmbience({ beds: { cryptLoop: 0.5 } });
+        assert.equal(sound.beds.get("caveDrips").level.gain.value, 0, "fading out");
+        assert.ok(sound.wanted.has("cryptLoop"));
+        sound.context.currentTime += 3;
+        sound.tick();
+        assert.ok(copy.stopped !== undefined && !sound.beds.get("caveDrips").level, "stopped once it's faded");
+        assert.ok(sound.recorded.has("caveDrips"), "kept a while, should it come back");
+
+        sound.context.currentTime += 61;
+        sound.tick();
+        assert.ok(!sound.beds.has("caveDrips") && !sound.recorded.has("caveDrips") && !sound.wanted.has("caveDrips"), "let go of");
+        sound.close();
+    });
+
+    it("calls now and then from round about, on the environment's bus, a made bird singing in a recorded one's place till it's in", async () => {
+        const { sound, played } = await started();
+
+        const birds = () => played.filter(({ source }) => sound.buffers.get("bird").includes(source.buffer));
+
+        sound.setPaused(false);
+        sound.setListener(100, 100);
+        sound.setAmbience({ calls: { birdDay: { ...CALLS.birdDay, volume: 1, often: 1 } } });
+        sound.recorded.delete("birdDay");
+        sound.update(CALLS.birdDay.every[1] + 0.1);
+        assert.equal(birds().length, 1, "heard once in its wait, the made bird meanwhile");
+        assert.equal(route(sound, birds()[0].source).bus, "environment");
+        assert.ok(sound.due.get("birdDay") >= CALLS.birdDay.every[0] && sound.due.get("birdDay") <= CALLS.birdDay.every[1], "and again in a while");
+
+        // (A call no longer heard there: not heard again)
+        sound.setAmbience({});
+        sound.update(60);
+        assert.equal(birds().length, 1);
         sound.close();
     });
 });

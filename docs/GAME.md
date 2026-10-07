@@ -3166,7 +3166,7 @@ compressed, and limited just under full scale, so a busy fight turned up can't c
 | Bus | What | To start with |
 | --- | --- | --- |
 | Effects | Blows, spells, footsteps, cues | 50% |
-| Environment | The wind, birds, rustling trees; the tavern's hearth | 40% |
+| Environment | The ambience: the wind, water, birds and beasts, a town's bustle, a room's hush; the tavern's hearth | 40% |
 | Music | The town's score, or the tavern's jig | 35% |
 
 The defaults are set for a phone at about 40% volume (a player's own setting): blows and spells
@@ -3294,9 +3294,13 @@ played at its own volume:
     them. Nothing's heard of what floats or flies in a swarm, of a dragon in the air or of anyone
     Levitating.
   - **Stairs**: four treads on the stairs' boards or stone as anyone goes up or down them, on the
-    player's floor (coming up, louder; going away, quieter).
-- **A door**: its latch lifting, its hinges creaking and it banging shut, when anyone goes through
-  the tavern's door on the player's side of it (so the orc following them in is heard).
+    player's floor (coming up, louder; going away, quieter); on wooden stairs, a recording of old
+    treads creaking under them (`stairs`, played 1.4 times as quick).
+- **A door**, recorded, when anyone goes through one on the player's side of it (so the orc
+  following them in is heard): each building's own (`ambience.js` `doorOf`). An old wooden door's
+  creak and shutting into a house, a tavern, a smithy or a guild; a heavy one into a keep, a
+  temple, a town hall or a watchtower; an iron gate into a ruined keep; a trapdoor down into a
+  crypt; none into a cave or the lair, open to the air.
 - **Cues**: a target chosen, an enemy slain (one the player or a follower felled, or one the
   player fought in the last 30 s; not the folk and soldiers' own fights), falling, waking again,
   out of breath, the action wheel opening, and a flick refused.
@@ -3304,10 +3308,55 @@ played at its own volume:
 They're heard from where they happen: full volume within 4 metres of the player, fading to
 nothing at 34, and panned left or right; at most 24 at once.
 
-**The environment**: out in the town, a quiet wind (a ten-second loop without a seam), birds now
-and then (every 4 to 14 seconds), and leaves rustling in a tree within 22 metres (every 2.5 to 7
-seconds), from where the tree is. In the taproom, instead, the hearth's fire crackles (a soft rush
-of flame with a few pops and snaps, every 0.2 to 0.9 seconds, from the hearth).
+**The environment** (`ambience.js`, `sound.js` setAmbience): recorded beds looped round and
+round, and calls now and then, each as where the player is makes them (all CC0 or public domain,
+from Freesound, the National Park Service's and the Versilian Community Sample Library's;
+`scripts/sounds/ambience.js`, each recording's page in the sound studio).
+
+- **What's round the player** (`app/surroundings.js`, worked out every half second out of doors):
+  the land underfoot and whether it's high (the mountains, the snow, the tundra, or above 175 m);
+  how far a stream, a river, a waterfall's lip, the sea and a lake are; how much of round about is
+  a settlement's (here and 22 m off all round); how far its market and its smithy are; how far a
+  camp fire, and a brazier while it's lit. Indoors, how far the hearth is. And the time of day.
+- **Beds**, out of doors:
+  - the wind: over open land, dry grass rustling (`windOpen`); in the woods, gusts through the
+    trees (`windForest`); up high, wind singing over a mountain (`windHigh`); half as loud in a
+    town. The made wind (a ten-second loop without a seam) blows until a recorded one's in;
+  - water near, louder nearer: a stream (35 m), a river (60 m), a waterfall (90 m), the sea's
+    surf (120 m), a lake lapping (45 m);
+  - crickets after dark, rising as the light goes (not on the snow, the mountains or the sea;
+    quieter in a town), and frogs in the marsh and round a lake;
+  - a town's bustle (quieter at night), its market's by day within 45 m of its middle;
+  - a camp fire's crackle within 16 m, a lit brazier's roar within 10 m.
+- **Beds indoors** (`INDOORS`): a taproom's crowd and its hearth (louder nearer), the crowd
+  quieter upstairs and in an adventurers' guild; a smithy's forge; a temple's hush, quieter in a
+  town hall; a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
+  undercroft); a cave's drips; the dragon's lair's belching spring; wind through a ruined keep and
+  a watchtower.
+- **Calls** (`CALLS`), each from somewhere round the player (or a tree near, or its smithy):
+  birdsong by day (every 4 to 14 seconds; more in the woods, fewer in a town or on dry land, none
+  up high), the dawn chorus from first light to five minutes after sunrise, crows over open land,
+  gulls by the sea, an owl at night, a tree creaking in the woods; in a town, dogs (fewer at
+  night), hens and horses, the cock crowing at dawn (on a farm too); cattle and sheep on farmland
+  and meadow; the smith's hammer from the smithy by day, through a low-pass filter as from off.
+  A made bird's chirp sings in a recorded bird's place till it's in.
+- **A church's bell** in a town at the hours of prayer (6, 9, 12, 15 and 18 o'clock: `TOLLS`),
+  three strokes 2.4 seconds apart, from 60 to 120 m off.
+- **Leaves** rustle in a tree within 22 metres (every 2.5 to 7 seconds), from where the tree is;
+  in the taproom the hearth's fire crackles too (a few pops, every 0.2 to 0.9 seconds, from the
+  hearth).
+- **Looping**: each bed's file is its loop and a crossfade longer (`recorded.js` `loop`:
+  [length, crossfade], 11 to 37 seconds and 1 to 3; at 48 kb/s). A copy is set going a moment
+  before the last one's loop ends, fading in over the crossfade (sine) as the last fades out
+  (cosine): together as loud as either, the way two unrelated sounds add, so there's no seam and
+  no dip. The loops' lengths were chosen with no common factor, so beds heard together line up
+  again only after minutes.
+- **Loudness**: a bed's recorded at about −30 dBFS over its length, so at 1 it's as loud as the
+  made wind was. Changing place, each bed fades to its new loudness over 2 seconds.
+- **Downloaded where it's heard**: every bed and call is on demand (`want`), asked for as the
+  player comes where it's heard. A bed is big decoded (a 37-second loop is about 8 MB), so one
+  silent for a minute is let go of, downloaded again (from the browser's cache) if it's heard
+  again. The rain and the thunder are in the sound studio only, as there's no weather yet.
 
 **Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
 were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
