@@ -54,6 +54,7 @@ export const ACTIONS = Object.freeze({
     ...Object.fromEntries(Object.entries(SPELLS).map(([id, { label, target }]) => [id, { label, spell: id, learnt: id, on: ON[target] ?? "self" }])),
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
+    shieldBash: { label: "Shield bash", ability: "shieldBash", learnt: "shieldBash", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
     camp: { label: "Make camp", order: "camp", on: "self" },
 });

@@ -130,7 +130,8 @@ const ROUND_SHIELDS = new Set(["orc", "lizard"]);
  * elves' leaf, were carried so on the march, by their strap (the guige); not the cat folk's
  * (hide on a stick, carried by the stick, with no strap to sling it by), nor the dark elves'
  * long kite (spikes round its rim, that would gash the arms swinging past them, and it'd reach
- * past the backs of the knees), nor a tower shield, were there one. A new shield says too.
+ * past the backs of the knees), nor a tower shield (too tall and heavy for the back); a mage's
+ * spellward, small and light, is. A new shield says too.
  */
 export const SLING = Object.freeze({ socket: "back", top: 0.23, off: 0.065, lean: 0.2, over: 0.1, garment: "baldric", swing: { arm: [0.7, -0.25, 0.2], back: [0.5, 0.05, -0.55] } });
 
@@ -173,6 +174,8 @@ export const ITEMS = Object.freeze({
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow, sheath: SHEATHS.bow },
     roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: true },
+    towerShield: { label: "Tower shield", slot: "offHand", model: "towerShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: false },
+    spellward: { label: "Spellward", slot: "offHand", model: "spellward", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
     orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
     wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"] },

@@ -803,7 +803,8 @@ new one must say too (a test checks):
 | The elves' leaf | Yes | Light, with a strap |
 | The cat folk's hide on a stick | No | Carried by its stick, with no strap to sling it by |
 | The dark elves' long kite | No | Spikes round its rim would gash the arms swinging past, and it'd reach past the backs of the knees |
-| A tower shield (were there one) | No | Too tall and heavy to carry on the back |
+| Tower shield | No | Too tall and heavy to carry on the back |
+| Spellward (a mage's buckler) | Yes | Small and light, with a strap |
 
 `Character.sheathe(on)` slings it with the weapons (or takes it off the back), and
 `Character.slings` says whether the shield carried can be. Moving between the arm and the back,
@@ -1428,6 +1429,11 @@ cat folk's gauntlets were in the head), unless both are on a haft: forward by 0.
 the deepest (a quarter took a boxer's lead arm, its fist out before the face already, 21° past
 the shoulder's range). And they turn with the chest as
 it goes round: the backward dodge's 37° turn had the lizard folk's forearm 11 cm into the belly.
+
+**Catching a blow on a shield** (`react("block", { from })`, `BRACES`: the battle's `blocked`,
+docs/WAR.md, *Shields*): braced behind it, the shield arm thrown up and forward into the blow,
+a little crouched and pushed back a step, for 0.42 s; no wound (it's not among `REACTIONS`, the
+kinds of damage). With what got through, the blow's own reaction plays as well.
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
 A new attack needs at least five ways (`ATTACKS[name].variants`: a name and key poses each, or an

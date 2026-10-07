@@ -1841,6 +1841,21 @@ export const REACTIONS = Object.freeze({
     },
 });
 
+// How a blow caught on a shield is taken (react("block"), as a blow's reaction is, but leaving no
+// wound): braced behind it, the shield arm thrown up and forward into the blow, a little crouched
+// and pushed back a step
+export const BRACES = Object.freeze({
+    block: {
+        length: 0.42,
+        effect: "sparks",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.16);
+
+            return { ...spine({ flex: front * 8 * e, turn: side * 6 * e }), Head: { flex: front * 4 * e }, LeftArm: { flex: 38 * e, abduct: -6 * e }, LeftForeArm: { flex: 30 * e }, RightArm: { abduct: 8 * e }, offset: [0, -0.05 * e, -front * 0.06 * e] };
+        },
+    },
+});
+
 // --- Falling ---
 
 // Falling down dead, and knocked off the feet and up again, as animators' clips have them, whole
@@ -2597,11 +2612,11 @@ export class Actions {
     }
 
     /**
-     * React to a blow (a REACTIONS key). `from` is where it came from, as an angle in the
+     * React to a blow (a REACTIONS key; or one caught on a shield, BRACES). `from` is where it came from, as an angle in the
      * character's own frame (0 straight ahead, positive to its left).
      */
     react(name, { from = 0, way = null } = {}) {
-        const reaction = REACTIONS[name] ?? REACTIONS.strike;
+        const reaction = REACTIONS[name] ?? BRACES[name] ?? REACTIONS.strike;
         const clips = reaction.clips ?? [];
         // (Its keyed way, 0, or one of its clips': in turn, never the same twice running)
         const pick = way ?? (clips.length ? this.variety.next(`react:${name}`, 1 + clips.length) : 0);

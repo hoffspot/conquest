@@ -31,10 +31,14 @@ describe("gear (gear.js)", () => {
         }
     });
 
-    it("leaves the other hand free with a one-handed weapon; a bow's takes only a quiver; any other two-handed weapon's nothing", () => {
+    it("leaves the other hand free with a one-handed weapon (a wand's for a spellward only); a bow's takes only a quiver; any other two-handed weapon's nothing", () => {
         assert.deepEqual(["sword", "wand", "staff", "hammer", "bow", "gauntlets", "grimoire"].map(handsOf), [1, 1, 2, 2, 2, 2, 2]);
         assert.equal(offHandFits("sword", "kiteShield"), null);
-        assert.equal(offHandFits("wand", "roundShield"), null);
+        assert.equal(offHandFits("sword", "towerShield"), null);
+        assert.equal(offHandFits("sword", "spellward"), null, "(a sword, any shield)");
+        assert.deepEqual(["roundShield", "kiteShield", "towerShield", "shield"].map((piece) => offHandFits("wand", piece)), ["ward", "ward", "ward", "ward"]);
+        assert.equal(offHandFits("wand", "spellward"), null);
+        assert.equal(offHandFits("grimoire", "spellward"), "twoHanded", "(a grimoire, none: held open in both hands)");
         assert.equal(offHandFits("sword", "quiver"), "quiver");
         assert.equal(offHandFits("bow", "quiver"), null);
         assert.equal(offHandFits("bow", "shield"), "bow");

@@ -426,7 +426,7 @@ whoever holds the town, and whom they fight is as their peoples stand.
 A player grows by what they do (`Progress`, `core/progress.js`), kept with their character
 (`app/save.js`) and changed only by the host.
 
-**Skills.** Eight trees, each grown by its own use (healing is now magic's Healing school:
+**Skills.** Nine trees, each grown by its own use (healing is now magic's Healing school:
 docs/MAGIC.md). A rank takes 100, 300, 800, 2,000 and 4,500
 experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 
@@ -438,6 +438,7 @@ experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 | Hexes | stunning foes (15 a stun) | stuns twice as long | Hold |
 | Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
 | Evasion | slipping blows (20 a blow), and three tenths of all Blade, Marksman and Endurance grow by | a blow or a shot slipped one time in four (one in twenty from the start) | |
+| Shield | catching blows on a shield (20 a blow), and stunning with a shield bash (15) | a blow or a shot from in front caught on a shield one time in two (one in ten from the start) | Shield bash |
 | Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold | |
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
@@ -449,6 +450,20 @@ Legend under its strongest Dodge slips half of the blows. Slipping one shows "Do
 head, and the body ducks or sways out of the way (docs/CHARACTERS.md). The pack's totals show the
 chance.
 
+**Shields** (`Battle#blocks`, `TREES.shield`, `Progress.guard`). A player with a shield in the
+other hand catches a blow or a shot on it now and then: one in ten from the start, 8 in a hundred
+more each rank of the Shield skill, to one in two as a Legend; a shield's own Stalwart bonus on
+top, never more than three in five (`BLOCK_CAP`). Only from in front (within a right angle of the
+way they face), and not while stunned or knocked down. Ordinary shields catch blows and shots,
+not spells; a spellward (a mage's shield) catches spells too. Caught, the shield takes its share
+of the blow (how much is its own, rolled when it was made: below), the rest getting through; one
+that takes it all leaves nothing. A blow caught leaves nothing lingering (venom, a web...),
+knocks no one down and staggers for half as long. "Blocked" shows over the head, the shield arm
+braces into it (docs/CHARACTERS.md) and the boss rings (a spellward's light flares). Others
+carrying a shield block too (`NPC_SHIELDS`): a people's soldiers with a sword or a cleaver (their
+uniform's shield: `SHIELD_ARMS`) one blow in seven, 30% of it; their captains one in four, 45%;
+a hired warrior (who always carries one) one in five, 30%.
+
 **Abilities** come with a tree's second rank, and can then be put on an action wheel (Game
 options, Action wheels: docs/GAME.md):
 - **Greater heal** (the player's own wheel): a slower cast healing 25 to 40.
@@ -459,15 +474,36 @@ options, Action wheels: docs/GAME.md):
   what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of reach",
   "Can't see it"), as a spell out of reach is, and stays ready: nothing's spent
   (`Battle.shotAt`; `NET_VERSION` 46).
+- **Shield bash** (an enemy's wheel; only with a shield in the other hand: "You need a shield in
+  your other hand"): the next blow up close slams the shield into them too, stunning them for 2
+  seconds (longer for a stronger stunner: Hexes, of Binding). A shield of the Ram makes it harder
+  and longer by its bonus. Ready again 15 seconds after.
 
 **Gear** (`core/gear.js`) goes in a slot for each part of a player, as in the old dungeon
 games' inventories: head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and
 both hands.
 - **The hands.** A weapon goes in the main hand. One held in both (a staff, a war hammer, a bow,
   spiked gauntlets, a grimoire held open) leaves nothing for the other hand, except a bow, whose
-  other hand takes a quiver (+5% ranged damage); a one-handed one (a sword, a wand) leaves it
-  for a shield (`offHandFits`, `offHandFree`). Taking up a two-handed weapon puts the shield
-  back in the pack. Spiked boots kick; worn with nothing in hand, they're all a player fights
+  other hand takes a quiver (+5% ranged damage); a one-handed one leaves it for a shield: a sword
+  any, a wand only a spellward ("A wand's other hand takes only a mage's shield": `offHandFits`,
+  `offHandFree`). Taking up a two-handed weapon puts the shield back in the pack. For the shield
+  they can't carry, the two-handed weapons do about half as much again as a sword in a fight
+  (their blows over time, core/weapons.js): a war hammer twice a sword's blow (8 to 16), slower
+  (every 1.5 seconds); a staff a little more than a sword's (5 to 9), quicker (every 0.85);
+  spiked gauntlets' punches 3 to 7, quicker still; a bow's arrows 5 to 10. A grimoire's spells
+  are a quarter stronger than a wand's as strong (`spellTimes`), on everything else that
+  strengthens them, for the spellward a wand leaves a hand for: a wand's caster has some
+  defence, a grimoire's hits harder.
+- **Shields.** A round shield (6% armour), a kite shield (10%), a tower shield (12%), each
+  people's uniform's shield (8%) and the spellward (4%), a mage's shield: a small buckler of
+  dark wood, a crystal in a ring of runes, that catches spells as well as blows. How much of a
+  blow each one takes when it's caught on it is its own, rolled as it's made (`rollBlock`), from
+  half the most its make can to all of it, the higher the rarer: the most is a tower shield's,
+  50% common, 65% fine, 80% masterwork, 100% legendary (`BLOCK_MOST`), and the others as much
+  less as they're less robust (`robust`): a kite shield 0.8 of it, the uniform's 0.7, a round
+  shield 0.6, a spellward half. It's in its name ("Kite shield (blocks 32%)"), and it's worth
+  more the more of its most it takes. Shields made before they blocked take two thirds of the
+  most their make can. Spiked boots kick; worn with nothing in hand, they're all a player fights
   with (so the weapon only comes off with them on, and they only come off with a weapon in hand).
 - **What each does.** Shields, helms, body armour, bracers, gloves, belts, legs, boots and
   cloaks take a share off every blow (a mail shirt 14%, plate 20%, a kite shield 10%), never more
@@ -486,7 +522,9 @@ both hands.
   given), each adding to something different that fits the piece: armour (Sturdy), melee
   damage (Keen), ranged damage (True), spell power (Arcane), stamina (Tireless), hit points (of
   the Bear), healing (of Mending), stun length (of Binding), haggling (of the Fox: a better price
-  from shops) and persuasion (of Eloquence). A piece is named for them ("Keen sword of the Bear");
+  from shops), persuasion (of Eloquence) and, on a shield, how often it blocks (Stalwart) and how
+  hard it bashes (of the Ram; a spellward instead the spells' Arcane, of Mending and of Binding).
+  A piece is named for them ("Keen sword of the Bear");
   a legendary one has its own name ("Stormward"). Only pieces alike (the same make, people and
   bonuses) stack.
 - **Each people's uniform.** Each people's soldiers wear their own (`UNIFORM`: a helm, a hauberk,
@@ -504,12 +542,14 @@ both hands.
   soldier of that people within 3 squares who can see them has a 2% chance of seeing through it
   (twice that, a step away: `SCRUTINY`). Seen through, or striking one of that people, they're
   known for what they are for two minutes (`UNMASKED_MS`), and fought as they would be.
-- **Where gear comes from.** A new character starts with their weapon, leather bracers,
-  breeches and boots. The smiths sell every piece up to masterwork, and the pieces of their own
+- **Where gear comes from.** A new character starts with their weapon (with a sword, a common
+  round shield; with a wand, a common spellward; each taking two thirds of the most its make
+  can: `STARTING_SHIELDS`), leather bracers, breeches and boots. The smiths sell every piece up
+  to masterwork (tower shields too), the arcanists and the adventurers' guilds spellwards, and the pieces of their own
   people's uniform; a fallen soldier sometimes carries a piece of their people's uniform (15%;
   an orc 12%); the keep's armoury gives a gift at each rank (`armouryGift`): a fine hauberk of the
   player's people at Retainer, a masterwork weapon at Knight, a masterwork shield (or, with both
-  hands on their weapon, a helm) of their people's at Lord, and a legendary weapon at Councillor.
+  hands on their weapon or a wand in hand, a helm) of their people's at Lord, and a legendary weapon at Councillor.
 
 **Gold and the pack.** A player starts with 20 gold and a pack of 40 slots, shown two pages of 20
 at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carried in games saved then are read as gold.)

@@ -3714,7 +3714,7 @@ export class Game {
         };
 
         this.spellbook.show({
-            boost: ITEMS[weapon?.id]?.magic && weapon.boost ? { label: itemLabel({ id: weapon.id, quality: weapon.quality }), share: weapon.boost } : null,
+            boost: ITEMS[weapon?.id]?.magic && weapon.boost ? { label: itemLabel({ id: weapon.id, quality: weapon.quality }), share: (1 + weapon.boost) * (ITEMS[weapon.id].spellTimes ?? 1) - 1 } : null,
             schools: Object.entries(SCHOOLS).map(([id, { label, tiers, xp }]) => {
                 const { xp: has, from, to } = progress.toNextTier(id);
                 const tier = progress.tierOf(id);
@@ -4618,6 +4618,18 @@ export class Game {
                     effects.burst("dust", avatar.point(0.1));
                     // (Slipping it: aside, away from where it came from, or back)
                     avatar.actions.dodge?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
+                    break;
+                }
+                case "blocked": {
+                    // (Caught on a shield: braced behind it, the boss ringing; a spell on a
+                    // spellward, its light)
+                    const by = event.by ? this.avatars.get(event.by) : null;
+                    const at = avatar.point(0.68);
+
+                    hud.damage(this.#screenAbove(event.id), "Blocked", { kind: "stun" });
+                    avatar.actions.react("block", { from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
+                    effects.impact(event.spell ? "arcane" : "sparks", at, by ? at.clone().sub(by.point(0.7)).setY(0).normalize() : null);
+                    this.sound?.play(event.spell ? "arcane" : "block", { at: avatar.object.position });
                     break;
                 }
                 case "resisted":

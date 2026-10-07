@@ -42,56 +42,62 @@ const ranged = (settings) => ({ kind: "ranged", stagger: 150, ...settings });
  * Every weapon: its name, its school (melee, ranged or magic), what it's made of (EQUIPMENT ids,
  * characters/equipment.js), a line about it, and its attacks. The starting weapons a player
  * chooses from are STARTING_WEAPONS; the rest belong to enemies.
+ *
+ * Those held in both hands (core/gear.js `hands`) do about half as much again as a sword in a
+ * fight (their blows over time), for the shield they can't carry: the war hammer twice a sword's
+ * blow, slower; the staff a little more than a sword's, quicker; the gauntlets' punches, quicker
+ * still; the bow's arrows half as much again. The wand and the grimoire are for spells (a
+ * grimoire's a quarter stronger, for the spellward a wand leaves a hand for: progress.js).
  */
 export const WEAPONS = Object.freeze({
     sword: {
         label: "Sword",
         school: "Melee",
-        about: "A steel arming sword. Quick, sure slashes up close.",
+        about: "A steel arming sword in one hand, and a round shield in the other to block with. Quick, sure slashes up close.",
         equipment: ["sword"],
         attacks: [melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "sword" })],
     },
     staff: {
         label: "Staff",
         school: "Melee",
-        about: "A long oak staff. Fast, reaching strikes up close.",
+        about: "A long oak staff, held in both hands. Quick, reaching strikes up close, one after another.",
         equipment: ["staff"],
-        attacks: [melee({ id: "strike", damage: [3, 7], hitAt: 330, duration: 700, interval: 1000, reaction: "strike", animation: "staff" })],
+        attacks: [melee({ id: "strike", damage: [5, 9], hitAt: 330, duration: 700, interval: 850, reaction: "strike", animation: "staff" })],
     },
     wand: {
         label: "Wand",
         school: "Magic",
-        about: "A crystal-tipped wand: it makes spells stronger. Its own bolts of light, from 7 metres, are weak.",
+        about: "A crystal-tipped wand in one hand, and a spellward, a mage's shield, in the other to block blows and spells with. The wand makes spells stronger; its own bolts of light, from 7 metres, are weak.",
         equipment: ["wand"],
         attacks: [ranged({ id: "bolt", reach: 7, damage: [1, 3], hitAt: 300, duration: 620, interval: 1000, reaction: "arcane", animation: "wand", projectile: { kind: "bolt", speed: 14 } })],
     },
     grimoire: {
         label: "Grimoire",
         school: "Magic",
-        about: "A book of spells: it makes them stronger. Its own little fireballs, from 7 metres, are weak.",
+        about: "A book of spells, held open in both hands: it makes them stronger, a quarter more than a wand as strong does. Its own little fireballs, from 7 metres, are weak.",
         equipment: ["grimoire"],
         attacks: [ranged({ id: "fireball", reach: 7, damage: [2, 4], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
     },
     hammer: {
         label: "War hammer",
         school: "Melee",
-        about: "A heavy two-handed hammer. Slow, crushing blows that knock back.",
+        about: "A heavy two-handed hammer. Slow, crushing blows, twice a sword's, that knock back.",
         equipment: ["warHammer"],
-        attacks: [melee({ id: "smash", damage: [6, 12], hitAt: 640, duration: 1100, interval: 1700, stagger: 450, reaction: "crush", animation: "hammer" })],
+        attacks: [melee({ id: "smash", damage: [8, 16], hitAt: 640, duration: 1100, interval: 1500, stagger: 450, reaction: "crush", animation: "hammer" })],
     },
     bow: {
         label: "Bow",
         school: "Ranged",
         about: "A yew longbow and a quiver of arrows. Shoots from 13.5 metres.",
         equipment: ["bow", "quiver"],
-        attacks: [ranged({ id: "arrow", reach: 13.5, damage: [3, 7], hitAt: 660, duration: 1000, interval: 1400, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 22 } })],
+        attacks: [ranged({ id: "arrow", reach: 13.5, damage: [5, 10], hitAt: 660, duration: 1000, interval: 1400, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 22 } })],
     },
     gauntlets: {
         label: "Spiked gauntlets",
         school: "Melee",
         about: "Iron gauntlets with spiked knuckles. A flurry of punches, left and right.",
         equipment: ["spikedGauntlets", "spikedGauntletLeft"],
-        attacks: [melee({ id: "punch", damage: [2, 5], hitAt: 170, duration: 420, interval: 600, stagger: 80, reaction: "punch", animation: "punch" })],
+        attacks: [melee({ id: "punch", damage: [3, 7], hitAt: 170, duration: 420, interval: 600, stagger: 80, reaction: "punch", animation: "punch" })],
     },
     boots: {
         label: "Spiked boots",

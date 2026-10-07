@@ -19,6 +19,7 @@
 // wears into equipment (characters/equipment.js), each people's make of a uniform's pieces in its
 // colours and metal. Pure data, no DOM.
 
+import { SHIELD_ARMS } from "../core/gear.js";
 import { WEAPONS } from "../core/weapons.js";
 
 /**
@@ -76,6 +77,8 @@ export function uniformLook(piece, people) {
 const LOOKS = Object.freeze({
     roundShield: ["roundShield"],
     kiteShield: ["kiteShield"],
+    towerShield: ["towerShield"],
+    spellward: ["spellward"],
     quiver: ["quiver"],
     cap: ["leatherCap"],
     nasalHelm: ["nasalHelm"],
@@ -103,9 +106,10 @@ export const lookOf = ({ id, people = null }) => LOOKS[id] ?? uniformLook(id, pe
 /** What a character wearing some gear ([{ id, people }]) has on: equipment ids, each once. */
 export const dress = (pieces) => [...new Set(pieces.flatMap((piece) => lookOf(piece)))];
 
-// The weapons a soldier carries a shield with (one-handed), and one worn on both hands (spiked
-// gauntlets: no gauntlets of the uniform's under them)
-const SHIELDED = new Set(["sword", "cleaver"]);
+// The weapons a soldier carries a shield with (one-handed: core/gear.js SHIELD_ARMS, as the host
+// has them block with it), and one worn on both hands (spiked gauntlets: no gauntlets of the
+// uniform's under them)
+const SHIELDED = new Set(SHIELD_ARMS);
 
 /**
  * A soldier's kit (equipment ids): their people's uniform, what they fight with (a core/
