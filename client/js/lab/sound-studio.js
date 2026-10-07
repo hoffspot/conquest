@@ -2,10 +2,11 @@
 // described, where it plays and where it comes from (recorded, and by whom: recorded.js; or made
 // in code: synth.js), played as the game plays it (audio/sound.js, at the game's own levels, from
 // as far off as asked), each of its variants on its own, and a recorded one's made versions to
-// compare; the wind; the music in each place. Nothing here but the catalog's words: a sound
-// added to the game and described there shows here.
+// compare; the ambience's beds, looped round as the game loops them, any of them together; the
+// made wind; the music in each place. Nothing here but the catalog's words: a sound added to the
+// game and described there shows here.
 //
-// window.soundStudio is there for tests ({ sound, play }).
+// window.soundStudio is there for tests ({ sound, play, beds }).
 
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../audio/catalog.js";
 import { ON_DEMAND, RECORDED, SOURCES } from "../audio/recorded.js";
@@ -27,6 +28,9 @@ const FEET = Object.fromEntries(Object.entries(GAITS).filter(([, { sound }]) => 
 const WALK = { steps: 4, apart: 0.5, speed: 1.5 };
 
 const sound = new Sound({ volumes: VOLUMES });
+
+// The ambience's beds playing (name → how loud: as the game plays them at their loudest)
+const beds = {};
 
 sound.setListener(0, 0);
 sound.prepare();
@@ -128,12 +132,10 @@ function soundCard(name) {
     const recorded = RECORDED[name]?.length ?? 0;
     const made = SOUNDS[name]?.variants ?? 0;
     const walking = SURFACE(name) || FEET[name];
-    const controls = [
-        row("Hear", [
-            button("▶ As in the game", () => play(name), "primary"),
-            ...(walking ? [button("A walk", () => Array.from({ length: WALK.steps }, (_, k) => play(name, { delay: k * WALK.apart })))] : []),
-        ]),
-    ];
+    const controls = [row("Hear", RECORDED[name]?.[0].loop ? [bedToggle(name)] : [
+        button("▶ As in the game", () => play(name), "primary"),
+        ...(walking ? [button("A walk", () => Array.from({ length: WALK.steps }, (_, k) => play(name, { delay: k * WALK.apart })))] : []),
+    ])];
 
     if (recorded) {
         controls.push(row("Recordings", Array.from({ length: recorded }, (_, k) => button(String(k + 1), () => play(name, { variant: k }), "small"))));
@@ -154,6 +156,22 @@ function soundCard(name) {
     }
 
     return card({ name, label, about, plays, recorded: Boolean(recorded), made, controls });
+}
+
+// A bed's button: started looping (with any others started), and stopped
+function bedToggle(name) {
+    const toggle = button("▶ Start", () => {
+        if (beds[name]) {
+            delete beds[name];
+        } else {
+            beds[name] = 1;
+        }
+
+        sound.setAmbience({ beds });
+        toggle.textContent = beds[name] ? "■ Stop" : "▶ Start";
+    }, "primary");
+
+    return toggle;
 }
 
 // The wind's card: started and stopped
@@ -252,4 +270,4 @@ function wire() {
 
 build();
 wire();
-window.soundStudio = { sound, play };
+window.soundStudio = { sound, play, beds };
