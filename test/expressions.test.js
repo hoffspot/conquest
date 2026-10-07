@@ -1,12 +1,14 @@
 // The face's expressions (client/js/characters/expressions.js): Vitruvian's own FACS shapes for
-// blinking, smiling and frowning, laid out once for the GPU, and a character's face eased towards
-// what it's doing, with its blinks; and the eyelashes (lashes.js), which swing with the lids and
-// are drawn as strands
+// blinking, smiling and frowning, the mouth opened wide and its visemes for speaking, laid out once
+// for the GPU, and a character's face eased towards what it's doing, with its blinks; the mouth's
+// inside (teeth, gums and tongue: mouth.js); and the eyelashes (lashes.js), which swing with the
+// lids and are drawn as strands
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readHumanData } from "../scripts/lib/human-data.js";
 import { expressionData, EXPRESSIONS, Expressions, FACES } from "../client/js/characters/expressions.js";
 import { lashTexture, lashUVs } from "../client/js/characters/lashes.js";
+import { BODIES, motions } from "../client/js/characters/motioncheck.js";
 
 const vitruvian = readHumanData("vitruvian");
 const human = readHumanData("human");
@@ -47,8 +49,32 @@ describe("the face's expressions", () => {
 
                 // (The face: from the chin to the top of the forehead, in front of the ears)
                 assert.ok(Math.abs(x) < 0.09 && y > eyeY - 0.14 && y < eyeY + 0.13 && z > -0.02, `${name}: vertex ${vertices[i]} at ${[x, y, z].map((value) => value.toFixed(3))}`);
-                assert.ok(move < 0.02, `${name}: vertex ${vertices[i]} moves ${move.toFixed(4)} m`);
+                // (No further than 2 cm: but the mouth opened wide, its jaw dropped 4 or 5)
+                assert.ok(move < (name === "open" ? 0.05 : 0.02), `${name}: vertex ${vertices[i]} moves ${move.toFixed(4)} m`);
             }
+        }
+    });
+
+    it("moves the middle of the face as either side of it: a shape's halves, added up, don't move it twice", () => {
+        // (Its largest move on the middle, half way between the eyes (Vitruvian was moved a
+        // millimetre or so to stand on MakeHuman's joints), within 0.3 mm of it, and beside it,
+        // 1 to 6 mm off it: with the halves' middle moved twice, the brows raised moved it 16 mm,
+        // beside it 7)
+        const across = (eyeMiddle(1)[0] + eyeMiddle(-1)[0]) / 2;
+
+        for (const [name, { vertices, deltas }] of vitruvian.expressions) {
+            let middle = 0;
+            let beside = 0;
+
+            for (let i = 0; i < vertices.length; i++) {
+                const x = Math.abs(at(vitruvian, vertices[i])[0] - across);
+                const move = Math.hypot(deltas[i * 3], deltas[i * 3 + 1], deltas[i * 3 + 2]) * vitruvian.deltaUnit;
+
+                middle = x < 0.0003 ? Math.max(middle, move) : middle;
+                beside = x > 0.001 && x < 0.006 ? Math.max(beside, move) : beside;
+            }
+
+            assert.ok(middle < beside * 1.25 + 0.0005, `${name}: the middle moves ${(middle * 1000).toFixed(1)} mm, beside it ${(beside * 1000).toFixed(1)}`);
         }
     });
 
@@ -61,6 +87,55 @@ describe("the face's expressions", () => {
         }
 
         assert.ok(lowest < -0.006, `the lids come down ${(-lowest * 1000).toFixed(1)} mm`);
+    });
+
+    it("opens the mouth onto its inside: the jaw drops, and the lower teeth and tongue with it", () => {
+        const mouth = new Set(Array.from(vitruvian.renderIndices("mouth"), (r) => vitruvian.renderSource[r]));
+        const { vertices, deltas } = vitruvian.expressions.get("open");
+        let inside = 0;
+        let lowest = 0;
+
+        for (let i = 0; i < vertices.length; i++) {
+            if (mouth.has(vertices[i])) {
+                inside++;
+                lowest = Math.min(lowest, deltas[i * 3 + 1] * vitruvian.deltaUnit);
+            }
+        }
+
+        assert.ok(mouth.size > 1000 && inside > mouth.size / 3, `${inside} of the mouth's ${mouth.size} vertices move`);
+        assert.ok(lowest < -0.02, `the lower teeth come down ${(-lowest * 1000).toFixed(1)} mm`);
+    });
+
+    it("keeps the mouth's inside behind the lips, closed, on every people's bodies at the ends of their builds", () => {
+        const source = (part) => [...new Set(Array.from(vitruvian.renderIndices(part), (r) => vitruvian.renderSource[r]))];
+        const skin = new Set(source("body"));
+        const mouth = source("mouth").filter((v) => !skin.has(v));
+        const motion = motions().find(({ id }) => id === "draw/sword");
+
+        for (const body of [{ id: "default", shape: {} }, ...BODIES.map((one) => ({ id: one.id, shape: motion.look(one).shape }))]) {
+            const { positions } = vitruvian.shape(body.shape);
+            const p = (v) => [positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]];
+            const [, mouthY] = p(mouth[0]);
+            const front = Math.max(...mouth.map((v) => p(v)[2]));
+            const near = [...skin].filter((v) => Math.abs(p(v)[0]) < 0.05 && Math.abs(p(v)[1] - mouthY) < 0.06 && p(v)[2] > front - 0.08);
+
+            // (Before each of its vertices, the skin furthest forward there: none's in front of it.
+            // Moved a centimetre forward, a few dozen show through, by up to 5 mm)
+            for (const v of mouth) {
+                const [x, y, z] = p(v);
+                let ahead = -Infinity;
+
+                for (const s of near) {
+                    const [sx, sy, sz] = p(s);
+
+                    if (Math.abs(sx - x) < 0.0025 && Math.abs(sy - y) < 0.0025) {
+                        ahead = Math.max(ahead, sz);
+                    }
+                }
+
+                assert.ok(ahead === -Infinity || z < ahead + 0.0005, `${body.id}: the mouth's vertex ${v} ${((z - ahead) * 1000).toFixed(1)} mm in front of the lips`);
+            }
+        }
     });
 
     it("seats the eyelashes on the lids: each card's roots on the lid's skin, not out in front of it", () => {
@@ -221,6 +296,69 @@ describe("a character's face (Expressions)", () => {
         face.talking = false;
         play(face, 2, { fall: { end: Infinity } });
         assert.ok(Math.abs(weight(face, "blink") - FACES.dead.blink) < 0.01, "dead: no blinking, the eyes left a little open");
+    });
+
+    it("speaks when talked to: a sound's shape of the mouth each syllable, in phrases, closed between them", () => {
+        const face = new Expressions(seeded(11));
+        const visemes = ["ah", "eh", "ee", "oo", "f"];
+        let changes = 0;
+        let closed = 0;
+        let last = null;
+        let jaw = 0;
+        // (How far the jaw's dropped on each sound, at its loudest: the most)
+        const dropped = Object.fromEntries(visemes.map((name) => [name, 0]));
+
+        face.blinks = false;
+        face.talking = true;
+
+        for (let t = 0; t < 20; t += 1 / 60) {
+            face.update(1 / 60, {});
+
+            const loudest = visemes.reduce((best, name) => (weight(face, name) > weight(face, best) ? name : best));
+
+            closed += weight(face, loudest) < 0.05 ? 1 : 0;
+            changes += weight(face, loudest) > 0.3 && loudest !== last ? 1 : 0;
+            last = weight(face, loudest) > 0.3 ? loudest : last;
+            jaw = Math.max(jaw, weight(face, "open"));
+            dropped[loudest] = weight(face, loudest) > 0.5 ? Math.max(dropped[loudest], weight(face, "open")) : dropped[loudest];
+        }
+
+        // (Syllables, a few a second; pauses between phrases, a third of the time or so; the jaw
+        // dropping with each sound, most for an "ah", hardly for an "f", never as wide as a shout)
+        assert.ok(changes > 40, `${changes} sounds in 20 s`);
+        assert.ok(closed > 60 * 2 && closed < 60 * 12, `the mouth closed ${(closed / 60).toFixed(1)} s of 20`);
+        assert.ok(jaw > 0.15 && jaw < 0.4, `the jaw dropped to ${jaw.toFixed(2)}`);
+        assert.ok(dropped.ah > dropped.ee && dropped.ee > dropped.f, `the jaw dropped ${JSON.stringify(dropped)}`);
+
+        face.talking = false;
+        play(face, 1);
+        assert.ok(visemes.every((name) => weight(face, name) < 0.01), "quiet once no longer talked to");
+    });
+
+    it("shouts now and then as an attack starts: the mouth open, its lips drawn back from the teeth, held a moment", () => {
+        const face = new Expressions(seeded(13));
+        let shouts = 0;
+
+        face.blinks = false;
+
+        for (let k = 0; k < 40; k++) {
+            const attack = { attack: { weapon: "sword" } };
+            let widest = 0;
+            let bared = 0;
+
+            for (let t = 0; t < 1; t += 1 / 60) {
+                face.update(1 / 60, attack);
+                widest = Math.max(widest, weight(face, "open"));
+                bared = Math.max(bared, weight(face, "snarl"));
+            }
+
+            shouts += widest > 0.45 ? 1 : 0;
+            assert.equal(widest > 0.45, bared > 0.7, "the teeth bared with the mouth opened");
+        }
+
+        assert.ok(shouts >= 5 && shouts <= 22, `${shouts} war cries in 40 attacks`);
+        play(face, 1);
+        assert.ok(weight(face, "open") < 0.01 && weight(face, "snarl") < 0.01, "the mouth closed again at rest");
     });
 
     it("shows its mood at rest: one of its faces, or weights of its own", () => {

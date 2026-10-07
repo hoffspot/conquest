@@ -7,6 +7,6 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "ee2e99177e",
+    release: "8c7097de2f",
     models: {},
 });

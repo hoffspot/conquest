@@ -4972,3 +4972,16 @@ converted data is to be measured in M8 against today's hm08 data.
     with the lids' edges (moved as the lid's skin nearest them, a closing lid crumpled them), and
     are drawn as tapering strands rather than a grey see-through sheet, the lower lid's shorter.
   - The character lab's *Face* tab shows each face or one expression held.
+
+- **2026-10-07, Vitruvian's mouth: its inside, speaking and war cries** (§10;
+  docs/CHARACTERS.md *The Vitruvian body*).
+  - The mouth's inside, Vitruvian's own teeth, gums and tongue (2,500 triangles, from 17,548),
+    with its own picture (512 texels, from its 4K EXR) darkening into the throat. It's kept after
+    every other vertex and the sliders' principal components are worked out without it, so every
+    body is as it was to the bit (the motion check unchanged). Closed, it stays behind the lips on
+    every people's bodies.
+  - Six more of Vitruvian's shapes: the mouth opened wide, and five visemes. Folk talked to speak
+    in phrases, a sound's shape every syllable; three attacks in ten start with a war cry; the hurt
+    bare their teeth, the dead's jaws are slack.
+  - The GPU layout updates only the triangles round the vertices an expression moves (3,800 slots,
+    1.6 MB). The download is 200 KB more.

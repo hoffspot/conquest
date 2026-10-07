@@ -128,7 +128,24 @@ describe("the Vitruvian body (client/characters/vitruvian.*)", () => {
     });
 
     it("has MakeHuman's parts, drawn with 16-bit indices, and every shape the sliders blend", () => {
-        assert.deepEqual(Object.keys(vitruvian.parts), Object.keys(human.parts));
+        // (And the mouth's inside, its own, with its own picture)
+        assert.deepEqual(Object.keys(vitruvian.parts), [...Object.keys(human.parts), "mouth"]);
+        assert.deepEqual(vitruvian.manifest.pictures, { mouth: "vitruvian/mouth.jpg" });
+        assert.equal(jpeg.decode(readFileSync(new URL(vitruvian.manifest.pictures.mouth, folder))).width, 512);
+
+        // (No vertex in two parts, where the mouth's inside meets the lips too: the body's own
+        // vertices, their facing and their neighbours, as everything that works on them takes
+        // them, are as they were before it had a mouth)
+        const owner = new Map();
+
+        for (const part of Object.keys(vitruvian.parts)) {
+            for (const r of vitruvian.renderIndices(part)) {
+                const v = vitruvian.renderSource[r];
+
+                assert.equal(owner.get(v) ?? part, part, `vertex ${v} in the ${owner.get(v)} and the ${part}`);
+                owner.set(v, part);
+            }
+        }
         assert.ok(vitruvian.renderSource.length < 65536 && vitruvian.vertexCount < 65536);
         assert.ok(vitruvian.indices.every((r) => r < vitruvian.renderSource.length));
         assert.ok(vitruvian.renderSource.every((v) => v < vitruvian.vertexCount));

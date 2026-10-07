@@ -139,8 +139,9 @@ as it is:
   where it was set on its eyes, before it was seated: so every shape, and the bodies the sliders
   make, are as they were to the bit; seated by them, the sliders' principal components came out
   up to 0.05 mm otherwise, and that alone moved 7 of the motion check's 8,400 results by up to a
-  centimetre) and swung with the lids' edges in its expressions (below). The mouth's inside,
-  irises and tear lines are left out for now.
+  centimetre) and swung with the lids' edges in its expressions (below). The mouth's inside is
+  its own (its teeth, gums and tongue: *The mouth's inside*, below); its irises and tear lines
+  are left out.
 - **Bones.** Its own Mixamo rig and weights: the same 52 bones as MakeHuman's, in the same order.
 - **Size.** It's scaled to the height of MakeHuman's default body (it's 5% taller), so the game's
   measures, doorways and animations fit it.
@@ -285,10 +286,11 @@ two-handed blows, which aren't moved out of the torso, and kicks) and things hel
 194 to 194; 1,036 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
-**The face's expressions** (`expressions.js`). Characters on Vitruvian's body blink and show
-what they're doing on their faces, from eight of its own FACS shapes (`EXPRESSIONS` in the build:
-a left and a right half as one), only those that keep the lips together, as there's no inside of
-the mouth yet:
+**The face's expressions** (`expressions.js`). Characters on Vitruvian's body blink, speak and
+show what they're doing on their faces, from fifteen of its own shapes (`EXPRESSIONS` in the
+build: a left and a right half as one): eight of its FACS shapes, the mouth opened wide and its
+lips drawn back from the teeth, and five of its visemes (the mouth's shapes as a sound's made,
+numbered as Microsoft's are), enough for talking:
 
 | Expression | Vitruvian's shapes |
 |---|---|
@@ -300,12 +302,32 @@ the mouth yet:
 | frown | Frown_Left, Frown_Right |
 | browsUp | Eyebrows_InnerBrow_Raised_Left, _Right |
 | browsKnit | Eyebrows_Frown_Left, _Right |
+| open | Mouth_Large_Opened (the jaw dropped 4.5 cm) |
+| snarl | Lips_Up_Raised_Left, _Right, Lips_Dn_Lower_Left, _Right |
+| ah, eh, ee, oo, f | ae_ax_ah_01, ey_eh_uh_04, y_iy_ih_ix_06, w_uw_07, f_v_18 |
 
+- **Halves added up.** Most of Vitruvian's left and right halves split hard down the middle of the
+  face: each moves only its own side, and the vertices on the middle in full, so added up they
+  moved those twice as far as either side of them (a ridge down the forehead with the brows
+  raised, 16 mm against 7 beside it; a notch in the lower lip drawn down). Where a pair's halves
+  move the far side by less than half as much as the middle (`HARD_SPLIT`: the frown, the brows
+  and the lower lip, a seventh at most), the middle's moved once. The upper lip's halves fade
+  across it instead (each moves the far side three quarters as much or more), so they're added
+  up there.
 - **What a face shows** (`FACES`), eased towards it (most of the way in a quarter of a second):
-  attacking, angry with the brows knit and the eyes narrowed; hurt (a flinch or knocked down),
-  squinting with the brows raised and the mouth down; dead, the eyes left a little open; talked
-  to, a little smile and the brows lifting now and then, as when speaking; and at rest, a
-  part's `mood` (roles.js: the serving wenches, the madam and the courtesans smile).
+  attacking, angry with the brows knit and the eyes narrowed, and now and then (three attacks in
+  ten, `SHOUT`) a war cry, the mouth open and its lips drawn back from the teeth for half a second
+  (wide open alone, the mouth's round, as in surprise); hurt (a flinch or knocked down),
+  squinting with the brows raised, the mouth down and the teeth bared a little; dead, the eyes
+  left a little open and the jaw slack; talked to, speaking (below), a little smile and the brows
+  lifting now and then; and at rest, a part's `mood` (roles.js: the serving wenches, the madam
+  and the courtesans smile).
+- **Speaking** (`SPEECH`): in phrases of 1.2 to 3 seconds with pauses of 0.4 to 1.1 between them,
+  the mouth closed; in a phrase, a sound's shape every 0.08 to 0.17 s (one of the five visemes,
+  made most or all of the way), the jaw dropping with each by as much as the sound's said with
+  (`JAW`: a third of the way open for an "ah", hardly at all for an "f"; the shapes themselves
+  keep the jaw near shut). The mouth's shapes ease three times as fast as the rest of the face
+  (`MOUTH_EASE`): a syllable's a tenth of a second or so.
 - **Blinking**: every 1.8 to 6 seconds, now and then twice; shut in 0.06 s, held 0.04 s and
   opened in 0.11 s, and shut a little past the shape (1.15 of it): by the shape alone, the upper
   lid stops just in front of the lower, and from above, as the game's camera is, the eye shows
@@ -318,25 +340,56 @@ the mouth yet:
   eye's opening (the skin is closed round the eye: past the edge it lines the lid, inwards).
 - **On the GPU, shared.** three.js's own morph targets keep a texture of every target's moves at
   every vertex for each geometry: each character has its own, so a quarter of a megabyte a shape
-  for each of the tavern's folk. Instead the moves are kept once for the kit, only at the 2,300
-  vertices they move or turn (a 2048 × 18 float texture, 576 KB, laid out as the kit loads: some
-  tens of milliseconds), with how each expression turns each vertex's normal (worked out on the
-  base body), so a closed lid is lit as one, not as the fold it was. Each vertex's slot in it is
-  an attribute (`faceSlot`, -1 for none); a character's skin and lashes add up its expressions'
-  moves and turns before skinning, by its own weights (a uniform): one more texture read in their
-  shaders (16 at most, as an iPhone allows, still). They're 16 KB more of the download.
+  for each of the tavern's folk. Instead the moves are kept once for the kit, only at the 3,840
+  vertices they move or turn (a 2048 × 57 float texture, 1.8 MB, laid out as the kit loads: about
+  a tenth of a second in Node), with how each expression turns each vertex's normal (worked out on
+  the base body), so a closed lid is lit as one, not as the fold it was. Each vertex's slot in it
+  is an attribute (`faceSlot`, -1 for none); a character's skin, lashes and mouth's inside add up
+  its expressions' moves and turns before skinning, by its own weights (a uniform): one more
+  texture read in their shaders (16 at most, as an iPhone allows, still).
 - **Where they're shown.** Every character on the game's body with its own skin (a beast's hide
   shows none, nor does MakeHuman's body, which has no expressions): updated as its body's posed
   (`Avatar.update`: less often far off). A shadow isn't moved by them (three.js's depth material
   is its own): a blink's isn't missed. The character lab's *Face* tab shows any face or one
   expression held (and `?expression=angry&amount=0.8&blink=0`).
 
-`test/expressions.test.js` checks that the expressions are on the face alone, that a blink brings
-the upper lids and their lashes down without crumpling a card, the GPU layout, the blinking and
-the faces; and the lashes' strands.
+**The mouth's inside** (`mouth.js`). Vitruvian's own teeth, gums and tongue (its `Mouth` material:
+17,548 triangles, brought down to 2,500, within about a third of a millimetre), weighted to the
+head; there's no jaw bone (Mixamo's rig has none), so the jaw drops by its shapes (`open`, the
+visemes), which move the lower teeth and tongue with it.
 
-Still to come: its own skin textures, and the inside of the mouth (and with it open-mouthed
-expressions: a shout, speech).
+- **Its picture**: Vitruvian's own (`Mouth_Color`, its tile 1008: a 4096-texel EXR, read with
+  three.js's EXRLoader), brought down to 512 texels (`vitruvian/mouth.jpg`, 47 KB), loaded with
+  the kit (`loadPictures`) and shared by everyone.
+- **Darkening into the throat.** Nothing lights a mouth's inside but what comes in between the
+  lips, and three.js's light reaches it all alike: the back of an open mouth was lit as its front.
+  Its shader darkens it by how far back it is (`SHADE`): the front teeth as they are, to a twelfth
+  of the light a third of the way to the throat. How far back is measured from each character's
+  own mouth as its body's shaped (`fitMouth`, two uniforms of its own material): the heroine's
+  mouth sits a centimetre behind the base body's, and measured from that, her front teeth were
+  grey; an orc's sits two and a half in front.
+- **Its shapes.** Every slider moves it as the face before it moves (it's placed on MakeHuman's
+  face, as the lips are). It's kept after every other vertex, and the sliders' principal
+  components are worked out without it (its own are the same sums of the shapes' changes there),
+  so every body the sliders make is as it was, to the bit. Where it meets the lips it has its own
+  vertices (40 copies of the skin's there, moved alike): the skin's are the body's alone, their
+  facing and neighbours as they were, so what works on the body's own vertices (where it touches
+  the ground, the motion check) takes the same as before. With
+  the mouth closed it stays behind the lips on every people's bodies at the ends of their builds
+  (the teeth some 5 mm behind).
+- **Where it's drawn**: in full only (not from afar: a mouth's inside is a few pixels there), its
+  own group and material. MakeHuman's body has none.
+- The mouth's inside, its shapes and the new expressions are 156 KB more of the body's data, and
+  its picture 47 KB: 203 KB more of the download (10.0 MB in all).
+
+`test/expressions.test.js` checks that the expressions are on the face alone, that a blink brings
+the upper lids and their lashes down without crumpling a card, that the middle of the face moves
+as either side of it, that the wide-open mouth drops the jaw and the lower teeth and tongue with
+it, that the mouth's inside stays behind the lips on every people's bodies, the GPU layout, the
+blinking, speaking (the jaw dropping most for an "ah") and war cries (the teeth bared), and the
+faces; and the lashes' strands.
+
+Still to come: its own skin textures.
 
 ### Skin, eyes and hair
 

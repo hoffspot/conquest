@@ -35,6 +35,8 @@ import { fileURLToPath } from "node:url";
 import { deflateSync, gunzipSync, gzipSync } from "node:zlib";
 import jpeg from "jpeg-js";
 import { MeshoptSimplifier } from "meshoptimizer";
+import { FloatType } from "three";
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { allDetailTargetNames } from "../client/js/characters/details.js";
 import { faceFrame } from "../client/js/characters/face.js";
@@ -48,12 +50,18 @@ import { namesOf, readNpy, readNpz } from "./lib/npy.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Vitruvian's materials (the order of char.blend's mesh's): which part each face is in, or none
-// (the mouth's inside, the irises and pupils behind the cornea, the tear line)
+// (the irises and pupils behind the cornea, the tear line)
 const MATERIALS = ["Iris", "Mouth", "Pupil", "Sclera_Cornea", "UDIM.Skin", "charmorph_censor", "EyeHair", "Tearline"];
-const PART_OF = { "UDIM.Skin": "body", "charmorph_censor": "body", "Sclera_Cornea": "eyes" };
+const PART_OF = { "UDIM.Skin": "body", "charmorph_censor": "body", "Sclera_Cornea": "eyes", "Mouth": "mouth" };
 
-// How many triangles the skin is brought down to
+// How many triangles the skin is brought down to, and the mouth's inside (its teeth, gums and
+// tongue: 17,548 of them; at 2,500 they're within about a third of a millimetre of it)
 const SKIN_TRIANGLES = 28000;
+const MOUTH_TRIANGLES = 2500;
+
+// The mouth's inside's texture: its tile (UDIM 1008: u 7 to 8), and how big its picture is
+const MOUTH_TILE = 7;
+const MOUTH_PICTURE = 512;
 
 // The same tolerance, steps and units as the MakeHuman body's (build-characters.js)
 const PCA_TOLERANCE = 0.0015;
@@ -64,8 +72,10 @@ const DELTA_UNIT = 0.0001;
 const DETAIL_CUTOFF = 0.00005;
 
 // The face's expressions (Vitruvian's own, its morphs/L3: FACS shapes), each the sum of these,
-// a left and a right half as one; only those that keep the lips together, as there's no inside
-// of the mouth to show (expressions.js plays them)
+// a left and a right half as one (expressions.js plays them): the face's; the mouth opened wide,
+// and its lips drawn back from the teeth (with it, a shout); and five of its visemes (the mouth's
+// shapes as a sound's made, by Microsoft's numbering), enough for talking: "ah", "eh", "ee",
+// "oo", and "f" (the lower lip under the upper teeth)
 const EXPRESSIONS = {
     blink: ["Eyes_Closed_Left", "Eyes_Closed_Right"],
     squint: ["Eyes_Squint"],
@@ -75,7 +85,21 @@ const EXPRESSIONS = {
     frown: ["Frown_Left", "Frown_Right"],
     browsUp: ["Eyebrows_InnerBrow_Raised_Left", "Eyebrows_InnerBrow_Raised_Right"],
     browsKnit: ["Eyebrows_Frown_Left", "Eyebrows_Frown_Right"],
+    open: ["Mouth_Large_Opened"],
+    snarl: ["Lips_Up_Raised_Left", "Lips_Up_Raised_Right", "Lips_Dn_Lower_Left", "Lips_Dn_Lower_Right"],
+    ah: ["ae_ax_ah_01"],
+    eh: ["ey_eh_uh_04"],
+    ee: ["y_iy_ih_ix_06"],
+    oo: ["w_uw_07"],
+    f: ["f_v_18"],
 };
+
+// How near the middle of the face (CharMorph's metres) a vertex is on it, where a shape's left and right halves
+// meet; and how little (of its move there) a half moves the far side of it, split hard there
+// (Vitruvian's frown, brows and lower lip: a seventh at most; its upper lip's halves fade across
+// it, three quarters and more)
+const SEAM = 0.0002;
+const HARD_SPLIT = 0.5;
 
 // How far round the eye (radians) a lash's vertices are from those of its column, which is
 // seated on its lid and swings with it in one piece (about its root, the column's nearest the
@@ -696,6 +720,48 @@ export function fitOnto(points, triangles, onto, ontoTriangles, pins = []) {
 }
 
 // A PNG of one 8-bit channel (`size` square), for the masks
+/**
+ * The mouth's inside's picture: its colour (Vitruvian's Mouth_Color, a linear 4096-texel EXR)
+ * brought down to MOUTH_PICTURE texels a side by averaging, in sRGB, as a JPEG (its first row the
+ * picture's top: its texture coordinates' v of 1).
+ */
+function mouthPicture(from) {
+    const file = readFileSync(path.join(from, "textures/4K/Mouth_Color.1008.exr"));
+    const loader = new EXRLoader().setDataType(FloatType);
+    const { width, height, data } = loader.parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
+    const channels = data.length / (width * height);
+    const step = width / MOUTH_PICTURE;
+    const pixels = new Uint8Array(MOUTH_PICTURE * MOUTH_PICTURE * 4);
+    const encode = (linear) => Math.round(255 * Math.min(1, Math.max(0, linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055)));
+
+    for (let y = 0; y < MOUTH_PICTURE; y++) {
+        for (let x = 0; x < MOUTH_PICTURE; x++) {
+            const sum = [0, 0, 0];
+
+            for (let j = 0; j < step; j++) {
+                for (let i = 0; i < step; i++) {
+                    const at = ((y * step + j) * width + x * step + i) * channels;
+
+                    for (let k = 0; k < 3; k++) {
+                        sum[k] += data[at + k];
+                    }
+                }
+            }
+
+            // (The loader's first row is the bottom's)
+            const to = ((MOUTH_PICTURE - 1 - y) * MOUTH_PICTURE + x) * 4;
+
+            for (let k = 0; k < 3; k++) {
+                pixels[to + k] = encode(sum[k] / (step * step));
+            }
+
+            pixels[to + 3] = 255;
+        }
+    }
+
+    return jpeg.encode({ data: pixels, width: MOUTH_PICTURE, height: MOUTH_PICTURE }, 85).data;
+}
+
 function grayPng(pixels, size) {
     const crcTable = Array.from({ length: 256 }, (_, n) => {
         let c = n;
@@ -877,7 +943,7 @@ async function main() {
     }
 
     // Vitruvian's faces, by part, as triangles of its vertices
-    const faceTriangles = { body: [], eyes: [] };
+    const faceTriangles = { body: [], eyes: [], mouth: [] };
 
     for (let f = 0; f < vitruvian.faceCount; f++) {
         const part = PART_OF[MATERIALS[vitruvian.materials[f]]];
@@ -944,6 +1010,38 @@ async function main() {
 
     for (const v of eyeVertices) {
         keep(`v${v}`, { kind: "vitruvian", v });
+    }
+
+    // The mouth's inside, brought down as the skin is, its texture coordinates its own tile's.
+    // Kept last: every vertex before it is as it was, and the shapes' principal components are
+    // worked out without it (below), so every body the sliders make is as it was, to the bit
+    const mouthRenderOf = new Map();
+    const mouthRender = [];
+    const mouthCorner = (f, k) => {
+        const l = f * 4 + k;
+        const v = vitruvian.corners[l];
+        const uv = [vitruvian.uvs[l * 2] - MOUTH_TILE, vitruvian.uvs[l * 2 + 1]];
+        const key = `${v} ${uv[0].toFixed(6)} ${uv[1].toFixed(6)}`;
+
+        if (!mouthRenderOf.has(key)) {
+            mouthRenderOf.set(key, mouthRender.length);
+            mouthRender.push({ v, uv });
+        }
+
+        return mouthRenderOf.get(key);
+    };
+    const mouthWhole = Uint32Array.from(faceTriangles.mouth.flatMap(([f, ...ks]) => ks.map((k) => mouthCorner(f, k))));
+    const mouthPositions = Float32Array.from(mouthRender.flatMap(({ v }) => [...vitruvian.positions.subarray(v * 3, v * 3 + 3)]));
+    const mouthUVs = Float32Array.from(mouthRender.flatMap(({ uv }) => uv));
+    const [mouth, mouthError] = MeshoptSimplifier.simplifyWithAttributes(mouthWhole, mouthPositions, 3, mouthUVs, 2, [0.5, 0.5], new Uint8Array(mouthRender.length), MOUTH_TRIANGLES * 3, 0.05, ["LockBorder"]);
+    const shaped = sources.length;
+
+    console.log(`the mouth's inside: ${mouthWhole.length / 3} triangles to ${mouth.length / 3} (error ${(mouthError * 100).toFixed(2)}% of its size)`);
+
+    // (Its own vertices, those where it meets the lips too: copies of the skin's there, moved
+    // alike, so the skin's are the body's alone, their facing and neighbours as they were)
+    for (const r of mouth) {
+        keep(`m${mouthRender[r].v}`, { kind: "vitruvian", v: mouthRender[r].v });
     }
 
     const count = sources.length;
@@ -1060,7 +1158,9 @@ async function main() {
     };
     const onSkin = placeOn([...new Set([...sources.filter(({ kind }) => kind === "vitruvian").map(({ v }) => v).filter((v) => !eyeVertices.includes(v)), ...jointVertices])], fitted, humanSkin, vitruvianNormals);
     const onEyes = placeOn(eyeVertices, laid, humanEyes, null);
-    const distances = [...onSkin.values()].map(({ distance }) => distance).sort((x, y) => x - y);
+    // (The skin's: not the mouth's inside, kept after it)
+    const mouthOnly = new Set(sources.slice(shaped).map(({ v }) => v));
+    const distances = [...onSkin].filter(([v]) => !mouthOnly.has(v)).map(([, { distance }]) => distance).sort((x, y) => x - y);
     const within = (share) => (distances[Math.floor(share * (distances.length - 1))] * 1000).toFixed(1);
 
     console.log(`fitted over each other: half the skin within ${within(0.5)} mm of MakeHuman's, 90% within ${within(0.9)} mm, 99% within ${within(0.99)} mm`);
@@ -1520,6 +1620,13 @@ async function main() {
     }
 
     parts.eyes.count = indices.length - parts.eyes.start;
+    parts.mouth = { start: indices.length };
+
+    for (const r of mouth) {
+        indices.push(drawAt(`m${r}`, sourceOf.get(`m${mouthRender[r].v}`), mouthRender[r].uv));
+    }
+
+    parts.mouth.count = indices.length - parts.mouth.start;
 
     if (renderSource.length > 65535 || count > 65535) {
         throw new Error(`Too many vertices for 16-bit indices: ${count} (${renderSource.length} drawn)`);
@@ -1528,12 +1635,20 @@ async function main() {
     // Each vertex's four strongest bones, in 255ths (the strongest first): Vitruvian's own weights,
     // and the eyelashes' MakeHuman's
     const influences = sources.map(() => []);
-    const vitruvianSource = new Map(sources.map((entry, i) => [entry, i]).filter(([entry]) => entry.kind === "vitruvian").map(([entry, i]) => [entry.v, i]));
+    // (Each Vitruvian vertex's kept ones: two where the mouth's inside meets the lips, the skin's
+    // and its own)
+    const vitruvianSources = new Map();
+
+    sources.forEach((entry, i) => {
+        if (entry.kind === "vitruvian") {
+            vitruvianSources.set(entry.v, [...(vitruvianSources.get(entry.v) ?? []), i]);
+        }
+    });
 
     for (const [name, list] of vitruvian.weights) {
         for (const [v, weight] of list) {
-            if (vitruvianSource.has(v)) {
-                influences[vitruvianSource.get(v)].push([boneIndex.get(name), weight]);
+            for (const i of vitruvianSources.get(v) ?? []) {
+                influences[i].push([boneIndex.get(name), weight]);
             }
         }
     }
@@ -1559,7 +1674,9 @@ async function main() {
         });
     });
 
-    // The macro shapes in principal components (as build-characters.js)
+    // The macro shapes in principal components (as build-characters.js), worked out on the
+    // vertices before the mouth's inside (`shaped`): the components there are as they were without
+    // it, and its own are the same sums of the shapes' changes there
     const macroShapes = allMacroTargetNames().map((name) => ({ name, ...carried.get(name) }));
     const n = macroShapes.length;
     const gram = Array.from({ length: n }, () => new Array(n).fill(0));
@@ -1568,7 +1685,7 @@ async function main() {
         for (let j = i; j < n; j++) {
             let sum = 0;
 
-            for (let k = 0; k < count * 3; k++) {
+            for (let k = 0; k < shaped * 3; k++) {
                 sum += macroShapes[i].deltas[k] * macroShapes[j].deltas[k];
             }
 
@@ -1605,7 +1722,7 @@ async function main() {
 
             coefficients[i].push(c);
 
-            for (let j = 0; j < residual.length; j += 3) {
+            for (let j = 0; j < shaped * 3; j += 3) {
                 residual[j] -= c * component[j];
                 residual[j + 1] -= c * component[j + 1];
                 residual[j + 2] -= c * component[j + 2];
@@ -1619,14 +1736,22 @@ async function main() {
     }
 
     const packer = new Packer();
-    const pcaScales = components.map((component) => component.reduce((max, value) => Math.max(max, Math.abs(value)), 0) / PCA_STEPS);
+    const pcaScales = components.map((component) => component.subarray(0, shaped * 3).reduce((max, value) => Math.max(max, Math.abs(value)), 0) / PCA_STEPS);
     const pcaData = new Int16Array(components.length * count * 3);
+    let pcaClamped = 0;
 
     components.forEach((component, k) => {
         for (let j = 0; j < component.length; j++) {
-            pcaData[k * count * 3 + j] = Math.round(component[j] / pcaScales[k]);
+            const step = Math.round(component[j] / pcaScales[k]);
+
+            pcaClamped += Math.abs(step) > 32767 ? 1 : 0;
+            pcaData[k * count * 3 + j] = Math.max(-32767, Math.min(32767, step));
         }
     });
+
+    if (pcaClamped) {
+        throw new Error(`${pcaClamped} of the mouth's inside's principal components' changes too big for their steps`);
+    }
 
     // The detail and bust shapes, sparse: the vertices they move by more than a twentieth of a
     // millimetre
@@ -1693,10 +1818,11 @@ async function main() {
     // vertices, and the eyelashes swung with the lids' edges (packed after the rest, so the rest
     // lies where it did)
     let widestSwing = 0;
+    // (Where each vertex is across the face, as CharMorph keeps it: its middle at 0)
+    const faceX = readNpy(path.join(from, "morphs/L1/Default.npy")).data.filter((_, j) => j % 3 === 0);
     const expressions = Object.entries(EXPRESSIONS).map(([name, parts]) => {
         const deltas = new Float64Array(count * 3);
-
-        for (const part of parts) {
+        const partMoves = new Map(parts.map((part) => {
             const { idx, delta } = readNpz(path.join(from, `morphs/L3/${part}.npz`));
             const moves = new Map();
 
@@ -1704,8 +1830,13 @@ async function main() {
                 moves.set(v, toOurs(delta.data[k * 3], delta.data[k * 3 + 1], delta.data[k * 3 + 2]).map((value) => value * scale));
             });
 
+            return [part, moves];
+        }));
+        const once = seamMovedOnce(partMoves, faceX);
+
+        for (const [part, moves] of partMoves) {
             sources.forEach((entry, i) => {
-                const move = entry.kind === "vitruvian" ? moves.get(entry.v) : undefined;
+                const move = entry.kind === "vitruvian" && !once.get(part)?.has(entry.v) ? moves.get(entry.v) : undefined;
 
                 if (move) {
                     for (let k = 0; k < 3; k++) {
@@ -1768,6 +1899,7 @@ async function main() {
         deltaUnit: DELTA_UNIT,
         landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4, shoulder: shoulderOffset },
         masks: MASKS.map((name) => `vitruvian/masks/${name}.png`),
+        pictures: { mouth: "vitruvian/mouth.jpg" },
     };
     const bytes = packer.toBytes();
 
@@ -1798,6 +1930,7 @@ async function main() {
 
     writeFileSync(path.join(target, "vitruvian.bin"), packed);
     writeFileSync(path.join(target, "vitruvian.json"), `${JSON.stringify(manifest)}\n`);
+    writeFileSync(path.join(target, "vitruvian/mouth.jpg"), mouthPicture(from));
 
     console.log(`${count} vertices (${renderSource.length} to draw), ${indices.length / 3} triangles, ${bones.length} bones`);
     console.log(`${n} macro shapes in ${components.length} components (worst error ${(worst * 1000).toFixed(2)} mm); ${details.length} detail and bust shapes`);
@@ -1823,6 +1956,38 @@ async function main() {
 
     console.log(`areolae: ${areolae.map(({ radius }) => (radius * 1000).toFixed(1)).join(" and ")} mm across from their nipples`);
     writeMasks({ target, human, laid: fitted, areolae, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace });
+}
+
+// The vertices down the middle of the face that a shape's left and right halves split hard there
+// both move, each in full (each half moves only its own side, and the middle as the whole shape
+// does): added up, the middle moved twice as far as either side of it (a ridge down the brow
+// raised, a notch in the lower lip). Those the right half leaves to the left, by part. (Halves
+// that fade across the middle instead, each moving it part of the way, are added up there: the
+// upper lip's raised)
+function seamMovedOnce(partMoves, x) {
+    const once = new Map();
+    const onSeam = (v) => Math.abs(x[v]) <= SEAM;
+
+    for (const [left, a] of partMoves) {
+        const right = left.endsWith("_Left") ? `${left.slice(0, -"_Left".length)}_Right` : null;
+        const b = partMoves.get(right);
+
+        if (!b) {
+            continue;
+        }
+
+        // (Its largest move on the middle, and on the far side of it: a hard split's next to none)
+        const seam = [...a.keys()].filter((v) => onSeam(v) && b.has(v));
+        const middle = Math.max(0, ...seam.flatMap((v) => [length(a.get(v)), length(b.get(v))]));
+        const across = (moves, side) => Math.max(0, ...[...moves].filter(([v]) => !onSeam(v) && Math.sign(x[v]) !== side).map(([, move]) => length(move)));
+        const sideOf = (moves) => Math.sign([...moves].reduce((sum, [v, move]) => sum + x[v] * length(move), 0));
+
+        if (across(a, sideOf(a)) < middle * HARD_SPLIT && across(b, sideOf(b)) < middle * HARD_SPLIT) {
+            once.set(right, new Set(seam));
+        }
+    }
+
+    return once;
 }
 
 // How much each of the MakeHuman body's vertices is in one of its masks (a JPEG in its texture
