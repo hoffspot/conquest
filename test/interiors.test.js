@@ -350,6 +350,20 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         return { world, battle };
     }
 
+    it("fills a people's own tavern with folk of that people, each looked as their part (not as Wenches and Ale's humans)", () => {
+        const human = generateWorld({ seed: 1 }).folk;
+
+        assert.ok(human.every(({ preset, people }) => preset && !people), "Wenches and Ale's own");
+
+        for (const people of ["elf", "darkElf", "orc", "cat", "lizard"]) {
+            const folk = generateWorld({ seed: 1, people }).folk;
+
+            assert.deepEqual(folk.map(({ id }) => id), human.map(({ id }) => id), people);
+            assert.ok(folk.every((one) => one.people === people && !one.preset && one.local === one.id && Number.isFinite(one.seed)), people);
+            assert.equal(new Set(folk.map(({ seed }) => seed)).size, folk.length, `${people}: each their own look`);
+        }
+    });
+
     it("puts a barkeep behind the bar, two wenches, patrons on benches facing the tables, and the madam and four courtesans upstairs", () => {
         const world = generateWorld({ seed: 1 });
         const folk = tavernFolk();

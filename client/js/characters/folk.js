@@ -5,7 +5,8 @@
 // that go with it, how they wear their hair and beard, and what they wear and carry for their
 // part, each picked from the seed. Folk of another people than humans have their people's bodies,
 // skins and parts (peoples.js), built and dressed as their part has them. Wenches and Ale's folk
-// keep their own looks (presets.js FOLK). Pure data, no DOM.
+// keep their own looks (presets.js FOLK), but in a start town of another people, where its tavern's
+// folk are of that people and made up here. Pure data, no DOM.
 
 import { createRandom } from "../core/random.js";
 import { everydayDress } from "./dress.js";

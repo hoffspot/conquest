@@ -174,9 +174,14 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
         tavern,
         maps,
         links,
-        folk: !tavern ? [] : people === "human" ? namePeople(tavernFolk(), seed) : namePeople(tavernFolk(), seed, people).map((one) => ({ ...one, people })),
+        folk: !tavern ? [] : people === "human" ? namePeople(tavernFolk(), seed) : namePeople(tavernFolk(), seed, people).map((one) => ({ ...peoplesOwn(one, seed), people })),
     };
 }
+
+// One of a people's own tavern's folk: looked as their part is among their people (characters/
+// folk.js folkLook: their own seed, as a settlement's tavern's folk are, insides.js), not as
+// Wenches and Ale's humans are (presets.js FOLK)
+const peoplesOwn = (one, seed) => ({ ...one, preset: undefined, local: one.id, seed: seed * 31 + one.id.length * 7 + one.square[0] * 131 + one.square[1] });
 
 /**
  * Where the tavern stands and which way it faces (the way the town laid it out: towards the market
