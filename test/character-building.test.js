@@ -192,6 +192,38 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.ok(character.items.length >= 3, character.items.map(({ name }) => name).join());
         assert.ok(character.materials.lashes.forceSinglePass && character.materials.lashes.side === THREE.DoubleSide);
+        assert.ok(character.materials.lashes.alphaMap, "the lashes drawn as strands");
+    });
+
+    it("moves its face with its expressions (a body with them): its skin and lashes by its own weights, from the kit's moves, made once", async () => {
+        const { expressionData } = await import("../client/js/characters/expressions.js");
+        const character = new Character(kitOf(), options(wench));
+        const other = new Character(kitOf(), options(soldier));
+        const faces = expressionData(human);
+
+        assert.ok(faces && character.expressions && other.expressions);
+        assert.notEqual(character.expressions.weights, other.expressions.weights);
+        assert.equal(character.geometry.attributes.faceSlot.array, faces.slotOf);
+        assert.notEqual(character.geometry.attributes.faceSlot, other.geometry.attributes.faceSlot, "each geometry its own attribute (they're let go of with it)");
+
+        // Its skin's and lashes' shaders add its expressions' moves before skinning
+        for (const material of [character.materials.body, character.materials.lashes]) {
+            const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>\n#include <skinning_vertex>", fragmentShader: "void main() {}" };
+
+            material.onBeforeCompile(shader, null);
+            assert.equal(shader.uniforms.faceShapes.value, faces.texture);
+            assert.equal(shader.uniforms.faceWeights, character.expressions.weights);
+            assert.ok(shader.vertexShader.indexOf("faceWeights[ k ]") < shader.vertexShader.indexOf("#include <skinning_vertex>"));
+            assert.match(material.customProgramCacheKey(), /face\d+/);
+        }
+
+        // A beast's hide (its own body material) shows none
+        const beast = new Character(kitOf(), { ...options(soldier), materials: { body: new THREE.MeshStandardMaterial() } });
+
+        assert.equal(beast.expressions, null);
+        character.dispose();
+        other.dispose();
+        beast.dispose();
     });
 
     it("draws a character small on the screen with a quarter of its body's and outfit's triangles, over the same vertices, made once for everyone", async () => {

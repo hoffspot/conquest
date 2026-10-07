@@ -12,6 +12,7 @@ import { ClipPlayer, gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, 
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
 import { EQUIPMENT, SLOTS } from "../characters/equipment.js";
+import { EXPRESSIONS, FACES } from "../characters/expressions.js";
 import { cadence, CURVES, curveAt, PELVIC_TILT, phaseName, runCadence, runStrideLength, strideLength, walkToRunSpeed } from "../characters/gait.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { BODIES, GAME_BODY } from "../characters/body.js";
@@ -162,6 +163,24 @@ const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.l
 const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
 walker.overlay = (dt, walking) => actions.apply(dt * fight.slow, walking);
+
+// Its face (a body with expressions: expressions.js): as it's doing (""), one of its faces (a key
+// of FACES), or one expression held (`amount` of it); and whether it blinks
+const face = { showing: params.get("expression") ?? "", amount: Number(params.get("amount") ?? 1) };
+// (What they're called)
+const FACE_LABELS = { attacking: "Attacking", hurt: "Hurt", talking: "Talked to", smiling: "Smiling", dead: "Dead" };
+const EXPRESSION_LABELS = { blink: "Blink", squint: "Squint", smile: "Smile", angry: "Angry", sad: "Sad", frown: "Frown", browsUp: "Brows raised", browsKnit: "Brows knit" };
+
+function showFace() {
+    if (character.expressions) {
+        character.expressions.mood = !face.showing ? null : FACES[face.showing] ? face.showing : { [face.showing]: face.amount };
+    }
+}
+
+if (character.expressions) {
+    character.expressions.blinks = params.get("blink") !== "0";
+    showFace();
+}
 walker.freed = (side) => actions.free[side];
 walker.afterPose = () => actions.place();
 const skeletonHelper = new THREE.SkeletonHelper(character.rig.root);
@@ -277,6 +296,8 @@ function step(dt) {
     } else {
         walker.update(dt, { speed });
     }
+
+    character.expressions?.update(dt * fight.slow, actions);
 
     // The camera follows the character
     const moved = object.position.clone().sub(before);
@@ -602,7 +623,29 @@ function detailSliders(which) {
 }
 
 function faceTab() {
-    return [group("Face", ...detailSliders("face"))];
+    const expression = character.expressions && group(
+        "Expression",
+        select("Showing", [["", "As it's doing"], ...Object.keys(FACES).map((name) => [name, FACE_LABELS[name]]), ...EXPRESSIONS.map((name) => [name, `${EXPRESSION_LABELS[name]} (one shape)`])], {
+            get: () => face.showing,
+            set: (value) => {
+                face.showing = value;
+                showFace();
+                refreshControls();
+            },
+        }),
+        slider("How much", {
+            min: 0, max: 1,
+            get: () => face.amount,
+            set: (value) => {
+                face.amount = value;
+                showFace();
+            },
+            enabled: () => EXPRESSIONS.includes(face.showing),
+        }),
+        check("Blinking", { get: () => character.expressions.blinks, set: (on) => (character.expressions.blinks = on) }),
+    );
+
+    return [group("Face", ...detailSliders("face")), ...(expression ? [expression] : [])];
 }
 
 function lookTab() {

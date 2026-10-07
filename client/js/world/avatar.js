@@ -149,6 +149,7 @@ export class Avatar {
         if (unposed.frames >= this.every) {
             this.actions.keepClear = this.every <= POSING.clear;
             this.walker.update(unposed.dt, { moved: unposed.moved });
+            this.character.expressions?.update(unposed.dt, this.actions);
             Object.assign(unposed, { frames: 0, dt: 0, moved: 0 });
         }
     }

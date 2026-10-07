@@ -1316,6 +1316,11 @@ export class Game {
 
         avatar.actions.setSeated(Boolean(one.routine.seated));
 
+        // (Their face at rest: their part's, a smile for some)
+        if (character.expressions) {
+            character.expressions.mood = ROLES[one.role]?.mood ?? null;
+        }
+
         return avatar;
     }
 
@@ -2834,6 +2839,7 @@ export class Game {
         });
 
         this.talking = { id: npc.id, conversation };
+        this.#talkingFace(npc.id, true);
         this.avatars.get(npc.id)?.actions.stopResting();
         this.avatars.get(this.me)?.actions.stopResting();
         this.talk.show({ name: npc.name, title }, conversation);
@@ -3068,6 +3074,16 @@ export class Game {
         }
     }
 
+    // Someone's face while they're talked to, and after (characters/expressions.js): a little
+    // smile, and their brows lifting now and then, as when speaking
+    #talkingFace(id, talking) {
+        const face = this.avatars.get(id)?.character.expressions;
+
+        if (face) {
+            face.talking = talking;
+        }
+    }
+
     // Stop talking: they go back to what they were doing
     #endTalk() {
         if (!this.talking) {
@@ -3075,6 +3091,7 @@ export class Game {
         }
 
         this.#command({ type: "talk", with: null });
+        this.#talkingFace(this.talking.id, false);
         this.talking = null;
         this.talk?.hide();
 

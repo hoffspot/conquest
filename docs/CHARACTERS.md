@@ -70,10 +70,14 @@ The body is MakeHuman's base mesh (`hm08`), taken from its Blender add-on
 `npm run build:characters -- --mpfb2=../mpfb2` prepares it.
 
 - **Parts.** The build keeps the body (13,380 vertices), and the eyes and eyelashes (which
-  MakeHuman keeps as "helper" meshes). The lashes are see-through and two-sided, drawn both
-  sides at once (`forceSinglePass`: three.js would otherwise draw a see-through two-sided
-  material's back, then its front, a draw call each, and a lash is too thin for the order to
-  show).
+  MakeHuman keeps as "helper" meshes). The lashes are cards along the lids, drawn as strands: a
+  picture of tapering strands (`lashes.js`, made once) laid over each card along its lid and out
+  from its root, a lower lid's ending about half way out (MakeHuman's lower cards are as long as
+  its upper). Their own texture coordinates are for MakeHuman's picture of lashes, which isn't
+  shipped, so they're laid out again from the cards' shape as the kit loads. They're see-through
+  and two-sided, drawn both sides at once (`forceSinglePass`: three.js would otherwise draw a
+  see-through two-sided material's back, then its front, a draw call each, and a lash is too thin
+  for the order to show).
 - **Bones.** It keeps the 52-bone Mixamo rig and its skin weights (the four strongest per vertex).
 - **Body shape.** The build also keeps 60 shapes ("targets") behind the gender, muscle, weight,
   height and heritage sliders. They are stored as their principal components: 29 of them
@@ -129,8 +133,14 @@ as it is:
   coordinates), the hero's budget. Its areolae and nipples are kept whole: brought down with the
   rest, they were left a few flat facets. Its four texture tiles (head, torso, arms, legs) are laid
   side by side in one square. Its eyes are its own; its eyelashes are MakeHuman's, set on its
-  eyes, as it has none, and moved as the eyelids under them move in every shape. The mouth's
-  inside, irises and tear lines are left out for now.
+  eyes, as it has none, each column of a card seated on its lid's edge (set on its eyes alone,
+  the cards stood 4 to 10 mm out in front of its lids, which are set further back round its eyes
+  than MakeHuman's), and moved as the eyelids under them move in every shape (the skin nearest
+  where it was set on its eyes, before it was seated: so every shape, and the bodies the sliders
+  make, are as they were to the bit; seated by them, the sliders' principal components came out
+  up to 0.05 mm otherwise, and that alone moved 7 of the motion check's 8,400 results by up to a
+  centimetre) and swung with the lids' edges in its expressions (below). The mouth's inside,
+  irises and tear lines are left out for now.
 - **Bones.** Its own Mixamo rig and weights: the same 52 bones as MakeHuman's, in the same order.
 - **Size.** It's scaled to the height of MakeHuman's default body (it's 5% taller), so the game's
   measures, doorways and animations fit it.
@@ -275,7 +285,58 @@ two-handed blows, which aren't moved out of the torso, and kicks) and things hel
 194 to 194; 1,036 failing pairs to MakeHuman's 1,037. The game's clipping test passes on
 it, and the motion check's baseline is now its own (*The motion check*, below).
 
-Still to come: its own skin textures, the inside of the mouth, and blinking and expressions.
+**The face's expressions** (`expressions.js`). Characters on Vitruvian's body blink and show
+what they're doing on their faces, from eight of its own FACS shapes (`EXPRESSIONS` in the build:
+a left and a right half as one), only those that keep the lips together, as there's no inside of
+the mouth yet:
+
+| Expression | Vitruvian's shapes |
+|---|---|
+| blink | Eyes_Closed_Left, Eyes_Closed_Right |
+| squint | Eyes_Squint |
+| smile | Smile_Lips_Closed |
+| angry | Angry |
+| sad | Sad |
+| frown | Frown_Left, Frown_Right |
+| browsUp | Eyebrows_InnerBrow_Raised_Left, _Right |
+| browsKnit | Eyebrows_Frown_Left, _Right |
+
+- **What a face shows** (`FACES`), eased towards it (most of the way in a quarter of a second):
+  attacking, angry with the brows knit and the eyes narrowed; hurt (a flinch or knocked down),
+  squinting with the brows raised and the mouth down; dead, the eyes left a little open; talked
+  to, a little smile and the brows lifting now and then, as when speaking; and at rest, a
+  part's `mood` (roles.js: the serving wenches, the madam and the courtesans smile).
+- **Blinking**: every 1.8 to 6 seconds, now and then twice; shut in 0.06 s, held 0.04 s and
+  opened in 0.11 s, and shut a little past the shape (1.15 of it): by the shape alone, the upper
+  lid stops just in front of the lower, and from above, as the game's camera is, the eye shows
+  between them. Not when dead.
+- **The lashes swing with the lids.** Moved as the lid's skin nearest them is (as in the body's
+  other shapes), a closing lid crumpled them: the cards sit a little out from the lids, and the
+  skin nearest a card's tip is the lid's fold, which hardly moves. Now each column of a card is
+  carried as the lid's edge is the same way round the eye and turned about its root by as much
+  as the edge turns about the eye's middle (up to 45°). The lid's edge is its skin nearest the
+  eye's opening (the skin is closed round the eye: past the edge it lines the lid, inwards).
+- **On the GPU, shared.** three.js's own morph targets keep a texture of every target's moves at
+  every vertex for each geometry: each character has its own, so a quarter of a megabyte a shape
+  for each of the tavern's folk. Instead the moves are kept once for the kit, only at the 2,300
+  vertices they move or turn (a 2048 × 18 float texture, 576 KB, laid out as the kit loads: some
+  tens of milliseconds), with how each expression turns each vertex's normal (worked out on the
+  base body), so a closed lid is lit as one, not as the fold it was. Each vertex's slot in it is
+  an attribute (`faceSlot`, -1 for none); a character's skin and lashes add up its expressions'
+  moves and turns before skinning, by its own weights (a uniform): one more texture read in their
+  shaders (16 at most, as an iPhone allows, still). They're 16 KB more of the download.
+- **Where they're shown.** Every character on the game's body with its own skin (a beast's hide
+  shows none, nor does MakeHuman's body, which has no expressions): updated as its body's posed
+  (`Avatar.update`: less often far off). A shadow isn't moved by them (three.js's depth material
+  is its own): a blink's isn't missed. The character lab's *Face* tab shows any face or one
+  expression held (and `?expression=angry&amount=0.8&blink=0`).
+
+`test/expressions.test.js` checks that the expressions are on the face alone, that a blink brings
+the upper lids and their lashes down without crumpling a card, the GPU layout, the blinking and
+the faces; and the lashes' strands.
+
+Still to come: its own skin textures, and the inside of the mouth (and with it open-mouthed
+expressions: a shout, speech).
 
 ### Skin, eyes and hair
 

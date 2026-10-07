@@ -2,6 +2,8 @@
 // painter's map of the body's texture (skin.js).
 
 import { GAME_BODY, HumanData, HUMAN_URL, loadHumanFiles } from "./body.js";
+import { expressionData } from "./expressions.js";
+import { lashUVs } from "./lashes.js";
 import { loadMasks, SkinAtlas } from "./skin.js";
 import { Lods } from "./lod.js";
 import { Skins } from "./skins.js";
@@ -22,6 +24,11 @@ export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, f
     const files = await loadHumanFiles(base, fetch, body);
     const human = new HumanData(files.manifest, files.data);
     const masks = await loadMasks(base, textureSize, fetch, files.manifest.masks);
+
+    // (The face's expressions and the lashes' strands laid out now, as it loads, rather than as
+    // the first character's built: some tens of milliseconds)
+    expressionData(human);
+    lashUVs(human);
 
     if (!elsewhere) {
         const atlas = new SkinAtlas(human, masks, textureSize);
