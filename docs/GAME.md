@@ -1171,6 +1171,16 @@ A drag that starts on the player and sets off mostly upwards is a swipe (straigh
 the camera looks), not a turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
 
+**A phone held upright** (view.js `PORTRAIT`, `framed`). With the same lens, a screen taller
+than wide sees a third as much across as one held sideways (24 to 29 degrees, against 60 to 70),
+so the camera frames it as portrait games do: out of doors, it looks down more steeply, up to 15
+degrees more (35 becomes 50; the further down it looks, the more, none looking level or up), from
+1.3 times as far back, so more of the ground round the player shows; through a lens 58 degrees
+tall (36 on a screen wider than tall), about 35 degrees across at 9:16. Turning the phone, it eases
+from one framing to the other in about half a second. The pitch and zoom the follow camera and the
+player ask for are the same either way: only where the view places the camera changes. Indoors
+only the lens is wider: the room's ceiling and walls keep the camera where it is.
+
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:

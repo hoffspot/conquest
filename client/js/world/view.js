@@ -77,6 +77,29 @@ const LOOK_UP = 0.8;
 // up at the ceiling
 const INDOORS_UP = 40;
 
+// How tall the camera's lens is (degrees) on a screen wider than tall. On one taller than wide (a
+// phone held upright), which sees a third as much across with the same lens, `PORTRAIT`: out of
+// doors, the camera looks down more steeply (up to `pitch` degrees more, the further down it
+// looks, none looking level or up) from `distance` times as far back, so more of the ground round
+// the player shows, as portrait games do; through a lens `fov` degrees tall (about 35 degrees
+// across at 9:16, against 29 with the landscape lens widened only to 50). Eased into and out of
+// at `ease` a second as the phone's turned. Indoors, only the lens: the room's ceiling and walls
+// keep the camera where ROOM_VIEW has it. (The camera study: *Phones*, recommendation 1.)
+const LANDSCAPE_FOV = 36;
+export const PORTRAIT = Object.freeze({ fov: 58, pitch: 15, distance: 1.3, ease: 4 });
+
+/**
+ * The pitch (degrees) and distance (metres) the camera is placed by, for the pitch and distance
+ * asked for (the follow camera's, the zoom's), `upright` of the way (0 to 1) to a phone held
+ * upright's framing (PORTRAIT).
+ */
+export function framed(pitch, distance, upright) {
+    return {
+        pitch: pitch + PORTRAIT.pitch * upright * Math.max(0, Math.min(1, pitch / PITCH)),
+        distance: distance * (1 + (PORTRAIT.distance - 1) * upright),
+    };
+}
+
 // The layer the player's drawn on for the pack's paperdoll, and what's behind them there
 const PREVIEW = 3;
 const PREVIEW_BACKGROUND = new THREE.Color(0x221c16);
@@ -349,7 +372,7 @@ export class View {
         this.far.scene.add(this.sky.object);
         this.far.sun.position.copy(this.sunDirection);
 
-        this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, FAR.nearFar);
+        this.camera = new THREE.PerspectiveCamera(LANDSCAPE_FOV, 1, 0.3, FAR.nearFar);
 
         // (The camera that draws the player alone on the pack's paperdoll: renderPreview)
         this.previewCamera = new THREE.PerspectiveCamera(24, 1, 0.1, 60);
@@ -357,6 +380,9 @@ export class View {
         this.frozen = null;
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
+
+        // How far it's come to a phone held upright's framing (0 to 1: PORTRAIT), eased as it's turned
+        this.upright = 0;
 
         /**
          * Which way the camera looks from, in radians: 0 from the south, looking north, growing
@@ -671,8 +697,9 @@ export class View {
         this.renderer.setSize(width, height, false);
         this.camera.aspect = width / height;
 
-        // Tall screens (a phone held upright) see less across, so step back a little
-        this.camera.fov = width < height ? 50 : 36;
+        // Tall screens (a phone held upright) see less across: a wider lens (and, eased into as
+        // the camera's next placed, a steeper look from further back: PORTRAIT)
+        this.camera.fov = width < height ? PORTRAIT.fov : LANDSCAPE_FOV;
         this.camera.updateProjectionMatrix();
     }
 
@@ -685,8 +712,15 @@ export class View {
         this.focus.copy(point);
         this.yaw = yaw;
         this.pitch = pitch;
+        this.upright += ((this.camera.aspect < 1 ? 1 : 0) - this.upright) * (1 - Math.exp(-PORTRAIT.ease * dt));
         this.#clear(dt);
         this.#place();
+    }
+
+    // The pitch and distance the camera's placed by: those asked for, held upright looked down more
+    // steeply from further back, out of doors (framed, PORTRAIT)
+    #framed() {
+        return framed(this.pitch, this.distance, this.room ? 0 : this.upright);
     }
 
     /**
@@ -773,31 +807,32 @@ export class View {
     // further off (indoors, in closer than the walls, under the ceiling); or go back out once
     // it's not in the way: quickly in, slowly out
     #clear(dt) {
+        const { pitch, distance } = this.#framed();
         let pulled = 0;
         let lifted = 0;
 
         if (this.room) {
-            pulled = this.distance - this.roomReach();
+            pulled = distance - this.roomReach(pitch, distance);
 
             // (Going over the ceiling or back under it, there at once: never through it)
-            const over = overCeiling(this.room, this.focus.y, this.pitch, this.distance);
+            const over = overCeiling(this.room, this.focus.y, pitch, distance);
 
             if (over !== this.room.over) {
                 this.room.over = over;
                 this.pulled = pulled;
             }
-        } else if (this.buildings && this.clearance(Math.max(0, this.pitch)) < this.distance) {
+        } else if (this.buildings && this.clearance(Math.max(0, pitch), distance) < distance) {
             // (Looking up, the camera's no lower than level with the player: see #place)
             let best = -Infinity;
 
-            for (let lift = 0; Math.max(0, this.pitch) + lift <= PULL.highest; lift += 5) {
-                const reach = Math.max(PULL.least, Math.min(this.distance, this.clearance(Math.max(0, this.pitch) + lift)));
+            for (let lift = 0; Math.max(0, pitch) + lift <= PULL.highest; lift += 5) {
+                const reach = Math.max(PULL.least, Math.min(distance, this.clearance(Math.max(0, pitch) + lift, distance)));
                 const score = reach - PULL.lift * lift;
 
                 if (score > best) {
                     best = score;
                     lifted = lift;
-                    pulled = this.distance - reach;
+                    pulled = distance - reach;
                 }
             }
         }
@@ -826,8 +861,9 @@ export class View {
 
     #place() {
         const { focus, camera, yaw } = this;
-        const distance = Math.max(Math.min(this.distance, this.room ? ROOM.least : PULL.least), this.distance - this.pulled);
-        const looking = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
+        const asked = this.#framed();
+        const distance = Math.max(Math.min(asked.distance, this.room ? ROOM.least : PULL.least), asked.distance - this.pulled);
+        const looking = (Math.min(PULL.highest, asked.pitch + this.lifted) * Math.PI) / 180;
         // (Looking up, the camera comes down behind the player to just over the ground where they
         // stand, then tilts up from there)
         const floor = this.ground ? this.ground(focus.x, focus.z) : 0;
