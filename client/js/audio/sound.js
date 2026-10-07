@@ -963,7 +963,9 @@ export class Sound {
      * work's sounds) }. Each downloaded now if it isn't yet.
      */
     setAmbience({ beds = {}, calls = {}, wants = [] } = {}) {
-        this.want([...Object.keys(beds), ...Object.keys(calls), ...wants]);
+        // (The beds first, on their own: not to wait behind the calls' many short recordings)
+        this.want(Object.keys(beds));
+        this.want([...Object.keys(calls), ...wants]);
 
         for (const [name, bed] of this.beds) {
             if (!(name in beds)) {

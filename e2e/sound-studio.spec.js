@@ -57,4 +57,12 @@ test("describes every sound, and plays each, its recordings and its made variant
     await page.locator("#search").fill("anvil");
     await expect(page.locator(".card:visible")).toHaveCount(1);
     await expect(page.locator(".card:visible")).toHaveAttribute("data-name", "anvil");
+
+    // A bed's started looping as the game loops it, and stopped
+    await page.locator("#search").fill("");
+    await page.locator('.card[data-name="windOpen"] button.primary').click();
+    await expect(page.locator('.card[data-name="windOpen"] button.primary')).toHaveText("■ Stop");
+    await expect.poll(() => page.evaluate(() => window.soundStudio.sound.beds.get("windOpen")?.copies.length ?? 0)).toBeGreaterThan(0);
+    await page.locator('.card[data-name="windOpen"] button.primary').click();
+    expect(await page.evaluate(() => window.soundStudio.sound.beds.get("windOpen").gain)).toBe(0);
 });
