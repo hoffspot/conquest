@@ -766,6 +766,39 @@ export const TREES = Object.freeze({
             parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Look me up if you need a blade again."], choices: [{ say: "Farewell.", next: null }] },
         },
     },
+    // The townsfolk out about their business in the streets (core/townsfolk.js): busy, but glad
+    // enough of a word; they tell of their town, and of the war as it's heard there
+    townsfolk: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Mind yourself! Oh, a stranger. Welcome to {town}, then.", "Good day to you. Don't mind me, I'm off before the best of it's gone.", "Can't stop long, there's work wants doing. What is it?", "Morning! Or is it afternoon already? The day runs off with you."] },
+                    { lines: ["You again! Still about, then?", "Busy day. What can I do for you?", "{player}, isn't it? Good day to you.", "Back in {town}? It suits you."] },
+                ],
+                choices: [
+                    { if: { rumour: true }, say: "What's the news?", next: "news" },
+                    { say: "What's this place like?", next: "place" },
+                    { say: "Don't let me keep you.", next: null },
+                ],
+            },
+            news: {
+                say: ["{rumour1}", "They were saying at the well: {rumour2}", "{rumour3} That's what I heard, anyway.", "{rumourRuler}"],
+                choices: [
+                    { say: "What else?", next: "news" },
+                    { say: "What's this place like?", next: "place" },
+                    { say: "Thank you. Good day.", next: null },
+                ],
+            },
+            place: {
+                say: ["{town}? Quiet, mostly. The market's busy of a morning, and the tavern of an evening.", "Honest folk here, mostly. Keep an eye on your purse at the market all the same.", "The guild's always after someone to see off the beasts on the roads. If you're handy, ask there.", "Bread's dear and the well's deep, but it's home."],
+                choices: [
+                    { if: { rumour: true }, say: "What's the news?", next: "news" },
+                    { say: "Thank you. Good day.", next: null },
+                ],
+            },
+        },
+    },
     // An adventurer at the guild: seasoned, a little wry, glad to give advice
     adventurer: {
         start: "greet",

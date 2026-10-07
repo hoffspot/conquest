@@ -30,6 +30,10 @@ export const DRAPES = Object.freeze({
     apron: { label: "Apron", slot: "apron", length: 0.62, flare: 0.08, pleats: 5, arc: 0.4, over: 0.035, colour: "#d9d0bc", roughness: 0.95 },
     leatherApron: { label: "Leather apron", slot: "apron", length: 0.78, flare: 0.06, pleats: 3, arc: 0.45, over: 0.04, colour: "#4f3220", roughness: 0.7 },
     albSkirt: { label: "Alb (its skirt)", slot: "legs", length: 1.06, flare: 0.5, pleats: 18, colour: "#f1ede4", roughness: 0.9 },
+    // The townsfolk's (core/townsfolk.js): a blue kirtle, a homespun brown skirt, a friar's habit
+    blueKirtle: { label: "Blue kirtle", slot: "legs", length: 1, flare: 0.55, pleats: 16, colour: "#3a4f7a", roughness: 0.88 },
+    brownSkirt: { label: "Brown skirt", slot: "legs", length: 0.95, flare: 0.45, pleats: 14, colour: "#6b5236", roughness: 0.92 },
+    habitSkirt: { label: "Habit (its skirt)", slot: "legs", length: 1.06, flare: 0.5, pleats: 18, colour: "#5a4330", roughness: 0.95 },
     guildSkirt: { label: "Guild skirt", slot: "legs", length: 0.55, flare: 0.55, pleats: 16, colour: "#23365e", roughness: 0.8 },
     mageRobe: { label: "Mage's robe", slot: "legs", length: 1.05, flare: 0.55, pleats: 16, colour: "#2e3f78", roughness: 0.85 },
     // A cloak (`cape`), from the shoulders down the back to below the knees, behind the arms,

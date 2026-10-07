@@ -487,6 +487,59 @@ are kept.
   mail by the thrones and the door. What the officials of both do is in
   [WAR.md](WAR.md) (*The player's people*).
 
+### Townsfolk (core/townsfolk.js)
+
+Every settlement's people are out in its streets about their business, and a castle's in its
+wards, once a player comes within 100 m of its edge (`TOWNSFOLK_REACH`); they go home once every
+player's 220 m off. How many are out by day goes by the place (`TOWNSFOLK`: a farmstead 2, a hamlet
+3, a village 5, a town 8, a city 12, a capital 14, a castle 5); once the torches are lit, a third
+of them (`NIGHT_SHARE`, at least one).
+
+**Who.** Each is of a calling (`CALLINGS`), drawn in turn from a shuffle of a mix for the place:
+a village's mostly shoppers and field hands, a town's and a city's shoppers, porters, merchants,
+sweepers, friars and a few field hands; a castle's servants, grooms and scribes. They're named
+and seeded from the place's id and the world's seed (`townsfolkOf`), so the same folk are out
+whenever a player comes back, in every copy of the world, and their ids are
+`townsfolk:<place>/<n>`. A shopper is a townsman or a townswoman, or in a village a villager.
+
+| Calling | Wears and carries (characters/folk.js) | Goes to |
+| --- | --- | --- |
+| Shopper | tunics, kirtles and skirts, an apron, a coif or a hood; a pannier on the back, or a jug | stalls, tradesmen's houses, the well, houses, the market, the church |
+| Porter | a smock or tunic, a hood or coif; a sack or a bundle of firewood on the back | tradesmen's houses, stalls, yards, the ways out, the market |
+| Field hand | a smock, a straw hat; a hay fork | the ways out (the fields), yards, the well, the market, houses |
+| Merchant | good cloth: a jerkin over a dyed tunic, or a velvet bodice and a gown | the market, stalls, the guild, the hall, the tavern, tradesmen's houses |
+| Sweeper | a smock and apron, a hood or coif; a broom | the market, stalls, the church, the tavern, the hall, houses |
+| Friar | a brown habit, a hood; a walking staff or a ledger | the church, the market, houses, the well |
+| Servant (a castle's) | a chemise and kirtle or a shirt, an apron, a coif; a jug, a pannier or firewood | the courtyard, the keep's door, the wards' heart |
+| Groom (a castle's) | a jerkin and breeches; a hay fork | the wards' heart, the courtyard |
+| Scribe (a castle's) | a robe or a gown; a ledger | the keep's door, the courtyard |
+
+**Where.** A settlement's errands are found on its layout (`errandsOf`): its market's middle and
+round it, in front of each stall, round its well, in front of its tradesmen's houses and the other
+houses, at its church's, tavern's, guild's and hall's doors, a little in from each way out (the
+fields beyond), and in its yards. A castle's are its courtyard's squares, a dozen spread through
+them, its keep's door and its heart (`wardErrandsOf`). Each is a square someone can be put to
+stand on (`roomy`: clear of walls), facing what's there. Each townsperson goes round one errand of
+each kind its calling goes to (`order: "alternate"`, battle.js `#routine`: never the same kind
+twice running), lingering at each a while (`LINGER`: a few seconds at a way out, up to a quarter
+of a minute at the well or a house), so most of the time they're walking. Each comes out at an
+errand of theirs no player can see, if there's one.
+
+**What they do.** Walking, they swing their free arm, what they carry held as it's carried (a
+pannier, sack or firewood on the back; a jug as a tankard; a fork, broom or staff upright as a
+mage's staff; a ledger open on the palm). Lingering where a player can see them, they're at their
+ease a moment (`ROLES.townsfolk`: looking about, stretching the back, a yawn, shifting the weight,
+a glance back), the left hand's alone, what's in the right kept there. Tapped, they talk
+(`TREES.townsfolk`): busy but glad of a word, of their town, and of the war as it's heard there.
+No one fights them. The host keeps them in its snapshot (`townsfolk`: each place's, their looks
+and errands with them; `SNAPSHOT_VERSION` 5).
+
+**Drawn.** A step at a time, as the soldiers and the wild's creatures are (app/game.js
+`#nextEnlistee`), but after them, the nearest the player first, and none while a building's being
+got ready: only there to be seen about, they keep neither the town's guards waiting to be drawn
+nor a tavern's folk waiting on their skins (seed 2's start town: its 6 guards drawn as soon as
+before, its 8 townsfolk within a few seconds after).
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
