@@ -809,6 +809,61 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     expect((await told(page)).order).toBe(null);
 });
 
+test("the thumb stick, asked to float, springs up under the thumb where it lands in the bottom left, walks the player the way it's pushed from there, and goes back to its corner let go", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+    await clearestWayAhead(page);
+
+    // The stick on, and floating: its zone the bottom left of the screen
+    await page.evaluate(() => {
+        for (const id of ["#stickswitch", "#floatswitch"]) {
+            const switched = document.querySelector(id);
+
+            switched.checked = true;
+            switched.dispatchEvent(new Event("change"));
+        }
+    });
+
+    const middleOf = (selector) => page.evaluate((selector) => {
+        const box = document.querySelector(selector).getBoundingClientRect();
+
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width };
+    }, selector);
+    const zone = await page.locator("#stickzone").boundingBox();
+    const waiting = await middleOf("#stick");
+
+    expect(zone.width).toBeGreaterThan(waiting.width * 2);
+
+    // Down well away from where it waits: it comes to the thumb, and pushed up from there, they
+    // walk ahead the way the camera looks
+    const down = { x: zone.x + zone.width * 0.65, y: zone.y + zone.height * 0.35 };
+
+    expect(Math.hypot(down.x - waiting.x, down.y - waiting.y)).toBeGreaterThan(waiting.width / 2);
+    await page.mouse.move(down.x, down.y);
+    await page.mouse.down();
+
+    const under = await middleOf("#stick");
+
+    expect(Math.hypot(under.x - down.x, under.y - down.y)).toBeLessThan(2);
+    await page.mouse.move(down.x, down.y - 34, { steps: 4 });
+
+    const walking = await told(page);
+
+    expect(walking.order?.type).toBe("move");
+    expect(walking.order.run).toBe(false);
+    expect(Math.cos(walking.facing - walking.look)).toBeGreaterThan(0.99);
+
+    // Let go: stopped, and back where it waits
+    await page.mouse.up();
+    expect((await told(page)).order).toBe(null);
+
+    const back = await middleOf("#stick");
+
+    expect(Math.hypot(back.x - waiting.x, back.y - waiting.y)).toBeLessThan(2);
+
+    // Remembered
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).stickFloats)).toBe(true);
+});
+
 test("the thumb stick, off until Game options asks for it, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off again", async ({ page }) => {
     // (Turned on and off again, pushed twice and played on between: more than the usual time, on a
     // machine drawing in software)

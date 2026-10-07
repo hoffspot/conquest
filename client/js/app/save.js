@@ -45,6 +45,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // asked for, since tapping is how the game has always been walked. W, A, S, D steer whether
     // it's shown or not
     stick: false,
+    // (And whether it springs up under the thumb wherever it lands in the bottom left, rather than
+    // waiting in its corner)
+    stickFloats: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
     // (Summoned by another player: said no to at once, not asked)

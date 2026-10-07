@@ -65,6 +65,7 @@ import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
 import { NavBaker } from "../world/navbaker.js";
+import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { ContactShadows } from "../world/contacts.js";
@@ -1675,6 +1676,15 @@ export class Game {
         }
     }
 
+    /** Whether the thumb stick springs up under the thumb in the bottom left (Game options), or stays in its corner. */
+    floatStick(on) {
+        this.steering?.release();
+
+        if (this.steering) {
+            this.steering.floating = on;
+        }
+    }
+
     /**
      * Show the squares characters walk on, which are blocked, and everyone's path (debug mode):
      * out in the world, those round the player.
@@ -2594,6 +2604,10 @@ export class Game {
         this.focusHeight = Math.max(eased, ground - FOCUS_LAG);
         this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, pitch, dt || Infinity);
         this.view.setFocus(chest);
+
+        // (Seen too close, as near walls and buildings can push the camera, they're dithered away:
+        // each of their materials made so once, put on or changed: nearfade.js)
+        fadeNear(player.object);
 
         // (Shaken by the greater spells, dying away)
         if (this.shaking > 0.005) {
@@ -6400,6 +6414,7 @@ export class Game {
             this.steering = new Steering({
                 zone,
                 knob,
+                ring: this.hud.root.querySelector("#stick"),
                 looking: () => this.#steerable(),
                 go: (facing, run) => {
                     this.#wake();
