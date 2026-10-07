@@ -250,7 +250,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/cloth.js", 26554],
             ["js/world/contacts.js", 5328],
             ["js/world/daytime.js", 8720],
-            ["js/world/drops3d.js", 14081],
+            ["js/world/drops3d.js", 14690],
             ["js/world/effects.js", 61626],
             ["js/world/environment.js", 5675],
             ["js/world/falls.js", 12180],

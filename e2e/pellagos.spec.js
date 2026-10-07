@@ -4042,9 +4042,17 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
     expect(hall.map).toBe("home:hall-1/chamber");
     expect(hall.roles).toEqual(expect.arrayContaining(["reeve", "clerk"]));
 
-    // The reeve: work, taken on
+    // The reeve: work, taken on. (Turned to look at him behind his desk first, as the player would
+    // to tap him: indoors the camera's close behind them, under the ceiling, and they came up to it
+    // stepping east)
     const reeve = await page.evaluate(() => {
         const { game, session } = window.pellagos;
+        const [player, at] = [game.battle.actor("player"), game.battle.actor("home:hall-1/reeve")];
+        const toward = Math.atan2(at.x - player.x, at.y - player.y);
+
+        game.cameraFollow.yaw = Math.atan2(-Math.sin(toward), -Math.cos(toward));
+        game.advance(0.5);
+
         const spot = session.view.toScreen(game.avatars.get("home:hall-1/reeve").point(0.6));
 
         game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
