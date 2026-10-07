@@ -31,7 +31,7 @@ const catalogInput = path.join(client, "models/assets.json");
 // What the loading screen says each body is (body.js BODIES)
 const BODY_DETAILS = {
     human: { body: "MakeHuman base mesh, skeleton and sliders", skin: "MakeHuman masks" },
-    vitruvian: { body: "CharMorph's Vitruvian, with MakeHuman's sliders", skin: "MakeHuman masks, carried over, and the mouth's inside" },
+    vitruvian: { body: "CharMorph's Vitruvian, with MakeHuman's sliders", skin: "Its own skin's pictures, MakeHuman masks carried over, and the mouth's inside" },
 };
 
 // The modules the game imports once everything is downloaded (main.js: import()), and those it
@@ -134,9 +134,9 @@ export async function manifestGroups() {
         navigation.push(...(await readdir(path.join(client, folder))).filter((name) => name.endsWith(".wasm")).map((name) => `${folder}/${name}`));
     }
 
-    // (The game's body, body.js GAME_BODY, and the masks and pictures its manifest names)
+    // (The game's body, body.js GAME_BODY, and the masks, pictures and skin pictures its manifest names)
     const body = JSON.parse(await readFile(path.join(client, `characters/${GAME_BODY}.json`), "utf8"));
-    const masks = [...body.masks, ...Object.values(body.pictures ?? {})].map((file) => `characters/${file}`).toSorted();
+    const masks = [...body.masks, ...Object.values(body.pictures ?? {}), ...Object.values(body.skin ?? {})].map((file) => `characters/${file}`).toSorted();
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
     const groups = [
         { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },

@@ -132,6 +132,14 @@ describe("the Vitruvian body (client/characters/vitruvian.*)", () => {
         assert.deepEqual(Object.keys(vitruvian.parts), [...Object.keys(human.parts), "mouth"]);
         assert.deepEqual(vitruvian.manifest.pictures, { mouth: "vitruvian/mouth.jpg" });
         assert.equal(jpeg.decode(readFileSync(new URL(vitruvian.manifest.pictures.mouth, folder))).width, 512);
+        // (And its own skin's pictures, in its texture layout)
+        assert.deepEqual(Object.keys(vitruvian.manifest.skin), ["light", "dark", "height", "roughness"]);
+
+        for (const file of Object.values(vitruvian.manifest.skin)) {
+            const { width, height } = jpeg.decode(readFileSync(new URL(file, folder)));
+
+            assert.deepEqual([width, height], [1024, 1024], file);
+        }
 
         // (No vertex in two parts, where the mouth's inside meets the lips too: the body's own
         // vertices, their facing and their neighbours, as everything that works on them takes

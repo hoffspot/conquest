@@ -389,12 +389,63 @@ it, that the mouth's inside stays behind the lips on every people's bodies, the 
 blinking, speaking (the jaw dropping most for an "ah") and war cries (the teeth bared), and the
 faces; and the lashes' strands.
 
-Still to come: its own skin textures.
+**Its own skin** (`scripts/build-vitruvian.js` `skinPictures`, `skin.js` `ownSkin`): Vitruvian's
+skin is painted from its own pictures, as CharMorph paints it, with what the painter adds laid
+over them.
+
+- **The pictures** are CharMorph's 4096-texel EXRs, four tiles each:
+  - light skin's colour and dark skin's;
+  - the height of its skin;
+  - its roughness.
+
+  They're brought down into the game's texture layout as JPEGs, `vitruvian/skin/*.jpg`. Each is
+  1024 texels a side, each tile a quarter of it, where the skin's texture coordinates put it.
+  - Light 98 KB, dark 73 KB, height 216 KB, roughness 105 KB: 492 KB in all.
+  - **Height: only the fine relief.** It's the height less its average within 4 texels:
+    wrinkles, lip lines, knuckles, the nipples, pores where there's room. The broad rises are
+    taken out (the elbows' and knees' are some centimetres across), as a bump map would only
+    shade them as smudges.
+  - **Outside the skin**, each picture's own edge is carried a few texels out, then its
+    average, so a JPEG's blocks spend nothing on the tiles' streaked borders.
+- **Matched to a tone** (`ownSkin`):
+  - The light and dark pictures are mixed linearly, as they're made to be. They're mixed as far
+    towards the dark as makes the skin's average as bright as the tone: a fair or light tone is
+    the light picture alone, deep the dark picture alone, olive about halfway.
+  - Each channel is then multiplied so the average is the tone's colour: orcs come out green,
+    dark elves grey-violet.
+  - What the pictures have stays: blotches, the redness round the eyes and nose, darker and
+    lighter places, the lips, nipples, palms, soles and nails. `variation` scales it round the
+    tone (1 as it is).
+- **What's painted over them** (`OVER_OWN`):
+  - Redness (`blush`), the shading under the eyes and in the armpits, and the areolae at half
+    strength; the creases' shading at half. The pictures have their own.
+  - None of the painted palms, soles, nails or eyelids.
+  - Lips only when a look gives them a colour (dark elves', orcs'). Otherwise they're the
+    pictures' own.
+  - Everything else is the character's own and painted as before: freckles, veins, warts, war
+    paint, fur, stripes, scales, stubble, a buzz cut and the brows.
+- **Roughness** is the roughness picture's, moved so its average is the skin's (0.56). That
+  replaces the painted T-zone and creases; lips, nails, painted hair, war paint, fur and scales
+  still change it as before.
+- **Bumps** are the fine relief (`OVER_OWN.relief` of its bytes from 128), in place of the
+  painted pores and lip lines. Warts, painted hair, fur and scales still raise it as before.
+- **Loading and cost.** The pictures are loaded with the masks (`loadMasks`) at the skin's size
+  (1024 on High, 512 below) and kept in the skin atlas: 8 bytes more a texel (8 MB at 1024, 2 MB
+  at 512). Painting a skin takes as long as before (about half a second at 1024 in Node, a tenth
+  at 512). The loader's manifest counts the pictures with the masks: 492 KB more of the download
+  (10.5 MB in all).
+- **Bodies without pictures** (MakeHuman's) are painted as before.
+
+`test/characters.test.js` checks that its skin painted from its pictures is on average each
+tone's colour (a light, an olive and a deep human's, an orc's, a dark elf's), from the light
+picture alone to the dark picture alone, as blotched as the light picture, as rough as skin on
+average, and bumped where its relief is.
 
 ### Skin, eyes and hair
 
-**Skin.** The skin is painted into MakeHuman's texture layout, so any image in that layout is a
-skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
+**Skin.** The skin is painted into the body's texture layout (MakeHuman's, or Vitruvian's, from
+its own pictures: *Its own skin*, above), so any image in that layout is a skin. That covers the
+lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
 
 - **Texel map.** Painting starts from a map of where every texel is on the body, made once.
 - **Precomputed fields.** From that map, the parts that don't change with settings are worked out
@@ -402,7 +453,10 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
   - noise from 3D positions, so patterns are seamless across the UV map's seams
   - MakeHuman's masks (lips, nails, eyelids...)
   - how hollow the skin is (creases get darker)
-  - regions measured from the eyes: cheeks, brows, beard line, hairline
+  - regions measured from the eyes: cheeks, brows, beard line, hairline. Down the neck the beard
+    and the scalp are measured on every triangle near the head, whichever bone it follows, so
+    their edges fade there. Measured on the head's triangles alone, a beard stopped in a jagged
+    line along the neck's, which are the head's and the chest's by turns.
 - **Painting.** Painting a skin then only mixes colours per texel: tone, blotches, redness,
   darker creases, lighter palms, lips, nails, freckles, veins, warts, war paint, and hair painted
   on (brows, stubble, a buzz cut or the scalp under longer hair). It also makes a bump map. Each

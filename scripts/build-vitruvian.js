@@ -25,7 +25,9 @@
 //     (fitOnto), and each Vitruvian vertex takes the change of the point of it nearest (turned as
 //     the bones there are); the face's by the face map.
 //   - masks for painting skin: its lips and areolae its own, MakeHuman's others (nails,
-//     eyelids...) carried over the same way into this body's texture layout.
+//     eyelids...) carried over the same way into this body's texture layout; and its own skin's
+//     pictures (light and dark skin's colours, its fine relief, its roughness: skinPictures),
+//     from its 4K EXRs, in that layout.
 //   - where garments measure the neck from, as MakeHuman's joints are in different places
 //     (landmarks: garments.js measureBody).
 
@@ -62,6 +64,22 @@ const MOUTH_TRIANGLES = 2500;
 // The mouth's inside's texture: its tile (UDIM 1008: u 7 to 8), and how big its picture is
 const MOUTH_TILE = 7;
 const MOUTH_PICTURE = 512;
+
+// Its own skin pictures (skinPictures): which of its EXRs, how big, how well kept; the range of
+// heights the height picture's bytes span
+const SKIN_PICTURES = {
+    light: { name: "Light_Skin_Color", channels: 3 },
+    dark: { name: "Dark_Skin_Color", channels: 3 },
+    height: { name: "Skin_Height", channels: 1 },
+    roughness: { name: "Skin_Roughness", channels: 1 },
+};
+const SKIN_PICTURE = 1024;
+const SKIN_QUALITY = 85;
+// (Its height picture only its fine relief: the height less its average within SKIN_RELIEF
+// texels, which takes out the broad rises a bump map would only shade as a smudge; those
+// heights' range over the bytes, 128 none)
+const SKIN_RELIEF = 4;
+const SKIN_HEIGHT = 0.03;
 
 // The same tolerance, steps and units as the MakeHuman body's (build-characters.js)
 const PCA_TOLERANCE = 0.0015;
@@ -717,6 +735,166 @@ export function fitOnto(points, triangles, onto, ontoTriangles, pins = []) {
     }
 
     return fitted;
+}
+
+/**
+ * Vitruvian's own skin pictures (SKIN_PICTURES: its linear 4096-texel EXRs, four tiles each), as
+ * JPEGs in the game's texture layout: SKIN_PICTURE texels a side, each tile a quarter of it
+ * (brought down by averaging) where the skin's texture coordinates put it, the first row the
+ * top. Colours in sRGB; height and roughness one channel (as grey): roughness as it is, 0 to 1;
+ * height its fine relief (`relief`), 128 none and SKIN_HEIGHT either way to 1 or 255. Outside the
+ * skin (`covered`: rasterised at SKIN_PICTURE), each picture's own edge carried a few texels out
+ * and then its average, so a JPEG's blocks spend nothing on the tiles' streaked borders.
+ */
+export function skinPictures(from, covered) {
+    const size = SKIN_PICTURE;
+    const half = size / 2;
+    const read = (name, tile) => {
+        const file = readFileSync(path.join(from, `textures/4K/${name}.${1001 + tile}.exr`));
+
+        return new EXRLoader().setDataType(FloatType).parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
+    };
+    const pictures = {};
+
+    for (const [key, { name, channels }] of Object.entries(SKIN_PICTURES)) {
+        const linear = new Float32Array(size * size * channels);
+
+        for (let tile = 0; tile < 4; tile++) {
+            const { width, data } = read(name, tile);
+            const step = width / half;
+            const stride = data.length / (width * width);
+
+            for (let y = 0; y < half; y++) {
+                for (let x = 0; x < half; x++) {
+                    // (The loader's first row is the bottom's, the tile's v of 0; the tile's
+                    // place in the square, (tile % 2, tile / 2) quarters across and up)
+                    const to = ((size - 1 - (Math.floor(tile / 2) * half + y)) * size + (tile % 2) * half + x) * channels;
+
+                    for (let j = 0; j < step; j++) {
+                        for (let i = 0; i < step; i++) {
+                            const at = ((y * step + j) * width + x * step + i) * stride;
+
+                            for (let k = 0; k < channels; k++) {
+                                linear[to + k] += data[at + k] / (step * step);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        pictures[key] = carriedOut(key === "height" ? relief(linear, covered, size) : linear, channels, covered, size);
+    }
+
+    const encode = (linear) => Math.round(255 * Math.min(1, Math.max(0, linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055)));
+    const byte = { light: encode, dark: encode, roughness: (value) => Math.round(255 * Math.min(1, Math.max(0, value))), height: (value) => Math.round(Math.min(255, Math.max(0, 128 + (127 * value) / SKIN_HEIGHT))) };
+
+    return Object.fromEntries(Object.entries(pictures).map(([key, linear]) => {
+        const channels = SKIN_PICTURES[key].channels;
+        const pixels = new Uint8Array(size * size * 4);
+
+        for (let i = 0; i < size * size; i++) {
+            for (let k = 0; k < 3; k++) {
+                pixels[i * 4 + k] = byte[key](linear[i * channels + Math.min(k, channels - 1)]);
+            }
+
+            pixels[i * 4 + 3] = 255;
+        }
+
+        return [key, jpeg.encode({ data: pixels, width: size, height: size }, SKIN_QUALITY).data];
+    }));
+}
+
+// A height picture's fine relief: each texel of the skin's less the skin's average round it
+// (three box blurs, as good as a Gaussian, of the heights and of the skin's coverage, so texels
+// outside it count for nothing)
+function relief(heights, covered, size) {
+    const blur = (values) => {
+        let out = values;
+
+        for (let pass = 0; pass < 3; pass++) {
+            for (const [step, across] of [[1, size], [size, 1]]) {
+                const next = new Float32Array(size * size);
+
+                for (let line = 0; line < size; line++) {
+                    let sum = 0;
+                    const at = (k) => out[line * across + Math.min(size - 1, Math.max(0, k)) * step];
+
+                    for (let k = -SKIN_RELIEF; k <= SKIN_RELIEF; k++) {
+                        sum += at(k);
+                    }
+
+                    for (let k = 0; k < size; k++) {
+                        next[line * across + k * step] = sum / (2 * SKIN_RELIEF + 1);
+                        sum += at(k + SKIN_RELIEF + 1) - at(k - SKIN_RELIEF);
+                    }
+                }
+
+                out = next;
+            }
+        }
+
+        return out;
+    };
+    const weight = blur(Float32Array.from(covered));
+    const average = blur(heights.map((h, i) => h * covered[i]));
+
+    return heights.map((h, i) => (covered[i] ? h - average[i] / weight[i] : 0));
+}
+
+// A picture's texels outside the skin (`covered`): those next to it, from it, a few times over
+// (each pass reaching a texel further out), and the rest its average over the skin
+function carriedOut(values, channels, covered, size) {
+    const out = values.slice();
+    let done = Uint8Array.from(covered);
+    const mean = new Array(channels).fill(0);
+    let count = 0;
+
+    for (let i = 0; i < size * size; i++) {
+        if (covered[i]) {
+            count++;
+
+            for (let k = 0; k < channels; k++) {
+                mean[k] += values[i * channels + k];
+            }
+        }
+    }
+
+    for (let pass = 0; pass < 6; pass++) {
+        const next = done.slice();
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const i = y * size + x;
+
+                if (done[i]) {
+                    continue;
+                }
+
+                const around = [x > 0 ? i - 1 : -1, x < size - 1 ? i + 1 : -1, y > 0 ? i - size : -1, y < size - 1 ? i + size : -1].filter((j) => j >= 0 && done[j]);
+
+                if (around.length) {
+                    for (let k = 0; k < channels; k++) {
+                        out[i * channels + k] = around.reduce((sum, j) => sum + out[j * channels + k], 0) / around.length;
+                    }
+
+                    next[i] = 1;
+                }
+            }
+        }
+
+        done = next;
+    }
+
+    for (let i = 0; i < size * size; i++) {
+        if (!done[i]) {
+            for (let k = 0; k < channels; k++) {
+                out[i * channels + k] = mean[k] / count;
+            }
+        }
+    }
+
+    return out;
 }
 
 // A PNG of one 8-bit channel (`size` square), for the masks
@@ -1900,6 +2078,7 @@ async function main() {
         landmarks: { neck: Math.round(neckFraction * 1e4) / 1e4, shoulder: shoulderOffset },
         masks: MASKS.map((name) => `vitruvian/masks/${name}.png`),
         pictures: { mouth: "vitruvian/mouth.jpg" },
+        skin: Object.fromEntries(Object.keys(SKIN_PICTURES).map((key) => [key, `vitruvian/skin/${key}.jpg`])),
     };
     const bytes = packer.toBytes();
 
@@ -1956,6 +2135,17 @@ async function main() {
 
     console.log(`areolae: ${areolae.map(({ radius }) => (radius * 1000).toFixed(1)).join(" and ")} mm across from their nipples`);
     writeMasks({ target, human, laid: fitted, areolae, humanDefault, humanSkin, vitruvian, simplified, skin, render, headShare, toHumanFace });
+
+    // Its own skin pictures, where the skin's drawn
+    const covered = new Uint8Array(SKIN_PICTURE * SKIN_PICTURE);
+
+    rasterise(simplified, render, SKIN_PICTURE, (i) => (covered[i] = 1));
+    mkdirSync(path.join(target, "vitruvian/skin"), { recursive: true });
+
+    for (const [key, bytes] of Object.entries(skinPictures(from, covered))) {
+        writeFileSync(path.join(target, `vitruvian/skin/${key}.jpg`), bytes);
+        console.log(`skin picture ${key}: ${(bytes.length / 1024).toFixed(0)} KB`);
+    }
 }
 
 // The vertices down the middle of the face that a shape's left and right halves split hard there

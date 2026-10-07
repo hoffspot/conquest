@@ -24,7 +24,7 @@ import { Skins } from "./skins.js";
 export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false, body = GAME_BODY } = {}) {
     const files = await loadHumanFiles(base, fetch, body);
     const human = new HumanData(files.manifest, files.data);
-    const [masks, pictures] = await Promise.all([loadMasks(base, textureSize, fetch, files.manifest.masks), loadPictures(base, fetch, files.manifest.pictures)]);
+    const [masks, pictures] = await Promise.all([loadMasks(base, textureSize, fetch, files.manifest.masks, files.manifest.skin), loadPictures(base, fetch, files.manifest.pictures)]);
 
     // (Its own pictures: the mouth's inside's, mouth.js)
     human.pictures = pictures;
