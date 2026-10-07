@@ -1,9 +1,11 @@
 // How the camera follows the player (client/js/app/camera.js): from behind them from their first
 // step, easing round as they turn; turned and tilted by a drag, and swinging back round behind
-// them once they walk again
+// them once they walk again; and on a phone held upright, framed as portrait games do
+// (client/js/world/view.js framed)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CameraFollow, PITCH } from "../client/js/app/camera.js";
+import { framed, PORTRAIT } from "../client/js/world/view.js";
 
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -228,5 +230,26 @@ describe("the camera following the player (camera.js)", () => {
         }
 
         assert.ok(Math.hypot(camera.focus.x - 7, camera.focus.z - 1) < 0.25);
+    });
+});
+
+describe("a phone held upright (world/view.js framed)", () => {
+    const across = (fov, aspect) => (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
+
+    it("looks down more steeply from further back, the more the further down it looks, and through a lens seeing more across", () => {
+        // (Held sideways, as asked)
+        assert.deepEqual(framed(35, 10.5, 0), { pitch: 35, distance: 10.5 });
+
+        // (Upright: 35 down becomes 50, from 1.3 times as far; half as far down, half as much more;
+        // looking up, none)
+        assert.deepEqual(framed(PITCH.start, 10.5, 1), { pitch: 50, distance: 13.65 });
+        assert.equal(framed(17.5, 10.5, 1).pitch, 25);
+        assert.equal(framed(-20, 10.5, 1).pitch, -20);
+
+        // (Half turned, half way)
+        assert.ok(Math.abs(framed(35, 10, 0.5).pitch - 42.5) < 1e-9 && Math.abs(framed(35, 10, 0.5).distance - 11.5) < 1e-9);
+
+        // (Its lens: about 35 degrees across at 9:16, where the landscape lens widened to 50 saw 29)
+        assert.ok(Math.abs(across(PORTRAIT.fov, 9 / 16) - 34.6) < 0.1 && across(50, 9 / 16) < 30, `${across(PORTRAIT.fov, 9 / 16)}`);
     });
 });
