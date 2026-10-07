@@ -9,11 +9,13 @@
 //    `hp` and `lp` (Hz: 2nd-order Butterworths, run over the cut and 50 ms either side of it);
 //    played backwards (`reverse`); sped up or slowed down, pitch and all (`rate`); swelled or
 //    faded (`ramp`: from and to dB, the curve's power); faded in and out (`fadeIn`, `fadeOut`:
-//    ms, raised cosines); made `gain` dB louder; and placed `at` seconds in.
+//    ms, raised cosines); made `gain` dB louder; and placed `at` seconds in. Or, played as a tape
+//    is (`after`), sped up or slowed first and filtered after, the cut alone, by Butterworths of
+//    `order` (as the creatures' were made).
 // 3. The layers summed; `trim` seconds taken off the front, cut to `cap` seconds; faded in
 //    (`fadeIn`: 2 ms unless said, 0 for a sound of one layer already faded) and out (`fadeOut`);
 //    and made `level` dBFS loud by its loudest 30 ms (−20 unless said), less if its peak would
-//    pass −1 dBFS.
+//    pass −1 dBFS (or the recipe's own `ceiling`, its peak then just that).
 
 import { butter, fade, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "./dsp.js";
 
@@ -48,12 +50,31 @@ export function prepare({ channels, rate }, { channel = null, highpass = 40 } = 
 }
 
 // One layer, shaped
-function layer(samples, { cut: [from, to], hp = null, lp = null, reverse = false, rate = 1, ramp = null, fadeIn = 2, fadeOut = 15, gain = 0 }) {
+function layer(samples, { cut: [from, to], hp = null, lp = null, order = 2, after = false, reverse = false, rate = 1, ramp = null, fadeIn = 2, fadeOut = 15, gain = 0 }) {
     to = Math.min(to, samples.length);
 
     let y;
 
-    if (hp || lp) {
+    if (after) {
+        // (Played as a tape: sped up or slowed first, its rate as a fraction of small numbers;
+        // then filtered, the cut alone)
+        y = samples.slice(from, to);
+
+        if (rate !== 1) {
+            const [num, den] = limitDenominator(rate, 200);
+
+            y = resamplePoly(y, den, num);
+        }
+
+        for (const [kind, frequency] of [
+            ["highpass", hp],
+            ["lowpass", lp],
+        ]) {
+            if (frequency) {
+                y = sosfiltfilt(butter(order, frequency, kind), y);
+            }
+        }
+    } else if (hp || lp) {
         const [start, end] = [Math.max(0, from - PAD * RATE), Math.min(samples.length, to + PAD * RATE)];
         let around = samples.slice(start, end);
 
@@ -62,7 +83,7 @@ function layer(samples, { cut: [from, to], hp = null, lp = null, reverse = false
             ["lowpass", lp],
         ]) {
             if (frequency) {
-                around = sosfiltfilt(butter(2, frequency, kind), around);
+                around = sosfiltfilt(butter(order, frequency, kind), around);
             }
         }
 
@@ -75,7 +96,7 @@ function layer(samples, { cut: [from, to], hp = null, lp = null, reverse = false
         y.reverse();
     }
 
-    if (rate !== 1) {
+    if (rate !== 1 && !after) {
         y = resamplePoly(y, ...limitDenominator(1 / rate, 1000));
     }
 
@@ -93,10 +114,10 @@ function layer(samples, { cut: [from, to], hp = null, lp = null, reverse = false
 }
 
 /**
- * A sound made from its recipe ({ layers, trim, cap, fadeIn, fadeOut, level }), each layer's recording
- * from `recording(layer)` (prepared), as numbers from -1 to 1 at 48 kHz.
+ * A sound made from its recipe ({ layers, trim, cap, fadeIn, fadeOut, level, ceiling }), each
+ * layer's recording from `recording(layer)` (prepared), as numbers from -1 to 1 at 48 kHz.
  */
-export function render({ layers, trim = 0, cap = null, fadeIn = 2, fadeOut = 15, level = LEVEL }, recording) {
+export function render({ layers, trim = 0, cap = null, fadeIn = 2, fadeOut = 15, level = LEVEL, ceiling = null }, recording) {
     const parts = layers.map((spec) => [Math.round((spec.at ?? 0) * RATE), layer(recording(spec), spec)]);
     const length = Math.max(...parts.map(([at, y]) => at + y.length));
     let mix = new Float64Array(length);
@@ -122,8 +143,8 @@ export function render({ layers, trim = 0, cap = null, fadeIn = 2, fadeOut = 15,
 
     let gain = level - rms30(mix);
 
-    if (peak(mix) + gain > CEILING) {
-        gain = CEILING - 0.02 - peak(mix);
+    if (peak(mix) + gain > (ceiling ?? CEILING)) {
+        gain = (ceiling ?? CEILING - 0.02) - peak(mix);
     }
 
     return mix.map((value) => value * 10 ** (gain / 20));

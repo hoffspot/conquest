@@ -3196,6 +3196,30 @@ played at its own volume:
     the Scroll of Safety's and carrying-off's from the start); anyone else's the first time it's
     heard, what's made playing in its place till then (the made bolt, fireball, heal...), or
     nothing.
+- **The wild's creatures** (`sound.js` CREATURE_VOICES, voice; `game.js` #calling, #aloft and on
+  each attack, blow and death): recorded (`scripts/sounds/creatures.js`, all CC0 or public
+  domain), real animals where there are any (the National Park Service's wolves, grizzlies and
+  bison; a pet rat, a cobra, wild boars, an alligator, a frog), the nearest real thing for the
+  rest (a hissing cockroach for a spider, a tree creaking for a treant, a lion, a bison and an
+  alligator slowed for a dragon, men's voices for goblins and trolls, whispers and moans for the
+  dead). Each creature has its family's (21 families), played slower and lower for a bigger one
+  of the family and higher for a smaller (a dire wolf a wolf's at 0.85, a wyvern a dragon's at
+  1.15):
+  - **A call** as it sets on someone (no sooner than 8 s after its last), and now and then as it
+    goes about its business (every 25 to 70 s, never two creatures' within 5 s), heard to 50 m.
+    A dragon or a wyvern in the sky calls now and then too.
+  - **An attack**, loudest as its blow lands: a beast's every blow, a people-shaped one's (a
+    bandit, a goblin, a troll) about half of them, 0.9 s apart at least.
+  - **Hurt**, no oftener than every 0.7 s; struck dead, its death instead.
+  - **Dying**, and falling: a body's thud for its size (a rat's light, a bear's or a dragon's
+    heavy), none for a slime, a ghost or the bats (a skeleton's bones and a treant's crash are in
+    their deaths); the people-shaped as a person falls.
+  - **Wings**: a dragon's and a wyvern's beating in the air when they beat hard (heard to 45 m),
+    and flaring as one comes down to land; the bats fluttering under their voice. **A dragon's
+    fire** is its own (a fire whooshing up), and **a magma slime** sizzles under its voice.
+  - **A woman** among the bandits and cultists is silent: no woman's voice is recorded yet.
+  - **Downloaded only once wanted**, as a creature's drawn (about 2.5 MB in all; a family's
+    about 100 to 200 KB). **Out of breath**: the player panting, recorded too.
 - **Footsteps**, as each foot lands (the walker says when), on what it lands on (`footing.js`):
   - **Laid ground** as it's laid: wooden boards (floors, a bridge's deck), stone (cobbles, flags);
     a road's packed dirt, and ploughed soil's.

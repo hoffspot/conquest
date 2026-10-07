@@ -38,7 +38,7 @@ import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { footing } from "../audio/footing.js";
-import { spellSounds } from "../audio/sound.js";
+import { CREATURE_VOICES, creatureSounds, spellSounds } from "../audio/sound.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -149,6 +149,18 @@ const FOUGHT = 30;
 
 // How long after a body hits the ground what it fought with clatters down after it (s)
 const DROPPED = 0.15;
+
+/**
+ * The wild's creatures heard (sound.js CREATURE_VOICES): calling as one sets on someone (no
+ * sooner than `again` seconds after its last call), and now and then about its business (every
+ * `idle` seconds, from and to; never two creatures' within `apart` seconds of each other); a
+ * people-shaped one grunting with `effort` of its blows (a beast's every one heard), each
+ * `growl` seconds apart at least; crying out hurt no oftener than every `hurt` seconds; a
+ * dragon's or a wyvern's wings beating `wings` seconds apart when it beats them hard (heard to
+ * `aloft` metres off, up in the air), and coming down out of the sky, flaring to land `flare` of
+ * the way down (arrive).
+ */
+const CALLS = Object.freeze({ again: 8, idle: Object.freeze([25, 70]), apart: 5, effort: 0.5, growl: 0.9, hurt: 0.7, wings: 1.1, aloft: 45, flare: Object.freeze([0.7, 0.86]) });
 
 // Going up or down the stairs: how many treads are heard, how far apart (s), and how fast they're
 // climbed (m/s, as a footstep's: a steady walk)
@@ -1394,6 +1406,9 @@ export class Game {
             avatar.character.lowerDetail(this.kit.lods);
         }
 
+        // (Its voice downloaded now it's near: audio/sound.js want)
+        this.sound?.want(creatureSounds(actor.wild.creature));
+
         return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
     }
 
@@ -1461,7 +1476,7 @@ export class Game {
     #wantSpells() {
         const known = Object.keys(SPELLS).filter((id) => this.progress.knows?.(id));
 
-        this.sound?.want(["fizzle", "spellCircle", "teleportOut", "teleportIn", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))]);
+        this.sound?.want(["fizzle", "spellCircle", "teleportOut", "teleportIn", "breath", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))]);
     }
 
     /** Stop: nothing moves until start() again. */
@@ -2022,6 +2037,7 @@ export class Game {
             }
 
             this.#grounded(actor, avatar);
+            this.#calling(actor, avatar);
         }
 
         this.contacts?.end();
@@ -2384,6 +2400,66 @@ export class Game {
         const seen = this.battle.buffOf(actor, "invisibility") ? 0.22 : 1;
 
         this.contacts.add(x, actor.dead ? (avatar.ground ?? 0) : (avatar.standing ?? 0), z, tall, risen * dying * seen);
+    }
+
+    // One of the wild's creatures' voice (sound.js CREATURE_VOICES): its kind, or null (not one of
+    // the wild's, or a woman among the bandits and cultists, a woman's voice not recorded yet)
+    #voiced(actor, avatar) {
+        const creature = actor?.wild?.creature;
+
+        return CREATURE_VOICES[creature] && (avatar?.character?.shape?.macro?.gender ?? 1) >= 0.5 ? creature : null;
+    }
+
+    // One of the wild's creatures calling (CALLS): as it sets on someone, and now and then as it
+    // goes about its business, wherever it is (the sound's heard only so far: sound.js)
+    #calling(actor, avatar) {
+        const creature = !actor.dead && !avatar.compiling && this.#voiced(actor, avatar);
+
+        if (!creature) {
+            return;
+        }
+
+        const heard = (avatar.calls ??= { target: null, quiet: 0, next: this.clock + Math.random() * CALLS.idle[1] });
+        const [soonest, latest] = CALLS.idle;
+
+        if (actor.target && actor.target !== heard.target && this.clock >= heard.quiet) {
+            this.sound?.voice(creature, "call", avatar.object.position);
+            heard.quiet = this.clock + CALLS.again;
+        } else if (!actor.target && this.clock >= heard.next && this.clock >= (this.called ?? 0) + CALLS.apart) {
+            this.sound?.voice(creature, "call", avatar.object.position);
+            heard.next = this.clock + soonest + Math.random() * (latest - soonest);
+            this.called = this.clock;
+        }
+
+        heard.target = actor.target;
+    }
+
+    // A wyvern or a dragon up in the air (flyers3d.js): its wings heard beating as it beats them
+    // hard, and now and then its call (CALLS); its voice downloaded as it comes
+    #aloft(flier) {
+        const voice = CREATURE_VOICES[flier.kind];
+
+        if (!voice) {
+            return;
+        }
+
+        const at = { x: flier.x, z: flier.z };
+        const [soonest, latest] = CALLS.idle;
+
+        if (!flier.heard) {
+            flier.heard = { beat: 0, call: this.clock + soonest + Math.random() * (latest - soonest) };
+            this.sound?.want(creatureSounds(flier.kind));
+        }
+
+        if (voice.wings && flier.beat > 0.6 && this.clock >= flier.heard.beat) {
+            this.sound?.play(voice.wings, { at, rate: voice.rate ?? 1, far: CALLS.aloft });
+            flier.heard.beat = this.clock + CALLS.wings / (voice.rate ?? 1);
+        }
+
+        if (this.clock >= flier.heard.call) {
+            this.sound?.voice(flier.kind, "call", at);
+            flier.heard.call = this.clock + soonest + Math.random() * (latest - soonest);
+        }
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
@@ -3804,6 +3880,13 @@ export class Game {
 
                     if (avatar.winged && near && !actor.dead) {
                         avatar.arrive({ from: this.flyers?.takeAloft(avatar.id, [x, z]) ?? null, ground: this.#groundOn(actor.map, x, z) });
+
+                        // (Its wings heard beating as it flares to land)
+                        const wings = CREATURE_VOICES[actor.wild?.creature]?.wings;
+
+                        for (const flare of wings ? CALLS.flare : []) {
+                            this.sound?.play(wings, { at: avatar.object.position, delay: flare * (avatar.arrival?.duration ?? 0), far: CALLS.aloft });
+                        }
                     }
                 }
             }
@@ -4778,6 +4861,10 @@ export class Game {
 
         if (me) {
             this.flyers?.update(dt, this.clock, { x: me.x, z: me.z }, { outdoors: !interior });
+
+            for (const flier of interior ? [] : (this.flyers?.aloft ?? [])) {
+                this.#aloft(flier);
+            }
         }
     }
 
@@ -4858,6 +4945,16 @@ export class Game {
 
                     this.lastAttack.set(event.id, battle.time);
                     this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
+
+                    // (One of the wild's creatures snarling, hissing or grunting with it, loudest as
+                    // it lands: a beast's every blow, a people-shaped one's now and then: CALLS)
+                    const creature = this.#voiced(actor, avatar);
+
+                    if (creature && this.clock >= (avatar.growled ?? 0) && (avatar instanceof BeastAvatar || Math.random() < CALLS.effort)) {
+                        this.sound?.voice(creature, "attack", avatar.object.position, { hitAt: event.hitAt / 1000 });
+                        avatar.growled = this.clock + CALLS.growl;
+                    }
+
                     break;
                 }
                 case "draw":
@@ -5037,7 +5134,19 @@ export class Game {
                     avatar.lands = avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 }) ?? FALL_LANDS;
                     avatar.deadFor = 0;
                     effects.clearDaze(avatar.object);
-                    this.sound?.play(["mail", "plate"].includes(armourOf(avatar.character)) ? "fallArmoured" : "fall", { at: avatar.object.position, delay: avatar.lands });
+
+                    // (One of the wild's creatures dying as it does, and falling as it's made: a
+                    // body's thud for its size, or none heard; anyone else as a person falls)
+                    const dying = battle.actor(event.id);
+                    const fall = CREATURE_VOICES[dying?.wild?.creature]?.fall;
+
+                    if (this.#voiced(dying, avatar)) {
+                        this.sound?.voice(dying.wild.creature, "death", avatar.object.position);
+                    }
+
+                    if (fall !== null) {
+                        this.sound?.play(fall ?? (["mail", "plate"].includes(armourOf(avatar.character)) ? "fallArmoured" : "fall"), { at: avatar.object.position, delay: avatar.lands });
+                    }
 
                     // (What they fought with falling from their hand after them)
                     if (battle.actor(event.id)?.kind !== "beast" && !["punch", "kick"].includes(guardOf(battle.actor(event.id)?.weapon) ?? "punch")) {
@@ -5513,6 +5622,15 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
+
+        // (One of the wild's creatures crying out, now and then; struck dead, it's its death
+        // that's heard: CALLS)
+        const hurt = !actor?.dead && this.#voiced(actor, victim);
+
+        if (hurt && this.clock >= (victim.cried ?? 0)) {
+            this.sound?.voice(hurt, "hurt", victim.object.position);
+            victim.cried = this.clock + CALLS.hurt;
+        }
         // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like;
         // a spell's blow heard as it lands, its own, unless it's the fire it left on the ground or
         // it's turned back: #spellLanded)
