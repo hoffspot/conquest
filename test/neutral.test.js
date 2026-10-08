@@ -165,8 +165,8 @@ describe("the sites no people keeps in the world (sites.js)", () => {
             assert.ok(!down.squares.has(hy * WORLD_SIZE + hx), `${site.kind} ${site.id}: its heart open`);
             assert.ok(down.squares.size > 0 && down.squares.size < down.w * down.h * PLOT * PLOT * 0.7, `${site.kind} ${site.id}: ${down.squares.size} squares blocked of ${down.w * down.h * PLOT * PLOT}`);
             // (Levelled only where it's a ruined castle's courtyard, or dug into the ground: a
-            // cave's floor, its pit)
-            assert.equal(Boolean(down.pad), site.kind === "ruined castle" || site.kind === "cave" || site.kind === "dragon's lair", site.kind);
+            // cave's floor, its pit, and a dungeon's way in, as a cave's)
+            assert.equal(Boolean(down.pad), ["ruined castle", "cave", "dragon's lair", "dungeon"].includes(site.kind), site.kind);
         }
 
         assert.ok(set >= 100, `${set} set down`);

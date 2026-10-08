@@ -3024,6 +3024,50 @@ function lair(map) {
     return { solid, moving: [], flames: [], lights, hearth: null };
 }
 
+// A tomb (art pixels from its plan's piece: a run of squares): a chest of stone (`stone`) on a
+// plinth, its lid over it, a cross cut in it; now and then the lid pushed askew, the dark inside
+// showing
+function tomb(solid, tomb, stone) {
+    const [x0, z0, x1, z1] = [m(tomb.x + 0.12), m(tomb.y + 0.18), m(tomb.x + tomb.w - 0.12), m(tomb.y + tomb.h - 0.18)];
+    const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+    const along = x1 - x0 >= z1 - z0;
+    const opened = roughOf(tomb.x * 7, tomb.y * 3) > 0.72;
+
+    solid.box(x0 - m(0.06), 0, z0 - m(0.06), x1 + m(0.06), m(0.15), z1 + m(0.06), material("stone-dark"));
+    solid.box(x0, m(0.15), z0, x1, m(0.75), z1, material(stone));
+
+    if (opened) {
+        solid.box(x0 + m(0.08), m(0.74), z0 + m(0.08), x1 - m(0.08), m(0.76), z1 - m(0.08), material("shadow"));
+    }
+
+    const [lx, lz, turn] = opened ? [cx + (along ? m(0.35) : m(0.15)), cz + (along ? m(0.15) : m(0.35)), 0.35] : [cx, cz, 0];
+    const [hx, hz] = [(x1 - x0) / 2 + m(0.05), (z1 - z0) / 2 + m(0.05)];
+
+    solid.turnedBox(lx, lz, hx, hz, m(0.75), m(0.9), turn, material("stone"));
+    solid.turnedBox(lx, lz, along ? hx * 0.7 : m(0.04), along ? m(0.04) : hz * 0.7, m(0.9), m(0.92), turn, material("stone-dark"));
+    solid.turnedBox(lx + (along ? -hx * 0.35 : 0), lz + (along ? 0 : -hz * 0.35), along ? m(0.04) : m(0.22), along ? m(0.22) : m(0.04), m(0.9), m(0.92), turn, material("stone-dark"));
+}
+
+// Candles burning in an iron stand (art pixels from its plan's piece), and their light, warm on
+// what's round them
+function candleStand(solid, stand) {
+    const [cx, cz] = [m(stand.x + 0.5), m(stand.y + 0.5)];
+
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + 0.4;
+
+        solid.turnedBox(cx + Math.cos(a) * m(0.18), cz + Math.sin(a) * m(0.18), m(0.025), m(0.025), 0, m(0.95), a, material("iron"));
+    }
+
+    solid.cylinder(cx, cz, m(0.95), m(1.0), m(0.32), m(0.28), material("iron"), { segments: 10 });
+
+    for (const [dx, dz] of [[0, 0], [0.16, 0.08], [-0.14, 0.1], [0.05, -0.17]]) {
+        candle(solid, cx + m(dx), cz + m(dz), m(1.0));
+    }
+
+    return { kind: "fire", x: stand.x + 0.5, y: 1.4, z: stand.y + 0.5, colour: 0xffb060, intensity: 5, distance: 10, flicker: 0.2, seed: roughOf(stand.x, stand.y), rate: 1.1, steady: 0.85 };
+}
+
 // How high a crypt's vault is at its crown, and its stair's steps (metres)
 const CRYPT = Object.freeze({ tall: 3.4, step: { rise: 0.2, tread: 0.3 }, steps: 13 });
 
@@ -3104,27 +3148,9 @@ function crypt(map) {
         solid.box(cx - m(0.38), tall - m(0.6), cz - m(0.38), cx + m(0.38), tall - m(0.35), cz + m(0.38), material("stone-dark"));
     }
 
-    // The tombs: a chest of stone on a plinth, its lid over it, a cross cut in it; now and then
-    // the lid pushed askew, the dark inside showing
-    for (const tomb of at("tomb")) {
-        const [x0, z0, x1, z1] = [m(tomb.x + 0.12), m(tomb.y + 0.18), m(tomb.x + tomb.w - 0.12), m(tomb.y + tomb.h - 0.18)];
-        const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
-        const along = x1 - x0 >= z1 - z0;
-        const opened = roughOf(tomb.x * 7, tomb.y * 3) > 0.72;
-
-        solid.box(x0 - m(0.06), 0, z0 - m(0.06), x1 + m(0.06), m(0.15), z1 + m(0.06), material("stone-dark"));
-        solid.box(x0, m(0.15), z0, x1, m(0.75), z1, material(stone));
-
-        if (opened) {
-            solid.box(x0 + m(0.08), m(0.74), z0 + m(0.08), x1 - m(0.08), m(0.76), z1 - m(0.08), material("shadow"));
-        }
-
-        const [lx, lz, turn] = opened ? [cx + (along ? m(0.35) : m(0.15)), cz + (along ? m(0.15) : m(0.35)), 0.35] : [cx, cz, 0];
-        const [hx, hz] = [(x1 - x0) / 2 + m(0.05), (z1 - z0) / 2 + m(0.05)];
-
-        solid.turnedBox(lx, lz, hx, hz, m(0.75), m(0.9), turn, material("stone"));
-        solid.turnedBox(lx, lz, along ? hx * 0.7 : m(0.04), along ? m(0.04) : hz * 0.7, m(0.9), m(0.92), turn, material("stone-dark"));
-        solid.turnedBox(lx + (along ? -hx * 0.35 : 0), lz + (along ? 0 : -hz * 0.35), along ? m(0.04) : m(0.22), along ? m(0.22) : m(0.04), m(0.9), m(0.92), turn, material("stone-dark"));
+    // The tombs, lidded, now and then pushed askew
+    for (const piece of at("tomb")) {
+        tomb(solid, piece, stone);
     }
 
     for (const heap of at("bones")) {
@@ -3133,21 +3159,7 @@ function crypt(map) {
 
     // Candles burning in iron stands, their light warm on the stone
     for (const stand of at("candles")) {
-        const [cx, cz] = [m(stand.x + 0.5), m(stand.y + 0.5)];
-
-        for (let k = 0; k < 3; k++) {
-            const a = (k / 3) * Math.PI * 2 + 0.4;
-
-            solid.turnedBox(cx + Math.cos(a) * m(0.18), cz + Math.sin(a) * m(0.18), m(0.025), m(0.025), 0, m(0.95), a, material("iron"));
-        }
-
-        solid.cylinder(cx, cz, m(0.95), m(1.0), m(0.32), m(0.28), material("iron"), { segments: 10 });
-
-        for (const [dx, dz] of [[0, 0], [0.16, 0.08], [-0.14, 0.1], [0.05, -0.17]]) {
-            candle(solid, cx + m(dx), cz + m(dz), m(1.0));
-        }
-
-        lights.push({ kind: "fire", x: stand.x + 0.5, y: 1.4, z: stand.y + 0.5, colour: 0xffb060, intensity: 5, distance: 10, flicker: 0.2, seed: roughOf(stand.x, stand.y), rate: 1.1, steady: 0.85 });
+        lights.push(candleStand(solid, stand));
     }
 
     // The stair up to the hall from its door, under its own vault, daylight at its head
@@ -3481,7 +3493,432 @@ function towerTop(map) {
     return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
 }
 
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop };
+// --- A dungeon's levels (core/dungeons: docs/DUNGEONS.md) ---
+
+// How each theme's levels are drawn (by its look: core/dungeons/themes.js): what's underfoot; its
+// rock (crags `low` to `high` metres, the roof a little over them) or its walls of dressed stone
+// (`walls`, `tall` metres high, a vault over them); what its heaps of fallen stuff are; and
+// whether its tunnels are shored up with timber (an outlaws' hideout's)
+const DUNGEON_LOOKS = Object.freeze({
+    caves: { floor: "road", rock: "rock-dark", low: 3.4, high: 5.2, rubble: "rock-dark" },
+    hideout: { floor: "road", rock: "rock", low: 2.9, high: 3.8, rubble: "rock", shored: true },
+    ancient: { floor: "stone", walls: "stone-old", tall: 4.2, rubble: "rubble-old" },
+});
+
+// A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
+// stone under the floor goes either side of one going down (metres)
+const FLIGHT = Object.freeze({ steps: 6, rise: 0.32, deep: 2.6 });
+
+// An outlaws' hideout's shoring: across a tunnel no wider than `widest` squares, every `every`
+// squares along it, `tall` metres to the cap
+const SHORING = Object.freeze({ widest: 6, every: 4, tall: 2.5 });
+
+// A level's floor (`stuff`), all but where a flight of stairs goes down through it (`hole`: its
+// plan's piece, or none)
+function floorAround(solid, map, hole, stuff) {
+    const [w, h] = [m(map.width + 1), m(map.height + 1)];
+    const ground = material(stuff);
+
+    if (!hole) {
+        solid.box(-m(1), -0.5, -m(1), w, 0, h, ground);
+
+        return;
+    }
+
+    const [x0, z0, x1, z1] = [m(hole.x), m(hole.y), m(hole.x + hole.w), m(hole.y + hole.h)];
+
+    solid.box(-m(1), -0.5, -m(1), w, 0, z0, ground);
+    solid.box(-m(1), -0.5, z1, w, 0, h, ground);
+    solid.box(-m(1), -0.5, z0, x0, 0, z1, ground);
+    solid.box(x1, -0.5, z0, w, 0, z1, ground);
+}
+
+// A level's walls of dressed stone (`walls`, `tall` metres high): each run along a row of its
+// plan's rock squares by open ground as one, a plinth of darker stone along its foot and a cornice
+// under the vault; and the vault over all (as a ceiling)
+function dressedWalls(solid, map, { walls, tall }) {
+    const rock = (x, y) => x < 0 || y < 0 || x >= map.width || y >= map.height || map.plan[y][x] === "#";
+    const near = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    const edge = (x, y) => rock(x, y) && near.some(([dx, dy]) => !rock(x + dx, y + dy));
+    const top = m(tall);
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (!edge(x, y)) {
+                continue;
+            }
+
+            let end = x;
+
+            while (end + 1 < map.width && edge(end + 1, y)) {
+                end++;
+            }
+
+            const [x0, z0, x1, z1] = [m(x), m(y), m(end + 1), m(y + 1)];
+
+            solid.box(x0, 0, z0, x1, top, z1, material(walls, WALL));
+            solid.box(x0 - 0.4, 0, z0 - 0.4, x1 + 0.4, m(0.35), z1 + 0.4, material("stone-dark", WALL));
+            solid.box(x0 - 0.5, top - m(0.3), z0 - 0.5, x1 + 0.5, top, z1 + 0.5, material("stone-dark", WALL));
+            x = end;
+        }
+    }
+
+    solid.box(-m(1), top, -m(1), m(map.width + 1), top + m(0.4), m(map.height + 1), material(walls, CEILING), { under: material(walls, CEILING) });
+}
+
+// A flight of stairs dug into a level's rock (its plan's piece) from the landing before it: down
+// through the floor to the next level (`down`), or up into the rock to the one above; the dark it
+// goes on into at its far end (in front of the rock by `inset` metres), and going down, the stone
+// either side of it and beyond it under the floor
+function flight(solid, map, piece, stuff, { down, inset }) {
+    const landing = map.marks[down ? ">" : "<"] ?? [];
+    const mean = (k) => landing.reduce((sum, square) => sum + square[k] + 0.5, 0) / Math.max(1, landing.length);
+    const [lx, ly] = landing.length ? [mean(0), mean(1)] : [map.width / 2, map.height / 2];
+    const [px, py] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
+    const alongX = Math.abs(px - lx) > Math.abs(py - ly);
+    const sign = (alongX ? px - lx : py - ly) >= 0 ? 1 : -1;
+    const length = alongX ? piece.w : piece.h;
+    const start = alongX ? piece.x + (sign > 0 ? 0 : piece.w) : piece.y + (sign > 0 ? 0 : piece.h);
+    const [a0, a1] = alongX ? [piece.y, piece.y + piece.h] : [piece.x, piece.x + piece.w];
+    const stone = material(stuff);
+    // (A box from `u0` to `u1` squares along the flight from its start, `c0` to `c1` across, `y0`
+    // up to `y1` metres)
+    const span = (u0, u1, c0, c1, y0, y1) => {
+        const [p, q] = [start + sign * u0, start + sign * u1].sort((a, b) => a - b);
+
+        if (alongX) {
+            solid.box(m(p), m(y0), m(c0), m(q), m(y1), m(c1), stone);
+        } else {
+            solid.box(m(c0), m(y0), m(p), m(c1), m(y1), m(q), stone);
+        }
+    };
+    const way = down ? -1 : 1;
+    const tread = length / FLIGHT.steps;
+
+    for (let k = 0; k < FLIGHT.steps; k++) {
+        span(k * tread, (k + 1) * tread, a0, a1, down ? -FLIGHT.deep : 0, way * FLIGHT.rise * (k + 1));
+    }
+
+    if (down) {
+        span(0, length + 0.4, a0 - 0.4, a0, -FLIGHT.deep, 0);
+        span(0, length + 0.4, a1, a1 + 0.4, -FLIGHT.deep, 0);
+        span(length, length + 0.4, a0, a1, -FLIGHT.deep, 0);
+    }
+
+    const far = start + sign * (length - inset);
+    const [foot, head] = down ? [-FLIGHT.rise * FLIGHT.steps, 0] : [FLIGHT.rise * FLIGHT.steps, FLIGHT.rise * FLIGHT.steps + 2.3];
+    const quad = alongX
+        ? [[m(far), m(foot), m(a0)], [m(far), m(foot), m(a1)], [m(far), m(head), m(a1)], [m(far), m(head), m(a0)]]
+        : [[m(a0), m(foot), m(far)], [m(a1), m(foot), m(far)], [m(a1), m(head), m(far)], [m(a0), m(head), m(far)]];
+
+    solid.facing(quad, alongX ? [-sign, 0, 0] : [0, 0, -sign], material("shadow"));
+}
+
+// An outlaws' hideout's tunnels shored up: every few squares along a tunnel (open ground between
+// rock, clear of every room's bounds), a post against the rock either side and a cap across between them
+function shoring(solid, map) {
+    const open = (x, y) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.plan[y][x] !== "#";
+    const roomed = new Uint8Array(map.width * map.height);
+    const timber = material("timber");
+    const tall = m(SHORING.tall);
+
+    for (const room of map.dungeon?.rooms ?? []) {
+        for (let y = room.y; y < room.y + room.h; y++) {
+            roomed.fill(1, y * map.width + room.x, y * map.width + room.x + room.w);
+        }
+    }
+
+    // (Across a tunnel running north and south, along a row; then across one running east and
+    // west, along a column: `u` across, `v` along)
+    for (const across of [true, false]) {
+        const at = (u, v) => (across ? [u, v] : [v, u]);
+        const box = (u0, u1, v0, v1, y0, y1) => (across ? solid.box(m(u0), y0, m(v0), m(u1), y1, m(v1), timber) : solid.box(m(v0), y0, m(u0), m(v1), y1, m(u1), timber));
+        const [wide, long] = across ? [map.width, map.height] : [map.height, map.width];
+
+        for (let v = SHORING.every; v < long - 1; v += SHORING.every) {
+            for (let u = 0; u < wide; u++) {
+                if (!open(...at(u, v)) || open(...at(u - 1, v))) {
+                    continue;
+                }
+
+                let end = u;
+
+                while (open(...at(end + 1, v))) {
+                    end++;
+                }
+
+                // (Only open ground, no room's, and going on either side of it: a tunnel's)
+                const run = Array.from({ length: end - u + 1 }, (_, k) => at(u + k, v));
+                const middle = Math.floor((u + end) / 2);
+                const tunnel = run.length <= SHORING.widest && run.every(([x, y]) => map.plan[y][x] === "." && !roomed[y * map.width + x]) && open(...at(middle, v - 1)) && open(...at(middle, v + 1));
+
+                if (tunnel) {
+                    box(u - 0.05, u + 0.2, v + 0.35, v + 0.65, 0, tall);
+                    box(end + 0.8, end + 1.05, v + 0.35, v + 0.65, 0, tall);
+                    box(u - 0.1, end + 1.1, v + 0.32, v + 0.68, tall - m(0.25), tall);
+                }
+
+                u = end;
+            }
+        }
+    }
+}
+
+// Rock standing up from a cave's floor (art pixels: where), each its own way (`rough`, 0 to 1),
+// and rock hanging over it from the roof (`roof`: how high)
+function stalagmite(solid, x, z, rough, stuff, roof) {
+    const tall = m(1.1 + 1.6 * rough);
+
+    solid.cone(x, z, 0, tall, m(0.42 + 0.12 * rough), material(stuff), 7);
+    solid.cone(x + m(0.3), z - m(0.2), 0, tall * 0.55, m(0.26), material(stuff), 6);
+    solid.cylinder(x - m(0.1), z + m(0.1), roof - m(0.7 + 0.9 * (1 - rough)), roof, 0, m(0.3), material(stuff), { segments: 6 });
+}
+
+// A heap of what fell (art pixels: where), stones tumbled about it
+function rubbleHeap(solid, x, z, rough, stuff) {
+    solid.cone(x, z, 0, m(0.5 + 0.3 * rough), m(0.75), material(stuff), 7);
+
+    for (let k = 0; k < 4; k++) {
+        const size = m(0.16 + 0.14 * roughOf(x + k, z));
+        const [bx, bz] = [x + m(roughOf(k, x) - 0.5) * 1.2, z + m(roughOf(z, k) - 0.5) * 1.2];
+
+        solid.turnedBox(bx, bz, size, size * 0.8, 0, size * 1.2, roughOf(k, z) * 3, material(stuff));
+    }
+}
+
+// A barrel standing on its end (art pixels: its middle), hooped with iron
+function barrel(solid, x, z) {
+    solid.cylinder(x, z, 0, m(0.9), m(0.28), m(0.28), material("planks"), { segments: 10 });
+
+    for (const y of [0.15, 0.72]) {
+        solid.cylinder(x, z, m(y), m(y + 0.05), m(0.295), m(0.295), material("iron"), { segments: 10, capped: false });
+    }
+}
+
+// Crates of plunder (art pixels: where), one on another now and then, a sack by them
+function crates(solid, x, z, rough) {
+    const turn = (rough - 0.5) * 0.8;
+
+    solid.turnedBox(x, z, m(0.38), m(0.38), 0, m(0.76), turn, material("planks-dark"));
+
+    if (rough > 0.45) {
+        solid.turnedBox(x + m(0.05), z - m(0.03), m(0.27), m(0.27), m(0.76), m(1.3), turn + 0.5, material("planks"));
+    }
+
+    if (rough < 0.35) {
+        solid.cylinder(x + m(0.5), z + m(0.25), 0, m(0.45), m(0.22), m(0.16), material("canvas-sack"), { segments: 8 });
+    }
+}
+
+// A rack of spears and axes standing free (art pixels from its plan's piece), along its longer side
+function weaponRack(solid, piece) {
+    const along = piece.w >= piece.h;
+    const [x0, z0, x1, z1] = [m(piece.x + 0.15), m(piece.y + 0.15), m(piece.x + piece.w - 0.15), m(piece.y + piece.h - 0.15)];
+    const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+    const length = along ? x1 - x0 : z1 - z0;
+    const at = (s, d = 0) => (along ? [x0 + s, cz + d] : [cx + d, z0 + s]);
+
+    for (const s of [0, length]) {
+        const [x, z] = at(s);
+
+        solid.box(x - 0.4, 0, z - 0.4, x + 0.4, m(1.7), z + 0.4, material("timber"));
+    }
+
+    for (const y of [0.35, 1.45]) {
+        const [[ax, az], [bx, bz]] = [at(0, -0.3), at(length, 0.3)];
+
+        solid.box(Math.min(ax, bx), m(y), Math.min(az, bz), Math.max(ax, bx), m(y + 0.08), Math.max(az, bz), material("timber"));
+    }
+
+    for (let s = m(0.3), k = 0; s < length - m(0.2); s += m(0.32), k++) {
+        const [x, z] = at(s);
+
+        solid.cylinder(x, z, m(0.35), m(2.1), m(0.03), m(0.03), material("timber-light"), { segments: 5 });
+        solid.cylinder(x, z, m(2.1), m(2.35), m(0.05), 0, material("iron"), { segments: 5 });
+
+        if (k % 2) {
+            solid.turnedBox(x, z, m(0.14), m(0.02), m(1.3), m(1.6), along ? 0 : Math.PI / 2, material("iron"));
+        }
+    }
+}
+
+// The outlaw chief's seat (art pixels from its plan's piece), its high back to the rock it stands
+// against, a hide thrown over it
+function chiefSeat(solid, map, piece) {
+    const [x, z] = [m(piece.x + 0.5), m(piece.y + 0.5)];
+    const rock = (dx, dy) => map.plan[piece.y + dy]?.[piece.x + dx] === "#";
+    const [bx, bz] = [[0, -1], [-1, 0], [1, 0], [0, 1]].find(([dx, dy]) => rock(dx, dy)) ?? [0, -1];
+
+    solid.box(x - m(0.4), 0, z - m(0.4), x + m(0.4), m(0.5), z + m(0.4), material("timber"));
+    solid.box(x - m(0.38), m(0.5), z - m(0.38), x + m(0.38), m(0.56), z + m(0.38), material("hide"));
+    solid.turnedBox(x + bx * m(0.35), z + bz * m(0.35), m(bz ? 0.42 : 0.07), m(bz ? 0.07 : 0.42), m(0.5), m(1.7), 0, material("timber"));
+    solid.turnedBox(x + bx * m(0.3), z + bz * m(0.3), m(bz ? 0.32 : 0.05), m(bz ? 0.05 : 0.32), m(0.6), m(1.5), 0, material("hide"));
+}
+
+// An ancient temple's altar (art pixels from its plan's piece): a block of dark stone on a step,
+// a slab over it, stained, candles burning at its ends
+function altarStone(solid, piece, stone) {
+    const [x0, z0, x1, z1] = [m(piece.x + 0.1), m(piece.y + 0.15), m(piece.x + piece.w - 0.1), m(piece.y + piece.h - 0.15)];
+    const along = x1 - x0 >= z1 - z0;
+
+    solid.box(x0 - m(0.2), 0, z0 - m(0.2), x1 + m(0.2), m(0.18), z1 + m(0.2), material("stone-dark"));
+    solid.box(x0 + m(0.1), m(0.18), z0 + m(0.1), x1 - m(0.1), m(0.9), z1 - m(0.1), material(stone));
+    solid.box(x0, m(0.9), z0, x1, m(1.04), z1, material("stone-dark"));
+    solid.box((x0 + x1) / 2 - m(0.35), m(1.04), (z0 + z1) / 2 - m(0.25), (x0 + x1) / 2 + m(0.35), m(1.045), (z0 + z1) / 2 + m(0.25), material("shadow"));
+
+    for (const s of [0.18, 0.82]) {
+        const [x, z] = along ? [x0 + (x1 - x0) * s, (z0 + z1) / 2] : [(x0 + x1) / 2, z0 + (z1 - z0) * s];
+
+        candle(solid, x, z, m(1.04));
+    }
+}
+
+// A pillar of an ancient temple's (art pixels: where): its plinth, its shaft up to its capital under
+// the vault (`tall` metres)
+function templePillar(solid, x, z, stone, tall) {
+    const top = m(tall);
+
+    solid.box(x - m(0.4), 0, z - m(0.4), x + m(0.4), m(0.38), z + m(0.4), material("stone-dark"));
+    solid.cylinder(x, z, m(0.38), top - m(0.55), m(0.28), m(0.28), material(stone), { segments: 10 });
+    solid.box(x - m(0.42), top - m(0.55), z - m(0.42), x + m(0.42), top, z + m(0.42), material("stone-dark"));
+}
+
+// A dungeon's level, as its theme has it drawn (DUNGEON_LOOKS: caves of dark rock, an outlaws'
+// hideout dug out and shored up with timber, an ancient temple of dressed stone under its vault):
+// its floor, its rock or walls; daylight at the way in on its first level; its stairs down through
+// the floor and up into the rock; what's in its rooms (core/dungeons/place.js's props, by plan
+// character); gold heaped by the boss's hoard; and torches on its walls
+function dungeon(map) {
+    const solid = new Solid();
+    const look = DUNGEON_LOOKS[map.look] ?? DUNGEON_LOOKS.caves;
+    const stuff = look.walls ?? look.rock;
+    const roof = m(look.walls ? look.tall : look.high + 0.6);
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const lights = [];
+    const flames = [];
+    const burning = ({ fire, light }) => {
+        flames.push(fire);
+        lights.push(light);
+    };
+
+    floorAround(solid, map, at("stairs-down")[0], look.floor);
+
+    if (look.walls) {
+        dressedWalls(solid, map, look);
+    } else {
+        crags(solid, map, look.rock, look);
+    }
+
+    if (map.marks.D) {
+        lights.push(mouth(solid, map, stuff));
+    }
+
+    for (const [kind, down] of [["stairs-down", true], ["stairs-up", false]]) {
+        for (const piece of at(kind)) {
+            flight(solid, map, piece, stuff, { down, inset: look.walls ? 0.02 : 0.45 });
+        }
+    }
+
+    if (look.shored) {
+        shoring(solid, map);
+    }
+
+    for (const piece of map.pieces) {
+        const [x, z] = [m(piece.x + piece.w / 2), m(piece.y + piece.h / 2)];
+        const rough = roughOf(piece.x, piece.y);
+
+        switch (piece.kind) {
+            case "stalagmite":
+                stalagmite(solid, x, z, rough, stuff, roof);
+                break;
+            case "bones":
+                bones(solid, x, z, rough);
+                break;
+            case "rubble":
+                rubbleHeap(solid, x, z, rough, look.rubble);
+                break;
+            case "campfire":
+                burning(campfire(solid, x, z));
+                break;
+            case "bedroll":
+                bedroll(solid, x, z, rough);
+                break;
+            case "barrels":
+                for (const [sx, sy] of piece.squares) {
+                    barrel(solid, m(sx + 0.5), m(sy + 0.5));
+                }
+
+                break;
+            case "crates":
+                crates(solid, x, z, rough);
+                break;
+            case "table":
+                table(solid, m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h));
+                break;
+            case "rack":
+                weaponRack(solid, piece);
+                break;
+            case "throne":
+                chiefSeat(solid, map, piece);
+                break;
+            case "statue":
+                solid.box(x - m(0.45), 0, z - m(0.45), x + m(0.45), m(0.6), z + m(0.45), material("stone-dark"));
+                statue(solid, x, z, m(2.4), stuff, "stone-dark");
+                break;
+            case "pillar":
+                templePillar(solid, x, z, stuff, look.tall ?? look.low);
+                break;
+            case "tomb":
+                tomb(solid, piece, stuff);
+                break;
+            case "candles":
+                lights.push(candleStand(solid, piece));
+                break;
+            case "altar":
+                altarStone(solid, piece, stuff);
+                break;
+            case "shrine":
+                solid.box(x - m(0.4), 0, z - m(0.35), x + m(0.4), m(0.8), z + m(0.35), material("stone-dark"));
+                statue(solid, x, z, m(1.1), stuff, "stone-dark");
+                candle(solid, x - m(0.28), z + m(0.2), m(0.8));
+                candle(solid, x + m(0.28), z + m(0.2), m(0.8));
+                break;
+            case "brazier":
+                burning(brazier(solid, x, z, rough));
+                break;
+            case "hoard":
+                // (Gold heaped either side of where the hoard's chest stands, coins strewn)
+                for (const [dx, dz, r, tall] of [[-1.3, -0.1, 0.7, 0.4], [1.3, 0.1, 0.6, 0.35], [-0.5, -0.8, 0.45, 0.25]]) {
+                    solid.cone(x + m(dx), z + m(dz), 0, m(tall), m(r), material("gold"), 12);
+                }
+
+                for (let k = 0; k < 18; k++) {
+                    const [a, d] = [roughOf(k, piece.x) * Math.PI * 2, 0.9 + roughOf(piece.y, k) * 1.4];
+
+                    solid.cylinder(x + Math.cos(a) * m(d), z + Math.sin(a) * m(d), 0, m(0.012), m(0.06), m(0.06), material("gold"), { segments: 6 });
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Torches on the walls (place.js's: each by a wall, and which way it is)
+    for (const torch of map.dungeon?.lights ?? []) {
+        if (torch.kind === "torch") {
+            const [x, y] = torch.at;
+            const [dx, dy] = torch.wall ?? [0, 0];
+
+            burning(wallTorch(solid, m(x + 0.5 + dx * 0.42), m(y + 0.5 + dy * 0.42)));
+        }
+    }
+
+    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M };
+}
+
+// (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
 
 // --- Each people's own ---
 
@@ -3703,7 +4140,7 @@ function accents(solid, map, people) {
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),
  * lights (its flames, as point lights: { kind, x, y, z (world metres), colour, intensity,
  * distance, flicker, seed }, its fires first: roomlight.js), daylight (the way towards the sun
- * shining in at its windows, [x, y, z], or null for none), ceiling (how high it is: STOREY),
+ * shining in at its windows, [x, y, z], or null for none), ceiling (how high it is: STOREY, or a dungeon level's roof),
  * hearth (world point of its fire, or null), update(dt, time) (turns the spit, moves the flames), drive(name, time, seconds) (turns a
  * named part a while), dispose() }.
  */
@@ -3747,7 +4184,7 @@ export function* buildingInterior(map) {
     lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
     try {
-        built = BUILDERS[map.style ?? map.id](map);
+        built = (BUILDERS[map.style ?? map.id] ?? (map.dungeon ? dungeon : null))(map);
 
         if (own) {
             accents(built.solid, map, own);
@@ -3861,10 +4298,11 @@ export function* buildingInterior(map) {
     return {
         map,
         object,
-        lights: gather([...built.lights, ...lit.flames]).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: light.seed ?? k * 17.3 })),
+        // (A dungeon's level's lights each its own, however many: the view lights it by those nearest)
+        lights: gather([...built.lights, ...lit.flames], map.dungeon ? Infinity : undefined).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: light.seed ?? k * 17.3 })),
         daylight: lit.daylight,
         open: Boolean(built.open),
-        ceiling: STOREY,
+        ceiling: built.ceiling ?? STOREY,
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {
             for (const part of built.moving) {

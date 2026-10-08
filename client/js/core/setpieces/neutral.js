@@ -30,6 +30,7 @@ export const NEUTRAL = Object.freeze({
     "dragon's lair": [10, 9],
     watchtower: [3, 3],
     graveyard: [6, 5],
+    dungeon: [5, 4],
 });
 
 /**
@@ -118,9 +119,9 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * (for a ruined castle: its castle.js pieces, ruined), entry (where it's gone into, if it can be:
  * { x, y (metres: the middle of its way in, on the line of its face), width, height, inside (what
  * it's like within: insides.js's kinds) }, facing out the way the site does) }; or null if the
- * kind isn't one.
+ * kind isn't one. A dungeon's way in is dressed as its `theme` has it (core/dungeons/themes.js).
  */
-export function layoutNeutral({ kind, seed, form = null, facing = 0 }) {
+export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = null }) {
     const size = NEUTRAL[kind];
 
     if (!size) {
@@ -129,7 +130,7 @@ export function layoutNeutral({ kind, seed, form = null, facing = 0 }) {
 
     const random = createRandom((seed ^ 0x5eed) >>> 0);
     const [width, depth] = [size[0] * PLOT, size[1] * PLOT];
-    const laid = LAYOUTS[kind](random, width, depth, seed, form, facing);
+    const laid = LAYOUTS[kind](random, width, depth, seed, form, facing, theme);
 
     return { size, ...laid };
 }
@@ -213,6 +214,39 @@ const LAYOUTS = {
         // (Where it's cut into the hill: the face's line, and how high it stands over the floor dug
         // in front of it: sites.js levels that floor)
         return { parts, solid, heart: [cx, back + 2.6], cut: { x: cx, y: back, face: tall + 1.4 }, entry: { x: cx, y: back + 0.4, width: mouth, height: tall, inside: "cave" } };
+    },
+
+    // A dungeon's way in (core/dungeons: docs/DUNGEONS.md): a cave's mouth, cut into a hillside or
+    // sunk into the ground where the land's flat, as a cave's is, leading down to its levels; and
+    // round it, as its theme has it, the bones of those who went in (caves), what outlaws keep by
+    // their door (barrels and crates, a heap of old timber: a hideout), or the stumps of an old
+    // temple's columns either side, its fallen stone about (an ancient temple)
+    dungeon(random, width, depth, seed, form, facing, theme) {
+        const laid = LAYOUTS.cave(random, width, depth, seed, form);
+        const [cx, front] = [width / 2, laid.entry.y];
+        const parts = [...laid.parts];
+        const solid = [...laid.solid];
+        const keep = (part, w, d) => {
+            parts.push(part);
+            solid.push(box(part.x, part.y, w, d));
+        };
+
+        if (theme === "hideout") {
+            keep({ part: "stores", x: cx + 5, y: front + 1.6, seed: random.seed() }, 2.2, 2.2);
+            keep({ part: "timbers", x: cx - 5, y: front + 1.8, r: 1.2, seed: random.seed() }, 2.2, 2.2);
+        } else if (theme === "ancient") {
+            for (const side of [-1, 1]) {
+                const fallen = random.chance(0.35);
+
+                keep({ part: "column", x: cx + side * 4.6, y: front + 1.2, h: fallen ? 0.6 : random.range(1.6, 3.2), fallen, turn: random.range(0, TAU) }, 1.2, 1.2);
+            }
+
+            keep({ part: "rubble", x: cx + random.pick([-1, 1]) * random.range(6, 7), y: front + random.range(2.4, 3.2), r: random.range(0.7, 1), seed: random.seed() }, 1.8, 1.8);
+        } else {
+            keep({ part: "bones", x: cx + random.pick([-1, 1]) * random.range(4.4, 5.4), y: front + random.range(1.8, 2.6), turn: random.range(0, TAU), big: random.chance(0.3) }, 1.6, 1.6);
+        }
+
+        return { ...laid, parts, solid, entry: { ...laid.entry, inside: "dungeon" } };
     },
 
     // An old hall's walls, broken off unevenly, its door in front and a breach in a side; the

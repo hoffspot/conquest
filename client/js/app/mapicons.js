@@ -5,8 +5,9 @@
 // crown for a keep. And the places worth finding out in the world (core/places.js; the terrain
 // plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
 // spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
-// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); and
-// an adventurers' cache once it's been seen (a chest). Drawn on a canvas, from paths on a grid 24
+// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); a
+// dungeon's way in (an arch over steps going down, grey while it's cleared); and an adventurers'
+// cache once it's been seen (a chest). Drawn on a canvas, from paths on a grid 24
 // across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
@@ -219,6 +220,17 @@ const LOOKS = {
             ["M-10,9 q10,-4.6 20,0 z", "#6f7a5e", "#1e2420", 0.9],
             ["M-9,7.4 v-6.4 a2.6,2.6 0 0 1 5.2,0 v5.6 z M3.8,6.6 v-5.6 a2.6,2.6 0 0 1 5.2,0 v6.4 z", "#b0ab9c", "#1e2420", 1],
             ["M-1.1,6 v-10.5 h2.2 v10.5 z M-3.6,-1.6 h7.2 v2.2 h-7.2 z", "#c4bfb0", "#1e2420", 1],
+        ],
+    },
+    // (A dungeon's way in, out in the wilds: core/dungeons)
+    dungeon: {
+        rim: "#c46a3a",
+        parts: [
+            // An arch of old stone over a dark way in, steps going down into it
+            ["M-10,9 v-9 a10,9.5 0 0 1 20,0 v9 z", "#857c70", "#1e1a14", 1],
+            ["M-5.6,9 v-8 a5.6,5.6 0 0 1 11.2,0 v8 z", "#0d0a08", null, 0],
+            ["M-4.6,4.2 h9.2 M-4,6.7 h8", null, "#5a5248", 1.1],
+            ["M0,-9.5 v3.2", null, "#1e1a14", 1],
         ],
     },
     // (An adventurers' cache out in the wilds, once seen: core/caches.js)

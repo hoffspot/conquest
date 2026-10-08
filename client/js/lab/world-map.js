@@ -23,6 +23,7 @@ const SITE_MARKS = {
     castle: "♜",
     "dragon's lair": "☠",
     graveyard: "†",
+    dungeon: "⛬",
 };
 const TIER_COLOURS = ["#ffe066", "#ffc04d", "#ff9f40", "#ff7a33", "#f5522e", "#e0322d", "#c01f3a", "#8f1747"];
 

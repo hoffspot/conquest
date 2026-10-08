@@ -9,6 +9,7 @@
 // changes only the choices the new entry wins, so the dungeons already found stay as they were.
 
 import { GROUND } from "../setpieces/pieces.js";
+import { pickStable } from "./seeds.js";
 
 /**
  * Where a prop goes in a room (place.js): against a wall, facing out from it ("wall"); free
@@ -20,7 +21,8 @@ import { GROUND } from "../setpieces/pieces.js";
 export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "rows", "sides", "head"]);
 
 /**
- * The themes, by id: { id, name (what the kind's called), layout (layouts.js LAYOUTS), hoard
+ * The themes, by id: { id, name (what the kind's called), layout (layouts.js LAYOUTS), lands (how
+ * likely the theme is in each land, by BIOMES id: themeFor), hoard
  * ("head" to put the boss's hoard at the head of its hall, else at the far end), style (the
  * art's: world/interiors3d.js), ground (setpieces/pieces.js GROUND), sound, names ({ forms, adj,
  * place }: what one's called), packs ([{ id, creatures, size: [least, most], weight }]), minis
@@ -33,6 +35,7 @@ export const THEMES = {
         id: "caves",
         name: "caves",
         layout: "caves",
+        lands: { mountain: 4, snow: 3, volcanic: 3, badlands: 3, tundra: 2, heath: 2 },
         style: "dungeon-caves",
         ground: GROUND.soil,
         sound: "cave",
@@ -85,6 +88,7 @@ export const THEMES = {
         id: "hideout",
         name: "an outlaws' hideout",
         layout: "accretion",
+        lands: { woods: 4, farmland: 3, meadow: 3, darkwood: 3, heath: 2, marsh: 2, elfwood: 2 },
         style: "dungeon-hideout",
         ground: GROUND.soil,
         sound: "cave",
@@ -129,6 +133,7 @@ export const THEMES = {
         id: "ancient",
         name: "an ancient temple",
         layout: "axial",
+        lands: { jungle: 4, savannah: 3, badlands: 2, marsh: 2, elfwood: 2, darkwood: 2 },
         hoard: "head",
         style: "dungeon-ancient",
         ground: GROUND.courtyard,
@@ -171,6 +176,26 @@ export const THEMES = {
         },
     },
 };
+
+/**
+ * Which theme a dungeon found in the wilds has, by its seed and the land its way in's in (a BIOMES
+ * id): any of them, the likelier as the theme's `lands` has that land (1 for one it doesn't
+ * name), chosen stably as themes are added (seeds.js pickStable).
+ */
+export function themeFor(seed, land) {
+    return pickStable(seed, "theme", Object.values(THEMES), (theme) => theme.lands?.[land] ?? 1).id;
+}
+
+/**
+ * A dungeon's name, from its theme's names (forms with {adj} and {place} filled in), by seed,
+ * stable as names are added.
+ */
+export function dungeonName(theme, seed) {
+    const strings = (list) => list.map((id) => ({ id }));
+    const form = pickStable(seed, "name", strings(theme.names.forms)).id;
+
+    return form.replace("{adj}", pickStable(seed, "adj", strings(theme.names.adj)).id).replace("{place}", pickStable(seed, "place", strings(theme.names.place)).id);
+}
 
 /** Add a theme (as THEMES' own), or replace one with the same id. */
 export function registerTheme(theme) {

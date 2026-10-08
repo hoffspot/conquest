@@ -2932,6 +2932,10 @@ come within 60 m of it (`CACHE_SEEN`, app/game.js `cachesSeen`; said as it's see
 and the world map alike; rimmed grey once it's opened, and gone with it, once every player's left
 it far behind (the host's "cache" event, `gone`).
 
+**A dungeon's way in** (docs/DUNGEONS.md, *Dungeons in play*) is marked with an arch over steps
+going down (`dungeon`, rimmed rust) on the minimap, and on the world map once the land round it's
+been seen (app/game.js `dungeonIcons`); rimmed grey while it's cleared, till it's made again.
+
 **Who holds them** is mixed by the war, a world at a time (`heldAtStart`):
 - Each people's castle is theirs.
 - Their other places (manors, abbeys, halls, temples, watchtowers and the like) are theirs, or

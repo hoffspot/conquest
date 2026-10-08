@@ -6,6 +6,7 @@
 // world is as it was before them), hamlets off the roads, a track to each, and farmsteads out in
 // the fields near the villages and towns.
 
+import { dungeonName, themeFor, THEMES } from "../dungeons/themes.js";
 import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES } from "./races.js";
@@ -78,6 +79,14 @@ const SITES_APART = 8;
 // wild's first tier); and how near a road it would rather be (cells), and how far a road's looked
 // for
 const GRAVEYARD = Object.freeze({ out: [8, 17], road: 2, look: 8 });
+
+/**
+ * The dungeons' ways in out in the wilds (core/dungeons: docs/DUNGEONS.md): about `per` a square
+ * kilometre of land, at least `apart` cells from each other, `clear` cells from the settlements
+ * (beyond their reach), `sites` from the other sites, `camps` from the camps, and off the roads by
+ * `road` cells; `tries` darts thrown at the land at most.
+ */
+export const DUNGEON_SITES = Object.freeze({ per: 1, apart: 26, clear: 6, sites: 8, camps: 5, road: 1, tries: 30000 });
 
 // Tiers of enemy camp: the first as far as TIER_FROM + TIER_EVERY metres from where the player
 // starts, then one more for each TIER_EVERY metres further, up to TIERS; and the camps pitched
@@ -620,6 +629,10 @@ export function settleLand(land, seed) {
     // of their own: nothing else laid out moves for them)
     sites.push(...graveyards(land, road, places, sites, camps, createRandom(seed * 37 + 11)));
 
+    // (And the dungeons' ways in, after them, from numbers of their own too: nothing else moves for
+    // them, and their ids are their own count's)
+    sites.push(...dungeons(land, road, places, sites, camps, createRandom(seed * 43 + 19)));
+
     // (And the land's waters, as far as they've been worked out, for the plan to take on: the same
     // land)
     return { places, road, roads, sites, camps, waters: watersOf(view) };
@@ -908,6 +921,57 @@ function graveyards(land, road, places, sites, camps, random) {
             found.push({ id: `graveyard-${sites.length + found.length + 1}`, kind: "graveyard", race: race.id, name: null, cell, at: centre(...cell), seed: random.seed() });
         }
     });
+
+    return found;
+}
+
+// The dungeons' ways in (DUNGEON_SITES): darts thrown at the land, each kept where it's dry land,
+// off the beach and the roads, clear of the settlements, the sites and the camps, and far enough
+// from every way in kept already; as many as the land's square kilometres (`per` each). Each a
+// theme by its land (core/dungeons/themes.js themeFor) and a name by its theme
+function dungeons(land, road, places, sites, camps, random) {
+    const { biome, water } = land;
+    const { per, apart: away, clear, sites: fromSites, camps: fromCamps, road: fromRoad, tries } = DUNGEON_SITES;
+    let dry = 0;
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        dry += water[k] || biome[k] === BIOME.beach ? 0 : 1;
+    }
+
+    const wanted = Math.round(((dry * CELL * CELL) / 1e6) * per);
+    const found = [];
+    const offRoad = ([x, y]) => {
+        for (let dy = -fromRoad; dy <= fromRoad; dy++) {
+            for (let dx = -fromRoad; dx <= fromRoad; dx++) {
+                if (road[cellIndex(x + dx, y + dy)] || water[cellIndex(x + dx, y + dy)]) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    };
+
+    for (let k = 0; k < tries && found.length < wanted; k++) {
+        const cell = [random.int(5, CELLS - 6), random.int(5, CELLS - 6)];
+        const at = cellIndex(...cell);
+
+        if (water[at] || biome[at] === BIOME.beach || !offRoad(cell) || !clearOf(places, cell, clear)) {
+            continue;
+        }
+
+        if (found.some((one) => apart(one.cell, cell) < away) || sites.some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps)) {
+            continue;
+        }
+
+        const seed = random.seed();
+        const theme = themeFor(seed, BIOMES[biome[at]].id);
+        // (Named as its theme names them, none the same as another's)
+        const names = found.map(({ name }) => name);
+        const name = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => dungeonName(THEMES[theme], seed + k * 7919)).find((one) => !names.includes(one)) ?? dungeonName(THEMES[theme], seed);
+
+        found.push({ id: `dungeon-${found.length + 1}`, kind: "dungeon", theme, race: null, name, cell, at: centre(...cell), seed });
+    }
 
     return found;
 }

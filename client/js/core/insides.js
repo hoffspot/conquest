@@ -20,6 +20,8 @@
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
 // Pure data, no DOM.
 
+import { tierAt } from "./creatures.js";
+import { buildDungeon } from "./dungeons/build.js";
 import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
 import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
@@ -27,6 +29,8 @@ import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
+import { landAt, startFor } from "./worldplan/plan.js";
+import { RACES } from "./worldplan/races.js";
 
 /**
  * Where each kind of building's front door is, as the art builds it: how far in from the front of
@@ -999,6 +1003,52 @@ export function watchFolkOf(building, ground, top) {
     ];
 }
 
+// --- The dungeons (core/dungeons: docs/DUNGEONS.md) ---
+
+/**
+ * How strong a dungeon is (its first level's packs: core/dungeons/build.js): its land's tier
+ * (creatures.js tierAt), from how far its way in is from where any people's players start, so the
+ * same for everyone who comes to it.
+ */
+export function dungeonTier(plan, site) {
+    const homes = RACES.map(({ id }) => startFor(plan, id)?.at).filter(Boolean);
+
+    return homes.length ? tierAt(site.at, homes, landAt(plan, ...site.at).biome) : 1;
+}
+
+// Which level of a dungeon a floor is, said ("the second level")
+const DEEP = Object.freeze(["", "the second level", "the third level"]);
+const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * A dungeon's levels (insides.js `rooms`): cooked up by the dungeon builder from its site's seed
+ * and theme, its tier and how many times it's been made (`generation`), each level a floor;
+ * the dungeon itself kept on the building (`dungeon`).
+ */
+export function dungeonRooms(building) {
+    const dungeon = buildDungeon({ seed: building.seed, theme: building.theme ?? "caves", tier: building.tier ?? 1, generation: building.generation ?? 0 });
+
+    building.dungeon = dungeon;
+
+    return dungeon.levels.map((level, k) => ({
+        suffix: `level-${k + 1}`,
+        style: dungeon.style,
+        look: dungeon.theme,
+        name: capital(k ? `${building.name ?? dungeon.name}, ${DEEP[k]}` : (building.name ?? dungeon.name)),
+        rows: level.rows,
+        ground: dungeon.ground,
+        sound: dungeon.sound,
+        level,
+    }));
+}
+
+/**
+ * Where the dungeons' levels are drawn in the 3D world: beyond the buildings' columns, each
+ * dungeon a column of its own by its number (so the same wherever it's made, and made again),
+ * `across` to a row, its levels `step` apart, a row `row` deep.
+ */
+export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 400 });
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
@@ -1015,10 +1065,12 @@ const KINDS = Object.freeze({
     tower: { first: "ground", rooms: towerRooms, folk: () => [] },
     // (A people's watchtower: kept, its sentries in it)
     watchtower: { first: "ground", rooms: watchtowerRooms, folk: (building, [ground, top]) => watchFolkOf(building, ground, top) },
+    // (A dungeon: its levels the dungeon builder's, those in it the host's)
+    dungeon: { first: "level-1", rooms: dungeonRooms, folk: () => [] },
 });
 
 /** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
-export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "watchtower"]);
+export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "watchtower", "dungeon"]);
 
 // What those holding a building not theirs gather by: a temple's altar, a keep's thrones
 const HELD_BY = Object.freeze({ church: "altar", keep: "throne" });
@@ -1140,7 +1192,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -1173,6 +1225,12 @@ export class Interiors {
 
         /** Bumped whenever a building is added or made (for the doors to catch up). */
         this.version = 0;
+
+        /**
+         * How many times each dungeon's been cleared and made again (by key), so its levels are
+         * made as they were (a saved world's, a joining player's: core/host.js).
+         */
+        this.generations = new Map();
     }
 
     /**
@@ -1266,7 +1324,9 @@ export class Interiors {
             return this.buildings.get(key);
         }
 
-        const inside = `${key}/${KINDS[entrance.inside].first}`;
+        const dungeon = entrance.inside === "dungeon";
+        const generation = dungeon ? (this.generations.get(key) ?? 0) : 0;
+        const inside = dungeon ? dungeonLevel(key, generation, 0) : `${key}/${KINDS[entrance.inside].first}`;
         const [ox, oy] = entrance.outside;
         const building = {
             key,
@@ -1286,6 +1346,8 @@ export class Interiors {
             made: false,
             maps: [],
             folk: [],
+            // (A dungeon's: its theme, how strong, and how many times it's been made)
+            ...(dungeon ? { theme: site.theme ?? "caves", tier: this.world.plan ? dungeonTier(this.world.plan, site) : 1, generation, flights: [], dungeon: null } : {}),
         };
         building.door = {
             id: `${key}/door`,
@@ -1332,6 +1394,10 @@ export class Interiors {
 
         if (!building || building.made) {
             return building;
+        }
+
+        if (building.kind === "dungeon") {
+            return this.#makeDungeon(building);
         }
 
         const kind = KINDS[building.kind];
@@ -1393,4 +1459,129 @@ export class Interiors {
 
         return building;
     }
+
+    // A dungeon's levels made (dungeonRooms), each a floor drawn at its column of DUNGEON_ORIGINS,
+    // its front door's inside end on the first, and stairs down from each level to the next (its
+    // stairs down's landing above, the foot of its stairs up below), all among the world's links
+    #makeDungeon(building) {
+        const { key } = building;
+        const floors = dungeonRooms(building);
+        const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
+        const column = Math.max(0, number - 1);
+        const origin = [DUNGEON_ORIGINS.x + (column % DUNGEON_ORIGINS.across) * DUNGEON_ORIGINS.step, Math.floor(column / DUNGEON_ORIGINS.across) * DUNGEON_ORIGINS.row];
+        const maps = floors.map((floor, k) => {
+            const map = readPlan(dungeonLevel(key, building.generation, k), floor.name, floor.rows, { ground: floor.ground });
+
+            Object.assign(map, {
+                origin: [origin[0], origin[1] + k * DUNGEON_ORIGINS.step],
+                style: floor.style,
+                look: floor.look,
+                finish: null,
+                patron: null,
+                sound: floor.sound,
+                building: key,
+                layout: null,
+                people: "human",
+                // (What the art and the minimap want of the level: its theme, how deep, its torches
+                // and fires, its rooms)
+                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms },
+            });
+
+            return map;
+        });
+
+        for (const map of maps) {
+            this.world.maps[map.id] = map;
+            this.byMap.set(map.id, building);
+            building.maps.push(map.id);
+        }
+
+        const levels = floors.map(({ level }) => level);
+
+        Object.assign(building.door.ends[1], { map: maps[0].id, squares: maps[0].marks.D, arrive: [...levels[0].entry.arrive], facing: levels[0].entry.facing, pending: false });
+        building.flights = levels.slice(0, -1).map((above, k) => {
+            const below = levels[k + 1];
+
+            return {
+                id: `${dungeonLevel(key, building.generation, k)}/stairs`,
+                kind: "stairs",
+                building: key,
+                ends: [
+                    { map: maps[k + 1].id, squares: below.entry.squares.map((square) => [...square]), arrive: [...below.entry.arrive], facing: below.entry.facing },
+                    { map: maps[k].id, squares: above.down.squares.map((square) => [...square]), arrive: [...above.down.arrive], facing: above.down.facing },
+                ],
+            };
+        });
+        this.world.links.push(...building.flights);
+        building.made = true;
+        this.order.push(key);
+        this.version++;
+
+        return building;
+    }
+
+    /**
+     * A dungeon cleared and everyone gone from it, made again (core/host.js): its levels taken out
+     * of the world (and its stairs out of the links), and its next generation's to be made the
+     * next time they're wanted, its front door leading to them. The building, or null for one
+     * that isn't a dungeon.
+     */
+    remake(key) {
+        const building = this.buildings.get(key);
+
+        if (building?.kind !== "dungeon") {
+            return null;
+        }
+
+        for (const id of building.maps) {
+            delete this.world.maps[id];
+            this.byMap.delete(id);
+        }
+
+        for (const link of building.flights) {
+            const at = this.world.links.indexOf(link);
+
+            if (at >= 0) {
+                this.world.links.splice(at, 1);
+            }
+        }
+
+        if (this.order.includes(key)) {
+            this.order.splice(this.order.indexOf(key), 1);
+        }
+
+        this.byMap.delete(building.door.ends[1].map);
+        this.setGeneration(key, building.generation + 1);
+
+        return building;
+    }
+
+    /**
+     * How many times a dungeon's been made (a saved world's, or one hosted elsewhere): kept, and,
+     * if its building's here and not made yet, its front door leading to that generation's first
+     * level.
+     */
+    setGeneration(key, generation) {
+        this.generations.set(key, generation);
+
+        const building = this.buildings.get(key);
+
+        if (building?.kind !== "dungeon" || building.made && building.generation === generation) {
+            return;
+        }
+
+        const inside = dungeonLevel(key, generation, 0);
+
+        this.byMap.delete(building.door.ends[1].map);
+        Object.assign(building, { generation, made: false, maps: [], flights: [], dungeon: null });
+        Object.assign(building.door.ends[1], { map: inside, squares: [], arrive: null, pending: true });
+        this.byMap.set(inside, building);
+        this.version++;
+    }
 }
+
+/**
+ * A dungeon's level's map id: `${key}/level-N` for its first making, `${key}/gG/level-N` once it's
+ * been made again (so a level made again is a new map to everything that keeps one).
+ */
+export const dungeonLevel = (key, generation, index) => `${key}/${generation ? `g${generation}/` : ""}level-${index + 1}`;

@@ -91,6 +91,31 @@ function shapeOf(world, link, end) {
         return { box: [middle - 1.1, 0, z - 0.6, middle + 1.1, 2.6, map.height + 0.2], loop: corners, normal: [0, 0, -1], floor: 0 };
     }
 
+    if (map.dungeon) {
+        // A dungeon's flight dug into its rock (core/dungeons): the squares it starts on, by the
+        // landing before them; going down, its mouth on the floor; going up, the opening in the rock
+        const xs = end.squares.map(([x]) => x);
+        const zs = end.squares.map(([, z]) => z);
+        const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs) + 1, Math.min(...zs), Math.max(...zs) + 1];
+        const [dx, dz] = [end.arrive[0] + 0.5 - (x0 + x1) / 2, end.arrive[1] + 0.5 - (z0 + z1) / 2];
+        const out = Math.abs(dx) > Math.abs(dz) ? [Math.sign(dx), 0, 0] : [0, 0, Math.sign(dz)];
+
+        if (map.plan[end.squares[0][1]][end.squares[0][0]] === "V") {
+            return {
+                box: [x0, -0.6, z0, x1, 1.2, z1],
+                loop: [[x0, 0.04, z0], [x1, 0.04, z0], [x1, 0.04, z1], [x0, 0.04, z1]],
+                normal: [0, 1, 0],
+            };
+        }
+
+        // (Its face where the squares meet the landing)
+        const [fx, fz] = [out[0] > 0 ? x1 : x0, out[2] > 0 ? z1 : z0];
+        const corners = out[0] ? [[fx, 0, z0], [fx, 0, z1], [fx, 2.5, z1], [fx, 2.5, z0]] : [[x0, 0, fz], [x1, 0, fz], [x1, 2.5, fz], [x0, 2.5, fz]];
+        const box = out[0] ? [fx - 0.6, 0, z0 - 0.1, fx + 0.6, 2.6, z1 + 0.1] : [x0 - 0.1, 0, fz - 0.6, x1 + 0.1, 2.6, fz + 0.6];
+
+        return { box, loop: corners, normal: out, floor: 0 };
+    }
+
     // Stairs along the north wall: from below, round their side; from above, round the stairwell
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
     const [x0, x1] = [stair.x - 0.05, stair.x + stair.w + 0.05];

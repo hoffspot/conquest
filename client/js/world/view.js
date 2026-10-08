@@ -23,7 +23,7 @@ import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
-import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
+import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
 import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -141,6 +141,30 @@ export const ROOM_VIEW = Object.freeze({ distance: 5.6, pitch: 22 });
 
 // Whether the camera's well over a room's ceiling (ROOM.over), looking `pitch` degrees down from
 // `distance` metres off a point `y` metres up
+// A dungeon's level's rock (core/dungeons: its plan's opaque squares), as whether a point (world
+// metres) is in it; null for any other inside, walled all round as its bounds are
+function rockOf(map) {
+    if (!map?.dungeon) {
+        return null;
+    }
+
+    const [ox, oz] = map.origin;
+
+    return (x, z) => Boolean(map.opaque[Math.floor(z - oz)]?.[Math.floor(x - ox)] ?? 1);
+}
+
+// How far from (x, z) the way (dx, dz) goes before it's in the rock (`rock`: rockOf's), short of it
+// by ROOM.margin; Infinity if it's clear for `distance` metres
+function rockAlong(rock, x, z, dx, dz, distance) {
+    for (let along = 0.25; along <= distance; along += 0.25) {
+        if (rock(x + dx * along, z + dz * along)) {
+            return Math.max(0, along - 0.25 - ROOM.margin);
+        }
+    }
+
+    return Infinity;
+}
+
 const overCeiling = (room, y, pitch, distance) => pitch > 0 && y + LOOK_UP + Math.sin((pitch * Math.PI) / 180) * distance >= room.ceiling + ROOM.over;
 
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
@@ -817,7 +841,7 @@ export class View {
         const [dx, dz] = [Math.sin(this.yaw), Math.cos(this.yaw)];
         const [px, pz] = [this.focus.x, this.focus.z];
         const toward = (from, way, least, most) => (way > 1e-6 ? (most - ROOM.margin - from) / way : way < -1e-6 ? (least + ROOM.margin - from) / way : Infinity);
-        const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1)));
+        const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1), this.room.rock ? rockAlong(this.room.rock, px, pz, dx, dz, distance) : Infinity));
         const up = pitch > 0 && !open ? Math.max(0, ceiling - ROOM.under - this.focus.y - LOOK_UP) / Math.sin(tilt) : Infinity;
 
         return Math.max(ROOM.least, Math.min(distance, up, out / Math.max(0.05, Math.cos(tilt))));
@@ -983,7 +1007,9 @@ export class View {
         if (interior) {
             const { origin, width, height } = interior.map;
 
-            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, lights: interior.lights.slice(0, ROOM_LIGHTS), colours: interior.lights.slice(0, ROOM_LIGHTS).map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [] };
+            // (One with more flames than the list holds, a dungeon's level, lit by those nearest
+            // the player: roomlight.js NEAR_FILL)
+            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, lights: interior.lights, colours: interior.lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], near: interior.lights.length > ROOM_LIGHTS ? [] : null, rock: rockOf(interior.map) };
         } else {
             this.room = null;
         }
@@ -1111,7 +1137,11 @@ export class View {
         }
 
         lampShadows(this);
-        fillOf(room.colours, room.strengths, (room.x1 - room.x0) * (room.z1 - room.z0), ROOM_LIGHT.fill.value);
+        if (room.near) {
+            fillNear(room.lights, room.colours, room.strengths, near, ROOM_LIGHT.fill.value);
+        } else {
+            fillOf(room.colours, room.strengths, (room.x1 - room.x0) * (room.z1 - room.z0), ROOM_LIGHT.fill.value);
+        }
 
         this.lamps.forEach(({ light }, k) => {
             const index = room.lamps[k];
@@ -1126,16 +1156,24 @@ export class View {
             }
         });
 
-        // The rest in the list, one after another (the lamps left out)
+        // The rest in the list, one after another (the lamps left out); a big room's, the nearest
+        // as many as it holds
         let count = 0;
 
-        room.lights.forEach((flame, k) => {
+        for (const k of room.near ? nearestOf(room.lights, near, room.near) : room.lights.keys()) {
+            if (count >= ROOM_LIGHTS) {
+                break;
+            }
+
             if (!room.lamps.includes(k)) {
+                const flame = room.lights[k];
+
                 ROOM_LIGHT.at.value[count].set(flame.x, flame.y, flame.z, flame.distance);
                 ROOM_LIGHT.colour.value[count].copy(room.colours[k]).multiplyScalar(room.strengths[k]);
                 count += 1;
             }
-        });
+        }
+
         ROOM_LIGHT.count.value = count;
     }
 
