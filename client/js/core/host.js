@@ -2978,13 +2978,13 @@ export class Host {
 
     // One of a people's soldiers, out in the world: how they look (from their id, the same every
     // time), and what they're doing (their orders: patrol, leash, facing), named for their people
-    // and their part ("Orcish raider"); `record` says whose they are ({ town }, or { camp, share })
+    // and their part ("Orcish sentry"); `record` says whose they are ({ town }, or { camp, share })
     #enlist(id, { people, weapon, square, name, record, ...orders }) {
         const seed = [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0;
         const sex = seed % 4 === 0 ? "f" : "m";
         const adjective = ADJECTIVES[people] ?? people;
 
-        // (The first of each post, patrol, camp's sentries, raid, and an envoy's escort: its captain)
+        // (The first of each post, patrol, camp's sentries, and an envoy's escort: its captain)
         const captain = /-0$|escort-1$/.test(id);
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });

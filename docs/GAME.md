@@ -3653,9 +3653,9 @@ soft as a light hand on it ("audible, but barely and not distracting"): the inte
   player or a follower fallen, a rising fifth for waking (and a spell learnt, a place cleared,
   another player asking to trade or summoning); a harp's run for a new rank (a skill's, among the
   player's people, in the guilds), a school's next tier or a spell grown; a harp and chimes for a
-  request done; a small hand bell for news of the war near (a raid or an assault coming, a town
-  fallen, an envoy arrived or struck down); a glockenspiel's note for a pin set; and out of
-  breath.
+  request done; a small hand bell for news of the war near (a fortification razed or fallen, an
+  envoy arrived or struck down, a convoy fallen on); a glockenspiel's note for a pin set; and out
+  of breath.
 - **When they're downloaded**: the interface's, the cues' and the coins' with the rest at the
   start (54 files, 226 KB); the things in hand's (`sound.js` `ITEM_SOUNDS`) wanted once the game
   starts, after what's heard first. Till a recording's in, the made sound nearest it stands in (a

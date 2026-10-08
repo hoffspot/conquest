@@ -129,8 +129,8 @@ export const FORT_SIEGE = Object.freeze({ reach: 250, hp: 10, tower: 1, garrison
 
 /**
  * How near its holders' fortification covers a town (docs/WAR.md *Battle lines*, M15: metres from
- * the town's edge): while one stands so near, the town can't be stormed, and those besieging it
- * fall on the fortification first.
+ * the town's edge): while one stands so near, the town can't be stormed, and an army sent against it
+ * falls on the fortification first.
  */
 export const FORT_COVER = 250;
 
@@ -305,8 +305,8 @@ export class War {
         this.events = [];
 
         /**
-         * The towns a player's near (their ids: watch()). What a camp does against one of them is
-         * played out in the world (a sortie: settle()), not reckoned here.
+         * What a player's near (ids: watch()): what's done to it is played out in the world for a
+         * while (WATCH_TURNS), not reckoned here.
          */
         this.watched = new Set();
 
@@ -1135,7 +1135,7 @@ export class War {
         for (const town of this.towns) {
             const owner = this.realm(town.owner);
 
-            // (Raided lately: nothing to pay)
+            // (Fallen on by skirmishers lately: nothing to pay)
             if (!owner || this.turn - town.raidedAt <= 1) {
                 continue;
             }
@@ -2495,7 +2495,7 @@ export class War {
 
         const towns = this.towns.filter(({ owner }) => owner === realm.id);
         const threat = this.forces
-            .filter((force) => force.kind === "army" && force.size > 0 && this.hostile(force.realm, realm.id) && towns.some((town) => apart(town.at, force.at) <= CLOSE.threat))
+            .filter((force) => force.kind === "army" && force.size > 0 && force.mission !== "muster" && this.hostile(force.realm, realm.id) && towns.some((town) => apart(town.at, force.at) <= CLOSE.threat))
             .map((force) => ({ force, attacking: force.mission === "attack" && this.#targetOf(force.target)?.realm === realm.id ? 1 : 0 }))
             .sort((a, b) => b.attacking - a.attacking || apart(a.force.at, reserve.at) - apart(b.force.at, reserve.at) || (a.force.id < b.force.id ? -1 : 1))[0]?.force;
 
@@ -2524,9 +2524,10 @@ export class War {
     // The fighting this turn: each army and reserve upon an enemy's (within CLOSE.fight) fights it,
     // and the beaten falls back; reinforcements caught by an enemy army are fallen on; then each
     // army attacking what it's after once it's there (not one a player's near, a while:
-    // WATCH_TURNS)
+    // WATCH_TURNS). An army mustering at its seat is within its walls, not in the field: it fights
+    // only beside its garrison, if the seat's stormed (#attack)
     #engage() {
-        const fighters = () => this.forces.filter(({ kind, size }) => (kind === "army" || kind === "reserve") && size > 0);
+        const fighters = () => this.forces.filter(({ kind, size, mission }) => (kind === "army" || kind === "reserve") && size > 0 && mission !== "muster");
 
         for (const a of fighters()) {
             for (const b of fighters()) {
@@ -2628,8 +2629,9 @@ export class War {
     }
 
     // An army's attack this turn on what it's after (docs/WAR.md *Standing armies*):
-    // - a town: its garrison fought behind its walls, its people's reserve beside it if it's there,
-    //   and a seat's ruler and captain of its guard (LEADERS) last; put to the sword to the last,
+    // - a town: its garrison fought behind its walls, its people's reserve beside it if it's there
+    //   (and their army, if it's mustering there), and a seat's ruler and captain of its guard
+    //   (LEADERS) last; put to the sword to the last,
     //   the town is theirs, a few of the army left to hold it (HELD). No other way to take one;
     // - a works: its guard; put down, it's seized;
     // - a fortification: battered (FORT_SIEGE), its defenders bringing some of the army down;
@@ -2653,20 +2655,24 @@ export class War {
                 return;
             }
 
+            // (Beside its garrison: its people's reserve, if it's there, and their army, if it's
+            // mustering there)
             const seat = this.realm(thing.owner)?.seat === thing.id;
-            const reserve = this.reserveOf(thing.owner);
-            const helping = reserve && reserve.size > 0 && apart(reserve.at, thing.at) <= CLOSE.fight + this.#radius(thing.id) ? reserve : null;
-            const defenders = thing.garrison + (helping?.size ?? 0) + (seat ? LEADERS : 0);
+            const helping = [this.reserveOf(thing.owner), this.armyOf(thing.owner)].filter((force) => force && force.size > 0 && (force.kind === "reserve" || force.mission === "muster") && apart(force.at, thing.at) <= CLOSE.fight + this.#radius(thing.id));
+            const defenders = thing.garrison + helping.reduce((sum, { size }) => sum + size, 0) + (seat ? LEADERS : 0);
             const { attackers, defenders: left } = this.#fight(army.size, defenders, HOLDINGS[thing.kind].walls);
-            // (The reserve's fallen first, then the garrison's; the leaders last)
+            // (The reserve's fallen first, then the army's, then the garrison's; the leaders last)
             const killed = defenders - left;
-            const fromReserve = Math.min(helping?.size ?? 0, killed);
+            let toll = killed;
 
-            if (helping) {
-                helping.size -= fromReserve;
+            for (const force of helping) {
+                const fell = Math.min(force.size, toll);
+
+                force.size -= fell;
+                toll -= fell;
             }
 
-            thing.garrison -= Math.min(thing.garrison, killed - fromReserve);
+            thing.garrison -= Math.min(thing.garrison, toll);
             army.size = attackers;
             this.remember(thing.owner, army.realm, -5);
             this.#emit("assault", { realm: army.realm, town: thing.id, owner: thing.owner, won: left <= 0 && attackers > 0, killed, lost: went - attackers, army: army.id });

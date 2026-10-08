@@ -58,7 +58,7 @@ export const HELD = 0.5;
 /** How many turns an army waits before a town (or works) a player's near before what's left of it is reckoned here. */
 export const WATCH_TURNS = 3;
 
-/** A people's army's or reserve's strength at its fullest (`kind`: "army" or "reserve"), at a stage's share of the war's height, for a vassal or not. */
+/** A people's army's or reserve's strength at its fullest, at a stage's share of the war's height, for a vassal or not. */
 export function fullOf(share, { vassal = false } = {}) {
     return Math.round(ARMY.size * share * (vassal ? ARMY.vassal : 1));
 }

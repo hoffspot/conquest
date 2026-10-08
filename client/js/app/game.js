@@ -5415,29 +5415,10 @@ export class Game {
         this.enlisting.push(...ids);
     }
 
-    // A camp struck (its tents down, its sentries gone), or a sortie's raiders or attackers back
-    // to their camp: said how it went, if the player was there
-    #strike(event) {
-        const ids = event.type === "strike" ? event.ids : event.back;
-
-        if (event.type === "strike") {
-            this.camps?.strike(event.camp);
-            this.banners?.lower(`camp:${event.camp}`);
-        } else if (event.result) {
-            const them = `the ${peopleOf(event.people)}`;
-            const said = {
-                raided: `${them[0].toUpperCase()}${them.slice(1)} have burnt ${event.name}'s fields, and gone back to their camp.`,
-                repulsed: event.kind === "raid" ? `The raid on ${event.name} is driven off.` : `The assault on ${event.name} is thrown back.`,
-                taken: `${event.name} has fallen to ${them}!`,
-                broken: `The camp outside ${event.name} is broken.`,
-            }[event.result];
-
-            if (said) {
-                this.hud.message(said, 4);
-                this.sound?.play("newsHeard");
-            }
-        }
-
+    // A camp struck (its tents down, its sentries gone)
+    #strike({ camp, ids }) {
+        this.camps?.strike(camp);
+        this.banners?.lower(`camp:${camp}`);
         this.#unenlist(ids);
 
         for (const id of ids) {

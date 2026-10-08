@@ -3,7 +3,7 @@
 // - work from the town halls' reeves, from the first;
 // - scouting, once they're trusted;
 // - an audience at the keep, work from the ruler and their steward, and the pick of its armoury;
-// - then a say in what the rulers decide: where the next expedition marches, and war and peace.
+// - then a say in what the rulers decide: where their army marches next, and war and peace.
 //
 // And the requests: what's asked (a letter carried, a tithe for the treasury, the enemy's numbers
 // thinned, the wild cleared off the roads, an enemy scouted, a town held), by whom and where, how
@@ -26,7 +26,7 @@ export const STANDINGS = Object.freeze([
     { title: "Commoner", points: 0, opens: "Work from the reeves at the town halls." },
     { title: "Freeholder", points: 60, opens: "Scouting for the reeves." },
     { title: "Retainer", points: 180, opens: "An audience at the keep, work from the ruler, and the pick of its armoury." },
-    { title: "Knight", points: 400, opens: "A say in where the next expedition marches and where the council builds, and, serving another, when to rise." },
+    { title: "Knight", points: 400, opens: "A say in where the army marches next and where the council builds, and, serving another, when to rise." },
     { title: "Lord", points: 800, opens: "A say in war and peace." },
     { title: "Councillor", points: 1500, opens: "A seat on the council: your word weighs the most." },
 ]);
@@ -63,7 +63,7 @@ export const REQUESTS = Object.freeze({
     plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 40 } },
     retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 35 } },
     seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 45 } },
-    // (An enemy's town taken by its barracks: docs/WAR.md M16)
+    // (An enemy's town taken, its whole garrison put to the sword: docs/WAR.md *Standing armies*)
     take: { title: "Take the town", rank: OPENS.take, turns: 60, reward: { standing: 120, gold: 80 } },
     // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
     // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
@@ -284,8 +284,8 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.liege(each.owner) !== liege) && !has("retake", each.id)) : [];
     const theirWorks = rank >= OPENS.seize ? works.filter((each) => !each.held && war.hostile(liege, war.liege(each.owner)) && war.liege(each.race) !== liege && !has("seize", each.id)) : [];
 
-    // An enemy's town taken, its barracks' guardsmen and captain put down, while the age lets
-    // towns of its kind be taken (docs/WAR.md M16)
+    // An enemy's town taken, its whole garrison put to the sword, while the age lets towns of its
+    // kind be taken (docs/WAR.md *Standing armies*)
     const takeable = post === "keep" && rank >= OPENS.take ? war.towns.filter((each) => war.hostile(liege, war.liege(each.owner)) && STAGES[war.stage].take.includes(each.kind) && !has("take", each.id)) : [];
 
     for (const [kind, found] of [["convoy", ourConvoys], ["plunder", theirConvoys], ["retake", lost], ["seize", theirWorks], ["take", takeable]]) {

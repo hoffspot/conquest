@@ -4,9 +4,11 @@
 // - each people's works (lumber mills, mines and quarries) in their holder's colour, or dark and
 //   ringed in red where brigands hold them;
 // - each people's fortifications: guard towers and forward garrisons, how strong each stands;
-// - the forces out: expeditions on the march, the camps outside their targets, relief, envoys,
-//   and convoys carrying the works' goods to their seats;
-// - each realm, its ruler and what they're like, what it holds, its gold and its stores;
+// - the forces out: each people's army (on the march, at its camp, attacking) and reserve, the
+//   reinforcements on their way to them, the armies' camps, bands winning back their works from
+//   the wild, envoys, and convoys carrying the works' goods to their seats;
+// - each realm, its ruler and what they're like, what it holds, its gold and its stores, its army
+//   and reserve and camps;
 // - how each stands with each other;
 // - the news of it all.
 //

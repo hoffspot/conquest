@@ -100,7 +100,7 @@ test("plays the war on: forces march and camp, the news tells of it, and the pla
         const box = await page.locator("#map").boundingBox();
 
         await page.mouse.move(box.x + x, box.y + y);
-        await expect(page.locator("#hover")).toContainText(/The .+ \d+, (marching on|camped outside|going to relieve)/);
+        await expect(page.locator("#hover")).toContainText(/The .+ \d+, (the army|the reserve|on their way to join|going to win back)/);
     }
 
     // The players' might: the war comes on (and it's in the address)

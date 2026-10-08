@@ -188,8 +188,8 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
 
         reserve.size = 60;
 
-        // (An orc army deep in its own lands: the reserve stays home)
-        const army = { id: "force-orc", realm: "orc", kind: "army", size: 40, at: [...theirs.at], path: [[...theirs.at]], leg: 0, target: null, home: theirs.id, mission: "muster", about: null, camp: null, orders: null, went: 40, arrived: null, since: 0 };
+        // (An orc army in the field, deep in its own lands: the reserve stays home)
+        const army = { id: "force-orc", realm: "orc", kind: "army", size: 40, at: [...theirs.at], path: [[...theirs.at]], leg: 0, target: null, home: theirs.id, mission: "regroup", about: null, camp: null, orders: null, went: 40, arrived: null, since: 0 };
 
         war.forces.push(army);
         play(war, 2);
@@ -210,6 +210,48 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         play(war, 40);
         assert.equal(reserve.mission, "home");
         assert.deepEqual(reserve.at, war.town(war.realm("human").seat).at);
+    });
+
+    it("keeps an army mustering at its seat within its walls: not fallen on in the field, but fighting beside its garrison when the seat's stormed", () => {
+        const war = warOf();
+        const seat = war.town(war.realm("orc").seat);
+        const near = war.towns.filter(({ id, owner }) => owner === "orc" && id !== seat.id).sort((a, b) => apart(a.at, seat.at) - apart(b.at, seat.at))[0];
+        const reserve = war.reserveOf("human");
+
+        // (A town of the humans' near the orcs' seat, so their seat's in the humans' lands; the
+        // orcs raising nothing more, their reserve away)
+        near.owner = "human";
+        assert.ok(apart(near.at, seat.at) <= CLOSE.threat);
+        war.realm("orc").treasury = 0;
+        war.reserveOf("orc").size = 0;
+        reserve.size = 60;
+
+        const theirs = { id: "force-orc", realm: "orc", kind: "army", size: 20, at: [...seat.at], path: [[...seat.at]], leg: 0, target: null, home: seat.id, mission: "muster", about: null, camp: null, orders: null, went: 0, arrived: null, since: 0 };
+
+        war.forces = war.forces.filter((force) => !(force.kind === "army" && force.realm === "orc"));
+        war.forces.push(theirs);
+
+        // (A human army standing just outside it, on its way elsewhere)
+        const ours = { id: "force-human", realm: "human", kind: "army", size: 30, at: [seat.at[0] + 60, seat.at[1]], path: [[seat.at[0] + 60, seat.at[1]]], leg: 0, target: null, home: war.realm("human").seat, mission: "camp", about: null, camp: null, orders: null, went: 30, arrived: null, since: 0 };
+
+        war.forces = war.forces.filter((force) => !(force.kind === "army" && force.realm === "human"));
+        war.forces.push(ours);
+
+        const events = play(war, 3);
+
+        assert.ok(!events.some(({ type, army, other }) => type === "battle" && [army, other].includes(theirs.id)), "not fought in the field");
+        assert.notEqual(reserve.target, theirs.id, "the reserve not sent against it");
+        assert.equal(theirs.size, 20);
+
+        // (The seat stormed: it fights there, beside the garrison, falling before it)
+        war.camps.push({ id: "camp-seat", realm: "human", at: [seat.at[0] + edgeOf(seat.id) + 100, seat.at[1]], guard: 6, built: 0, done: 0, toward: seat.id, used: 1e6, skirmished: 1e6 });
+        seat.garrison = 0;
+        Object.assign(ours, { size: 70, at: [...seat.at], path: [[...seat.at]], leg: 0, target: seat.id, mission: "attack", camp: "camp-seat", went: 70 });
+
+        const stormed = play(war, 1).find(({ type, town }) => type === "assault" && town === seat.id);
+
+        assert.ok(stormed.killed > LEADERS, `${stormed.killed} killed`);
+        assert.equal(theirs.size, Math.max(0, 20 - stormed.killed));
     });
 
     it("raises an army at its seat, of none at first, made up over time; marches once it's made up enough, builds a camp, and attacks from it", () => {
