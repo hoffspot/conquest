@@ -5479,6 +5479,98 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
     expect(heeded.line).toBe(`${plan.name}. So be it: it's the next we build, as soon as the stores allow.`);
 });
 
+test("a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    const built = await page.evaluate(async () => {
+        const { mayBuild } = await import("/js/core/war/forts.js");
+        const { nearestFree, squaresOf } = await import("/js/core/grid.js");
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // A forward garrison where their people may build, the nearest the player; the player 30 m
+        // from it
+        let at = null;
+
+        for (let r = 40; r < 300 && !at; r += 4) {
+            for (let k = 0; k < 48 && !at; k++) {
+                const spot = [Math.round(player.x + Math.cos((k / 48) * Math.PI * 2) * r), Math.round(player.y + Math.sin((k / 48) * Math.PI * 2) * r)];
+
+                at = mayBuild(war, "human", spot) ? spot : null;
+            }
+        }
+
+        Object.assign(war.realm("human").stores, { wood: 900, stone: 900, metal: 900 });
+
+        const fort = war.build("human", { kind: "garrison", at });
+        const [x, y] = nearestFree(squaresOf(game.world.maps.town), [at[0] - 30, at[1]], { within: 8 });
+
+        Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        window.fortId = fort.id;
+
+        return { id: fort.id, at };
+    });
+
+    // (Drawn a few at a time: every one of them within 150 m of the player, as near as anyone's
+    // drawn; the outer patrol's round goes further out)
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const player = game.battle.actor("player");
+                const ids = Object.values(game.host.squadsOut.get(window.fortId)?.ids ?? {}).flat();
+
+                return ids.length === 14 && ids.filter((id) => Math.hypot(game.battle.actor(id).x - player.x, game.battle.actor(id).y - player.y) < 150).every((id) => game.avatars.has(id));
+            },
+            { seconds: 90 },
+        ),
+    ).toBe(true);
+
+    const squads = await page.evaluate(({ id, at }) => {
+        const { game } = window.pellagos;
+        const out = game.host.squadsOut.get(id);
+        const each = (ids) =>
+            ids.map((one) => {
+                const actor = game.battle.actor(one);
+
+                const player = game.battle.actor("player");
+
+                return { name: actor.name, team: actor.team, far: Math.hypot(actor.x - at[0], actor.y - at[1]), near: Math.hypot(actor.x - player.x, actor.y - player.y) < 150, drawn: game.avatars.has(one), gate: Math.hypot(actor.x - out.gate[0], actor.y - out.gate[1]) };
+            });
+
+        return { patrols: [each(out.ids["patrol-0"]), each(out.ids["patrol-1"])], assault: each(out.ids.assault) };
+    }, built);
+
+    expect(squads.patrols.map((patrol) => patrol.length)).toEqual([4, 4]);
+    expect(squads.assault).toHaveLength(6);
+
+    for (const one of [...squads.patrols.flat(), ...squads.assault]) {
+        expect(one.team).toBe("human");
+        expect(one.drawn || !one.near).toBe(true);
+        expect(one.far).toBeLessThanOrEqual(300);
+    }
+
+    expect(squads.assault.every(({ drawn }) => drawn)).toBe(true);
+
+    expect(squads.patrols.flat().every(({ name }) => name === "Human patrol")).toBe(true);
+    expect(squads.assault.every(({ name, gate }) => name === "Human vanguard" && gate < 8)).toBe(true);
+});
+
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
