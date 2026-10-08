@@ -139,8 +139,6 @@ const ROOM = Object.freeze({ over: 0.25, under: 0.6, margin: 0.35, least: 1 });
  */
 export const ROOM_VIEW = Object.freeze({ distance: 5.6, pitch: 22 });
 
-// Whether the camera's well over a room's ceiling (ROOM.over), looking `pitch` degrees down from
-// `distance` metres off a point `y` metres up
 // A dungeon's level's rock (core/dungeons: its plan's opaque squares), as whether a point (world
 // metres) is in it; null for any other inside, walled all round as its bounds are
 function rockOf(map) {
@@ -165,7 +163,9 @@ function rockAlong(rock, x, z, dx, dz, distance) {
     return Infinity;
 }
 
-const overCeiling = (room, y, pitch, distance) => pitch > 0 && y + LOOK_UP + Math.sin((pitch * Math.PI) / 180) * distance >= room.ceiling + ROOM.over;
+// Whether the camera's well over a room's ceiling (ROOM.over), looking `pitch` degrees down from
+// `distance` metres off a point `y` metres up (never in a dungeon's rock: it stays under the roof)
+const overCeiling = (room, y, pitch, distance) => !room.rock && pitch > 0 && y + LOOK_UP + Math.sin((pitch * Math.PI) / 180) * distance >= room.ceiling + ROOM.over;
 
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
 // staying `margin` metres clear of it (along the camera's line), or rising over it (up to

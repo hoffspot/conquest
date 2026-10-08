@@ -23,6 +23,7 @@
     "build:vitruvian": "node scripts/build-vitruvian.js",
     "build:music": "node scripts/build-music.js",
     "build:sounds": "node scripts/build-sounds.js",
+    "build:textures": "node scripts/build-textures.js",
     "build:clips": "node scripts/build-clips.js",
     "build:footprints": "node scripts/build-footprints.js",
     "vendor:recast": "node scripts/vendor-recast.js"

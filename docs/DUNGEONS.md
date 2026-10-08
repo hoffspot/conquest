@@ -197,15 +197,32 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   gone, its levels thrown away and made anew from the next generation (`Interiors.remake`), with
   other rooms, other foes and other chests.
 
-### Drawn (`world/interiors3d.js` `dungeon`, `world/view.js`)
+### Drawn (`world/interiors3d.js` `dungeon`, `world/caverns.js`, `world/dungeons3d.js`, `world/view.js`)
 
 - **By its theme's look** (`DUNGEON_LOOKS`):
-  - caves: crags of dark rock round packed earth, rock standing up from the floor and hanging
-    from the roof;
-  - an outlaws' hideout: paler rock, its tunnels shored up with timber posts and caps every few
-    squares;
-  - an ancient temple: walls of old dressed stone on a darker plinth under a cornice, flagstones,
-    a vault over all.
+  - caves: their rock as one surface, walls standing up from the floor along the open ground's
+    edge, bulging and hollowed, leaning in as they rise and rounding over into a roof that's
+    highest over a cavern's middle and lowest over a tunnel; dark grey rock over stony earth;
+  - an outlaws' hideout: the same, dug: smoother walls, a flatter, lower roof, quarried rock over
+    trodden earth, its tunnels shored up with timber posts and caps every few squares;
+  - an ancient temple: walls of dressed stone on a darker plinth under a cornice, flagstones, a
+    vault over all.
+- **The rock as one surface** (`caverns.js`): how far into the open each point of the level is,
+  from its plan's squares (a distance transform, a quarter of a metre at a time, its corners
+  rounded), shapes walls and roof together, with noise for the rock's bulges; the surface is
+  drawn where that's nought, as a surface net (a point in each cell of a 0.45 m lattice it passes
+  through, joined into quads), each point shaded darker where the rock closes round it. Below
+  head height the walls only ever go further into the rock, never into the ground anyone walks
+  on; over every open square there's room to stand. It's worked out a step at a time, over
+  frames, and cut into 16 m tiles, so what's out of sight or out of a light's reach isn't drawn.
+- **Drawn with photographs** (`dungeons3d.js`, CC0, from ambientCG and Poly Haven, made by
+  `npm run build:textures`): the rock, earth, stone, flagstones and timber each a colour picture
+  and a normal map, laid over the surface from all three sides at once (triplanar: never
+  stretched however the rock turns), the picture's grain under the theme's own colour. They're
+  in the catalog (`client/models/assets.json`), downloaded only once a dungeon's wanted (about
+  1.8 MB in all); until they've come, the rock's drawn in its colours alone.
+- **Never cut away**: the rock and the temple's walls stand whole however the camera looks,
+  since the camera's kept out of them (below), so nothing's ever seen from inside.
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
   crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
   altars, shrines and braziers; gold heaped either side of the hoard.
@@ -216,7 +233,7 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   (`ROOM_LIGHTS`, 16), so each frame the 16 nearest the player light it, and the light all round
   comes from those within 18 m (`roomlight.js` `NEAR_FILL`).
 - **The camera kept out of the rock**: it comes in closer rather than go into a level's rock, and
-  stays under its roof.
+  stays under its roof (never over it, as it can go over a building's ceiling).
 - **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,
   and the dungeon cleared.
 
@@ -262,7 +279,9 @@ registerTheme({
 A layout gives back `{ grid, count, entryRoom, goalRoom, kinds, entrance, loops }`, and digs its
 way in with `digWayIn` (two wide, up from the middle of the south edge). Every pack's creatures
 must suit every tier (a test checks a pack suits each tier from 1 to 10, within a tier of where
-it's met in the wilds). New art goes in by the theme's `style`.
+it's met in the wilds). New art goes in by the theme's `style`: a look in `interiors3d.js`
+`DUNGEON_LOOKS` (its rock's shell, `caverns.js` `SHELLS`, or walls of dressed stone; its pictures,
+added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`).
 
 ## The dungeon map (`dungeon-map.html`, `js/lab/dungeon-map.js`)
 
@@ -319,6 +338,11 @@ code is here.
     again with the player in it; made again once everyone's gone, the next generation.
 - **`e2e/pellagos.spec.js`**: in the game, a dungeon's way in gone into, its first level drawn and
   lit, down its stairs to the next and out again.
+- **`test/caverns.test.js`**, the rock as one surface: how far into the open each point is; its
+  walls never in the open ground below head height; room to stand under its roof over every open
+  square; every triangle facing the open; the floor under all the open ground but the stairs'
+  hole; its tiles the whole of it, smooth where they meet; and the photographs each in the
+  catalog, on disk.
 - **`test/dungeons.test.js`**:
   - seeds mix the same parts the same way, and stable choosing changes only the slots a new entry
     wins (by weight);

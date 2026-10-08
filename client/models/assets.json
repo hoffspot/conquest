@@ -1,3 +1,88 @@
 {
-    "models": {}
+    "models": {
+        "dungeon-rock-cave": {
+            "tier": "demand",
+            "label": "A cave's rock (ambientCG Rock028, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/rock-cave-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/rock-cave-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-ground-cave": {
+            "tier": "demand",
+            "label": "A cave's floor (ambientCG Ground022, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-cave-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/ground-cave-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-ground-dug": {
+            "tier": "demand",
+            "label": "An outlaws' hideout's trodden earth (ambientCG Ground048, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-dug-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/ground-dug-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-rock-dug": {
+            "tier": "demand",
+            "label": "An outlaws' hideout's rock, dug out (Poly Haven quarry_wall, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/rock-dug-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/rock-dug-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-timber": {
+            "tier": "demand",
+            "label": "Rough timber, its posts and beams (Poly Haven rough_wood, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/timber-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/timber-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-stone-temple": {
+            "tier": "demand",
+            "label": "An ancient temple's dressed stone (Poly Haven stone_brick_wall_001, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/stone-temple-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/stone-temple-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-floor-temple": {
+            "tier": "demand",
+            "label": "An ancient temple's flagstones (Poly Haven large_grey_tiles, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/floor-temple-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/floor-temple-normal.jpg"
+                }
+            ]
+        }
+    }
 }
