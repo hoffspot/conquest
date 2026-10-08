@@ -6,7 +6,9 @@
 // plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
 // spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
 // standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); and
-// an adventurers' cache once it's been seen (a chest). Drawn on a canvas, from paths on a grid 24
+// an adventurers' cache once it's been seen (a chest); and each people's works, a lumber mill (a
+// log and an axe), a mine (a pick over its ore) and a quarry (a squared block), rimmed in their
+// holder's colour. Drawn on a canvas, from paths on a grid 24
 // across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
@@ -231,6 +233,41 @@ const LOOKS = {
             ["M-5,-8.4 v16.4 M5,-8.4 v16.4", null, "#d9b04a", 1.4],
             ["M-8.5,-1 h17", null, "#2a1608", 1.2],
             ["M-1.8,-2.6 h3.6 v4.8 h-3.6 z", "#e8c35a", "#2a1608", 0.8],
+        ],
+    },
+    // (Each people's works: docs/WAR.md *The works*; rimmed in the colour of who holds it)
+    mill: {
+        rim: "#c9a46a",
+        parts: [
+            // A log lying, its sawn end ringed; an axe standing over it
+            ["M-9,1.5 h11 a3.5,3.5 0 0 1 0,7 h-11 a3.5,3.5 0 0 1 0,-7 z", "#8a5a2e", "#2a1608", 1],
+            ["M2,5 m-3.5,0 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0", "#e2c28a", "#2a1608", 1],
+            ["M2,5 m-1.5,0 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0", null, "#9a6a3a", 0.8],
+            ["M-4,-9.5 L-1,1", null, "#2a1608", 2.6],
+            ["M-4,-9.5 L-1,1", null, "#b07a42", 1.4],
+            ["M-7.6,-9.6 q3.4,-2 6.6,-1.6 l0.8,3.6 q-3.6,0.2 -6.4,2.2 z", "#c8d0d8", "#1e2328", 1],
+        ],
+    },
+    mine: {
+        rim: "#c9a46a",
+        parts: [
+            // A pick laid over a heap of ore
+            ["M-10,9 q4,-7.5 10,-7.5 q6,0 10,7.5 z", "#9a4a2a", "#2a1608", 1],
+            ["M-5,5.5 l2,-1.6 l1.8,1.4 z M2,4.6 l2.2,-1.4 l1.6,1.6 z M-1.4,1.6 l1.6,-1 l1.4,1 z", "#d4744a", null, 0],
+            ["M-6.5,4 L6,-8.5", null, "#2a1608", 2.6],
+            ["M-6.5,4 L6,-8.5", null, "#b07a42", 1.4],
+            ["M-0.6,-11 q8,0.4 10.4,7.2 q-4.4,-3.4 -8.6,-3.2 q2.6,-2.8 -1.8,-4 z", "#c8d0d8", "#1e2328", 1],
+        ],
+    },
+    quarry: {
+        rim: "#c9a46a",
+        parts: [
+            // A squared block of stone, its top and side, a wedge in its split
+            ["M-8,-2 l6,-4.5 h10 l-6,4.5 z", "#d6d0c2", "#1e1e1a", 1],
+            ["M-8,-2 h10 v10 h-10 z", "#b0aa9c", "#1e1e1a", 1],
+            ["M2,-2 l6,-4.5 v10 l-6,4.5 z", "#8c877a", "#1e1e1a", 1],
+            ["M-3,-2 v10", null, "#3a362e", 0.9],
+            ["M-4.4,-6.2 l1.4,-4 l1.4,4 z", "#9aa4ae", "#1e2328", 0.8],
         ],
     },
     camp: {

@@ -18,7 +18,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { GUILD_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
+import { landAt, planWorld, WORKS } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -81,7 +81,8 @@ describe("places worth finding (places.js)", () => {
         for (const plan of plans) {
             const places = placesOf(plan);
 
-            assert.equal(places.length, plan.sites.length + plan.camps.length, "every site and camp a place");
+            // (But the peoples' works: the war's, docs/WAR.md *The works*)
+            assert.equal(places.length, plan.sites.filter(({ kind }) => !WORKS.some((each) => each.kind === kind)).length + plan.camps.length, "every site and camp a place");
             assert.equal(placesOf(plan), places, "worked out once");
 
             for (const place of places) {

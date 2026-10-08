@@ -15,13 +15,16 @@ import { cos, PI, sin } from "../exact.js";
 import { createRandom } from "../random.js";
 import { layoutCastle } from "./castle.js";
 import { pieceCatalog, PLOT } from "./pieces.js";
+import { layoutWorks, WORKS_SIZE } from "./works.js";
 
 /**
  * Each neutral site's size (plots across and deep), as it's built: a circle of stones 24 m across,
  * a shrine 12 m, a cave's crag 20 by 16, a ruined hall 24 by 20, a ruined castle as big as the
  * humans' own, the dragon's crag 40 by 36, a broken watchtower, and a walled graveyard 24 by 20.
+ * The peoples' works are laid out the same way (works.js WORKS_SIZE).
  */
 export const NEUTRAL = Object.freeze({
+    ...WORKS_SIZE,
     "standing stones": [6, 6],
     shrine: [3, 3],
     cave: [5, 4],
@@ -118,9 +121,9 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * (for a ruined castle: its castle.js pieces, ruined), entry (where it's gone into, if it can be:
  * { x, y (metres: the middle of its way in, on the line of its face), width, height, inside (what
  * it's like within: insides.js's kinds) }, facing out the way the site does) }; or null if the
- * kind isn't one.
+ * kind isn't one. A people's works (works.js, its `people`'s) has its yard, posts and round too.
  */
-export function layoutNeutral({ kind, seed, form = null, facing = 0 }) {
+export function layoutNeutral({ kind, seed, form = null, facing = 0, people = null }) {
     const size = NEUTRAL[kind];
 
     if (!size) {
@@ -129,7 +132,7 @@ export function layoutNeutral({ kind, seed, form = null, facing = 0 }) {
 
     const random = createRandom((seed ^ 0x5eed) >>> 0);
     const [width, depth] = [size[0] * PLOT, size[1] * PLOT];
-    const laid = LAYOUTS[kind](random, width, depth, seed, form, facing);
+    const laid = WORKS_SIZE[kind] ? layoutWorks(kind, random, width, depth, people) : LAYOUTS[kind](random, width, depth, seed, form, facing);
 
     return { size, ...laid };
 }

@@ -26,6 +26,7 @@ const { buildWorld } = await import("../client/js/core/overworld.js");
 const { isNeutral, restingOf } = await import("../client/js/core/sites.js");
 const { heightAt } = await import("../client/js/core/terrain/height.js");
 const { layoutNeutral, NEUTRAL } = await import("../client/js/core/setpieces/neutral.js");
+const { WORKS_SIZE } = await import("../client/js/core/setpieces/works.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { WORLD_SIZE } = await import("../client/js/core/worldplan/plan.js");
 const { gatehouse, keep, KEEP_RUIN, keepWindows, RUINED, tower, wall } = await import("../client/js/world/art/kits/castle.js");
@@ -141,7 +142,8 @@ describe("the sites no people keeps in the world (sites.js)", () => {
     before(() => {
         world = buildWorld({ seed: 1 });
         overworld = world.maps.town;
-        sites = world.plan.sites.filter(isNeutral);
+        // (The sites no people keeps: not the peoples' works, laid out the same way, test/works.test.js)
+        sites = world.plan.sites.filter((site) => isNeutral(site) && !WORKS_SIZE[site.kind]);
 
         for (const site of sites) {
             overworld.sites.heartOf(site);

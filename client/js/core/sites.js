@@ -85,7 +85,10 @@ export function siteSize(site) {
 // A people's own place's size (a castle, a special place), if the site is one
 const ownPlace = (site) => (site.race === "human" ? HUMAN_PLACES[site.kind] : PEOPLE_PLACES[site.race]?.[site.kind]) ?? null;
 
-/** Is a site one no people builds (setpieces/neutral.js), laid out as the neutral sites are? */
+/**
+ * Is a site laid out as the neutral sites are (setpieces/neutral.js): one no people builds, or a
+ * people's works (setpieces/works.js)?
+ */
 export const isNeutral = (site) => !ownPlace(site) && !(site.kind === "watchtower" && site.race) && Boolean(NEUTRAL[site.kind]);
 
 /**
@@ -535,7 +538,7 @@ export class Sites {
             }
 
             // (All it stands on, or for a neutral site just what of it stands in the way)
-            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form, facing }) : null;
+            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form, facing, people: site.race }) : null;
             const turn = turned(x, y, facing, [w, h]);
             // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
             // its layout's way in; the humans' abbey and manor by their church's and keep's door; a
@@ -558,6 +561,14 @@ export class Sites {
             // (The way into its keep, too: cleared into its walls, flagged as its courtyard)
             const courts = castle ? all.filter(([i, j]) => way.has(j * size + i) || (!solidAt(castle, lot(i + 0.5, j + 0.5)) && inCourt(castle, lot(i + 0.5, j + 0.5)))) : [];
             const heart = laid ? turn(...laid.heart) : { x, y };
+            // (A people's works: where its wagons are loaded, where its guards stand and the round
+            // they walk, in the world: setpieces/works.js)
+            const spot = ([u, v]) => {
+                const at = turn(u, v);
+
+                return [Math.round(at.x * 100) / 100, Math.round(at.y * 100) / 100];
+            };
+            const works = laid?.yard ? { yard: spot(laid.yard), posts: laid.posts.map(spot), round: laid.round.map(spot) } : {};
             const radius = hypot(w, h) * (PLOT / 2);
             // (Its pad, if it's levelled into the land: every people's place, on a mound or in a
             // hollow as it lies; of those no people keeps, a ruined castle's courtyard and a cave's
@@ -593,6 +604,7 @@ export class Sites {
                 radius,
                 heart: [heart.x, heart.y],
                 pad,
+                ...works,
             };
         }
 

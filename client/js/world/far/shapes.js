@@ -10,6 +10,7 @@ import { CITADEL, citadelLevel, citadelParts, layoutCitadel, moatReach } from ".
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
+import { WORKS_SIZE } from "../../core/setpieces/works.js";
 import { PLOT } from "../../core/setpieces/pieces.js";
 
 /**
@@ -474,6 +475,40 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
 // hillside, or down in the ground)
 const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", "dragon's lair", "watchtower"]);
 
+/**
+ * A people's works (core/setpieces/works.js lays it out, as near to), as seen from afar: a
+ * quarry's faces, a mine's spoil heaps and its headframe, the roofs of a mill's saw shed and
+ * lodge, a mine's sheds, a masons' lodge. (A mill's trees are the land's, from afar.)
+ */
+function worksShapes(shapes, { kind, people, seed, facing, place, heightOf, builders }) {
+    const laid = layoutNeutral({ kind, seed: seed ?? 1, people });
+    const groundAt = (u, v) => {
+        const [x, z] = place(u, v);
+
+        return [x, z, heightOf(x, z) - SUNK];
+    };
+
+    for (const part of laid?.parts ?? []) {
+        if (part.part === "face") {
+            const [x, z, y] = groundAt((part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2);
+
+            shapes.box(x, z, y, part.x1 - part.x0, part.y1 - part.y0, part.h * 0.85 + SUNK, facing, people === "orc" || people === "darkElf" ? ROCK.dark : ROCK.light);
+        } else if (part.part === "spoil") {
+            const [x, z, y] = groundAt(part.x, part.y);
+
+            shapes.cone(x, z, y, part.r, part.h + SUNK, people === "orc" || people === "darkElf" ? ROCK.dark : ROCK.light, 6);
+        } else if (part.part === "shaft") {
+            const [x, z, y] = groundAt(part.x, part.y);
+
+            shapes.box(x, z, y, 2.6, 0.5, 3.6 + SUNK, facing, builders.wood);
+        } else if (["sawshed", "lodge", "toolshed"].includes(part.part)) {
+            const [x, z, y] = groundAt((part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2);
+
+            shapes.box(x, z, y, part.x1 - part.x0, part.y1 - part.y0, 3 + SUNK, facing, builders.roof);
+        }
+    }
+}
+
 // The rock crags are of (art/kits/neutral.js: rock, and the dragon's dark rock)
 const ROCK = Object.freeze({ light: 0x86827b, dark: 0x3f3d3c });
 
@@ -570,6 +605,12 @@ export function siteShapes(shapes, { kind, people, seed, form = null, x, z, faci
 
     if (NEUTRAL_KINDS.has(kind) && !(kind === "watchtower" && people)) {
         neutralShapes(shapes, { kind, people, seed, form, facing, place, heightOf, builders });
+
+        return;
+    }
+
+    if (WORKS_SIZE[kind]) {
+        worksShapes(shapes, { kind, people, seed, facing, place, heightOf, builders });
 
         return;
     }

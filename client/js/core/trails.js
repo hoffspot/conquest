@@ -1,6 +1,7 @@
 // Foot paths up into the hills and mountains: one from the roads to each cave, ruin, shrine, ring of
 // standing stones, ruined castle and lair up there (the plan's sites on land TRAILS.height high and
-// more, within TRAILS.reach of a road), found its own way over the land (terrain/ways.js) at a
+// more, within TRAILS.reach of a road), and to each people's works wherever it is (the way its
+// wagons go), found its own way over the land (terrain/ways.js) at a
 // walker's grade, so it climbs in hairpins where the land's steep, and keeping out of the town and
 // the settlements. The roads through the mountains' feet thus lead on, by narrow paths, up to what
 // there is to find in them. Each site's turned to face the way its trail comes (sites.js), and
@@ -20,7 +21,7 @@ import { atan2, cos, hypot, sin } from "./exact.js";
 import { layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
 import { PLOT } from "./setpieces/pieces.js";
 import { CUT_EASE, cutOf, isNeutral, LIE, restingOf } from "./sites.js";
-import { CELL, CELLS, WORLD_SIZE } from "./worldplan/plan.js";
+import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
 
 /**
  * Trails: how high the land must be (the plan's height) for a site there to have one, how far from
@@ -31,8 +32,9 @@ import { CELL, CELLS, WORLD_SIZE } from "./worldplan/plan.js";
  */
 export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2 });
 
-/** The sites a trail goes up to. */
+/** The sites a trail goes up to (in the hills); and each people's works, wherever they are (their convoys' way to the road). */
 export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", "dragon's lair"]);
+const WORKED = WORKS.map(({ kind }) => kind);
 
 // How far past a trail's room its land must be wanted for it to be found first (metres: as far as
 // its shoulders reach, so every chunk whose ground it levels has it from the first)
@@ -54,7 +56,7 @@ export class Trails {
         // site reached already if that's nearer (so trails branch from each other, rather than
         // two running side by side from one road to sites near each other)
         const sites = plan.sites
-            .filter(({ kind, cell: [cx, cy] }) => TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height)
+            .filter(({ kind, cell: [cx, cy] }) => (TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height) || WORKED.includes(kind))
             .map((site) => ({ site, road: nearestOn(lines, site.at) }))
             .filter(({ road }) => road)
             .map((each) => ({ ...each, gap: hypot(each.road[0] - each.site.at[0], each.road[1] - each.site.at[1]) }))
