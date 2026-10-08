@@ -116,6 +116,11 @@ input {
     cursor: pointer;
 }
 
+#panel button[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 #panel button[type="submit"] {
     border-color: var(--accent);
     background: var(--accent);

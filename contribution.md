@@ -212,7 +212,7 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    (`git fetch origin main && git checkout -b <you>/<what-it-does> origin/main`). One topic per
    pull request: small pull requests are reviewed quickly and are easy to undo.
 2. **Read the docs for what you're changing first.** The game's design lives in `docs/`
-   (`GAME.md`, `WORLD.md`, `WAR.md`, `WILDS.md`, `MAGIC.md`, `CHARACTERS.md`), the tooling in
+   (`GAME.md`, `WORLD.md`, `WAR.md`, `WILDS.md`, `DUNGEONS.md`, `MAGIC.md`, `CHARACTERS.md`), the tooling in
    `README.md`, and plans in progress in `generated/` (e.g.
    `generated/terrain_navmesh_overhaul_plan.md`).
 3. **Write the code the way the code around it is written:**

@@ -139,7 +139,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/grid.js", 2906],
             ["js/core/host.js", 234937],
             ["js/core/insides.js", 64004],
-            ["js/core/interiors.js", 19577],
+            ["js/core/interiors.js", 20162],
             ["js/core/journey.js", 11074],
             ["js/core/lagoons.js", 4037],
             ["js/core/light.js", 4698],
