@@ -280,7 +280,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/grass.js", 18646],
             ["js/world/grassmap.js", 15921],
             ["js/world/ground.js", 71174],
-            ["js/world/interiors3d.js", 185892],
+            ["js/world/interiors3d.js", 190879],
             ["js/world/layout-worker.js", 357],
             ["js/world/layouts.js", 2729],
             ["js/world/lights.js", 10958],

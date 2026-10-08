@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { readPlan, tavernFloors } from "../client/js/core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../client/js/core/insides.js";
-import { buildInterior, cutFor, cutsAway, daylightOf, shaftsOf, STOREY } from "../client/js/world/interiors3d.js";
+import { buildInterior, cutFor, cutsAway, daylightOf, shaftsOf, STOREY, VEIL } from "../client/js/world/interiors3d.js";
 import { BOUNCE, fillOf, gather, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "../client/js/world/roomlight.js";
 import { ROOM_VIEW, View } from "../client/js/world/view.js";
 
@@ -313,6 +313,36 @@ describe("the flames lighting the rooms (roomlight.js, interiors3d.js)", () => {
         const fill = fillOf(colours, [10, 2], 100, new THREE.Color());
 
         assert.ok(Math.abs(fill.r - (12 * BOUNCE) / 100) < 1e-9 && Math.abs(fill.g - (7 * BOUNCE) / 100) < 1e-9 && Math.abs(fill.b - (4.5 * BOUNCE) / 100) < 1e-9);
+    });
+});
+
+describe("a guild's portal's veil (interiors3d.js veilShader)", () => {
+    it("is drawn as swirling fluid worked out as it's drawn, not turning blocks: three.js's own shader for it, its colour the vortex's, cut away as the wall it's in; its time coming round each loop", () => {
+        const built = insideOf("guild");
+        const [veil] = meshesOf(built, ({ material }) => material.name === "portal-veil-inside-wall");
+
+        // (One veil, its shape's coordinates kept to work the swirl out from; nothing turning)
+        assert.ok(veil && veil.geometry.attributes.uv);
+        assert.equal(meshesOf(built, ({ material }) => material.name.startsWith("portal-swirl")).length, 0);
+
+        // (Three.js's shader for it as it would be compiled: the swirl worked in, every hook found)
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+
+        veil.material.onBeforeCompile(shader);
+        assert.match(shader.vertexShader, /vVeil = uv;/);
+        assert.match(shader.fragmentShader, /vec4 diffuseColor = vec4\( veilAt\(vVeil \/ 5\.0\), opacity \);/);
+        assert.doesNotMatch(shader.fragmentShader, /vec4\( diffuse, opacity \)/);
+        assert.match(shader.fragmentShader, /if \(vCutWorld\.y - cutPlayer\.y > cutHeight/);
+        assert.equal(shader.uniforms.veilTime, VEIL.time);
+        assert.equal(shader.uniforms.cutSquares.value, 1);
+        assert.match(veil.material.customProgramCacheKey(), /-veil$/);
+
+        // (Its time, as the room's drawn, round and round its loop)
+        built.update(0.016, VEIL.loop + 5);
+        assert.equal(VEIL.time.value, 5);
+        built.update(0.016, 3);
+        assert.equal(VEIL.time.value, 3);
+        built.dispose();
     });
 });
 
