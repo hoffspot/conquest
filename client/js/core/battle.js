@@ -27,7 +27,8 @@
 // Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
 // speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
 // time to arrive. Running uses stamina, STAMINA_DRAIN points a second; anything else gets it
-// back, STAMINA_RECOVERY a second. A character has as much stamina as it has hit points, and it
+// back, STAMINA_RECOVERY a second (faster for a player after a courtesan's company: its
+// `recovery`, host.js COMPANY). A character has as much stamina as it has hit points, and it
 // never goes below none or above that. With none left, a runner walks the rest of the way.
 //
 // A character can cast spells (spells.js) too: healing itself, or stunning an enemy it can see
@@ -181,7 +182,7 @@ const magicOf = (attack, spell) => Boolean(spell) || THROWN[attack.projectile?.k
 export const SPRINT = 6.5 / 1.4;
 
 /** Stamina used running, and got back doing anything else, in points a second. */
-export const STAMINA_DRAIN = 3;
+export const STAMINA_DRAIN = 1.5;
 export const STAMINA_RECOVERY = 1;
 
 // How quickly a runner speeds up and slows down (metres a second, each second): about a second
@@ -2158,13 +2159,14 @@ export class Battle {
             actor.pace = walk;
         }
 
-        // Running uses stamina, anything else gets it back (in hundredths, so it adds up exactly)
+        // Running uses stamina, anything else gets it back (in thousandths, so it adds up exactly),
+        // the faster for what does them good (`recovery`) and the slower for what ails them
         actor.running = run && travelled > 0;
 
         const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1);
-        const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * shareOf(actor, "recovery")) * seconds;
+        const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
 
-        actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 100) / 100));
+        actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 1000) / 1000));
     }
 
     // How far a character has to go along its path (to where the one it's after is within

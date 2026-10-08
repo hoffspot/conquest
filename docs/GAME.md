@@ -594,8 +594,8 @@ draws anything.
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
   6 m/s each second (a second from a walk to a sprint) and slows at 7, slowing in time to arrive
-  (or to reach an enemy it's charging) at a walk. Running uses 3 points of stamina a second;
-  walking, standing and fighting get 1 a second back. A character has as much stamina as hit
+  (or to reach an enemy it's charging) at a walk. Running uses 1.5 points of stamina a second;
+  walking, standing and fighting get 1 a second back (faster after a courtesan's company: below). A character has as much stamina as hit
   points, and it never goes above that or below none. With none left, a runner walks the rest of
   the way (the `exhausted` event). Coming back to life, a character is rested. The orc doesn't
   run.
@@ -2184,8 +2184,24 @@ explicit, and built to lead to things done in the world once the game does them.
 stranger, someone she's met, or someone she's danced with differently, and she offers:
 
 - **Herself**: where she came from (one of a few stories), once, and whether she misses home.
-- **What she offers**: her company for the evening (`{ hire: "company", price: 20 }`, and the
-  talk ends as the door closes), a dance (remembered, so she teases about it after), or just talk.
+- **What she offers**: her company for the evening (`{ company: true, price: 20 }`, remembered as
+  `company`, so she greets the player as a caller after; and the talk ends as the door closes), a
+  dance (remembered, so she teases about it after), or just talk. What her company does for a
+  caller she hints at (the wind of a boy of sixteen for an hour after), and so does the madam
+  (asked what her ladies offer: callers get their wind back twice as fast for an hour; asked if
+  it's safe, a clean house, mostly, and the adventurers' guild sells a draught for the rest).
+
+**A courtesan's company** (core/host.js `COMPANY`), paid for: three times in four an hour's
+**afterglow**, a boon (`afterglow`, on the player's plate as a rosy heart) that brings their
+stamina back faster by a whole share rolled between 50% and 100% (`recoveryTimes`, the battle's
+`recovery`), said as it's rolled ("Afterglow: stamina back 73% faster, for an hour."); another
+company rolls it again. The rest of the time the player's caught something (the `pox`,
+core/afflictions.js): **diseased** for the hour, their stamina coming back at 40%, as the wild's
+sickness has it, but never hurting (an hour of that would be the end of anyone), and ended by the
+same Cure disease draught. Either's kept between visits for what's left of its hour (the
+afterglow with its roll). Only a courtesan's to give: asked of anyone else, nothing's paid.
+(`NET_VERSION` 63: both ends of a game must agree on the stamina a run uses, and on what a
+company does.)
 - **What she's heard**: secrets from her callers, for a price (`{ pay: 5 }`, and the player
   learns `courtesanRumours`): the east gate, the miller's gold, the greybeard's friends at the
   keep, the ruins east of town, and the orc (which the player learns of, if they hadn't).
@@ -3784,14 +3800,15 @@ joined to someone else's keeps nothing of this: it's theirs.
 `vitalsOf`, save.js `saveVitals`): their hit points and stamina; what lingers on them after blows
 (poison, a burn, a bleed...: each's kind, how hard it hurts, how it shows); the spells lasting on
 them (Levitate, a ward, Reflect...: and how far grown, and whether they cast it themselves); their
-boons (a sharpening, a blessing, a Stamina Boost); and how long till each ability and spell can be
+boons (a sharpening, a blessing, a Stamina Boost, a courtesan's afterglow with its roll); and how long till each ability and spell can be
 used again. Each's kept by what's left of it, in the world's own time, which stands still while
 the game's stopped: so the next time, it's as long as it was, however long they were away. It's
 put back as they join (host.js `restoreVitals`): their boons first (a Stamina Boost doubles the
 breath they can have), then their hit points and stamina (no more than they can have now), the
 rest with what was left of it. Anything the game no longer knows is let go, and nothing lasts
 longer than it can (a boon its own time, an ability its wait); a boon's what the game says it
-is, not what was kept. Fallen when kept, they get up whole, at home. A Scroll of Safety being read
+is, not what was kept (an afterglow's roll no more than the most a roll can be, nor less than the
+least). Fallen when kept, they get up whole, at home. A Scroll of Safety being read
 isn't kept: read again. A world joined to someone else's keeps nothing of this either.
 
 A save of another version, or one naming a weapon the game doesn't know, is ignored rather than

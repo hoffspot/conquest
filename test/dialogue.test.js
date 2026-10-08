@@ -124,6 +124,28 @@ describe("conversations (dialogue.js)", () => {
         assert.equal(talk("barkeep").fill("{player} at {place}, {madam} upstairs, {title} {fullName}"), `Nessa at ${PLACE}, ${names.madam} upstairs, Barkeep ${speakerOf("barkeep").name}`);
     });
 
+    it("hints at what a courtesan's company does for a caller, in the madam's talk and the courtesans', and hands the company to the game", () => {
+        const madam = talk("madam");
+
+        reply(madam, "What do your ladies offer?");
+        assert.match(madam.line, /wind|breath/);
+        reply(madam, "Is it safe?");
+        assert.match(madam.line, /adventurers' guild sells a draught/);
+
+        const memory = { talks: 0, flags: [] };
+        const done = [];
+        const courtesan = talk("courtesan", { memory, onEffect: (effect) => done.push(effect) });
+
+        reply(courtesan, "What is it you offer?");
+        assert.match(courtesan.line, /wind|breath/);
+        reply(courtesan, "Your company for the evening");
+        assert.deepEqual(done, [{ company: true, price: 20 }]);
+        assert.ok(memory.flags.includes("company"));
+
+        // (Back again: greeted as a caller who's had her company)
+        assert.match(talk("courtesan", { memory }).line, /wind|breath/);
+    });
+
     it("greets a stranger, then someone it's met; remembers what's been asked, and hands what's done in the world to the game", () => {
         const memory = { talks: 0, flags: [] };
         const done = [];
