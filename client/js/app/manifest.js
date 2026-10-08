@@ -49,7 +49,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/mapicons.js", 13245],
             ["js/app/minimap.js", 38656],
             ["js/app/pacing.js", 1893],
-            ["js/app/pack.js", 57622],
+            ["js/app/pack.js", 58154],
             ["js/app/predict.js", 6326],
             ["js/app/quickbar.js", 9084],
             ["js/app/session.js", 3761],

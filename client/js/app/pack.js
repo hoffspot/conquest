@@ -870,7 +870,12 @@ export class PackPanel {
         const margin = 8;
         const clamp = (value, least, most) => Math.max(least, Math.min(most, value));
         const room = { left: box.left - view.left - margin - ABOUT_GAP, right: view.right - box.right - margin - ABOUT_GAP };
-        const side = this.dollView.isConnected && Math.max(room.left, room.right) >= ABOUT_SIDE ? (room.left > room.right ? "left" : "right") : null;
+        // (Beside it only where the paperdoll is: its picture beside a slot of it, or all of it
+        // beside the pack's slots; not where it's above them, a narrow screen's one column)
+        const sideOf = (rect, level) => (!rect || (level && (rect.bottom <= box.top || rect.top >= box.bottom)) ? null : rect.right <= box.left ? "left" : rect.left >= box.right ? "right" : null);
+        const doll = this.dollView.isConnected ? this.dollView.getBoundingClientRect() : null;
+        const beside = sideOf(doll, true) ?? sideOf(this.dollView.closest(".doll-section")?.getBoundingClientRect(), false);
+        const side = beside && room[beside] >= ABOUT_SIDE ? beside : null;
         let width;
         let x;
         let y;
