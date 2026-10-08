@@ -19,8 +19,9 @@ const { DUNGEON_PROPS, furnish } = await import("../client/js/world/dungeons3d.j
 const { buildInterior } = await import("../client/js/world/interiors3d.js");
 const { PROPS } = await import("../scripts/build-props.js");
 
-// How big a model's file may be, and all of them together (bytes)
-const MOST = Object.freeze({ each: 450 * 1024, all: 2.2 * 1024 * 1024 });
+// How big a model's file may be, and all of them together (bytes: within the dungeons' budget of
+// about 25 MB with their photographs, each dungeon fetching only its own theme's)
+const MOST = Object.freeze({ each: 650 * 1024, all: 22 * 1024 * 1024 });
 
 // A dungeon's levels as the game makes them (core/insides.js), each built as it's drawn
 function levelsOf(theme, seed) {
@@ -43,21 +44,29 @@ describe("the scanned models a dungeon's furnished with (scripts/build-props.js)
     it("are each in the catalog, downloaded only once a dungeon's wanted, a GLB on disk, and small", () => {
         let all = 0;
 
-        assert.deepEqual(Object.keys(DUNGEON_PROPS).sort(), Object.keys(PROPS).sort());
+        // (A set's pieces each a prop of their own, all in their set's file)
+        const names = Object.entries(PROPS).flatMap(([file, { pieces }]) => (pieces ? Object.keys(pieces) : [file]));
 
-        for (const [name, entry] of Object.entries(DUNGEON_PROPS)) {
-            const model = ASSETS.models[entry];
+        assert.deepEqual(Object.keys(DUNGEON_PROPS).sort(), names.sort());
 
-            assert.ok(model, `${name}: ${entry} isn't in the catalog`);
+        for (const [file, { pieces }] of Object.entries(PROPS)) {
+            const model = ASSETS.models[`dungeon-prop-${file}`];
+
+            assert.ok(model, `${file} isn't in the catalog`);
             assert.equal(model.tier, "demand");
             assert.deepEqual(
                 model.files.map(({ path }) => path),
-                [`models/dungeons/${name}.glb`],
+                [`models/dungeons/${file}.glb`],
             );
+            assert.deepEqual(model.pieces, pieces);
+
+            for (const name of pieces ? Object.keys(pieces) : [file]) {
+                assert.deepEqual(DUNGEON_PROPS[name], { asset: `dungeon-prop-${file}`, nodes: pieces?.[name] ?? null });
+            }
 
             const { size } = statSync(new URL(`../client/${model.files[0].path}`, import.meta.url));
 
-            assert.ok(size < MOST.each, `${name}: ${size} bytes`);
+            assert.ok(size < MOST.each, `${file}: ${size} bytes`);
             all += size;
         }
 
@@ -67,7 +76,7 @@ describe("the scanned models a dungeon's furnished with (scripts/build-props.js)
 
 describe("a dungeon's levels furnished (world/interiors3d.js dungeon)", () => {
     it("puts each theme's things where they can stand, on open ground, each on what it's on", () => {
-        const wanted = { caves: ["fire-pit", "boulder"], hideout: ["barrel", "crate", "table"], ancient: ["bust"] };
+        const wanted = { caves: ["fire-pit", "boulder", "pebble-a", "bark-b"], hideout: ["barrel", "crate", "table", "stool", "lantern", "shelf"], ancient: ["bust", "goblet-a", "vase-tall"] };
 
         for (const [theme, models] of Object.entries(wanted)) {
             const seen = new Set();
@@ -105,7 +114,7 @@ describe("the models placed (world/dungeons3d.js furnish)", () => {
 
     geometry.computeBoundingBox();
 
-    const read = (name) => (name === "block" ? { geometry, source: new THREE.MeshStandardMaterial(), box: geometry.boundingBox } : null);
+    const read = (name) => (name === "block" ? { parts: [{ geometry, source: new THREE.MeshStandardMaterial() }], box: geometry.boundingBox } : null);
     const boxOf = (mesh, k) => geometry.boundingBox.clone().applyMatrix4(mesh.getMatrixAt(k, new THREE.Matrix4()));
     const near = (a, b, why) => assert.ok(Math.abs(a - b) < 1e-6, `${why}: ${a} not ${b}`);
 

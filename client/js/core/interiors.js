@@ -85,13 +85,19 @@ export const PLAN_KEY = Object.freeze({
     n: { kind: "stand", blocks: true },
     // A dungeon's (core/dungeons): the stairs down to the next level (dug into the floor, a hole
     // to see over) and up from it (rising into the rock), rock standing up from a cave's floor,
-    // an outlaws' crates and sacks, a brazier burning, and a small chest left about
+    // an outlaws' crates and sacks, a brazier burning, and a small chest left about; what's left
+    // against a wall as the theme's room has it (a bucket, a basket, a ladder, a fallen log, a
+    // heap of skulls: world/interiors3d.js chooses), and the remains of someone who died there
     V: { kind: "stairs-down", blocks: true, joins: true },
     "^": { kind: "stairs-up", blocks: true, opaque: true, joins: true },
     "*": { kind: "stalagmite", blocks: true, opaque: true },
     "%": { kind: "crates", blocks: true },
     y: { kind: "brazier", blocks: true },
     $: { kind: "coffer" },
+    d: { kind: "clutter", blocks: true },
+    i: { kind: "remains", blocks: true },
+    // (And a cart or a barrow left by a wall, the length of the squares it's on)
+    J: { kind: "wagon", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

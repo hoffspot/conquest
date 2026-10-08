@@ -53,7 +53,7 @@ export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, fa
 
 /**
  * Cook up a dungeon: { version, seed, theme, tier, generation, name, levels: [{ index, width,
- * height, rows (plan rows), rooms: [{ id, kind, area, x, y, w, h, centre, role }], links, path
+ * height, rows (plan rows), rooms: [{ id, kind, look, area, x, y, w, h, centre, role }], links, path
  * (room ids from the way in to the room furthest in), entry ({ squares, arrive, facing }: the
  * front door's or the foot of the stairs up's), down (the same for the stairs down, or null on the
  * bottom level), packs ([{ id, role: "pack" | "mini" | "boss", room, title, foes: [{ creature,
@@ -148,7 +148,7 @@ function finish(dug, plan) {
         width: grid.width,
         height: grid.height,
         rows,
-        rooms: ended.map(({ id, area, x, y, w, h, centre }) => ({ id, kind: dug.kinds[id], area, x, y, w, h, centre, role: roleOf(id) })),
+        rooms: ended.map(({ id, area, x, y, w, h, centre }) => ({ id, kind: dug.kinds[id], look: filled.looks[id] ?? null, area, x, y, w, h, centre, role: roleOf(id) })),
         links: linksOf(grid),
         path: filled.path,
         loops: dug.loops,

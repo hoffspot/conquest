@@ -246,73 +246,127 @@ export class Blocks {
 
 /**
  * The scanned models a dungeon's rooms are furnished with (scripts/build-props.js: Poly Haven's,
- * CC0), by name: each a catalog entry (app/assets.js), downloaded only once a dungeon's wanted.
+ * CC0), by name, as the catalog (app/assets.js) lists them: each its file's entry (`asset`,
+ * downloaded only once a dungeon's wanted) and, for one of a set's pieces (three candleholders in
+ * one file, a heap of rocks), its nodes in that file (`nodes`; null for the whole file).
  */
-export const DUNGEON_PROPS = Object.freeze({
-    barrel: "dungeon-prop-barrel",
-    crate: "dungeon-prop-crate",
-    table: "dungeon-prop-table",
-    "fire-pit": "dungeon-prop-fire-pit",
-    boulder: "dungeon-prop-boulder",
-    bust: "dungeon-prop-bust",
-    vase: "dungeon-prop-vase",
-    axe: "dungeon-prop-axe",
-});
+export const DUNGEON_PROPS = Object.freeze(
+    Object.fromEntries(
+        Object.entries(ASSETS.models)
+            .filter(([asset]) => asset.startsWith("dungeon-prop-"))
+            .flatMap(([asset, { pieces }]) => (pieces ? Object.entries(pieces).map(([name, nodes]) => [name, Object.freeze({ asset, nodes })]) : [[asset.slice("dungeon-prop-".length), Object.freeze({ asset, nodes: null })]])),
+    ),
+);
 
-// Each model, once read (a promise of it): its meshes joined into one (they share one material),
-// that material, and how big it is ({ min, max }, its own metres)
+// Each file, once read (a promise of its scene), and each model, once taken from it (a promise of
+// its parts and size)
+const files = new Map();
 const props = new Map();
 
+// What's kept of a model's meshes, joined: where they are, which way they face, where their
+// pictures lie (a model without pictures given none)
+const KEPT = Object.freeze(["position", "normal", "uv"]);
+
+// A model's meshes (those under its `nodes`, or all of them), joined into one for each material
+// it's drawn with: its parts ([{ geometry, source }]) and how big it is ({ min, max }, its own
+// metres), or null if it has no meshes
+function partsOf(scene, nodes) {
+    const wanted = nodes && new Set(nodes);
+    const byMaterial = new Map();
+
+    scene.updateMatrixWorld(true);
+    scene.traverse((node) => {
+        let at = node;
+
+        while (wanted && at && !wanted.has(at.name)) {
+            at = at.parent;
+        }
+
+        if (node.isMesh && at) {
+            const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld);
+
+            for (const name of Object.keys(geometry.attributes)) {
+                if (!KEPT.includes(name)) {
+                    geometry.deleteAttribute(name);
+                }
+            }
+
+            if (!geometry.attributes.uv) {
+                geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
+            }
+
+            byMaterial.set(node.material, [...(byMaterial.get(node.material) ?? []), geometry.index ? geometry : geometry.setIndex([...Array(geometry.attributes.position.count).keys()])]);
+        }
+    });
+
+    const box = new THREE.Box3();
+    const parts = [...byMaterial].map(([source, geometries]) => {
+        const geometry = geometries.length > 1 ? mergeGeometries(geometries) : geometries[0];
+
+        geometry.computeBoundingBox();
+        geometry.userData.shared = true;
+        box.union(geometry.boundingBox);
+
+        return { geometry, source };
+    });
+
+    return parts.length ? { parts, box } : null;
+}
+
 /**
- * A model's mesh, material and size, read once (DUNGEON_PROPS' name): null if it's not in the
- * catalog (or there's no page to read it from).
+ * A model's parts (its meshes joined, one for each material it's drawn with: [{ geometry,
+ * source }]) and how big it is (`box`: { min, max }, its own metres), read once (DUNGEON_PROPS'
+ * name): null if it's not in the catalog (or there's no page to read it from).
  */
 export function loadProp(name) {
     if (!props.has(name)) {
-        const file = ASSETS.models[DUNGEON_PROPS[name]]?.files[0];
+        const entry = DUNGEON_PROPS[name];
+        const file = entry && ASSETS.models[entry.asset]?.files[0];
         const page = globalThis.document?.baseURI ?? globalThis.location?.href;
 
-        props.set(
-            name,
-            file && page
-                ? loadGltf(new URL(hashed(file.path, file.hash), page).href).then(({ scene }) => {
-                      const parts = [];
-                      let source = null;
+        if (file && page && !files.has(entry.asset)) {
+            files.set(
+                entry.asset,
+                loadGltf(new URL(hashed(file.path, file.hash), page).href).then(({ scene }) => scene),
+            );
+        }
 
-                      scene.updateMatrixWorld(true);
-                      scene.traverse((node) => {
-                          if (node.isMesh) {
-                              parts.push(node.geometry.clone().applyMatrix4(node.matrixWorld));
-                              source ??= node.material;
-                          }
-                      });
-
-                      const geometry = parts.length > 1 ? mergeGeometries(parts) : parts[0];
-
-                      geometry.computeBoundingBox();
-                      geometry.userData.shared = true;
-
-                      return { geometry, source, box: geometry.boundingBox };
-                  })
-                : Promise.resolve(null),
-        );
+        props.set(name, file && page ? files.get(entry.asset).then((scene) => partsOf(scene, entry.nodes)) : Promise.resolve(null));
     }
 
     return props.get(name);
 }
 
+// How metal a model's drawn at most: with nothing about it to shine back but the room's flames, a
+// wholly metal thing would be all but black
+const METAL = 0.3;
+
 // A model's material in a colour (`tint`, times its picture's), lit by the room's flames as the
-// rock is, never cut away, drawn many times over at once (instanced); one for each
+// rock is, never cut away, drawn many times over at once (instanced); one for each of its parts
+// and tints. How rough and how metal it is, and whether it glows or can be seen through (glass, a
+// flame), as its own material has it.
 const propMaterials = new Map();
 
-function propMaterial(name, source, tint) {
-    const key = `${name}|${tint ?? ""}`;
+function propMaterial(name, part, source, tint) {
+    const key = `${name}|${part}|${tint ?? ""}`;
 
     if (propMaterials.has(key)) {
         return propMaterials.get(key);
     }
 
-    const result = new THREE.MeshStandardMaterial({ map: source.map ?? null, normalMap: source.normalMap ?? null, color: new THREE.Color(tint ?? 0xffffff), roughness: 0.85, metalness: 0 });
+    const result = new THREE.MeshStandardMaterial({
+        map: source.map ?? null,
+        normalMap: source.normalMap ?? null,
+        emissiveMap: source.emissiveMap ?? null,
+        emissive: source.emissive ?? new THREE.Color(0),
+        color: new THREE.Color(tint ?? 0xffffff).multiply(source.color ?? new THREE.Color(0xffffff)),
+        roughness: source.roughness ?? 0.85,
+        metalness: Math.min(METAL, source.metalness ?? 0),
+        transparent: source.transparent ?? false,
+        opacity: source.opacity ?? 1,
+        depthWrite: !source.transparent,
+        alphaTest: source.alphaTest ?? 0,
+    });
 
     result.name = `prop-${name}`;
     result.userData.shared = true;
@@ -327,20 +381,28 @@ function propMaterial(name, source, tint) {
     return result;
 }
 
+// How big a thing placed must be to cast a shadow (metres, its longest side): the small things
+// strewn about cast none (a light's shadows are drawn six ways round, each thing in reach once
+// for each)
+const SHADOWS_FROM = 0.45;
+
 const _turn = new THREE.Quaternion();
 const _roll = new THREE.Quaternion();
+const _pitch = new THREE.Quaternion();
 const _corner = new THREE.Vector3();
 
 /**
  * Furnish a level with models (`placements`: [{ model (DUNGEON_PROPS' name), x, z (level metres:
  * where its middle stands), y (how high its foot is: metres, or `on` another placement, on top of
- * it), turn (radians round the upright), roll (radians round its own length: an axe laid down),
+ * it), turn (radians round the upright), roll (radians round its own z: an axe laid down), pitch
+ * (radians round its own x, before that: a shield leant back),
  * size (its longest side, metres; or `scale`: times its own size, a number or one for each side;
  * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
- * to) }]), each model's copies in each tile of the level
- * (caverns.js's) drawn at once (instanced), so what's out of sight or of a light's reach isn't
- * drawn; added to `group` once they're all read (`read`: how, loadProp). What isn't read (not
- * in the catalog, not downloaded) is left out, and what's on it. Resolves once they're in.
+ * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said) }]), each
+ * model's copies in each tile of the level (the rock's, CAVERNS) drawn at once (instanced, one for
+ * each of its materials), so what's out of sight or of a light's reach isn't drawn; added to
+ * `group` once they're all read (`read`: how, loadProp). What isn't read (not in the catalog, not
+ * downloaded) is left out, and what's on it. Resolves once they're in.
  */
 export async function furnish(group, placements, { read: reading = loadProp } = {}) {
     const names = [...new Set(placements.map(({ model }) => model))];
@@ -365,11 +427,11 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
             continue;
         }
 
-        const { x, z, turn = 0, roll = 0, size, fit, tint = null } = placement;
+        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null } = placement;
         const extent = prop.box.getSize(new THREE.Vector3());
         const each = fit ? [fit[0] / extent.x, fit[1] / extent.y, fit[2] / extent.z] : (placement.scale ?? (size ? size / Math.max(extent.x, extent.y, extent.z) : 1));
         const scale = Array.isArray(each) ? new THREE.Vector3(...each) : new THREE.Vector3(each, each, each);
-        const turned = _turn.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, turn).multiply(_roll.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
+        const turned = _turn.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, turn).multiply(_pitch.setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch)).multiply(_roll.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
         const matrix = new THREE.Matrix4().compose(new THREE.Vector3(), turned, scale);
         const box = new THREE.Box3();
 
@@ -387,21 +449,26 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         const key = `${placement.model}|${tint ?? ""}|${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
 
         if (!lots.has(key)) {
-            lots.set(key, { name: placement.model, prop, tint, matrices: [] });
+            lots.set(key, { name: placement.model, prop, tint, matrices: [], shadow: false });
         }
 
-        lots.get(key).matrices.push(matrix);
+        const lot = lots.get(key);
+
+        lot.matrices.push(matrix);
+        lot.shadow ||= placement.shadow ?? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) >= SHADOWS_FROM;
     }
 
-    for (const { name, prop, tint, matrices } of lots.values()) {
-        const mesh = new THREE.InstancedMesh(prop.geometry, propMaterial(name, prop.source, tint), matrices.length);
+    for (const { name, prop, tint, matrices, shadow } of lots.values()) {
+        prop.parts.forEach(({ geometry, source }, part) => {
+            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint), matrices.length);
 
-        matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.computeBoundingSphere();
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.name = `prop-${name}`;
-        group.add(mesh);
+            matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.computeBoundingSphere();
+            mesh.castShadow = shadow && !source.transparent;
+            mesh.receiveShadow = true;
+            mesh.name = `prop-${name}`;
+            group.add(mesh);
+        });
     }
 }

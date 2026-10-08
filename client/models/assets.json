@@ -155,6 +155,1146 @@
                     "path": "models/dungeons/vase.glb"
                 }
             ]
+        },
+        "dungeon-prop-table-plank": {
+            "tier": "demand",
+            "label": "A plank table (Poly Haven WoodenTable_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/table-plank.glb"
+                }
+            ]
+        },
+        "dungeon-prop-table-low": {
+            "tier": "demand",
+            "label": "A low table (Poly Haven small_wooden_table_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/table-low.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stool": {
+            "tier": "demand",
+            "label": "A stool (Poly Haven wooden_stool_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stool.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stool-low": {
+            "tier": "demand",
+            "label": "A low stool (Poly Haven wooden_stool_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stool-low.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stool-folding": {
+            "tier": "demand",
+            "label": "A folding stool (Poly Haven folding_wooden_stool, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stool-folding.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bench": {
+            "tier": "demand",
+            "label": "A settle (Poly Haven painted_wooden_bench, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bench.glb"
+                }
+            ]
+        },
+        "dungeon-prop-chair-gothic": {
+            "tier": "demand",
+            "label": "A tall carved chair (Poly Haven WoodenChair_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/chair-gothic.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bookshelf": {
+            "tier": "demand",
+            "label": "Shelves (Poly Haven wooden_bookshelf_worn, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bookshelf.glb"
+                }
+            ]
+        },
+        "dungeon-prop-shelf": {
+            "tier": "demand",
+            "label": "A narrow shelf (Poly Haven Shelf_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/shelf.glb"
+                }
+            ]
+        },
+        "dungeon-prop-cabinet-gothic": {
+            "tier": "demand",
+            "label": "A carved cabinet (Poly Haven GothicCabinet_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/cabinet-gothic.glb"
+                }
+            ]
+        },
+        "dungeon-prop-ladder": {
+            "tier": "demand",
+            "label": "A step ladder (Poly Haven wooden_ladder_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/ladder.glb"
+                }
+            ]
+        },
+        "dungeon-prop-barrels": {
+            "tier": "demand",
+            "label": "Old barrels and a broken one's staves (Poly Haven wooden_barrels_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/barrels.glb"
+                }
+            ],
+            "pieces": {
+                "barrel-old": [
+                    "wooden_barrels_01_barrel01"
+                ],
+                "barrel-worn": [
+                    "wooden_barrels_01_barrel02"
+                ],
+                "staves": [
+                    "wooden_barrels_01_piece01",
+                    "wooden_barrels_01_piece02",
+                    "wooden_barrels_01_piece03",
+                    "wooden_barrels_01_piece04",
+                    "wooden_barrels_01_piece05",
+                    "wooden_barrels_01_piece06",
+                    "wooden_barrels_01_piece07",
+                    "wooden_barrels_01_piece08",
+                    "wooden_barrels_01_piece09",
+                    "wooden_barrels_01_piece10",
+                    "wooden_barrels_01_piece11",
+                    "wooden_barrels_01_piece12",
+                    "wooden_barrels_01_piece13",
+                    "wooden_barrels_01_piece14",
+                    "wooden_barrels_01_piece15",
+                    "wooden_barrels_01_piece16",
+                    "wooden_barrels_01_piece17"
+                ]
+            }
+        },
+        "dungeon-prop-crate-long": {
+            "tier": "demand",
+            "label": "A long crate with rope handles (Poly Haven wooden_crate_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/crate-long.glb"
+                }
+            ]
+        },
+        "dungeon-prop-crate-big": {
+            "tier": "demand",
+            "label": "An iron-bound chest (Poly Haven wooden_military_crate, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/crate-big.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bucket": {
+            "tier": "demand",
+            "label": "A bucket (Poly Haven wooden_bucket_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bucket.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bucket-wide": {
+            "tier": "demand",
+            "label": "A tub (Poly Haven wooden_bucket_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bucket-wide.glb"
+                }
+            ]
+        },
+        "dungeon-prop-basket": {
+            "tier": "demand",
+            "label": "A flat basket (Poly Haven wicker_basket_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/basket.glb"
+                }
+            ]
+        },
+        "dungeon-prop-basket-lidded": {
+            "tier": "demand",
+            "label": "A lidded basket (Poly Haven wicker_basket_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/basket-lidded.glb"
+                }
+            ]
+        },
+        "dungeon-prop-goblets": {
+            "tier": "demand",
+            "label": "Brass goblets (Poly Haven brass_goblets, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/goblets.glb"
+                }
+            ],
+            "pieces": {
+                "goblet-a": [
+                    "brass_goblet_01"
+                ],
+                "goblet-b": [
+                    "brass_goblet_02"
+                ],
+                "goblet-c": [
+                    "brass_goblet_03"
+                ]
+            }
+        },
+        "dungeon-prop-bowl": {
+            "tier": "demand",
+            "label": "A carved bowl (Poly Haven wooden_bowl_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bowl.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bowl-small": {
+            "tier": "demand",
+            "label": "A small bowl (Poly Haven wooden_bowl_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bowl-small.glb"
+                }
+            ]
+        },
+        "dungeon-prop-spoon": {
+            "tier": "demand",
+            "label": "A spoon (Poly Haven wooden_spoon, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/spoon.glb"
+                }
+            ]
+        },
+        "dungeon-prop-plate": {
+            "tier": "demand",
+            "label": "A wooden plate (Poly Haven carved_wooden_plate, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/plate.glb"
+                }
+            ]
+        },
+        "dungeon-prop-board": {
+            "tier": "demand",
+            "label": "A board (Poly Haven wooden_cutting_board, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/board.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pot": {
+            "tier": "demand",
+            "label": "A lidded pot (Poly Haven ceramic_pot, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pot.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pot-brass": {
+            "tier": "demand",
+            "label": "A cooking pot (Poly Haven brass_pot_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pot-brass.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pot-flat": {
+            "tier": "demand",
+            "label": "A shallow pot (Poly Haven brass_pot_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pot-flat.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pot-clay": {
+            "tier": "demand",
+            "label": "A clay pot (Poly Haven planter_pot_clay, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pot-clay.glb"
+                }
+            ]
+        },
+        "dungeon-prop-apple": {
+            "tier": "demand",
+            "label": "An apple (Poly Haven food_apple_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/apple.glb"
+                }
+            ]
+        },
+        "dungeon-prop-onion": {
+            "tier": "demand",
+            "label": "An onion (Poly Haven yellow_onion, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/onion.glb"
+                }
+            ]
+        },
+        "dungeon-prop-sweet-potato": {
+            "tier": "demand",
+            "label": "A root (Poly Haven sweet_potato, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sweet-potato.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pomegranate": {
+            "tier": "demand",
+            "label": "A pomegranate (Poly Haven food_pomegranate_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pomegranate.glb"
+                }
+            ]
+        },
+        "dungeon-prop-vase-antique": {
+            "tier": "demand",
+            "label": "A painted vase (Poly Haven antique_ceramic_vase_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase-antique.glb"
+                }
+            ]
+        },
+        "dungeon-prop-vase-tall": {
+            "tier": "demand",
+            "label": "A tall vase (Poly Haven brass_vase_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase-tall.glb"
+                }
+            ]
+        },
+        "dungeon-prop-vase-brass": {
+            "tier": "demand",
+            "label": "A brass ewer (Poly Haven brass_vase_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase-brass.glb"
+                }
+            ]
+        },
+        "dungeon-prop-vase-small": {
+            "tier": "demand",
+            "label": "A small vase (Poly Haven brass_vase_03, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase-small.glb"
+                }
+            ]
+        },
+        "dungeon-prop-candlestick": {
+            "tier": "demand",
+            "label": "A candlestick (Poly Haven wooden_candlestick, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/candlestick.glb"
+                }
+            ]
+        },
+        "dungeon-prop-candleholders": {
+            "tier": "demand",
+            "label": "Brass candleholders (Poly Haven brass_candleholders, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/candleholders.glb"
+                }
+            ],
+            "pieces": {
+                "candleholder-a": [
+                    "brass_candleholder_01"
+                ],
+                "candleholder-b": [
+                    "brass_candleholder_02"
+                ],
+                "candleholder-c": [
+                    "brass_candleholder_03"
+                ]
+            }
+        },
+        "dungeon-prop-lantern": {
+            "tier": "demand",
+            "label": "A wooden lantern (Poly Haven wooden_lantern_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/lantern.glb"
+                }
+            ]
+        },
+        "dungeon-prop-axe-long": {
+            "tier": "demand",
+            "label": "A long axe (Poly Haven wooden_axe_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/axe-long.glb"
+                }
+            ]
+        },
+        "dungeon-prop-axe-old": {
+            "tier": "demand",
+            "label": "An old axe (Poly Haven wooden_axe_03, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/axe-old.glb"
+                }
+            ]
+        },
+        "dungeon-prop-hatchet": {
+            "tier": "demand",
+            "label": "A hatchet (Poly Haven hatchet, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/hatchet.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pickaxe": {
+            "tier": "demand",
+            "label": "A pickaxe (Poly Haven picke_dirty_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pickaxe.glb"
+                }
+            ]
+        },
+        "dungeon-prop-spade": {
+            "tier": "demand",
+            "label": "A spade (Poly Haven rusted_spade_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/spade.glb"
+                }
+            ]
+        },
+        "dungeon-prop-hammer": {
+            "tier": "demand",
+            "label": "A hammer (Poly Haven cross_pein_hammer, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/hammer.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mallet": {
+            "tier": "demand",
+            "label": "A mallet (Poly Haven wooden_hammer_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mallet.glb"
+                }
+            ]
+        },
+        "dungeon-prop-saw": {
+            "tier": "demand",
+            "label": "A saw (Poly Haven handsaw_wood, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/saw.glb"
+                }
+            ]
+        },
+        "dungeon-prop-estoc": {
+            "tier": "demand",
+            "label": "A long sword (Poly Haven antique_estoc, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/estoc.glb"
+                }
+            ]
+        },
+        "dungeon-prop-dagger": {
+            "tier": "demand",
+            "label": "A dagger and its sheath (Poly Haven ornate_medieval_dagger, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/dagger.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mace": {
+            "tier": "demand",
+            "label": "A mace (Poly Haven ornate_medieval_mace, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace.glb"
+                }
+            ]
+        },
+        "dungeon-prop-war-hammer": {
+            "tier": "demand",
+            "label": "A war hammer (Poly Haven ornate_war_hammer, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/war-hammer.glb"
+                }
+            ]
+        },
+        "dungeon-prop-saber": {
+            "tier": "demand",
+            "label": "A sabre (Poly Haven wooden_handle_saber, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/saber.glb"
+                }
+            ]
+        },
+        "dungeon-prop-shield-kite": {
+            "tier": "demand",
+            "label": "A kite shield (Poly Haven kite_shield, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/shield-kite.glb"
+                }
+            ]
+        },
+        "dungeon-prop-statue-gothic": {
+            "tier": "demand",
+            "label": "A crowned king's statue (Poly Haven gothic_statue, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/statue-gothic.glb"
+                }
+            ]
+        },
+        "dungeon-prop-lion-head": {
+            "tier": "demand",
+            "label": "A bronze lion's head (Poly Haven lion_head, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/lion-head.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bull-head": {
+            "tier": "demand",
+            "label": "A bronze bull's head (Poly Haven bull_head, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bull-head.glb"
+                }
+            ]
+        },
+        "dungeon-prop-horse-head": {
+            "tier": "demand",
+            "label": "A bronze horse's head (Poly Haven horse_head, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/horse-head.glb"
+                }
+            ]
+        },
+        "dungeon-prop-cat-statue": {
+            "tier": "demand",
+            "label": "A stone cat (Poly Haven concrete_cat_statue, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/cat-statue.glb"
+                }
+            ]
+        },
+        "dungeon-prop-boulder-02": {
+            "tier": "demand",
+            "label": "A heap of broken rock (Poly Haven namaqualand_boulder_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder-02.glb"
+                }
+            ]
+        },
+        "dungeon-prop-boulder-03": {
+            "tier": "demand",
+            "label": "A squared boulder (Poly Haven namaqualand_boulder_03, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder-03.glb"
+                }
+            ]
+        },
+        "dungeon-prop-boulder-04": {
+            "tier": "demand",
+            "label": "A lichened boulder (Poly Haven namaqualand_boulder_04, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder-04.glb"
+                }
+            ]
+        },
+        "dungeon-prop-boulder-06": {
+            "tier": "demand",
+            "label": "A rounded boulder (Poly Haven namaqualand_boulder_06, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder-06.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mossy-rocks": {
+            "tier": "demand",
+            "label": "Mossy rocks (Poly Haven rock_moss_set_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mossy-rocks.glb"
+                }
+            ],
+            "pieces": {
+                "mossrock-a": [
+                    "rock_moss_set_01_rock01"
+                ],
+                "mossrock-b": [
+                    "rock_moss_set_01_rock02"
+                ],
+                "mossrock-c": [
+                    "rock_moss_set_01_rock03"
+                ],
+                "mossrock-d": [
+                    "rock_moss_set_01_rock04"
+                ],
+                "mossrock-e": [
+                    "rock_moss_set_01_rock05"
+                ],
+                "mossrock-f": [
+                    "rock_moss_set_01_rock06"
+                ]
+            }
+        },
+        "dungeon-prop-mossy-rocks-2": {
+            "tier": "demand",
+            "label": "Mossy rocks (Poly Haven rock_moss_set_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mossy-rocks-2.glb"
+                }
+            ],
+            "pieces": {
+                "mossrock2-a": [
+                    "rock_moss_set_02_rock07"
+                ],
+                "mossrock2-b": [
+                    "rock_moss_set_02_rock08"
+                ],
+                "mossrock2-c": [
+                    "rock_moss_set_02_rock09"
+                ],
+                "mossrock2-d": [
+                    "rock_moss_set_02_rock10"
+                ],
+                "mossrock2-e": [
+                    "rock_moss_set_02_rock11"
+                ],
+                "mossrock2-f": [
+                    "rock_moss_set_02_rock12"
+                ],
+                "mossrock2-g": [
+                    "rock_moss_set_02_rock13"
+                ]
+            }
+        },
+        "dungeon-prop-rock-a": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-a.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-b": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_03, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-b.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-c": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_04, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-c.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-d": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_05, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-d.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-e": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_06, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-e.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-f": {
+            "tier": "demand",
+            "label": "A rock (Poly Haven moon_rock_07, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-f.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-flat": {
+            "tier": "demand",
+            "label": "A flat rock (Poly Haven rock_07, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-flat.glb"
+                }
+            ]
+        },
+        "dungeon-prop-rock-shard": {
+            "tier": "demand",
+            "label": "A shard of rock (Poly Haven rock_09, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rock-shard.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stone": {
+            "tier": "demand",
+            "label": "A stone (Poly Haven stone_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stone.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pebbles": {
+            "tier": "demand",
+            "label": "Pebbles (Poly Haven namaqualand_stones_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pebbles.glb"
+                }
+            ],
+            "pieces": {
+                "pebble-a": [
+                    "namaqualand_stones_01_a"
+                ],
+                "pebble-b": [
+                    "namaqualand_stones_01_b"
+                ],
+                "pebble-c": [
+                    "namaqualand_stones_01_c"
+                ],
+                "pebble-d": [
+                    "namaqualand_stones_01_d"
+                ],
+                "pebble-e": [
+                    "namaqualand_stones_01_e"
+                ]
+            }
+        },
+        "dungeon-prop-stones": {
+            "tier": "demand",
+            "label": "Stones (Poly Haven namaqualand_rocks_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stones.glb"
+                }
+            ],
+            "pieces": {
+                "stone-a": [
+                    "namaqualand_rocks_02_a"
+                ],
+                "stone-b": [
+                    "namaqualand_rocks_02_b"
+                ],
+                "stone-c": [
+                    "namaqualand_rocks_02_c"
+                ],
+                "stone-d": [
+                    "namaqualand_rocks_02_d"
+                ]
+            }
+        },
+        "dungeon-prop-log": {
+            "tier": "demand",
+            "label": "A dead log (Poly Haven dead_tree_trunk, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/log.glb"
+                }
+            ]
+        },
+        "dungeon-prop-log-big": {
+            "tier": "demand",
+            "label": "A fallen trunk (Poly Haven dead_tree_trunk_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/log-big.glb"
+                }
+            ]
+        },
+        "dungeon-prop-root-single": {
+            "tier": "demand",
+            "label": "An old root (Poly Haven single_root, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/root-single.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stump": {
+            "tier": "demand",
+            "label": "A stump (Poly Haven tree_stump_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stump.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stump-2": {
+            "tier": "demand",
+            "label": "A stump (Poly Haven tree_stump_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stump-2.glb"
+                }
+            ]
+        },
+        "dungeon-prop-branches": {
+            "tier": "demand",
+            "label": "Dry branches (Poly Haven dry_branches_medium_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/branches.glb"
+                }
+            ],
+            "pieces": {
+                "branches-a": [
+                    "dry_branches_medium_01_a"
+                ],
+                "branches-b": [
+                    "dry_branches_medium_01_b"
+                ],
+                "branches-c": [
+                    "dry_branches_medium_01_c"
+                ]
+            }
+        },
+        "dungeon-prop-bark": {
+            "tier": "demand",
+            "label": "Bark (Poly Haven bark_debris_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bark.glb"
+                }
+            ],
+            "pieces": {
+                "bark-a": [
+                    "bark_debris_01_a"
+                ],
+                "bark-b": [
+                    "bark_debris_01_b"
+                ],
+                "bark-c": [
+                    "bark_debris_01_c"
+                ],
+                "bark-d": [
+                    "bark_debris_01_d"
+                ]
+            }
+        },
+        "dungeon-prop-skull": {
+            "tier": "demand",
+            "label": "A skull (CDmir on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bones": {
+            "tier": "demand",
+            "label": "Skulls and bones (Paul_Wortmann on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bones.glb"
+                }
+            ],
+            "pieces": {
+                "skull-worn": [
+                    "skull-worn"
+                ],
+                "skull-side": [
+                    "skull-side"
+                ],
+                "skull-crossbones": [
+                    "skull-crossbones"
+                ],
+                "bone-heap": [
+                    "bone-heap"
+                ],
+                "skull-pile": [
+                    "skull-pile"
+                ],
+                "bone": [
+                    "bone"
+                ]
+            }
+        },
+        "dungeon-prop-rat": {
+            "tier": "demand",
+            "label": "A rat (Poly Haven street_rat, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/rat.glb"
+                }
+            ]
+        },
+        "dungeon-prop-cart": {
+            "tier": "demand",
+            "label": "A handcart (\"Wooden Cart\" by filip.hans.nyberg on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/cart.glb"
+                }
+            ]
+        },
+        "dungeon-prop-wheelbarrow": {
+            "tier": "demand",
+            "label": "A wheelbarrow (\"Mining cart medieval\" by tijerin_art on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/wheelbarrow.glb"
+                }
+            ]
+        },
+        "dungeon-prop-cauldron": {
+            "tier": "demand",
+            "label": "A bronze cauldron (the Hunt Museum's Ballyscullion Bronze Cauldron, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/cauldron.glb"
+                }
+            ]
+        },
+        "dungeon-prop-chest-old": {
+            "tier": "demand",
+            "label": "An old chest (\"Old wooden chest\" by Tim0 on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/chest-old.glb"
+                }
+            ]
+        },
+        "dungeon-prop-weapon-rack": {
+            "tier": "demand",
+            "label": "A weapon rack (\"Medieval weapon rack\" by JosueBorghi on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/weapon-rack.glb"
+                }
+            ]
+        },
+        "dungeon-prop-sword": {
+            "tier": "demand",
+            "label": "A sword (\"Sæbø / Thurmuth sword\" by JohnyNawalony on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sword.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pelt": {
+            "tier": "demand",
+            "label": "A sheepskin (the Hunt Museum's Sheep Skin, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pelt.glb"
+                }
+            ]
+        },
+        "dungeon-prop-sarcophagus-stone": {
+            "tier": "demand",
+            "label": "A stone sarcophagus (Minneapolis Institute of Art's Sarcophagus of Prince Yuan Mi, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sarcophagus-stone.glb"
+                }
+            ]
+        },
+        "dungeon-prop-sarcophagus-painted": {
+            "tier": "demand",
+            "label": "A painted coffin (\"Sarcophagus of Hunefer\" by The Fitzwilliam Museum on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sarcophagus-painted.glb"
+                }
+            ]
+        },
+        "dungeon-prop-guardian": {
+            "tier": "demand",
+            "label": "A winged guardian (the Smithsonian's Kneeling Winged Monster, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/guardian.glb"
+                }
+            ]
+        },
+        "dungeon-prop-urn-face": {
+            "tier": "demand",
+            "label": "An urn (the Archaeological Museum in Kraków's Face urn (Virtual Małopolska), CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/urn-face.glb"
+                }
+            ]
+        },
+        "dungeon-prop-urn-carved": {
+            "tier": "demand",
+            "label": "A carved urn (\"Urn (cinerarium)\" by The Fitzwilliam Museum on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/urn-carved.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bronze-vessel": {
+            "tier": "demand",
+            "label": "A bronze vessel (the Smithsonian's Square lidded ritual wine container (fangyi), CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bronze-vessel.glb"
+                }
+            ]
+        },
+        "dungeon-prop-basin": {
+            "tier": "demand",
+            "label": "A clay basin (\"Etruscan brazier\" by GlobalDigitalHeritage on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/basin.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mushrooms": {
+            "tier": "demand",
+            "label": "Mushrooms (\"Leponogi Goban Boletus calopus\" by Prirodoslovni_muzej_Slovenije on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mushrooms.glb"
+                }
+            ]
+        },
+        "dungeon-prop-fungus": {
+            "tier": "demand",
+            "label": "Bracket fungus on a branch (\"Some kind of Fungus\" by nebulousflynn on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/fungus.glb"
+                }
+            ]
+        },
+        "dungeon-prop-wolf-skull": {
+            "tier": "demand",
+            "label": "A wolf's skull (the Virtual Museums of Małopolska's wolf skull, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/wolf-skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bear-skull": {
+            "tier": "demand",
+            "label": "A cave bear's skull (\"Vertebrate: Ursus spelaeus (PRI 50009)\" by Digital Atlas of Ancient Life on Sketchfab, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bear-skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-cow-skull": {
+            "tier": "demand",
+            "label": "A cow's skull (\"Cow Skull\" by IsraelK on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/cow-skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-stag-skull": {
+            "tier": "demand",
+            "label": "A stag's skull (\"Deer Skull - Photoscan\" by Dmitry Schnein on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/stag-skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-sheep-skull": {
+            "tier": "demand",
+            "label": "A ram's skull (\"sheep skull 3D scan\" by Model Thomas (daaanin) on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sheep-skull.glb"
+                }
+            ]
+        },
+        "dungeon-prop-ribcage": {
+            "tier": "demand",
+            "label": "A ribcage (\"Rib Cage_Human Skeleton\" (3DPX-016836) by My Segmenter on NIH 3D, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/ribcage.glb"
+                }
+            ]
+        },
+        "dungeon-prop-pelvis": {
+            "tier": "demand",
+            "label": "A pelvis (the Human Reference Atlas's male pelvis (v1.3), CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/pelvis.glb"
+                }
+            ]
         }
     }
 }

@@ -14,7 +14,7 @@ import { WAY_IN } from "./layouts.js";
 import { pickStable } from "./seeds.js";
 
 /** Characters a level's plan uses beyond floor and rock, that block walking (interiors.js PLAN_KEY). */
-export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m"]);
+export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J"]);
 
 /**
  * How far (rings of squares) no one waits from where anyone comes onto a level: as the places
@@ -148,7 +148,8 @@ function chooseFoe(seed, slot, list, tier, slack) {
 
 /**
  * Fill a dug level (layouts.js's `dug`): { chars, reserved, entry, down, packs, chests, lights,
- * rooms, links, path, goal, arena, hoard } (see buildDungeon). `plan`: { index, levels (how many),
+ * looks (each room's look's id, by its id), rooms, links, path, goal, arena, hoard } (see
+ * buildDungeon). `plan`: { index, levels (how many),
  * theme, tier (the level's), boss (on the bottom level: { tier }), minis (how many here), seed,
  * random }.
  */
@@ -411,15 +412,18 @@ export function fillLevel(dug, rooms, links, plan) {
     // --- Dressing: each room as its theme has that kind of room; torches on its walls ---
 
     const lights = [];
+    // (Which of its kind's looks each room has: its art's, world/interiors3d.js, by it)
+    const looks = {};
 
     for (const one of rooms) {
         const kind = dug.kinds[one.id];
-        const looks = theme.rooms[kind] ?? theme.rooms.any ?? [];
-        const look = pickStable(seed, slot("room", one.id), looks);
+        const look = pickStable(seed, slot("room", one.id), theme.rooms[kind] ?? theme.rooms.any ?? []);
 
         if (!look) {
             continue;
         }
+
+        looks[one.id] = look.id;
 
         for (const [n, prop] of (look.props ?? []).entries()) {
             dress(level, one, prop, { random, putProp, fromDoors, count: random.int(...prop.count), axis: Math.floor(level.width / 2), tag: n });
@@ -440,7 +444,7 @@ export function fillLevel(dug, rooms, links, plan) {
         }
     }
 
-    return { level, entry, down, packs, chests, lights, path, goal, hoard };
+    return { level, entry, down, packs, chests, lights, looks, path, goal, hoard };
 }
 
 /**
