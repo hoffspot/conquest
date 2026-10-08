@@ -16,10 +16,11 @@
 // `triangles`, by meshoptimizer's simplifier, keeping its outline, its seams and where its
 // pictures lie on it: SIMPLER), and the whole saved as one GLB, each of its materials' colour
 // picture and normal map in it, how rough and how metal it is kept as a number (its picture's
-// average). Some models are sets (three candleholders, a heap of rocks, skulls and bones): each
-// thing in a set is a prop of its own (`pieces`: its nodes), all of them in one file, sharing its
-// pictures. Each file is listed in client/models/assets.json's catalog, with its pieces and whose
-// it is, downloaded only once a dungeon's wanted (then: npm run build:manifest).
+// average). Bones (`bone`), whoever scanned or painted them, are all made one colour: BONE. Some
+// models are sets (three candleholders, a heap of rocks, skulls and bones): each thing in a set is
+// a prop of its own (`pieces`: its nodes), all of them in one file, sharing its pictures. Each file
+// is listed in client/models/assets.json's catalog, with its pieces and whose it is, downloaded
+// only once a dungeon's wanted (then: npm run build:manifest).
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Document, NodeIO, getBounds } from "@gltf-transform/core";
@@ -155,7 +156,7 @@ export const PROPS = {
     branches: { id: "dry_branches_medium_01", of: "dry branches", pixels: 256, triangles: 1000, pieces: Object.fromEntries(["a", "b", "c"].map((l) => [`branches-${l}`, [`dry_branches_medium_01_${l}`]])) },
     bark: { id: "bark_debris_01", of: "bark", pixels: 128, triangles: 400, normals: false, pieces: Object.fromEntries(["a", "b", "c", "d"].map((l) => [`bark-${l}`, [`bark_debris_01_${l}`]])) },
     // Bones (from OpenGameArt: CDmir's skull, and Paul_Wortmann's heaps of it and Ouren's bone)
-    skull: { from: { mesh: SKULL("skull-obj/skull-Low4K.obj"), colour: SKULL("skull-obj/Skull-Low.png"), normal: SKULL("skull-obj/Skull-Low-normal.png"), occlusion: SKULL("skull-obj/Skull-AO.png") }, by: "CDmir on OpenGameArt, CC0", of: "a skull", scale: 0.075, rough: 0.7, saturation: 0.45, pixels: 256, triangles: 1500 },
+    skull: { from: { mesh: SKULL("skull-obj/skull-Low4K.obj"), colour: SKULL("skull-obj/Skull-Low.png"), normal: SKULL("skull-obj/Skull-Low-normal.png"), occlusion: SKULL("skull-obj/Skull-AO.png") }, by: "CDmir on OpenGameArt, CC0", of: "a skull", scale: 0.075, rough: 0.7, saturation: 0.45, bone: true, pixels: 256, triangles: 1500 },
     bones: {
         from: {
             meshes: { "skull-worn": DEBRIS("export_obj/skull_1_001.obj"), "skull-side": DEBRIS("export_obj/skull_1_002.obj"), "skull-crossbones": DEBRIS("export_obj/bones_1_001.obj"), "bone-heap": DEBRIS("export_obj/bones_1_002.obj"), "skull-pile": DEBRIS("export_obj/bones_1_003.obj"), bone: { ...DEBRIS("export_obj/bones_1_004.obj"), within: [0.47, 0.35, 0.68, 0.65] } },
@@ -166,6 +167,7 @@ export const PROPS = {
         of: "skulls and bones",
         scale: 0.26,
         rough: 0.7,
+        bone: true,
         pixels: 256,
         triangles: 1200,
         pieces: each("skull-worn", "skull-side", "skull-crossbones", "bone-heap", "skull-pile", "bone"),
@@ -189,15 +191,15 @@ export const PROPS = {
     basin: { from: zenodo(21490838, "7d5b55c2c5204759b22e979327662421_normalized-0.100.glb"), by: '"Etruscan brazier" by GlobalDigitalHeritage on Sketchfab, CC BY 4.0', of: "a clay basin", size: 1, pixels: 256, triangles: 3000 },
     mushrooms: { from: zenodo(10229058, "f6adebbb4ed24f3591fa5b4dac4af4eb.glb"), by: '"Leponogi Goban Boletus calopus" by Prirodoslovni_muzej_Slovenije on Sketchfab, CC BY 4.0', of: "mushrooms", size: 0.2, pixels: 256, triangles: 1500 },
     fungus: { from: zenodo(21353381, "0715b186cb2642c38ca17a97aa73c8b0_normalized-0.100.glb"), by: '"Some kind of Fungus" by nebulousflynn on Sketchfab, CC BY 4.0', of: "bracket fungus on a branch", size: 0.35, pixels: 256, triangles: 1500 },
-    // Beasts' skulls, and a body's bones (a CT scan's and an anatomy atlas's, without pictures: bone
+    // Beasts' skulls, and a body's bones (a CT scan's and an anatomy atlas's, without pictures: BONE
     // coloured)
-    "wolf-skull": { from: zenodo(21492563, "f9430188e21f4e40a46d9e97875d6b2a_normalized_optimized-0.100.glb"), by: "the Virtual Museums of Małopolska's wolf skull, CC0", of: "a wolf's skull", size: 0.25, pixels: 256, triangles: 2500 },
-    "bear-skull": { from: objaverse("000-091/3fb00c98c70845a9bb2d989d0656a8ab"), by: '"Vertebrate: Ursus spelaeus (PRI 50009)" by Digital Atlas of Ancient Life on Sketchfab, CC0', of: "a cave bear's skull", size: 0.45, pixels: 256, triangles: 2500 },
-    "cow-skull": { from: objaverse("000-073/4de92a49cb8b4ffaacb515c64a5fbb37"), by: '"Cow Skull" by IsraelK on Sketchfab, CC BY 4.0', of: "a cow's skull", size: 0.6, pixels: 256, triangles: 2500 },
-    "stag-skull": { from: objaverse("000-061/ebd6e5b589cf41929f4748cdd27c5129"), by: '"Deer Skull - Photoscan" by Dmitry Schnein on Sketchfab, CC BY 4.0', of: "a stag's skull", size: 0.7, pixels: 256, triangles: 3000, saturation: 0.35 },
-    "sheep-skull": { from: objaverse("000-116/2803d96915c4418b83618c17f45d50a6"), by: '"sheep skull 3D scan" by Model Thomas (daaanin) on Sketchfab, CC BY 4.0', of: "a ram's skull", size: 0.3, pixels: 256, triangles: 2500 },
-    ribcage: { from: { glb: { url: "https://3d.nih.gov/api/download?submissionId=22678&fileIds=498606" }, plain: true }, by: '"Rib Cage_Human Skeleton" (3DPX-016836) by My Segmenter on NIH 3D, CC BY 4.0', of: "a ribcage", size: 0.36, tint: [0.78, 0.72, 0.6], rough: 0.75, pixels: 256, triangles: 4000 },
-    pelvis: { from: { glb: { url: "https://cdn.humanatlas.io/digital-objects/ref-organ/pelvis-male/v1.3/assets/3d-vh-m-pelvis.glb" }, plain: true }, by: "the Human Reference Atlas's male pelvis (v1.3), CC BY 4.0", of: "a pelvis", size: 0.3, tint: [0.78, 0.72, 0.6], rough: 0.75, pixels: 256, triangles: 2500 },
+    "wolf-skull": { from: zenodo(21492563, "f9430188e21f4e40a46d9e97875d6b2a_normalized_optimized-0.100.glb"), by: "the Virtual Museums of Małopolska's wolf skull, CC0", of: "a wolf's skull", size: 0.25, bone: true, pixels: 256, triangles: 2500 },
+    "bear-skull": { from: objaverse("000-091/3fb00c98c70845a9bb2d989d0656a8ab"), by: '"Vertebrate: Ursus spelaeus (PRI 50009)" by Digital Atlas of Ancient Life on Sketchfab, CC0', of: "a cave bear's skull", size: 0.45, bone: true, pixels: 256, triangles: 2500 },
+    "cow-skull": { from: objaverse("000-073/4de92a49cb8b4ffaacb515c64a5fbb37"), by: '"Cow Skull" by IsraelK on Sketchfab, CC BY 4.0', of: "a cow's skull", size: 0.6, bone: true, pixels: 256, triangles: 2500 },
+    "stag-skull": { from: objaverse("000-061/ebd6e5b589cf41929f4748cdd27c5129"), by: '"Deer Skull - Photoscan" by Dmitry Schnein on Sketchfab, CC BY 4.0', of: "a stag's skull", size: 0.7, pixels: 256, triangles: 3000, saturation: 0.35, bone: true },
+    "sheep-skull": { from: objaverse("000-116/2803d96915c4418b83618c17f45d50a6"), by: '"sheep skull 3D scan" by Model Thomas (daaanin) on Sketchfab, CC BY 4.0', of: "a ram's skull", size: 0.3, bone: 0.25, pixels: 256, triangles: 2500 },
+    ribcage: { from: { glb: { url: "https://3d.nih.gov/api/download?submissionId=22678&fileIds=498606" }, plain: true }, by: '"Rib Cage_Human Skeleton" (3DPX-016836) by My Segmenter on NIH 3D, CC BY 4.0', of: "a ribcage", size: 0.36, bone: true, rough: 0.75, pixels: 256, triangles: 4000 },
+    pelvis: { from: { glb: { url: "https://cdn.humanatlas.io/digital-objects/ref-organ/pelvis-male/v1.3/assets/3d-vh-m-pelvis.glb" }, plain: true }, by: "the Human Reference Atlas's male pelvis (v1.3), CC BY 4.0", of: "a pelvis", size: 0.3, bone: true, rough: 0.75, pixels: 256, triangles: 2500 },
     // And what lives in the dark
     rat: { id: "street_rat", of: "a rat", pixels: 256, triangles: 1200 },
 };
@@ -249,6 +251,54 @@ function shrunk({ width, height, data }, size, kind, arm = null, saturation = 1)
     }
 
     return { width: size, height: size, data: out };
+}
+
+// The colour every bone is made (sRGB: PROPS' `bone`), a dry, aged bone's, so that heaped skulls,
+// beasts' skulls and a body's bones lie together as one, whoever scanned or painted them
+const BONE = [206, 192, 166];
+
+// How far each of a bone's pixels is drawn to BONE's colour at its own lightness (0: kept its own;
+// 1: all BONE's), so a scan's stains and tints are as dark as they were but of bone's hue
+const BONE_HUE = 0.5;
+
+// A bone's colour picture (sRGB, `picture`: changed) made BONE's colour: each channel times what
+// brings the lighter part of it (`share`: the lighter half, or less where horn's more of it), as its
+// meshes' corners see it (the bone, not horn, teeth or sockets), its material's colour factor taken
+// in, to BONE, then each pixel drawn BONE_HUE of the way to BONE's colour as light as it is; its
+// light and shade, and its horn, darker, kept. Its material's colour factor's then let go of.
+function boned(picture, material, share) {
+    const factor = material.getBaseColorFactor();
+    const seen = [];
+
+    for (const primitive of material.listParents().filter((parent) => parent.propertyType === "Primitive")) {
+        const uv = primitive.getAttribute("TEXCOORD_0");
+
+        for (let k = 0; uv && k < uv.getCount(); k++) {
+            const [x, y] = uv.getElement(k, []).map((t, axis) => Math.min((axis ? picture.height : picture.width) - 1, Math.max(0, Math.floor((t - Math.floor(t)) * (axis ? picture.height : picture.width)))));
+            const p = (y * picture.width + x) * 4;
+
+            seen.push([0, 1, 2].map((c) => linear(picture.data[p + c] / 255) * factor[c]));
+        }
+    }
+
+    const shade = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const lighter = seen.sort((a, b) => shade(b) - shade(a)).slice(0, Math.ceil(seen.length * share));
+    const gain = [0, 1, 2].map((c) => (factor[c] * linear(BONE[c] / 255) * lighter.length) / Math.max(1e-4, lighter.reduce((sum, each) => sum + each[c], 0)));
+
+    const bone = BONE.map((c) => linear(c / 255));
+
+    for (let p = 0; p < picture.data.length; p += 4) {
+        const own = [0, 1, 2].map((c) => linear(picture.data[p + c] / 255) * gain[c]);
+        const light = shade(own) / shade(bone);
+
+        for (let c = 0; c < 3; c++) {
+            picture.data[p + c] = Math.round(encoded(Math.min(1, own[c] + (bone[c] * light - own[c]) * BONE_HUE)) * 255);
+        }
+    }
+
+    material.setBaseColorFactor([1, 1, 1, factor[3]]);
+
+    return picture;
 }
 
 // How rough and how metal a material is on average, from its ARM picture (green and blue: 0 to 1)
@@ -413,13 +463,18 @@ async function fromGlb(source, { scale, size, up }) {
 // one node by the model's name; or `meshes`, a node by each one's name), made `scale` times as big
 // and stood up (`up`: "z" if it's made with z up, not y), and its pictures (`colour`, `normal`, a
 // JPEG or PNG each; and `occlusion`, darkening its colour) on one material as rough as `rough`
-// says, of the colour `tint` says (a scan's that has no picture). With the picture standing in for
-// its ARM (Poly Haven's: occlusion, roughness, metal), if it has one.
-async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough = 0.8, tint = [1, 1, 1] }) {
+// says, of the colour `tint` says (a scan's that has no picture: BONE's, if it's a `bone`). With the
+// picture standing in for its ARM (Poly Haven's: occlusion, roughness, metal), if it has one.
+async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough = 0.8, bone = false, tint = bone ? BONE.map((c) => linear(c / 255)) : [1, 1, 1] }) {
     if (from.glb) {
         const document = await fromGlb(from.glb, { scale, size, up });
 
-        // (A scan without pictures, of a colour of its own: `tint`, and how rough it is)
+        // (A scan without pictures, of a colour of its own: `tint`, and how rough it is; its parts
+        // without a material given one, not left white)
+        for (const primitive of from.plain ? document.getRoot().listMeshes().flatMap((mesh) => mesh.listPrimitives()) : []) {
+            primitive.getMaterial() ?? primitive.setMaterial(document.createMaterial("surface"));
+        }
+
         for (const material of from.plain ? document.getRoot().listMaterials() : []) {
             material.setBaseColorFactor([...tint, 1]).setRoughnessFactor(rough).setMetallicFactor(0);
         }
@@ -607,9 +662,9 @@ export async function make(name, prop, { out = OUT } = {}) {
         }
 
         if (colour && !done.has(colour)) {
-            const c = decode(colour);
+            const picture = shrunk(decode(colour), prop.pixels, "colour", a, prop.saturation);
 
-            colour.setImage(new Uint8Array(jpeg.encode(shrunk(c, prop.pixels, "colour", a, prop.saturation), 82).data)).setMimeType("image/jpeg").setURI(`${name}-${material.getName()}-colour.jpg`);
+            colour.setImage(new Uint8Array(jpeg.encode(prop.bone ? boned(picture, material, prop.bone === true ? 0.5 : prop.bone) : picture, 82).data)).setMimeType("image/jpeg").setURI(`${name}-${material.getName()}-colour.jpg`);
             done.add(colour);
         }
 

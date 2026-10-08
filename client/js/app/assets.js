@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "dc3fd0b757",
+    release: "c17339a7a5",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1265,8 +1265,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/skull.glb",
-                    "hash": "4586f5bc11",
-                    "bytes": 86052
+                    "hash": "ebe1b076ae",
+                    "bytes": 84996
                 }
             ]
         },
@@ -1276,8 +1276,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bones.glb",
-                    "hash": "959aff1153",
-                    "bytes": 186696
+                    "hash": "3cd14b1945",
+                    "bytes": 188456
                 }
             ],
             "pieces": {
@@ -1494,8 +1494,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/wolf-skull.glb",
-                    "hash": "b4ba2dc1b0",
-                    "bytes": 301768
+                    "hash": "550869e33b",
+                    "bytes": 306872
                 }
             ]
         },
@@ -1505,8 +1505,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bear-skull.glb",
-                    "hash": "d1a4616306",
-                    "bytes": 152620
+                    "hash": "7e1585c5e2",
+                    "bytes": 158308
                 }
             ]
         },
@@ -1516,8 +1516,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cow-skull.glb",
-                    "hash": "364ddc4965",
-                    "bytes": 150020
+                    "hash": "b8f739da6f",
+                    "bytes": 150428
                 }
             ]
         },
@@ -1527,8 +1527,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stag-skull.glb",
-                    "hash": "de15fd13db",
-                    "bytes": 150468
+                    "hash": "e4694e875a",
+                    "bytes": 153068
                 }
             ]
         },
@@ -1538,8 +1538,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sheep-skull.glb",
-                    "hash": "c316f54c34",
-                    "bytes": 272412
+                    "hash": "0ce545c7ba",
+                    "bytes": 277396
                 }
             ]
         },
@@ -1549,8 +1549,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/ribcage.glb",
-                    "hash": "fcf97bb837",
-                    "bytes": 49292
+                    "hash": "74ccc89661",
+                    "bytes": 49484
                 }
             ]
         },
@@ -1560,8 +1560,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pelvis.glb",
-                    "hash": "63f7862949",
-                    "bytes": 64964
+                    "hash": "98edeec2e7",
+                    "bytes": 65008
                 }
             ]
         }

@@ -236,30 +236,32 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
   crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
   altars, shrines and braziers; gold heaped either side of the hoard.
-- **Furnished with scanned and modelled things** (`dungeons3d.js` `furnish`, made by
-  `npm run build:props`, 150 of them in 116 files): mostly CC0, from Poly Haven
-  (furniture, barrels, crates, tableware, food, tools and arms, statues, rocks, logs, a rat),
-  OpenGameArt (a skull; skulls and bones heaped, crossed, scattered) and museums' scans mirrored
-  on Zenodo and Objaverse (a bronze cauldron, a sheepskin, a stone sarcophagus, a winged guardian,
-  urns, a ritual bronze, a wolf's and a cave bear's skulls); some CC BY 4.0 from Sketchfab's makers
-  through the same mirrors (a handcart, a wheelbarrow, an old chest, a weapon rack, a sword, a
-  painted coffin, a carved urn, a clay basin, mushrooms, bracket fungus, a cow's, a stag's and a
-  ram's skulls), and a ribcage and a pelvis from anatomy scans (NIH 3D, the Human Reference
-  Atlas: CC BY 4.0, without pictures, coloured as bone), each maker named in the catalog and the
-  README. A model that's a set (three candleholders, a heap of rocks, skulls and bones) is a prop
-  for each thing in it, one file between them. The level's built with them placed (`dungeon`'s
-  `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn`, `pitch` and
-  `roll`, `on` what it stands on, its `tint`, whether it casts a `shadow`), and they're added once
-  their models have come: each model's copies in each of the rock's 16 m tiles drawn at once
-  (instanced, one for each of its materials), so what's out of sight or a light's reach isn't
-  drawn; small things cast no shadow. In the busiest room seen (an outlaws' chief's hall, from
-  inside) that's about 390 draw calls (270 before, 250 of them the rock, lights and the rest);
-  most rooms are 20 to 60 more than they were, 100 to 190 in all. Bigger squares (32 m) drew no
-  fewer, and a lamp's shadow then drew a quarter to four fifths more triangles, every copy in
-  the square, near or not.
-  They're in the catalog, downloaded only once a dungeon's wanted (each dungeon only its
-  theme's: about 4 to 9 MB), fetched as soon as a level's begun; one that can't be had is left
-  out, and what's on it.
+- **Furnished with scanned and modelled things** (`dungeons3d.js` `furnish`, made by `npm run
+  build:props`, 150 of them in 116 files): mostly CC0, from Poly Haven (furniture, barrels, crates,
+  tableware, food, tools and arms, statues, rocks, logs, a rat), OpenGameArt (a skull; skulls and
+  bones heaped, crossed, scattered) and museums' scans mirrored on Zenodo and Objaverse (a bronze
+  cauldron, a sheepskin, a stone sarcophagus, a winged guardian, urns, a ritual bronze, a wolf's and
+  a cave bear's skulls); some CC BY 4.0 from Sketchfab's makers through the same mirrors (a
+  handcart, a wheelbarrow, an old chest, a weapon rack, a sword, a painted coffin, a carved urn, a
+  clay basin, mushrooms, bracket fungus, a cow's, a stag's and a ram's skulls), and a ribcage and a
+  pelvis from anatomy scans (NIH 3D, the Human Reference Atlas: CC BY 4.0, without pictures,
+  coloured as bone), each maker named in the catalog and the README. Every bone among them, whoever
+  scanned or painted it, is made one aged bone's colour (`build-props.js` `BONE`, sRGB 206, 192,
+  166): its picture's lighter half (a quarter of the ram's, half of it horn) brought to that colour
+  and every pixel drawn halfway to bone's hue as light as it is, so its light and shade, stains and
+  horn stay darker. A model that's a set (three candleholders, a heap of rocks, skulls and bones) is
+  a prop for each thing in it, one file between them. The level's built with them placed
+  (`dungeon`'s `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn`, `pitch`
+  and `roll`, `on` what it stands on, its `tint`, whether it casts a `shadow`), and they're added
+  once their models have come: each model's copies in each of the rock's 16 m tiles drawn at once
+  (instanced, one for each of its materials), so what's out of sight or a light's reach isn't drawn;
+  small things cast no shadow. In the busiest room seen (an outlaws' chief's hall, from inside)
+  that's about 390 draw calls (270 before, 250 of them the rock, lights and the rest); most rooms
+  are 20 to 60 more than they were, 100 to 190 in all. Bigger squares (32 m) drew no fewer, and a
+  lamp's shadow then drew a quarter to four fifths more triangles, every copy in the square, near or
+  not. They're in the catalog, downloaded only once a dungeon's wanted (each dungeon only its
+  theme's: about 4 to 9 MB), fetched as soon as a level's begun; one that can't be had is left out,
+  and what's on it.
 - **Dressed by its theme's rooms** (`dungeondressing.js`): each piece of the plan is dressed as
   its room's look has it, the same way every time (by the numbers of its own square):
   - what's left against a wall (`d`): a cave's mossy rocks, boulders, logs, roots, branches,
@@ -339,11 +341,12 @@ it's met in the wilds). New art goes in by the theme's `style`: a look in `inter
 added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`). New
 furniture: a model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, or its own files:
 a GLB, or an OBJ or STL and its pictures, with whose it is and its licence; how big its pictures,
-how many triangles at most; a set's pieces), made with `npm run build:props` (then `npm run
-build:manifest`), and placed by `dungeondressing.js` (a kind of what's left against a wall, in a
-theme's `CLUTTER`) or in `dungeon` for a plan character. Only CC0 or CC BY (its maker named), and
-only what can be downloaded without an account. Its bosses' and mini-bosses' looks:
-an entry each in `beasts/champions.js` `REGALIA`, by its id (one not there looks as its rank has it).
+how many triangles at most; a set's pieces; `bone` for a bone, so it's BONE's colour), made with
+`npm run build:props` (then `npm run build:manifest`), and placed by `dungeondressing.js` (a kind
+of what's left against a wall, in a theme's `CLUTTER`) or in `dungeon` for a plan character. Only
+CC0 or CC BY (its maker named), and only what can be downloaded without an account. Its bosses'
+and mini-bosses' looks: an entry each in `beasts/champions.js` `REGALIA`, by its id (one not
+there looks as its rank has it).
 
 ## The creature lab (`creature-lab.html`, `js/lab/creature-lab.js`)
 
