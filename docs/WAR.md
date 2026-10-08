@@ -827,8 +827,8 @@ Each people has six works in its lands, where what it builds with comes from
 - **Where:** in their lands, but not on their very edge, on gentle, dry ground. They keep clear:
   of settlements by 5 cells, of other sites by 8, of wild camps by 4; two of a people's of one
   kind are 24 cells apart. Each would rather be by a road. A trail runs to each from its road
-  (`trails.js`), which it faces; no other trail branches from it. Each is named in its people's
-  tongue.
+  (`trails.js`), which it faces, joining it no nearer a town's ground than 48 m (clear of its
+  fingerpost); no other trail branches from it. Each is named in its people's tongue.
 - **Laid out last,** after the graveyards and the dungeons' ways in, from random numbers of their
   own, so nothing else in the world moves for them. How each looks: GAME.md, *Each people's works*.
 

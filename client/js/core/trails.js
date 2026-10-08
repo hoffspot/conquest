@@ -28,9 +28,11 @@ import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
  * a road it may be (metres), how much room a trail has round the straight way to it to find its
  * own (metres), its half-width (metres), how far before its site's front it ends (metres), and how
  * far clear of the sites no people keeps it goes round them (metres, past their plots). It climbs
- * no steeper than a path's GRADE, but in stone steps up mountainsides (ground.js STAIRS).
+ * no steeper than a path's GRADE, but in stone steps up mountainsides (ground.js STAIRS). A works'
+ * trail joins its road no nearer a town's ground than `byTown` (metres, past where the town's
+ * fingerpost may stand by its road out: signposts.js SIGNPOST).
  */
-export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2 });
+export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2, byTown: 48 });
 
 /** The sites a trail goes up to (in the hills); and each people's works, wherever they are (their convoys' way to the road). */
 export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", "dragon's lair"]);
@@ -55,9 +57,10 @@ export class Trails {
         // The sites up in the hills, nearest a road first; each reached from its road, or from a
         // site reached already if that's nearer (so trails branch from each other, rather than
         // two running side by side from one road to sites near each other)
+        const byTown = (x, y) => keepOut.every(([x0, y0, x1, y1]) => x < x0 - TRAILS.byTown || y < y0 - TRAILS.byTown || x >= x1 + TRAILS.byTown || y >= y1 + TRAILS.byTown);
         const sites = plan.sites
             .filter(({ kind, cell: [cx, cy] }) => (TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height) || WORKED.includes(kind))
-            .map((site) => ({ site, road: nearestOn(lines, site.at) }))
+            .map((site) => ({ site, road: nearestOn(lines, site.at, WORKED.includes(site.kind) ? byTown : null) }))
             .filter(({ road }) => road)
             .map((each) => ({ ...each, gap: hypot(each.road[0] - each.site.at[0], each.road[1] - each.site.at[1]) }))
             .sort((a, b) => a.gap - b.gap || (a.site.id < b.site.id ? -1 : 1));
@@ -205,10 +208,10 @@ function inRoom([cx, cy, facing, a, b], x, y) {
     return Math.abs(dx * c - dy * s) < a && Math.abs(dx * s + dy * c) < b;
 }
 
-// The nearest point to `at` on any of the lines ([x, y], metres), or null if there are none
-// (compared by the square of the distance: no segment further off than the nearest yet, by its
-// bounds, is looked at closer)
-function nearestOn(lines, [px, py]) {
+// The nearest point to `at` on any of the lines ([x, y], metres), or null if there are none; of
+// those `keep(x, y)` will have, if given (compared by the square of the distance: no segment
+// further off than the nearest yet, by its bounds, is looked at closer)
+function nearestOn(lines, [px, py], keep = null) {
     let [best, gap] = [null, Infinity];
 
     for (const { planned } of lines) {
@@ -221,6 +224,23 @@ function nearestOn(lines, [px, py]) {
             }
 
             const [dx, dy] = [bx - ax, by - ay];
+
+            // (Only where `keep(x, y)` will have it: the nearest such point along it, 2 m at a time)
+            if (keep) {
+                const steps = Math.max(1, Math.ceil(hypot(dx, dy) / 2));
+
+                for (let step = 0; step <= steps; step++) {
+                    const [x, y] = [ax + (dx * step) / steps, ay + (dy * step) / steps];
+                    const off = (px - x) * (px - x) + (py - y) * (py - y);
+
+                    if (off < gap && keep(x, y)) {
+                        [best, gap] = [[x, y], off];
+                    }
+                }
+
+                continue;
+            }
+
             const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
             const [x, y] = [ax + dx * t, ay + dy * t];
             const off = (px - x) * (px - x) + (py - y) * (py - y);
