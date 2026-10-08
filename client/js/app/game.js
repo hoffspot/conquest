@@ -4729,7 +4729,8 @@ export class Game {
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
-        // (A shop's wares by kind, the commoner made first; what it won't buy, said)
+        // (A shop's wares by kind, the commoner made first; what it won't buy, said; what one is,
+        // worked out as it's looked at: a piece of gear's with what's rolled on it as it's bought)
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: wares(this.shopping.shop, this.shopping.people)
@@ -4740,11 +4741,16 @@ export class Game {
                     return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)] };
                 }),
             unwanted: this.shopping.shop === "guild" ? null : "Only the adventurers' guild buys tomes and the spoils of the wild.",
+            preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
         };
 
         const trade = this.#tradeNow();
         const other = trade && (trade.from === this.me ? trade.to : trade.from);
-        const offer = (side) => ({ gold: side?.gold ?? 0, items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item) })) });
+        // (What each offers, each thing with what it is: gear as if it were carried)
+        const offer = (side) => ({
+            gold: side?.gold ?? 0,
+            items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item), about: aboutOf(item), info: ITEMS[item.id]?.slot ? describe(item, progress, { label: itemLabel(item), haggle, outside: true }) : null })),
+        });
 
         this.pack.show({
             gold: progress.gold,
@@ -6564,7 +6570,11 @@ export class Game {
 
             const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey;
 
-            if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open)) {
+            if (event.key === "Escape" && this.pack?.open && this.pack.unpeek()) {
+                // (What was open in the pack to see what it is, put away first)
+                event.preventDefault();
+                event.stopPropagation();
+            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
