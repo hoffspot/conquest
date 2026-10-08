@@ -87,7 +87,11 @@ export class Trails {
             const ahead = cut ? Math.max(depth / 2 + TRAILS.front, laid.cut.y + 2 * cut + CUT_EASE - depth / 2) : depth / 2 + TRAILS.front;
             const to = [sx + sin(facing) * ahead, sy + cos(facing) * ahead];
 
-            reached.push(to);
+            // (No trail branches from a works': it's only its convoys' way to the road, and no
+            // other trail moves for it)
+            if (!WORKED.includes(site.kind)) {
+                reached.push(to);
+            }
             this.facings.set(site.id, facing);
 
             const box = [

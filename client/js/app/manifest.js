@@ -194,7 +194,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/terrain/waters.js", 36855],
             ["js/core/terrain/ways.js", 8625],
             ["js/core/townsfolk.js", 13057],
-            ["js/core/trails.js", 11872],
+            ["js/core/trails.js", 12074],
             ["js/core/variety.js", 1431],
             ["js/core/war/muster.js", 7708],
             ["js/core/war/news.js", 10892],
