@@ -38,6 +38,8 @@ import { gather, roomLit } from "./roomlight.js";
 import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { WATER_DETAIL } from "./water.js";
+import { cavern, SHELLS } from "./caverns.js";
+import { rockMaterial } from "./dungeons3d.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
@@ -3500,8 +3502,8 @@ function towerTop(map) {
 // (`walls`, `tall` metres high, a vault over them); what its heaps of fallen stuff are; and
 // whether its tunnels are shored up with timber (an outlaws' hideout's)
 const DUNGEON_LOOKS = Object.freeze({
-    caves: { floor: "road", rock: "rock-dark", low: 3.4, high: 5.2, rubble: "rock-dark" },
-    hideout: { floor: "road", rock: "rock", low: 2.9, high: 3.8, rubble: "rock", shored: true },
+    caves: { floor: "road", rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
+    hideout: { floor: "road", rock: "rock", shell: "dug", picture: "rock-cave", underfoot: "ground-dug", rubble: "rock", shored: true, tint: 0x8a7458, ground: 0x6e5440 },
     ancient: { floor: "stone", walls: "stone-old", tall: 4.2, rubble: "rubble-old" },
 });
 
@@ -3792,7 +3794,8 @@ function dungeon(map) {
     const solid = new Solid();
     const look = DUNGEON_LOOKS[map.look] ?? DUNGEON_LOOKS.caves;
     const stuff = look.walls ?? look.rock;
-    const roof = m(look.walls ? look.tall : look.high + 0.6);
+    const shell = look.shell ? SHELLS[look.shell] : null;
+    const roof = m(look.walls ? look.tall : shell.low);
     const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
     const lights = [];
     const flames = [];
@@ -3801,12 +3804,12 @@ function dungeon(map) {
         lights.push(light);
     };
 
-    floorAround(solid, map, at("stairs-down")[0], look.floor);
+    if (!shell) {
+        floorAround(solid, map, at("stairs-down")[0], look.floor);
+    }
 
     if (look.walls) {
         dressedWalls(solid, map, look);
-    } else {
-        crags(solid, map, look.rock, look);
     }
 
     if (map.marks.D) {
@@ -3914,7 +3917,50 @@ function dungeon(map) {
         }
     }
 
-    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M };
+    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell) };
+}
+
+// The rock round a dungeon's level as one surface (caverns.js), a step at a time: its walls and
+// roof, shaded darker where the rock closes in, drawn as the rest is lit (roomlight.js) but never
+// cut away (the camera's kept out of the rock instead: view.js); its roof kept clear over stairs
+// going up
+function* rockShell(map, look, shell) {
+    const rock = (x, y) => map.plan[y][x] === "#";
+    const ups = map.pieces.filter((piece) => piece.kind === "stairs-up");
+    const least = (x, z) => (ups.some((piece) => x > piece.x - 1 && x < piece.x + piece.w + 1 && z > piece.y - 1 && z < piece.y + piece.h + 1) ? FLIGHT.rise * FLIGHT.steps + 2.6 : 0);
+    const hole = map.pieces.find((piece) => piece.kind === "stairs-down") ?? null;
+    const made = yield* cavern(map.width, map.height, rock, shell, { seed: [...map.id].reduce((hash, c) => Math.imul(hash, 31) + c.charCodeAt(0), 7), least, hole });
+    const group = new THREE.Group();
+
+    // (Its points coloured as the theme has it, shaded as caverns.js has them)
+    const meshOf = ({ positions, indices, shade }, colour, picture, name) => {
+        const geometry = new THREE.BufferGeometry();
+        const tint = new THREE.Color(colour);
+        const colours = new Float32Array(shade.length * 3);
+
+        for (let k = 0; k < shade.length; k++) {
+            colours[k * 3] = tint.r * shade[k];
+            colours[k * 3 + 1] = tint.g * shade[k];
+            colours[k * 3 + 2] = tint.b * shade[k];
+        }
+
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        geometry.computeVertexNormals();
+
+        const mesh = new THREE.Mesh(geometry, rockMaterial(picture));
+
+        mesh.name = name;
+
+        return mesh;
+    };
+
+    group.add(meshOf(made, look.tint, look.picture, "rock"));
+    yield;
+    group.add(meshOf(made.floor, look.ground, look.underfoot, "floor"));
+
+    return group;
 }
 
 // (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
@@ -4221,6 +4267,10 @@ export function* buildingInterior(map) {
     const merged = joined(parts);
 
     object.add(merged);
+
+    if (built.shell) {
+        object.add(yield* built.shell);
+    }
 
     const animated = new THREE.Group();
 

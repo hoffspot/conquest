@@ -1,3 +1,40 @@
 {
-    "models": {}
+    "models": {
+        "dungeon-rock-cave": {
+            "tier": "demand",
+            "label": "A cave's rock (ambientCG Rock028, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/rock-cave-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/rock-cave-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-ground-cave": {
+            "tier": "demand",
+            "label": "A cave's floor (ambientCG Ground022, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-cave-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/ground-cave-normal.jpg"
+                }
+            ]
+        },
+        "dungeon-ground-dug": {
+            "tier": "demand",
+            "label": "An outlaws' hideout's floor (ambientCG Ground048, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-dug-colour.jpg"
+                },
+                {
+                    "path": "textures/dungeons/ground-dug-normal.jpg"
+                }
+            ]
+        }
+    }
 }

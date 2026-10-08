@@ -7,6 +7,55 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "485760bd94",
-    models: {},
+    release: "76cd057627",
+    models: {
+        "dungeon-rock-cave": {
+            "tier": "demand",
+            "label": "A cave's rock (ambientCG Rock028, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/rock-cave-colour.jpg",
+                    "hash": "704e439744",
+                    "bytes": 72422
+                },
+                {
+                    "path": "textures/dungeons/rock-cave-normal.jpg",
+                    "hash": "564bfb9401",
+                    "bytes": 129858
+                }
+            ]
+        },
+        "dungeon-ground-cave": {
+            "tier": "demand",
+            "label": "A cave's floor (ambientCG Ground022, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-cave-colour.jpg",
+                    "hash": "fbb993fa64",
+                    "bytes": 88553
+                },
+                {
+                    "path": "textures/dungeons/ground-cave-normal.jpg",
+                    "hash": "c2f5a75b14",
+                    "bytes": 142478
+                }
+            ]
+        },
+        "dungeon-ground-dug": {
+            "tier": "demand",
+            "label": "An outlaws' hideout's floor (ambientCG Ground048, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-dug-colour.jpg",
+                    "hash": "3894de7857",
+                    "bytes": 88256
+                },
+                {
+                    "path": "textures/dungeons/ground-dug-normal.jpg",
+                    "hash": "c81029e93d",
+                    "bytes": 106682
+                }
+            ]
+        }
+    },
 });
