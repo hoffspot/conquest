@@ -3582,10 +3582,10 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
-test("an enemy camp near the player is pitched, tents, fire, banner and sentries; its raiders come for the town's fields, and the player's told", async ({ page }) => {
+test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries; struck once the player's far", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
-    // An orc camp just outside the town, at war with the humans; the player by it
+    // An orc army's camp just outside the town, at war with the humans; the player by it
     await page.evaluate(() => {
         const { game } = window.pellagos;
         const war = game.host.war;
@@ -3598,7 +3598,7 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.stage = 3;
-        war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at, path: [at], leg: 0, target: home.id, home: war.realm("orc").capital, mission: null, about: null, since: 1000, sortie: null });
+        war.camps.push({ id: "camp-900", realm: "orc", at, guard: 6, built: 0, done: 0, toward: home.id, used: 1e6, skirmished: 1e6 });
         Object.assign(player, { square: [Math.floor(at[0] - 3), Math.floor(at[1] + 10)], to: null, path: [], hp: 5000, maxHp: 5000 });
         Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
         game.advance(0.1);
@@ -3608,18 +3608,18 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
     await playUntil(page, () => {
         const { game } = window.pellagos;
 
-        return (game.host.camps.get("force-900")?.ids ?? []).some((id) => game.avatars.has(id));
+        return (game.host.camps.get("camp-900")?.ids ?? []).some((id) => game.avatars.has(id));
     });
 
     const camp = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
-        const sentries = game.host.camps.get("force-900")?.ids ?? [];
+        const sentries = game.host.camps.get("camp-900")?.ids ?? [];
 
         return {
             drawn: game.camps.size,
-            tents: game.camps.camps.get("force-900")?.object.children.length ?? 0,
-            banner: game.banners.group.children.some(({ name }) => name === "banner:camp:force-900"),
+            tents: game.camps.camps.get("camp-900")?.object.children.length ?? 0,
+            banner: game.banners.group.children.some(({ name }) => name === "banner:camp:camp-900"),
             sentries: sentries.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id), hostile: game.battle.hostile(game.battle.actor(id), player) })),
         };
     });
@@ -3630,36 +3630,6 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
     expect(camp.sentries.length).toBe(6);
     expect(camp.sentries.every(({ name, hostile }) => name === "Orcish sentry" && hostile)).toBe(true);
     expect(camp.sentries.some(({ drawn }) => drawn)).toBe(true);
-
-    // A raid, sooner or later: the player told, and its raiders drawn (over a few seconds)
-    const sortied = await page.evaluate(() => {
-        const { game } = window.pellagos;
-
-        for (let turn = 0; turn < 30 && !game.host.sorties.size; turn++) {
-            game.advance(60, { render: false });
-        }
-
-        return game.host.sorties.has("force-900");
-    });
-
-    expect(sortied).toBe(true);
-    await expect(page.locator("#banner")).toContainText("Raiders of the Orcs are coming for");
-    await playUntil(page, () => {
-        const { game } = window.pellagos;
-
-        return (game.host.sorties.get("force-900")?.ids ?? []).some((id) => game.avatars.has(id));
-    });
-
-    const raid = await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const sortie = game.host.sorties.get("force-900");
-
-        return sortie && { kind: sortie.kind, raiders: sortie.ids.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id) })) };
-    });
-
-    expect(raid.kind).toBe("raid");
-    expect(raid.raiders.every(({ name }) => name === "Orcish raider")).toBe(true);
-    expect(raid.raiders.some(({ drawn }) => drawn)).toBe(true);
 
     // Far off: the camp struck, its tents down
     const struck = await page.evaluate(() => {
@@ -4118,14 +4088,14 @@ test("tapping someone walks the player up to talk: their name and what they are,
 
     expect(waved).toEqual({ ok: true, emoting: "wave" });
 
-    // News of a raid on the town, and a war declared far off; the barkeep tapped again
+    // News of skirmishers falling on the town, and a war declared far off; the barkeep tapped again
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const war = game.host.war;
         const home = war.town(game.world.start.id);
 
         game.stop();
-        war.log.push({ type: "raid", turn: war.turn, realm: "orc", town: home.id, owner: home.owner, killed: 2, lost: 1 });
+        war.log.push({ type: "skirmish", turn: war.turn, realm: "orc", camp: "camp-900", against: home.owner, target: home.id, killed: 2, lost: 1 });
         war.log.push({ type: "declared", turn: war.turn, by: "orc", on: "elf" });
 
         const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
@@ -4137,7 +4107,7 @@ test("tapping someone walks the player up to talk: their name and what they are,
 
     // The news, or what's said of a ruler: and asked again, something else, until the news is told
     const line = talk.locator(".talk-line");
-    const warNews = /Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/;
+    const warNews = /Skirmishers out of the Orcs' camp fell on .+, and brought 2 of the Humans down|The Orcs have declared war on the Elves/;
 
     await talk.getByRole("button", { name: "What's the word on the war?" }).click();
     await expect(line).toContainText(/Orcs|They say/);
@@ -5572,7 +5542,7 @@ test("a forward garrison of the player's people near them: its two patrols of fo
     expect(squads.assault.every(({ name, gate }) => name === "Human vanguard" && gate < 8)).toBe(true);
 });
 
-test("the barracks of the town the player starts in, held by the orcs at war with their people: gone into, its captain and guardsmen are there, of the orcs, drawn; put down, the town's the humans', and said; the humans' garrison in it once the player's left", async ({ page }) => {
+test("the barracks of the town the player starts in, held by the orcs at war with their people: gone into, its captain and guardsmen are there, of the orcs, drawn; put down, the last of its garrison, the town's the humans', and said; the humans' garrison in it once the player's left", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
@@ -5611,12 +5581,15 @@ test("the barracks of the town the player starts in, held by the orcs at war wit
             game.advance(0.25, { render: false });
         }
 
-        // (Standing still while they're looked at, and put down at a blow each)
+        // (Standing still while they're looked at, and put down at a blow each; the rest of the
+        // town's garrison down already, those in the barracks all that's left of it)
         const out = game.host.quartered.get(town.id);
 
         for (const id of out?.ids ?? []) {
             Object.assign(game.battle.actor(id), { ai: null, hp: 1 });
         }
+
+        town.garrison = out?.ids.length ?? 0;
 
         window.barracks = { town: town.id, door: building.door.id, ids: [...(out?.ids ?? [])] };
 
@@ -5661,7 +5634,7 @@ test("the barracks of the town the player starts in, held by the orcs at war wit
         return { said: window.said, garrison: town.garrison, name: town.name };
     });
 
-    expect(taken.said).toContain(`${taken.name} is taken! Its barracks put to the sword, the Humans hold it now.`);
+    expect(taken.said).toContain(`${taken.name} is taken! The last of its garrison put to the sword, the Humans hold it now.`);
     expect(taken.garrison).toBe(3);
 
     // (Round it, the humans' soldiers out in the orcs' place)

@@ -3,7 +3,7 @@
 // - work from the town halls' reeves, from the first;
 // - scouting, once they're trusted;
 // - an audience at the keep, work from the ruler and their steward, and the pick of its armoury;
-// - then a say in what the rulers decide: where the next expedition marches, and war and peace.
+// - then a say in what the rulers decide: where their army marches next, and war and peace.
 //
 // And the requests: what's asked (a letter carried, a tithe for the treasury, the enemy's numbers
 // thinned, the wild cleared off the roads, an enemy scouted, a town held), by whom and where, how
@@ -26,7 +26,7 @@ export const STANDINGS = Object.freeze([
     { title: "Commoner", points: 0, opens: "Work from the reeves at the town halls." },
     { title: "Freeholder", points: 60, opens: "Scouting for the reeves." },
     { title: "Retainer", points: 180, opens: "An audience at the keep, work from the ruler, and the pick of its armoury." },
-    { title: "Knight", points: 400, opens: "A say in where the next expedition marches and where the council builds, and, serving another, when to rise." },
+    { title: "Knight", points: 400, opens: "A say in where the army marches next and where the council builds, and, serving another, when to rise." },
     { title: "Lord", points: 800, opens: "A say in war and peace." },
     { title: "Councillor", points: 1500, opens: "A seat on the council: your word weighs the most." },
 ]);
@@ -63,7 +63,7 @@ export const REQUESTS = Object.freeze({
     plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 40 } },
     retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 35 } },
     seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 45 } },
-    // (An enemy's town taken by its barracks: docs/WAR.md M16)
+    // (An enemy's town taken, its whole garrison put to the sword: docs/WAR.md *Standing armies*)
     take: { title: "Take the town", rank: OPENS.take, turns: 60, reward: { standing: 120, gold: 80 } },
     // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
     // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
@@ -119,6 +119,9 @@ export const GUILD_REACH = 1500;
  * people's town or camp is within a guild's reach if its middle is this much nearer than that.
  */
 export const SOLDIERS_OUT = Object.freeze({ town: 150, camp: 40 });
+
+// How near an enemy army's camp is to a town for it to threaten it (metres: war.js REACH.threat)
+const THREAT = 1000;
 
 // The creatures whose parts the guilds want: those found anywhere, not too far out (the first
 // three tiers)
@@ -281,8 +284,8 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.liege(each.owner) !== liege) && !has("retake", each.id)) : [];
     const theirWorks = rank >= OPENS.seize ? works.filter((each) => !each.held && war.hostile(liege, war.liege(each.owner)) && war.liege(each.race) !== liege && !has("seize", each.id)) : [];
 
-    // An enemy's town taken, its barracks' guardsmen and captain put down, while the age lets
-    // towns of its kind be taken (docs/WAR.md M16)
+    // An enemy's town taken, its whole garrison put to the sword, while the age lets towns of its
+    // kind be taken (docs/WAR.md *Standing armies*)
     const takeable = post === "keep" && rank >= OPENS.take ? war.towns.filter((each) => war.hostile(liege, war.liege(each.owner)) && STAGES[war.stage].take.includes(each.kind) && !has("take", each.id)) : [];
 
     for (const [kind, found] of [["convoy", ourConvoys], ["plunder", theirConvoys], ["retake", lost], ["seize", theirWorks], ["take", takeable]]) {
@@ -470,7 +473,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 ...base,
                 key: there.id,
                 target: { town: there.id, at: [...there.at], name: there.name, realm: there.owner, quarters },
-                text: `${there.name} is held by ${war.realm(there.owner).name}. Get into its ${quarters} and put down its guardsmen and their captain, and it's ours: our soldiers in it, and its taxes ours.`,
+                text: `${there.name} is held by ${war.realm(there.owner).name}. Put its whole garrison to the sword: its guards and patrols, and the guardsmen and their captain in its ${quarters}, and it's ours: our soldiers in it, and its taxes ours.`,
                 until: war.turn + turns,
                 reward: worth(reward.standing, reward.gold),
             };
@@ -535,7 +538,7 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
     const holders = war.liege(town.owner);
     const soldiers = opened("hunt") ? soldiersNear(war, town) : new Map();
     const foes = war.enemiesOf(holders).filter((foe) => soldiers.has(foe) && !has("hunt", foe));
-    const camps = opened("camp") ? war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && apart(force.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", force.id)) : [];
+    const camps = opened("camp") ? war.camps.filter((camp) => war.hostile(camp.realm, town.owner) && apart(camp.at, town.at) <= THREAT && apart(camp.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", camp.id)) : [];
     const wanted = dearest(wantedNear(war, town, home ?? town.at), grade.rank >= GUILD_DEARER).filter((part) => !has("parts", part));
     const occupied = biggest(heldNear(war, town).filter(({ place }) => GUILD_SIZES[place.size] <= grade.rank)).filter(({ place }) => !has("clear", place.id));
     const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : [])];
@@ -809,10 +812,8 @@ function soldiersNear(war, town) {
         }
     }
 
-    for (const force of war.forces) {
-        if (force.kind === "camp") {
-            add(force.realm, force.at, null, SOLDIERS_OUT.camp, true);
-        }
+    for (const camp of war.camps) {
+        add(camp.realm, camp.at, null, SOLDIERS_OUT.camp, true);
     }
 
     return found;
@@ -883,9 +884,9 @@ function compass([fx, fy], [tx, ty]) {
 // What there is to scout near a town, for a people: enemy camps and armies within a few km, or
 // failing those the nearest enemy town
 function scoutable(war, liege, town) {
-    const forces = war.forces
-        .filter((force) => (force.kind === "camp" || force.kind === "expedition") && war.hostile(liege, war.liege(force.realm)) && apart(force.at, town.at) < 4000)
-        .map((force) => ({ key: force.id, target: { force: force.id, realm: force.realm, at: [...force.at] }, what: `the ${force.kind === "camp" ? "camp" : "army on the march"} ${war.realm(force.realm).name} have ${force.kind === "camp" ? "set up" : "sent out"} near ${town.name}` }));
+    const forces = [...war.camps, ...war.forces.filter((force) => force.kind === "army" && force.mission !== "muster" && force.size > 0)]
+        .filter((each) => war.hostile(liege, war.liege(each.realm)) && apart(each.at, town.at) < 4000)
+        .map((each) => ({ key: each.id, target: { force: each.id, realm: each.realm, at: [...each.at] }, what: `the ${each.kind === "army" ? "army on the march" : "camp"} ${war.realm(each.realm).name} have ${each.kind === "army" ? "sent out" : "set up"} near ${town.name}` }));
 
     if (forces.length) {
         return forces;
@@ -896,12 +897,12 @@ function scoutable(war, liege, town) {
     return enemy ? [{ key: enemy.id, target: { town: enemy.id, name: enemy.name, realm: enemy.owner, at: [...enemy.at] }, what: `${enemy.name}, held by ${war.realm(enemy.owner).name}` }] : [];
 }
 
-// A people's towns with an enemy camp near them
+// A people's towns with an enemy army's camp near them (THREAT)
 function threatenedTowns(war, realm) {
     const towns = [];
 
     for (const town of war.towns.filter(({ owner }) => owner === realm)) {
-        const camp = war.forces.find((force) => force.kind === "camp" && war.hostile(force.realm, realm) && apart(force.at, town.at) <= 1000);
+        const camp = war.camps.find((each) => war.hostile(each.realm, realm) && apart(each.at, town.at) <= THREAT);
 
         if (camp) {
             towns.push({ town, camp });
@@ -923,7 +924,7 @@ export function whereTo(request, war) {
     }
 
     if (target.force) {
-        const force = war?.force(target.force);
+        const force = war?.force(target.force) ?? war?.camp?.(target.force);
 
         return { at: force ? force.at : target.at, name: target.name ?? "the enemy" };
     }
@@ -979,7 +980,7 @@ export function progressOf(request) {
         case "seize":
             return request.there ? "Bring down whoever holds it." : `Get to the ${target.name}.`;
         case "take":
-            return request.there ? `Get into its ${target.quarters ?? "barracks"}, and put down its guardsmen and their captain.` : `Get to ${target.name}.`;
+            return request.there ? `Put down its guards and patrols, and the guardsmen and their captain in its ${target.quarters ?? "barracks"}.` : `Get to ${target.name}.`;
         default:
             return "";
     }

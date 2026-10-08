@@ -41,6 +41,17 @@ export function tell(event, war) {
             .map(([resource, amount]) => `${Math.round(amount)} ${resource}`)
             .join(" and ");
     const brigands = (faction) => FACTION_NAMES[faction] ?? "brigands";
+    // (Whatever an army goes against: a town, a works, a fortification or a camp)
+    const thing = (id) => {
+        const fort = war.fort?.(id);
+        const camp = war.camp?.(id);
+
+        if (fort) {
+            return `the ${own(fort.realm)} ${FORT_NAMES[fort.kind] ?? fort.kind} ${where(fort)}`;
+        }
+
+        return camp ? `the ${own(camp.realm)} camp${war.town(camp.toward) ? ` before ${war.town(camp.toward).name}` : ""}` : town(id);
+    };
 
     switch (event.type) {
         case "stage":
@@ -63,24 +74,32 @@ export function tell(event, war) {
             return event.accepted ? `${People(event.from)} and ${people(event.to)} have made ${MISSIONS[event.mission]}.` : `${People(event.to)} would not hear of ${MISSIONS[event.mission]} with ${people(event.from)}.`;
         case "waylaid":
             return `The ${own(event.realm)} envoy to ${people(event.to)} was waylaid on the road${event.by ? ` by ${people(event.by)}` : ""}.`;
+        case "raised":
+            return `${People(event.realm)} have raised an army at their seat.`;
+        case "disbanded":
+            return `${People(event.realm)} have stood their army down, and sent its soldiers home.`;
         case "marched":
-            return event.mission === "retake" ? `${People(event.realm)} march to win back ${works(event.target)} from the brigands holding it, ${event.size} strong.` : `${People(event.realm)} march on ${town(event.target)}, ${event.size} strong.`;
+            return event.mission === "retake" ? `${People(event.realm)} march to win back ${works(event.target)} from the brigands holding it, ${event.size} strong.` : `The ${own(event.realm)} army marches on ${thing(event.target)}, ${event.size} strong.`;
         case "camped":
-            return `${People(event.realm)} have made camp outside ${town(event.target)}.`;
-        case "reinforced":
-            return `More of ${people(event.realm)} join the camp outside ${town(event.target)}.`;
-        case "raid":
-            if (event.played && !event.reached) {
-                return `Raiders of ${people(event.realm)} came for ${town(event.town)}'s fields, and were driven off.`;
-            }
-
-            return `Raiders of ${people(event.realm)} struck at ${town(event.town)}'s fields${event.killed ? `, killing ${event.killed} of its guard` : ""}.`;
-        case "sortie":
-            return event.kind === "raid" ? `Raiders of ${people(event.realm)} set out for ${town(event.town)}'s fields.` : `${People(event.realm)} march out of their camp to storm ${town(event.town)}.`;
+            return event.target ? `${People(event.realm)} have made camp within a march of ${thing(event.target)}.` : `${People(event.realm)} have made camp in the field.`;
+        case "skirmish":
+            return `Skirmishers out of the ${own(event.realm)} camp fell on ${thing(event.target)}${event.killed ? `, and brought ${event.killed === 1 ? "one" : event.killed} of ${people(event.against)} down` : ""}.`;
         case "assault":
-            return event.won ? `${People(event.realm)} stormed ${town(event.town)}.` : `${People(event.realm)} stormed ${town(event.town)}, and were thrown back.`;
+            return event.won ? `The ${own(event.realm)} army put the last of ${town(event.town)}'s defenders to the sword.` : `The ${own(event.realm)} army fell on ${town(event.town)}'s defenders, ${event.killed} of them killed, ${event.lost} of its own lost.`;
         case "taken":
-            return event.how === "barracks" ? `${town(event.town)} has fallen to ${people(event.to)}, its barracks put to the sword. Its folk live under their rule now.` : `${town(event.town)} has fallen to ${people(event.to)}. Its folk live under their rule now.`;
+            return `${town(event.town)} has fallen to ${people(event.to)}, its garrison put to the sword. Its folk live under their rule now.`;
+        case "fellBack":
+            return `The ${own(event.realm)} army has fallen back from ${thing(event.from)}, to be made up again.`;
+        case "destroyed":
+            return `The ${own(event.realm)} army has been put to the sword to the last.`;
+        case "intercepted":
+            return `Soldiers on their way to join the ${own(event.realm)} army were cut down on the road by ${people(event.by)}.`;
+        case "crushed":
+            return `${People(event.realm)} rose in ${town(event.town)}, and ${people(event.from)} put the rising down.`;
+        case "ordered":
+            return `The ${own(event.realm)} army has its orders.`;
+        case "struck":
+            return `${People(event.realm)} have struck one of their camps.`;
         case "subjugated":
             return `The ${own(event.realm)} seat has fallen. They bend the knee to ${people(event.by)}.`;
         case "fallen":
@@ -91,18 +110,16 @@ export function tell(event, war) {
             return `${People(event.realm)} are restless under ${people(event.against)}. There's talk of rising.`;
         case "risen":
             return `${People(event.realm)} have risen in ${town(event.town)}, and thrown out ${people(event.from)}!`;
-        case "sally":
-            return event.won ? `The guard of ${town(event.town)} sallied out and broke the ${own(event.against)} camp.` : `The guard of ${town(event.town)} sallied out against the ${own(event.against)} camp, and was driven back.`;
-        case "relief":
-            return `${People(event.realm)} send ${event.size} to relieve ${town(event.town)}.`;
         case "battle":
             if (event.works) {
                 return !event.against ? (event.won ? `${People(event.realm)} fell upon the brigands at ${works(event.works)} and put them to the sword.` : `${People(event.realm)} fell upon the brigands at ${works(event.works)}, and were beaten off.`) : event.won ? `${People(event.realm)} fell upon ${works(event.works)} and took it from ${people(event.against)}.` : `${People(event.realm)} fell upon ${works(event.works)}, and its guard beat them off.`;
             }
 
-            return event.won ? `${People(event.realm)} fell upon the ${own(event.against)} camp and scattered it.` : `${People(event.realm)} fell upon the ${own(event.against)} camp, and were beaten off.`;
-        case "broken":
-            return `The ${own(event.realm)} camp outside ${town(event.target)} has broken up.`;
+            if (event.camp) {
+                return event.won ? `The ${own(event.realm)} army fell upon the ${own(event.against)} camp and put its guard to the sword.` : `The ${own(event.realm)} army fell upon the ${own(event.against)} camp, and were beaten off.`;
+            }
+
+            return `The ${own(event.realm)} army met the ${own(event.against)} ${event.kind === "reserve" ? "reserve" : "army"} in the field, ${event.killed} of them killed and ${event.lost} of its own lost, and ${event.won ? "drove them off" : "was driven off"}.`;
         case "withdrew":
             return `${People(event.realm)} have turned back from ${target(event.target)}.`;
         case "unpaid":
@@ -112,11 +129,15 @@ export function tell(event, war) {
         case "built":
             return `${People(event.realm)} have raised a ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "razed":
+            if (event.camp) {
+                return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} camp${war.town(event.toward) ? ` before ${war.town(event.toward).name}` : ""}.`;
+            }
+
             return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "assailed":
             return `An assault team of ${people(event.by)} has fallen on the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "abandoned":
-            return `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
+            return event.camp ? `The ${own(event.realm)} camp has been given up.` : `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
         case "counsel":
             if (event.build) {
                 return `${People(event.realm)} are counselled where to build.`;
@@ -153,7 +174,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced", "delivered", "assailed"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmish", "intercepted"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
@@ -162,8 +183,8 @@ const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforc
  */
 export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     const heard = [];
-    const near = (id) => {
-        const place = war.town(id) ?? war.workAt?.(id);
+    const near = (id, there) => {
+        const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? (there ? { at: there } : null);
 
         return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
     };
@@ -171,7 +192,7 @@ export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {
         const event = war.log[k];
 
-        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about))) {
+        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about ?? event.from, event.at))) {
             continue;
         }
 

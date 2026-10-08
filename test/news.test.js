@@ -113,7 +113,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         assert.deepEqual([...kinds()].sort(), ["beasts", ...clear(0), "parts"].sort());
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
-        war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
+        war.camps.push({ id: "camp-900", realm: "orc", at: [town.at[0] + 300, town.at[1]], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
         assert.deepEqual([...kinds()].sort(), ["beasts", ...clear(0), "parts"].sort(), "not for a Copper");
         assert.deepEqual([...kinds(opens)].sort(), ["beasts", "camp", ...clear(opens), "hunt", "parts"].sort());
 
@@ -131,7 +131,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
             }
 
             if (contract.kind === "camp") {
-                assert.equal(contract.target.force, "force-900");
+                assert.equal(contract.target.force, "camp-900");
             }
         }
 

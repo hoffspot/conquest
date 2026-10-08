@@ -36,9 +36,9 @@ import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./po
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
-import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf, sortieOf } from "./war/muster.js";
+import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, War, WORKED } from "./war/war.js";
+import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
@@ -92,14 +92,6 @@ export const WORKS_OUT = Object.freeze({ near: 120, far: 250, posted: 4, most: 8
  * world); struck once every player's this far.
  */
 export const CAMP_NEAR = Object.freeze({ near: 150, far: 300 });
-
-/**
- * A camp's sortie against a town a player's near, played out (docs/WAR.md M6): how many raiders,
- * or attackers in an assault, come at most; how near their mark they must come to have reached it
- * (metres); how long raiders stay at the fields once there, and a sortie goes on at most (battle
- * ms).
- */
-export const SORTIE = Object.freeze({ raiders: 6, attackers: 16, reach: 10, stay: 30000, most: 150000 });
 
 /**
  * An envoy on the road near a player (docs/WAR.md M7): met once a player's this near (metres),
@@ -353,7 +345,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 15;
+export const SNAPSHOT_VERSION = 16;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -561,14 +553,10 @@ export class Host {
         this.townsfolk = new Map();
 
         /**
-         * The war's camps near a player, pitched (by the camp's id): { people, ids (its
-         * sentries'), share (how many of the camp each stands for), fire, tents }; and each camp's
-         * sortie out against a town a player's near (by the camp's id): { kind ("raid" or
-         * "assault"), town, people, ids, to (the square they make for), at (when they set out),
-         * reached, reachedAt }.
+         * The war's camps near a player, pitched (by the camp's id: war.js camps): { people, ids
+         * (its sentries'), share (how many of its guard each stands for), fire, tents }.
          */
         this.camps = new Map();
-        this.sorties = new Map();
 
         /**
          * The envoys met on the road near a player (by the envoy's id): { people, to (whose seat
@@ -1345,7 +1333,13 @@ export class Host {
                 } else if (soldier.fort) {
                     this.war?.squadLost(soldier.fort, soldier.squad, 1);
                 } else {
-                    this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
+                    // (A town's garrison put down to the last: whose people did it hold it now)
+                    const by = this.#realmOf(event.by);
+                    const result = this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1, { by });
+
+                    if (result === "taken") {
+                        this.#event("taken", { town: soldier.town, by, people: soldier.people });
+                    }
                 }
 
                 this.#fall(event.id, FALLEN_MS);
@@ -1508,10 +1502,6 @@ export class Host {
                 }
             }
 
-            // (A camp's sortie against a town a player's near: out into the world)
-            if (event.type === "sortie") {
-                this.#setOut(event);
-            }
         }
 
         if (this.war.turn !== turn) {
@@ -1538,7 +1528,6 @@ export class Host {
             worksOut: [...this.worksOut.entries()],
             townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
-            sorties: [...this.sorties.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
@@ -1654,7 +1643,6 @@ export class Host {
             }),
         );
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
-        host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
@@ -2790,24 +2778,22 @@ export class Host {
             }
         }
 
-        // The camps near a player pitched, and those far from every player (or gone) struck
+        // The armies' camps near a player pitched, and those far from every player (or gone) struck
         const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
 
         for (const id of [...this.camps.keys()]) {
-            const camp = war.force(id);
+            const camp = war.camp(id);
 
-            if (camp?.kind !== "camp" || !near(camp, CAMP_NEAR.far)) {
+            if (!camp || !near(camp, CAMP_NEAR.far)) {
                 this.#strike(id);
             }
         }
 
-        for (const camp of war.forces) {
-            if (camp.kind === "camp" && !this.camps.has(camp.id) && near(camp, CAMP_NEAR.near)) {
+        for (const camp of war.camps) {
+            if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp, CAMP_NEAR.near)) {
                 this.#pitch(camp);
             }
         }
-
-        this.#watchSorties();
 
         // The envoys near a player met on the road, and let go once they're far (or gone, and far)
         for (const [id, met] of [...this.envoys]) {
@@ -2941,12 +2927,11 @@ export class Host {
 
     // A town's fallen soldiers relieved (RELIEF_MS after the last was taken away): others of its
     // garrison out at the stations they've left, as many as it has now (with none to spare, asked
-    // again a while after), each once no player can see where they'd come out; none while a camp's
-    // sortie is out against it (those left standing are all it has, till it's over)
+    // again a while after), each once no player can see where they'd come out
     #relieve(town, place, middle) {
         const mustered = this.mustered.get(town.id);
 
-        if ((mustered.relief ?? null) === null || this.battle.time < mustered.relief || [...this.sorties.values()].some((sortie) => sortie.town === town.id)) {
+        if ((mustered.relief ?? null) === null || this.battle.time < mustered.relief) {
             return;
         }
 
@@ -2993,13 +2978,13 @@ export class Host {
 
     // One of a people's soldiers, out in the world: how they look (from their id, the same every
     // time), and what they're doing (their orders: patrol, leash, facing), named for their people
-    // and their part ("Orcish raider"); `record` says whose they are ({ town }, or { camp, share })
+    // and their part ("Orcish sentry"); `record` says whose they are ({ town }, or { camp, share })
     #enlist(id, { people, weapon, square, name, record, ...orders }) {
         const seed = [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0;
         const sex = seed % 4 === 0 ? "f" : "m";
         const adjective = ADJECTIVES[people] ?? people;
 
-        // (The first of each post, patrol, camp's sentries, raid, and an envoy's escort: its captain)
+        // (The first of each post, patrol, camp's sentries, and an envoy's escort: its captain)
         const captain = /-0$|escort-1$/.test(id);
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
@@ -3562,9 +3547,12 @@ export class Host {
     }
 
     // One of a town's barracks' garrison fallen: made up a while after (RELIEF_MS); and once the
-    // last of them's down, captain and guardsmen, the barracks is cleared, and the town taken by
-    // the people of whoever brought the last down, if the war lets it be (war.capture: at war with
-    // its holders, and the age letting it be), and made up sooner (BARRACKS_NEAR.relief)
+    // last of them's down, captain and guardsmen, the barracks is cleared, and made up sooner
+    // (BARRACKS_NEAR.relief). It's part of the town's garrison (docs/WAR.md *Standing armies*):
+    // the town's taken only once the whole of that's put down (war.loss). Said how it stands:
+    // "taken" (it was, the last of them the last of it), "garrison" (some of it's left yet),
+    // "peace" (the people of whoever brought the last down aren't at war with its holders), "age"
+    // (the age doesn't let towns of its kind be taken)
     #barracksFell(id, by) {
         const out = this.quartered.get(id);
 
@@ -3579,7 +3567,8 @@ export class Host {
         }
 
         const realm = this.#realmOf(by);
-        const how = realm ? this.war.capture(id, realm) : null;
+        const town = this.war.town(id);
+        const how = !realm || !town ? null : town.owner === realm ? "taken" : !this.war.hostile(realm, town.owner) ? "peace" : !STAGES[this.war.stage].take.includes(town.kind) ? "age" : "garrison";
 
         Object.assign(out, { cleared: true, relief: this.battle.time + BARRACKS_NEAR.relief });
         this.#event("barracks", { town: id, by: realm, how, people: out.people });
@@ -3799,15 +3788,16 @@ export class Host {
         return this.players.get(leader)?.realm ?? this.soldiers.get(id)?.people ?? this.fortsOut.get(id)?.realm ?? null;
     }
 
-    // A camp near a player pitched (docs/WAR.md M6): its tents round its fire, and its sentries
-    // round them, facing out, as many as it has (a third of it, up to CAMP.sentries)
+    // An army's camp near a player pitched (docs/WAR.md *Standing armies*): its tents round its
+    // fire, and its guard round them as sentries, facing out (up to CAMP.sentries of them, each
+    // standing for a share of it)
     #pitch(camp) {
-        const count = Math.min(CAMP.sentries, Math.max(1, Math.ceil(camp.size / 3)));
+        const count = Math.min(CAMP.sentries, Math.max(1, camp.guard));
         const { fire, tents, posts } = campOf(camp, { sentries: count });
         const [guardArms, patrolArms] = SOLDIERS_ARMS[camp.realm] ?? SOLDIERS_ARMS.human;
         const free = this.#spots();
         const ids = [];
-        const share = camp.size / count;
+        const share = camp.guard / count;
 
         try {
             for (const [k, post] of posts.entries()) {
@@ -3822,7 +3812,7 @@ export class Host {
         }
 
         this.camps.set(camp.id, { people: camp.realm, ids, share, fire, tents });
-        this.#event("camp", { camp: camp.id, people: camp.realm, town: camp.target, ids, fire, tents });
+        this.#event("camp", { camp: camp.id, people: camp.realm, town: this.war.town(camp.toward) ? camp.toward : null, ids, fire, tents });
     }
 
     // A camp struck: its sentries gone from the world (still with it, in the war), its tents down
@@ -4712,113 +4702,6 @@ export class Host {
         this.world.interiors.remake(building.key);
         Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false });
         this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
-    }
-
-    // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or
-    // attackers, out from the town's edge on the camp's side, making for its fields (a raid) or
-    // into it (an assault), each standing for a share of those the camp sent. If the town's no
-    // longer near anyone, it's reckoned in the war instead
-    #setOut({ force: id, town: townId, kind, party }) {
-        const camp = this.war.force(id);
-        const town = this.war.town(townId);
-
-        if (!camp || !town || !this.mustered.has(townId)) {
-            this.war.settle(id, { reckon: true });
-
-            return;
-        }
-
-        const place = this.#placeOf(townId);
-        const { from, to } = sortieOf(place, camp, kind, { middle: this.#middleOf(place) });
-        const count = Math.max(1, Math.min(kind === "raid" ? SORTIE.raiders : SORTIE.attackers, party));
-        const [guardArms, patrolArms] = SOLDIERS_ARMS[camp.realm] ?? SOLDIERS_ARMS.human;
-        const free = this.#spots();
-        const ids = [];
-        let mark = null;
-
-        try {
-            mark = nearestFree(squaresOf(this.world.maps.town), [Math.floor(to[0]), Math.floor(to[1])], { within: 24 });
-
-            for (let k = 0; k < count; k++) {
-                const each = `${id}/${kind}-${this.war.turn}-${k}`;
-
-                // (Each making for its own square by the mark, spread over the fields round it,
-                // rather than all for the one, where all but one would wait for ever)
-                this.#enlist(each, { people: camp.realm, weapon: k % 2 ? patrolArms : guardArms, square: free(from), name: kind === "raid" ? "raider" : "attacker", record: { camp: id, share: party / count, sortie: true }, patrol: [free(mark)] });
-                ids.push(each);
-            }
-        } catch {
-            // (No free ground there: those found are out, and no more)
-        }
-
-        if (!ids.length) {
-            this.war.settle(id, { reckon: true });
-
-            return;
-        }
-
-        this.sorties.set(id, { kind, town: townId, people: camp.realm, ids, to: mark, at: this.battle.time, reached: false, reachedAt: null });
-        this.#event("sortie", { camp: id, town: townId, name: town.name, kind, people: camp.realm, owner: town.owner, ids });
-    }
-
-    // Each sortie out, watched: whether its raiders have reached the town's fields, and whether
-    // it's over (all of them down; the town's defenders all down, in an assault; the raiders done
-    // with the fields; too long out; the camp gone; no one near the town any more)
-    #watchSorties() {
-        for (const [id, sortie] of [...this.sorties]) {
-            const camp = this.war.force(id);
-            const standing = (ids) => ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
-            const out = standing(sortie.ids);
-            const mustered = this.mustered.get(sortie.town);
-            const time = this.battle.time;
-
-            if (!sortie.reached && out.some(({ square }) => distanceBetween(square, sortie.to) <= SORTIE.reach)) {
-                Object.assign(sortie, { reached: true, reachedAt: time });
-            }
-
-            let end = null;
-
-            if (camp?.kind !== "camp" || !camp.sortie) {
-                end = "gone";
-            } else if (!mustered) {
-                end = "left";
-            } else if (!out.length) {
-                end = "beaten";
-            } else if (sortie.kind === "assault" && !standing(mustered.ids).length) {
-                end = "won";
-            } else if ((sortie.kind === "raid" && sortie.reached && time - sortie.reachedAt >= SORTIE.stay) || time - sortie.at >= SORTIE.most) {
-                end = "done";
-            }
-
-            if (end) {
-                this.#comeBack(id, end);
-            }
-        }
-    }
-
-    // A sortie over: those still standing back to their camp (out of the world), and the war told
-    // how it went (settle): an assault that's left no one standing in the town takes it; the rest
-    // of one whose town no one's near any more is reckoned there
-    #comeBack(id, end) {
-        const sortie = this.sorties.get(id);
-        const town = this.war.town(sortie.town);
-
-        this.sorties.delete(id);
-
-        if (end === "won" && town) {
-            this.war.loss(town.id, town.garrison);
-        }
-
-        const back = sortie.ids.filter((each) => this.battle.actor(each) && !this.battle.actor(each).dead);
-
-        for (const each of back) {
-            this.battle.remove(each);
-            this.soldiers.delete(each);
-        }
-
-        const result = end === "gone" ? null : this.war.settle(id, { reached: sortie.reached, reckon: end === "left" });
-
-        this.#event("sortied", { camp: id, town: sortie.town, name: town?.name ?? null, kind: sortie.kind, people: sortie.people, result, back });
     }
 
     // An envoy on the road near a player met (docs/WAR.md M7): them, and their escort, where the
@@ -6317,7 +6200,7 @@ export class Host {
             }
             case "scout": {
                 if (request.target.force) {
-                    const force = war.force(request.target.force);
+                    const force = war.force(request.target.force) ?? war.camp(request.target.force);
 
                     return !force ? "void" : near(force.at, REQUEST_REACH.scout) ? "ready" : null;
                 }
@@ -6346,11 +6229,11 @@ export class Host {
                     this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                 }
 
-                return war.force(request.target.camp) ? null : request.there ? "ready" : "void";
+                return war.camp(request.target.camp) ? null : request.there ? "ready" : "void";
             }
             case "rout":
             case "camp": {
-                const camp = war.force(request.target.force);
+                const camp = war.camp(request.target.force);
 
                 if (camp && !request.there && near(camp.at, REQUEST_REACH.rout)) {
                     request.there = true;
@@ -6454,11 +6337,11 @@ export class Host {
                     this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                 }
 
-                // (Its barracks put down since it was asked, and it taken by the player's people:
-                // done. Taken some other way, or by anyone else: come to nothing)
+                // (Its garrison put down to the last in the world since it was asked, and it taken by
+                // the player's people: done. Taken some other way, or by anyone else: come to nothing)
                 const taken = war.log.findLast((event) => event.type === "taken" && event.town === town.id && event.turn >= request.given);
 
-                if (taken?.how === "barracks" && war.liege(taken.to) === liege) {
+                if (taken?.how === "played" && war.liege(taken.to) === liege) {
                     return "ready";
                 }
 

@@ -208,9 +208,9 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         const home = host.war.town(host.world.start.id);
 
         host.war.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
-        host.war.forces.push({ id: "force-camp", realm: enemy, kind: "camp", size: 10, at: [home.at[0] + 500, home.at[1]], path: [], leg: 0, target: home.id, home: theirs.id, since: 0 });
+        host.war.camps.push({ id: "camp-900", realm: enemy, at: [home.at[0] + 500, home.at[1]], guard: 6, built: 0, done: 0, toward: home.id, used: 0, skirmished: 0 });
         player.standing.take(request("scout", { target: { town: theirs.id, name: theirs.name, realm: enemy, at: [...theirs.at] } }));
-        player.standing.take(request("defend", { target: { town: home.id, name: home.name, at: [...home.at], camp: "force-camp", realm: enemy }, until: null }));
+        player.standing.take(request("defend", { target: { town: home.id, name: home.name, at: [...home.at], camp: "camp-900", realm: enemy }, until: null }));
         player.standing.take(request("wild", { target: { wild: true, need: 3 }, until: host.war.turn - 1 }));
 
         // Out at home: there to hold it; the one run out of time failed
@@ -228,7 +228,7 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         assert.equal(player.standing.requests.find(({ kind }) => kind === "scout").state, "done");
 
         // The camp gone, the town still theirs: held
-        host.war.forces = host.war.forces.filter(({ id }) => id !== "force-camp");
+        host.war.camps = host.war.camps.filter(({ id }) => id !== "camp-900");
         events = run(host, 600);
         assert.equal(player.standing.requests.find(({ kind }) => kind === "defend").state, "done");
 

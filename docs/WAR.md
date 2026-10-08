@@ -45,8 +45,9 @@ Each people is a **realm**. It holds:
 - **its towns**: its capital, cities, towns and villages (the plan's places in its lands), each
   with a **garrison** in keeping with its size and **patrols** on the roads round it;
 - **its treasury**: taxes from every town it holds, paid in each turn;
-- **its forces in the field**: expeditions on the march, the camps they set up, and the raids
-  and patrols the camps send out;
+- **its standing army and defensive reserve** (M18, *Standing armies*): the army out in the field
+  from the forward camps it builds, their scouts and skirmishers out from them; the reserve at its
+  seat, out against any army that comes into its lands;
 - **its relations** with each other realm it's met (below).
 
 ### Relations
@@ -58,7 +59,7 @@ Then they're one of:
 | --- | --- |
 | **Allied** | They help each other: their forces fight side by side, and come to each other's aid. |
 | **Neutral** | Neither helps nor hinders. A neutral people can turn allied or hostile, and so can any of its people on their own account: a guard turns on those who harm his town. |
-| **Hostile** | Their forces attack each other on sight, and they send expeditions against each other. |
+| **Hostile** | Their forces attack each other on sight, and they send their armies against each other. |
 | **Vassal** | Beaten. The vassal's forces are the overlord's allies, and the overlord's rulers direct both. |
 
 **Diplomats** go by road between the capitals of peoples who know each other. A diplomat can:
@@ -72,21 +73,22 @@ A diplomat who doesn't arrive, waylaid on the road, carries nothing.
 Every turn, each realm:
 1. collects its taxes;
 2. pays for its garrisons and forces;
-3. decides, by its rulers' traits and its relations, what to spend on:
-   - strengthening garrisons;
-   - sending **expeditions** towards a hostile people;
-   - sending diplomats.
+3. raises soldiers in its towns: its garrisons to half, then its reserve, then its army, then its
+   garrisons to the full;
+4. decides, by its rulers' traits and its relations (or a player's orders), where its army goes,
+   and sends diplomats.
 
-An expedition marches the roads, then sets up a **camp** within reach of an enemy town. The camp
-sends out patrols and **raids**, and stages the forces for an attack.
+Its **army** marches the roads, builds a **camp** within reach of an enemy town, and attacks from
+it; the camp sends out a scout and skirmishers.
 
-A town whose forces are all destroyed is **taken**:
-- its garrison becomes the attacker's;
+A town whose garrison is all put to the sword is **taken**, and only so:
+- a few of the attackers hold it;
 - its folk stay, under their new rulers;
 - its taxes go to its new realm.
 
-A **capital** taken, its forces and its leader destroyed, makes its people the conqueror's
-**vassal**. Every one of its garrisons now serves the conqueror, whose rulers direct both.
+A **capital** taken, its garrison put down and its ruler and the captain of its guard with them,
+makes its people the conqueror's **vassal**. Its army and reserve serve the conqueror, half as
+strong, whose rulers direct both.
 
 ### The rulers' traits
 
@@ -98,7 +100,7 @@ player learns a ruler's traits from rumours about them.
 ### Grudges and favours
 
 Every realm remembers what's been done to it, and who did it:
-- a raid, a broken truce, a diplomat waylaid;
+- an attack, a broken truce, a diplomat waylaid;
 - or help in a fight, or a request carried out.
 
 Grudges and favours fade slowly. They weigh on which way a neutral people turns.
@@ -108,7 +110,7 @@ Grudges and favours fade slowly. They weigh on which way a neutral people turns.
 - **The news of the war** reaches the player as it would anyone:
   - tavern rumours;
   - what folk say;
-  - requests at the adventurers' guild, to drive off a rival's camp or break up a raid.
+  - requests at the adventurers' guild, to break up a rival's camp.
 - **Requests** come from their people's rulers at the keep and the town halls. The player can:
   - carry messages;
   - escort diplomats, or waylay a rival's;
@@ -117,7 +119,8 @@ Grudges and favours fade slowly. They weigh on which way a neutral people turns.
 
   Carrying them out raises the player's **standing**.
 - **Standing** is a rank in their people. Higher ranks bring:
-  - more say in what the rulers decide (where the next expedition goes, whether to make peace);
+  - more say in what the rulers decide (where the army goes, whether to make peace), and, from a
+    Lord, orders for the army itself;
   - more to ask for: a squad of their own, the pick of the armoury.
 - **Skills** grow by use, each along a tree of its own:
   - swordplay leads to stronger strikes;
@@ -199,7 +202,7 @@ The engine is built for this from the start. These are its rules:
 | **M3** | Built | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | Built | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | Built | The other peoples' looks: elves, dark elves, cat folk, lizard folk and orcs, as soldiers and as townsfolk. |
-| **M6** | Built | Camps, raids and conquest played out around the player. |
+| **M6** | Built | Camps, raids and conquest played out around the player (the raids and sorties retired in M18). |
 | **M7** | Built | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | Built | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | Built | Followers, mercenaries and adventurers for hire. |
@@ -209,9 +212,12 @@ The engine is built for this from the start. These are its rules:
 | **M13** | Built | Convoys in the world: their wagons, guards and captain on the road near a player, to see in or fall on; the keep's requests about the convoys and the works. |
 | **M14** | Built | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
 | **M15** | Built | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
-| **M16** | Built | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
+| **M16** | Built | A barracks in every settlement, its guardsmen and captain part of its town's garrison (taken by putting them down, till M18); the war half as fast. |
 | **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
-| **M18** | Planned | Standing armies and reserves in the war: raised and disbanded at the keep's war table, camps, scouts and skirmishers, capture by annihilation only, reinforcements, supply wagons and depots. |
+| **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
+| **M19** | Planned | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, raided or razed. |
+| **M20** | Planned | The armies in the world near a player: armies, reserves, reinforcements, scouts and skirmishers met, in their lines, drawn in their crowds. |
+| **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
 
 ## What's built
 
@@ -236,22 +242,25 @@ for a seed. A turn takes a millisecond or two.
 **The towns.** The plan's capitals, cities, towns and villages are fought over (`HOLDINGS`).
 Hamlets and farmsteads go with the town nearest them (`holdingAt`).
 
-| | Garrison when full | Taxes a turn | Walls | Patrols (from M2) |
-| --- | --- | --- | --- | --- |
-| Capital | 40 | 6 | ×1.6 | 3 |
-| City | 24 | 4 | ×1.35 | 2 |
-| Town | 12 | 2 | ×1.15 | 1 |
-| Village | 5 | 1 | ×1 | 1 |
+| | Garrison when full | Taxes a turn | Walls | Patrols (from M2) | Soldiers raised a turn (M18) |
+| --- | --- | --- | --- | --- | --- |
+| Capital | 40 | 9 | ×1.6 | 3 | 4 |
+| City | 24 | 6 | ×1.35 | 2 | 3 |
+| Town | 12 | 3 | ×1.15 | 1 | 2 |
+| Village | 5 | 1.5 | ×1 | 1 | 1 |
 
-**The ages of the war** (`STAGES`) say what can be taken, how big an expedition can be, and how
-many forces each realm can have out:
+(Taxes are half again what they were before the standing armies, and a soldier's keep 0.06 gold a
+turn rather than 0.1, so that a people can keep its army and reserve as well as its garrisons.)
 
-| Age | Comes with might | What can be taken | Biggest expedition | Forces out |
-| --- | --- | --- | --- | --- |
-| An uneasy peace | 0 | Nothing: camps only raid | 8 | 1 |
-| Border wars | 2 | Villages | 16 | 2 |
-| War | 4 | Villages, towns and cities | 30 | 3 |
-| Conquest | 6 | Capitals too | 60 | 4 |
+**The ages of the war** (`STAGES`) say what can be taken, and how strong each people's army and
+reserve can be (of the most, 80: *Standing armies*). No army's raised in the uneasy peace:
+
+| Age | Comes with might | What can be taken | Army and reserve |
+| --- | --- | --- | --- |
+| An uneasy peace | 0 | Nothing | 20 (the reserve only) |
+| Border wars | 2 | Villages | 40 |
+| War | 4 | Villages, towns and cities | 60 |
+| Conquest | 6 | Capitals too | 80 |
 
 The next age comes with the strongest player's **might** (`war.setMight`, 0 to 8: from their
 skills, gear and followers, from M3), or after 180 turns each (three hours of play) whatever
@@ -262,13 +271,14 @@ taken, and far longer before a capital can.
 1. **The age** moves on, if it's time.
 2. **Meeting.** Peoples whose towns or forces come within 1.5 km of each other meet (neutral to
    start with).
-3. **Taxes and keep.** Every town pays its holder, unless it was raided this turn or last. A
-   vassal pays half of it to its liege. Every soldier costs 0.1 gold a turn. A realm that can't pay
-   loses a twentieth of each garrison.
+3. **Taxes and keep.** Every town pays its holder, unless skirmishers fell on it this turn or last.
+   A vassal pays half of it to its liege. Every soldier costs 0.06 gold a turn. A realm that can't
+   pay loses a twentieth of each garrison, and of its army and reserve.
 4. **Grudges and favours** fade.
 5. **Each liege's rulers decide**, for their realm and its vassals:
-   - **Garrisons:** fill them up (five a town at most), the seat first, then those threatened,
-     keeping gold back for the troops' keep and, at war, for the war.
+   - **Soldiers raised** in each of their towns, as many as each raises a turn, keeping gold back
+     for the troops' keep and, at war, for the war (*Standing armies*): the garrisons to half (the
+     seat first, then those threatened), the reserve, the army, the garrisons to the full.
    - **Envoys** (one out at a time, 10 gold), to the other ruler's seat:
      - to sue for peace in a war going badly (the more cautious, the sooner);
      - to part an enemy from its ally;
@@ -277,47 +287,41 @@ taken, and far longer before a capital can.
      more warlike and greedy the ruler, the further the war's come, and the longer it's gone on.
      Its allies may join in against them. Once there's no one else to fight, the greedy and warlike
      may break with their allies.
-   - **Relief** for their own or an ally's town with an enemy camp outside it stronger than its
-     garrison.
-   - **Expeditions** against the enemy's weakest near town. They go for one of their camps
-     already outside first, to reinforce it, then for the enemy's seat, once it can be taken and
-     they're strong enough. Each is as big as it takes, and as the age and the treasury allow
-     (5 gold a soldier).
-6. **The march.** Forces go along the roads (`roads.js`), or across country where there's none
-   (counting 1.8 times as long): 250 m a turn, envoys 400. An expedition within 350 m of its
-   target camps there, or joins its people's camp there.
-7. **The camps.** Each turn a camp does one of these:
-   - Is **sallied out** against by a garrison much stronger than it.
-   - **Storms** its town, if the age allows it, it's sat there 6 turns (`SIEGE`), and it's strong
-     enough for its ruler's taste. The fight goes round by round, the defenders' walls counting
-     for them, until one side's gone or the attack breaks.
-   - Otherwise it may **raid**: a few of its soldiers out against the town's fields, killing a few
-     of its guard and stopping its taxes.
-8. **Envoys** passing an enemy's forces may be **waylaid**.
-9. **Vassals** grow **restless** as they serve, and rise once they're ready (M10, below). Those
+   - **Each reserve** out against an enemy army in its people's lands, or home.
+   - **Bands** to win back their works from the wild.
+   - **Each army** raised, sent, made up (*Standing armies*).
+6. **The march.** Armies, reserves, reinforcements, bands, envoys and convoys go on: along the
+   roads (`roads.js`), or across country where there's none (counting 1.8 times as long).
+7. **The camps** go up, send out their skirmishers, or are struck (*Standing armies*).
+8. **The fighting**: armies and reserves upon each other, reinforcements caught on the road, and
+   each army's attack on what it's after (*Standing armies*).
+9. **Envoys** passing an enemy's army, reserve or band may be **waylaid**.
+10. **Vassals** grow **restless** as they serve, and rise once they're ready (M10, below). Those
    that have served 60 turns may **rise** against their overlord sooner: rarely, and likelier the
    stronger they are beside them, the more they resent them, the harder pressed they are, and the
-   more restless. A **fallen** people rises again in one of its old towns, once it's stirred to it.
-10. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
+   more restless. A **fallen** people rises again in one of its old towns, once it's stirred to
+   it, if its rebels can put the town's garrison to the sword.
+11. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
     can undo it.
 
-**A town taken** is the attacker's: its garrison is what's left of their camp, and its folk stay
-under their new rulers. **A realm's seat taken** makes it the taker's liege's **vassal**, with any
-realms that served it:
+**A town taken** (its garrison put to the sword: *Standing armies*) is the attacker's: held by a
+few of their army, and its folk stay under their new rulers. **A realm's seat taken** makes it the
+taker's liege's **vassal**, with any realms that served it:
 - it gets a new ruler, and rules from its seat again (its seat is given back to it);
 - its own dealings end: its liege's friends and enemies are its own;
-- its forces fight for its liege.
+- its army and reserve fight for its liege, cut to a vassal's half (the rest into its garrisons).
 
 **Relations** (`war.relation(a, b)`): `self`, `overlord`, `vassal`, `unknown`, or, as their lieges
 stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied. `hostile` and
 `friendly` answer the question the world will ask (from M2): will these two fight?
 
 **From the world** (from M2 and M6):
-- `war.loss(id, count)`: losses in fights played out near a player;
+- `war.loss(id, count, { by })`: losses in fights played out near a player (a town's whole garrison
+  put down: taken by `by`'s people, M18);
 - `war.remember(realm, about, amount)`: grudges and favours earned by players;
-- `war.watch(ids)`: the towns and envoys a player's near, whose raids and assaults are played out
-  there, and who go at their own pace (M6, M7);
-- `war.settle(camp, { reached, reckon })`: a sortie over (M6);
+- `war.watch(ids)`: the towns, works, fortifications, camps and envoys a player's near: an army
+  waits before them a while (M18), and envoys go at their own pace (M7);
+- `war.order(realm, orders)`: a player's orders to their people's army (M18);
 - `war.move(envoy, at, leg)`, `war.waylaid(envoy, by)`: an envoy's way in the world (M7);
 - `war.win(works, by)`: a works won in the world, seized or cleared (M12).
 
@@ -332,9 +336,10 @@ from it the next time. Nothing in the world shows it yet (M2).
 **The war page** (`war.html`, `lab/war.js`) plays the war out on a world's map:
 - every town in the colour of whoever holds it, ringed in its builders' colour if it's been taken,
   with its garrison beside it;
-- the forces out: shields for expeditions and relief, with the way they're going; tents for camps;
-  scrolls for envoys;
-- each realm, its ruler, what they're like, what it holds and its gold;
+- the forces out: shields for armies and bands, banners for reserves, dots for reinforcements,
+  each with the way it's going; tents for the armies' camps (hollow while they go up); scrolls for
+  envoys; wagons for convoys;
+- each realm, its ruler, what they're like, what it holds, its gold, its army and reserve;
 - how each stands with each other, and the news.
 
 Play it a turn at a time or faster, and turn the players' might up to bring the next age on.
@@ -366,9 +371,8 @@ whoever holds the town, and whom they fight is as their peoples stand.
   the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life.
 - **Relief.** A minute after one of a town's soldiers is taken away, another of its garrison takes
   their place, at their post or on their round, as many as the garrison has then (with none to
-  spare, it's asked again a minute later), each coming out where no player can see; none while a
-  camp's sortie is out against the town. The town musters afresh from its garrison the next time a
-  player comes.
+  spare, it's asked again a minute later), each coming out where no player can see. The town
+  musters afresh from its garrison the next time a player comes.
 - **Banners.** A banner stands beside each road out with guards at it, 3 metres further out than
   them: its people's colour (the crown's gold on red, the cat folk's sun on indigo), a trim, and
   their emblem (`world/banners3d.js`, the cloths `world/cloth.js`'s):
@@ -727,7 +731,7 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Commoner | 0 | Work from the reeves at the town halls. |
 | Freeholder | 60 | Scouting for the reeves. |
 | Retainer | 180 | An audience at the keep, work from the ruler, and the pick of its armoury. |
-| Knight | 400 | A say in where the next expedition marches and where the council builds. |
+| Knight | 400 | A say in where the army marches next and where the council builds. |
 | Lord | 800 | A say in war and peace. |
 | Councillor | 1500 | A seat on the council: your word weighs the most. |
 
@@ -748,7 +752,7 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 40 |
 | Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 35 |
 | Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 45 |
-| Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put down its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 80 |
+| Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put its whole garrison to the sword, its guards, patrols, and its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 80 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -759,11 +763,11 @@ much again, and it asks the weightier things.
 masterwork of the player's own weapon; a masterwork kite shield (or mail, with a weapon that takes
 no shield); a legendary weapon.
 
-**Counsel.** At the throne, a Knight can say where the next expedition should march (one of the
-three nearest enemy towns); a Lord can counsel peace with an enemy, or war on a people they're
+**Counsel.** At the throne, a Knight can say where their people's army should march next (one of
+the three nearest enemy towns); a Lord can counsel peace with an enemy, or war on a people they're
 neutral with (`War.counsel`). It weighs more the higher their rank (0.4, 0.7, 1), and is heeded
 for 20 turns or until it's acted on:
-- **March:** the town counts as far nearer in choosing the next expedition's target.
+- **March:** the town counts as far nearer when the army next chooses what to go against.
 - **Peace:** each turn, a chance (the counsel's weight, more with a cautious ruler) of sending an
   envoy for a truce.
 - **War:** each turn, a chance (the weight, more with a warlike ruler) of declaring war.
@@ -782,44 +786,27 @@ Where the requests take the player is marked on the world map with a gold star.
 
 ### Camps, raids and conquest in play (M6)
 
-Near a player, the war's camps and what they do come to life.
+Near a player, the war's camps come to life. (Built for the camps of M1's expeditions, their raids
+and the sorties that played them out near a player; since M18 the camps are the armies' forward
+camps, and the raids, sorties, sallies and relief are no more: *Standing armies*.)
 
-**Camps.** A camp (one of the war's forces) is **pitched** once a player's within 150 metres of it
-(`CAMP_NEAR`), and struck once every player's more than 300 off, or it's gone from the war
-(broken, gone home, or into the town it took). Pitched (`war/muster.js` `campOf`, the same every
-time for a camp):
+**Camps.** An army's camp (the war's `camps`) is **pitched** once a player's within 150 metres of
+it (`CAMP_NEAR`), and struck once every player's more than 300 off, or it's gone from the war
+(razed, or struck by its own). Pitched (`war/muster.js` `campOf`, the same every time for a camp):
 - **five tents** round its fire, their doors to it: ridge tents of undyed canvas with a little of
   their people's colour (`world/camps3d.js`);
 - **a fire** in a ring of stones, logs crossed in it, flames flickering; **its banner** beside it;
-- **its sentries**, round the tents facing out (a third of the camp, up to six), each going after an
-  enemy within 18 metres of their post. Each stands for a share of the camp: one who falls takes
-  that share off it in the war (`war.loss`). A camp too few to hold (under 3) is broken.
-
-**Sorties.** While a town's soldiers are out (a player near it: `war.watch`), what a camp does
-against it isn't reckoned in the war but **played out** there: the war sends it out as a **sortie**
-(`war.js` `#sortie`, the host's `#setOut`) and waits for it to be settled (`war.settle`):
-
-| | Who comes | From, and making for | Over when | Then |
-| --- | --- | --- | --- | --- |
-| **A raid** | raiders (a third of the camp, up to 6) | 40 m out from the town's edge on the camp's side, to its fields just outside it | they're all down; or 30 s after reaching the fields (within 10 m) | reached: the town's taxes stopped, a grudge (`raided`); else driven off (`repulsed`) |
-| **An assault** | attackers (the whole camp, up to 16) | the same, into the town | they're all down; or the town's defenders are | none of its defenders left: the town's **taken**, its new holders' soldiers out at once; else thrown back |
-
-- Each raider or attacker makes for a square of their own by the mark, not all for the one.
-- Each raider or attacker stands for a share of those the camp sent. Their losses and the town's
-  are the war's as they fall. Those still standing when it's over go back to their camp.
-- A sortie goes on 2.5 minutes at most. If every player leaves the town first, the rest of it is
-  reckoned in the war (as it would have been), and one out for 3 turns (`SORTIE_TURNS`) is too.
-- A sally from the town, relief against a camp and the rest of the war are reckoned as ever.
-- **On the screen:** "Raiders of the Orcs are coming for Ashford's fields!", "The Orcs are
-  storming Ashford!"; and how it ended: the fields burnt, the raid driven off, the assault thrown
-  back, the town fallen, the camp broken. The news tells of it too (`news.js`: "sortie", and a
-  raid "driven off").
+- **its guard** as its sentries, round the tents facing out (up to six), each going after an enemy
+  within 18 metres of their post. Each stands for a share of the guard: one who falls takes that
+  share off it in the war (`war.loss`, by whose people did it). Its guard all put down, the camp's
+  **razed**.
 
 **Break the camp.** From a Retainer up, a reeve (or the keep) may ask the player to break up an
-enemy camp outside one of their towns (above).
+enemy camp within a march (1 km) of one of their towns; the guild asks the same, of a camp near
+its town ("The camp outside the walls").
 
-**Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
-and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+**Kept.** The camps pitched are in the host's snapshot, and the camps themselves in the war's, so a
+saved or joined world carries on exactly.
 
 ### The works (M12)
 
@@ -861,13 +848,14 @@ Each people has six works in its lands, where what it builds with comes from
     aggression × 0.5 a turn. Beating it, they carry off half of what it carried.
   - **The brigands of a wild camp** of outlaws, raiders or goblins within 250 m of its way: 0.12
     a turn. Beating it, they carry off the lot.
-- **Seized.** From Border wars on (`WORKED.from`), a realm's expeditions go for an enemy's works
-  as well as its towns:
+- **Seized.** From Border wars on (`WORKED.from`), a realm's army goes for an enemy's works as
+  well as its towns (*Standing armies*):
   - a works is worth half again a village (`WORKED.worth`), and more if the realm's stores are
     short of what it yields;
-  - the expedition falls on its guard once within 120 m; won, the works is theirs, held by up to
-    6 of them, and its yard with it. Its old holders bear them a grudge (10);
-  - while a player's near the works, the expedition waits there, for 3 turns at most.
+  - the army falls on its guard once within 120 m; won, the works is theirs, held by up to 6 of
+    the army (a quarter of it at most), and its yard with it. Its old holders bear them a grudge
+    (10);
+  - while a player's near the works, the army waits there, for 3 turns at most (`WATCH_TURNS`).
 - **Overrun.** Any turn, the wild's bands may overrun a works (`OVERRUN`):
   - the chance is 0.1%, and up to 2.5% more the emptier its guard (by the square of how empty);
   - overrun, its guard and its convoy's guards at home are put to the sword, its yard is
@@ -1002,10 +990,12 @@ plan, or anywhere it may be (`war.build`).
 The plan's score is weighed 1 + 3 × their counsel's weight (`COUNCIL.counsel`; a Knight's weighs
 0.4, a Lord's 0.7, a Councillor's 1) for 20 turns (`COUNSEL_TURNS`), or till it's built.
 
-**Besieged** (`#besiege`, `FORT_SIEGE`): an enemy camp or army within 250 m falls on a
-fortification each turn, taking 10 of its strength for each of them; its defenders bring down 1
-of them a turn (a garrison 2). At nothing, it's razed by them, and its people bear them a grudge
-(6). Not while a player's near it: that's played out in the world.
+**Attacked** (`#attack`, `FORT_SIEGE`): an enemy's army goes for a fortification on purpose, when
+it covers a town the army's after (below) or a player orders it to (*Standing armies*). Once
+within 120 m, it falls on it each turn, taking 10 of its strength for each of the army; its
+defenders bring down 1 of them a turn (a garrison 2). At nothing, it's razed by them, and its
+people bear them a grudge (6). Not while a player's near it, for 3 turns (`WATCH_TURNS`): that's
+played out in the world.
 
 **Near a player** (`host.js` `FORT_NEAR`): stood up in the battle once a player's within 200 m,
 let go once every player's beyond 350:
@@ -1072,9 +1062,9 @@ them carries on with none), and those stood up near a player in the host's (`SNA
   player's near either of them: that's played out in the world.
 
 **A town covered** (`FORT_COVER`): while its holders' fortification (or their liege's, or one
-serving the same) stands within 250 m of its edge (`war.coverOf`), a town can't be stormed. Those
-besieging it fall on that fortification first, wherever it stands (`camp.against`), and storm it
-once it's razed. Raids on its fields go on.
+serving the same) stands within 250 m of its edge (`war.coverOf`), a town can't be stormed. An
+army sent against it goes for that fortification first, wherever it stands (from a camp built
+within reach of it if it has none: *Standing armies*), and for the town once it's razed.
 
 **Near a player** (`host.js` `SQUADS_NEAR`), stood up with their garrison:
 - **its patrols,** each on a ring of 8 stops round it, 80 m and 200 m out (the second turned half
@@ -1118,30 +1108,37 @@ player at its door), of whoever holds the town:
 - **made up** a while after any of them falls (`RELIEF_MS`), from the garrison as it is then, once
   no player's in the room; let go with the building, when every player's far.
 
-**Taken.** Once its captain and every guardsman are down, the barracks is **cleared**
-(`#barracksFell`), and the town's taken by the people of whoever brought the last of them down
-(`war.capture`), if:
-- they're at war with its holders (else "peace": not theirs to take);
-- and the age lets towns of its kind be taken (`STAGES`: else "age").
+**Cleared.** Once its captain and every guardsman are down, the barracks is **cleared**
+(`#barracksFell`). Since M18 that doesn't take the town by itself (*Standing armies*): a town is
+taken only once its whole garrison's put to the sword, its guards and patrols outside as well as
+its barracks. Each of them stands for their share of it (a guardsman or the captain for one), so
+the barracks is one part of it. The player's told how it stands, in the barracks or of their
+people's doing:
+- **taken:** that was the last of the garrison ("…is taken! The last of its garrison put to the
+  sword…");
+- **garrison:** the rest of it's still out there;
+- **peace:** they're not at war with its holders, so it's not theirs to take;
+- **age:** the age doesn't let towns of its kind be taken (`STAGES`).
 
-A town taken so is theirs as a town stormed is (`#hold`): its folk stay; its new holders' soldiers
-come out round it at once, and into its barracks once no player's in it; it's held by a quarter
-of a full garrison of theirs (`BARRACKS_TAKEN`: a village 2, a town 3, a city 6, a capital 10),
-which their rulers fill as ever; its old holders bear a grudge. A people's seat taken so makes
-them its takers' vassal. A fortification covering the town doesn't stop it: that's only for camps
-storming it. The news tells it ("…has fallen to the Humans, its barracks put to the sword"), and
-the player's told, in the barracks or of their people's doing: the town taken, or why it isn't.
-Cleared and not taken, it's made up sooner (`BARRACKS_NEAR.relief`, 20 seconds), once they've
-left it.
+**Taken** (`war.loss` with `by`, `#hold`, how "played"): the last of a town's garrison brought
+down in the world, by a people at war with its holders and in an age that lets towns of its kind
+be taken, makes it theirs as a town stormed is. Its folk stay; its new holders' soldiers come out
+round it at once, and into its barracks once no player's in it; it's held by a quarter of a full
+garrison of theirs (`TAKEN`: a village 2, a town 3, a city 6, a capital 10), which their rulers
+fill as ever; its old holders bear a grudge. A people's seat taken so makes them its takers'
+vassal. A fortification covering the town doesn't stop it: that's only for armies storming it.
+The news tells it ("…has fallen to the Humans, its garrison put to the sword…"), and the player's
+told. Cleared and not taken, the barracks is made up sooner (`BARRACKS_NEAR.relief`, 20 seconds),
+once they've left it.
 
 **The keep's request** (`standing.js` *Take the town*): from a Knight, the nearest enemy town the
-age lets be taken. It's done once the player's people take it by its barracks, within 60 turns;
-it comes to nothing if it's taken any other way.
+age lets be taken. It's done once the player's people take it in the world, its whole garrison put
+to the sword, within 60 turns; it comes to nothing if it's taken any other way.
 
 **The war half as fast.** Each age comes after 180 turns without the players' might (three hours
-of play: `TURNS_PER_STAGE`, it was 90), and a camp sits 6 turns before its town before it may
-storm it (`SIEGE`, it was 3). Played out alone, six worlds, 1,080 turns (18 hours), no player's
-might:
+of play: `TURNS_PER_STAGE`, it was 90), and a camp sat 6 turns before its town before it might
+storm it (`SIEGE`, it was 3; retired in M18 with the camps' sieges: *Standing armies* has the war's
+pace since). Played out alone, six worlds, 1,080 turns (18 hours), no player's might:
 
 | | Before (M15) | Now |
 | --- | --- | --- |
@@ -1156,7 +1153,8 @@ towns taken in 400 turns, from 21 to 67. Either way the war still moves, peoples
 the forts still go up and come down.
 
 **Kept.** Each barracks' garrison stood up is in the host's snapshot (`SNAPSHOT_VERSION` 13). The
-war keeps nothing new: a town taken so is told in its log (`taken`, `how: "barracks"`).
+war keeps nothing new: a town taken in the world is told in its log (`taken`, `how: "played"`; it
+was "barracks" before M18).
 
 ### Lines of battle (M17)
 
@@ -1238,6 +1236,134 @@ after whom is looked up rather than looked through.
 
 **Kept.** The lines (`formations`) and each soldier's place in one are in the battle's snapshot,
 and so the host's (`SNAPSHOT_VERSION` 15); the rules two games share changed (`NET_VERSION` 75).
+
+### Standing armies (M18)
+
+The second of the standing armies' parts: the armies and reserves in the war, as numbers
+(`core/war/armies.js`, `war.js`). Their supply (M19), the armies near a player (M20) and the war
+table they're ordered from (M21) come after.
+
+**Each people's two forces** (`ARMY`, `war.armyOf`, `war.reserveOf`):
+- **its army,** raised at its seat once it's at war and the age is past its uneasy peace (or by a
+  player's orders), out from the camps it builds;
+- **its reserve,** at its seat from the start, out only in its own lands. It needs no supply.
+- **How strong:** each up to 80 at the height of the war, the age's share of that before then (20,
+  40, 60, 80: `STAGES` `army`); a vassal's half that (`ARMY.vassal`). A people brought under has
+  its army and reserve cut to a vassal's, the rest going into its garrisons (`#trim`), and both
+  fight for its liege.
+
+**Mustered over time** (`#muster`). Each town raises as many a turn as it can (`HOLDINGS`
+`produce`: a capital 4, a city 3, a town 2, a village 1), 5 gold each. Its people keep gold back
+for three turns of keep and, at war, for the war (15, and 40 more the more warlike). In this order:
+1. the garrisons to half: the seat first, then those threatened (an enemy's army or camp within
+   1 km), then the emptiest;
+2. the reserve made up, then the army, from the towns nearest them;
+3. the garrisons to the full;
+4. the works' guards, and their convoys'.
+
+A vassal's towns raise only for its own.
+
+**Reinforcements** (`REINFORCE`). Those raised for an army or reserve that isn't at their town go
+out to it as a column:
+- 250 m a turn, straight for where it is now;
+- two columns for the same within 150 m of each other band together;
+- they join it within 60 m;
+- an enemy's army within 120 m falls on them on the road;
+- theirs gone, they go into the nearest of their people's towns.
+
+**Camps** (`CAMP`, `war.camps`: `{ id, realm, at, guard, built, done, toward, used, skirmished }`).
+An army attacks only what's within 300 m of one of its people's camps (of the edge of a town's
+ground). So:
+- **Built ahead,** as a fortification is. Sent against something out of reach, an army marches to
+  a site 180 m out from it on its way there (on dry land, off the roads) and builds a camp: 20 gold,
+  2 turns going up, 6 of the army staying to hold it, made up from the army while it's there. Once
+  it's up, the army goes against what it was sent for.
+- **A scout** out from each, seeing 300 m round it (`SIGHT`; an army and a town see 150), for the
+  war table's map (M21).
+- **Skirmishers,** a pair every 3 turns, against the nearest of the enemy's within 600 m: a town's
+  garrison (never its last, and its taxes lost for the turn), a works' guard, an army, a reserve,
+  reinforcements, a convoy or a camp. Each brings one down half the time, and is lost a quarter of
+  the time. Not against anything a player's near: that's for the world (M20).
+- **Struck:** a people keeps 3 camps at most, the least used struck for a new one; one no army's
+  been near for 40 turns is struck too. Its guard goes into the nearest of their towns.
+- **Razed:** an enemy army puts its guard down; or, in the world, its sentries all brought down with
+  no army of theirs by it (`war.loss`).
+
+**The army's campaign** (`#command`, `#campaign`):
+- **Raised,** it waits at its seat till it's 70% of its full strength (`ARMY.ready`).
+- **Sent:** its rulers choose what to go against: the enemy's town that's nearest, weakest and worth
+  most, of a kind the age lets be taken. A seat counts as nearer the more warlike they are, once
+  they're strong enough to take it; so does a town a player's counselled them to march on (M4
+  *Counsel*). From Border wars on, a works too. A town covered by its holders' fortification (M15),
+  that first.
+- **Beaten back** below half what it went in with (`ARMY.regroup`), it falls back to its camp to be
+  made up, and goes back at it once it's ready again.
+- **Done,** it goes back to its camp to wait for what's next; at peace, home.
+
+**The fighting** (`#engage`, `#battle`, `#attack`), each turn:
+- **In the field:** an army and an enemy's army or reserve within 120 m fight it out. The beaten
+  falls back (an army to its camp, a reserve home) and isn't fallen on again for 2 turns
+  (`ARMY.flee`); an army brought to nothing is gone (`destroyed`), and its people can raise
+  another.
+- **An army mustering at its seat** is within its walls, not in the field: no army fights it there,
+  and no reserve goes out against it.
+- **Attacking,** once within 120 m of what it's after:
+  - **a town:** its garrison behind its walls, its people's reserve beside it if that's within
+    120 m (and their army, if it's mustering there), and at a seat its ruler and the captain of its
+    guard (`LEADERS`, 2) last. Put to the sword to the last, the town is theirs, held by half a
+    full garrison of the army (`HELD`). There's no other way to take a town;
+  - **a works:** its guard; put down, it's seized, held by up to 6 of the army;
+  - **a fortification:** battered, 10 of its strength a turn for each of the army, its defenders
+    bringing 1 or 2 down; razed at nothing;
+  - **a camp:** its guard; put down, it's razed.
+- **Not what a player's near,** for 3 turns (`WATCH_TURNS`): that's played out in the world.
+
+**The reserve** (`#defend`) goes out against an enemy army within 1 km of one of its people's towns,
+if it's at least 0.4 as strong: one attacking one of their towns first, then the nearest. It goes
+300 m a turn, anywhere in its own lands and never beyond them, and home to its seat once there's
+none. Beside a town attacked, it fights with its garrison. Two reserves never fight each other.
+
+**A player's orders** (`war.order(realm, orders, { by })`), a Lord's or a Councillor's, from the
+war table in the keep at their seat once it's built (M21):
+- `{ raise: true }`: an army raised at its seat, made up from its towns over time;
+- `{ disband: true }`: each of it back into the garrisons of their towns, the nearest first (up to
+  half again a full garrison each), with any reinforcements on their way;
+- `{ camp: [x, y] }`: to build a camp there, or go to theirs there, and hold;
+- `{ attack: id }`: an enemy's town, works, fortification or camp within reach of one of their
+  camps, until it's taken or razed;
+- `{ home: true }`: back to its seat.
+
+Orders are carried out before anything its rulers would have it do, and last until they are:
+beaten back, the army is made up and goes back at it. A Knight counsels where it marches next (M4
+*Counsel*).
+
+**Gone:** M1's expeditions against towns, their camps' sieges (`SIEGE`), their raids, M6's sorties,
+sallies and relief, and M16's barracks taking a town by itself. Expeditions remain only to win back
+works from the wild.
+
+**Played out alone,** six worlds, no player's might, 1,080 turns (18 hours), beside M16's:
+
+| | M16 | Now |
+| --- | --- | --- |
+| First town taken | turn 180 to 192 | turn 195 to 225 |
+| First seat taken | turn 540 to 585 | turn 566 to 823 |
+| Towns taken by turn 360 | 5 to 11 | 5 to 16 |
+| Towns taken by turn 720 | 26 to 57 | 29 to 54 |
+| Towns taken by turn 1,080 | 58 to 100 | 43 to 87 |
+
+At the players' full might, 400 turns: the first town on turn 34 to 55, and 14 to 41 taken (15 to
+52 in M16). Each world sees 56 to 97 armies destroyed in 1,080 turns, every one of them 30 strong
+or more at its height; most of the fighting in the field is a reserve against an army in its
+lands, and two armies seldom meet (2 to 6 times a world), each going for a different town. A
+people's army raised again at its seat used to be put down there by an enemy's reserve, over and
+over, before it was ever made up (110 of 188 armies destroyed in one world): hence the rule above,
+that an army mustering at its seat is within its walls. The balance across many more wars, with
+the supply and the war table, is to come once they're built.
+
+**Kept.** The camps, the armies and reserves and their reinforcements are in the war's snapshot
+(`WAR_VERSION` 5). A war kept before them is carried on: its camps, relief and expeditions against
+towns go back into their towns' garrisons, and each people gets its reserve. The host keeps no
+sorties now (`SNAPSHOT_VERSION` 16), and what two games share changed (`NET_VERSION` 76).
 
 ### Playing together (M11)
 
@@ -1490,8 +1616,8 @@ journal shows the player's company: each follower, how they are, and how many th
 ### News and rumours, and the guild's board (M8)
 
 **The war's news** is heard as it goes round (`news.js` `rumoursAt`):
-- in a town: what's happened within 5 km of it (raids, assaults, towns taken, camps made, armies
-  marching...), and what's heard everywhere (wars declared and joined, alliances broken, truces and
+- in a town: what's happened within 5 km of it (skirmishes, assaults, towns taken, camps made,
+  armies marching...), and what's heard everywhere (wars declared and joined, alliances broken, truces and
   treaties, peoples brought under another, risings, the war's new ages, victory);
 - newest first, told in words (`tell`), three at most, none twice; not the war's small business
   (who's met whom, counsel, unpaid soldiers).
@@ -1619,7 +1745,7 @@ them (`ENVOY`), and let go once every player's more than 300 off:
 **Grudges and favours** (a realm's `standing` towards another: `war.remember`, fading) weigh on
 whom a people makes war on, allies with and heeds (M1). Players earn them:
 - **a grudge** for every blow on a soldier of a people not at war with theirs (M2), for a camp's
-  raids and assaults (M6), and for an envoy waylaid;
+  skirmishers and an army's assaults (M18), and for an envoy waylaid;
 - **a favour** (2) when a player brings down a people's enemy where that people's soldiers can see
   it (within 25 metres, `FAVOUR_SIGHT`): an ally's, or a neutral's.
 

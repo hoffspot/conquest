@@ -208,7 +208,7 @@ describe("a town covered by its holders' fortification (war.js FORT_COVER)", () 
         assert.equal(war.coverOf(town)?.id, `fort-human-${FORT_COVER - 30}`);
     });
 
-    it("can't be stormed while it's covered: those besieging it fall on the fortification first, and storm it once it's razed", () => {
+    it("can't be fallen on while it's covered: an army against it falls on the fortification first, and on it once that's razed", () => {
         const war = new War(plan);
         const town = war.towns.find(({ owner, kind }) => owner === "human" && kind === "village") ?? war.towns.find(({ owner, kind }) => owner === "human" && kind !== "capital");
         const radius = plan.places.find(({ id }) => id === town.id).radius;
@@ -222,32 +222,26 @@ describe("a town covered by its holders' fortification (war.js FORT_COVER)", () 
         war.forts.push(cover);
         town.garrison = 2;
 
-        const camp = { id: "force-test", realm: "orc", kind: "camp", size: 40, at, path: [at], leg: 0, target: town.id, home, mission: null, about: null, since: war.turn - 10 };
-
-        war.forces.push(camp);
+        // (An orc army at its camp before the town, ordered against it)
+        war.camps.push({ id: "camp-test", realm: "orc", at, guard: 6, built: 0, done: 0, toward: town.id, used: 1e6, skirmished: 1e6 });
+        war.forces.push({ id: "force-test", realm: "orc", kind: "army", size: 60, at: [...at], path: [[...at]], leg: 0, target: null, home, mission: "camp", about: [...at], camp: "camp-test", orders: null, went: 60, arrived: null, since: 0 });
+        assert.equal(war.order("orc", { attack: town.id }), true);
 
         const events = [];
 
-        for (let k = 0; k < 3 && war.fort(cover.id); k++) {
+        for (let k = 0; k < 40 && town.owner === "human"; k++) {
             war.step();
             events.push(...war.advance(0));
         }
 
-        assert.ok(apart(camp.at, cover.at) > FORT_SIEGE.reach, "further off than a siege reaches");
+        assert.ok(apart(at, cover.at) > FORT_SIEGE.reach, "further off than a siege reaches");
         assert.ok(events.some(({ type, fort, by }) => type === "razed" && fort === cover.id && by === "orc"), "fallen on, and razed");
 
-        const stormed = events.findIndex(({ type, town: id }) => type === "assault" && id === town.id);
+        const assaulted = events.findIndex(({ type, town: id }) => type === "assault" && id === town.id);
         const razed = events.findIndex(({ type, fort }) => type === "razed" && fort === cover.id);
 
-        assert.ok(stormed === -1 || stormed > razed, "not stormed while it was covered");
-
-        // (Uncovered now: stormed)
-        for (let k = 0; k < 4 && town.owner === "human"; k++) {
-            war.step();
-        }
-
-        assert.equal(town.owner, "orc");
-        assert.equal(camp.against ?? null, null, "nothing more to fall on");
+        assert.ok(assaulted > razed, "not fallen on while it was covered");
+        assert.equal(town.owner, "orc", "(uncovered: taken)");
     });
 });
 

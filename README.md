@@ -624,8 +624,8 @@ client/                 The game (static files served to the browser)
     war/                The war between the peoples (see docs/WAR.md): war.js the realms, towns,
                         forces, turns and conquest; peoples.js their temperaments and rulers;
                         roads.js the ways their forces go; news.js the war told in words;
-                        muster.js where a town's guards stand and its patrols go, how a camp is
-                        laid out, and where its raids come from
+                        muster.js where a town's guards stand and its patrols go, and how a
+                        camp is laid out; armies.js the standing armies' and their camps' sizes
     battle.js           Moving (over the navigation meshes, round each other), fighting,
                         damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks (and the wild's creatures' own)

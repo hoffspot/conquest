@@ -64,9 +64,9 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
 
         // A camp of theirs, but not near: still none; near: a bounty, saying where they are (to
         // an adventurer of the rank that opens bounties: none to a Copper)
-        war.forces.push({ id: "force-900", realm: far.id, kind: "camp", size: 20, at: [town.at[0] + GUILD_REACH, town.at[1]], path: [], leg: 0, target: "elsewhere", home: war.realm(far.id).capital, since: 0 });
+        war.camps.push({ id: "camp-900", realm: far.id, at: [town.at[0] + GUILD_REACH, town.at[1]], guard: 6, built: 0, done: 0, toward: null, used: 0, skirmished: 0 });
         assert.ok(!offers(war, town, 200, 3, undefined, IRON).some(({ kind }) => kind === "hunt"));
-        war.force("force-900").at = [town.at[0] + GUILD_REACH - SOLDIERS_OUT.camp - 200, town.at[1]];
+        war.camp("camp-900").at = [town.at[0] + GUILD_REACH - SOLDIERS_OUT.camp - 200, town.at[1]];
         assert.ok(!offers(war, town).some(({ kind }) => kind === "hunt"), "none for a Copper");
 
         const hunts = offers(war, town, 200, 3, undefined, IRON).filter(({ kind }) => kind === "hunt");
@@ -177,16 +177,16 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
         const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
-        war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0], town.at[1] + GUILD_REACH + 100], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
+        war.camps.push({ id: "camp-900", realm: "orc", at: [town.at[0], town.at[1] + GUILD_REACH + 100], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
         assert.ok(!offers(war, town, 200, 3, undefined, BRONZE).some(({ kind }) => kind === "camp"));
 
-        war.force("force-900").at = [town.at[0], town.at[1] + 400];
+        war.camp("camp-900").at = [town.at[0], town.at[1] + 400];
         assert.ok(!offers(war, town).some(({ kind }) => kind === "camp"), "none for a Copper");
 
         const camps = offers(war, town, 200, 3, undefined, BRONZE).filter(({ kind }) => kind === "camp");
 
         assert.ok(camps.length > 10);
-        assert.ok(camps.every(({ target, text }) => target.force === "force-900" && text.includes(`0.4 km south of ${town.name}`)));
+        assert.ok(camps.every(({ target, text }) => target.force === "camp-900" && text.includes(`0.4 km south of ${town.name}`)));
     });
 });
 
@@ -555,7 +555,7 @@ describe("the guilds' ranks: one card, good at every branch (standing.js GUILD_R
             const foe = town.owner === "orc" ? "human" : "orc";
 
             war.relations[[town.owner, foe].sort().join("|")] = { state: "hostile", since: 0 };
-            war.forces.push({ id: `force-${town.id}`, realm: foe, kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm(foe).capital, since: 0 });
+            war.camps.push({ id: `camp-${town.id}`, realm: foe, at: [town.at[0] + 300, town.at[1]], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
 
             // (The places near held by outlaws or the dead)
             const held = placesOf(plan).filter((place) => apart(place.at, town.at) <= GUILD_REACH && bandOf(place, holderOf(plan, place, war.places?.[place.id], war.turn)));

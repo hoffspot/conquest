@@ -125,18 +125,18 @@ describe("standing (standing.js)", () => {
         assert.ok(scouting.every(({ target }) => target.town === nearest.id));
 
         // An enemy camp near: that, instead
-        fresh.forces.push({ id: "force-99", realm: enemy, kind: "camp", size: 10, at: [town.at[0] + 600, town.at[1]], path: [], leg: 0, target: town.id, home: nearest.id, since: 0 });
+        fresh.camps.push({ id: "camp-99", realm: enemy, at: [town.at[0] + 600, town.at[1]], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
 
         const camped = offers(fresh, { town: town.id, rank: OPENS.scout }).filter((request) => request?.kind === "scout");
 
-        assert.ok(camped.every(({ target }) => target.force === "force-99"));
+        assert.ok(camped.every(({ target }) => target.force === "camp-99"));
         assert.deepEqual(whereTo(camped[0], fresh).at, [town.at[0] + 600, town.at[1]]);
 
         // And, from a retainer up, to hold the town it threatens
         const defend = offers(fresh, { town: town.id, rank: OPENS.defend }).filter((request) => request?.kind === "defend");
 
         assert.ok(defend.length);
-        assert.ok(defend.every(({ target, until }) => target.town === town.id && target.camp === "force-99" && until === null));
+        assert.ok(defend.every(({ target, until }) => target.town === town.id && target.camp === "camp-99" && until === null));
         assert.ok(!offers(fresh, { town: town.id, rank: OPENS.defend - 1 }).some((request) => request?.kind === "defend"));
 
         // The keep asks the weightier things, for more

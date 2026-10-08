@@ -153,7 +153,7 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
         const random = createRandom(4);
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
-        war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
+        war.camps.push({ id: "camp-900", realm: "orc", at: [town.at[0] + 300, town.at[1]], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
 
         // (Offered to the rank that opens the camp outside, and a bounty)
         const guildRank = Math.max(REQUESTS.camp.rank, REQUESTS.hunt.rank);
