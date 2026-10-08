@@ -2885,8 +2885,9 @@ test("the guild's portal: a character kept from before there were portals has th
         return game.view.toScreen(game.view.camera.position.clone().set(ox + 19.6, 0.6, oz + 12.5));
     });
 
+    // (Walked up to it in the game's own time, as fast as it draws: a slow runner, a slow walk)
     await page.mouse.click(at.x, at.y);
-    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 30000, polling: 100 });
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 90000, polling: 100 });
 
     const map = await page.evaluate(() => {
         const { game, worldMap } = window.pellagos;
