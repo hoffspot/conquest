@@ -7077,3 +7077,138 @@ test.describe("on a phone", () => {
         expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);
     });
 });
+
+test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; met, they fight, and the fallen lie", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=2");
+
+    // (Out of town, on open ground, the camera drawn back to see it all)
+    const ground = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const squares = game.world.maps?.town?.squares ?? game.world.squares;
+        const open = (x0, y0) => {
+            for (let y = y0 - 70; y < y0 + 10; y += 2) {
+                for (let x = x0 - 25; x < x0 + 25; x += 2) {
+                    if (squares.blocked(x, y) || squares.opaque(x, y)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        session.view.zoom(10);
+
+        for (let r = 60; r < 1500; r += 20) {
+            for (let a = 0; a < 24; a++) {
+                const [x, y] = [Math.round(me.x + r * Math.cos((a * Math.PI) / 12)), Math.round(me.y + r * Math.sin((a * Math.PI) / 12))];
+
+                if (open(x, y)) {
+                    game.host.battle.place(game.me, "town", [x, y], { facing: Math.PI });
+
+                    return [x, y];
+                }
+            }
+        }
+
+        return null;
+    });
+
+    expect(ground).not.toBeNull();
+    await playUntil(page, () => false, { seconds: 4 });
+
+    // Mustered from the debug overlay, the way the camera looks: held where they stand till they're
+    // all drawn
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.fieldBattle(40);
+        window.held = {};
+
+        for (const actor of game.battle.actors.filter(({ id }) => id.startsWith("field-"))) {
+            window.held[actor.id] = actor.patrol;
+            Object.assign(actor, { patrol: [actor.patrol[0]], patrolIndex: 0 });
+        }
+    });
+
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+
+        // (And the nearest built in full, in the crowd till they are)
+        const building = [...game.enlisting, ...game.enlistees.keys()].some((id) => id.startsWith("field-"));
+
+        return fielded.length === 80 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building;
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 120 })).toBe(true);
+
+    const seen = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const crowded = fielded.filter(({ id }) => game.avatars.get(id).constructor.name === "CrowdAvatar");
+
+        game.advance(1 / 30, { render: false });
+        session.view.render();
+
+        const batches = [];
+
+        session.view.scene.traverse((node) => node.isInstancedMesh && node.name.startsWith("crowd ") && node.visible && batches.push({ name: node.name, count: node.count }));
+
+        return {
+            crowded: crowded.length,
+            full: fielded.length - crowded.length,
+            kinds: new Set(crowded.map(({ id }) => game.avatars.get(id).key)).size,
+            instances: batches.reduce((sum, { count }) => sum + count, 0),
+            batches: batches.length,
+            soldiers: session.view.quality.soldiers,
+        };
+    });
+
+    // (The few nearest in full, as many as the quality level draws so (and up to 3 more drawn so
+    // already, let go only once they're further: app/game.js MARSHAL), the rest in their kind's crowd)
+    expect(seen.full).toBeGreaterThanOrEqual(seen.soldiers.full);
+    expect(seen.full).toBeLessThanOrEqual(seen.soldiers.full + 3);
+    expect(seen.crowded).toBe(80 - seen.full);
+
+    // (Each kind drawn in one go, or two, near and far: a few dozen instances, those in view, in a
+    // handful of draws)
+    expect(seen.kinds).toBeGreaterThanOrEqual(3);
+    expect(seen.batches).toBeLessThanOrEqual(2 * seen.kinds);
+    expect(seen.instances).toBeGreaterThan(20);
+    expect(seen.instances).toBeLessThanOrEqual(seen.crowded);
+
+    // Let go, they make for each other and fight: the fallen of the crowds lie where they fell
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const [id, patrol] of Object.entries(window.held)) {
+            Object.assign(game.battle.actor(id), { patrol, patrolIndex: 1 });
+        }
+    });
+
+    const fallen = () => {
+        const { game } = window.pellagos;
+
+        return game.battle.actors.filter(({ id, dead }) => id.startsWith("field-") && dead && game.avatars.get(id)?.constructor.name === "CrowdAvatar").length >= 4;
+    };
+
+    expect(await playUntil(page, fallen, { seconds: 90 })).toBe(true);
+
+    const lying = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const one = game.battle.actors.find(({ id, dead }) => id.startsWith("field-") && dead && game.avatars.get(id)?.constructor.name === "CrowdAvatar");
+        const avatar = game.avatars.get(one.id);
+        const { table } = game.crowds.kinds.get(avatar.key).template;
+        const [row] = avatar.frameIn(table);
+
+        return { from: table.die.start, to: table.die.start + table.die.frames, row };
+    });
+
+    expect(lying.row).toBeGreaterThanOrEqual(lying.from);
+    expect(lying.row).toBeLessThan(lying.to);
+});

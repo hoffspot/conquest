@@ -70,6 +70,7 @@ import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SC
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
+import { Crowd, CrowdAvatar } from "../world/crowd.js";
 import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
@@ -334,6 +335,14 @@ const TOGETHER = Object.freeze({
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
+// Soldiers in their crowds (world/crowd.js): a battle's, with more than `from` of them about the
+// player (a town's own guards are never so many), those nearest, and whoever's fighting the
+// player, drawn in full (as many as QUALITY soldiers' `full`) and the rest in the crowd, as their
+// kind's figure is made. Looked at every `every` seconds; one drawn in full let go to the crowd
+// only once it's `margin` places past the last drawn in full. Each kind's figure made with `share`
+// of the frame's time for building those drawn (VISITS.budget), first
+const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
+
 // How near (metres) an adventurers' cache has to be to be seen, and marked on the maps from then
 // on (core/caches.js: they're put out further off than this, ahead of the player)
 const CACHE_SEEN = 60;
@@ -480,7 +489,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -770,6 +779,10 @@ export class Game {
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
 
+        // Soldiers waiting on their kind's figure in the crowds to be drawn (#marshal), and those crowds
+        this.crowdWaiting = new Set();
+        this.crowds = null;
+
         // Those of them begun, being drawn a step at a time (the nearest the player first: one
         // further off put by for one nearer, and taken up again after): id -> { actor, steps }
         this.enlistees = new Map();
@@ -914,7 +927,8 @@ export class Game {
         for (const actor of dark ? this.battle.actors : []) {
             const avatar = carriesTorch(actor, dark) && actor.map === "town" ? this.avatars.get(actor.id) : null;
 
-            if (avatar?.character) {
+            // (Not one of a crowd: world/crowd.js)
+            if (avatar?.character && !(avatar instanceof CrowdAvatar)) {
                 carriers.push({ id: actor.id, character: avatar.character, shown: avatar.object.visible });
             }
         }
@@ -1274,7 +1288,8 @@ export class Game {
     // The same, a step at a time (each a yield: Character.building's), so that drawing someone new
     // is spread over frames. Returns their avatar (none if they've gone meanwhile)
     *#dressing(actor) {
-        if (this.avatars.has(actor.id)) {
+        // (Drawn already: but one of a crowd's built in full, to take its place)
+        if (this.#drawnInFull(actor.id)) {
             return this.avatars.get(actor.id);
         }
 
@@ -1364,7 +1379,7 @@ export class Game {
     *#built(actor, options) {
         const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), ...options });
 
-        if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
+        if (this.#drawnInFull(actor.id) || !this.battle.actor(actor.id)) {
             character.dispose();
 
             return null;
@@ -1523,6 +1538,12 @@ export class Game {
         };
         character.object.name = id;
         this.view.scene.add(character.object);
+
+        // (One of a crowd till now, drawn in full in its place)
+        if (this.avatars.get(id) instanceof CrowdAvatar) {
+            this.avatars.get(id).character.dispose();
+        }
+
         this.avatars.set(id, avatar);
 
         if (wounds) {
@@ -1651,6 +1672,8 @@ export class Game {
             avatar.object.removeFromParent();
             avatar.character.dispose();
         }
+
+        this.crowds?.dispose();
 
         for (const wounds of this.wounds.values()) {
             wounds.dispose();
@@ -2120,6 +2143,7 @@ export class Game {
             this.#syncForts();
         }
         this.contacts?.begin();
+        this.#marshal(dt);
         this.#crowding();
         this.#cheered();
 
@@ -2179,6 +2203,7 @@ export class Game {
         }
 
         this.contacts?.end();
+        this.crowds?.draw(view.camera);
 
         // Projectiles, between their last two steps, rising and falling on the way
         for (const projectile of battle.projectiles) {
@@ -2496,6 +2521,134 @@ export class Game {
         }
 
         return this.clock < notice.until ? mine : null;
+    }
+
+    // Whether someone's drawn as themselves (not one of a crowd, nor waiting to be drawn)
+    #drawnInFull(id) {
+        const avatar = this.avatars.get(id);
+
+        return Boolean(avatar) && !(avatar instanceof CrowdAvatar);
+    }
+
+    // The soldiers about drawn in full or in the crowds (world/crowd.js, MARSHAL): with a battle's
+    // near the player (more than MARSHAL.from), those nearest (whoever's fighting the player
+    // first) in full (QUALITY soldiers), the rest in their kind's crowd once its figure's made;
+    // one waiting on its kind's figure not drawn meanwhile, nor built in full (but where it can't
+    // be made). A couple of times a second
+    #marshal(dt) {
+        if ((this.marshalClock = (this.marshalClock ?? 0) - dt) > 0) {
+            return;
+        }
+
+        this.marshalClock = MARSHAL.every;
+
+        const me = this.battle.actor(this.me);
+        const full = this.view.quality.soldiers?.full ?? Infinity;
+
+        if (!me) {
+            return;
+        }
+
+        const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
+        const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+
+        if ((soldiers.length <= MARSHAL.from || soldiers.length <= full) && !this.crowds?.members.size) {
+            return;
+        }
+
+        this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
+
+        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
+        const ranked = soldiers.map((actor) => [Math.hypot(actor.x - me.x, actor.y - me.y) - (fighting(actor) ? DRAW_REACH : 0), actor]).sort((a, b) => a[0] - b[0]);
+
+        ranked.forEach(([, actor], place) => {
+            const avatar = this.avatars.get(actor.id);
+            const crowded = avatar instanceof CrowdAvatar;
+
+            if (place < full) {
+                // (In full: built, the crowd's in its place till it is)
+                if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+                    this.enlisting.push(actor.id);
+                }
+
+                return;
+            }
+
+            if (crowded || (avatar && place < full + MARSHAL.margin)) {
+                return;
+            }
+
+            const { key, spec } = this.#crowdKind(actor);
+
+            if (this.crowds.failed(key)) {
+                return;
+            }
+
+            if (!this.crowds.template(key, spec)) {
+                // (Waiting on its kind's figure: not built in full meanwhile)
+                if (!avatar && !this.enlistees.has(actor.id)) {
+                    this.#unenlist([actor.id]);
+                    this.crowdWaiting.add(actor.id);
+                }
+
+                return;
+            }
+
+            this.#toCrowd(actor, key);
+        });
+
+        // (Those waiting on a figure that couldn't be made, built in full after all; those gone, forgotten)
+        for (const id of this.crowdWaiting) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || this.avatars.has(id)) {
+                this.crowdWaiting.delete(id);
+            } else if (this.crowds.failed(this.#crowdKind(actor).key) || !ranked.some(([, each], place) => each === actor && place >= full)) {
+                this.crowdWaiting.delete(id);
+
+                if (!this.enlisting.includes(id) && !this.enlistees.has(id)) {
+                    this.enlisting.push(id);
+                }
+            }
+        }
+    }
+
+    // A soldier's kind in the crowds: their people's, their sex's, carrying their weapon, and what
+    // its figure's made from (world/crowd.js makingTemplate)
+    #crowdKind(actor) {
+        const { people = "human", sex = "m", weapon = actor.weapon } = this.host.soldiers.get(actor.id) ?? {};
+        const key = `${people}:${sex}:${weapon}`;
+
+        return {
+            key,
+            spec: { look: soldierLook({ people, weapon, sex, seed: 1 }), guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 } },
+        };
+    }
+
+    // A soldier drawn in its kind's crowd from now on: where it's drawn in full now, or where it is
+    // (its character drawn in full let go)
+    #toCrowd(actor, key) {
+        const old = this.avatars.get(actor.id);
+        const avatar = new CrowdAvatar(this.crowds, key, { height: old?.character.height });
+
+        this.view.scene.add(avatar.object);
+
+        if (old) {
+            avatar.place(old.follow.x, old.follow.z, old.facing);
+            avatar.object.position.y = old.object.position.y;
+            Object.assign(avatar, { standing: old.standing, ground: old.ground });
+            old.object.removeFromParent();
+            old.character.dispose();
+            this.wounds.get(actor.id)?.dispose();
+            this.wounds.delete(actor.id);
+            this.avatars.set(actor.id, avatar);
+        } else {
+            this.avatars.set(actor.id, avatar);
+            this.#place(actor);
+        }
+
+        this.crowdWaiting.delete(actor.id);
+        avatar.actions.setGuard(actor.armed);
     }
 
     // The crowd drawn in full: only so many of those in view can be (QUALITY crowd), the biggest on
@@ -4319,7 +4472,7 @@ export class Game {
         let nearest = null;
 
         // (Those gone, or drawn some other way meanwhile, off the list)
-        this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.avatars.has(id) && !this.enlistees.has(id));
+        this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.#drawnInFull(id) && !this.enlistees.has(id));
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {
@@ -4360,6 +4513,11 @@ export class Game {
         // behind theirs in the skins worker)
         if (this.tavernFolk && !busy) {
             this.#work(this.tavernFolk, until);
+        }
+
+        // The crowds' figures, each made a step at a time, with a share of the time first (world/crowd.js)
+        if (this.crowds?.busy) {
+            this.crowds.work(Math.min(until, performance.now() + VISITS.budget * MARSHAL.share), { wait: this.waits });
         }
 
         // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,
@@ -6052,6 +6210,11 @@ export class Game {
                 // (A town's fallen soldiers' places taken: those who took them drawn)
                 this.enlisting.push(...event.ids);
                 break;
+            case "fieldBattle":
+                // (Two armies mustered to see how many are drawn smoothly: the debug overlay's)
+                this.enlisting.push(...event.ids);
+                this.hud.message(`Two armies of ${event.size} take the field`, 3);
+                break;
             case "townsfolk":
                 // (A place's townsfolk out about their business, drawn nearest first; or home again)
                 if (event.change === "out") {
@@ -7144,6 +7307,22 @@ export class Game {
         const [ox, oz] = this.originOf(this.mapId);
 
         this.#order({ enemy, door, portal, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    /**
+     * Two armies of `size` each mustered before the player, the way the camera looks (core/host.js
+     * FIELD_BATTLE: the debug overlay's Field battle), to see how many this device draws and plays
+     * smoothly; told why not,
+     * if not (not out in the world, or not the world's own player).
+     */
+    fieldBattle(size) {
+        const [x, z] = this.#lookAlong();
+
+        this.#command({ type: "fieldBattle", size, facing: Math.atan2(x, z) }, (result) => {
+            if (!result.ok) {
+                this.hud.message("Only out in the world you've opened, not joined", 2.5);
+            }
+        });
     }
 
     // The portal of the guild's hall the player's in (core/portals.js), if that's what was tapped:

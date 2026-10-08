@@ -2189,7 +2189,12 @@ that casts a shadow (soldiers and folk don't; a player does) isn't taken to be o
 shadow might not be. The walk and the actions already cope with any frame's length, and
 the tests check the feet stay on the ground posed every third frame.
 
-For many enemies on screen, the next steps are:
+**Many on screen.** A field battle's soldiers, past the nearest few, are drawn in crowds
+([GAME.md](GAME.md#soldiers-in-their-crowds-worldcrowdjs)): one character of each kind built
+once, merged into one mesh at the far level and lowered further, its moves recorded into a
+picture of its bones' places, and everyone of the kind drawn at once, posed on the graphics card.
+Posed so, a crowd's corners are where the character's own are, to two millimetres, as it's merged
+and mid-swing (`test/crowd.test.js`). For the few drawn in full, the next steps are:
 
 - merging the rest of a character's parts into one mesh (its garments already are, but a player's)
 - a lower-detail body: MakeHuman's proxy meshes use the same rig

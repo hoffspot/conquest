@@ -47,16 +47,18 @@ export function keyOf(name, indices) {
 /**
  * A mesh's triangles for drawing it from afar (`indices` over `positions`, xyz in metres, with
  * texture coordinates `uvs`, uv), about `share` of them, never more than `error` metres out of
- * place: resolves to a list of triangles over the same vertices.
+ * place: resolves to a list of triangles over the same vertices. `flags`, more of meshoptimizer's
+ * simplifier's: "Permissive" to take triangles off across the picture's seams too, "Prune" to drop
+ * small pieces of it altogether (a crowd's figure, world/crowd.js).
  */
-export async function lowerDetail(indices, positions, uvs, share = LODS[0].share, error = LODS[0].error) {
+export async function lowerDetail(indices, positions, uvs, share = LODS[0].share, error = LODS[0].error, flags = []) {
     const { MeshoptSimplifier } = await import("../../vendor/meshoptimizer-1.3.0/meshopt_simplifier.min.js");
 
     await MeshoptSimplifier.ready;
 
     const triangles = Uint32Array.from(indices);
     const target = Math.floor((triangles.length / 3) * share) * 3;
-    const [lower] = MeshoptSimplifier.simplifyWithAttributes(triangles, Float32Array.from(positions), 3, Float32Array.from(uvs), 2, [1, 1], null, target, error, ["ErrorAbsolute"]);
+    const [lower] = MeshoptSimplifier.simplifyWithAttributes(triangles, Float32Array.from(positions), 3, Float32Array.from(uvs), 2, [1, 1], null, target, error, ["ErrorAbsolute", ...flags]);
 
     return lower;
 }
@@ -79,8 +81,8 @@ export class Lods {
 
     /**
      * The lower-detail triangles of `key`, resolving when they're made: `mesh` says what it is
-     * ({ indices, positions, uvs }, and if not the middle level's, its `share` and `error`), asked
-     * only when it isn't kept.
+     * ({ indices, positions, uvs }, and if not the middle level's, its `share` and `error`, and any
+     * `flags`: lowerDetail), asked only when it isn't kept.
      */
     of(key, mesh) {
         const made = this.made.get(key) ?? this.#making(mesh());
@@ -96,18 +98,18 @@ export class Lods {
         return made;
     }
 
-    #making({ indices, positions, uvs, share = LODS[0].share, error = LODS[0].error }) {
+    #making({ indices, positions, uvs, share = LODS[0].share, error = LODS[0].error, flags = [] }) {
         const worker = this.#worker();
 
         if (!worker) {
             // (Here, then: after whatever's happening now)
-            return new Promise((resolve) => setTimeout(resolve, 0)).then(() => lowerDetail(indices, positions, uvs, share, error));
+            return new Promise((resolve) => setTimeout(resolve, 0)).then(() => lowerDetail(indices, positions, uvs, share, error, flags));
         }
 
         const id = this.next++;
         const copies = [Uint32Array.from(indices), Float32Array.from(positions), Float32Array.from(uvs)];
 
-        worker.postMessage({ id, indices: copies[0], positions: copies[1], uvs: copies[2], share, error }, copies.map(({ buffer }) => buffer));
+        worker.postMessage({ id, indices: copies[0], positions: copies[1], uvs: copies[2], share, error, flags }, copies.map(({ buffer }) => buffer));
 
         return new Promise((resolve, reject) => this.waiting.set(id, { resolve, reject }));
     }
