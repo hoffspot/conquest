@@ -29,7 +29,8 @@ lying about, and their war camps, in 3D from a seed to go round and look at, is 
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 The creature lab, showing every creature of the wilds walking, running, attacking, resting,
-struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land), is at <https://hoffspot.github.io/conquest/creature-lab.html>.
+struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land),
+and each dungeon's bosses and mini-bosses as they're drawn, is at <https://hoffspot.github.io/conquest/creature-lab.html>.
 The uniform lab, showing each people's soldiers in their uniforms and their officials in their
 livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.
 The fire lab, showing every kind of fire (torches, a brazier, a camp fire, candles) lighting what's
@@ -712,6 +713,7 @@ client/                 The game (static files served to the browser)
     squares.js          Debug mode's squares and paths
   js/beasts/            The wild's creatures, built and animated in code (see docs/WILDS.md):
     looks.js            How each looks; beast.js puts one in the world as an avatar is
+    champions.js        A dungeon's bosses and mini-bosses: bigger, crowned or helmed, tinted
     sculpt.js           A body's shapes blended into one skinned mesh; its pieces folded in
     quadruped.js        Four legs: faces, tails, legs of every kind, bats' wings
     arachnid.js         Spiders and scorpions, their legs reaching the ground (two-bone IK)

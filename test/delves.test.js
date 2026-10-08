@@ -256,6 +256,12 @@ describe("a dungeon in play (host.js #dungeons)", () => {
 
         assert.equal(host.battle.actor(id).map, building.maps.at(-1));
         assert.equal(host.battle.actor(id).name, boss.title ?? host.battle.actor(id).name);
+
+        // (Drawn as its theme's boss: its rank and its id there, beasts/champions.js)
+        const { wild } = host.battle.actor(id);
+
+        assert.equal(wild.champion, "boss");
+        assert.ok(THEMES[site.theme].bosses.some((each) => each.id === wild.regalia), wild.regalia);
     });
 
     it("keeps its boss's hoard locked till the boss falls", () => {
