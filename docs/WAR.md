@@ -622,7 +622,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     parts; things alike put together (`sort`).
   - **Tapped**, a thing says what it is (`app/gearinfo.js`: its name in the colour of its make,
     what it does and what was rolled on it, its set; a piece in the pack compared with what's
-    worn there, each change in green or red), with buttons for what can be done with it.
+    worn there, each change in green or red; what a thing that isn't gear does), in a card
+    beside it with buttons for what can be done with it beneath. Beside it means over the
+    paperdoll where there's room either side, its point at the slot, as tall as what's in view
+    at most (what it says scrolls; its buttons stay in view). Otherwise (trading, or a narrow
+    screen) it goes below it if it fits there, else above. One of its buttons used, or a tap
+    anywhere else in the pack (or Escape, or its ×), puts the card away. Held, its wheel opens
+    instead, without the card.
   - **Held**, a piece of gear goes on (from the pack) or comes off (worn), back into the pack;
     double-clicked too. Anything else held (or right-clicked) opens a wheel of what can be done
     with it round it, like the action wheel: N to drink or eat it; NE to put it on an action
@@ -653,6 +659,22 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     player**, face to face (docs/WILDS.md), it shows what
     each offers: tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's
     agreed to or called off, below.
+  - **A row tapped** (a ware, something carried to sell, something offered in a trade; anywhere
+    on it but its button) opens beneath it to say what it is, one row at a time, its chevron
+    turning up; tapped again (or Escape) it closes. A ware is said as it is before it's bought
+    (gearinfo.js `describe`, `ware`), worked out only as it's opened (the shop's `preview`):
+    - what it does as its make has it;
+    - what's rolled on it as it's bought, as what it could be (core/host.js `#made`):
+      - a wand's or grimoire's spell power (+10–100%, most under +30%: `BOOSTS`);
+      - how much of a blow a shield takes (half the most its make can, to all of it);
+      - the bonuses a better made piece (or any jewel) comes with: how many, each one it could
+        be, with the word it puts in its name and how much it could add, stronger the better made
+        (gearinfo.js `rolledOf`: `ROLLS`, `AFFIXES`; a legendary one, a name of its own too);
+    - what buying and putting it on would change against what's worn (core/progress.js
+      `tryingOn`: as if it were in the pack's first free slot), but for its spell power, and
+      said to be before what's rolled on it (with no free slot: no room in the pack for it).
+
+    What another player offers is said as it was made, and compared as if it were carried.
   - **The Skills tab** shows each skill's rank and how far to the next.
 
 **Might** is how dangerous a player is: their best fighting rank (or their command of others),

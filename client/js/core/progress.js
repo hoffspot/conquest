@@ -1009,13 +1009,28 @@ export class Progress {
      * one they'd fight with) }. Nothing's changed.
      */
     trying(index, to = null) {
-        const trial = new Progress(this.toJSON());
-        const before = this.bonuses();
-        const was = { ...trial.gear };
-        const reason = trial.equip(index, to);
-        const off = reason ? [] : SLOT_IDS.filter((slot) => was[slot] && trial.gear[slot] !== was[slot] && !alike(trial.gear[slot], was[slot])).map((slot) => was[slot]);
+        return tryOn(new Progress(this.toJSON()), index, to);
+    }
 
-        return { reason, before, after: reason ? before : trial.bonuses(), off, weapon: weaponOf(trial) };
+    /**
+     * What putting on a piece that isn't carried would change (a shop's ware, as it is: nothing
+     * rolled on it yet; or another's), as trying has it, the piece first in the pack's first free
+     * slot; with no free slot, `reason` "room". Nothing's changed.
+     */
+    tryingOn(item) {
+        const index = this.pack.indexOf(null);
+
+        if (index < 0 || !ITEMS[item?.id]) {
+            const before = this.bonuses();
+
+            return { reason: index < 0 ? "room" : "item", before, after: before, off: [], weapon: weaponOf(this) };
+        }
+
+        const trial = new Progress(this.toJSON());
+
+        trial.pack[index] = { ...thingOf(item), count: 1 };
+
+        return tryOn(trial, index);
     }
 
     /**
@@ -1050,4 +1065,14 @@ export class Progress {
 }
 
 /** The weapon a player fights with (a WEAPONS key), from their gear: kicking, in spiked boots with nothing in hand. */
+// A piece in the pack of a copy of someone's progress put on, as Progress trying has it (the copy changed)
+function tryOn(trial, index, to = null) {
+    const before = trial.bonuses();
+    const was = { ...trial.gear };
+    const reason = trial.equip(index, to);
+    const off = reason ? [] : SLOT_IDS.filter((slot) => was[slot] && trial.gear[slot] !== was[slot] && !alike(trial.gear[slot], was[slot])).map((slot) => was[slot]);
+
+    return { reason, before, after: reason ? before : trial.bonuses(), off, weapon: weaponOf(trial) };
+}
+
 export const weaponOf = (progress) => (WEAPONS[progress.gear.mainHand?.id] ? progress.gear.mainHand.id : progress.gear.boots && ITEMS[progress.gear.boots.id]?.kicks ? "boots" : "sword");

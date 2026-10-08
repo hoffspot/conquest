@@ -264,6 +264,8 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await guest.locator(".pack-about").getByRole("button", { name: /^Offer/ }).click();
     await guest.locator(".pack-ask").getByRole("button", { name: "Offer", exact: true }).click();
     await expect(host.locator(".pack-section", { hasText: "Bryn offers" })).toContainText("Wolf pelt ×2", { timeout: 30000 });
+    await host.locator(".pack-section", { hasText: "Bryn offers" }).locator(".pack-peek").click();
+    await expect(host.locator(".pack-section", { hasText: "Bryn offers" }).locator(".pack-peeked")).toContainText("The adventurers' guild pays");
     await expect(guest.locator('.pack-cell[data-item="wolfPelt"]')).toHaveClass(/offered/, { timeout: 30000 });
 
     await host.locator(".pack-barter").getByRole("button", { name: "Offer gold" }).click();
