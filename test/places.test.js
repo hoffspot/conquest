@@ -77,12 +77,13 @@ describe("places worth finding (places.js)", () => {
         plans = [1, 2, 3].map((seed) => planWorld(seed));
     });
 
-    it("are every site and wild camp in a world, each with its icon on the maps and who may hold it", () => {
+    it("are every site and wild camp in a world (but the dungeons), each with its icon on the maps and who may hold it", () => {
         for (const plan of plans) {
             const places = placesOf(plan);
 
-            // (But the peoples' works: the war's, docs/WAR.md *The works*)
-            assert.equal(places.length, plan.sites.filter(({ kind }) => !WORKS.some((each) => each.kind === kind)).length + plan.camps.length, "every site and camp a place");
+            // (But the dungeons' ways in: no one holds them, the war passes them by; core/dungeons. Nor
+            // the peoples' works: the war's, docs/WAR.md *The works*)
+            assert.equal(places.length, plan.sites.filter(({ kind }) => kind !== "dungeon" && !WORKS.some((each) => each.kind === kind)).length + plan.camps.length, "every site and camp a place, but the dungeons and the works");
             assert.equal(placesOf(plan), places, "worked out once");
 
             for (const place of places) {

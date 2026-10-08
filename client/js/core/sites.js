@@ -104,7 +104,7 @@ const REST = Object.freeze({ gentle: 3, shift: 48, step: 12 });
  * them, front to back (metres: `rise`, at least and at most), and the slope they'd best be on;
  * where there's none so steep near, a cave goes down into the ground instead.
  */
-const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, "dragon's lair": { rise: [8, 26], slope: 0.4 } });
+const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, dungeon: { rise: [6, 14], slope: 0.55 }, "dragon's lair": { rise: [8, 26], slope: 0.4 } });
 
 /**
  * The hill's lie over the brow of a face of rock cut into it (art/kits/neutral.js outcrop, so its
@@ -206,7 +206,7 @@ export function restingOf(plan, site) {
                 }
             }
 
-            rest = { at: best.at, facing: null, form: site.kind === "cave" ? "pit" : hill ? "hillside" : null, slope: 0 };
+            rest = { at: best.at, facing: null, form: site.kind === "cave" || site.kind === "dungeon" ? "pit" : hill ? "hillside" : null, slope: 0 };
         }
 
         known.set(site.id, rest);
@@ -540,7 +540,7 @@ export class Sites {
             }
 
             // (All it stands on, or for a neutral site just what of it stands in the way)
-            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form, facing, people: site.race }) : null;
+            const laid = isNeutral(site) ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form, facing, theme: site.theme ?? null, people: site.race }) : null;
             const turn = turned(x, y, facing, [w, h]);
             // (Where it's gone into, if it can be, the way in kept clear: a place no people keeps by
             // its layout's way in; the humans' abbey and manor by their church's and keep's door; a

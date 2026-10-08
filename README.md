@@ -59,9 +59,10 @@ and how the engine's made ready for other players to hop in and out of a running
 [docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
 the adventurers' caches their brigands keep, how they behave, what lingers after their blows and
 its cures, what they leave, trading between players, and how they're built and animated in code.
-[docs/DUNGEONS.md](docs/DUNGEONS.md) describes the dungeon builder: dungeons one to three levels
-deep cooked up from a seed and a theme, how each kind is dug, what's put in them, and how to add a
-theme. [docs/MAGIC.md](docs/MAGIC.md) describes
+[docs/DUNGEONS.md](docs/DUNGEONS.md) describes the dungeons: one to three levels deep, cooked up
+from a seed and a theme, how each kind is dug and what's put in them; their ways in out in the
+wilds, who wakes in them, their chests and bosses' hoards, how they're drawn, how they're made
+again once cleared, and how to add a theme. [docs/MAGIC.md](docs/MAGIC.md) describes
 magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
 the host works, the spellbook, and how every spell looks.
 
@@ -618,9 +619,10 @@ client/                 The game (static files served to the browser)
     weapons.js          The weapons and their attacks (and the wild's creatures' own)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
-    dungeons/           The dungeon builder (see docs/DUNGEONS.md): build.js cooks a dungeon up
-                        from a seed and a theme; themes.js the themes; layouts.js how each is dug;
-                        place.js what's put in; graph.js, grid.js and seeds.js what they share
+    dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
+                        seed and a theme; themes.js the themes; layouts.js how each is dug;
+                        place.js what's put in; play.js its champions and chests in play;
+                        graph.js, grid.js and seeds.js what they share
     spoils.js           What they leave: their parts, and what the guild pays for them
     afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
@@ -742,7 +744,7 @@ docs/CHARACTERS.md      The character engine, and the research behind it
 docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
 docs/WAR.md             The war between the peoples, and playing with others (hop in, hop out)
 docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how they're built
-docs/DUNGEONS.md        The dungeon builder: themes, layouts, what's put in, adding a theme
+docs/DUNGEONS.md        The dungeons: themes, layouts, what's put in, in play, adding a theme
 docs/MAGIC.md           Magic: the schools, wands, tomes, wonders, the spellbook, and the spells' looks
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```

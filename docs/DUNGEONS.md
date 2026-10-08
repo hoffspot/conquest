@@ -9,8 +9,9 @@ the rest of it.
 This document describes the **dungeon builder**, `client/js/core/dungeons/`. It cooks a whole
 dungeon up from a seed and a theme. The builder is pure: no DOM, whole numbers and seeded streams
 only. It's the same on every machine, so a host and the players who join it make the same
-dungeon. Putting dungeons into the world (their ways in, the levels made as interiors, the host
-waking who's in them, the chests, and making one again once it's cleared) comes next.
+dungeon. It also describes [dungeons in play](#dungeons-in-play): their ways in out in the wilds,
+the levels made as interiors and drawn, the host waking who's in them, the chests, and making one
+again once it's cleared.
 
 See any dungeon at <https://hoffspot.github.io/conquest/dungeon-map.html> (or `npm start` and
 open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=2&tier=3`.
@@ -137,6 +138,95 @@ square that can be walked on can still be walked to.
 brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt already use:
 `#` rock, `I` pillars, `t` tombs, `m` rubble, `j` bones, `h` the hoard, and so on.
 
+## Dungeons in play
+
+### Their ways in (`worldplan/settle.js`, `setpieces/neutral.js`)
+
+- **About one to each square kilometre of dry land** (`DUNGEON_SITES`): some 55 in a world. Each
+  is a site of kind `dungeon` in the world plan, thrown down at random and kept:
+  - off water and beaches, and a cell clear of roads and rivers;
+  - clear of the settlements;
+  - `apart` cells (26: over a kilometre) from each other, `sites` cells from the other sites and
+    `camps` cells from the camps.
+- **Its theme by the land it's in** (`themes.js` `themeFor`, each theme's `lands`): caves likeliest
+  in the mountains, the snows, the volcanic and the badlands; an outlaws' hideout in the woods,
+  the farmland and the meadows; an ancient temple in the jungle and the savannah. Any theme can
+  turn up anywhere, less often.
+- **Its name** from its theme's names, each its own in the world.
+- **Its way in**, set down into a hillside as a cave mouth is (`sites.js` `HILLSIDE.dungeon`), a
+  mouth in the rock (`layoutNeutral({ kind: "dungeon", theme })`), dressed by its theme: stores
+  and fallen timbers by an outlaws' hideout, columns (some fallen) and rubble by a temple, bones by
+  caves.
+- **On the maps**: an arch over steps going down (`app/mapicons.js` `dungeon`), on the minimap and
+  on the world map once the land there's been seen, grey while it's cleared.
+
+### Its levels (`insides.js`)
+
+- **Made as a player comes near** (`DELVES.near`, 45 m from its way in), from the site's seed and
+  theme, at the tier of the land it's in (`dungeonTier`: as the wilds' creatures there,
+  `creatures.js` `tierAt`) and its generation (`buildDungeon`).
+- **Each level its own map**, `site:dungeon-N/level-K` (`site:dungeon-N/gG/level-K` once it's been
+  made again), read from its plan rows as any building's floor is. The levels sit well away from
+  every other inside (`DUNGEON_ORIGINS`: a column of them for each dungeon, from x 20000).
+- **Joined by stairs**: a flight for each level but the bottom (`building.flights`), from the
+  stairs down on one level to the stairs up on the next, each end where one comes off it, facing
+  into the level.
+
+### Who's in it (`host.js` `#dungeons`, `dungeons/play.js`)
+
+- **Each level's foes woken while a player's on it or on the level over it**, the first level's as
+  soon as a player's near; let go once no one is. Each pack is a wild pack of its own (territorial,
+  keeping near where it stood), its leader the boss or mini-boss if it has one.
+- **The boss and the mini-bosses stand out** (`CHAMPIONS`): the boss with four times its kind's
+  hit points and blows 1.3 times as hard, a mini-boss twice the hit points and 1.12 times as hard,
+  each named by its title (the Troll King, a Tomb champion).
+- **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
+  however often a level's woken and let go.
+
+### Its chests
+
+- **Small chests** set out on each level as it's woken, unlocked. Opened, each player near it gets
+  a share of their own (`COFFER`, `rollCoffer` at the level's tier): 6 to 18 gold, more each tier,
+  a piece of gear 40% of the time, a healing draught 30% of the time.
+- **The boss's hoard**, locked (`REFUSALS.kept`) till the boss falls. Opened, every player in the
+  dungeon gets a share at their own power (`hoardTier`: their might plus one, or the bottom level's
+  tier, whichever's higher; `HOARD`, `rollHoard`): 80 to 150 gold, more each tier; three to five
+  pieces of gear made two tiers better than a cache's; one or two healing draughts.
+- **Opening the hoard clears the dungeon.** Its icon goes grey. Once every player's left it and is
+  `DELVES.far` (120 m) from its way in, it's made again: its foes and what's left on its floors
+  gone, its levels thrown away and made anew from the next generation (`Interiors.remake`), with
+  other rooms, other foes and other chests.
+
+### Drawn (`world/interiors3d.js` `dungeon`, `world/view.js`)
+
+- **By its theme's look** (`DUNGEON_LOOKS`):
+  - caves: crags of dark rock round packed earth, rock standing up from the floor and hanging
+    from the roof;
+  - an outlaws' hideout: paler rock, its tunnels shored up with timber posts and caps every few
+    squares;
+  - an ancient temple: walls of old dressed stone on a darker plinth under a cornice, flagstones,
+    a vault over all.
+- **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
+  crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
+  altars, shrines and braziers; gold heaped either side of the hoard.
+- **Its stairs**: down through the floor into the dark, or up into the rock, the dark at their
+  head. They glow green to tap as a building's stairs do (`app/doors.js`).
+- **Daylight at the way in** on its first level; **torches** on its walls.
+- **Lit by what's near the player**: a level has more flames than the view's list of lights holds
+  (`ROOM_LIGHTS`, 16), so each frame the 16 nearest the player light it, and the light all round
+  comes from those within 18 m (`roomlight.js` `NEAR_FILL`).
+- **The camera kept out of the rock**: it comes in closer rather than go into a level's rock, and
+  stays under its roof.
+- **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,
+  and the dungeon cleared.
+
+### Kept
+
+The host keeps each dungeon's state by site (`host.dungeons`): its generation, which levels are
+awake, the slain, the chests opened, and whether it's cleared. It goes into snapshots
+(`SNAPSHOT_VERSION` 8) and saves, and a game taken up again makes each dungeon's levels as many
+times over as they had been, so a player saved deep in a dungeon is back where they were.
+
 ## Always the same, and stable as it grows (`seeds.js`)
 
 - One seed for a dungeon, and from it a stream of its own for each stage of each level and attempt
@@ -218,6 +308,17 @@ code is here.
 
 ## Tests
 
+- **`test/delves.test.js`**, dungeons in play:
+  - about one way in to a square kilometre of dry land, apart from each other, the roads and the
+    other places, each named and themed; every theme in a world;
+  - the theme by the land; the way in laid out by its theme; its icon;
+  - what's in the small chests and the hoard, and the tier a share is at;
+  - in a world: made as a player comes near, its first level woken and its chests set out; gone
+    into and down its stairs, each level woken and the one above let go; the hoard locked till the
+    boss falls; a share of a small chest and of the hoard; cleared; kept in a snapshot and taken up
+    again with the player in it; made again once everyone's gone, the next generation.
+- **`e2e/pellagos.spec.js`**: in the game, a dungeon's way in gone into, its first level drawn and
+  lit, down its stairs to the next and out again.
 - **`test/dungeons.test.js`**:
   - seeds mix the same parts the same way, and stable choosing changes only the slots a new entry
     wins (by weight);

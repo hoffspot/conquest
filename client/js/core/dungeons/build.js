@@ -14,8 +14,10 @@ import { TIERS } from "../creatures.js";
 import { linksOf, neighbours, roomPath, roomsOf } from "./graph.js";
 import { LAYOUTS } from "./layouts.js";
 import { fillLevel } from "./place.js";
-import { mix, pickStable, streamOf } from "./seeds.js";
-import { THEMES } from "./themes.js";
+import { mix, streamOf } from "./seeds.js";
+import { dungeonName, THEMES } from "./themes.js";
+
+export { dungeonName };
 
 /**
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
@@ -48,17 +50,6 @@ export const ATTEMPTS = 20;
  * size.
  */
 export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, far: 0.6, arena: 160 });
-
-/**
- * A dungeon's name, from its theme's names (themes.js: forms with {adj} and {place} filled in), by
- * seed, stable as names are added.
- */
-export function dungeonName(theme, seed) {
-    const strings = (list) => list.map((id) => ({ id }));
-    const form = pickStable(seed, "name", strings(theme.names.forms)).id;
-
-    return form.replace("{adj}", pickStable(seed, "adj", strings(theme.names.adj)).id).replace("{place}", pickStable(seed, "place", strings(theme.names.place)).id);
-}
 
 /**
  * Cook up a dungeon: { version, seed, theme, tier, generation, name, levels: [{ index, width,

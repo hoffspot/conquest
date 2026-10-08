@@ -70,6 +70,20 @@ const INSIDE = {
     shelves: [84, 60, 38],
     portal: [110, 168, 236],
     stand: [120, 122, 130],
+    // (A cave's, the lair's and a dungeon's: core/dungeons)
+    rock: [44, 40, 38],
+    "stairs-down": [26, 20, 16],
+    "stairs-up": [150, 116, 74],
+    stalagmite: [92, 86, 80],
+    rubble: [108, 100, 90],
+    crates: [112, 76, 42],
+    campfire: [210, 112, 40],
+    brazier: [210, 112, 40],
+    bedroll: [96, 110, 128],
+    pillar: [168, 160, 146],
+    tomb: [150, 144, 132],
+    throne: [124, 84, 46],
+    candles: [70, 66, 62],
 };
 
 // Pixels to the metre of the painted map
@@ -630,6 +644,19 @@ function paintInterior(map) {
                 context.lineTo(tread, y + h - 0.08);
                 context.stroke();
             }
+        } else if (kind === "stairs-down" || kind === "stairs-up") {
+            // A dungeon's flight dug into its rock: treads across its longer way
+            context.strokeStyle = kind === "stairs-down" ? "rgba(150, 116, 74, 0.8)" : "rgba(40, 26, 14, 0.7)";
+            context.lineWidth = 0.08;
+
+            for (let tread = 0.5; tread < Math.max(w, h); tread += 0.5) {
+                context.beginPath();
+                context.moveTo(w >= h ? x + tread : x + 0.08, w >= h ? y + 0.08 : y + tread);
+                context.lineTo(w >= h ? x + tread : x + w - 0.08, w >= h ? y + h - 0.08 : y + tread);
+                context.stroke();
+            }
+        } else if (kind === "rock") {
+            continue;
         } else if (kind === "barrels") {
             for (let j = y; j < y + h; j++) {
                 context.beginPath();

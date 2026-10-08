@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { readPlan, tavernFloors } from "../client/js/core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../client/js/core/insides.js";
 import { buildInterior, cutFor, cutsAway, daylightOf, shaftsOf, STOREY, VEIL } from "../client/js/world/interiors3d.js";
-import { BOUNCE, fillOf, gather, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "../client/js/world/roomlight.js";
+import { BOUNCE, fillNear, fillOf, gather, NEAR_FILL, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "../client/js/world/roomlight.js";
 import { ROOM_VIEW, View } from "../client/js/world/view.js";
 
 const KINDS = Object.freeze({ taproom: tavernRooms, smithy: smithyRooms, temple: templeRooms, guild: guildRooms, hall: hallRooms, keep: keepRooms });
@@ -313,6 +313,27 @@ describe("the flames lighting the rooms (roomlight.js, interiors3d.js)", () => {
         const fill = fillOf(colours, [10, 2], 100, new THREE.Color());
 
         assert.ok(Math.abs(fill.r - (12 * BOUNCE) / 100) < 1e-9 && Math.abs(fill.g - (7 * BOUNCE) / 100) < 1e-9 && Math.abs(fill.b - (4.5 * BOUNCE) / 100) < 1e-9);
+    });
+
+    it("lights a room with more flames than the list holds (a dungeon's level) by those nearest the player, and all round by those near", () => {
+        // (Torches every 4 m along a passage 120 m long)
+        const lights = Array.from({ length: 30 }, (_, k) => ({ x: k * 4, y: 2, z: 0, distance: 10 }));
+        const at = { x: 61, y: 1.2, z: 0 };
+        const order = nearestOf(lights, at);
+
+        assert.equal(order.length, lights.length);
+        assert.deepEqual(order.slice(0, 3), [15, 16, 14]);
+        assert.ok(order.slice(0, ROOM_LIGHTS).every((k) => Math.abs(lights[k].x - at.x) <= 4 * (ROOM_LIGHTS / 2 + 1)));
+        assert.equal(nearestOf(lights, at, [99]).length, lights.length, "into the list given, emptied first");
+
+        // (Only those within reach light it all round, the nearer the more; none past it)
+        const colours = lights.map(() => new THREE.Color(1, 1, 1));
+        const strengths = lights.map(() => 4);
+        const near = fillNear(lights, colours, strengths, at, new THREE.Color());
+        const far = fillNear(lights, colours, strengths, { x: 500, y: 1.2, z: 0 }, new THREE.Color());
+
+        assert.ok(near.r > 0 && near.r < (strengths.length * 4 * BOUNCE) / NEAR_FILL.floor);
+        assert.equal(far.r, 0);
     });
 });
 
