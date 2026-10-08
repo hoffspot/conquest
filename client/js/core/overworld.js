@@ -30,6 +30,7 @@ import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { byRank, SIGNED, signpostBeside, signpostPiece } from "./signposts.js";
+import { CLEARING, footprintOf } from "./war/forts.js";
 import { LAGOON, lagoonDepths, lagoonReach } from "./lagoons.js";
 import { PEOPLE_TOWNS } from "./setpieces/town.js";
 import { Sites } from "./sites.js";
@@ -337,6 +338,9 @@ export class Overworld {
         this.waters = watersOf(plan);
         this.last = null;
 
+        /** The fortifications standing (setForts): by id, { kind, box (footprintOf's squares) }. */
+        this.forts = new Map();
+
         // The places trees keep clear of: the settlements (but the town, which is set in), the
         // sites, the camps, the arches of rock (arches.js: their own room round them) and the
         // aqueducts' piers
@@ -434,6 +438,35 @@ export class Overworld {
         // (The humans' hill citadel set down at once, wherever the player is: its moat and the
         // ground it keeps clear of fields are wanted from afar)
         this.sites.settleCitadels();
+    }
+
+    /**
+     * The fortifications standing in the world (war.js forts; docs/WAR.md *Fortifications*): the
+     * squares each stands over blocked as chunks are made, the ground round them cleared (CLEARING:
+     * no crops, no trees), and those made already that one's gone up in or come down from let go,
+     * to be made again. Returns the boxes of squares that changed ([x0, y0, x1, y1], with the
+     * ground cleared round them), for what's worked out from them (the navigation mesh, what's
+     * drawn) to be too.
+     */
+    setForts(forts) {
+        const next = new Map(forts.map((fort) => [fort.id, { kind: fort.kind, box: footprintOf(fort), cleared: footprintOf(fort, CLEARING) }]));
+        const changed = [...[...this.forts].filter(([id]) => !next.has(id)), ...[...next].filter(([id]) => !this.forts.has(id))].map(([, { cleared }]) => cleared);
+
+        this.forts = next;
+
+        for (const [x0, y0, x1, y1] of changed) {
+            for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
+                for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
+                    this.chunks.delete(cy * CHUNKS + cx);
+
+                    if (this.last?.cx === cx && this.last?.cy === cy) {
+                        this.last = null;
+                    }
+                }
+            }
+        }
+
+        return changed;
     }
 
     /** Whether every chunk a box of squares touches has been made (and is kept). */
@@ -1120,6 +1153,33 @@ export class Overworld {
             const random = createRandom(Math.round(piece.x * 73 + piece.y * 37));
 
             chunk.trees.push({ x: Math.round(piece.x), y: Math.round(piece.y), variant: piece.variant, size: random.range(0.85, 1.05), turn: random.next() * Math.PI * 2 });
+        }
+
+        // The fortifications standing in it (setForts), over their squares; the ground round them
+        // cleared, no crops and no tree growing there
+        if (this.forts.size) {
+            const forts = [...this.forts.values()];
+            const under = (x, y) => forts.some(({ cleared: [fx0, fy0, fx1, fy1] }) => x >= fx0 && y >= fy0 && x <= fx1 && y <= fy1);
+            const within = ([fx0, fy0, fx1, fy1], each) => {
+                for (let y = Math.max(fy0, y0); y <= Math.min(fy1, y0 + CHUNK - 1); y++) {
+                    for (let x = Math.max(fx0, x0); x <= Math.min(fx1, x0 + CHUNK - 1); x++) {
+                        each((y - y0) * CHUNK + (x - x0));
+                    }
+                }
+            };
+
+            for (const { box, cleared } of forts) {
+                within(cleared, (k) => {
+                    crops[k] = 0;
+                    ground[k] = ground[k] === GROUND.soil ? GROUND.grass : ground[k];
+                });
+                within(box, (k) => {
+                    blocked[k] = 1;
+                    solid[k] = 1;
+                });
+            }
+
+            chunk.trees = chunk.trees.filter(({ x, y }) => ![[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]].some(([sx, sy]) => under(sx, sy)));
         }
 
         return chunk;

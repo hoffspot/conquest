@@ -13,10 +13,15 @@
 // Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
 // of the buildings only the guild's branches open to the player, each however far out it's
 // zoomed, with its town's name and its fare; tapped, one's chosen.
+//
+// Opened at their ruler's (app/building.js), it's the building screen: of the buildings only their
+// people's fortifications standing, each with its strength, and where the council would build
+// more, each however far out it's zoomed, numbered best first, named, and whether the stores hold
+// it now; tapped, one's chosen to counsel.
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon } from "./mapicons.js";
+import { drawBuildingIcon, FORT_ICONS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -53,6 +58,10 @@ const BRANCH_REACH = 28;
 
 // (What's said across the top of the travel map: how much of it, pixels, the branches keep clear of)
 const BRANCH_TOP = 72;
+
+// The building screen's: how big a plan's icon and a fortification standing's (pixels)
+const PLAN_SIZE = 30;
+const FORT_SIZE = 22;
 
 // Roads' colours and widths (metres; a pixel at least)
 const ROAD = { colour: "rgb(186, 160, 112)", width: 5 };
@@ -264,6 +273,12 @@ export class WorldMap {
         /** The travel map's branches (core/portals.js branchesFrom), or null for the world map. */
         this.travel = null;
 
+        /**
+         * The building screen's plans and fortifications standing (app/building.js buildingView's
+         * { plans, forts }), or null for the world map.
+         */
+        this.build = null;
+
         const listen = (type, listener, options) => {
             canvas.addEventListener(type, listener, options);
             this.listeners.push([type, listener]);
@@ -282,16 +297,20 @@ export class WorldMap {
      * over `icons` ([{ kind, x, z, rim }]: the buildings they've gone into, and the places worth
      * finding near where they've been, rimmed in who holds them), marks where their
      * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
-     * and the way to it (`way`: [[x, z], ...], or null).
+     * and the way to it (`way`: [[x, z], ...], or null). Or as the travel map (`travel`: the
+     * branches), or the building screen (`build`: { plans, forts }).
      */
-    open({ player, icons = [], marks = [], pin = null, way = null, travel = null }) {
+    open({ player, icons = [], marks = [], pin = null, way = null, travel = null, build = null }) {
+        const only = Boolean(travel || build);
+
         this.land ??= paintLand(this.world.plan);
         this.player = player;
         this.travel = travel;
-        this.icons = travel ? [] : icons;
-        this.marks = travel ? [] : marks;
-        this.pin = travel ? null : pin;
-        this.way = travel ? null : way;
+        this.build = build;
+        this.icons = only ? [] : icons;
+        this.marks = only ? [] : marks;
+        this.pin = only ? null : pin;
+        this.way = only ? null : way;
         this.lastTap = null;
 
         const [width, height] = this.#size();
@@ -299,9 +318,12 @@ export class WorldMap {
         this.view = { scale: Math.max(NEAREST, OPENED / Math.max(1, Math.min(width, height))), x: player.x, z: player.z };
 
         // (The travel map: every branch open to them in view, if they're far apart, a little
-        // below the middle, clear of what's said across the top)
-        if (travel?.length > 1) {
-            const [xs, zs] = [travel.map(({ x }) => x), travel.map(({ z }) => z)];
+        // below the middle, clear of what's said across the top; the building screen: every plan,
+        // and where they are)
+        const shown = travel ?? (build ? [...build.plans, ...(build.plans.length ? [] : build.forts), player] : null);
+
+        if (shown?.length > 1) {
+            const [xs, zs] = [shown.map(({ x }) => x), shown.map(({ z }) => z)];
             const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
             const scale = Math.max(this.view.scale, ((x1 - x0) * 1.5) / Math.max(1, width), ((z1 - z0) * 1.5) / Math.max(1, height - 2 * BRANCH_TOP));
 
@@ -313,18 +335,28 @@ export class WorldMap {
     }
 
     /** The travel map's branch at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
-    branchAt([x, z]) {
+    branchAt(point) {
+        return this.#nearest(this.travel, point);
+    }
+
+    /** The building screen's plan at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
+    planAt(point) {
+        return this.#nearest(this.build?.plans, point);
+    }
+
+    // Of `list` ([{ x, z }]), the nearest a point (metres) within BRANCH_REACH pixels, or null
+    #nearest(list, [x, z]) {
         let best = null;
 
-        for (const branch of this.travel ?? []) {
-            const pixels = Math.hypot(branch.x - x, branch.z - z) / this.view.scale;
+        for (const each of list ?? []) {
+            const pixels = Math.hypot(each.x - x, each.z - z) / this.view.scale;
 
             if (pixels <= BRANCH_REACH && (!best || pixels < best.pixels)) {
-                best = { branch, pixels };
+                best = { each, pixels };
             }
         }
 
-        return best?.branch ?? null;
+        return best?.each ?? null;
     }
 
     /**
@@ -567,6 +599,13 @@ export class WorldMap {
             icons.push("guild");
         }
 
+        // The building screen: their people's fortifications standing, each with its strength
+        // under it; and where the council would build, however far out, each ringed (in gold,
+        // the one counselled), numbered best first, named, and whether the stores hold it now
+        if (this.build) {
+            this.#drawBuild(at, width, height, icons);
+        }
+
         // Where the player's requests take them: a gold ring with a star in it, fog or no
         for (const mark of this.marks ?? []) {
             const [x, y] = at(mark.x, mark.z);
@@ -621,7 +660,83 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length };
+    }
+
+    // The building screen's fortifications and plans (draw's)
+    #drawBuild(at, width, height, icons) {
+        const context = this.context;
+        const label = (text, x, y, colour, size = 13) => {
+            context.font = `600 ${size}px Georgia, "Times New Roman", serif`;
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.lineJoin = "round";
+            context.lineWidth = 4;
+            context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+            context.strokeText(text, x, y);
+            context.fillStyle = colour;
+            context.fillText(text, x, y);
+        };
+        const inView = (x, y) => x > -120 && y > -60 && x < width + 120 && y < height + 60;
+
+        for (const fort of this.build.forts) {
+            const [x, y] = at(fort.x, fort.z);
+
+            if (!inView(x, y)) {
+                continue;
+            }
+
+            drawBuildingIcon(context, FORT_ICONS[fort.kind], x, y, FORT_SIZE, "#e2c25a");
+
+            // (Its strength: a bar under it)
+            const [w, h, share] = [FORT_SIZE, 4, Math.max(0, Math.min(1, fort.hp / fort.maxHp))];
+
+            context.fillStyle = "rgba(20, 14, 8, 0.85)";
+            context.fillRect(x - w / 2 - 1, y + FORT_SIZE * 0.62 - 1, w + 2, h + 2);
+            context.fillStyle = share > 0.5 ? "#7fcf6a" : share > 0.25 ? "#e8c35a" : "#e0634a";
+            context.fillRect(x - w / 2, y + FORT_SIZE * 0.62, w * share, h);
+            icons.push(FORT_ICONS[fort.kind]);
+        }
+
+        for (const plan of this.build.plans) {
+            const [x, y] = at(plan.x, plan.z);
+
+            if (!inView(x, y)) {
+                continue;
+            }
+
+            context.save();
+            context.beginPath();
+            context.arc(x, y, PLAN_SIZE * 0.7, 0, Math.PI * 2);
+            context.setLineDash(plan.counselled ? [] : [5, 4]);
+            context.lineWidth = plan.counselled ? 3 : 2;
+            context.strokeStyle = plan.counselled ? "#f0c96a" : "rgba(246, 234, 208, 0.85)";
+            context.stroke();
+            context.restore();
+            context.globalAlpha = plan.affordable ? 1 : 0.7;
+            drawBuildingIcon(context, FORT_ICONS[plan.kind], x, y, PLAN_SIZE);
+            context.globalAlpha = 1;
+
+            // (Its place in the council's order, on a gold badge by it)
+            const [bx, by] = [x + PLAN_SIZE * 0.5, y - PLAN_SIZE * 0.5];
+
+            context.beginPath();
+            context.arc(bx, by, 8, 0, Math.PI * 2);
+            context.fillStyle = "#f0c96a";
+            context.fill();
+            context.lineWidth = 1.5;
+            context.strokeStyle = "#2a1608";
+            context.stroke();
+            context.font = `700 11px Georgia, "Times New Roman", serif`;
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillStyle = "#2a1608";
+            context.fillText(String(plan.place), bx, by + 0.5);
+
+            label(plan.kind === "garrison" ? "Forward garrison" : "Guard tower", x, y - PLAN_SIZE * 0.95, "#f6ead0");
+            label(plan.counselled ? "Counselled" : plan.affordable ? "The stores hold it" : "Saving for it", x, y + PLAN_SIZE * 0.95, plan.counselled ? "#f0c96a" : plan.affordable ? "#a8e08c" : "#e8b07a", 12);
+            icons.push(FORT_ICONS[plan.kind]);
+        }
     }
 
     /**

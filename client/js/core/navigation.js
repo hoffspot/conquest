@@ -102,6 +102,28 @@ export function releaseNavigation(map) {
     rooms.delete(map);
 }
 
+/**
+ * Let go of a map's tiles over a box of its squares ([x0, y0, x1, y1]), and a little round it, if
+ * it has a mesh: each made again from its squares as it's next wanted (what stands there changed:
+ * a fortification gone up or come down, core/overworld.js setForts).
+ */
+export function dropTiles(map, [x0, y0, x1, y1]) {
+    const navigation = navigators.get(map);
+
+    if (!navigation?.drop) {
+        return;
+    }
+
+    const [tx0, ty0] = navigation.tileOf(x0 - 2, y0 - 2);
+    const [tx1, ty1] = navigation.tileOf(x1 + 3, y1 + 3);
+
+    for (let ty = ty0; ty <= ty1; ty++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+            navigation.drop(tx, ty);
+        }
+    }
+}
+
 /** A mesh of its own for a map of squares (grid.js squaresOf's: settings.js ROOMS). */
 export function squaresNavigation(map) {
     const squares = squaresOf(map);

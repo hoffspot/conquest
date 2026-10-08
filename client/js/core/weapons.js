@@ -126,6 +126,10 @@ const eitherOf = (a, b) => ({ kind: "melee", reach: MELEE_REACH, either: [a, b] 
  * a creature further out is stronger (its power: creatures.js).
  */
 export const NATURAL = Object.freeze({
+    // (The fortifications' archers, shooting from a guard tower's loops, or a forward garrison's
+    // walls: core/war/forts.js; farther than a bow in hand, from up high)
+    tower: { label: "Arrow loops", attacks: [ranged({ id: "loose", reach: 20, damage: [5, 9], hitAt: 300, duration: 700, interval: 1600, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 24 } })] },
+    garrison: { label: "Archers on the walls", attacks: [ranged({ id: "volley", reach: 20, damage: [4, 8], hitAt: 300, duration: 700, interval: 1100, reaction: "pierce", animation: "bow", projectile: { kind: "arrow", speed: 24 } })] },
     rat: { label: "Teeth", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 300, duration: 650, interval: 1000, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
     porcupine: { label: "Quills", attacks: [melee({ id: "quills", damage: [3, 5], hitAt: 450, duration: 900, interval: 1300, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     slime: { label: "Slime", attacks: [melee({ id: "slam", damage: [2, 5], hitAt: 500, duration: 900, interval: 1200, stagger: 200, reaction: "crush", animation: "melee" })] },

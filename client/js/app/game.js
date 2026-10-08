@@ -44,7 +44,9 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { buildingView } from "./building.js";
+import { CLEARING, footprintOf } from "../core/war/forts.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -72,6 +74,7 @@ import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
+import { FortAvatar, Forts } from "../world/forts3d.js";
 import { ContactShadows } from "../world/contacts.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
@@ -477,7 +480,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -894,7 +897,7 @@ export class Game {
     #lightNear(x, z) {
         const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
 
-        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.carried?.lights() ?? []), ...(this.globes?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.forts3d?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.carried?.lights() ?? []), ...(this.globes?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
         GLOW_SCALE.value = this.view.pixelsPerMetre();
         EMBER_SCALE.value = GLOW_SCALE.value;
         this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
@@ -1116,6 +1119,9 @@ export class Game {
         this.doors = new Doors(world, view.scene);
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
+        // (And the fortifications standing near the player: world/forts3d.js, #syncForts)
+        this.forts3d = new Forts(view.scene, view.far.scene);
+        this.fortsClock = 0;
         this.carried = new CarriedTorches(view.scene);
         this.globes = new LightGlobes(view.scene);
         this.pinMarks = new PinMarks(view.scene, view.far.scene);
@@ -1130,6 +1136,7 @@ export class Game {
         // (Banners and camps only ever outside, on the world's ground)
         this.banners.setGround(this.groundOf("town"));
         this.camps.setGround(this.groundOf("town"));
+        this.forts3d.setGround(this.groundOf("town"));
 
         // What flies over the world outside: birds of each land, and the wyverns and the dragon
         // near their lairs (flyers3d.js)
@@ -1332,6 +1339,11 @@ export class Game {
         // One of a convoy's wagons: an ox in its shafts
         if (actor.kind === "wagon") {
             return yield* this.#addingWagon(actor);
+        }
+
+        // A fortification (its stone drawn by world/forts3d.js): standing in for it in the battle
+        if (actor.kind === "fort") {
+            return this.#register(actor.id, new FortAvatar(this.host.fortsOut.get(actor.id)?.kind ?? "tower"), { wounds: false });
         }
 
         // The orc
@@ -1687,6 +1699,7 @@ export class Game {
         this.doors?.dispose();
         this.banners?.dispose();
         this.camps?.dispose();
+        this.forts3d?.dispose();
         this.carried?.dispose();
         this.globes?.dispose();
         this.pinMarks?.dispose();
@@ -2100,6 +2113,12 @@ export class Game {
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
+
+        // (The fortifications standing near the player drawn, a couple of times a second)
+        if ((this.fortsClock -= dt) <= 0) {
+            this.fortsClock = 0.5;
+            this.#syncForts();
+        }
         this.contacts?.begin();
         this.#crowding();
         this.#cheered();
@@ -2127,6 +2146,13 @@ export class Game {
             // (Joined: their own hero drawn going where they're sent before the host's heard)
             if (actor === mine && this.predict) {
                 [x, z] = this.predict.at(actor, x, z, this.clock * 1000);
+            }
+
+            // (A fortification: only where it stands, on the ground there)
+            if (actor.kind === "fort") {
+                avatar.update(dt, ox + x, oz + z, actor.facing);
+                avatar.object.position.y = this.#groundOn(actor.map, ox + x, oz + z);
+                continue;
             }
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
@@ -2737,7 +2763,7 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
         });
     }
 
@@ -2779,6 +2805,28 @@ export class Game {
             const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
 
             return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance] };
+        });
+    }
+
+    /**
+     * Each people's fortifications standing (docs/WAR.md *Fortifications*), as icons for the maps:
+     * [{ id, kind (guardTower or garrison: app/mapicons.js), x, z (metres), rim (by how its
+     * people stand with the player's: WORKS_RIMS), own (its people the player's or an ally's: known
+     * to them wherever it stands) }].
+     */
+    fortIcons() {
+        const war = this.host?.war;
+
+        if (!war?.forts) {
+            return [];
+        }
+
+        const mine = this.self?.realm;
+
+        return war.forts.map((fort) => {
+            const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
+
+            return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own" };
         });
     }
 
@@ -2942,7 +2990,8 @@ export class Game {
     /**
      * What the world map shows (app/worldmap.js): where the player is ({ x, z, facing }, metres
      * and radians, on the world outside: inside, at the building's door) and the icons: the
-     * buildings gone into, and the places worth finding near where they've been (within a chunk).
+     * buildings gone into, the places worth finding near where they've been (within a chunk), and
+     * the fortifications there, and their own people's and their allies' wherever they stand.
      */
     worldMapView() {
         const actor = this.battle.actor(this.me);
@@ -2950,7 +2999,7 @@ export class Game {
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
     }
 
     // --- The world map's pin ---
@@ -3525,6 +3574,8 @@ export class Game {
             counselMarch: () => own && !oppressor && rank >= OPENS.march && options.march.length > 0,
             counselPeace: () => own && !oppressor && rank >= OPENS.peace && options.peace.length > 0,
             counselWar: () => own && !oppressor && rank >= OPENS.war && options.war.length > 0,
+            counselBuild: () => own && !oppressor && rank >= OPENS.build,
+            plans: () => (buildingView(war, this.self.realm)?.plans.length ?? 0) > 0,
             counselRise: () => Boolean(oppressor) && town.owner === this.self.realm && rank >= OPENS.rise,
             ready: () => ready,
             serving: () => Boolean(war.realm(town.owner)?.overlord),
@@ -3598,8 +3649,16 @@ export class Game {
 
                 return holds[key] ? holds[key]() === value : true;
             },
-            handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel || effect.guild),
+            handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel || effect.guild || effect.plans),
             effect: (effect) => {
+                // (The council's plans: the building screen opened, and what's counselled there sent)
+                if (effect.plans) {
+                    names.planned = "Take your time. Show me which.";
+                    this.#openPlans(npc, names);
+
+                    return;
+                }
+
                 const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
                 const chosen = kind && kind !== "rise" ? options[kind]?.[index - 1] : null;
                 // (A notice on a guild's board taken, by its place on it: sent as what it asks)
@@ -3609,6 +3668,39 @@ export class Game {
                 this.#command({ type: "effect", effect: sent }, (result) => heard(effect, result, kind, chosen));
             },
         };
+    }
+
+    // The building screen (app/building.js), opened at a ruler's: the council's plans on the world
+    // map, one chosen counselled (host.js #official, war.js counsel's `build`), and the ruler's
+    // words (`names.planned`) as it went
+    #openPlans(npc, names) {
+        const view = buildingView(this.host.war, this.self.realm);
+
+        if (!view) {
+            return;
+        }
+
+        this.onWorldMap({
+            build: {
+                ...view,
+                choose: (key) => {
+                    const plan = view.plans.find((each) => each.key === key);
+
+                    this.#command({ type: "effect", effect: { counsel: { build: key } } }, (result) => {
+                        names.planned = result.ok ? `${plan.name}. So be it: it's the next we build, as soon as the stores allow.` : "No. That cannot be.";
+
+                        if (!result.ok) {
+                            this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                        }
+
+                        if (this.talking?.id === npc.id) {
+                            this.talking.conversation.retell();
+                            this.talk.update(this.talking.conversation);
+                        }
+                    });
+                },
+            },
+        });
     }
 
     // What a soldier can tell of: the town they guard, whose it is, their ruler, the war (as
@@ -5173,6 +5265,53 @@ export class Game {
         this.sound?.play("newsHeard");
     }
 
+    // The fortifications standing near the player drawn (world/forts3d.js), each turned with its
+    // front (its door, its gate) towards home, away from the enemy it faces, its people's banner
+    // by it; those far off, or gone, let go
+    #syncForts() {
+        const war = this.host?.war;
+        const me = this.battle.actor(this.me);
+
+        if (!war?.forts || !me || !this.forts3d) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf("town");
+        const forts =
+            me.map === "town"
+                ? war.forts.map((fort) => {
+                      const toward = war.town(fort.toward)?.at;
+
+                      return { id: fort.id, kind: fort.kind, realm: fort.realm, at: [ox + fort.at[0], oz + fort.at[1]], facing: toward ? Math.atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0 };
+                  })
+                : [];
+        const { added, gone } = this.forts3d.sync(forts, [ox + me.x, oz + me.y]);
+
+        for (const { id, kind, realm, at: [x, z], facing } of added) {
+            const [out, side] = kind === "garrison" ? [6.4, 2.4] : [3.2, 1.6];
+
+            this.banners?.raise(`fort:${id}`, realm, [{ x: x + Math.sin(facing) * out + Math.cos(facing) * side, z: z + Math.cos(facing) * out - Math.sin(facing) * side, facing }]);
+        }
+
+        for (const id of gone) {
+            this.banners?.lower(`fort:${id}`);
+        }
+    }
+
+    // A fortification near the player let go from the battle: far off now, or razed (said, and its
+    // stone taken down: #syncForts)
+    #fortDown({ fort: id, razed = false, kind, people, by = null }) {
+        this.#undress(id);
+
+        if (razed) {
+            const name = `${ADJECTIVES[people] ?? people} ${kind === "garrison" ? "forward garrison" : "guard tower"}`;
+
+            this.hud.message(by && by === this.self?.realm ? `The ${name} is razed!` : `The ${name} has fallen!`, 3);
+            this.sound?.play("newsHeard");
+            this.fortsClock = 0;
+        }
+    }
+
     // A convoy met on the road near the player, in with its goods, or fallen on (host.js
     // #meetConvoy, #watchConvoys, #convoyFell): its wagons emptied once its goods are in; said, if
     // it's near the player, or it's their people's, or theirs who fell on it
@@ -5914,6 +6053,21 @@ export class Game {
             case "convoyed":
                 this.#convoyed(event);
                 break;
+            case "war":
+                // (A fortification gone up or come down: the ground under it, and round it, drawn
+                // again: core/overworld.js setForts)
+                if (["built", "razed", "abandoned"].includes(event.event.type)) {
+                    this.chunks?.redraw(footprintOf({ kind: event.event.kind, at: event.event.at }, CLEARING));
+                }
+
+                break;
+            case "fortOut":
+                // (A fortification near the player stood up in the battle: stood in for, its bar over it)
+                this.#mirror();
+                break;
+            case "fortDown":
+                this.#fortDown(event);
+                break;
             case "parted":
                 this.#unenlist(event.ids);
 
@@ -6617,7 +6771,7 @@ export class Game {
 
     // Does a character bleed red (not a skeleton, a slime, a spider, a wisp...)?
     #bleeds(actor) {
-        return actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red";
+        return actor?.kind !== "fort" && (actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red");
     }
 
     // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse

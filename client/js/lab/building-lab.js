@@ -26,6 +26,7 @@ import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
+import { fortObject } from "../world/art/kits/forts.js";
 import { Camps } from "../world/camps3d.js";
 import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -45,7 +46,7 @@ const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "
 const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
-    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", "forts", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
     stats: null,
@@ -310,6 +311,36 @@ async function build() {
         orbit.distance = 11;
         orbit.pitch = 42;
         finish(chunks.drawn.size);
+
+        return;
+    }
+
+    // Every people's fortifications in two rows: a guard tower each, and a forward garrison each
+    // (art/kits/forts.js)
+    if (state.show === "forts") {
+        const group = new THREE.Group();
+        const peoples = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
+        const width = peoples.length * 16 + 8;
+        const world = { width, height: 40, ground: Array.from({ length: 40 }, () => new Uint8Array(width)) };
+
+        group.add(buildGround(world, { land: landColour(HOMELANDS[state.people], state.people) }));
+        state.frames = peoples.flatMap((people, k) =>
+            ["tower", "garrison"].map((kind, row) => {
+                const [x, z] = [12 + k * 16, 10 + row * 18];
+                const fort = fortObject(kind, people);
+
+                fort.scale.setScalar(1 / 5);
+                fort.position.set(x, 0, z);
+                group.add(fort);
+
+                return { label: `${kind} ${people}`, x, z, w: 12, d: 12 };
+            }),
+        );
+        view.scene.add(group);
+        state.built = group;
+        orbit.focus.set(width / 2, 2, 20);
+        orbit.distance = 70;
+        finish(group.children.length);
 
         return;
     }

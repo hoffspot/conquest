@@ -114,10 +114,13 @@ export class Hud {
         this.#setStamina(this.plate, stamina, maxStamina);
     }
 
-    /** Show a bar over another character (hostile ones in red). */
-    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null }) {
+    /**
+     * Show a bar over another character (hostile ones in red; a fortification's, `kind` "fort",
+     * broader and heavier, as strong as it stands).
+     */
+    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null }) {
         const level = wild?.tier ?? null;
-        const plate = element("div", `floater plate${hostile ? " hostile" : ""}`);
+        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${kind === "fort" ? " fort" : ""}`);
         const bar = element("div", "bar");
         const breath = element("div", "bar stamina");
 

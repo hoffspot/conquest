@@ -3,6 +3,7 @@
 // - every town in the colour of whoever holds it, its garrison beside it;
 // - each people's works (lumber mills, mines and quarries) in their holder's colour, or dark and
 //   ringed in red where brigands hold them;
+// - each people's fortifications: guard towers and forward garrisons, how strong each stands;
 // - the forces out: expeditions on the march, the camps outside their targets, relief, envoys,
 //   and convoys carrying the works' goods to their seats;
 // - each realm, its ruler and what they're like, what it holds, its gold and its stores;
@@ -16,6 +17,7 @@
 // ?seed=N&might=M choose the world and the might; window.warViewer is there for tests.
 
 import { describeLeader } from "../core/war/peoples.js";
+import { FORTS } from "../core/war/forts.js";
 import { peopleOf, tell } from "../core/war/news.js";
 import { HOLDINGS, RESOURCES, STAGES, War } from "../core/war/war.js";
 import { CELL, planWorld, RACES, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -213,6 +215,30 @@ function draw() {
         context.fillText(WORKS_LETTERS[works.kind], sx, sy + 0.5);
     }
 
+    // The fortifications: a guard tower a little square, a forward garrison a bigger one with its
+    // gate open, in their holder's colour; an arc round each as much of it as stands
+    for (const fort of war.forts ?? []) {
+        const [sx, sy] = toScreen(...fort.at);
+        const r = fort.kind === "garrison" ? 6 : 4;
+
+        context.fillStyle = PEOPLE_COLOURS[fort.realm];
+        context.strokeStyle = "#101418";
+        context.lineWidth = 1.4;
+        context.fillRect(sx - r, sy - r, r * 2, r * 2);
+        context.strokeRect(sx - r, sy - r, r * 2, r * 2);
+
+        if (fort.kind === "garrison") {
+            context.fillStyle = "#101418";
+            context.fillRect(sx - 1.5, sy + r - 3, 3, 3);
+        }
+
+        context.strokeStyle = fort.hp < FORTS[fort.kind].hp * 0.5 ? "#d0413a" : "#e8e2d0";
+        context.lineWidth = 1.6;
+        context.beginPath();
+        context.arc(sx, sy, r + 3, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * fort.hp) / FORTS[fort.kind].hp);
+        context.stroke();
+    }
+
     // The forces themselves: camps as tents, expeditions and relief as shields, envoys as scrolls,
     // convoys as wagons
     for (const force of war.forces) {
@@ -268,6 +294,17 @@ function draw() {
 
 const own = (id) => (peopleOf(id).endsWith("s") ? `${peopleOf(id)}'` : `${peopleOf(id)}'s`);
 
+// A realm's fortifications, in words: "3 guard towers · 1 forward garrison"
+function forted(id) {
+    const count = (kind) => (state.war.forts ?? []).filter((fort) => fort.realm === id && fort.kind === kind).length;
+    const said = [
+        [count("tower"), "guard tower"],
+        [count("garrison"), "forward garrison"],
+    ].map(([n, name]) => `${n} ${name}${n === 1 ? "" : "s"}`);
+
+    return said.join(" · ");
+}
+
 function showRealms() {
     const { war } = state;
 
@@ -288,6 +325,7 @@ function showRealms() {
                 Object.assign(document.createElement("span"), { className: "leader", textContent: `${realm.leader.title} ${realm.leader.name}${said.length ? `: ${said.join(", ")}` : ""}` }),
                 Object.assign(document.createElement("span"), { className: "holds", textContent: realm.alive ? `${towns} towns · ${war.works.filter(({ owner, held }) => owner === realm.id && !held).length} works · ${war.power(realm.id)} under arms · ${Math.floor(realm.treasury)} gold` : "No towns left" }),
                 Object.assign(document.createElement("span"), { className: "holds", textContent: RESOURCES.map((resource) => `${Math.floor(realm.stores[resource])} ${resource}`).join(" · ") }),
+                Object.assign(document.createElement("span"), { className: "holds", textContent: forted(realm.id) }),
             );
 
             return li;
@@ -401,6 +439,12 @@ function describe(sx, sy) {
         const held = works.held ? `held by brigands, ${works.band} strong` : `the ${own(works.owner)}${works.owner === works.race ? "" : ` (the ${own(works.race)} once)`}, ${works.guard} on guard, ${Math.floor(works.yard)} waiting in its yard`;
 
         lines.push(`The ${works.name} ${works.kind}: ${held}`);
+    }
+
+    for (const fort of near(war.forts ?? [])) {
+        const where = war.town(fort.about)?.name ?? (war.workAt(fort.about) ? `the ${war.workAt(fort.about).name} ${war.workAt(fort.about).kind}` : "the border");
+
+        lines.push(`The ${own(fort.realm)} ${fort.kind === "garrison" ? "forward garrison" : "guard tower"} by ${where}: ${Math.round(fort.hp)} of ${FORTS[fort.kind].hp} standing`);
     }
 
     for (const force of near(war.forces)) {

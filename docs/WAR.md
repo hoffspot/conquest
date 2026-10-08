@@ -206,7 +206,7 @@ The engine is built for this from the start. These are its rules:
 | **M11** | Built | Hop in, hop out: other players joining a running world. |
 | **M12** | Built | The works: each people's lumber mills, mines and quarries, the stores of wood, metal and stone they fill, convoys carrying them to the seat, works seized, overrun and won back. |
 | **M13** | Built | Convoys in the world: their wagons, guards and captain on the road near a player, to see in or fall on; the keep's requests about the convoys and the works. |
-| **M14** | To come | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
+| **M14** | Built | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
 | **M15** | To come | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
 | **M16** | To come | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
 
@@ -724,7 +724,7 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Commoner | 0 | Work from the reeves at the town halls. |
 | Freeholder | 60 | Scouting for the reeves. |
 | Retainer | 180 | An audience at the keep, work from the ruler, and the pick of its armoury. |
-| Knight | 400 | A say in where the next expedition marches. |
+| Knight | 400 | A say in where the next expedition marches and where the council builds. |
 | Lord | 800 | A say in war and peace. |
 | Councillor | 1500 | A seat on the council: your word weighs the most. |
 
@@ -872,8 +872,8 @@ Each people has six works in its lands, where what it builds with comes from
     town nearest it, if that can spare it (keeping half), or else is raised for gold. Won, the
     works is held by those who won it. These forces don't count against those a realm may field.
 - **A people fallen:** its works go to whoever holds most of its old towns, or to the wild.
-- **What the stores are for** comes with M14: towers and forward garrisons, built and kept up
-  from them.
+- **What the stores are for:** towers and forward garrisons, built and kept up from them (M14,
+  *Fortifications*).
 
 **Near a player** (`host.js`, `WORKS_OUT`):
 - **The guards come out** once a player's within 120 m of the works, and are let go once every
@@ -954,6 +954,106 @@ it).
 of its works held by others; a Knight to fall on an enemy's convoy, or take an enemy's works.
 
 **Kept.** The convoys met and their wagons are in the host's snapshot (`SNAPSHOT_VERSION` 10).
+
+### Fortifications (M14)
+
+**What they are** (`core/war/forts.js` `FORTS`):
+
+| | Costs | Kept up, a turn | Strength | Apart | Most | Stands over |
+| --- | --- | --- | --- | --- | --- | --- |
+| Guard tower | 40 wood, 40 stone, 10 metal | 0.1 wood, 0.1 stone | 1,200 | 150 m | 8 | 4 m square |
+| Forward garrison | 100 wood, 30 stone, 40 metal | 0.4 wood, 0.2 metal | 2,400 | 500 m | 3 | 10 m square |
+
+- **Apart:** how near another of its people's of the same kind may stand. **Most:** how many of
+  the kind a people keeps.
+- **Kept up** each turn from its people's stores (`war.js` `#keepUp`), it's mended 2% of its
+  strength (`FORT_SIEGE.mend`). Unkept, the stores short, it falls 2% into ruin (`decay`), and is
+  given up at nothing; a fallen people's are given up at once.
+
+**Where a people may build** (`mayBuild`, `PLACING`):
+- anywhere in its own first lands (the plan's land of its race);
+- in another people's lands, only within 100 m of the edge of a town it took from them;
+- on dry ground, off the roads, no steeper than 0.06 between a cell of the plan and its
+  neighbours; never within 20 m of a settlement's edge, 40 m of a site's middle, or 40 m of
+  another fortification.
+
+**Where its council would build** (`plansFor`), each plan scored, best first:
+- **a tower** 70 m out past the edge of each of its towns, towards the other people's town it most
+  fears from there (an enemy's above all, the nearer the more, out to 4 km), weighed by the
+  town's size (`COUNCIL.town`: a capital 3, a city 2, a town 1.4, a village 0.8, a hamlet 0.5);
+- **a tower** 70 m from each of its works, towards the town it most fears, weighed by what the
+  works yields;
+- **a forward garrison** 220 m out from each of its towns on a front with an enemy (by a town it
+  took, 80 m past its edge), weighed 1.3 times a tower;
+- each turned a little either way, if it must be, to stand where it may build; none of a kind it
+  has the most of, nor near another of its own of the kind.
+
+**Built** (`#fortify`): once a turn, a realm's council builds the best of its plans it can
+afford, keeping back 20 turns of what it already keeps up (`COUNCIL.reserve`). The best it can't
+afford yet it saves for, rather than building lesser ones. It can also be built straight from a
+plan, or anywhere it may be (`war.build`).
+
+**Counsel** (the building screen, below): a Knight or above counsels which plan to build first.
+The plan's score is weighed 1 + 3 × their counsel's weight (`COUNCIL.counsel`; a Knight's weighs
+0.4, a Lord's 0.7, a Councillor's 1) for 20 turns (`COUNSEL_TURNS`), or till it's built.
+
+**Besieged** (`#besiege`, `FORT_SIEGE`): an enemy camp or army within 250 m falls on a
+fortification each turn, taking 10 of its strength for each of them; its defenders bring down 1
+of them a turn (a garrison 2). At nothing, it's razed by them, and its people bear them a grudge
+(6). Not while a player's near it: that's played out in the world.
+
+**Near a player** (`host.js` `FORT_NEAR`): stood up in the battle once a player's within 200 m,
+let go once every player's beyond 350:
+- **over its squares** (`footprintOf`): the world's ground under it is blocked
+  (`overworld.js` `setForts`), and the ways round it found again (`navigation.js` `dropTiles`);
+- **as strong as it stands in the war,** its stone turning a quarter of each blow (a garrison's a
+  fifth: `FORT_NEAR.armor`). Struck, the war's told (`war.strike`); at nothing, it's razed by the
+  striker's people;
+- **shooting from its loops** at its people's enemies within 20 m (`weapons.js` `tower`: arrow
+  loops, 5 to 9 a shot every 1.6 s; `garrison`: archers on the walls, 4 to 8 every 1.1 s). It
+  doesn't move (`battle.js` `KINDS.fort`, `ai` "fort");
+- **fought as it stands:** those who fight it close to its walls, not its middle (`battle.js`
+  `#aimAt`, `#goalOf`).
+
+**Drawn** (`art/kits/forts.js`, `world/forts3d.js`):
+- **a guard tower:** 3.6 m square and 9.5 m high, battered at its foot, two rows of loops in each
+  face, its door at the back with a torch by it. Its top is its people's (`FORT_LOOKS`):
+  battlements (humans, dark elves), a pointed roof over corbels (elves, cat folk), or a timber
+  gallery under a low roof (lizard folk, orcs);
+- **a forward garrison:** a 10 m curtain of its people's stone (a palisade of stakes, for the
+  lizard folk and orcs), battlemented and looped, a turret at each corner, its gate in the back
+  wall, the hipped roof of its barracks over the wall;
+- each turned with its front towards home, away from the enemy town it faces, its people's
+  banner by its door or gate;
+- drawn whole within 200 m (`FORTS_VIEW`), and from afar as a few boxes and roofs in its people's
+  colours, fading in where the near world fades out;
+- a bar over it, broader and heavier than a soldier's (`hud.js` `fort`).
+
+**The building screen** (`app/building.js`): at their own people's keep, a Knight or above asks
+the ruler "Where should we build our defences?" (`dialogue.js` ruler's `build`). Once the council
+has plans, **Show me the plans** opens the world map as the building screen:
+- the council's six best plans, numbered best first, each a dashed ring round its kind's icon,
+  "The stores hold it" or "Saving for it" under it, the one counselled ringed in gold;
+- their people's fortifications standing, each with its strength;
+- their stores across the top.
+
+A plan tapped is asked about: what it guards and faces, its place in the council's order, what it
+costs and takes to keep up, and whether the stores hold it. **Counsel it** sends the counsel
+(`counsel: { build }`), and the ruler says it's the next they'll build. The screen's worked out
+from the war alone (`buildingView`), so a player could one day build from it as well as counsel.
+
+**On the maps:** each fortification's icon, a battlemented tower or a wall between two turrets
+(`mapicons.js` `FORT_ICONS`), rimmed as a works' is. Their own people's and their allies' show on
+the world map wherever they stand; others' once the land round them is explored.
+
+**Said:** one razed near the player ("The orcish guard tower is razed!" by their people, "…has
+fallen!" by another). **The news** tells of fortifications raised, razed and given up, and of
+counsel on where to build. **The war page** draws them as squares, their strength round them,
+and each realm's.
+
+**Kept.** The fortifications are kept in the war's snapshot (`WAR_VERSION` 3; a war kept before
+them carries on with none), and those stood up near a player in the host's (`SNAPSHOT_VERSION`
+11).
 
 ### Playing together (M11)
 

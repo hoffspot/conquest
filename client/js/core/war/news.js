@@ -11,6 +11,9 @@ const MISSIONS = Object.freeze({ truce: "a truce", alliance: "an alliance", brea
 // What the wild camps' brigands who fall on a convoy are called (worldplan/races.js FACTIONS)
 const FACTION_NAMES = Object.freeze({ bandits: "outlaws", raiders: "raiders", goblins: "goblins" });
 
+/** What each kind of fortification is called (core/war/forts.js FORTS). */
+export const FORT_NAMES = Object.freeze({ tower: "guard tower", garrison: "forward garrison" });
+
 /** A people's name (the Humans...). */
 export const peopleOf = (id) => RACES.find((race) => race.id === id)?.name ?? id;
 
@@ -31,6 +34,8 @@ export function tell(event, war) {
         return found ? `the ${found.name} ${found.kind}` : "a works";
     };
     const Works = (id) => works(id).replace(/^t/, "T");
+    // (Where a fortification stands: before a town, or by a works)
+    const where = ({ about }) => (war.workAt?.(about) ? `by ${works(about)}` : war.town(about) ? `before ${war.town(about).name}` : "on the border");
     const cargo = (load) =>
         Object.entries(load ?? {})
             .map(([resource, amount]) => `${Math.round(amount)} ${resource}`)
@@ -104,7 +109,17 @@ export function tell(event, war) {
             return `${People(event.realm)} can't pay their soldiers, and some are leaving.`;
         case "victory":
             return `Every people bows to ${people(event.realm)}. The continent is theirs.`;
+        case "built":
+            return `${People(event.realm)} have raised a ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
+        case "razed":
+            return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
+        case "abandoned":
+            return `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
         case "counsel":
+            if (event.build) {
+                return `${People(event.realm)} are counselled where to build.`;
+            }
+
             return event.march ? `${People(event.realm)} are counselled to march on ${town(event.march)}.` : event.peace ? `${People(event.realm)} are counselled to seek peace with ${people(event.peace)}.` : `${People(event.realm)} are counselled to war with ${people(event.war)}.`;
         case "undone":
             return `${People(event.realm)} no longer rule the whole continent.`;
@@ -154,7 +169,7 @@ export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {
         const event = war.log[k];
 
-        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target))) {
+        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about))) {
             continue;
         }
 

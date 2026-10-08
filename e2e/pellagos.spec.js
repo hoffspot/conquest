@@ -2885,8 +2885,9 @@ test("the guild's portal: a character kept from before there were portals has th
         return game.view.toScreen(game.view.camera.position.clone().set(ox + 19.6, 0.6, oz + 12.5));
     });
 
+    // (Walked up to it in the game's own time, as fast as it draws: a slow runner, a slow walk)
     await page.mouse.click(at.x, at.y);
-    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 30000, polling: 100 });
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 90000, polling: 100 });
 
     const map = await page.evaluate(() => {
         const { game, worldMap } = window.pellagos;
@@ -5226,8 +5227,11 @@ test("a convoy on the road near the player: its wagons drawn, an ox in each one'
     expect(await page.evaluate(() => window.said.some((text) => /convoy of 60 wood is on the road to/.test(text)))).toBe(true);
 
     // (Drawn a few at a time, with the town's people about: each wagon an ox, the wagon behind it
-    // laden with logs)
+    // laden with logs. Held where it is the while, the war not told where it's got to, so it's
+    // drawn laden however long that takes)
+    await page.evaluate(() => (window.pellagos.game.host.convoys.get("force-990").over = "held"));
     expect(await playUntil(page, () => ["wagons", "ids"].every((key) => (window.pellagos.game.host.convoys.get("force-990")?.[key] ?? []).every((id) => window.pellagos.game.avatars.has(id))), { seconds: 90 })).toBe(true);
+    await page.evaluate(() => (window.pellagos.game.host.convoys.get("force-990").over = null));
 
     const drawn = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -5270,6 +5274,209 @@ test("a convoy on the road near the player: its wagons drawn, an ox in each one'
     expect(after.loads).toEqual([null, null, null]);
     expect(after.meshes.every((meshes, k) => meshes < drawn[k].meshes)).toBe(true);
     expect(after.said).toBe(true);
+});
+
+test("a guard tower of the player's people near them: drawn over its squares with its banner, its bar broad; it shoots their enemy within 20 m; razed, said, its stone taken down", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    const built = await page.evaluate(async () => {
+        const { footprintOf, mayBuild } = await import("/js/core/war/forts.js");
+        const { nearestFree, squaresOf } = await import("/js/core/grid.js");
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        // A tower where their people may build, the nearest the player; the player 12 m from it
+        let at = null;
+
+        for (let r = 20; r < 300 && !at; r += 4) {
+            for (let k = 0; k < 48 && !at; k++) {
+                const spot = [Math.round(player.x + Math.cos((k / 48) * Math.PI * 2) * r), Math.round(player.y + Math.sin((k / 48) * Math.PI * 2) * r)];
+
+                at = mayBuild(war, "human", spot) ? spot : null;
+            }
+        }
+
+        Object.assign(war.realm("human").stores, { wood: 500, stone: 500, metal: 500 });
+
+        const fort = war.build("human", { kind: "tower", at });
+        const [x, y] = nearestFree(squaresOf(game.world.maps.town), [at[0] - 12, at[1]], { within: 8 });
+
+        Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        const box = footprintOf(fort);
+
+        return { id: fort.id, at, box, blocked: game.world.maps.town.squares.blocked(box[0], box[1]) && game.world.maps.town.squares.blocked(box[2], box[3]) };
+    });
+
+    expect(built.blocked).toBe(true);
+
+    const drawn = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const plate = document.querySelector(`.floater.plate[data-id="${id}"]`);
+
+        return {
+            out: game.host.fortsOut.has(id),
+            avatar: game.avatars.get(id)?.constructor.name,
+            stone: Boolean(game.forts3d.drawn.get(id)),
+            banner: game.banners.towns.has(`fort:${id}`),
+            plate: plate?.className ?? null,
+            name: plate?.querySelector(".name")?.textContent ?? null,
+        };
+    }, built.id);
+
+    expect(drawn).toMatchObject({ out: true, avatar: "FortAvatar", stone: true, banner: true, name: "human guard tower" });
+    expect(drawn.plate).toContain("fort");
+
+    // At war with the orcs, one of theirs 10 m from it: shot from its loops
+    await page.evaluate(({ box }) => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.known.push("human|orc");
+        game.host.battle.add({ id: "raider", kind: "soldier", name: "Orcish raider", weapon: "cleaver", team: "orc", square: [box[2] + 10, box[1]], ai: null });
+        Object.assign(game.host.battle.actor("raider"), { hp: 5000, maxHp: 5000 });
+    }, built);
+
+    expect(await playUntil(page, () => window.pellagos.game.host.battle.actor("raider").hp < 5000, { seconds: 20 })).toBe(true);
+
+    // Brought low, and fallen on: razed by the orcs, said, its stone taken down and its squares open
+    await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const raider = game.host.battle.actor("raider");
+
+        window.fortId = id;
+
+        game.host.battle.actor(id).hp = 30;
+        game.host.war.fort(id).hp = 30;
+        game.host.command("raider", { type: "engage", target: id });
+        Object.assign(raider, { ai: "patrol", patrol: [raider.square], target: id });
+    }, built.id);
+
+    expect(await playUntil(page, () => !window.pellagos.game.host.war.fort(window.fortId), { seconds: 40 })).toBe(true);
+    expect(await playUntil(page, () => !window.pellagos.game.forts3d.drawn.has(window.fortId), { seconds: 5 })).toBe(true);
+
+    const after = await page.evaluate(({ id, box }) => {
+        const { game } = window.pellagos;
+
+        return { said: window.said, banner: game.banners.towns.has(`fort:${id}`), plate: Boolean(document.querySelector(`.floater.plate[data-id="${id}"]`)), open: !game.world.maps.town.squares.blocked(box[0], box[1]) };
+    }, built);
+
+    expect(after.said).toContain("The human guard tower has fallen!");
+    expect(after).toMatchObject({ banner: false, plate: false, open: true });
+});
+
+test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // A Knight, at war with the orcs, the stores holding a tower but not a garrison: into the
+    // keep, up to the ruler
+    const asked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "keep");
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.standing.points = 420;
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.known.push("human|orc");
+        Object.assign(war.realm("human").stores, { wood: 60, stone: 50, metal: 20 });
+
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const ruler = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "ruler");
+
+        game.approaching = ruler.id;
+        game.battle.command("player", { type: "approach", target: ruler.id });
+
+        for (let k = 0; k < 300 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const conversation = game.talking.conversation;
+        const where = conversation.choices.findIndex(({ text }) => text === "Where should we build our defences?");
+
+        conversation.choose(where);
+
+        const show = conversation.choices.findIndex(({ text }) => text === "Show me the plans.");
+
+        game.start();
+
+        return { where, show, line: conversation.line };
+    });
+
+    expect(asked.where).toBeGreaterThanOrEqual(0);
+    expect(asked.show).toBeGreaterThanOrEqual(0);
+    expect(asked.line).toMatch(/council/);
+
+    // Shown: the world map, as the building screen
+    await page.evaluate((show) => window.pellagos.game.talking.conversation.choose(show), asked.show);
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.plans, null, { timeout: 30000, polling: 100 });
+
+    const map = await page.evaluate(() => {
+        const { worldMap } = window.pellagos;
+
+        return { title: document.querySelector("#worldmaptitle").textContent, text: document.querySelector("#worldmappicktext").textContent, drawn: worldMap.drawn, plans: worldMap.build.plans };
+    });
+
+    expect(map.title).toBe("The council's plans");
+    expect(map.text).toBe("Tap a plan to counsel building it first. Our stores: 60 wood, 50 stone and 20 metal.");
+    expect(map.plans.length).toBeGreaterThan(1);
+    expect(map.drawn.plans).toBe(map.plans.length);
+    expect(map.plans.map(({ place }) => place)).toEqual(map.plans.map((_, k) => k + 1));
+    expect(map.plans.every(({ affordable, kind }) => affordable === (kind === "tower"))).toBe(true);
+
+    // The second tapped: asked about, then counselled
+    const plan = map.plans[1];
+    const spot = await page.evaluate(({ x, z }) => {
+        const map = window.pellagos.worldMap;
+        const rect = map.canvas.getBoundingClientRect();
+
+        return { x: rect.left + (x - map.view.x) / map.view.scale + rect.width / 2, y: rect.top + (z - map.view.z) / map.view.scale + rect.height / 2 };
+    }, plan);
+
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#build")).toBeVisible();
+    await expect(page.locator("#buildtitle")).toHaveText(`${plan.name}?`);
+    await expect(page.locator("#buildnote")).toContainText("The council's choice 2 of");
+    await expect(page.locator("#buildnote")).toContainText(plan.kind === "tower" ? "It costs 40 wood, 40 stone and 10 metal" : "It costs 100 wood, 30 stone and 40 metal");
+    await page.locator("#buildgo").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+    await page.waitForFunction(() => window.pellagos.game.host.war.realm("human").build, null, { timeout: 10000 });
+
+    const heeded = await page.evaluate(() => ({ build: window.pellagos.game.host.war.realm("human").build, line: window.pellagos.game.talking?.conversation.line }));
+
+    expect(heeded.build.key).toBe(plan.key);
+    expect(heeded.line).toBe(`${plan.name}. So be it: it's the next we build, as soon as the stores allow.`);
 });
 
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {

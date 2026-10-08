@@ -39,7 +39,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, together: null, joinAfter: null, building: false };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, building: false };
 
 window.pellagos = {
     get game() {
@@ -665,8 +665,9 @@ function quickBack() {
 // --- The world map (the minimap held, or M) ---
 
 // (Opened to pick somewhere to go: Wizard's Walk. `pick` hears the point tapped, somewhere
-// uncovered, or null if it's called off)
-async function openWorldMap({ pick = null, travel = null } = {}) {
+// uncovered, or null if it's called off. Or as the travel map, from a guild's portal: `travel`;
+// or the building screen, at a ruler's: `build`, app/building.js buildingView's, and `choose`)
+async function openWorldMap({ pick = null, travel = null, build = null } = {}) {
     const game = state.game;
 
     if (!game?.running || $("#menu").open || $("#worldmap").open) {
@@ -692,10 +693,35 @@ async function openWorldMap({ pick = null, travel = null } = {}) {
 
     state.picking = pick;
     state.travel = travel;
-    $("#worldmappick").hidden = !pick && !travel;
+    state.plans = build;
+    $("#worldmappick").hidden = !pick && !travel && !build;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
-    $("#worldmaptitle").textContent = travel ? "Guild portal" : "The world";
-    $("#worldmapkey").hidden = Boolean(travel);
+    $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : "The world";
+    $("#worldmapkey").hidden = Boolean(travel || build);
+
+    // (At a ruler's: where the council would build, one tapped asked about; nothing held or tapped
+    // twice)
+    if (build) {
+        const { goodsText } = await import("./app/building.js");
+
+        $("#worldmappicktext").textContent = build.plans.length ? `Tap a plan to counsel building it first. Our stores: ${goodsText(build.stores)}.` : "The council sees nowhere it would build just now.";
+        map.onPick = (point) => {
+            const plan = map.planAt(point);
+
+            if (!plan) {
+                mapNote("Tap one of the council's plans");
+            } else {
+                askBuild(plan, build, goodsText);
+            }
+        };
+        map.onHold = null;
+        map.onDoubleTap = null;
+        $("#worldmapunpin").hidden = true;
+        $("#worldmapnote").hidden = true;
+        map.open({ ...game.worldMapView(), build });
+
+        return;
+    }
 
     // (From a guild's portal: the branches open to them, one tapped asked about; nothing held or
     // tapped twice)
@@ -816,16 +842,48 @@ $("#portalback").addEventListener("click", () => {
     $("#portal").close();
 });
 
+// A plan tapped on the building screen: asked first, with what it guards and faces, what it costs
+// and takes to keep up, and whether the stores hold it now
+function askBuild(plan, build, goodsText) {
+    const placed = plan.place === 1 ? "The council's first choice" : `The council's choice ${plan.place} of ${build.plans.length}`;
+
+    $("#buildtitle").textContent = `${plan.name}?`;
+    $("#buildnote").textContent = `${plan.facing ? `${plan.facing[0].toUpperCase()}${plan.facing.slice(1)}. ` : ""}${placed}. It costs ${goodsText(plan.cost)}, and ${goodsText(plan.upkeep)} a turn to keep up. ${plan.affordable ? "The stores hold it now." : `Our stores hold ${goodsText(build.stores)}: it'll be built once they hold enough.`}`;
+    $("#buildgo").disabled = plan.counselled;
+    $("#buildgo").textContent = plan.counselled ? "Already counselled" : "Counsel it";
+    state.planned = { plan, build };
+    $("#build").showModal();
+    (plan.counselled ? $("#buildback") : $("#buildgo")).focus();
+}
+
+$("#buildgo").addEventListener("click", () => {
+    const chosen = state.planned;
+
+    state.planned = null;
+    $("#build").close();
+
+    if (chosen) {
+        closeWorldMap();
+        chosen.build.choose(chosen.plan.key);
+    }
+});
+$("#buildback").addEventListener("click", () => {
+    state.planned = null;
+    $("#build").close();
+});
+
 function closeWorldMap() {
     // (Closed while picking somewhere: called off)
     const picking = state.picking;
 
     state.picking = null;
     state.travel = null;
+    state.plans = null;
 
     if (state.worldMap) {
         state.worldMap.onPick = null;
         state.worldMap.travel = null;
+        state.worldMap.build = null;
         state.worldMap.rest();
     }
 
