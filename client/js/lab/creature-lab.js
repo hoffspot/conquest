@@ -1,8 +1,9 @@
 // The creature lab (creature-lab.html): every creature of the wilds (beasts/looks.js), one at a
 // time, standing, walking, running, attacking, struck and dying, to look at from any side.
 //
-// ?creature=wolf&action=walk&seed=3 opens on one; window.lab lets a script do the same and step
-// time on exactly (for renders: .shots).
+// ?creature=wolf&action=walk&seed=3 opens on one (a dungeon's boss or mini-boss:
+// ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js);
+// window.lab lets a script do the same and step time on exactly (for renders: .shots).
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -10,6 +11,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { dressCreature } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
 import { loadCharacterKit } from "../characters/kit.js";
+import { THEMES } from "../core/dungeons/themes.js";
 import { WEAPONS } from "../core/weapons.js";
 
 const canvas = document.querySelector("#view");
@@ -143,15 +145,26 @@ let seed = Number(params.get("seed") ?? 1);
 const PACE = { stand: 0, walk: 1.3, run: 3.2, fly: 7 };
 let along = 0;
 
-/** Show one of the creatures (a LOOKS id), one of its kind (`which`). */
+// A dungeon's boss or mini-boss, by "theme:rank:id" (its theme, "boss" or "mini", its id there):
+// { creature, rank, regalia, title, theme }, or null for any other creature
+function championOf(key) {
+    const [theme, rank, regalia] = key.split(":");
+    const one = THEMES[theme]?.[rank === "boss" ? "bosses" : "minis"]?.find((each) => each.id === regalia);
+
+    return one ? { creature: one.creature, rank, regalia, title: one.title, theme: THEMES[theme] } : null;
+}
+
+/** Show one of the creatures (a LOOKS id, or a dungeon's champion: championOf), one of its kind (`which`). */
 function show(id, which = seed) {
     if (current) {
         current.avatar.object.removeFromParent();
         current.avatar.character.dispose();
     }
 
-    const weapon = ABOUT[id]?.[2] ?? null;
-    const avatar = dressCreature(kit, id, { seed: which, equipment: weapon ? WEAPONS[weapon].equipment : [], guard: weapon ? WEAPONS[weapon].attacks[0].animation : null });
+    const champion = championOf(id);
+    const kind = champion?.creature ?? id;
+    const weapon = ABOUT[kind]?.[2] ?? null;
+    const avatar = dressCreature(kit, kind, { seed: which, equipment: weapon ? WEAPONS[weapon].equipment : [], guard: weapon ? WEAPONS[weapon].attacks[0].animation : null, champion: champion?.rank ?? null, regalia: champion?.regalia ?? null });
 
     scene.add(avatar.object);
     along = 0;
@@ -159,8 +172,8 @@ function show(id, which = seed) {
     current = { id, avatar, weapon, size: Math.max(avatar.character.height, (avatar.plan?.length ?? 0.6) * (avatar.scale ?? 1)) };
     seed = which;
     picker.value = id;
-    document.querySelector("#name").textContent = ABOUT[id]?.[0] ?? id;
-    document.querySelector("#about").textContent = ABOUT[id]?.[1] ?? "";
+    document.querySelector("#name").textContent = champion ? champion.title.replace(/^the /, "The ") : (ABOUT[id]?.[0] ?? id);
+    document.querySelector("#about").textContent = champion ? `${champion.rank === "boss" ? "The boss" : "A mini-boss"} of ${champion.theme.name}: ${ABOUT[kind]?.[0] ?? kind}` : (ABOUT[id]?.[1] ?? "");
     frame();
     act("stand");
 
@@ -298,6 +311,21 @@ for (const [label, ids] of groups) {
     picker.append(group);
 }
 
+// (Each dungeon theme's bosses and mini-bosses, as they're drawn there)
+for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
+    const group = document.createElement("optgroup");
+
+    group.label = `Dungeons: ${name}`;
+
+    for (const [rank, list] of [["boss", bosses], ["mini", minis]]) {
+        for (const { id, title } of list) {
+            group.append(new Option(`${title.replace(/^the /, "The ")}${rank === "boss" ? " (boss)" : ""}`, `${theme}:${rank}:${id}`));
+        }
+    }
+
+    picker.append(group);
+}
+
 picker.addEventListener("change", () => show(picker.value));
 document.querySelector("#another").addEventListener("click", () => show(current.id, seed + 1));
 
@@ -310,7 +338,7 @@ for (const button of document.querySelectorAll("[data-action]")) {
 
 // --- Running ---
 
-const start = params.get("creature") in LOOKS ? params.get("creature") : "wolf";
+const start = params.get("creature") in LOOKS || championOf(params.get("creature") ?? "") ? params.get("creature") : "wolf";
 
 show(start);
 act(params.get("action") ?? "stand");

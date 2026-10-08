@@ -180,6 +180,16 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **The boss and the mini-bosses stand out** (`CHAMPIONS`): the boss with four times its kind's
   hit points and blows 1.3 times as hard, a mini-boss twice the hit points and 1.12 times as hard,
   each named by its title (the Troll King, a Tomb champion).
+- **And they look it** (`beasts/champions.js`): the host gives each its rank and its id in its
+  theme (`wild.champion`, `wild.regalia`), and it's drawn bigger than its kind (a boss 1.22 times,
+  a mini-boss 1.1 times, but no taller than 3.3 m for it, `CHAMPION_HEIGHT`, so a hideout's
+  tunnels have room: a troll or an ogre, already big, only 5% bigger), what glows on it brighter (its eyes, a wraith's light), and each its own
+  way (`REGALIA`): the Troll King, the Goblin King and the Outlaw King crowned, the Frost Troll in
+  a silver circlet, the ogres in horned helms, the outlaw lieutenant in a soldier's helm, the
+  priests hooded in black; the Broodmother vast and blood-marked, the cave bear and the old tusker
+  grizzled, the tomb champion's bones gilded, the Tomb Lord's eyes and the Dread Wraith's light
+  burning brighter. What's worn takes the place of whatever was in its slot. The rules know
+  nothing of it.
 - **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
   however often a level's woken and let go.
 
@@ -295,7 +305,15 @@ it's met in the wilds). New art goes in by the theme's `style`: a look in `inter
 added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`). New
 furniture: a CC0 model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, how big its
 pictures, how many triangles at most), made with `npm run build:props`, named in `dungeons3d.js`
-`DUNGEON_PROPS`, and placed in `dungeon` for a plan character.
+`DUNGEON_PROPS`, and placed in `dungeon` for a plan character. Its bosses' and mini-bosses' looks:
+an entry each in `beasts/champions.js` `REGALIA`, by its id (one not there looks as its rank has it).
+
+## The creature lab (`creature-lab.html`, `js/lab/creature-lab.js`)
+
+The creature lab shows each theme's bosses and mini-bosses as they're drawn in a dungeon, one
+group of them for each theme ("Dungeons: caves" and so on), beside the creatures of the wild they
+are. Each is named by its title and rank. Open one straight away with `?creature=` and its theme,
+rank and id: `creature-lab.html?creature=caves:boss:trollKing`.
 
 ## The dungeon map (`dungeon-map.html`, `js/lab/dungeon-map.js`)
 
@@ -357,6 +375,10 @@ code is here.
   square; every triangle facing the open; the floor under all the open ground but the stairs'
   hole; its tiles the whole of it, smooth where they meet; and the photographs each in the
   catalog, on disk.
+- **`test/champions.test.js`**, the bosses' looks: every theme's boss and mini-boss with one,
+  bigger than its kind (a boss more than a mini-boss, none made taller than 3.3 m by it), wearing only what a people-shaped one can on
+  its head, in place of what was there; and a sculpted one bigger, its body tinted and what glows
+  on it brighter. `test/delves.test.js` checks the boss carries its rank and its id.
 - **`test/furnishings.test.js`**, the scanned models: each in the catalog, on disk, and small;
   every theme's levels furnished on open ground, each thing on what's placed before it, with the
   models each theme wants; and the models placed as asked (on the floor or on what's under them,

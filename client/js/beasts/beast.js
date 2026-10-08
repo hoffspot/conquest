@@ -14,6 +14,7 @@ import { Avatar } from "../world/avatar.js";
 import { arachnid } from "./arachnid.js";
 import { biped } from "./biped.js";
 import { blob } from "./blob.js";
+import { championLook, championScale, wearing } from "./champions.js";
 import { frog, swarm, wisp } from "./flyers.js";
 import { humanoidLook, LOOKS } from "./looks.js";
 import { quadruped } from "./quadruped.js";
@@ -72,8 +73,10 @@ export class BeastAvatar {
      * @param {string} id - A LOOKS id (not a people-shaped one's: dressCreature).
      * @param {object} [options]
      * @param {number} [options.seed] - Which one of its kind it is (its size, its markings).
+     * @param {object} [options.champion] - A dungeon's boss's or mini-boss's look, if it's one
+     *   (champions.js championLook): bigger, its body tinted, what glows on it brighter.
      */
-    constructor(id, { seed = 1 } = {}) {
+    constructor(id, { seed = 1, champion = null } = {}) {
         const look = LOOKS[id];
 
         // (One of three of its kind, which it's built as, and shares its body with: the rest of
@@ -85,12 +88,27 @@ export class BeastAvatar {
         this.id = id;
         this.scale = sizeOf(id, seed);
         this.plan = BUILDERS[look.body](look, random, `${id}:${variant}`);
+        this.scale *= champion ? championScale(champion, this.plan.height * this.scale) : 1;
 
         // (Its pieces folded into a few things to draw; its skin, whatever it became)
         const became = fold(this.plan.object, `${id}:${variant}`);
 
         this.plan.materials.body = became.get(this.plan.materials.body) ?? this.plan.materials.body;
         this.plan.materials.body.color?.multiplyScalar(0.9 + own() * 0.2);
+
+        // (A champion's: its body tinted, what glows on it, folded into its own material, brighter)
+        if (champion) {
+            if (champion.tint !== null) {
+                this.plan.materials.body.color?.multiply(new THREE.Color(champion.tint));
+            }
+
+            this.plan.object.traverse((node) => {
+                if (node.isMesh && node.material.isMeshBasicMaterial) {
+                    node.material.color.multiplyScalar(champion.glow);
+                }
+            });
+        }
+
         this.plan.object.scale.setScalar(this.scale);
         this.object = new THREE.Group();
         this.object.add(this.plan.object);
@@ -129,7 +147,7 @@ export class BeastAvatar {
         // when it's struck is added to (materials.body, as a person's skin)
         const skin = this.plan.materials.body;
 
-        this.glow = skin.emissive.clone().multiplyScalar(skin.emissiveIntensity);
+        this.glow = skin.emissive.clone().multiplyScalar(skin.emissiveIntensity * (champion?.glow ?? 1));
         this.flush = { emissive: new THREE.Color(0, 0, 0) };
 
         const joints = this.plan.joints;
@@ -501,7 +519,8 @@ export class BeastAvatar {
 /**
  * Draw one of the wild's creatures (a LOOKS id), one of its kind (`seed`): a BeastAvatar, or for
  * a people-shaped one, a character's Avatar, sized as its kind is, holding its weapon
- * (`equipment`: EQUIPMENT ids) and fighting as it does (`guard`: actions.js GUARDS).
+ * (`equipment`: EQUIPMENT ids) and fighting as it does (`guard`: actions.js GUARDS); a dungeon's
+ * boss or mini-boss (`champion`: "boss" or "mini", `regalia`: its id) as champions.js has it.
  */
 export function dressCreature(kit, id, options) {
     return allAtOnce(dressingCreature(kit, id, options));
@@ -512,14 +531,17 @@ export function dressCreature(kit, id, options) {
  * built in steps, Character.building's; a beast's body, the first time one of its kind's is
  * wanted, sculpted in steps, sculpting's), returning it.
  */
-export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1 } = {}) {
+export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1, champion = null, regalia = null } = {}) {
+    // (A dungeon's boss or mini-boss, `champion` its rank and `regalia` its id: champions.js)
+    const own = championLook(champion, regalia);
+
     if (LOOKS[id].body !== "humanoid") {
-        return yield* sculpting(() => new BeastAvatar(id, { seed }));
+        return yield* sculpting(() => new BeastAvatar(id, { seed, champion: own }));
     }
 
     const look = humanoidLook(id, seed);
-    const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: [...look.equipment, ...equipment], hairDetail, merge: true });
-    const scale = sizeOf(id, seed);
+    const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: wearing([...look.equipment, ...equipment], own?.wear ?? []), hairDetail, merge: true });
+    const scale = sizeOf(id, seed) * (own ? championScale(own, character.height * sizeOf(id, seed)) : 1);
 
     character.object.scale.setScalar(scale);
     character.height *= scale;
