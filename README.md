@@ -476,6 +476,7 @@ npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
 npm run build:sounds    # remakes client/sounds, the recorded sounds, from their CC0 recordings (scripts/sounds)
 npm run build:textures  # remakes client/textures/dungeons, the dungeons' photographs, from CC0 scans
+npm run build:props     # remakes client/models/dungeons, the dungeons' furniture, from CC0 scanned models
 npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
 
@@ -518,8 +519,12 @@ client/                 The game (static files served to the browser)
                         (made by npm run build:vitruvian), and MakeHuman's (npm run
                         build:characters), their texture masks, and motion capture clips
   models/assets.json    The catalog: what's downloaded only as it's wanted (the dungeons'
-                        photographs), each file's hash and size added by npm run build:manifest
-                        into js/app/assets.js
+                        photographs and furniture), each file's hash and size added by npm run
+                        build:manifest into js/app/assets.js
+  models/dungeons/      The scanned models a dungeon's furnished with (barrels, crates, tables, a
+                        fire pit, boulders, a bust, a vase, an axe), each a GLB with its colour
+                        picture and normal map (made by npm run build:props from Poly Haven's CC0
+                        models)
   textures/dungeons/    The photographs a dungeon's rock, earth, stone and timber are drawn with,
                         each a colour picture and a normal map (made by npm run build:textures
                         from ambientCG's and Poly Haven's CC0 scans)
@@ -675,7 +680,9 @@ client/                 The game (static files served to the browser)
                         down the walls between the camera and the player; and a dungeon's levels
     caverns.js          A dungeon's rock as one surface, its walls and roof, and its floor
     dungeons3d.js       The photographs a dungeon's drawn with, and the material that lays them
-                        over its rock from all three sides (dungeonpictures.js lists them)
+                        over its rock from all three sides (dungeonpictures.js lists them); and
+                        the scanned models it's furnished with, read once, each model's copies
+                        drawn at once a tile at a time
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and
@@ -784,6 +791,9 @@ asset out of this public repository.
   (<https://ambientcg.com>: Rock028, Ground022, Ground048) and Poly Haven
   (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles),
   CC0, made smaller by `scripts/build-textures.js`.
+- The dungeons' furniture is models scanned or made by Poly Haven (<https://polyhaven.com>:
+  wine_barrel_01, wooden_crate_02, wooden_table_02, stone_fire_pit, moon_rock_02, marble_bust_01,
+  brass_vase_04, wooden_axe), CC0, made simpler and smaller by `scripts/build-props.js`.
 - The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
   (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
   (`client/models/jmi/LICENSE`).

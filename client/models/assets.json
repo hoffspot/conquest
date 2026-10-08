@@ -83,6 +83,78 @@
                     "path": "textures/dungeons/floor-temple-normal.jpg"
                 }
             ]
+        },
+        "dungeon-prop-barrel": {
+            "tier": "demand",
+            "label": "A barrel (Poly Haven wine_barrel_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/barrel.glb"
+                }
+            ]
+        },
+        "dungeon-prop-crate": {
+            "tier": "demand",
+            "label": "A crate (Poly Haven wooden_crate_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/crate.glb"
+                }
+            ]
+        },
+        "dungeon-prop-table": {
+            "tier": "demand",
+            "label": "A rough table (Poly Haven wooden_table_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/table.glb"
+                }
+            ]
+        },
+        "dungeon-prop-fire-pit": {
+            "tier": "demand",
+            "label": "A fire pit ringed with stones (Poly Haven stone_fire_pit, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/fire-pit.glb"
+                }
+            ]
+        },
+        "dungeon-prop-boulder": {
+            "tier": "demand",
+            "label": "A fallen rock (Poly Haven moon_rock_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder.glb"
+                }
+            ]
+        },
+        "dungeon-prop-bust": {
+            "tier": "demand",
+            "label": "A marble bust on its plinth (Poly Haven marble_bust_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bust.glb"
+                }
+            ]
+        },
+        "dungeon-prop-axe": {
+            "tier": "demand",
+            "label": "A woodsman's axe (Poly Haven wooden_axe, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/axe.glb"
+                }
+            ]
+        },
+        "dungeon-prop-vase": {
+            "tier": "demand",
+            "label": "A brass vase, an altar's (Poly Haven brass_vase_04, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase.glb"
+                }
+            ]
         }
     }
 }

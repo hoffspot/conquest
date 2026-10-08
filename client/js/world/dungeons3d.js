@@ -1,6 +1,6 @@
 // How a dungeon's levels look, beyond what's built for them (world/interiors3d.js dungeon): the
 // photographs their rock and stone are drawn with (CC0, downloaded only once a dungeon's wanted:
-// the catalog, app/assets.js; scripts/build-textures.py makes them), and the material that draws
+// the catalog, app/assets.js; scripts/build-textures.js makes them), and the material that draws
 // a level's rock (caverns.js) with them: the picture laid over it from all three sides at once
 // (triplanar, so it's never stretched however the rock turns), its grain and its bumps, under the
 // colour each theme gives its rock, lit by the room's flames (roomlight.js) and never cut away.
@@ -10,6 +10,9 @@ import { ASSETS } from "../app/assets.js";
 import { hashed } from "../app/catalog.js";
 import { DUNGEON_PICTURES } from "./dungeonpictures.js";
 import { roomLit } from "./roomlight.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { loadGltf } from "./art/engine/models.js";
+import { CAVERNS } from "./caverns.js";
 
 /**
  * The pictures a dungeon's rock and stone can be drawn with, by name (dungeonpictures.js, made by
@@ -178,20 +181,33 @@ export class Blocks {
         this.indices = [];
     }
 
-    /** A box from (x0, y0, z0) to (x1, y1, z1), `shade` times as dark as the colour (0 to 1). */
-    box(x0, y0, z0, x1, y1, z1, shade = 1) {
+    /**
+     * A box from (x0, y0, z0) to (x1, y1, z1), `shade` times as dark as the colour (0 to 1),
+     * turned `turn` radians round the upright through its middle (a tomb's lid pushed askew).
+     */
+    box(x0, y0, z0, x1, y1, z1, shade = 1, turn = 0) {
         const at = [
             [x0, x1],
             [y0, y1],
             [z0, z1],
         ];
+        const [cx, cz, cos, sin] = [(x0 + x1) / 2, (z0 + z1) / 2, Math.cos(turn), Math.sin(turn)];
+        // (A point or a way turned round the upright through the middle, as three.js turns: +x to -z)
+        const turned = (x, z, about = true) => {
+            const [dx, dz] = about ? [x - cx, z - cz] : [x, z];
+
+            return [(about ? cx : 0) + dx * cos + dz * sin, (about ? cz : 0) - dx * sin + dz * cos];
+        };
 
         for (const { corners, normal } of FACES) {
             const first = this.positions.length / 3;
+            const [nx, nz] = turned(normal[0], normal[2], false);
 
             for (const corner of corners) {
-                this.positions.push(at[0][corner[0]], at[1][corner[1]], at[2][corner[2]]);
-                this.normals.push(...normal);
+                const [x, z] = turned(at[0][corner[0]], at[2][corner[2]]);
+
+                this.positions.push(x, at[1][corner[1]], z);
+                this.normals.push(nx, normal[1], nz);
                 this.shades.push(shade);
             }
 
@@ -225,5 +241,167 @@ export class Blocks {
         result.userData.shadowless = name === "floor";
 
         return result;
+    }
+}
+
+/**
+ * The scanned models a dungeon's rooms are furnished with (scripts/build-props.js: Poly Haven's,
+ * CC0), by name: each a catalog entry (app/assets.js), downloaded only once a dungeon's wanted.
+ */
+export const DUNGEON_PROPS = Object.freeze({
+    barrel: "dungeon-prop-barrel",
+    crate: "dungeon-prop-crate",
+    table: "dungeon-prop-table",
+    "fire-pit": "dungeon-prop-fire-pit",
+    boulder: "dungeon-prop-boulder",
+    bust: "dungeon-prop-bust",
+    vase: "dungeon-prop-vase",
+    axe: "dungeon-prop-axe",
+});
+
+// Each model, once read (a promise of it): its meshes joined into one (they share one material),
+// that material, and how big it is ({ min, max }, its own metres)
+const props = new Map();
+
+/**
+ * A model's mesh, material and size, read once (DUNGEON_PROPS' name): null if it's not in the
+ * catalog (or there's no page to read it from).
+ */
+export function loadProp(name) {
+    if (!props.has(name)) {
+        const file = ASSETS.models[DUNGEON_PROPS[name]]?.files[0];
+        const page = globalThis.document?.baseURI ?? globalThis.location?.href;
+
+        props.set(
+            name,
+            file && page
+                ? loadGltf(new URL(hashed(file.path, file.hash), page).href).then(({ scene }) => {
+                      const parts = [];
+                      let source = null;
+
+                      scene.updateMatrixWorld(true);
+                      scene.traverse((node) => {
+                          if (node.isMesh) {
+                              parts.push(node.geometry.clone().applyMatrix4(node.matrixWorld));
+                              source ??= node.material;
+                          }
+                      });
+
+                      const geometry = parts.length > 1 ? mergeGeometries(parts) : parts[0];
+
+                      geometry.computeBoundingBox();
+                      geometry.userData.shared = true;
+
+                      return { geometry, source, box: geometry.boundingBox };
+                  })
+                : Promise.resolve(null),
+        );
+    }
+
+    return props.get(name);
+}
+
+// A model's material in a colour (`tint`, times its picture's), lit by the room's flames as the
+// rock is, never cut away, drawn many times over at once (instanced); one for each
+const propMaterials = new Map();
+
+function propMaterial(name, source, tint) {
+    const key = `${name}|${tint ?? ""}`;
+
+    if (propMaterials.has(key)) {
+        return propMaterials.get(key);
+    }
+
+    const result = new THREE.MeshStandardMaterial({ map: source.map ?? null, normalMap: source.normalMap ?? null, color: new THREE.Color(tint ?? 0xffffff), roughness: 0.85, metalness: 0 });
+
+    result.name = `prop-${name}`;
+    result.userData.shared = true;
+    result.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;").replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;");
+        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;");
+        roomLit(shader);
+    };
+    result.customProgramCacheKey = () => "dungeon-prop";
+    propMaterials.set(key, result);
+
+    return result;
+}
+
+const _turn = new THREE.Quaternion();
+const _roll = new THREE.Quaternion();
+const _corner = new THREE.Vector3();
+
+/**
+ * Furnish a level with models (`placements`: [{ model (DUNGEON_PROPS' name), x, z (level metres:
+ * where its middle stands), y (how high its foot is: metres, or `on` another placement, on top of
+ * it), turn (radians round the upright), roll (radians round its own length: an axe laid down),
+ * size (its longest side, metres; or `scale`: times its own size, a number or one for each side;
+ * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
+ * to) }]), each model's copies in each tile of the level
+ * (caverns.js's) drawn at once (instanced), so what's out of sight or of a light's reach isn't
+ * drawn; added to `group` once they're all read (`read`: how, loadProp). What isn't read (not
+ * in the catalog, not downloaded) is left out, and what's on it. Resolves once they're in.
+ */
+export async function furnish(group, placements, { read: reading = loadProp } = {}) {
+    const names = [...new Set(placements.map(({ model }) => model))];
+    const read = await Promise.all(
+        names.map((name) =>
+            Promise.resolve(reading(name)).catch((error) => {
+                console.warn(`Couldn't load ${name}`, error);
+
+                return null;
+            }),
+        ),
+    );
+    const models = new Map(names.map((name, k) => [name, read[k]]));
+    const tops = new Map();
+    const lots = new Map();
+
+    for (const placement of placements) {
+        const prop = models.get(placement.model);
+        const below = placement.on;
+
+        if (!prop || (below && !tops.has(below))) {
+            continue;
+        }
+
+        const { x, z, turn = 0, roll = 0, size, fit, tint = null } = placement;
+        const extent = prop.box.getSize(new THREE.Vector3());
+        const each = fit ? [fit[0] / extent.x, fit[1] / extent.y, fit[2] / extent.z] : (placement.scale ?? (size ? size / Math.max(extent.x, extent.y, extent.z) : 1));
+        const scale = Array.isArray(each) ? new THREE.Vector3(...each) : new THREE.Vector3(each, each, each);
+        const turned = _turn.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, turn).multiply(_roll.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
+        const matrix = new THREE.Matrix4().compose(new THREE.Vector3(), turned, scale);
+        const box = new THREE.Box3();
+
+        // (Its box turned and sized, its middle then set over (x, z) and its foot on the floor or
+        // on what it's on)
+        for (let k = 0; k < 8; k++) {
+            box.expandByPoint(_corner.set(k & 1 ? prop.box.max.x : prop.box.min.x, k & 2 ? prop.box.max.y : prop.box.min.y, k & 4 ? prop.box.max.z : prop.box.min.z).applyMatrix4(matrix));
+        }
+
+        const y = below ? tops.get(below) : (placement.y ?? 0);
+
+        matrix.premultiply(new THREE.Matrix4().makeTranslation(x - (box.min.x + box.max.x) / 2, y - box.min.y, z - (box.min.z + box.max.z) / 2));
+        tops.set(placement, y + box.max.y - box.min.y);
+
+        const key = `${placement.model}|${tint ?? ""}|${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
+
+        if (!lots.has(key)) {
+            lots.set(key, { name: placement.model, prop, tint, matrices: [] });
+        }
+
+        lots.get(key).matrices.push(matrix);
+    }
+
+    for (const { name, prop, tint, matrices } of lots.values()) {
+        const mesh = new THREE.InstancedMesh(prop.geometry, propMaterial(name, prop.source, tint), matrices.length);
+
+        matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingSphere();
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.name = `prop-${name}`;
+        group.add(mesh);
     }
 }

@@ -226,6 +226,17 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
   crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
   altars, shrines and braziers; gold heaped either side of the hoard.
+- **Furnished with scanned models** (`dungeons3d.js` `furnish`, CC0, from Poly Haven, made by
+  `npm run build:props`): barrels, crates (one on another now and then), rough tables end to end
+  along a table's piece (an axe laid on one, tankards), a stone fire pit round a camp fire, fallen
+  boulders in a cave or a hideout, white stone busts on pedestals of dressed stone for a temple's
+  statues and shrines, brass vases on its altars. The temple's fallen stone, pillars and
+  pedestals are blocks of its dressed stone. The level's built with them placed
+  (`dungeon`'s `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn` and
+  `roll`, `on` what it stands on, its `tint`), and they're added once their models have come:
+  each model's copies in each 16 m tile drawn at once (instanced), so what's out of sight or a
+  light's reach isn't drawn. They're in the catalog, downloaded only once a dungeon's wanted
+  (about 1.5 MB in all, fetched as soon as a level's begun); one that can't be had is left out.
 - **Its stairs**: down through the floor into the dark, or up into the rock, the dark at their
   head. They glow green to tap as a building's stairs do (`app/doors.js`).
 - **Daylight at the way in** on its first level; **torches** on its walls.
@@ -281,7 +292,10 @@ way in with `digWayIn` (two wide, up from the middle of the south edge). Every p
 must suit every tier (a test checks a pack suits each tier from 1 to 10, within a tier of where
 it's met in the wilds). New art goes in by the theme's `style`: a look in `interiors3d.js`
 `DUNGEON_LOOKS` (its rock's shell, `caverns.js` `SHELLS`, or walls of dressed stone; its pictures,
-added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`).
+added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`). New
+furniture: a CC0 model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, how big its
+pictures, how many triangles at most), made with `npm run build:props`, named in `dungeons3d.js`
+`DUNGEON_PROPS`, and placed in `dungeon` for a plan character.
 
 ## The dungeon map (`dungeon-map.html`, `js/lab/dungeon-map.js`)
 
@@ -343,6 +357,11 @@ code is here.
   square; every triangle facing the open; the floor under all the open ground but the stairs'
   hole; its tiles the whole of it, smooth where they meet; and the photographs each in the
   catalog, on disk.
+- **`test/furnishings.test.js`**, the scanned models: each in the catalog, on disk, and small;
+  every theme's levels furnished on open ground, each thing on what's placed before it, with the
+  models each theme wants; and the models placed as asked (on the floor or on what's under them,
+  sized, turned, laid down, made to fit), a tile at a time, with what can't be read left out and
+  what's on it.
 - **`test/dungeons.test.js`**:
   - seeds mix the same parts the same way, and stable choosing changes only the slots a new entry
     wins (by weight);
