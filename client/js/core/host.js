@@ -37,7 +37,7 @@ import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./w
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { CONVOY, HOLDINGS, RISING, War, WORKED } from "./war/war.js";
+import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
@@ -124,6 +124,14 @@ export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside
  * go once every player's this far; how much of a blow its stone takes off (`armor`, by kind).
  */
 export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.25, garrison: 0.2 } });
+
+/**
+ * A forward garrison's squads out with it near a player (docs/WAR.md *Battle lines*, M15; war.js
+ * SQUADS): its patrols walking their rounds, `rounds` metres out from it (each a ring of `stops`,
+ * the second turned half a stop on from the first), and its assault team at its gate, `gate`
+ * metres out from its middle, or out against an enemy's fortification stood up within reach.
+ */
+export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 9 });
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
@@ -290,7 +298,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 11;
+export const SNAPSHOT_VERSION = 12;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -524,6 +532,13 @@ export class Host {
 
         /** The fortifications stood up near a player (by the fortification's id): { realm, kind }. */
         this.fortsOut = new Map();
+
+        /**
+         * The forward garrisons' squads out (SQUADS_NEAR), by the garrison's id: { people, gate,
+         * rounds, ids and next (by squad: SQUAD_NAMES), target (the enemy fortification its assault
+         * team's out against, or null), broken (its garrison razed: let go as they're out of sight) }.
+         */
+        this.squadsOut = new Map();
         this.wagons = new Map();
 
         /**
@@ -1260,6 +1275,8 @@ export class Host {
                 } else if (soldier.works) {
                     this.war?.loss(soldier.works, this.worksOut.get(soldier.works)?.share ?? 1);
                     this.#worksFell(soldier.works, event.by);
+                } else if (soldier.fort) {
+                    this.war?.squadLost(soldier.fort, soldier.squad, 1);
                 } else {
                     this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
                 }
@@ -1454,6 +1471,7 @@ export class Host {
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
+            squadsOut: [...this.squadsOut.entries()],
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
@@ -1567,6 +1585,7 @@ export class Host {
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
+        host.squadsOut = new Map(structuredClone(snapshot.squadsOut ?? []));
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
@@ -2755,6 +2774,8 @@ export class Host {
             }
         }
 
+        this.#tendSquads();
+
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
         war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
@@ -3153,6 +3174,7 @@ export class Host {
         Object.assign(this.battle.actor(fort.id), { hp: fort.hp });
         this.fortsOut.set(fort.id, { realm: fort.realm, kind: fort.kind });
         this.#event("fortOut", { fort: fort.id, kind: fort.kind, people: fort.realm });
+        this.#musterSquads(fort);
     }
 
     // A fortification let go: gone from the battle (it stands on in the war, unless it's razed: by
@@ -3163,6 +3185,174 @@ export class Host {
         this.battle.remove(id);
         this.fortsOut.delete(id);
         this.#event("fortDown", { fort: id, kind, people: realm, ...(razed ? { razed, by } : {}) });
+
+        // (Its squads with it, as they're out of sight: razed, those still standing fight on)
+        const squads = this.squadsOut.get(id);
+
+        if (squads) {
+            squads.broken = true;
+        }
+    }
+
+    // A forward garrison stood up near a player: its squads out with it (SQUADS_NEAR), as many as
+    // the war has in each: its patrols on their rounds, its assault team at its gate
+    #musterSquads(fort) {
+        if (!fort.squads) {
+            return;
+        }
+
+        // (Some of them still about from when it was let go: theirs again, and made up)
+        const kept = this.squadsOut.get(fort.id);
+
+        if (kept) {
+            kept.broken = false;
+            kept.target = null;
+            this.#fillSquads(fort);
+
+            return;
+        }
+
+        const squares = squaresOf(this.world.maps.town);
+        const toward = this.war.town(fort.toward)?.at;
+        // (Its gate at its back, away from the enemy it faces: world/forts3d.js)
+        const facing = toward ? atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0;
+        const near = ([x, y], within) => {
+            try {
+                return nearestFree(squares, [Math.round(x), Math.round(y)], { within });
+            } catch {
+                return null;
+            }
+        };
+        const gate = near([fort.at[0] + sin(facing) * SQUADS_NEAR.gate, fort.at[1] + cos(facing) * SQUADS_NEAR.gate], 12);
+        const rounds = SQUADS_NEAR.rounds.map((radius, k) =>
+            Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
+                const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;
+
+                return near([fort.at[0] + sin(angle) * radius, fort.at[1] + cos(angle) * radius], 16);
+            }).filter(Boolean),
+        );
+
+        if (!gate) {
+            return;
+        }
+
+        this.squadsOut.set(fort.id, { people: fort.realm, gate, rounds, ids: Object.fromEntries(SQUAD_NAMES.map((name) => [name, []])), next: Object.fromEntries(SQUAD_NAMES.map((name) => [name, 0])), target: null, broken: false });
+        this.#fillSquads(fort, { first: true });
+    }
+
+    // A forward garrison's squads made up to what the war has in each: the first out where they'd
+    // be (`first`), on their rounds and at its gate; those made up since, out of its gate
+    #fillSquads(fort, { first = false } = {}) {
+        const out = this.squadsOut.get(fort.id);
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[fort.realm] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+
+        // (Those still standing: the fallen are taken away a while after: #gone)
+        const standing = (name) => out.ids[name].filter((each) => this.battle.actor(each) && !this.battle.actor(each).dead).length;
+        const enlisted = [];
+
+        try {
+            SQUAD_NAMES.forEach((name, k) => {
+                const round = name === "assault" ? null : out.rounds[k];
+
+                for (let more = (fort.squads[k] ?? 0) - standing(name); more > 0; more--) {
+                    const id = `${fort.id}/${name}-${out.next[name]++}`;
+                    const square = free(first && round?.length ? round[0] : out.gate);
+                    const orders = round?.length ? { patrol: round, leash: LEASH * 2 } : { patrol: [out.gate], leash: LEASH, facing: 0 };
+
+                    this.#enlist(id, { people: fort.realm, weapon: round ? patrolArms : guardArms, square, name: round ? "patrol" : "vanguard", record: { fort: fort.id, squad: name }, ...orders });
+                    out.ids[name].push(id);
+                    enlisted.push(id);
+                }
+            });
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        if (enlisted.length) {
+            this.#event("squadsOut", { fort: fort.id, people: fort.realm, ids: enlisted });
+        }
+
+        this.#aimAssault(fort.id);
+    }
+
+    // A forward garrison's assault team sent against the nearest of the enemy's fortifications stood
+    // up within SQUADS.reach of it, to the foot of its walls; back to its gate with none
+    #aimAssault(id) {
+        const out = this.squadsOut.get(id);
+        const fort = this.war?.fort(id);
+
+        if (!out || !fort) {
+            return;
+        }
+
+        const target = [...this.fortsOut.keys()]
+            .map((other) => this.war.fort(other))
+            .filter((other) => other && other.id !== id && this.war.hostile(fort.realm, other.realm) && hypot(other.at[0] - fort.at[0], other.at[1] - fort.at[1]) <= SQUADS.reach)
+            .sort((a, b) => hypot(a.at[0] - fort.at[0], a.at[1] - fort.at[1]) - hypot(b.at[0] - fort.at[0], b.at[1] - fort.at[1]))[0];
+
+        if ((target?.id ?? null) === out.target) {
+            return;
+        }
+
+        out.target = target?.id ?? null;
+
+        const free = this.#spots();
+
+        for (const each of out.ids.assault) {
+            const actor = this.battle.actor(each);
+
+            if (!actor || actor.dead) {
+                continue;
+            }
+
+            try {
+                // (Before its walls, on the side facing the garrison)
+                const [x0, y0, x1, y1] = target ? footprintOf(target) : [0, 0, 0, 0];
+                const goal = target ? free([Math.min(x1 + 2, Math.max(x0 - 2, fort.at[0])), Math.min(y1 + 2, Math.max(y0 - 2, fort.at[1]))]) : free(out.gate);
+
+                Object.assign(actor, { patrol: [goal], patrolIndex: 0, leash: target ? LEASH * 3 : LEASH });
+            } catch {
+                // (Nowhere to stand there)
+            }
+        }
+    }
+
+    // The squads of forward garrisons out tended (the muster's): made up as the war makes them up,
+    // the assault team sent where it's wanted; those of a garrison let go (no player near, or
+    // razed) let go themselves as they're out of every player's sight
+    #tendSquads() {
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+
+        for (const [id, out] of [...this.squadsOut]) {
+            const fort = this.war.fort(id);
+
+            if (!out.broken && fort && this.fortsOut.has(id)) {
+                this.#fillSquads(fort);
+                continue;
+            }
+
+            for (const name of SQUAD_NAMES) {
+                out.ids[name] = out.ids[name].filter((each) => {
+                    const actor = this.battle.actor(each);
+
+                    if (actor && !actor.dead && players.some((player) => this.battle.canSee(player, actor))) {
+                        return true;
+                    }
+
+                    if (actor && !actor.dead) {
+                        this.battle.remove(each);
+                        this.soldiers.delete(each);
+                    }
+
+                    return false;
+                });
+            }
+
+            if (SQUAD_NAMES.every((name) => !out.ids[name].length)) {
+                this.squadsOut.delete(id);
+            }
+        }
     }
 
     // --- The works (docs/WAR.md *The works*) ---
@@ -4664,7 +4854,13 @@ export class Host {
         this.soldiers.delete(id);
         this.#unwild(id);
 
-        const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : soldier.works ? this.worksOut.get(soldier.works) : this.mustered.get(soldier.town));
+        const squad = soldier?.fort ? this.squadsOut.get(soldier.fort) : null;
+
+        if (squad) {
+            squad.ids[soldier.squad] = (squad.ids[soldier.squad] ?? []).filter((each) => each !== id);
+        }
+
+        const mustered = soldier && (soldier.envoy || soldier.fort ? null : soldier.camp ? this.camps.get(soldier.camp) : soldier.works ? this.worksOut.get(soldier.works) : this.mustered.get(soldier.town));
 
         if (mustered) {
             mustered.ids = mustered.ids.filter((each) => each !== id);

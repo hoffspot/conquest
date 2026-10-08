@@ -207,7 +207,7 @@ The engine is built for this from the start. These are its rules:
 | **M12** | Built | The works: each people's lumber mills, mines and quarries, the stores of wood, metal and stone they fill, convoys carrying them to the seat, works seized, overrun and won back. |
 | **M13** | Built | Convoys in the world: their wagons, guards and captain on the road near a player, to see in or fall on; the keep's requests about the convoys and the works. |
 | **M14** | Built | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
-| **M15** | To come | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
+| **M15** | Built | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
 | **M16** | To come | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
 
 ## What's built
@@ -967,8 +967,9 @@ of its works held by others; a Knight to fall on an enemy's convoy, or take an e
 - **Apart:** how near another of its people's of the same kind may stand. **Most:** how many of
   the kind a people keeps.
 - **Kept up** each turn from its people's stores (`war.js` `#keepUp`), it's mended 2% of its
-  strength (`FORT_SIEGE.mend`). Unkept, the stores short, it falls 2% into ruin (`decay`), and is
-  given up at nothing; a fallen people's are given up at once.
+  strength (`FORT_SIEGE.mend`), once it's not been fallen on for 3 turns (`rest`). Unkept, the
+  stores short, it falls 2% into ruin (`decay`), and is given up at nothing; a fallen people's
+  are given up at once.
 
 **Where a people may build** (`mayBuild`, `PLACING`):
 - anywhere in its own first lands (the plan's land of its race);
@@ -1054,6 +1055,34 @@ and each realm's.
 **Kept.** The fortifications are kept in the war's snapshot (`WAR_VERSION` 3; a war kept before
 them carries on with none), and those stood up near a player in the host's (`SNAPSHOT_VERSION`
 11).
+
+### Battle lines (M15)
+
+**A forward garrison's squads** (`war.js` `SQUADS`):
+- **two patrols of four**, walking their rounds within 300 m of it, and **an assault team of six**;
+- **made up as they fall:** one of them every 2 turns, the emptiest squad first (by its share),
+  for 5 gold from its people's treasury; none while they can't pay;
+- **the assault team** goes out against the nearest of the enemy's fortifications within 900 m
+  once it's 4 strong (`ready`). Each of them takes 15 of its strength a turn, and its defenders
+  bring down 1 of them a turn (a garrison's 2). At nothing, it's razed by them. Not where a
+  player's near either of them: that's played out in the world.
+
+**A town covered** (`FORT_COVER`): while its holders' fortification (or their liege's, or one
+serving the same) stands within 250 m of its edge (`war.coverOf`), a town can't be stormed. Those
+besieging it fall on that fortification first, wherever it stands (`camp.against`), and storm it
+once it's razed. Raids on its fields go on.
+
+**Near a player** (`host.js` `SQUADS_NEAR`), stood up with their garrison:
+- **its patrols,** each on a ring of 8 stops round it, 80 m and 200 m out (the second turned half
+  a stop on), each one's first its captain;
+- **its assault team** ("vanguard") at its gate, 9 m out at its back, or out against an enemy's
+  fortification stood up within 900 m of it, to the foot of its walls, fighting it there;
+- **its fallen** told to the war (`war.squadLost`); those the war makes up come out of its gate;
+- **let go** with their garrison (no player near, or razed: the survivors fight on), each as it's
+  out of every player's sight. Stood up again first, they're its again.
+
+**Kept.** The squads are kept in the war's snapshot (`WAR_VERSION` 4: a war kept before them has
+each garrison's whole), and those out near a player in the host's (`SNAPSHOT_VERSION` 12).
 
 ### Playing together (M11)
 

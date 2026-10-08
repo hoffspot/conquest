@@ -113,6 +113,8 @@ export function tell(event, war) {
             return `${People(event.realm)} have raised a ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "razed":
             return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
+        case "assailed":
+            return `An assault team of ${people(event.by)} has fallen on the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "abandoned":
             return `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
         case "counsel":
@@ -151,7 +153,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced", "delivered"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced", "delivered", "assailed"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):

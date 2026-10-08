@@ -128,13 +128,32 @@ export const OVERRUN = Object.freeze({ base: 0.001, weak: 0.025, band: 6, held: 
  * A fortification under siege (docs/WAR.md *Fortifications*): an enemy camp or army within `reach`
  * metres of it falls on it each turn, taking `hp` of its strength for each of them; its defenders
  * bring down `tower` of them a turn (a garrison `garrison`). Kept up, it's mended `mend` of its
- * strength a turn; not kept up (its people's stores short of its upkeep), it falls `decay` into
- * ruin a turn, and is given up at nothing.
+ * strength a turn, once it's not been fallen on for `rest` turns; not kept up (its people's
+ * stores short of its upkeep), it falls `decay` into ruin a turn, and is given up at nothing.
  */
-export const FORT_SIEGE = Object.freeze({ reach: 250, hp: 10, tower: 1, garrison: 2, mend: 0.02, decay: 0.02 });
+export const FORT_SIEGE = Object.freeze({ reach: 250, hp: 10, tower: 1, garrison: 2, mend: 0.02, decay: 0.02, rest: 3 });
+
+/**
+ * How near its holders' fortification covers a town (docs/WAR.md *Battle lines*, M15: metres from
+ * the town's edge): while one stands so near, the town can't be stormed, and those besieging it
+ * fall on the fortification first.
+ */
+export const FORT_COVER = 250;
+
+/**
+ * A forward garrison's squads (docs/WAR.md *Battle lines*, M15): its `patrols` patrols of `patrol`
+ * each, walking their rounds within `round` metres of it, and its assault team, `assault` strong,
+ * out against the enemy's fortifications within `reach` of it once it's `ready` strong (each of
+ * them taking `hp` of the fortification's strength a turn). One of them made up every `every`
+ * turns as they fall, the emptiest squad first, for `cost` gold from its people's treasury.
+ */
+export const SQUADS = Object.freeze({ patrols: 2, patrol: 4, assault: 6, round: 300, reach: 900, ready: 4, hp: 15, every: 2, cost: 5 });
+
+/** The names of a forward garrison's squads, its patrols' and its assault team's (`squads` keys and indexes). */
+export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols }, (_, k) => `patrol-${k}`), "assault"]);
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 3;
+export const WAR_VERSION = 4;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -147,6 +166,10 @@ const YIELDS = Object.fromEntries(WORKS.map(({ kind, yields }) => [kind, yields]
 
 // A realm's stores, empty
 const noStores = () => Object.fromEntries(RESOURCES.map((resource) => [resource, 0]));
+
+// A forward garrison's squads, whole (SQUADS): { squads (as SQUAD_NAMES), mustered (the turn it
+// was last made up) }
+const fullSquads = (turn) => ({ squads: SQUAD_NAMES.map((name) => (name === "assault" ? SQUADS.assault : SQUADS.patrol)), mustered: turn });
 
 // The wild camps whose brigands fall on a convoy passing (worldplan/races.js FACTIONS), and how
 // likely they are to each turn it's near one
@@ -432,6 +455,8 @@ export class War {
         this.#march();
         this.#camps();
         this.#besiege();
+        this.#replenish();
+        this.#assaults();
         this.#waylay();
         this.#ambush();
         this.#overrun();
@@ -747,7 +772,7 @@ export class War {
             realm.stores[good] = Math.round((realm.stores[good] - amount) * 10) / 10;
         }
 
-        const fort = { id: `fort-${this.nextFort++}`, kind, realm: id, at: [...at], hp: spec.hp, about, toward, built: this.turn, by };
+        const fort = { id: `fort-${this.nextFort++}`, kind, realm: id, at: [...at], hp: spec.hp, about, toward, built: this.turn, by, struck: null, ...(kind === "garrison" ? fullSquads(this.turn) : {}) };
 
         this.forts.push(fort);
         this.#emit("built", { fort: fort.id, kind, realm: id, at: [...at], about, by });
@@ -768,6 +793,7 @@ export class War {
         }
 
         fort.hp = Math.max(0, Math.round((fort.hp - amount) * 10) / 10);
+        fort.struck = this.turn;
 
         if (fort.hp <= 0) {
             this.#raze(fort, by, { played: true });
@@ -776,6 +802,43 @@ export class War {
         }
 
         return true;
+    }
+
+    /**
+     * One of a forward garrison's squads (SQUAD_NAMES: "patrol-0", "patrol-1", "assault") lost
+     * `count` of its soldiers in the world (from the host). Returns how many it has left.
+     */
+    squadLost(id, squad, count = 1) {
+        const fort = this.fort(id);
+        const k = SQUAD_NAMES.indexOf(squad);
+
+        if (!fort?.squads || k < 0) {
+            return 0;
+        }
+
+        fort.squads[k] = Math.max(0, fort.squads[k] - count);
+
+        return fort.squads[k];
+    }
+
+    /**
+     * The fortification that covers a town (FORT_COVER): its holders' (or their liege's, or one
+     * serving the same) nearest within FORT_COVER of its edge, or null.
+     */
+    coverOf(town) {
+        const edge = this.#radius(town.id);
+        const liege = this.liege(town.owner);
+        let best = null;
+
+        for (const fort of this.forts) {
+            const distance = apart(fort.at, town.at) - edge;
+
+            if (distance <= FORT_COVER && this.liege(fort.realm) === liege && (!best || distance < best.distance)) {
+                best = { fort, distance };
+            }
+        }
+
+        return best?.fort ?? null;
     }
 
     /** A realm remembers something done to it by another: a grudge (below 0) or a favour (above). */
@@ -876,7 +939,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && snapshot.version !== 1 && snapshot.version !== 2) {
+        if (snapshot.version !== WAR_VERSION && ![1, 2, 3].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -903,8 +966,9 @@ export class War {
             realm.build ??= null;
         }
 
-        // (A war kept before the fortifications (version 2 or before) has none)
-        war.forts = kept.forts ?? [];
+        // (A war kept before the fortifications (version 2 or before) has none; before their squads
+        // (version 3), each forward garrison's are whole)
+        war.forts = (kept.forts ?? []).map((fort) => ({ ...fort, struck: fort.struck ?? null, ...(fort.kind === "garrison" && !fort.squads ? fullSquads(kept.turn) : {}) }));
         war.nextFort = kept.nextFort ?? 1;
 
         return war;
@@ -1114,7 +1178,10 @@ export class War {
                     realm.stores[good] = Math.round((realm.stores[good] - amount) * 100) / 100;
                 }
 
-                fort.hp = Math.min(spec.hp, Math.round(fort.hp + spec.hp * FORT_SIEGE.mend));
+                // (Mended, once it's not been fallen on a while)
+                if ((fort.struck ?? null) === null || this.turn - fort.struck > FORT_SIEGE.rest) {
+                    fort.hp = Math.min(spec.hp, Math.round(fort.hp + spec.hp * FORT_SIEGE.mend));
+                }
             } else {
                 fort.hp = Math.max(0, Math.round(fort.hp - spec.hp * FORT_SIEGE.decay));
 
@@ -1186,12 +1253,14 @@ export class War {
                 continue;
             }
 
-            const near = this.forces.filter((force) => (force.kind === "camp" || force.kind === "expedition") && force.size > 0 && this.hostile(force.realm, fort.realm) && apart(force.at, fort.at) <= FORT_SIEGE.reach);
+            // (Those near it, and the camps before a town it covers: FORT_COVER)
+            const near = this.forces.filter((force) => (force.kind === "camp" || force.kind === "expedition") && force.size > 0 && this.hostile(force.realm, fort.realm) && (apart(force.at, fort.at) <= FORT_SIEGE.reach || force.against === fort.id));
 
             for (const force of near) {
                 const toll = Math.min(force.size, fort.kind === "garrison" ? FORT_SIEGE.garrison : FORT_SIEGE.tower);
 
                 fort.hp = Math.max(0, fort.hp - force.size * FORT_SIEGE.hp);
+                fort.struck = this.turn;
                 force.size -= toll;
 
                 if (fort.hp <= 0) {
@@ -1200,6 +1269,72 @@ export class War {
                 }
             }
         }
+    }
+
+    // Each forward garrison's squads made up as they've fallen (SQUADS): one of them every so many
+    // turns, the emptiest squad first, while its people can pay
+    #replenish() {
+        for (const fort of this.forts.filter(({ squads }) => squads)) {
+            const realm = this.realm(fort.realm);
+
+            if (!realm?.alive || this.turn - (fort.mustered ?? 0) < SQUADS.every || realm.treasury < SQUADS.cost) {
+                continue;
+            }
+
+            const full = SQUAD_NAMES.map((name) => (name === "assault" ? SQUADS.assault : SQUADS.patrol));
+            const short = fort.squads
+                .map((count, k) => ({ k, want: (full[k] - count) / full[k] }))
+                .filter(({ want }) => want > 0)
+                .sort((a, b) => b.want - a.want || a.k - b.k)[0];
+
+            if (short) {
+                fort.squads[short.k] += 1;
+                realm.treasury -= SQUADS.cost;
+                fort.mustered = this.turn;
+            }
+        }
+    }
+
+    // Each forward garrison's assault team out against the nearest of the enemy's fortifications
+    // within its reach (SQUADS), once it's strong enough: taking from its strength, and losing some
+    // to its defenders; razed at nothing. Not where a player's near either: that's played out in
+    // the world
+    #assaults() {
+        const assault = SQUAD_NAMES.indexOf("assault");
+
+        for (const fort of this.forts.filter(({ squads }) => squads)) {
+            const team = fort.squads[assault];
+
+            if (team < SQUADS.ready || this.watched.has(fort.id) || !this.forts.includes(fort)) {
+                continue;
+            }
+
+            const target = this.forts
+                .filter((other) => other !== fort && !this.watched.has(other.id) && this.hostile(fort.realm, other.realm) && apart(other.at, fort.at) <= SQUADS.reach)
+                .sort((a, b) => apart(a.at, fort.at) - apart(b.at, fort.at) || (a.id < b.id ? -1 : 1))[0];
+
+            if (!target) {
+                continue;
+            }
+
+            const toll = Math.min(team, target.kind === "garrison" ? FORT_SIEGE.garrison : FORT_SIEGE.tower);
+
+            target.hp = Math.max(0, target.hp - team * SQUADS.hp);
+            target.struck = this.turn;
+            fort.squads[assault] = team - toll;
+            this.#emit("assailed", { fort: target.id, kind: target.kind, realm: target.realm, by: fort.realm, from: fort.id, about: target.about });
+
+            if (target.hp <= 0) {
+                this.#raze(target, fort.realm);
+            }
+        }
+    }
+
+    // How far a place's ground reaches from its middle (metres: settle.js's radius for its kind)
+    #radius(id) {
+        this.radii ??= new Map(this.plan.places.map((place) => [place.id, place.radius ?? 0]));
+
+        return this.radii.get(id) ?? 0;
     }
 
     // A fortification gone: razed by a people (`by`), or given up by its own
@@ -1873,6 +2008,11 @@ export class War {
             const { traits } = this.realm(this.liege(camp.realm)).leader;
             const walls = HOLDINGS[town.kind].walls;
             const watched = this.watched.has(town.id);
+            // (Covered by its holders' fortification: not to be stormed till that's razed, and
+            // fallen on first: #besiege)
+            const cover = this.coverOf(town);
+
+            camp.against = cover?.id ?? null;
 
             // A sally
             if (town.garrison > camp.size * 1.6 + 4) {
@@ -1890,7 +2030,7 @@ export class War {
                 continue;
             }
 
-            if (stage.take.includes(town.kind) && this.turn - camp.since >= SIEGE && camp.size >= town.garrison * walls * (1.25 - traits.aggression * 0.35)) {
+            if (!cover && stage.take.includes(town.kind) && this.turn - camp.since >= SIEGE && camp.size >= town.garrison * walls * (1.25 - traits.aggression * 0.35)) {
                 if (watched) {
                     this.#sortie(camp, town, "assault", camp.size);
                 } else {
