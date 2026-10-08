@@ -498,26 +498,65 @@ export class War {
     }
 
     /**
-     * An envoy a player's near, where it's got to in the world: `at` ([x, y] metres), past the
-     * point `leg` of its path. At the end of it, it's heard (and gone). Returns whether it's arrived.
+     * An envoy or a convoy a player's near, where it's got to in the world: `at` ([x, y] metres),
+     * past the point `leg` of its path. At the end of it, an envoy's heard (and gone); a convoy's
+     * goods go into its people's stores (and it turns for home), or it's home. Returns whether it's
+     * at the end of its way.
      */
     move(id, at, leg) {
-        const envoy = this.force(id);
+        const force = this.force(id);
 
-        if (envoy?.kind !== "envoy") {
+        if (force?.kind !== "envoy" && force?.kind !== "convoy") {
             return false;
         }
 
-        envoy.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
-        envoy.leg = Math.max(envoy.leg, Math.min(leg, envoy.path.length - 1));
+        force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
+        force.leg = Math.max(force.leg, Math.min(leg, force.path.length - 1));
 
-        if (envoy.leg >= envoy.path.length - 1) {
-            this.#hear(envoy);
-
-            return true;
+        if (force.leg < force.path.length - 1) {
+            return false;
         }
 
-        return false;
+        // (A convoy at its seat, its goods in, and back on the road for more; or home, its guards
+        // home too: either way, at the end of the way it was going)
+        if (force.kind === "convoy") {
+            this.#onConvoy(force);
+        } else {
+            this.#hear(force);
+        }
+
+        return true;
+    }
+
+    /**
+     * A convoy beaten in the world (docs/WAR.md *Convoys*): every one of its guards brought down by
+     * one of the people `by` (a realm's id, or null for anyone else). What it carried is lost to
+     * its people, half of it `by`'s, and they bear them a grudge for it. Returns what it carried
+     * ({ [resource]: amount }), or null if it wasn't a convoy.
+     */
+    plundered(id, by) {
+        const convoy = this.force(id);
+
+        if (convoy?.kind !== "convoy") {
+            return null;
+        }
+
+        const cargo = convoy.cargo ?? {};
+        const plunderer = this.realm(by);
+
+        this.forces.splice(this.forces.indexOf(convoy), 1);
+
+        if (plunderer) {
+            for (const [resource, amount] of Object.entries(cargo)) {
+                plunderer.stores[resource] = Math.round((plunderer.stores[resource] + amount / 2) * 10) / 10;
+            }
+
+            this.remember(convoy.realm, by, -8);
+        }
+
+        this.#emit("ambushed", { realm: convoy.realm, by: plunderer ? by : null, faction: null, works: convoy.home, cargo, beaten: false, force: convoy.id, played: true });
+
+        return cargo;
     }
 
     /**
@@ -1258,8 +1297,9 @@ export class War {
     // envoys are heard
     #march() {
         for (const force of [...this.forces]) {
-            // (Camps stay put; an envoy a player's near goes as it's seen to go there: move)
-            if (force.kind === "camp" || !this.forces.includes(force) || (force.kind === "envoy" && this.watched.has(force.id))) {
+            // (Camps stay put; an envoy or a convoy a player's near goes as it's seen to go there:
+            // move)
+            if (force.kind === "camp" || !this.forces.includes(force) || ((force.kind === "envoy" || force.kind === "convoy") && this.watched.has(force.id))) {
                 continue;
             }
 

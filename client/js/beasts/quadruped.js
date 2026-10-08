@@ -470,19 +470,29 @@ export function quadruped(look, random, key = null) {
         }
 
         if (look.horns) {
-            const horn = joint(head, `horn-${side}`, onSurface([hx, hy, hz], [0, 0, hz * 0.3], [side * 0.45, 0.8, -0.3], 0.85));
+            // (Sweeping back from the crown; or, an ox's, out to the sides from the poll and
+            // curving up and a little forward)
+            const out = look.hornSweep === "out";
+            const horn = joint(head, `horn-${side}`, onSurface([hx, hy, hz], [0, 0, hz * 0.3], out ? [side * 0.7, 0.7, -0.5] : [side * 0.45, 0.8, -0.3], 0.85));
 
-            horn.rotation.set(-1.15, 0, -side * 0.4);
+            horn.rotation.set(out ? 0.1 : -1.15, 0, -side * (out ? 1.4 : 0.4));
 
-            // (Curving back as it goes: a few pieces, each turned a little more)
+            // (Curving as it goes: a few pieces, each turned a little more)
             let from = horn;
+
+            const thick = hx * (out ? 0.3 : 0.17);
 
             for (let k = 0; k < 3; k++) {
                 const long = look.horns / 3;
 
-                part(from, limb(long, hx * 0.17 * (1 - k * 0.3), hx * 0.17 * (1 - (k + 1) * 0.3), 7), ivory, { turn: [Math.PI, 0, 0] });
+                part(from, limb(long, thick * (1 - k * 0.3), thick * (1 - (k + 1) * 0.3), 7), ivory, { turn: [Math.PI, 0, 0] });
                 from = joint(from, `horn-${side}-${k}`, [0, long, 0]);
-                from.rotation.x = -0.28;
+
+                if (out) {
+                    from.rotation.set(0.15, 0, side * 0.32);
+                } else {
+                    from.rotation.x = -0.28;
+                }
             }
 
             part(from, cone(look.horns * 0.2, hx * 0.05, 6), ivory);

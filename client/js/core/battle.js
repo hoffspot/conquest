@@ -117,6 +117,9 @@ export const KINDS = Object.freeze({
     follower: { hp: 50, speed: 1.7, chase: 2.3, respawn: Infinity },
     // (One of the wild's creatures: core/creatures.js has how strong and fast each is)
     beast: { hp: 30, speed: 1.2, chase: 2.4, respawn: Infinity },
+    // (A convoy's wagon and the ox drawing it: no one's foe, going where it's driven; host.js
+    // CONVOY_NEAR)
+    wagon: { hp: 200, speed: 1.1, respawn: Infinity },
 });
 
 /**

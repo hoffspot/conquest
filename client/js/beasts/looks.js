@@ -70,6 +70,18 @@ export const LOOKS = Object.freeze({
         colours: { scales: 0x6a6a38, bands: 0x2a2a16, belly: 0xc0b080, eyes: 0xd8a020 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
     },
+    // (Not of the wild: an ox in the shafts of a works' wagon, drawing it in a convoy, art/kits/wagon.js.
+    // Deep and heavy, its head carried low, its horns out to the sides and curving up; it only
+    // stands with its head down a while, or shakes off the flies)
+    ox: {
+        body: "quadruped",
+        scale: [0.95, 1.05],
+        length: 2.2, height: 1.5, girth: 0.42, width: 0.33, chest: 1.2, haunch: 1.05, neck: 0.32, neckUp: 0.1,
+        head: [0.13, 0.16, 0.24], snout: { length: 0.24, radius: 0.095, taper: 0.95, flat: 1.1 }, ears: "round", legs: 0.11, hooves: true,
+        horns: 0.44, hornSweep: "out", tail: { length: 0.85, radius: 0.028, lift: -1.4, curl: 0.05, taper: 0.5 }, tipColour: 0x1e1610,
+        colours: { fur: 0x86573a, belly: 0x9c7254, dark: 0x1e1610, mask: 0x6a4630, ivory: 0xd8ccb0, eyes: 0x140c08 },
+        attacks: ["gore", "stamp"], rests: ["sniff", "shake"],
+    },
     bandit: { body: "humanoid", scale: [0.95, 1.05] },
     banditChief: { body: "humanoid", scale: [1.08, 1.14] },
     bear: {

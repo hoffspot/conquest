@@ -37,7 +37,7 @@ import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./w
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { HOLDINGS, RISING, War, WORKED } from "./war/war.js";
+import { CONVOY, HOLDINGS, RISING, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
@@ -104,6 +104,17 @@ export const SORTIE = Object.freeze({ raiders: 6, attackers: 16, reach: 10, stay
  * along their road they make for at a time, and how near a point on it counts as passing it.
  */
 export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, past: 6 });
+
+/**
+ * A works' convoy on the road near a player (docs/WAR.md *Convoys*): met once a player's this
+ * near (metres), let go once every player's this far. Its captain goes ahead, its wagons in a
+ * column behind them `apart` metres apart, its guards beside the wagons, `beside` metres off the
+ * road; all at the wagons' pace (`pace`, metres a second); making for a mark `ahead` metres on along
+ * its road at a time, a point on it passed once they're `past` metres from it. Beaten (every guard
+ * down), its goods carried off, a share of what they're worth in gold for each player there (`worth`
+ * of each of its goods); its wagons stand where they were left.
+ */
+export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
@@ -270,7 +281,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 9;
+export const SNAPSHOT_VERSION = 10;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -490,6 +501,17 @@ export class Host {
          * was last), over (null; or "arrived" or "waylaid", once they're gone from the war) }.
          */
         this.envoys = new Map();
+
+        /**
+         * The convoys met on the road near a player (by the convoy's id): { people, works (its
+         * works'), to (the town it takes its goods to), cargo (what it carries: { [resource]:
+         * amount }, or null going home), ids (its
+         * captain's, then its guards'), wagons (its wagons'), leg, mark, at (as an envoy's), over
+         * (null; or "arrived", "home" or "plundered", once it's done with the war) }. And each
+         * wagon (by id): { convoy, people, load (what it's laden with: a resource, or null), seed }.
+         */
+        this.convoys = new Map();
+        this.wagons = new Map();
 
         /**
          * The adventurers following the players (by id): { leader (a player's id), name, calling,
@@ -1219,6 +1241,9 @@ export class Host {
                     if (soldier.part === "envoy") {
                         this.#envoyFell(soldier.envoy, event.by);
                     }
+                } else if (soldier.convoy) {
+                    this.war?.loss(soldier.convoy, 1);
+                    this.#convoyFell(soldier.convoy, event.by);
                 } else if (soldier.works) {
                     this.war?.loss(soldier.works, this.worksOut.get(soldier.works)?.share ?? 1);
                     this.#worksFell(soldier.works, event.by);
@@ -1388,6 +1413,8 @@ export class Host {
             camps: [...this.camps.entries()],
             sorties: [...this.sorties.entries()],
             envoys: [...this.envoys.entries()],
+            convoys: [...this.convoys.entries()],
+            wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
             hired: [...this.hired],
@@ -1498,6 +1525,8 @@ export class Host {
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
+        host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
+        host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
@@ -2655,9 +2684,24 @@ export class Host {
 
         this.#watchEnvoys();
 
+        // The convoys near a player met on the road, and let go once they're far (or gone, and far)
+        for (const [id, met] of [...this.convoys]) {
+            if (!near({ at: met.at }, CONVOY_NEAR.far) || (!met.over && war.force(id)?.kind !== "convoy")) {
+                this.#partWith(id);
+            }
+        }
+
+        for (const convoy of war.forces) {
+            if (convoy.kind === "convoy" && !this.convoys.has(convoy.id) && near(convoy, CONVOY_NEAR.near)) {
+                this.#meetConvoy(convoy);
+            }
+        }
+
+        this.#watchConvoys();
+
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
-        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...[...this.envoys].filter(([, met]) => !met.over).map(([id]) => id)]);
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -2817,6 +2861,207 @@ export class Host {
 
             return square;
         };
+    }
+
+    // --- Convoys (docs/WAR.md *Convoys*) ---
+
+    // A convoy on the road near a player met: its captain ahead, its wagons in a column behind,
+    // its guards beside them, each where they'd be along its road (CONVOY_NEAR), making for its mark
+    #meetConvoy(convoy) {
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[convoy.realm] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+        const load = convoy.cargo ? Object.keys(convoy.cargo)[0] : null;
+        const met = { people: convoy.realm, works: convoy.home, to: convoy.target, cargo: convoy.cargo ? { ...convoy.cargo } : null, ids: [], wagons: [], leg: convoy.leg, mark: null, at: [...convoy.at], over: null };
+
+        try {
+            met.mark = this.#ahead(convoy, convoy.at, convoy.leg, CONVOY_NEAR.ahead);
+
+            // (Its first wagon where the war has it, its captain a wagon's length ahead)
+            const spots = this.#column(convoy, this.#ahead(convoy, convoy.at, convoy.leg, CONVOY_NEAR.apart));
+
+            for (let k = 0; k < CONVOY.wagons; k++) {
+                const id = `${convoy.id}/wagon-${k}`;
+                const square = free(spots.wagons[k]);
+
+                this.wagons.set(id, { convoy: convoy.id, people: convoy.realm, load, seed: [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0 });
+                this.battle.add({ id, kind: "wagon", name: load ? `Wagon of ${load}` : "Empty wagon", team: convoy.realm, square, ai: "patrol", neutral: true, patrol: [square], speed: CONVOY_NEAR.pace });
+                met.wagons.push(id);
+            }
+
+            for (let k = 0; k < Math.min(convoy.size, spots.guards.length); k++) {
+                const id = `${convoy.id}/guard-${k}`;
+
+                this.#enlist(id, { people: convoy.realm, weapon: k % 2 ? patrolArms : guardArms, square: free(spots.guards[k]), name: k ? "convoy guard" : "convoy captain", record: { convoy: convoy.id }, patrol: [free(spots.guards[k])], speed: CONVOY_NEAR.pace });
+                met.ids.push(id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        this.convoys.set(convoy.id, met);
+        this.#event("convoy", { convoy: convoy.id, people: convoy.realm, ids: met.ids, wagons: met.wagons, load });
+    }
+
+    // Where a convoy's captain, wagons and guards are to be, its captain at `mark` on its road
+    // and the rest strung out behind them along it: { guards: [[x, y]...] (its captain's first),
+    // wagons: [[x, y]...] }
+    #column(convoy, mark) {
+        const way = convoy.path.slice(0, convoy.leg + 1).concat([convoy.at]).reverse();
+        const back = (metres) => {
+            let [x, y] = [mark[0] + 0.5, mark[1] + 0.5];
+            let left = metres;
+
+            for (const [px, py] of way) {
+                const d = hypot(px - x, py - y);
+
+                if (d >= left) {
+                    return [x + ((px - x) / Math.max(d, 1e-6)) * left, y + ((py - y) / Math.max(d, 1e-6)) * left, (px - x) / Math.max(d, 1e-6), (py - y) / Math.max(d, 1e-6)];
+                }
+
+                [x, y, left] = [px, py, left - d];
+            }
+
+            return [x, y, 0, 1];
+        };
+        const wagons = Array.from({ length: CONVOY.wagons }, (_, k) => back(CONVOY_NEAR.apart * (k + 1)));
+        const beside = ([x, y, dx, dy], side) => [x - dy * side * CONVOY_NEAR.beside, y + dx * side * CONVOY_NEAR.beside];
+        const guards = [[mark[0], mark[1]], ...wagons.flatMap((at) => [beside(at, 1), beside(at, -1)])];
+
+        return { guards, wagons: wagons.map(([x, y]) => [x, y]) };
+    }
+
+    // The convoys met, on along their road: where the first wagon's got to told to the war
+    // (war.move); there or nearly at their mark, on to the next, strung out behind it; at the end
+    // of their way, their goods in (and back for more), or home
+    #watchConvoys() {
+        for (const [id, met] of this.convoys) {
+            const convoy = this.war.force(id);
+            const leader = this.battle.actor(met.wagons[0]);
+
+            if (met.over || convoy?.kind !== "convoy" || !leader) {
+                continue;
+            }
+
+            met.at = [leader.x, leader.y];
+
+            let leg = met.leg;
+
+            while (leg < convoy.path.length - 1 && hypot(convoy.path[leg + 1][0] - leader.x, convoy.path[leg + 1][1] - leader.y) <= CONVOY_NEAR.past) {
+                leg++;
+            }
+
+            const back = convoy.back;
+
+            if (this.war.move(id, met.at, leg)) {
+                // (Its goods in, and it turns for home, empty; or it's home, and done)
+                if (!back && this.war.force(id)) {
+                    const cargo = met.cargo;
+
+                    met.cargo = null;
+                    met.leg = 0;
+
+                    for (const wagon of met.wagons) {
+                        Object.assign(this.wagons.get(wagon) ?? {}, { load: null });
+                    }
+
+                    this.#event("convoyed", { convoy: id, people: met.people, over: "arrived", wagons: met.wagons, cargo });
+                } else {
+                    met.over = back ? "home" : "arrived";
+                    this.#event("convoyed", { convoy: id, people: met.people, over: met.over });
+                }
+
+                continue;
+            }
+
+            met.leg = leg;
+
+            if (distanceBetween(leader.square, met.mark) <= 3 + CONVOY_NEAR.apart || (!leader.path.length && !leader.to)) {
+                try {
+                    const free = this.#spots();
+                    const [wx, wy] = met.mark;
+
+                    met.mark = this.#ahead(convoy, met.at, leg, CONVOY_NEAR.ahead + CONVOY_NEAR.apart);
+
+                    // (Nowhere further along its road to be got to, something standing on it (a
+                    // building, a keep at its end): on past its next point, and at the last, there)
+                    if (met.mark[0] === wx && met.mark[1] === wy) {
+                        met.leg = Math.min(convoy.path.length - 1, leg + 1);
+                    }
+
+                    const spots = this.#column(convoy, met.mark);
+
+                    for (const [k, each] of met.wagons.entries()) {
+                        Object.assign(this.battle.actor(each) ?? {}, { patrol: [free(spots.wagons[k])], patrolIndex: 0 });
+                    }
+
+                    for (const [k, each] of met.ids.entries()) {
+                        const actor = this.battle.actor(each);
+
+                        // (Not one fighting: back on the road once they're done)
+                        if (actor && !actor.dead && actor.target === null) {
+                            Object.assign(actor, { patrol: [free(spots.guards[k] ?? spots.guards.at(-1))], patrolIndex: 0 });
+                        }
+                    }
+                } catch {
+                    // (Nowhere free ahead just now: tried again next time)
+                }
+            }
+        }
+    }
+
+    // One of a convoy's guards fallen: once every one of them is, it's beaten, and its goods are
+    // carried off (war.plundered): half of them the people's of whoever felled the last, and a share
+    // of what they're worth in gold for each player there; its wagons left standing where they are
+    #convoyFell(id, byId) {
+        const met = this.convoys.get(id);
+
+        if (!met || met.over || met.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        const realm = this.#realmOf(byId);
+        const cargo = this.war?.plundered(id, realm) ?? met.cargo ?? {};
+        const worth = Math.round(Object.values(cargo).reduce((sum, amount) => sum + amount, 0) * CONVOY_NEAR.worth);
+        const wagon = this.battle.actor(met.wagons[0]);
+
+        met.over = "plundered";
+
+        for (const each of met.wagons) {
+            Object.assign(this.battle.actor(each) ?? {}, { ai: null, patrol: null, path: [], to: null });
+        }
+
+        if (worth > 0 && wagon) {
+            for (const player of this.players.values()) {
+                const actor = this.battle.actor(player.id);
+
+                if (!actor || actor.dead || actor.map !== "town" || hypot(actor.x - wagon.x, actor.y - wagon.y) > CONVOY_NEAR.near) {
+                    continue;
+                }
+
+                const ground = `ground-${this.nextGround++}`;
+
+                this.ground.set(ground, { id: ground, bundle: { gold: worth, items: [] }, for: player.id, from: "convoy", map: "town", square: this.#freeNear([Math.floor(wagon.x) + 1, Math.floor(wagon.y)]), until: this.battle.time + GROUND_MS });
+                this.#event("spoils", { id: player.id, ground, from: id, creature: "convoy" });
+            }
+        }
+
+        this.#event("convoyed", { convoy: id, people: met.people, over: "plundered", by: realm });
+    }
+
+    // A convoy let go: its captain, guards and wagons gone from the world (with it, in the war)
+    #partWith(id) {
+        const { ids, wagons } = this.convoys.get(id);
+
+        this.convoys.delete(id);
+
+        for (const each of [...ids, ...wagons]) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+            this.wagons.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("parted", { convoy: id, ids: [...ids, ...wagons] });
     }
 
     // --- The works (docs/WAR.md *The works*) ---
@@ -4056,9 +4301,9 @@ export class Host {
     }
 
     // The square `ENVOY.ahead` metres further along an envoy's road from `at` (past its point `leg`)
-    #ahead(envoy, at, leg) {
+    #ahead(envoy, at, leg, reach = ENVOY.ahead) {
         let [x, y] = at;
-        let left = ENVOY.ahead;
+        let left = reach;
 
         for (let k = leg + 1; k < envoy.path.length && left > 0; k++) {
             const [nx, ny] = envoy.path[k];
@@ -5594,6 +5839,56 @@ export class Host {
                 }
 
                 return end?.type === "waylaid" && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "waylaid" ? "void" : "failed";
+            }
+            case "convoy":
+            case "plunder": {
+                const convoy = war.force(request.target.force);
+
+                if (convoy && !convoy.back) {
+                    if (request.kind === "convoy" && !request.there && near(convoy.at, REQUEST_REACH.convoy)) {
+                        request.there = true;
+                        this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
+                    }
+
+                    return null;
+                }
+
+                // (Its goods in, or carried off, and by whom: fallen on in the world by the
+                // player's people, it's theirs)
+                const end = war.log.findLast(({ force, type, beaten }) => force === request.target.force && (type === "delivered" || type === "plundered" || (type === "ambushed" && !beaten)));
+
+                if (request.kind === "convoy") {
+                    return end?.type === "delivered" ? (request.there ? "ready" : "void") : end ? "failed" : "void";
+                }
+
+                return end?.type === "ambushed" && end.played && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "delivered" ? "failed" : "void";
+            }
+            case "retake":
+            case "seize": {
+                const works = war.workAt(request.target.works);
+
+                if (!works) {
+                    return "void";
+                }
+
+                if (!request.there && near(works.at, REQUEST_REACH.works)) {
+                    request.there = true;
+                    this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
+                }
+
+                // (Won in the world since it was asked, by the player's people: done. Back in
+                // their hands some other way, or, to be taken, in someone else's: come to nothing)
+                const won = war.log.findLast((event) => event.works === works.id && event.played && event.turn >= request.given && (event.type === "seized" || event.type === "cleared"));
+
+                if (won && war.liege(won.type === "seized" ? won.to : won.by) === liege) {
+                    return "ready";
+                }
+
+                if (!works.held && war.liege(works.owner) === liege) {
+                    return "void";
+                }
+
+                return request.kind === "seize" && (works.held || works.owner !== request.target.realm) ? "void" : null;
             }
             default:
                 return null;

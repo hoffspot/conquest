@@ -318,7 +318,7 @@ export const CATALOG = Object.freeze({
     lairLoop: { group: "Indoors", label: "The dragon's lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the dragon's lair." },
 
     // Coins and trade (scripts/sounds/items.js)
-    coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower." },
+    coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; a share of a convoy's goods fallen on, in gold; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower." },
     coinPickup: { group: "Coins and trade", label: "Coins picked up", about: "A few coins chinking together as they're scooped up: SpaceJoe's.", plays: "Taking a sack or a chest's share with gold in it; putting on a ring or an amulet." },
     tradeDone: { group: "Coins and trade", label: "A trade done", about: "A coin shake, and a hand chime ringing over it (A or D, in the music's key).", plays: "A face-to-face trade with another player agreed and done." },
     buyDenied: { group: "Coins and trade", label: "Too dear", about: "A coin pouch dropped on a table: a soft, dull thud (Canakinsound's).", plays: "Anything refused for want of gold: a shop's wares, a trade, a room, a hire or a step through a guild's portal." },
@@ -360,7 +360,7 @@ export const CATALOG = Object.freeze({
     wake: { group: "Cues", label: "Waking", about: "Two hand chimes rising a fifth.", plays: "Waking again after falling; a spell learnt from a tome; a place cleared; asked to trade, or summoned, by another player." },
     levelUp: { group: "Cues", label: "Rising a rank", about: "A quick run up the folk harp, a hand chime on its top note.", plays: "A new rank in a skill, among the player's people or in the guilds; a school of magic come to its next tier; a spell grown stronger." },
     questDone: { group: "Cues", label: "A quest done", about: "A folk harp's run from D, then two hand chimes ringing.", plays: "A request handed in and done." },
-    newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a raid or an assault coming, a town fallen or a raid driven off, an envoy arrived or struck down." },
+    newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a raid or an assault coming, a town fallen or a raid driven off, an envoy arrived or struck down, a convoy fallen on." },
     pinSet: { group: "Cues", label: "A pin set", about: "One soft glockenspiel note.", plays: "A pin put on the world map." },
     breath: { group: "Cues", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
 });

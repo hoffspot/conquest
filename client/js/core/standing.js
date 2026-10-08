@@ -31,7 +31,7 @@ export const STANDINGS = Object.freeze([
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, escort: 3, waylay: 3, rise: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, convoy: 2, retake: 2, march: 3, escort: 3, waylay: 3, plunder: 3, seize: 3, rise: 3, peace: 4, war: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
@@ -57,6 +57,11 @@ export const REQUESTS = Object.freeze({
     rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, gold: 40 } },
     escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, gold: 40 } },
     waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, gold: 50 } },
+    // (The works and their convoys: docs/WAR.md *Convoys*)
+    convoy: { title: "See the convoy in", rank: OPENS.convoy, turns: null, reward: { standing: 45, gold: 30 } },
+    plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 40 } },
+    retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 35 } },
+    seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 45 } },
     // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
     // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
     // rank each is first offered at (GUILD_RANKS)
@@ -132,8 +137,11 @@ const LAND_STEP = 100;
 // A thing's name for more than one ("wolf fangs", "slime jelly", "frog legs")
 const many = (label) => (/(s|y|dust|silk|meat|jelly|blood|skin)$/i.test(label) ? label : `${label}s`).toLowerCase();
 
-/** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
-export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60 });
+/**
+ * How near (m) a player goes to see what they're scouting, to be there to hold a town (from its
+ * middle), to be with an envoy or a convoy, and at a works to win it.
+ */
+export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60, convoy: 60, works: 120 });
 
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
@@ -260,12 +268,28 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         kinds.push("waylay");
     }
 
+    // The keep's convoys seen in with their goods, and an enemy's fallen on; the people's works
+    // others hold won back, and an enemy's taken (the works and their goods are what the war's
+    // towers and garrisons are built of)
+    const convoys = post === "keep" ? war.forces.filter((force) => force.kind === "convoy" && force.cargo && !force.back) : [];
+    const ourConvoys = rank >= OPENS.convoy ? convoys.filter((convoy) => war.liege(convoy.realm) === liege && !has("convoy", convoy.id)) : [];
+    const theirConvoys = rank >= OPENS.plunder ? convoys.filter((convoy) => war.hostile(liege, war.liege(convoy.realm)) && !has("plunder", convoy.id)) : [];
+    const works = post === "keep" ? (war.works ?? []) : [];
+    const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.liege(each.owner) !== liege) && !has("retake", each.id)) : [];
+    const theirWorks = rank >= OPENS.seize ? works.filter((each) => !each.held && war.hostile(liege, war.liege(each.owner)) && war.liege(each.race) !== liege && !has("seize", each.id)) : [];
+
+    for (const [kind, found] of [["convoy", ourConvoys], ["plunder", theirConvoys], ["retake", lost], ["seize", theirWorks]]) {
+        if (found.length) {
+            kinds.push(kind);
+        }
+    }
+
     if (!kinds.length) {
         return null;
     }
 
     // (The keep asks the weightier things when it can)
-    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "bounty"].includes(kind));
+    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "convoy", "plunder", "retake", "seize", "bounty"].includes(kind));
     const kind = random.pick(post === "keep" && weighty.length ? weighty : kinds);
     const times = post === "keep" ? KEEP_REWARD : 1;
     const worth = (standing, gold) => ({ standing: Math.round(standing * times), gold: Math.round(gold * times) });
@@ -375,10 +399,79 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 reward: worth(reward.standing, reward.gold),
             };
         }
+        case "convoy": {
+            const convoy = nearestTo(ourConvoys, town.at);
+            const [load, amount] = Object.entries(convoy.cargo)[0];
+            const to = war.town(convoy.target);
+
+            return {
+                ...base,
+                key: convoy.id,
+                target: { force: convoy.id, realm: convoy.realm, at: [...convoy.at], name: `our convoy of ${load}`, works: convoy.home },
+                text: `A convoy of ${Math.round(amount)} ${load} is on the road from ${worksName(war, convoy.home)} to ${to?.name ?? "the seat"}, and there are those who'd have it. Find it, and see it in.`,
+                until: null,
+                reward: worth(reward.standing, reward.gold),
+            };
+        }
+        case "plunder": {
+            const convoy = nearestTo(theirConvoys, town.at);
+            const [load] = Object.keys(convoy.cargo);
+            const from = war.realm(convoy.realm);
+
+            return {
+                ...base,
+                key: convoy.id,
+                target: { force: convoy.id, realm: convoy.realm, at: [...convoy.at], name: `the convoy of ${from.name}`, works: convoy.home },
+                text: `${from.name} have a convoy of ${load} on the road from ${worksName(war, convoy.home)}: their towers and garrisons are built of it. Fall on it, bring its guard down, and its goods are ours.`,
+                until: null,
+                reward: worth(reward.standing, reward.gold),
+            };
+        }
+        case "retake": {
+            const works = nearestTo(lost, town.at);
+            const name = worksName(war, works.id);
+
+            return {
+                ...base,
+                key: works.id,
+                target: { works: works.id, at: [...works.at], name: name.replace(/^the /, ""), realm: works.held ? null : works.owner },
+                text: works.held
+                    ? `Brigands hold ${name}, and nothing comes from it. Put them to the sword, and it's ours again.`
+                    : `${war.realm(works.owner).name} hold ${name}, and its goods go to them. Bring its guard down, and win it back for us.`,
+                until: war.turn + turns,
+                reward: worth(reward.standing, reward.gold),
+            };
+        }
+        case "seize": {
+            const works = nearestTo(theirWorks, town.at);
+            const name = worksName(war, works.id);
+
+            return {
+                ...base,
+                key: works.id,
+                target: { works: works.id, at: [...works.at], name: name.replace(/^the /, ""), realm: works.owner },
+                text: `${name[0].toUpperCase()}${name.slice(1)} keeps ${war.realm(works.owner).name} in ${YIELDED[works.kind] ?? "goods"}. Bring its guard down and it's ours, and its goods with it.`,
+                until: war.turn + turns,
+                reward: worth(reward.standing, reward.gold),
+            };
+        }
         default:
             return null;
     }
 }
+
+// What each kind of works yields, in words
+const YIELDED = Object.freeze({ "lumber mill": "timber", mine: "iron", quarry: "stone" });
+
+// A works, by name: "the Calbury lumber mill"
+const worksName = (war, id) => {
+    const works = war.workAt?.(id);
+
+    return works ? `the ${works.name} ${works.kind}` : "their works";
+};
+
+// The one of `things` (each with its `at`) nearest a point
+const nearestTo = (things, at) => things.reduce((best, each) => (apart(each.at, at) < apart(best.at, at) ? each : best));
 
 /**
  * How likely a guild's contract of each kind is to pay a spell's tome besides its gold (from the
@@ -858,6 +951,13 @@ export function progressOf(request) {
             return request.there ? "Stay with them to the end of the road." : "Find them on the road.";
         case "waylay":
             return "Find them on the road, and stop them.";
+        case "convoy":
+            return request.there ? "Stay with it to the end of the road." : "Find it on the road.";
+        case "plunder":
+            return "Find it on the road, and bring its guard down.";
+        case "retake":
+        case "seize":
+            return request.there ? "Bring down whoever holds it." : `Get to the ${target.name}.`;
         default:
             return "";
     }

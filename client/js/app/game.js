@@ -28,6 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
+import { LOOKS as CREATURE_LOOKS } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
@@ -47,7 +48,7 @@ import { PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -100,6 +101,7 @@ import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
+import { hitch } from "../world/art/kits/wagon.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
@@ -475,7 +477,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1327,6 +1329,11 @@ export class Game {
             return yield* this.#addingBeast(actor);
         }
 
+        // One of a convoy's wagons: an ox in its shafts
+        if (actor.kind === "wagon") {
+            return yield* this.#addingWagon(actor);
+        }
+
         // The orc
         const preset = PRESETS.orc;
         const character = yield* this.#built(actor, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail, merge: true });
@@ -1366,7 +1373,7 @@ export class Game {
         const me = this.battle.actor(this.me);
 
         for (const actor of this.battle.actors) {
-            if (!this.avatars.has(actor.id) && actor.kind !== "folk" && actor.kind !== "soldier") {
+            if (!this.avatars.has(actor.id) && actor.kind !== "folk" && actor.kind !== "soldier" && actor.kind !== "wagon") {
                 this.#dress(actor);
                 this.#place(actor);
                 this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
@@ -1461,6 +1468,24 @@ export class Game {
         this.sound?.want(creatureSounds(actor.wild.creature));
 
         return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
+    }
+
+    // One of a convoy's wagons (core/host.js #meetConvoy): an ox in its shafts (beasts/looks.js
+    // ox), the wagon behind it in its people's timber, laden with what its works yields
+    // (art/kits/wagon.js), a step at a time (the ox's body sculpted in steps the first time)
+    *#addingWagon(actor) {
+        const { load = null, people = "human", seed = 1 } = this.host.wagons.get(actor.id) ?? {};
+        const avatar = yield* dressingCreature(this.kit, "ox", { seed });
+
+        if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
+            avatar.character.dispose();
+
+            return this.avatars.get(actor.id) ?? null;
+        }
+
+        hitch(avatar, CREATURE_LOOKS.ox, { load, people, seed });
+
+        return this.#register(actor.id, avatar, { wounds: false });
     }
 
     // An avatar drawn, its footsteps heard
@@ -4319,6 +4344,9 @@ export class Game {
         } else if (event.type === "spoils" && event.given) {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
             this.sound?.play("drop");
+        } else if (event.type === "spoils" && event.creature === "convoy") {
+            this.hud.message("Your share of the convoy's goods, in gold: tap the sack to take it.", 3);
+            this.sound?.play("coins");
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
@@ -4424,7 +4452,14 @@ export class Game {
                 taken: `New request: ${request.title}. (J for your journal.)`,
                 count: `${request.title}: ${request.count} of ${request.target.need}.`,
                 ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
-                there: `You're here to hold ${request.target.name}. Stay till they're gone.`,
+                there: {
+                    escort: `You've found ${request.target.name}. Stay with them to the end of the road.`,
+                    convoy: `You've found ${request.target.name}. Stay with it to the end of the road.`,
+                    rout: `You've found the camp outside ${request.target.name}. Bring its soldiers down.`,
+                    camp: `You've found the camp outside ${request.target.name}. Bring its soldiers down.`,
+                    retake: `You're at the ${request.target.name}. Bring down whoever holds it.`,
+                    seize: `You're at the ${request.target.name}. Bring down whoever holds it.`,
+                }[request.kind] ?? `You're here to hold ${request.target.name}. Stay till they're gone.`,
                 done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}${event.reward?.tome ? ` And the Tome of ${SPELLS[event.reward.tome].label}.` : ""}`,
                 failed: `${request.title}: failed. ${request.from.post === "guild" ? "The guild marks it on your card." : "Your standing suffers."}`,
                 void: `${request.title}: it's come to nothing.`,
@@ -4687,7 +4722,7 @@ export class Game {
         this.battle = this.host.battle;
 
         for (const actor of this.battle.actors) {
-            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+            if ((actor.kind === "soldier" || actor.kind === "wagon") && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                 this.enlisting.push(actor.id);
             }
         }
@@ -5135,6 +5170,45 @@ export class Game {
 
         this.hud.message(over === "arrived" ? `${theirs} has reached the ${peopleOf(to)}.` : `${theirs} to the ${peopleOf(to)} has been struck down${by ? ` by the ${peopleOf(by)}` : ""}!`, 4);
         this.sound?.play("newsHeard");
+    }
+
+    // A convoy met on the road near the player, in with its goods, or fallen on (host.js
+    // #meetConvoy, #watchConvoys, #convoyFell): its wagons emptied once its goods are in; said, if
+    // it's near the player, or it's their people's, or theirs who fell on it
+    #convoyed({ convoy: id, people, over, by = null, wagons = [], cargo = null }) {
+        const met = this.host.convoys.get(id);
+        const me = this.battle.actor(this.me);
+        const mine = this.self?.realm;
+        const near = Boolean(met) && me?.map === "town" && Math.hypot(me.x - met.at[0], me.y - met.at[1]) <= CONVOY_NEAR.far;
+
+        if (over === "arrived") {
+            for (const wagon of wagons) {
+                this.avatars.get(wagon)?.wagon?.setLoad(null);
+            }
+        }
+
+        if (!met || over === "home" || (!near && !(over === "plundered" && (people === mine || by === mine)))) {
+            return;
+        }
+
+        const war = this.host.war;
+        const [load, amount] = Object.entries(cargo ?? met.cargo ?? {})[0] ?? [null, 0];
+        const works = war?.workAt(met.works);
+        const town = war?.town(met.to)?.name ?? "their seat";
+        const theirs = people === mine ? "our convoy" : `the ${ADJECTIVES[people] ?? people} convoy`;
+        const Theirs = `${theirs[0].toUpperCase()}${theirs.slice(1)}`;
+
+        if (over === "met") {
+            this.hud.message(load ? `${people === mine ? "Our" : `A ${ADJECTIVES[people] ?? people}`} convoy of ${Math.round(amount)} ${load} is on the road to ${town}.` : `${people === mine ? "Our" : `A ${ADJECTIVES[people] ?? people}`} convoy is on the road back to ${works ? `the ${works.name} ${works.kind}` : "its works"}, empty.`, 3);
+        } else if (over === "arrived") {
+            this.hud.message(`${Theirs} has brought its ${load ?? "goods"} in to ${town}.`, 3);
+        } else if (by === mine) {
+            this.hud.message(`We've taken ${theirs}'s ${load ?? "goods"}: half of it to our stores.`, 4);
+            this.sound?.play("newsHeard");
+        } else {
+            this.hud.message(`${Theirs} has been fallen on${by ? ` by the ${peopleOf(by)}` : ""}, and its ${load ?? "goods"} carried off!`, 4);
+            this.sound?.play("newsHeard");
+        }
     }
 
     // Start building a building the host's got ready: each floor and each of its folk, one to a
@@ -5830,6 +5904,22 @@ export class Game {
                 break;
             case "envoyed":
                 this.#envoyed(event);
+                break;
+            case "convoy":
+                // (A convoy met on the road near a player: its captain, guards and wagons drawn)
+                this.enlisting.push(...event.ids, ...event.wagons);
+                this.#convoyed({ ...event, over: "met" });
+                break;
+            case "convoyed":
+                this.#convoyed(event);
+                break;
+            case "parted":
+                this.#unenlist(event.ids);
+
+                for (const id of event.ids) {
+                    this.#undress(id);
+                }
+
                 break;
             case "follower":
                 if (event.id === this.me) {

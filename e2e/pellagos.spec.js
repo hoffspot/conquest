@@ -5158,6 +5158,120 @@ test("each people's works out in their lands: a lumber mill in its ring of trees
     await expect(journal.locator(".journal-people")).toContainText(/In their stores: \d+ wood, \d+ stone, \d+ metal\./);
 });
 
+test("a convoy on the road near the player: its wagons drawn, an ox in each one's shafts and its goods aboard, its captain and guards of its people; said; emptied at the road's end", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    const met = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        // A convoy of the humans' wood on the road out of the start town, 160 m on along it,
+        // bound for their seat at the end of the next 30 m of it
+        const home = war.town(game.world.start.id);
+        const other = war.towns.filter(({ owner, id }) => owner === "human" && id !== home.id).sort((a, b) => Math.hypot(a.at[0] - home.at[0], a.at[1] - home.at[1]) - Math.hypot(b.at[0] - home.at[0], b.at[1] - home.at[1]))[0];
+        const road = war.roads.route(home.id, other.id).points;
+        const along = (metres) => {
+            for (let k = 1, left = metres; k < road.length; k++) {
+                const [[ax, ay], [bx, by]] = [road[k - 1], road[k]];
+                const run = Math.hypot(bx - ax, by - ay);
+
+                if (left <= run) {
+                    return [ax + ((bx - ax) * left) / run, ay + ((by - ay) * left) / run];
+                }
+
+                left -= run;
+            }
+
+            return road.at(-1);
+        };
+        const at = along(160);
+
+        window.convoyAt = at;
+
+        const works = war.works.find(({ owner }) => owner === "human");
+
+        war.forces.push({ id: "force-990", realm: "human", kind: "convoy", size: 7, at: [...at], path: [at, along(175), along(190)], leg: 0, target: war.realm("human").seat, home: works.id, mission: null, about: null, cargo: { wood: 60 }, back: false, since: war.turn });
+        Object.assign(player, { x: at[0] - 11.5, y: at[1] + 8.5, square: [Math.floor(at[0] - 12), Math.floor(at[1] + 8)], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        const convoy = game.host.convoys.get("force-990");
+
+        return { wagons: convoy?.wagons ?? [], ids: convoy?.ids ?? [], teams: (convoy?.ids ?? []).map((id) => game.battle.actor(id)?.team) };
+    });
+
+    expect(met.wagons).toHaveLength(3);
+    expect(met.ids).toHaveLength(7);
+    expect(met.teams.every((team) => team === "human")).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => /convoy of 60 wood is on the road to/.test(text)))).toBe(true);
+
+    // (Drawn a few at a time, with the town's people about: each wagon an ox, the wagon behind it
+    // laden with logs)
+    expect(await playUntil(page, () => ["wagons", "ids"].every((key) => (window.pellagos.game.host.convoys.get("force-990")?.[key] ?? []).every((id) => window.pellagos.game.avatars.has(id))), { seconds: 90 })).toBe(true);
+
+    const drawn = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return game.host.convoys.get("force-990").wagons.map((id) => {
+            const avatar = game.avatars.get(id);
+            let meshes = 0;
+
+            avatar.wagon?.object.traverse((node) => (meshes += node.isMesh ? 1 : 0));
+
+            return { ox: avatar.id, wagon: Boolean(avatar.wagon), wheels: avatar.wagon?.wheels.length ?? 0, meshes };
+        });
+    });
+
+    expect(drawn.every(({ ox, wagon, wheels }) => ox === "ox" && wagon && wheels === 4)).toBe(true);
+
+    // At the road's end its goods are in, and its wagons empty
+    expect(await playUntil(page, () => window.pellagos.game.host.war.force("force-990")?.back === true, { seconds: 90 })).toBe(true);
+
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const convoy = game.host.convoys.get("force-990");
+
+        return {
+            loads: convoy.wagons.map((id) => game.host.wagons.get(id).load),
+            meshes: convoy.wagons.map((id) => {
+                let meshes = 0;
+
+                game.avatars.get(id).wagon.object.traverse((node) => (meshes += node.isMesh ? 1 : 0));
+
+                return meshes;
+            }),
+            said: window.said.some((text) => /has brought its wood in to/.test(text)),
+            moved: Math.hypot(game.battle.actor(convoy.wagons[0]).x - window.convoyAt[0], game.battle.actor(convoy.wagons[0]).y - window.convoyAt[1]),
+        };
+    });
+
+    expect(after.moved).toBeGreaterThan(15);
+
+    expect(after.loads).toEqual([null, null, null]);
+    expect(after.meshes.every((meshes, k) => meshes < drawn[k].meshes)).toBe(true);
+    expect(after.said).toBe(true);
+});
+
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
