@@ -5379,7 +5379,7 @@ test("a guard tower of the player's people near them: drawn over its squares wit
     expect(after).toMatchObject({ banner: false, plate: false, open: true });
 });
 
-test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next", async ({ page }) => {
+test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next; told when their army's supplies don't get through", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
@@ -5468,6 +5468,30 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
 
     expect(heeded.build.key).toBe(plan.key);
     expect(heeded.line).toBe(`${plan.name}. So be it: it's the next we build, as soon as the stores allow.`);
+
+    // Their army's supplies not getting through: a Knight's told (docs/WAR.md *Supply*); another
+    // people's army's, not
+    const told = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const said = [];
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        war.events.push({ type: "unsupplied", turn: war.turn, realm: "orc", army: "force-901", missed: 1, deserted: 0, why: "lost", by: null });
+        war.events.push({ type: "unsupplied", turn: war.turn, realm: "human", army: "force-902", missed: 2, deserted: 4, why: "lost", by: "orc" });
+        game.advance(0.1);
+        game.hud.message = message;
+
+        return said.filter((text) => /supplies/.test(text));
+    });
+
+    expect(told).toEqual(["Our army's supplies are cut off again: 4 have deserted."]);
 });
 
 test("a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people", async ({ page }) => {

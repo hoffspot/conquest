@@ -22,6 +22,7 @@ import { ARMY, CAMP, campSite, CLOSE, fullOf, HELD, LEADERS, REINFORCE, WATCH_TU
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { ACROSS_COUNTRY, Roads } from "./roads.js";
+import { DEPOT, HUNGER, SUPPLY } from "./supply.js";
 import { atan2, cos, hypot, sin } from "../exact.js";
 import { landAt } from "../worldplan/plan.js";
 import { WATER } from "../worldplan/terrain.js";
@@ -153,7 +154,7 @@ export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols
 export const TAKEN = 0.25;
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 5;
+export const WAR_VERSION = 6;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -215,7 +216,8 @@ export class War {
          * it thinks of each other realm: grudges below 0, favours above), counsel (a player's,
          * heeded for a while: counsel()), unrest (towards rising, serving or fallen: RISING),
          * alive, stores (what it has to build with: RESOURCES, from its works' convoys), build (a
-         * player's counsel on what to build: { key (forts.js plansFor's), weight, until }) }.
+         * player's counsel on what to build: { key (forts.js plansFor's), weight, until }), depotAt
+         * (the turn its rulers last built a supply depot, or null: supply.js DEPOT.again) }.
          */
         this.realms = RACES.map((race) => {
             const capital = plan.places.find((place) => place.race === race.id && place.kind === "capital");
@@ -236,6 +238,7 @@ export class War {
                 alive: true,
                 stores: noStores(),
                 build: null,
+                depotAt: null,
             };
         });
 
@@ -254,7 +257,7 @@ export class War {
 
         /**
          * The forces out in the world: { id, realm, kind ("army", "reserve", "reinforcement",
-         * "expedition", "envoy", "convoy"), size, at ([x, y] metres), path (the way it's going),
+         * "supply", "expedition", "envoy", "convoy"), size, at ([x, y] metres), path (the way it's going),
          * leg (the point on it it's gone past), target, home (the town it set out from, an army's
          * or reserve's its people's seat; a convoy's works), mission, about, since (the turn it
          * set out) }.
@@ -262,10 +265,15 @@ export class War {
          *   build a camp, or to its camp), "attack" (on what it's attacking: `target`, a town's,
          *   a works', a fortification's or a camp's id), "regroup" (beaten back to its camp, being
          *   made up), "home"; `camp` (the camp it's staged from), `orders` (a player's: { kind,
-         *   about, by }, until they're carried out), `went` (its strength when it went in).
+         *   about, by }, until they're carried out), `went` (its strength when it went in),
+         *   `supply` ({ due: the turn its next wagon's to be sent, missed: how many in a row haven't
+         *   got through }: supply.js).
          * - A reserve: `mission` "home" (at its people's seat), "defend" (`target`: the enemy
          *   army it's going to fall on), "back".
          * - Reinforcements: `target` (the army's or reserve's id they're joining).
+         * - A supply wagon (supply.js): `mission` "army" (`target`: the army it's taking a load to)
+         *   or "depot" (`target`: the depot it's taking a load to); `home` (the seat's or depot's
+         *   id it came from). Its `size` is its guards'.
          * - An expedition, now only to win back its people's works from the wild ("retake").
          * - An envoy's `mission` and `about`; a convoy's `cargo` ({ [resource]: amount }, while it's
          *   carrying) and `back` (going home empty).
@@ -281,6 +289,16 @@ export class War {
          */
         this.camps = [];
         this.nextCamp = 1;
+
+        /**
+         * The supply depots built (supply.js DEPOT): { id, realm, at, guard (those holding it),
+         * built (the turn it was finished: null while it's going up), done (when it will be),
+         * level (the loads it holds), toward (the town or works the camp it was built for was
+         * before), used (the turn it last sent a wagon), by (a player's people whose orders it
+         * was, or null) }.
+         */
+        this.depots = [];
+        this.nextDepot = 1;
 
         /**
          * The fortifications built (forts.js FORTS, docs/WAR.md *Fortifications*): { id, kind
@@ -342,6 +360,11 @@ export class War {
     /** A camp (by its id), or null. */
     camp(id) {
         return this.camps.find((camp) => camp.id === id) ?? null;
+    }
+
+    /** A supply depot (supply.js), by its id, or null. */
+    depot(id) {
+        return this.depots.find((depot) => depot.id === id) ?? null;
     }
 
     /** A people's army (armies.js), or null if it has none raised. */
@@ -431,13 +454,13 @@ export class War {
         return ["self", "allied", "vassal", "overlord"].includes(this.relation(a, b));
     }
 
-    /** A realm's own forces: its garrisons, its works' guards and convoys' at home, those it has out (envoys aside), and its camps'. */
+    /** A realm's own forces: its garrisons, its works' guards and convoys' at home, those it has out (envoys and supply wagons aside), and its camps' and depots'. */
     power(id) {
         return (
             this.towns.filter(({ owner }) => owner === id).reduce((sum, { garrison }) => sum + garrison, 0) +
             this.works.filter(({ owner, held }) => owner === id && !held).reduce((sum, { guard, escort }) => sum + guard + escort, 0) +
-            this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").reduce((sum, { size }) => sum + size, 0) +
-            this.camps.filter(({ realm }) => realm === id).reduce((sum, { guard }) => sum + guard, 0)
+            this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy" && kind !== "supply").reduce((sum, { size }) => sum + size, 0) +
+            [...this.camps, ...this.depots].filter(({ realm }) => realm === id).reduce((sum, { guard }) => sum + guard, 0)
         );
     }
 
@@ -503,6 +526,7 @@ export class War {
 
         this.#march();
         this.#encamp();
+        this.#provision();
         this.#engage();
         this.#replenish();
         this.#assaults();
@@ -520,16 +544,16 @@ export class War {
 
     /**
      * Losses in a fight played out in the world (from M6): a town's garrison, a works' guard, a
-     * camp's guard or a force (by id) loses `count`, brought down by the people `by` (a realm's
-     * id, or null). A town's garrison put down to the last by a people at war with its holders is
-     * theirs (docs/WAR.md *Standing armies*: no other way to take one), held by a few of them
-     * (TAKEN), if the age lets towns of its kind be taken; a camp's, it's razed. Returns how it
-     * went: "taken", "razed", or null.
+     * camp's or a depot's guard or a force (by id) loses `count`, brought down by the people `by`
+     * (a realm's id, or null). A town's garrison put down to the last by a people at war with its
+     * holders is theirs (docs/WAR.md *Standing armies*: no other way to take one), held by a few of
+     * them (TAKEN), if the age lets towns of its kind be taken; a camp's or a depot's, it's razed.
+     * Returns how it went: "taken", "razed", or null.
      */
     loss(id, count, { by = null } = {}) {
         const town = this.town(id);
         const works = town ? null : this.workAt(id);
-        const camp = town || works ? null : this.camp(id);
+        const camp = town || works ? null : (this.camp(id) ?? this.depot(id));
         const force = town || works || camp ? null : this.force(id);
         const lost = Math.max(0, Math.round(count));
 
@@ -547,7 +571,13 @@ export class War {
         } else if (camp) {
             camp.guard = Math.max(0, camp.guard - lost);
 
-            if (camp.guard <= 0 && !this.forces.some((force) => force.kind === "army" && force.camp === camp.id && apart(force.at, camp.at) <= CLOSE.fight)) {
+            if (this.depots.includes(camp)) {
+                if (camp.guard <= 0) {
+                    this.#razeDepot(camp, by, { played: true });
+
+                    return "razed";
+                }
+            } else if (camp.guard <= 0 && !this.forces.some((force) => force.kind === "army" && force.camp === camp.id && apart(force.at, camp.at) <= CLOSE.fight)) {
                 this.#razeCamp(camp, by, { played: true });
 
                 return "razed";
@@ -764,14 +794,19 @@ export class War {
      * - { attack: an id }: to attack an enemy's town, works, fortification or camp within reach
      *   of one of their camps (CAMP.reach), till it's taken or razed, falling back to be made up
      *   as it must;
-     * - { home: true }: back to its seat.
+     * - { home: true }: back to its seat;
+     * - { supply: true }: supplies asked for (docs/WAR.md *Supply*): a wagon sent to it now, from
+     *   the depot nearest it that can supply it or its seat, if none's on its way already;
+     * - { depot: [x, y] }: a supply depot built there, if it's in another people's lands and they
+     *   can pay for it (supply.js DEPOT).
      * `by`: the player's people (whose orders they were, for the news). Returns whether they could
      * be given.
      */
     order(id, orders, { by = null } = {}) {
         const realm = this.realm(id);
-        const [kind, about] = Object.entries(orders ?? {}).find(([key]) => ["raise", "disband", "camp", "attack", "home"].includes(key)) ?? [];
+        const [kind, about] = Object.entries(orders ?? {}).find(([key]) => ["raise", "disband", "camp", "attack", "home", "supply", "depot"].includes(key)) ?? [];
         const army = this.armyOf(id);
+        const point = (value) => (Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) ? [Math.round(value[0]), Math.round(value[1])] : null);
 
         if (!realm?.alive || !kind) {
             return false;
@@ -787,6 +822,16 @@ export class War {
             return true;
         }
 
+        if (kind === "depot") {
+            const depot = point(about) && this.#buildDepot(realm, point(about), { by, ordered: true });
+
+            if (depot) {
+                this.#emit("ordered", { realm: id, depot: depot.id, by });
+            }
+
+            return Boolean(depot);
+        }
+
         if (!army) {
             return false;
         }
@@ -797,8 +842,18 @@ export class War {
             return true;
         }
 
+        if (kind === "supply") {
+            const sent = army.mission !== "muster" && this.#feed(army, { now: true });
+
+            if (sent) {
+                this.#emit("ordered", { realm: id, army: army.id, supply: true, by });
+            }
+
+            return sent;
+        }
+
         if (kind === "camp") {
-            const at = Array.isArray(about) && about.length === 2 && about.every(Number.isFinite) ? [Math.round(about[0]), Math.round(about[1])] : null;
+            const at = point(about);
 
             if (!at) {
                 return false;
@@ -1010,6 +1065,8 @@ export class War {
             nextFort: this.nextFort,
             camps: this.camps,
             nextCamp: this.nextCamp,
+            depots: this.depots,
+            nextDepot: this.nextDepot,
             relations: this.relations,
             known: this.known,
             victor: this.victor,
@@ -1021,7 +1078,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4].includes(snapshot.version)) {
+        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -1046,6 +1103,7 @@ export class War {
         for (const realm of war.realms) {
             realm.stores ??= noStores();
             realm.build ??= null;
+            realm.depotAt ??= null;
         }
 
         // (A war kept before the fortifications (version 2 or before) has none; before their squads
@@ -1054,6 +1112,8 @@ export class War {
         war.nextFort = kept.nextFort ?? 1;
         war.camps = kept.camps ?? [];
         war.nextCamp = kept.nextCamp ?? 1;
+        war.depots = kept.depots ?? [];
+        war.nextDepot = kept.nextDepot ?? 1;
 
         // (A war kept before the standing armies (version 4 or before): its expeditions against
         // towns and works, its camps and its relief all home in their garrisons, and each people's
@@ -1072,6 +1132,12 @@ export class War {
             for (const realm of war.realms.filter(({ alive }) => alive)) {
                 war.#reserveFor(realm);
             }
+        }
+
+        // (A war kept before the armies' supply (version 5 or before): each army's next wagon due
+        // a while from now, none missed)
+        for (const army of war.forces.filter(({ kind }) => kind === "army")) {
+            army.supply ??= { due: war.turn + SUPPLY.every, missed: 0 };
         }
 
         return war;
@@ -1212,6 +1278,7 @@ export class War {
             this.#defend(each);
             this.#retake(each);
             this.#command(each, realm);
+            this.#depotFor(each);
         }
     }
 
@@ -1639,6 +1706,8 @@ export class War {
                 this.#onReserve(force);
             } else if (force.kind === "reinforcement") {
                 this.#onReinforcement(force);
+            } else if (force.kind === "supply") {
+                this.#onWagon(force);
             } else if (force.kind === "expedition") {
                 this.#go(force, SPEEDS.march);
                 this.#onExpedition(force);
@@ -1920,7 +1989,7 @@ export class War {
             return null;
         }
 
-        const army = { id: `force-${this.nextForce++}`, realm: realm.id, kind: "army", size: 0, at: [...seat.at], path: [[...seat.at]], leg: 0, target: null, home: seat.id, mission: "muster", about: null, camp: null, orders: null, went: 0, arrived: null, since: this.turn };
+        const army = { id: `force-${this.nextForce++}`, realm: realm.id, kind: "army", size: 0, at: [...seat.at], path: [[...seat.at]], leg: 0, target: null, home: seat.id, mission: "muster", about: null, camp: null, orders: null, went: 0, arrived: null, supply: { due: this.turn + SUPPLY.every, missed: 0 }, since: this.turn };
 
         this.forces.push(army);
         this.#emit("raised", { realm: realm.id, army: army.id, by });
@@ -2046,7 +2115,8 @@ export class War {
     }
 
     // Something of an enemy's an army can attack, by its id: { kind ("town", "works", "fort",
-    // "camp"), realm (whose it is), at, edge (how far its ground reaches from there), thing }, or null
+    // "camp", "depot"), realm (whose it is), at, edge (how far its ground reaches from there),
+    // thing }, or null
     #targetOf(id) {
         const town = this.town(id);
 
@@ -2068,7 +2138,13 @@ export class War {
 
         const camp = this.camp(id);
 
-        return camp ? { kind: "camp", realm: camp.realm, at: camp.at, edge: 0, thing: camp } : null;
+        if (camp) {
+            return { kind: "camp", realm: camp.realm, at: camp.at, edge: 0, thing: camp };
+        }
+
+        const depot = this.depot(id);
+
+        return depot ? { kind: "depot", realm: depot.realm, at: depot.at, edge: 0, thing: depot } : null;
     }
 
     // A people's camp (built, or going up) with something within its reach (CAMP.reach, of the
@@ -2447,15 +2523,17 @@ export class War {
 
     // A pair of a camp's skirmishers out against the nearest of the enemy's within reach
     // (CAMP.skirmish): a town's garrison (its taxes lost for a turn; never its last), a works'
-    // guard, an army, a reserve, reinforcements, a convoy, a camp. Each of them may bring one down,
-    // or be lost
+    // guard, an army, a reserve, reinforcements, a supply wagon (taken, its guards down), a convoy,
+    // a camp, a supply depot (a load carried off, or one of its guard). Each of them may bring one
+    // down, or be lost
     #skirmish(camp) {
         const enemy = (realm) => this.hostile(camp.realm, realm);
         const targets = [
-            ...this.towns.filter((town) => enemy(town.owner) && town.garrison > 1).map((town) => ({ id: town.id, realm: town.owner, at: town.at, hit: () => ((town.garrison -= 1), (town.raidedAt = this.turn)) })),
-            ...this.works.filter((works) => !works.held && enemy(works.owner) && works.guard > 0).map((works) => ({ id: works.id, realm: works.owner, at: works.at, hit: () => (works.guard -= 1) })),
-            ...this.forces.filter((force) => ["army", "reserve", "reinforcement", "convoy"].includes(force.kind) && enemy(force.realm) && force.size > 0).map((force) => ({ id: force.id, realm: force.realm, at: force.at, hit: () => (force.size -= 1) })),
-            ...this.camps.filter((other) => other !== camp && enemy(other.realm) && other.guard > 1).map((other) => ({ id: other.id, realm: other.realm, at: other.at, hit: () => (other.guard -= 1) })),
+            ...this.towns.filter((town) => enemy(town.owner) && town.garrison > 1).map((town) => ({ id: town.id, kind: "town", realm: town.owner, at: town.at, hit: () => ((town.garrison -= 1), (town.raidedAt = this.turn)) })),
+            ...this.works.filter((works) => !works.held && enemy(works.owner) && works.guard > 0).map((works) => ({ id: works.id, kind: "works", realm: works.owner, at: works.at, hit: () => (works.guard -= 1) })),
+            ...this.forces.filter((force) => ["army", "reserve", "reinforcement", "convoy", "supply"].includes(force.kind) && enemy(force.realm) && force.size > 0).map((force) => ({ id: force.id, kind: force.kind, realm: force.realm, at: force.at, hit: () => (force.size -= 1) })),
+            ...this.camps.filter((other) => other !== camp && enemy(other.realm) && other.guard > 1).map((other) => ({ id: other.id, kind: "camp", realm: other.realm, at: other.at, hit: () => (other.guard -= 1) })),
+            ...this.depots.filter((depot) => enemy(depot.realm) && (depot.level > 0 || depot.guard > 1)).map((depot) => ({ id: depot.id, kind: "depot", realm: depot.realm, at: depot.at, hit: () => (depot.level > 0 ? (depot.level -= 1) : (depot.guard -= 1)) })),
         ].filter(({ id, at }) => apart(at, camp.at) <= CAMP.skirmish && !this.watched.has(id));
         const target = targets.sort((a, b) => apart(a.at, camp.at) - apart(b.at, camp.at) || (a.id < b.id ? -1 : 1))[0];
 
@@ -2478,12 +2556,20 @@ export class War {
 
         camp.guard -= lost;
         this.remember(target.realm, camp.realm, -1);
-        this.#emit("skirmish", { realm: camp.realm, camp: camp.id, against: target.realm, target: target.id, killed, lost });
+        this.#emit("skirmish", { realm: camp.realm, camp: camp.id, against: target.realm, target: target.id, kind: target.kind, killed, lost });
+
+        // (A supply wagon's guards put down: it's taken)
+        const wagon = this.force(target.id);
+
+        if (wagon?.kind === "supply" && wagon.size <= 0) {
+            this.#wagonLost(wagon, camp.realm);
+        }
     }
 
     // A people's reserve this turn: out against the enemy army nearest it in its people's own lands
     // (within CLOSE.threat of one of their towns: never beyond), one attacking one of them first, if
-    // it's not much the weaker; home to its seat again once there's none
+    // it's not much the weaker; with none, against an enemy's supply depot there; home to its seat
+    // again once there's neither
     #defend(realm) {
         const reserve = this.reserveOf(realm.id);
 
@@ -2505,6 +2591,17 @@ export class War {
             return;
         }
 
+        // (No army: an enemy's supply depot in its lands, the nearest, if it's stronger than its guard)
+        const depot = this.depots
+            .filter((each) => this.hostile(each.realm, realm.id) && towns.some((town) => apart(town.at, each.at) <= CLOSE.threat) && reserve.size > each.guard * 1.5)
+            .sort((a, b) => apart(a.at, reserve.at) - apart(b.at, reserve.at) || (a.id < b.id ? -1 : 1))[0];
+
+        if (!threat && depot) {
+            Object.assign(reserve, { mission: "defend", target: depot.id, path: [[...reserve.at], [...depot.at]], leg: 0 });
+
+            return;
+        }
+
         const seat = this.town(realm.seat);
 
         if (seat && (reserve.mission === "defend" || reserve.home !== seat.id)) {
@@ -2521,8 +2618,269 @@ export class War {
         }
     }
 
+    // --- The armies' supply (supply.js; docs/WAR.md *Supply*) ---
+
+    // The supply this turn: each depot going up finished once it's stood long enough (its first
+    // loads in it); each one short of loads sent one from the nearest seat of its people's or a
+    // friend's, if they can pay for it; each army in the field sent its wagon when it's due (#feed).
+    // An army mustering at its seat is fed there. A depot of a fallen people is abandoned; one no
+    // army's drawn on a while (DEPOT.idle), struck
+    #provision() {
+        for (const depot of [...this.depots]) {
+            const realm = this.realm(depot.realm);
+
+            if (!realm?.alive) {
+                this.#razeDepot(depot, null, { abandoned: true });
+                continue;
+            }
+
+            if (depot.built === null) {
+                if (this.turn >= depot.done) {
+                    Object.assign(depot, { built: this.turn, level: DEPOT.start, used: this.turn });
+                    this.#emit("depot", { realm: depot.realm, depot: depot.id, at: [...depot.at], toward: depot.toward, by: depot.by });
+                }
+
+                continue;
+            }
+
+            if (this.turn - depot.used > DEPOT.idle) {
+                this.#strikeDepot(depot);
+                continue;
+            }
+
+            if (depot.level >= DEPOT.most || this.#wagonFor(depot.id) || realm.treasury < SUPPLY.cost) {
+                continue;
+            }
+
+            const seat = this.realms
+                .filter((other) => other.alive && this.friendly(depot.realm, other.id) && this.town(other.seat)?.owner === other.id)
+                .map((other) => this.town(other.seat))
+                .sort((a, b) => apart(a.at, depot.at) - apart(b.at, depot.at) || (a.id < b.id ? -1 : 1))[0];
+
+            if (seat) {
+                realm.treasury -= SUPPLY.cost;
+                this.#wagon(depot.realm, seat, depot, "depot");
+            }
+        }
+
+        for (const army of this.forces.filter(({ kind }) => kind === "army")) {
+            army.supply ??= { due: this.turn + SUPPLY.every, missed: 0 };
+
+            if (army.mission === "muster") {
+                army.supply = { due: this.turn + SUPPLY.every, missed: 0 };
+            } else {
+                this.#feed(army);
+            }
+        }
+    }
+
+    // An army's wagon, if it's due (or asked for `now`) and none's on its way: from the nearest depot
+    // that can supply it (one of its loads), or its seat (SUPPLY.cost of its people's gold). None
+    // sent when it's due (no gold, or neither to send it from) is a load that didn't get through
+    // (#hunger). Whether one was sent
+    #feed(army, { now = false } = {}) {
+        if (this.#wagonFor(army.id) || (!now && this.turn < army.supply.due)) {
+            return false;
+        }
+
+        const realm = this.realm(army.realm);
+        const source = this.#sourceFor(army);
+        const paid = source?.depot || (source?.seat && realm.treasury >= SUPPLY.cost);
+
+        if (!paid) {
+            if (!now) {
+                army.supply.due = this.turn + SUPPLY.every;
+                this.#hunger(army, { why: source ? "unpaid" : "cut off" });
+            }
+
+            return false;
+        }
+
+        if (source.depot) {
+            source.depot.level -= 1;
+            source.depot.used = this.turn;
+        } else {
+            realm.treasury -= SUPPLY.cost;
+        }
+
+        army.supply.due = this.turn + SUPPLY.every;
+        this.#wagon(army.realm, source.depot ?? source.seat, army, "army");
+
+        return true;
+    }
+
+    // Where an army's next wagon is to come from: the nearest depot within reach of it that can
+    // supply it (its people's, its liege's or a fellow vassal's: up, with a load in it, nearer it
+    // than its seat), else its people's seat while it's theirs: { depot } or { seat }, or null
+    #sourceFor(army) {
+        const seat = this.town(this.realm(army.realm)?.seat);
+        const home = seat?.owner === army.realm ? seat : null;
+        const fromSeat = home ? apart(home.at, army.at) : Infinity;
+        const depot = this.depots
+            .filter((each) => each.built !== null && each.level >= 1 && this.liege(each.realm) === this.liege(army.realm) && apart(each.at, army.at) <= Math.min(DEPOT.reach, fromSeat))
+            .sort((a, b) => apart(a.at, army.at) - apart(b.at, army.at) || (a.id < b.id ? -1 : 1))[0];
+
+        return depot ? { depot } : home ? { seat: home } : null;
+    }
+
+    // The supply wagon on its way to an army or a depot (by its id), if there is one
+    #wagonFor(id) {
+        return this.forces.find((force) => force.kind === "supply" && force.target === id) ?? null;
+    }
+
+    // A supply wagon sent from a seat or a depot (`from`) to an army or a depot (`to`, "army" or
+    // "depot"), its guards beside it
+    #wagon(realm, from, to, mission) {
+        this.forces.push({ id: `force-${this.nextForce++}`, realm, kind: "supply", size: SUPPLY.guards, at: [...from.at], path: [[...from.at], [...to.at]], leg: 0, target: to.id, home: from.id, mission, about: null, since: this.turn });
+    }
+
+    // A supply wagon on its way: straight for its army (or depot) where it is now; there, its load's
+    // theirs (an army's hunger over, a depot's loads one more). Its army or depot gone, it's gone too
+    #onWagon(wagon) {
+        const to = wagon.mission === "depot" ? this.depot(wagon.target) : this.force(wagon.target);
+
+        if (!to) {
+            this.forces.splice(this.forces.indexOf(wagon), 1);
+
+            return;
+        }
+
+        Object.assign(wagon, { path: [[...wagon.at], [...to.at]], leg: 0 });
+        this.#go(wagon, SUPPLY.speed);
+
+        if (apart(wagon.at, to.at) > SUPPLY.reach) {
+            return;
+        }
+
+        this.forces.splice(this.forces.indexOf(wagon), 1);
+
+        if (wagon.mission === "depot") {
+            to.level = Math.min(DEPOT.most, to.level + 1);
+            this.#emit("provisioned", { realm: wagon.realm, depot: to.id });
+        } else {
+            to.supply.missed = 0;
+            this.#emit("supplied", { realm: wagon.realm, army: to.id, from: wagon.home });
+        }
+    }
+
+    // A supply wagon fallen on (by an enemy people, `by`, or the wild's brigands, `faction`): taken,
+    // and for its army, a load that didn't get through (#hunger)
+    #wagonLost(wagon, by, { faction = null } = {}) {
+        this.forces.splice(this.forces.indexOf(wagon), 1);
+        this.#emit("wagonLost", { realm: wagon.realm, by, faction, [wagon.mission]: wagon.target, at: [...wagon.at] });
+
+        if (by) {
+            this.remember(wagon.realm, by, -2);
+        }
+
+        const army = wagon.mission === "army" ? this.force(wagon.target) : null;
+
+        if (army) {
+            this.#hunger(army, { why: "lost", by });
+        }
+    }
+
+    // An army whose load hasn't got through (lost on the way, or none sent): one more in a row. At
+    // the first, its people are alerted; then a share of it deserts (HUNGER); at the last, the rest
+    // go too, and the army's broken up
+    #hunger(army, { why, by = null }) {
+        const missed = ++army.supply.missed;
+
+        if (missed >= HUNGER.length) {
+            this.forces.splice(this.forces.indexOf(army), 1);
+            this.#emit("starved", { realm: army.realm, army: army.id, deserted: army.size, at: [...army.at] });
+
+            return;
+        }
+
+        const deserted = Math.round(army.size * HUNGER[missed - 1]);
+
+        army.size -= deserted;
+        this.#emit("unsupplied", { realm: army.realm, army: army.id, missed, deserted, why, by });
+    }
+
+    // A people's rulers' supply depot for their army, at war and in the field: built once its camp's
+    // up further than DEPOT.far from their seat with none of theirs (or a friend's under the same
+    // liege) in reach of it, DEPOT.back behind it towards home, if that's in another people's lands
+    // and they can pay for it and its guard, keeping something back; not again for a while
+    // (DEPOT.again: `depotAt`, the turn they last did)
+    #depotFor(realm) {
+        const army = this.armyOf(realm.id);
+        const camp = army && !["muster", "home"].includes(army.mission) && this.enemiesOf(this.liege(realm.id)).length > 0 && this.camp(army.camp);
+        const seat = this.town(realm.seat);
+
+        if (!camp || camp.built === null || seat?.owner !== realm.id || apart(camp.at, seat.at) <= DEPOT.far || this.turn - (realm.depotAt ?? -Infinity) < DEPOT.again) {
+            return;
+        }
+
+        if (this.depots.some((each) => this.liege(each.realm) === this.liege(realm.id) && apart(each.at, camp.at) <= DEPOT.reach)) {
+            return;
+        }
+
+        if (realm.treasury < DEPOT.cost + DEPOT.guard * COSTS.troop + COSTS.troop * 4) {
+            return;
+        }
+
+        if (this.#buildDepot(realm, this.#siteFor(seat.at, camp.at, DEPOT.back), { toward: camp.toward })) {
+            realm.depotAt = this.turn;
+        }
+    }
+
+    // A supply depot built at a point by a people (by their rulers, or a player's orders: `ordered`,
+    // by `by`'s people), if it's in another people's lands (the nearest town to it isn't theirs, nor
+    // a friend's), they have fewer than they may keep (DEPOT.per; for their rulers, the oldest
+    // struck otherwise), and they can pay for it and its guard. The depot, going up; or null
+    #buildDepot(realm, at, { by = null, toward = null, ordered = false } = {}) {
+        const nearest = this.towns.reduce((best, town) => (!best || apart(town.at, at) < apart(best.at, at) ? town : best), null);
+        const cost = DEPOT.cost + DEPOT.guard * COSTS.troop;
+        const mine = this.depots.filter((each) => each.realm === realm.id).sort((a, b) => a.used - b.used || (a.id < b.id ? -1 : 1));
+
+        if (!nearest || this.friendly(realm.id, nearest.owner) || realm.treasury < cost || (ordered && mine.length >= DEPOT.per)) {
+            return null;
+        }
+
+        if (mine.length >= DEPOT.per) {
+            this.#strikeDepot(mine[0]);
+        }
+
+        const depot = { id: `depot-${this.nextDepot++}`, realm: realm.id, at: [...at], guard: DEPOT.guard, built: null, done: this.turn + DEPOT.build, level: 0, toward, used: this.turn, by };
+
+        realm.treasury -= cost;
+        this.depots.push(depot);
+
+        return depot;
+    }
+
+    // A depot struck by its own people (one too many): its guard back into the nearest of their towns
+    #strikeDepot(depot) {
+        const home = this.#nearestOwn(depot.realm, depot.at);
+
+        if (home) {
+            home.garrison = Math.min(Math.round(HOLDINGS[home.kind].garrison * 1.5), home.garrison + depot.guard);
+        }
+
+        this.depots.splice(this.depots.indexOf(depot), 1);
+        this.#emit("struck", { realm: depot.realm, depot: depot.id, at: [...depot.at] });
+    }
+
+    // A depot razed by an enemy (`by`, a realm's id, or null), or given up by a fallen people: what's
+    // in it lost
+    #razeDepot(depot, by, { abandoned = false, played = false } = {}) {
+        if (!this.depots.includes(depot)) {
+            return;
+        }
+
+        this.depots.splice(this.depots.indexOf(depot), 1);
+        this.#emit(abandoned ? "abandoned" : "razed", { depot: depot.id, kind: "depot", realm: depot.realm, at: [...depot.at], about: depot.toward, by: by ?? null, ...(played ? { played } : {}) });
+
+        if (by && this.realm(by)) {
+            this.remember(depot.realm, by, -4);
+        }
+    }
+
     // The fighting this turn: each army and reserve upon an enemy's (within CLOSE.fight) fights it,
-    // and the beaten falls back; reinforcements caught by an enemy army are fallen on; then each
+    // and the beaten falls back; supply wagons caught by an enemy army or reserve are taken, and
+    // depots it's upon fallen on; reinforcements caught by an enemy army are fallen on; then each
     // army attacking what it's after once it's there (not one a player's near, a while:
     // WATCH_TURNS). An army mustering at its seat is within its walls, not in the field: it fights
     // only beside its garrison, if the seat's stormed (#attack)
@@ -2533,6 +2891,32 @@ export class War {
             for (const b of fighters()) {
                 if (a.id < b.id && this.forces.includes(a) && this.forces.includes(b) && a.size > 0 && b.size > 0 && (a.kind === "army" || b.kind === "army") && !this.#fleeing(a) && !this.#fleeing(b) && this.hostile(a.realm, b.realm) && apart(a.at, b.at) <= CLOSE.fight) {
                     this.#battle(a.kind === "reserve" ? b : a, a.kind === "reserve" ? a : b);
+                }
+            }
+        }
+
+        // (A supply wagon caught by an enemy army or reserve: taken)
+        for (const wagon of this.forces.filter(({ kind, id }) => kind === "supply" && !this.watched.has(id))) {
+            const by = fighters().find((force) => !this.#fleeing(force) && this.hostile(force.realm, wagon.realm) && apart(force.at, wagon.at) <= CLOSE.fight);
+
+            if (by) {
+                this.#wagonLost(wagon, by.realm);
+            }
+        }
+
+        // (A supply depot an enemy army or reserve is upon: its guard fought; put down, it's razed)
+        for (const depot of [...this.depots]) {
+            const by = !this.watched.has(depot.id) && fighters().find((force) => !this.#fleeing(force) && this.hostile(force.realm, depot.realm) && apart(force.at, depot.at) <= CLOSE.fight);
+
+            if (by && this.depots.includes(depot)) {
+                const { attackers, defenders } = this.#fight(by.size, depot.guard, 1);
+
+                this.#emit("battle", { realm: by.realm, against: depot.realm, depot: depot.id, at: [...depot.at], won: defenders === 0, killed: depot.guard - defenders, lost: by.size - attackers, [by.kind]: by.id });
+                by.size = attackers;
+                depot.guard = defenders;
+
+                if (!defenders) {
+                    this.#razeDepot(depot, by.realm);
                 }
             }
         }
@@ -2636,7 +3020,7 @@ export class War {
     // - a works: its guard; put down, it's seized;
     // - a fortification: battered (FORT_SIEGE), its defenders bringing some of the army down;
     //   razed at nothing;
-    // - a camp: its guard; put down, it's razed.
+    // - a camp or a supply depot: its guard; put down, it's razed.
     // Beaten back below what it went in with by too much (ARMY.regroup), the army falls back to its
     // camp to be made up, and comes back to it after (#command)
     #attack(army, { kind, thing }) {
@@ -2726,12 +3110,17 @@ export class War {
         } else {
             const { attackers, defenders } = this.#fight(army.size, thing.guard, 1);
 
-            this.#emit("battle", { realm: army.realm, against: thing.realm, camp: thing.id, at: [...thing.at], won: defenders === 0, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
+            this.#emit("battle", { realm: army.realm, against: thing.realm, [kind]: thing.id, at: [...thing.at], won: defenders === 0, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
             army.size = attackers;
             thing.guard = defenders;
 
             if (!defenders) {
-                this.#razeCamp(thing, army.realm);
+                if (kind === "depot") {
+                    this.#razeDepot(thing, army.realm);
+                } else {
+                    this.#razeCamp(thing, army.realm);
+                }
+
                 this.#done(army);
 
                 return;
@@ -2919,8 +3308,18 @@ export class War {
 
     // Convoys on the roads may be fallen on (not those a player's near): by an enemy's forces
     // passing (the more warlike, the likelier), who carry off half of what it carried; or by the
-    // brigands of a wild camp near its way, who carry off the lot
+    // brigands of a wild camp near its way, who carry off the lot. So may supply wagons: taken
     #ambush() {
+        for (const wagon of this.forces.filter(({ kind, id }) => kind === "supply" && !this.watched.has(id))) {
+            const by = this.forces.find((force) => FIGHTING.includes(force.kind) && force.size > 0 && this.hostile(force.realm, wagon.realm) && apart(force.at, wagon.at) <= REACH.waylay);
+            const camp = by ? null : this.plan.camps.find((each) => BRIGANDS.includes(each.faction) && apart(each.at, wagon.at) <= REACH.ambush);
+            const chance = by ? this.realm(this.liege(by.realm)).leader.traits.aggression * 0.5 : camp ? AMBUSH : 0;
+
+            if (chance && this.random.chance(chance)) {
+                this.#wagonLost(wagon, by?.realm ?? null, { faction: camp?.faction ?? null });
+            }
+        }
+
         for (const convoy of this.forces.filter(({ kind, id }) => kind === "convoy" && !this.watched.has(id))) {
             if (!convoy.cargo) {
                 continue;

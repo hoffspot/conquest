@@ -5426,6 +5426,24 @@ export class Game {
         }
     }
 
+    // The player's people's army's supplies not getting through (docs/WAR.md *Supply*): told, to a
+    // Knight or above (who counsel where it marches, and from a Lord order it)
+    #supplyCut({ type, realm, missed, deserted, why }) {
+        if (!["unsupplied", "starved"].includes(type) || realm !== this.self?.realm || this.standing.rank() < OPENS.march) {
+            return;
+        }
+
+        const said =
+            type === "starved"
+                ? "Our army's supplies were cut off too long: it has broken up."
+                : missed === 1
+                  ? `Our army's supplies haven't got through${why === "unpaid" ? ": there's no gold to pay for them" : why === "cut off" ? ": there's nowhere to send them from" : ""}.`
+                  : `Our army's supplies are cut off again: ${deserted} have deserted.`;
+
+        this.hud.message(said, 4);
+        this.sound?.play("newsHeard");
+    }
+
     // An envoy near the player at the end of their road, or waylaid on it: the player told
     #envoyed({ people, to, over, by }) {
         const theirs = `The ${ADJECTIVES[people] ?? people} envoy`;
@@ -6250,6 +6268,7 @@ export class Game {
                     this.chunks?.redraw(footprintOf({ kind: event.event.kind, at: event.event.at }, CLEARING));
                 }
 
+                this.#supplyCut(event.event);
                 break;
             case "fortOut":
                 // (A fortification near the player stood up in the battle: stood in for, its bar over it)

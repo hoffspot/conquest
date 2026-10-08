@@ -5,10 +5,11 @@
 //   ringed in red where brigands hold them;
 // - each people's fortifications: guard towers and forward garrisons, how strong each stands;
 // - the forces out: each people's army (on the march, at its camp, attacking) and reserve, the
-//   reinforcements on their way to them, the armies' camps, bands winning back their works from
-//   the wild, envoys, and convoys carrying the works' goods to their seats;
+//   reinforcements on their way to them, the armies' camps, their supply depots and the wagons
+//   taking them their loads, bands winning back their works from the wild, envoys, and convoys
+//   carrying the works' goods to their seats;
 // - each realm, its ruler and what they're like, what it holds, its gold and its stores, its army
-//   and reserve and camps;
+//   (and how its supply goes) and reserve, camps and depots;
 // - how each stands with each other;
 // - the news of it all.
 //
@@ -22,6 +23,7 @@ import { describeLeader } from "../core/war/peoples.js";
 import { FORTS } from "../core/war/forts.js";
 import { peopleOf, tell } from "../core/war/news.js";
 import { HOLDINGS, RESOURCES, STAGES, War } from "../core/war/war.js";
+import { DEPOT } from "../core/war/supply.js";
 import { CELL, planWorld, RACES, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { paintLand, PEOPLE_COLOURS, PIXELS } from "./land.js";
 
@@ -34,8 +36,9 @@ const DOT = { capital: 7, city: 5.5, town: 4, village: 3 };
 // Each kind of works' letter on the map
 const WORKS_LETTERS = { "lumber mill": "L", mine: "M", quarry: "Q" };
 
-// What's too everyday for the news (each works' convoys coming in: seen in the realms' stores)
-const QUIET = new Set(["delivered"]);
+// What's too everyday for the news (each works' convoys coming in: seen in the realms' stores; the
+// armies' and depots' supplies getting through)
+const QUIET = new Set(["delivered", "supplied", "provisioned"]);
 
 // The events worth making much of in the news
 const BIG = new Set(["declared", "taken", "subjugated", "rebelled", "victory", "undone", "stage", "fallen"]);
@@ -125,8 +128,8 @@ function draw() {
         const colour = PEOPLE_COLOURS[force.realm];
 
         if (force.leg < force.path.length - 1 && (force.kind !== "reserve" || force.size > 0)) {
-            context.strokeStyle = `${colour}${force.kind === "convoy" || force.kind === "reinforcement" ? "66" : "aa"}`;
-            context.setLineDash(force.kind === "envoy" || force.kind === "convoy" || force.kind === "reinforcement" ? [2, 4] : [6, 4]);
+            context.strokeStyle = `${colour}${force.kind === "convoy" || force.kind === "reinforcement" || force.kind === "supply" ? "66" : "aa"}`;
+            context.setLineDash(force.kind === "envoy" || force.kind === "convoy" || force.kind === "reinforcement" || force.kind === "supply" ? [2, 4] : [6, 4]);
             context.beginPath();
             context.moveTo(...toScreen(...force.at));
 
@@ -265,8 +268,30 @@ function draw() {
         context.stroke();
     }
 
+    // The supply depots as crates (hollow while they're going up)
+    for (const depot of war.depots ?? []) {
+        const [sx, sy] = toScreen(...depot.at);
+        const size = 4.5;
+
+        context.fillStyle = PEOPLE_COLOURS[depot.realm];
+        context.strokeStyle = depot.built === null ? PEOPLE_COLOURS[depot.realm] : "#101418";
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.rect(sx - size, sy - size, size * 2, size * 2);
+
+        if (depot.built !== null) {
+            context.fill();
+        }
+
+        context.moveTo(sx - size, sy - size);
+        context.lineTo(sx + size, sy + size);
+        context.moveTo(sx + size, sy - size);
+        context.lineTo(sx - size, sy + size);
+        context.stroke();
+    }
+
     // The forces themselves: armies and bands as shields, reserves as banners, reinforcements as
-    // dots, envoys as scrolls, convoys as wagons
+    // dots, envoys as scrolls, convoys as wagons, supply wagons as smaller ones
     for (const force of war.forces) {
         const [sx, sy] = toScreen(...force.at);
         const colour = PEOPLE_COLOURS[force.realm];
@@ -290,6 +315,10 @@ function draw() {
             context.lineTo(sx - size, sy + size * 1.6);
         } else if (force.kind === "envoy") {
             context.rect(sx - 3, sy - 4, 6, 8);
+        } else if (force.kind === "supply") {
+            context.rect(sx - 3.5, sy - 2.5, 7, 4);
+            context.moveTo(sx + 1, sy + 2.5);
+            context.arc(sx, sy + 2.5, 1, 0, Math.PI * 2);
         } else if (force.kind === "convoy") {
             context.rect(sx - 5, sy - 3, 10, 5);
             context.moveTo(sx - 1.5, sy + 3.5);
@@ -310,7 +339,7 @@ function draw() {
         context.fill();
         context.stroke();
 
-        if (force.kind !== "envoy" && force.kind !== "convoy" && force.kind !== "reinforcement") {
+        if (!["envoy", "convoy", "reinforcement", "supply"].includes(force.kind)) {
             context.font = "bold 10px system-ui, sans-serif";
             context.lineWidth = 3;
             context.strokeStyle = "rgb(10 12 14 / 85%)";
@@ -336,13 +365,16 @@ function forted(id) {
     return said.join(" · ");
 }
 
-// A realm's army and reserve, in words: "Army 56 of 80, attacking · Reserve 80 of 80 · 2 camps"
+// A realm's army and reserve, in words: "Army 56 of 80, attacking, 1 load missed · Reserve 80 of 80
+// · 2 camps · 1 depot"
 function armed(id) {
     const { war } = state;
     const [army, reserve, full] = [war.armyOf(id), war.reserveOf(id), war.fullOf(id)];
     const camps = war.camps.filter(({ realm }) => realm === id).length;
+    const depots = (war.depots ?? []).filter(({ realm }) => realm === id).length;
+    const missed = army?.supply?.missed ? `, ${army.supply.missed} load${army.supply.missed === 1 ? "" : "s"} missed` : "";
 
-    return [army ? `Army ${army.size} of ${full}, ${DOING[army.mission] ?? army.mission}` : "No army raised", `Reserve ${reserve?.size ?? 0} of ${full}`, `${camps} camp${camps === 1 ? "" : "s"}`].join(" · ");
+    return [army ? `Army ${army.size} of ${full}, ${DOING[army.mission] ?? army.mission}${missed}` : "No army raised", `Reserve ${reserve?.size ?? 0} of ${full}`, `${camps} camp${camps === 1 ? "" : "s"}`, `${depots} depot${depots === 1 ? "" : "s"}`].join(" · ");
 }
 
 // What an army's doing, in words (war.js forces' missions)
@@ -495,6 +527,10 @@ function describe(sx, sy) {
         lines.push(`The ${own(camp.realm)} camp${camp.built === null ? " going up" : ""}: ${camp.guard} holding it`);
     }
 
+    for (const depot of near(war.depots ?? [])) {
+        lines.push(`The ${own(depot.realm)} supply depot${depot.built === null ? " going up" : ""}: ${depot.guard} holding it, ${depot.level} of ${DEPOT.most} loads`);
+    }
+
     for (const force of near(war.forces)) {
         const works = war.workAt(force.target);
         const target = war.town(force.target)?.name ?? (works ? `the ${works.name} ${works.kind}` : force.kind === "envoy" ? `the ${peopleOf(force.target)}` : war.fort?.(force.target) ? "a fortification" : "a camp");
@@ -502,11 +538,12 @@ function describe(sx, sy) {
         const carrying = Object.entries(force.cargo ?? {}).map(([resource, amount]) => `${Math.floor(amount)} ${resource}`).join(", ");
         const what = {
             army: force.mission === "attack" ? `the army, attacking ${target}` : force.mission === "camp" && force.target ? `the army, going to camp within a march of ${target}` : `the army, ${DOING[force.mission] ?? force.mission}`,
-            reserve: force.mission === "defend" ? "the reserve, out against an enemy army" : "the reserve",
+            reserve: force.mission === "defend" ? `the reserve, out against an enemy ${war.depot?.(force.target) ? "supply depot" : "army"}` : "the reserve",
             reinforcement: `on their way to join their ${war.force(force.target)?.kind ?? "army"}`,
             expedition: `going to win back ${target}`,
             envoy: `an envoy to ${target}`,
             convoy: force.back ? `a convoy going back to the ${home?.name} ${home?.kind}` : `a convoy carrying ${carrying} to ${target}`,
+            supply: `a supply wagon taking a load to their ${force.mission === "depot" ? "depot" : "army"}`,
         }[force.kind];
 
         lines.push(`The ${own(force.realm)} ${force.kind === "envoy" ? what : `${force.size}, ${what}`}`);

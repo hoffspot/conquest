@@ -614,7 +614,14 @@ describe("the works in the war (core/war: docs/WAR.md *The works*)", () => {
             town.garrison = 500;
         }
 
-        const events = play(war, 90);
+        // (Kept at war: no truce before they get there)
+        const events = [];
+
+        for (let k = 0; k < 90; k++) {
+            atWar(war, "human", "darkElf");
+            events.push(...play(war, 1));
+        }
+
         const seized = events.find(({ type, to }) => type === "seized" && to === "human");
 
         assert.ok(events.some(({ type, realm, target }) => type === "marched" && realm === "human" && theirs.some(({ id }) => id === target)), "marched on their works");

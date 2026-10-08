@@ -46,8 +46,9 @@ Each people is a **realm**. It holds:
   with a **garrison** in keeping with its size and **patrols** on the roads round it;
 - **its treasury**: taxes from every town it holds, paid in each turn;
 - **its standing army and defensive reserve** (M18, *Standing armies*): the army out in the field
-  from the forward camps it builds, their scouts and skirmishers out from them; the reserve at its
-  seat, out against any army that comes into its lands;
+  from the forward camps it builds, their scouts and skirmishers out from them, its supply wagons
+  coming to it from its seat or a depot nearer it (M19, *Supply*); the reserve at its seat, out
+  against any army that comes into its lands;
 - **its relations** with each other realm it's met (below).
 
 ### Relations
@@ -215,7 +216,7 @@ The engine is built for this from the start. These are its rules:
 | **M16** | Built | A barracks in every settlement, its guardsmen and captain part of its town's garrison (taken by putting them down, till M18); the war half as fast. |
 | **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
-| **M19** | Planned | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, raided or razed. |
+| **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
 | **M20** | Planned | The armies in the world near a player: armies, reserves, reinforcements, scouts and skirmishers met, in their lines, drawn in their crowds. |
 | **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
 
@@ -289,19 +290,24 @@ taken, and far longer before a capital can.
      may break with their allies.
    - **Each reserve** out against an enemy army in its people's lands, or home.
    - **Bands** to win back their works from the wild.
-   - **Each army** raised, sent, made up (*Standing armies*).
-6. **The march.** Armies, reserves, reinforcements, bands, envoys and convoys go on: along the
-   roads (`roads.js`), or across country where there's none (counting 1.8 times as long).
+   - **Each army** raised, sent, made up (*Standing armies*), and a supply depot built for it when
+     it's far from home (*Supply*).
+6. **The march.** Armies, reserves, reinforcements, supply wagons, bands, envoys and convoys go
+   on: along the roads (`roads.js`), or across country where there's none (counting 1.8 times as
+   long).
 7. **The camps** go up, send out their skirmishers, or are struck (*Standing armies*).
-8. **The fighting**: armies and reserves upon each other, reinforcements caught on the road, and
-   each army's attack on what it's after (*Standing armies*).
-9. **Envoys** passing an enemy's army, reserve or band may be **waylaid**.
-10. **Vassals** grow **restless** as they serve, and rise once they're ready (M10, below). Those
+8. **The supply**: the depots go up and are sent their loads, and each army in the field its
+   wagon when it's due (*Supply*).
+9. **The fighting**: armies and reserves upon each other, supply wagons and reinforcements caught
+   on the road, depots fallen on, and each army's attack on what it's after (*Standing armies*).
+10. **Envoys** passing an enemy's army, reserve or band may be **waylaid**; convoys and supply
+    wagons **fallen on**.
+11. **Vassals** grow **restless** as they serve, and rise once they're ready (M10, below). Those
    that have served 60 turns may **rise** against their overlord sooner: rarely, and likelier the
    stronger they are beside them, the more they resent them, the harder pressed they are, and the
    more restless. A **fallen** people rises again in one of its old towns, once it's stirred to
    it, if its rebels can put the town's garrison to the sword.
-11. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
+12. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
     can undo it.
 
 **A town taken** (its garrison put to the sword: *Standing armies*) is the attacker's: held by a
@@ -321,7 +327,8 @@ stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied.
 - `war.remember(realm, about, amount)`: grudges and favours earned by players;
 - `war.watch(ids)`: the towns, works, fortifications, camps and envoys a player's near: an army
   waits before them a while (M18), and envoys go at their own pace (M7);
-- `war.order(realm, orders)`: a player's orders to their people's army (M18);
+- `war.order(realm, orders)`: a player's orders to their people's army (M18), supplies sent for
+  and depots built (M19);
 - `war.move(envoy, at, leg)`, `war.waylaid(envoy, by)`: an envoy's way in the world (M7);
 - `war.win(works, by)`: a works won in the world, seized or cleared (M12).
 
@@ -337,9 +344,10 @@ from it the next time. Nothing in the world shows it yet (M2).
 - every town in the colour of whoever holds it, ringed in its builders' colour if it's been taken,
   with its garrison beside it;
 - the forces out: shields for armies and bands, banners for reserves, dots for reinforcements,
-  each with the way it's going; tents for the armies' camps (hollow while they go up); scrolls for
-  envoys; wagons for convoys;
-- each realm, its ruler, what they're like, what it holds, its gold, its army and reserve;
+  each with the way it's going; tents for the armies' camps and crates for their supply depots
+  (hollow while they go up); scrolls for envoys; wagons for convoys, smaller ones for supply;
+- each realm, its ruler, what they're like, what it holds, its gold, its army (and the loads it's
+  missed) and reserve, its camps and depots;
 - how each stands with each other, and the news.
 
 Play it a turn at a time or faster, and turn the players' might up to bring the next age on.
@@ -1358,12 +1366,104 @@ lands, and two armies seldom meet (2 to 6 times a world), each going for a diffe
 people's army raised again at its seat used to be put down there by an enemy's reserve, over and
 over, before it was ever made up (110 of 188 armies destroyed in one world): hence the rule above,
 that an army mustering at its seat is within its walls. The balance across many more wars, with
-the supply and the war table, is to come once they're built.
+the supply (M19, below) and the war table, is to come once they're built.
 
 **Kept.** The camps, the armies and reserves and their reinforcements are in the war's snapshot
 (`WAR_VERSION` 5). A war kept before them is carried on: its camps, relief and expeditions against
 towns go back into their towns' garrisons, and each people gets its reserve. The host keeps no
 sorties now (`SNAPSHOT_VERSION` 16), and what two games share changed (`NET_VERSION` 76).
+
+### Supply (M19)
+
+The third of the standing armies' parts: their supply, as numbers (`core/war/supply.js`,
+`war.js`). The wagons and depots near a player (M20) and the war table, where supplies are asked
+for and depots ordered built (M21), come after.
+
+**An army in the field is fed by wagon** (`SUPPLY`, `#provision`, `#feed`):
+- every 5 turns, a wagon goes to it, guarded by 2, at 250 m a turn, straight for wherever it is;
+- it comes from the nearest **depot** (below) within reach of the army that's nearer it than its
+  seat, taking one of the depot's loads; or else from its people's **seat**, for 6 gold;
+- one at a time: the next once it's there, or lost.
+
+An army mustering at its seat is fed there, and a reserve needs no supply.
+
+**Wagons that don't get through** (`HUNGER`), lost on the way or never sent for want of gold or
+anywhere to send it from, one after another:
+
+| In a row | What befalls the army |
+| --- | --- |
+| 1 | Its people are alerted (a Knight or above among them is told in the game) |
+| 2 | A tenth of it deserts |
+| 3 | Half of what's left deserts |
+| 4 | The rest go too: the army's broken up |
+
+A wagon that gets through ends it.
+
+**A wagon is lost** when:
+- an enemy's army or reserve is upon it (within 120 m);
+- one of their forces passing within 300 m falls on it (the more warlike, the likelier: their
+  aggression × 0.5 a turn), or the brigands of a wild camp within 250 m do (0.12 a turn), as they
+  would a convoy;
+- a camp's skirmishers bring its guards down.
+
+**Supply depots** (`DEPOT`, `war.depots`: `{ id, realm, at, guard, built, done, level, toward,
+used, by }`):
+- **Only in another people's lands:** the town nearest it mustn't be its people's, nor a friend's.
+- **Built** for 40 gold and 6 raised to hold it (30 more), going up for 2 turns, with 2 loads in
+  it once it's up and 6 at most. A people keeps 2 at most.
+- **Supplies** its people's armies, and their liege's and fellow vassals', within 1.5 km of it.
+- **Refilled:** while it's short, a wagon brings it a load from the nearest seat of its people's
+  or of a friend's (an ally's, a vassal's or their liege's), for 6 gold of its people's.
+- **Raided:** a camp's skirmishers falling on it carry off a load (once it's empty, one of its
+  guard).
+- **Razed:** an enemy's army or reserve upon it puts its guard down. The enemy's reserve goes out
+  against a depot in its people's lands once there's no army there to go against.
+- **Struck** by its own people once no army's drawn on it for 40 turns, its guard home; **given
+  up** with its people fallen.
+
+**Its rulers build one** (`#depotFor`), at war, once their army's camp is up more than 2 km from
+their seat with none of theirs within reach of it: 300 m behind it, towards home, if that's in
+another people's lands and they can pay for it, keeping something back. They build none again for
+10 turns.
+
+**A player's orders** (`war.order`):
+- `{ supply: true }`: a wagon sent now, if none's on its way;
+- `{ depot: [x, y] }`: a depot built there, if it may be.
+
+The war table that gives them comes in M21.
+
+**The news** tells of each depot set up, raided and razed, each wagon fallen on, and each army
+whose supplies haven't got through, deserted or broken up. Each wagon and load getting through is
+too everyday for the news.
+
+**Played out alone,** six worlds, no player's might, 1,080 turns:
+
+| | Without supply (M18) | With supply |
+| --- | --- | --- |
+| First town taken | turn 195 to 225 | turn 195 to 234 |
+| First seat taken | turn 566 to 823 | turn 567 to 639 |
+| Towns taken by turn 360 | 5 to 16 | 6 to 18 |
+| Towns taken by turn 720 | 29 to 54 | 32 to 68 |
+| Towns taken by turn 1,080 | 43 to 87 | 49 to 99 |
+| Armies destroyed in battle | 56 to 97 | 52 to 76 |
+| Armies broken up, unsupplied | | 1 to 4 |
+
+At the players' full might, 400 turns: the first town falls on turn 34 to 53 and 13 to 47 are
+taken (14 to 41 without supply).
+
+**A world's supply:**
+- **Wagons:** 270 to 350 get through, and 100 to 150 are lost, nearly a third: three or four in
+  five of those to an enemy's forces, the rest to the wild's brigands.
+- **Armies:** 70 to 110 times an army's supplies don't get through.
+- **Depots:** 30 to 57 go up. About as many are razed, some before they're up, mostly by the
+  reserves of the peoples whose lands they're in, and a few struck once no army needs them.
+
+Rulers rebuilt a razed depot at once until they were made to wait 10 turns between them. Before
+that, twice as many went up as now, most of them razed again.
+
+**Kept.** The depots, the supply wagons and each army's supply (`supply`: `{ due, missed }`) are in
+the war's snapshot (`WAR_VERSION` 6). A war kept before them is carried on: no depots, each army's
+next wagon due 5 turns on, none missed. What two games share changed (`NET_VERSION` 77).
 
 ### Playing together (M11)
 
