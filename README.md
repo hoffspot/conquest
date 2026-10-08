@@ -475,6 +475,7 @@ npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from 
 npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body, from CharMorph's Vitruvian
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
 npm run build:sounds    # remakes client/sounds, the recorded sounds, from their CC0 recordings (scripts/sounds)
+npm run build:textures  # remakes client/textures/dungeons, the dungeons' photographs, from CC0 scans
 npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
 
@@ -516,8 +517,12 @@ client/                 The game (static files served to the browser)
   characters/           The bodies characters are made from: CharMorph's Vitruvian, the game's
                         (made by npm run build:vitruvian), and MakeHuman's (npm run
                         build:characters), their texture masks, and motion capture clips
-  models/assets.json    The catalog: models downloaded only as they're wanted (none yet), each
-                        file's hash and size added by npm run build:manifest into js/app/assets.js
+  models/assets.json    The catalog: what's downloaded only as it's wanted (the dungeons'
+                        photographs), each file's hash and size added by npm run build:manifest
+                        into js/app/assets.js
+  textures/dungeons/    The photographs a dungeon's rock, earth, stone and timber are drawn with,
+                        each a colour picture and a normal map (made by npm run build:textures
+                        from ambientCG's and Poly Haven's CC0 scans)
   models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
                         are its own now), kept for serving glTF
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
@@ -667,7 +672,10 @@ client/                 The game (static files served to the browser)
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
                         rooms and furniture, the fires, the boar on its spit, and taking
-                        down the walls between the camera and the player
+                        down the walls between the camera and the player; and a dungeon's levels
+    caverns.js          A dungeon's rock as one surface, its walls and roof, and its floor
+    dungeons3d.js       The photographs a dungeon's drawn with, and the material that lays them
+                        over its rock from all three sides (dungeonpictures.js lists them)
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and
@@ -772,6 +780,10 @@ asset out of this public repository.
 
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
+- The dungeons' rock, earth, stone and timber are photographs scanned by ambientCG
+  (<https://ambientcg.com>: Rock028, Ground022, Ground048) and Poly Haven
+  (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles),
+  CC0, made smaller by `scripts/build-textures.js`.
 - The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
   (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
   (`client/models/jmi/LICENSE`).
