@@ -1436,12 +1436,13 @@ export class Game {
     }
 
     // One of the wild's creatures, as its kind looks (the same one of its kind every time, from
-    // its id); holding its weapon, if it's people-shaped (and wounded as people are): a step at a
-    // time (a people-shaped one's character is built in steps)
+    // its id; a dungeon's boss or mini-boss its own way: beasts/champions.js); holding its weapon,
+    // if it's people-shaped (and wounded as people are): a step at a time (a people-shaped one's
+    // character is built in steps)
     *#addingBeast(actor) {
         const seed = [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
         const weapon = WEAPONS[actor.weapon];
-        const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+        const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null });
 
         // (Gone from the battle, or drawn some other way, while it was being built)
         if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {

@@ -3181,7 +3181,7 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null }) {
         const spec = CREATURES[creature];
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title)
         const stands = CHAMPIONS[champion] ?? { hp: 1, power: 1 };
@@ -3203,8 +3203,9 @@ export class Host {
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
             // (One holding a place gone into, `wary`: a moment's pause on first seeing someone come
-            // in, battle.js WARY_MS)
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(round ? { round: round.stops, stop: round.at } : {}) },
+            // in, battle.js WARY_MS; a dungeon's boss or mini-boss, its rank and its id in its theme,
+            // `champion` and `regalia`: how it's drawn, beasts/champions.js)
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(round ? { round: round.stops, stop: round.at } : {}), ...(champion ? { champion, regalia } : {}) },
         });
     }
 
@@ -3783,7 +3784,7 @@ export class Host {
                 const id = `wild-${this.nextWild++}`;
                 const champion = foe.boss ? "boss" : foe.mini ? "mini" : null;
 
-                this.#rouse(id, foe.creature, foe.tier, [...foe.at], { pack: group, leader: out[0] ?? null, master: Boolean(champion), map, dungeon: site.id, foe: key, champion, title: foe.title ?? null, roam: champion ? 3 : 4, temper: "territorial", guard: champion ? 9 : 7 });
+                this.#rouse(id, foe.creature, foe.tier, [...foe.at], { pack: group, leader: out[0] ?? null, master: Boolean(champion), map, dungeon: site.id, foe: key, champion, title: foe.title ?? null, regalia: foe.regalia ?? null, roam: champion ? 3 : 4, temper: "territorial", guard: champion ? 9 : 7 });
                 out.push(id);
             });
 

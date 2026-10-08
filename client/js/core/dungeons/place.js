@@ -296,7 +296,7 @@ export function fillLevel(dug, rooms, links, plan) {
             room: goal,
             title: boss.title,
             foes: [
-                { creature: boss.creature, tier: plan.boss.tier, at: lord, boss: true, title: boss.title },
+                { creature: boss.creature, tier: plan.boss.tier, at: lord, boss: true, title: boss.title, regalia: boss.id },
                 ...escorts.map((at, k) => ({ creature: guard.creatures[k % guard.creatures.length], tier: plan.tier, at })),
             ],
         });
@@ -339,7 +339,7 @@ export function fillLevel(dug, rooms, links, plan) {
             role: "mini",
             room: id,
             title: mini.title,
-            foes: [{ creature: mini.creature, tier: Math.min(TIERS, plan.tier + 1), at: heart, mini: true, title: mini.title }, ...escorts.map((at, j) => ({ creature: guard.creatures[j % guard.creatures.length], tier: plan.tier, at }))],
+            foes: [{ creature: mini.creature, tier: Math.min(TIERS, plan.tier + 1), at: heart, mini: true, title: mini.title, regalia: mini.id }, ...escorts.map((at, j) => ({ creature: guard.creatures[j % guard.creatures.length], tier: plan.tier, at }))],
         });
     }
 
