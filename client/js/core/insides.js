@@ -504,8 +504,9 @@ export function templeFolkOf(building, nave) {
 
 // A guild's hall, 20 by 16 metres: the counter across the north, the receptionist behind it and
 // shelves of ledgers and scrolls on the wall behind her; the quest board along the west wall;
-// tables with benches for the adventurers; a hearth on the east wall; barrels either side of the
-// door, in the middle of the south wall
+// tables with benches for the adventurers; a hearth on the east wall, across from the board, and
+// the guild's portal beside it (to the other branches the player's been to: core/portals.js);
+// barrels either side of the door, in the middle of the south wall
 const GUILD = [
     "eeeeeeee............",
     "....................",
@@ -518,9 +519,9 @@ const GUILD = [
     "q..................H",
     "......bbb.....bbb...",
     "......TTT.....TTT...",
-    "......bbb.....bbb...",
-    "....................",
-    "....................",
+    "......bbb.....bbb..U",
+    "...................U",
+    "...................U",
     "KK................KK",
     ".........DD.........",
 ];

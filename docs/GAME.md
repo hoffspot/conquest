@@ -450,12 +450,13 @@ are kept.
 - **An adventurers' guild** (`guildRooms`) is a hall 20 by 16 metres ("the Adventurers'
   Guild"), as the guilds of adventure stories have them: the counter across the north end, with
   shelves of ledgers and scrolls on the wall behind it; the quest board along the west wall;
-  four tables with benches; the hearth on the east wall; and barrels either side of the door:
+  four tables with benches; the hearth on the east wall, across the room from the board, and the
+  guild's portal beside it (*The guild's portals*, below); and barrels either side of the door:
 
   ```
   eeeeeeee............   e  shelves     M  counter   q  quest board
   ....................   T  table       b  bench     H  hearth
-  ..MMMMMMMM..........   K  barrels
+  ..MMMMMMMM..........   K  barrels     U  portal
   ....................
   q...................
   q.....bbb.....bbb...
@@ -464,9 +465,9 @@ are kept.
   q..................H
   ......bbb.....bbb...
   ......TTT.....TTT...
-  ......bbb.....bbb...
-  ....................
-  ....................
+  ......bbb.....bbb..U
+  ...................U
+  ...................U
   KK................KK
   .........DD.........
   ```
@@ -2175,8 +2176,12 @@ registered (`member`) is the game's, so every branch knows the card: one from an
 greeted by its rank the first time she sees it, and no one's offered another. She tells of the
 quest board, their card ("How's my card looking?": their rank, `{guildRank}`, and how much more
 merit to the next and what it opens, `{guildNext}`), the ranks (Copper, Iron, Bronze, Silver,
-Gold and Mithril: merit for every job, and a rank earned kept: docs/WAR.md M8) and the other
-branches. Talking to her, the talk shows the player's rank by her name. Asked what's on the board, she lists its notices, up to four
+Gold and Mithril: merit for every job, and a rank earned kept: docs/WAR.md M8), the other
+branches, and the portal ("What's that archway by the hearth?": where it goes, only to branches
+the player's been into; what it costs, and what each rank takes off; that it's members' only, and
+companions go free; each ending with what the player's own rank takes off, `{portalShare}`: the
+full fare at Copper, so much off at Iron to Gold, nothing to pay at Mithril, or that they must
+register first). Talking to her, the talk shows the player's rank by her name. Asked what's on the board, she lists its notices, up to four
 (`notice1` to `notice4`: what each asks in a few words, and what it pays: docs/WAR.md M8); one
 picked is read in full, and taken, or the player looks at the others. The adventurers are wry and give advice ("Be nice to
 {receptionist}. She decides who gets the good notices.").
@@ -2262,7 +2267,11 @@ wood with the guild's crest on its front and a blue runner along its top, and on
 ledger, a stamp and its pad, a stack of notices and a quill in its pot. The quest board is a
 framed board thick with notices, each pinned or sealed in red wax, some curling. The tables have
 tankards, a map, dice and candles; the hearth has a fire and a great horned skull over it; a ring
-of candles hangs over the tables. In the guild the tavern's jig plays as lively as in a taproom.
+of candles hangs over the tables. Beside the hearth stands the portal: an arch of dressed stone
+(the people's: marble for the elves, basalt for the orcs), nine runes up its face and two on each
+leg glowing pale blue, a worn step before it, and in it a veil of deep blue light with a swirl of
+paler light turning on it, lighting the room round it a cold blue (`FLAMES.portal`). In the guild
+the tavern's jig plays as lively as in a taproom.
 
 **Ceilings.** Every floor has its ceiling, 3 metres up (`STOREY`), each people's own way
 (`CEILINGS`): the humans' of limewashed plaster between joists half a metre apart, carried on great
@@ -3196,6 +3205,52 @@ zoom out. A key in the corner shows the four icons and the fog.
 
 A redraw waits for the next frame, or 50 ms if the browser has no frame coming (as when nothing
 else on the page is changing, with the game paused).
+
+### The guild's portals (core/portals.js)
+
+Every branch of the adventurers' guild has a portal in its hall, on the east wall beside the
+hearth, across the room from the quest board. Through it, a member of the guild steps to any other
+branch they've been into, for gold.
+
+- **Which branches** (`Explored.portals`: their places' ids, kept with what's explored): each one
+  the player's gone into the hall of (the host's `cross` into a guild's building), said the first
+  time ("This branch of the guild is open to you now..."). A character kept from before there
+  were portals has every branch in country they'd uncovered (the chunk its settlement's middle is
+  in) or whose hall they'd been in opened as they join (`branchesFound`: worked out once, as
+  their kept explored has no `portals`); after that, only those they go into. A world joined to
+  someone else's keeps none of it, as with where the player's been there.
+- **Using it.** Tapping the portal (its arch, or the step before it) walks the player up to it
+  (the square before its middle), and there the travel map opens: anything else they're told to
+  do on the way, and it's forgotten (`#keepToPortal`). Not a member, it doesn't open: "The veil
+  stays dark: the portals are for the guild's members. Register at the counter first."
+- **The travel map** is the world map (*The world map*, above) with the same land and fog, but
+  titled "Guild portal", without its key, its pin or the requests' marks, and of the buildings
+  only the branches open to the player (`branchesFrom`), each however far out it's zoomed: the
+  guild's icon with its town's name over it and its fare under it ("8 gold", "Free"), and the
+  branch they're in ringed in blue, "You are here". It opens with them all in view (below the bar
+  across its top: "Tap a branch of the guild to step through to it", and what their rank takes
+  off), or on the player if there's only theirs ("No other branch is open to you yet..."). Held
+  or tapped twice, nothing happens; Cancel or the cross closes it.
+- **Asked first.** A branch tapped (within 28 pixels of its icon) asks: "Step through to
+  Dunholm?", how far it is, its fare and what their rank takes off it, and the gold they have;
+  "Pay 8 gold and step through", or "Stay". Without the gold, the button says "Not enough gold" and
+  can't be pressed.
+- **The fare** (`fareOf`): 5 gold, and 7 more a kilometre between the two branches' settlements
+  as the crow flies (`PORTAL`), times the rank's share (`GUILD_RANKS` `fare`: Copper 1, Iron 0.8,
+  Bronze 0.6, Silver 0.4, Gold 0.2, Mithril 0), rounded, at least 1 gold but at Mithril, who go
+  free. Neighbouring branches (about half a kilometre apart) cost a Copper about 9 gold; a typical
+  trip of 3.5 km, 30; across the world (9 km), 68.
+- **Through** (`{ type: "travel", to }`, the host's `#travel`): the host checks the player stands
+  at the portal of the branch they're in (within 2.5 squares of its middle: `PORTAL_REACH`), is a
+  member, isn't in the middle of a blow or a spell or a fight (no one's after them), that the
+  branch is open to them and isn't this one, and that they have the fare; then lays out its
+  settlement and makes its hall if they aren't yet, takes the fare, and carries them there: out of
+  its portal and on into the room, as far as one comes in at a door (up to 4 squares: `outOf`),
+  facing into it. Their followers (and companions by magic) come through after them, as through
+  a door, for nothing; any told to wait stay where they are. Refused, the game says why (`portal`,
+  `unregistered`, `here`, `unexplored`, `fighting`, `midst`, `gold`). It's heard and seen as
+  being carried by magic is (`carried`, `why: "portal"`), in the portal's own blue, and said:
+  "Through the portal: the guild's branch in Dunholm, for 8 gold."
 
 ### Sound (audio/)
 

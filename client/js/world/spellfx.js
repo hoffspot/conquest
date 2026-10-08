@@ -1640,6 +1640,7 @@ const APPEARING = {
     called: { colour: 0x9a4aff, glow: [0xf0d8ff, 0x6a2ab8] },
     walk: { colour: 0x7a5acd, glow: [0xe8e0ff, 0x5a3a9a] },
     recall: { colour: 0xffe08a, glow: [0xfffbe0, 0xf2c040] },
+    portal: { colour: 0x6fb0ff, glow: [0xdff2ff, 0x2a5fb8] },
     safety: { colour: SAFETY.colour, glow: SAFETY.glow },
     risen: { colour: 0x3aaa4a, glow: [0xb8ff9a, 0x0a2a10] },
     over: { colour: 0x9a4aff },

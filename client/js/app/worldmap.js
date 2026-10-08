@@ -9,6 +9,10 @@
 // where they are. Hold a finger (or the mouse) down somewhere to drop a pin there (or on the pin,
 // to take it away), shown with the way there from where they are (the terrain plan's M7g) and how
 // far that is beside it; tap twice somewhere to run there.
+//
+// Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
+// of the buildings only the guild's branches open to the player, each however far out it's
+// zoomed, with its town's name and its fare; tapped, one's chosen.
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -41,6 +45,14 @@ const DETAIL_RESTING = 48;
 const NAMES_FROM = 20;
 const ICONS_FROM = 6;
 const ICON_SIZE = 24;
+
+// The travel map's branches: how big their icons (pixels), and how near one a tap chooses it
+// (pixels, from its middle)
+const BRANCH_SIZE = 30;
+const BRANCH_REACH = 28;
+
+// (What's said across the top of the travel map: how much of it, pixels, the branches keep clear of)
+const BRANCH_TOP = 72;
 
 // Roads' colours and widths (metres; a pixel at least)
 const ROAD = { colour: "rgb(186, 160, 112)", width: 5 };
@@ -249,6 +261,9 @@ export class WorldMap {
         /** What was drawn last (for tests): { chunks (shown in detail), fogged, names, icons }. */
         this.drawn = null;
 
+        /** The travel map's branches (core/portals.js branchesFrom), or null for the world map. */
+        this.travel = null;
+
         const listen = (type, listener, options) => {
             canvas.addEventListener(type, listener, options);
             this.listeners.push([type, listener]);
@@ -269,20 +284,47 @@ export class WorldMap {
      * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
      * and the way to it (`way`: [[x, z], ...], or null).
      */
-    open({ player, icons = [], marks = [], pin = null, way = null }) {
+    open({ player, icons = [], marks = [], pin = null, way = null, travel = null }) {
         this.land ??= paintLand(this.world.plan);
         this.player = player;
-        this.icons = icons;
-        this.marks = marks;
-        this.pin = pin;
-        this.way = way;
+        this.travel = travel;
+        this.icons = travel ? [] : icons;
+        this.marks = travel ? [] : marks;
+        this.pin = travel ? null : pin;
+        this.way = travel ? null : way;
         this.lastTap = null;
 
         const [width, height] = this.#size();
 
         this.view = { scale: Math.max(NEAREST, OPENED / Math.max(1, Math.min(width, height))), x: player.x, z: player.z };
+
+        // (The travel map: every branch open to them in view, if they're far apart, a little
+        // below the middle, clear of what's said across the top)
+        if (travel?.length > 1) {
+            const [xs, zs] = [travel.map(({ x }) => x), travel.map(({ z }) => z)];
+            const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+            const scale = Math.max(this.view.scale, ((x1 - x0) * 1.5) / Math.max(1, width), ((z1 - z0) * 1.5) / Math.max(1, height - 2 * BRANCH_TOP));
+
+            this.view = { scale, x: (x0 + x1) / 2, z: (z0 + z1) / 2 - (BRANCH_TOP / 2) * scale };
+        }
+
         this.#clamp();
         this.draw();
+    }
+
+    /** The travel map's branch at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
+    branchAt([x, z]) {
+        let best = null;
+
+        for (const branch of this.travel ?? []) {
+            const pixels = Math.hypot(branch.x - x, branch.z - z) / this.view.scale;
+
+            if (pixels <= BRANCH_REACH && (!best || pixels < best.pixels)) {
+                best = { branch, pixels };
+            }
+        }
+
+        return best?.branch ?? null;
     }
 
     /**
@@ -453,10 +495,12 @@ export class WorldMap {
             context.textBaseline = "middle";
             context.lineJoin = "round";
 
+            const branches = new Set((this.travel ?? []).map(({ id }) => id));
+
             for (const place of this.world.plan.places) {
                 const [px, pz] = place.at;
 
-                if (!this.explored.isVisited(Math.floor(px / CHUNK), Math.floor(pz / CHUNK))) {
+                if (!this.explored.isVisited(Math.floor(px / CHUNK), Math.floor(pz / CHUNK)) || branches.has(place.id)) {
                     continue;
                 }
 
@@ -487,6 +531,40 @@ export class WorldMap {
                     icons.push(icon.kind);
                 }
             }
+        }
+
+        // The travel map's branches, however far out: each a guild's icon, with its town's name
+        // and its fare (or that it's where they are, ringed)
+        for (const branch of this.travel ?? []) {
+            const [x, y] = at(branch.x, branch.z);
+
+            if (x < -120 || y < -60 || x > width + 120 || y > height + 60) {
+                continue;
+            }
+
+            if (branch.here) {
+                context.beginPath();
+                context.arc(x, y, BRANCH_SIZE * 0.72, 0, Math.PI * 2);
+                context.lineWidth = 3;
+                context.strokeStyle = "#8fd2ff";
+                context.stroke();
+            }
+
+            drawBuildingIcon(context, "guild", x, y, BRANCH_SIZE);
+            context.font = `600 14px Georgia, "Times New Roman", serif`;
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.lineJoin = "round";
+
+            for (const [text, dy, colour] of [[branch.name, -BRANCH_SIZE * 0.85, "#f6ead0"], [branch.here ? "You are here" : branch.fare ? `${branch.fare} gold` : "Free", BRANCH_SIZE * 0.85, branch.here ? "#8fd2ff" : "#f0c96a"]]) {
+                context.lineWidth = 4;
+                context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+                context.strokeText(text, x, y + dy);
+                context.fillStyle = colour;
+                context.fillText(text, x, y + dy);
+            }
+
+            icons.push("guild");
         }
 
         // Where the player's requests take them: a gold ring with a star in it, fog or no
@@ -543,7 +621,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length };
     }
 
     /**

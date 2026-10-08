@@ -39,7 +39,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null, building: false };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, together: null, joinAfter: null, building: false };
 
 window.pellagos = {
     get game() {
@@ -666,7 +666,7 @@ function quickBack() {
 
 // (Opened to pick somewhere to go: Wizard's Walk. `pick` hears the point tapped, somewhere
 // uncovered, or null if it's called off)
-async function openWorldMap({ pick = null } = {}) {
+async function openWorldMap({ pick = null, travel = null } = {}) {
     const game = state.game;
 
     if (!game?.running || $("#menu").open || $("#worldmap").open) {
@@ -691,8 +691,39 @@ async function openWorldMap({ pick = null } = {}) {
     const map = state.worldMap;
 
     state.picking = pick;
-    $("#worldmappick").hidden = !pick;
+    state.travel = travel;
+    $("#worldmappick").hidden = !pick && !travel;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
+    $("#worldmaptitle").textContent = travel ? "Guild portal" : "The world";
+    $("#worldmapkey").hidden = Boolean(travel);
+
+    // (From a guild's portal: the branches open to them, one tapped asked about; nothing held or
+    // tapped twice)
+    if (travel) {
+        const others = travel.branches.filter(({ here }) => !here).length;
+        const off = travel.off > 0 ? ` ${travel.rank}: ${travel.off >= 1 ? "free" : `${Math.round(travel.off * 100)}% off`}.` : "";
+
+        $("#worldmappicktext").textContent = others ? `Tap a branch of the guild to step through to it.${off}` : "No other branch is open to you yet: go into one, and its portal opens to you.";
+        map.onPick = (point) => {
+            const branch = map.branchAt(point);
+
+            if (!branch) {
+                mapNote("Tap one of the guild's branches");
+            } else if (branch.here) {
+                mapNote("You're here");
+            } else {
+                askTravel(branch, travel);
+            }
+        };
+        map.onHold = null;
+        map.onDoubleTap = null;
+        $("#worldmapunpin").hidden = true;
+        $("#worldmapnote").hidden = true;
+        map.open({ ...game.worldMapView(), travel: travel.branches });
+
+        return;
+    }
+
     map.onPick = pick
         ? (point) => {
               if (!map.uncovered(point)) {
@@ -752,18 +783,55 @@ function mapNote(text) {
     state.mapNoted = setTimeout(() => (note.hidden = true), 2800);
 }
 
+// A branch of the guild tapped on the travel map: asked first, with its fare (and what their rank
+// takes off it), and whether they have it
+function askTravel(branch, travel) {
+    const dialog = $("#portal");
+    const km = branch.metres >= 1000 ? `${(branch.metres / 1000).toFixed(1)} km` : `${Math.round(branch.metres / 10) * 10} m`;
+    const off = travel.off >= 1 ? `free at ${travel.rank} rank` : travel.off > 0 ? `${Math.round(travel.off * 100)}% off at ${travel.rank} rank` : "";
+    const short = branch.fare > travel.gold;
+
+    $("#portaltitle").textContent = `Step through to ${branch.name}?`;
+    $("#portalnote").textContent = `${km} away. ${branch.fare ? `${branch.fare} gold` : "No charge"}${off ? `, ${off}` : ""}. You have ${travel.gold} gold.`;
+    $("#portalgo").disabled = short;
+    $("#portalgo").textContent = short ? "Not enough gold" : branch.fare ? `Pay ${branch.fare} gold and step through` : "Step through";
+    state.portal = { branch, travel };
+    dialog.showModal();
+    (short ? $("#portalback") : $("#portalgo")).focus();
+}
+
+$("#portalgo").addEventListener("click", () => {
+    const chosen = state.portal;
+
+    state.portal = null;
+    $("#portal").close();
+
+    if (chosen) {
+        closeWorldMap();
+        chosen.travel.choose(chosen.branch.id);
+    }
+});
+$("#portalback").addEventListener("click", () => {
+    state.portal = null;
+    $("#portal").close();
+});
+
 function closeWorldMap() {
     // (Closed while picking somewhere: called off)
     const picking = state.picking;
 
     state.picking = null;
+    state.travel = null;
 
     if (state.worldMap) {
         state.worldMap.onPick = null;
+        state.worldMap.travel = null;
         state.worldMap.rest();
     }
 
     $("#worldmappick").hidden = true;
+    $("#worldmaptitle").textContent = "The world";
+    $("#worldmapkey").hidden = false;
     picking?.(null);
 
     if ($("#worldmap").open) {
