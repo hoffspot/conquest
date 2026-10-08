@@ -29,8 +29,9 @@ import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
 import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
+import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { rollSpoils } from "./spoils.js";
-import { campTier, CHUNK, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
+import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
@@ -153,7 +154,7 @@ export const SUMMONING_MS = 30000;
 
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
-const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree"]);
+const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel"]);
 
 // The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
 const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));
@@ -259,7 +260,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 5;
+export const SNAPSHOT_VERSION = 6;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -368,10 +369,12 @@ export const REFUSALS = Object.freeze({
     hostiles: "Not with enemies about.",
     midst: "Not in the middle of a blow or a spell.",
     fighting: "Not in the middle of a fight.",
+    portal: "Stand at a guild's portal to step through it.",
+    here: "You're there already.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
-const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade", "camp", "emote"]);
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade", "camp", "emote", "travel"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -623,6 +626,13 @@ export class Host {
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
+
+        // (Kept from before there were portals: every branch of the guild in country they'd
+        // uncovered, or whose hall they'd been in, open to them as if they'd been in each; from
+        // now on, only those they go into: core/portals.js)
+        if (player.explored.portals === null) {
+            player.explored.portals = new Set(this.world.plan ? branchesFound(this.world.plan, player.explored, this.world.start) : []);
+        }
 
         this.players.set(id, player);
         player.hero.weapon = weaponOf(player.progress);
@@ -974,6 +984,8 @@ export class Host {
                 return this.#agree(player);
             case "cancel":
                 return this.#cancel(player, command.with ?? null);
+            case "travel":
+                return this.#travel(player, actor, command.to);
             default:
                 return refuse("command");
         }
@@ -1222,6 +1234,13 @@ export class Host {
 
                 if (building && this.players.get(event.id).explored.enter(building.key)) {
                     this.#event("explored", { id: event.id, building: building.key });
+                }
+
+                // (A branch of the guild: its portal open to them from any other, from now on)
+                const branch = branchOf(building, this.world.start);
+
+                if (branch && this.players.get(event.id).explored.openPortal(branch)) {
+                    this.#event("explored", { id: event.id, portal: branch });
                 }
             }
         }
@@ -3927,6 +3946,85 @@ export class Host {
         if (at && this.world.maps?.town) {
             this.#carry(player, "town", [Math.floor(at[0]), Math.floor(at[1])], "walk");
         }
+    }
+
+    // Through a guild's portal (core/portals.js) to another branch they've been into (`to`: its
+    // place's id): from beside the portal of the branch they're in, a member of the guild, not in
+    // the middle of a fight, paying its fare (none at Mithril). They come out of the other's
+    // portal, facing into its hall, their followers with them (as through a door: #bring)
+    #travel(player, actor, to) {
+        const plan = this.world.plan;
+        const from = branchOf(this.world.interiors?.of(actor.map), this.world.start);
+        const portal = from && portalOn(this.world.maps?.[actor.map]);
+
+        if (!plan || !portal || !atPortal(portal, actor.x, actor.y)) {
+            return refuse("portal");
+        }
+
+        const rank = player.standing.guildRank();
+
+        if (rank === null) {
+            return refuse("unregistered");
+        }
+
+        if (to === from) {
+            return refuse("here");
+        }
+
+        const [origin, place] = [from, to].map((id) => guilds(plan).find((each) => each.id === id));
+
+        if (!place || !origin) {
+            return refuse("command");
+        }
+
+        if (!player.explored.canTravelTo(to)) {
+            return refuse("unexplored");
+        }
+
+        if (actor.attack || actor.casting) {
+            return refuse("midst");
+        }
+
+        if (actor.target !== null || this.battle.actors.some((other) => other.target === actor.id && !other.dead)) {
+            return refuse("fighting");
+        }
+
+        const fare = fareOf(hypot(place.at[0] - origin.at[0], place.at[1] - origin.at[1]), rank);
+
+        if (player.progress.gold < fare) {
+            return refuse("gold");
+        }
+
+        // (The branch there got ready: its settlement laid out, if it wasn't, and its hall made)
+        this.world.maps?.town?.settlements?.of(place);
+
+        const there = [...(this.world.interiors?.buildings.values() ?? [])].find((building) => branchOf(building, this.world.start) === to);
+
+        if (!there) {
+            return refuse("command");
+        }
+
+        this.#openBuilding(there.key);
+
+        const hall = there.maps[0];
+        const out = portalOn(this.world.maps?.[hall]);
+
+        if (!out) {
+            return refuse("command");
+        }
+
+        const { square, facing } = outOf(out, this.world.maps[hall]);
+        const went = { map: actor.map, x: actor.x, y: actor.y };
+        const came = this.battle.place(player.id, hall, square, { facing });
+
+        if (!came) {
+            return refuse("command");
+        }
+
+        player.progress.gold -= fare;
+        this.#event("carried", { id: player.id, why: "portal", from: went, map: hall, square: came, to, fare });
+
+        return { ok: true, to, fare };
     }
 
     // A player carried off by magic, to a square on a map: whoever was with them left behind.

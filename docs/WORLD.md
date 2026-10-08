@@ -248,7 +248,8 @@ at the far side of the world.
   before any place is moved out of water, so it's the same town whether or not the capital or a
   town has been moved since). It has a guild branch.
 - **Branches** (`guilds(plan)`): every capital, city, town and village has a branch of the
-  adventurers' guild, about 95 in a world. Players will be able to travel quickly between branches.
+  adventurers' guild, about 95 in a world. Players step between the branches they've been into
+  through the portal in each one's hall, for gold (docs/GAME.md *The guild's portals*).
 - **Districts** (`guildFor(plan, x, z)`): each branch's district is the land nearer to it than to
   any other branch.
 - **Points of interest** (`openGround(plan, branch, seed, count)`): a branch will make these up

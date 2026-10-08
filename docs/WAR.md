@@ -1091,14 +1091,14 @@ next rank. A contract failed or given up costs 2 merit (`GUILD_FAILED`), never a
 earned, and never the player's standing with their people; their people's requests give the
 guilds no merit.
 
-| Rank | Merit | Opens | More asked | Beasts of level | Pay |
-| --- | --- | --- | --- | --- | --- |
-| Copper | 0 | Beasts on the roads, parts wanted, sealed packages, the small places to clear | — | any | ×1 |
-| Iron | 10 | Bounties | 1 more | any | ×1.1 |
-| Bronze | 30 | The camp outside the walls, the middling places to clear; the dearer parts | 1 more | 2 or more | ×1.25 |
-| Silver | 70 | — | 2 more | 3 or more | ×1.4 |
-| Gold | 140 | The great places to clear | 3 more | 4 or more | ×1.6 |
-| Mithril | 250 | — | 4 more | 5 or more | ×1.8 |
+| Rank | Merit | Opens | More asked | Beasts of level | Pay | Portals |
+| --- | --- | --- | --- | --- | --- | --- |
+| Copper | 0 | Beasts on the roads, parts wanted, sealed packages, the small places to clear | — | any | ×1 | full fare |
+| Iron | 10 | Bounties | 1 more | any | ×1.1 | a fifth off |
+| Bronze | 30 | The camp outside the walls, the middling places to clear; the dearer parts | 1 more | 2 or more | ×1.25 | two fifths off |
+| Silver | 70 | — | 2 more | 3 or more | ×1.4 | three fifths off |
+| Gold | 140 | The great places to clear | 3 more | 4 or more | ×1.6 | four fifths off |
+| Mithril | 250 | — | 4 more | 5 or more | ×1.8 | free |
 
 So the higher the rank, the harder the work on the board, everywhere:
 - **More of it.** Beasts, bounties and parts ask for more of them (2 + more to 4 + more beasts or
@@ -1114,6 +1114,9 @@ So the higher the rank, the harder the work on the board, everywhere:
   small from Copper, middling from Bronze, great from Gold), and of those near, only the biggest:
   a Gold isn't sent to the graveyard while there's a ruin within reach.
 - **Better pay**, the rank's times what a Copper is paid, a package's too.
+- **Cheaper portals.** A step through a guild's portal (docs/GAME.md *The guild's portals*: 5
+  gold and 7 a kilometre at Copper) costs a fifth less at each rank up (`fare`), and nothing at
+  Mithril. A package can go through too.
 
 The player's rank shows on their card by their name, a chip of its metal, once they've
 registered; on the talk with a guild's receptionist ("Your rank", and how much more merit to the

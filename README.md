@@ -234,7 +234,11 @@ in white vestments blesses the pews and lights the shrines' candles, and worship
 **adventurers' guild**, a cheerful receptionist in the guild's uniform, her hair in twin tails,
 stamps notices behind her counter, and adventurers of every calling read the quest board and
 drink at the tables; she'll sign you up (Rank: Copper), though the board's jobs can't be taken
-yet.
+yet. Across the room from the board, by the hearth, stands the guild's **portal**: a stone arch
+with a veil of blue light. Tap it and you walk up to it and a map opens showing every branch of
+the guild you've been inside; tap one, agree to its fare (5 gold and 7 more a kilometre, a
+fifth less each rank up, free at Mithril), and you step out of that branch's portal, your
+followers with you. The receptionist explains it ("What's that archway by the hearth?").
 
 **Talking.** Tap one of the folk and you walk up to them (or to the bar, or the other side of a
 table) and talk: their name and what they are, what they say, and what you can say back (tap a
@@ -583,6 +587,7 @@ client/                 The game (static files served to the browser)
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
     explored.js         What the player has found: the buildings gone into, the chunks walked
+    portals.js          The guild's portals: the branches open to step through to, and their fares
     host.js             The one authority over a running world: its players (by id), their
                         commands, the buildings near them got ready, kept and made again
     wire.js             What goes between host and players, and into a save, as text

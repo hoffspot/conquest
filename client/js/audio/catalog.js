@@ -151,8 +151,8 @@ export const CATALOG = Object.freeze({
     cure: { group: "Tome spells", label: "Cured", about: "A singing bowl struck softly, a glockenspiel's or a hand bell's note, and a faint falling shimmer.", plays: "A cure (Cure Poison, Cure Sickness, Lift Curse, Quench, Staunch, Unbind) or Pacify landing." },
     hex: { group: "Tome spells", label: "Hexed", about: "Whispering voices over a bowed brake drum, slowed, and a scraped gong.", plays: "Poison or Vampirism landing." },
     fear: { group: "Tome spells", label: "Fear", about: "A slow whoosh, a scraped gong, bowed metal rising, and a whisper.", plays: "Fear landing." },
-    teleportOut: { group: "Tome spells", label: "Carried off", about: "A whoosh and a cymbal's swell drawn up into a bottle's uncorking pop, then gone.", plays: "Anyone carried off by magic (Teleport, Word of Recall, Wizard's Walk, a summons, a Scroll of Safety), as they go; Invisibility landing, hushed." },
-    teleportIn: { group: "Tome spells", label: "Arriving", about: "The pop first, then the whoosh blowing out, and a faint shimmer.", plays: "Anyone carried by magic arriving." },
+    teleportOut: { group: "Tome spells", label: "Carried off", about: "A whoosh and a cymbal's swell drawn up into a bottle's uncorking pop, then gone.", plays: "Anyone carried off by magic (Teleport, Word of Recall, Wizard's Walk, a summons, a Scroll of Safety, a guild's portal), as they go; Invisibility landing, hushed." },
+    teleportIn: { group: "Tome spells", label: "Arriving", about: "The pop first, then the whoosh blowing out, and a faint shimmer.", plays: "Anyone carried by magic arriving, a guild's portal's too." },
     summon: { group: "Tome spells", label: "Summoned", about: "A scraped gong or a bowed cymbal swelling in, then a rock's knock or a boulder's crash arriving in a gust of dust.", plays: "Summon, Attraction or Zombify landing." },
     polymorph: { group: "Tome spells", label: "Polymorph", about: "A flexatone's warped warble with a shimmer of chimes and a bowed cymbal.", plays: "Polymorph landing." },
     lightSpell: { group: "Tome spells", label: "Light", about: "A match flaring (without its strike), a glockenspiel's note, and a faint triangle roll.", plays: "Light lit over the shoulder, or put out." },
@@ -321,7 +321,7 @@ export const CATALOG = Object.freeze({
     coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower." },
     coinPickup: { group: "Coins and trade", label: "Coins picked up", about: "A few coins chinking together as they're scooped up: SpaceJoe's.", plays: "Taking a sack or a chest's share with gold in it; putting on a ring or an amulet." },
     tradeDone: { group: "Coins and trade", label: "A trade done", about: "A coin shake, and a hand chime ringing over it (A or D, in the music's key).", plays: "A face-to-face trade with another player agreed and done." },
-    buyDenied: { group: "Coins and trade", label: "Too dear", about: "A coin pouch dropped on a table: a soft, dull thud (Canakinsound's).", plays: "Anything refused for want of gold: a shop's wares, a trade, a room or a hire." },
+    buyDenied: { group: "Coins and trade", label: "Too dear", about: "A coin pouch dropped on a table: a soft, dull thud (Canakinsound's).", plays: "Anything refused for want of gold: a shop's wares, a trade, a room, a hire or a step through a guild's portal." },
 
     // In hand (scripts/sounds/items.js; audio/handling.js says which)
     pickup: { group: "In hand", label: "Picked up", about: "A leather quiver squeezed: a short creak of leather (Jan Schupke's).", plays: "Something picked up off the ground, found on a foe or taken back after it's thrown away; a weapon taken in hand from the pack." },

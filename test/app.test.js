@@ -274,7 +274,7 @@ describe("saving (save.js)", () => {
         assert.equal(saveTalks({ seed: 1 }, talks), false);
     });
 
-    it("remembers what a saved character has found of its world: the buildings gone into, the chunks set foot in; not for another", () => {
+    it("remembers what a saved character has found of its world: the buildings gone into, the chunks set foot in, the guild's branches open to them; not for another", () => {
         useStorage();
 
         const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
@@ -290,6 +290,14 @@ describe("saving (save.js)", () => {
 
         assert.ok(back.hasEntered("home:tavern") && back.isVisited(Math.floor(5000 / 64), Math.floor(6000 / 64)));
         assert.equal(back.chunksVisited, 1);
+
+        // The guild's branches open to step through to: none kept from before there were portals
+        // (worked out as they join: core/portals.js), kept once they are
+        assert.equal(back.portals, null);
+        assert.equal("portals" in loadExplored(save), false);
+        back.openPortal("human-town-2");
+        assert.equal(saveExplored(save, back), true);
+        assert.deepEqual([...new Explored(loadExplored(save)).portals], ["human-town-2"]);
 
         // Another character (or world) starts afresh; a game not saved (?play) keeps nothing
         assert.equal(new Explored(loadExplored({ ...save, created: "2026-09-27T10:00:00.000Z" })).chunksVisited, 0);

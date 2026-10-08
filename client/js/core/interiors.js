@@ -54,10 +54,12 @@ export const PLAN_KEY = Object.freeze({
     v: { kind: "votive", blocks: true },
     p: { kind: "pew", blocks: true },
     f: { kind: "basin", blocks: true },
-    // An adventurers' guild's: the quest board on the wall, and shelves of ledgers and scrolls
-    // behind the counter
+    // An adventurers' guild's: the quest board on the wall, shelves of ledgers and scrolls
+    // behind the counter, and the portal to the other branches (an arch on the wall, its veil
+    // shimmering: core/portals.js)
     q: { kind: "board", blocks: true, joins: true },
     e: { kind: "shelves", blocks: true, joins: true },
+    U: { kind: "portal", blocks: true, joins: true },
     // A keep's: the thrones (each square a seat), the pillars holding up the roof, and a carpet
     // laid from the door to the thrones
     Y: { kind: "throne", blocks: true },

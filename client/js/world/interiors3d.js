@@ -154,6 +154,10 @@ function material(asked, how = {}) {
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
+        } else if (name.startsWith("portal-")) {
+            // (A guild's portal: its veil, the swirl of light on it, and the runes round it, glowing)
+            result = new THREE.MeshBasicMaterial({ color: { "portal-veil": 0x1d4fa8, "portal-swirl": 0x8fd2ff, "portal-rune": 0xb8e6ff }[name] ?? 0x8fd2ff, toneMapped: false });
+            result.name = name;
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
             result.name = name;
@@ -542,6 +546,8 @@ const FLAMES = Object.freeze({
     // the amethyst shards in their iron cups on the walls, glowing)
     witchlight: { intensity: 4, distance: 9, flicker: 0.03, colour: 0xbc9cff, glow: 0.55 },
     shard: { intensity: 2.6, distance: 6, flicker: 0.02, colour: 0xa898ff, glow: 0.4 },
+    // (A guild's portal: its veil's cold light, all but steady)
+    portal: { intensity: 3.4, distance: 8, flicker: 0.04, colour: 0x7fb2ff, glow: 1.1 },
 });
 
 /**
@@ -1846,7 +1852,7 @@ function guild(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    walledIn(solid, map, "plaster-ochre", [{ side: "s", from: doorMiddle - 1.1, to: doorMiddle + 1.1, lintel: 2.6 }], [{ side: "s", at: 4.5 }, { side: "s", at: 14.5 }, { side: "e", at: 3 }, { side: "e", at: 12 }]);
+    walledIn(solid, map, "plaster-ochre", [{ side: "s", from: doorMiddle - 1.1, to: doorMiddle + 1.1, lintel: 2.6 }], [{ side: "s", at: 4.5 }, { side: "s", at: 14.5 }, { side: "e", at: 3 }]);
     solid.box(m(doorMiddle - 1.1), 0, h - 0.2, m(doorMiddle + 1.1), m(2.6), h + 0.4, material("planks-dark", WALL));
     ceiling(solid, map);
 
@@ -1979,6 +1985,11 @@ function guild(map) {
 
     solid.add(objectSolid(skull));
 
+    // The portal beside it (core/portals.js), its veil turning
+    for (const piece of at("portal")) {
+        moving.push(portal(solid, w, m(piece.y + piece.h / 2)));
+    }
+
     // Barrels either side of the door
     for (const barrel of at("barrels")) {
         const [x, z] = [m(barrel.x + barrel.w / 2), m(barrel.y + 0.5)];
@@ -2000,6 +2011,79 @@ function guild(map) {
         ],
         hearth: { x: map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 },
     };
+}
+
+// A guild's portal on the east wall (`w`: its x; `z` the middle of it, art pixels): an arch of
+// dressed stone (the people's), runes cut in its face glowing, a worn step before it, and in it a
+// veil of deep blue light with a swirl of paler light turning on it (the part that moves:
+// returned, for the room's `moving`), lighting the room round it a cold blue
+function portal(solid, w, z) {
+    const [spring, inner, outer, deep] = [m(1.75), m(0.8), m(1.2), m(0.5)];
+    const shape = new THREE.Shape();
+
+    // (Its outline, one piece: up the outside of one leg, over the top, down the other, and back
+    // round the opening)
+    shape.moveTo(-outer, 0);
+    shape.lineTo(-outer, spring);
+    shape.absarc(0, spring, outer, Math.PI, 0, true);
+    shape.lineTo(outer, 0);
+    shape.lineTo(inner, 0);
+    shape.lineTo(inner, spring);
+    shape.absarc(0, spring, inner, 0, Math.PI, false);
+    shape.lineTo(-inner, 0);
+    shape.closePath();
+
+    const arch = new THREE.Group();
+    const face = w + m(0.05) - deep;
+
+    arch.add(new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: deep, bevelEnabled: false, curveSegments: 10 }).rotateY(-Math.PI / 2).translate(w + m(0.05), 0, z), material("stone", WALL)));
+
+    // (The veil, a little in from the arch's face)
+    const opening = new THREE.Shape();
+
+    opening.moveTo(-inner, 0);
+    opening.lineTo(inner, 0);
+    opening.lineTo(inner, spring);
+    opening.absarc(0, spring, inner, 0, Math.PI, false);
+    opening.closePath();
+    arch.add(new THREE.Mesh(new THREE.ShapeGeometry(opening, 10).rotateY(-Math.PI / 2).translate(face + m(0.2), 0, z), material("portal-veil", WALL)));
+    solid.add(objectSolid(arch));
+
+    // Runes up the arch's face, glowing, and the step before it
+    for (let k = 0; k < 9; k++) {
+        const angle = Math.PI * (k / 8);
+        const [rz, ry] = [Math.cos(angle) * (inner + outer) * 0.5, spring + Math.sin(angle) * (inner + outer) * 0.5];
+
+        solid.box(face - 0.15, ry - m(0.07), z + rz - m(0.05), face, ry + m(0.07), z + rz + m(0.05), material("portal-rune", WALL));
+    }
+
+    for (const side of [-1, 1]) {
+        for (const ry of [m(0.5), m(1.1)]) {
+            solid.box(face - 0.15, ry - m(0.08), z + side * (inner + outer) * 0.5 - m(0.05), face, ry + m(0.08), z + side * (inner + outer) * 0.5 + m(0.05), material("portal-rune", WALL));
+        }
+    }
+
+    solid.box(face - m(0.45), 0, z - outer - m(0.1), face + m(0.1), m(0.08), z + outer + m(0.1), material("stone-dark"));
+
+    // The swirl: three arms of light winding out from the middle, turning about it
+    const swirl = new THREE.Group();
+
+    for (let arm = 0; arm < 3; arm++) {
+        for (let k = 0; k < 11; k++) {
+            const r = m(0.08 + k * 0.064);
+            const angle = (arm * Math.PI * 2) / 3 + k * 0.42;
+            const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, m(0.05 + k * 0.006), m(0.14)), material(k % 3 === 2 ? "portal-rune" : "portal-swirl"));
+
+            piece.position.set(0, Math.sin(angle) * r, Math.cos(angle) * r);
+            piece.rotation.x = -angle;
+            swirl.add(piece);
+        }
+    }
+
+    swirl.position.set(face + m(0.15), spring - m(0.45), z);
+    lit("portal", face + m(0.1), spring - m(0.3), z, { glows: [[face + m(0.1), spring - m(0.3), z]] });
+
+    return { object: swirl, turn: 1.1, axis: "x" };
 }
 
 // A hearth set into a side wall (a piece along x = 0, the west wall, or the east), a fire in it:

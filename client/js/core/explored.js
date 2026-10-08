@@ -1,20 +1,27 @@
 // What the player has found of the world: the buildings they've gone into (by key: core/insides.js),
-// shown on the minimap and the world map with an icon of what each is; and the chunks of the
-// world they've set foot in, the rest of the world map hidden under a fog until they have.
+// shown on the minimap and the world map with an icon of what each is; the chunks of the world
+// they've set foot in, the rest of the world map hidden under a fog until they have; and the
+// adventurers' guild's branches whose portals they can step through to (core/portals.js: by their
+// places' ids), each one they've been into.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
-// (the world's 128 by 128 chunks in 2 KB), written as base64.
+// (the world's 128 by 128 chunks in 2 KB), written as base64, and the branches as their ids. One
+// kept from before there were portals has none (`portals` null), till the host works out which
+// they'd found (Host join).
 
 import { fromBase64, toBase64 } from "./wire.js";
 import { CHUNK, CHUNKS } from "./worldplan/plan.js";
 
 export class Explored {
     /**
-     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64 }.
+     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids] }.
      */
-    constructor({ entered = [], visited = "" } = {}) {
+    constructor({ entered = [], visited = "", portals = null } = {}) {
         this.entered = new Set(entered.filter((key) => typeof key === "string"));
         this.visited = typeof visited === "string" && visited ? fromBase64(visited, (CHUNKS * CHUNKS) / 8) : new Uint8Array((CHUNKS * CHUNKS) / 8);
+
+        /** The guild's branches open to step through to (plan place ids), or null till worked out. */
+        this.portals = Array.isArray(portals) ? new Set(portals.filter((id) => typeof id === "string")) : null;
 
         /** Goes up by one whenever anything's found (for what's drawn from it to know to redraw). */
         this.version = 0;
@@ -32,6 +39,28 @@ export class Explored {
         }
 
         this.entered.add(key);
+        this.version++;
+
+        return true;
+    }
+
+    /** Can the player step through a guild's portal to this branch (a plan place's id)? */
+    canTravelTo(id) {
+        return this.portals?.has(id) ?? false;
+    }
+
+    /**
+     * A guild's branch (a plan place's id) open to step through to: the player's been in it.
+     * Returns whether it's the first time.
+     */
+    openPortal(id) {
+        this.portals ??= new Set();
+
+        if (typeof id !== "string" || this.portals.has(id)) {
+            return false;
+        }
+
+        this.portals.add(id);
         this.version++;
 
         return true;
@@ -85,8 +114,8 @@ export class Explored {
         return count;
     }
 
-    /** What to keep: { entered: [keys], visited: base64 }. */
+    /** What to keep: { entered: [keys], visited: base64, portals: [ids] } (no `portals` till they're worked out). */
     toJSON() {
-        return { entered: [...this.entered], visited: toBase64(this.visited) };
+        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}) };
     }
 }

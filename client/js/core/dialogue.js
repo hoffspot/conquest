@@ -693,6 +693,7 @@ export const TREES = Object.freeze({
                     { say: "What's the quest board?", next: "board" },
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
+                    { say: "What's that archway by the hearth?", next: "portal" },
                     FAREWELL,
                 ],
             },
@@ -757,8 +758,32 @@ export const TREES = Object.freeze({
                 choices: "more",
             },
             branches: {
-                say: "There's a branch in every village and town, and in the cities too. The same card works at all of them. And they all have a counter, and someone like me behind it. Though not quite like me.",
+                say: "There's a branch in every village and town, and in the cities too. The same card works at all of them. And they all have a counter, and someone like me behind it. Though not quite like me. And a portal, so once you've been to one, you can pop back any time!",
                 choices: "more",
+            },
+            // (The guild's portal: where it goes, what it costs, and what their rank takes off:
+            // core/portals.js, the game's words)
+            portal: {
+                say: "Oh, the portal! Every branch has one. Step up to it and you can go through to any other branch you've been inside. Only those, mind: the veil won't open on a hall you've never stood in. Something about knowing where you're going.",
+                choices: [
+                    { say: "What does it cost?", next: "fare" },
+                    { say: "Can anyone use it?", next: "members" },
+                    { say: "Good to know.", next: "more" },
+                ],
+            },
+            fare: {
+                say: "Five gold to step through, and seven more for every kilometre to the other branch, as the crow flies. But the higher your rank, the less you pay: a fifth off at Iron, two fifths at Bronze, and so on up. Mithril go free! {portalShare}",
+                choices: [
+                    { say: "Can anyone use it?", next: "members" },
+                    { say: "Good to know.", next: "more" },
+                ],
+            },
+            members: {
+                say: "Members only! It's the guild's, after all. Show your card at the arch, and it opens. Bring your companions along too; they don't pay a thing. {portalShare}",
+                choices: [
+                    { say: "What does it cost?", next: "fare" },
+                    { say: "Good to know.", next: "more" },
+                ],
             },
         },
     },

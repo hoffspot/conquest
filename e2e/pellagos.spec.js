@@ -1,4 +1,7 @@
 import { expect, test } from "./fixtures.js";
+import { Explored } from "../client/js/core/explored.js";
+import { branchesFound, fareOf } from "../client/js/core/portals.js";
+import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 // Pellagos in a real browser. The page exposes itself as window.pellagos ({ game, session,
 // creator, loader, playing }), which these tests use to look inside. Drawing is slow without a
@@ -2757,6 +2760,228 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
     expect(temple.acts.some((act) => act.startsWith("worshipper:rest:"))).toBe(true);
     expect(temple.patron).toMatch(/This is Aurelia's house, the Dawnmother/);
     expect(temple.place).toBe("temple");
+});
+
+test("the guild's portal: a character kept from before there were portals has the branches in country they'd found open; the receptionist tells of it, and what their rank takes off; tapped, it walks them up to it and the travel map shows those branches with their fares; one tapped is asked about first, and agreed to, they pay and step out of its portal", async ({ page }) => {
+    test.setTimeout(240000);
+
+    // Seed 2's world: the home town, the branch nearest it, and the next. Kept from before the
+    // portals: the way walked from home to the nearest branch, and round both, uncovered; the
+    // next branch still under the fog
+    const plan = planWorld(2);
+    const start = startFor(plan, "human");
+    const apart = (place) => Math.hypot(place.at[0] - start.at[0], place.at[1] - start.at[1]);
+    const [near, next] = guilds(plan)
+        .filter(({ id }) => id !== start.id)
+        .sort((a, b) => apart(a) - apart(b));
+    const kept = new Explored();
+
+    for (let t = 0; t <= 1; t += 0.02) {
+        kept.visit(start.at[0] + (near.at[0] - start.at[0]) * t, start.at[1] + (near.at[1] - start.at[1]) * t);
+    }
+
+    for (const { at } of [start, near]) {
+        for (const [dx, dz] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) {
+            kept.visit(at[0] + dx * 64, at[1] + dz * 64);
+        }
+    }
+
+    const open = branchesFound(plan, kept, start);
+
+    expect(open).toEqual(expect.arrayContaining([start.id, near.id]));
+    expect(open).not.toContain(next.id);
+    expect(kept.toJSON().portals).toBeUndefined();
+
+    await page.addInitScript(([save, explored]) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+        localStorage.setItem("pellagos.explored", JSON.stringify(explored));
+    }, [{ ...SAVE, seed: 2 }, { created: SAVE.created, seed: 2, ...kept.toJSON() }]);
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // Opened to them as they came in: those whose country they'd found
+    expect(await page.evaluate(() => [...window.pellagos.game.explored.portals].sort())).toEqual([...open].sort());
+
+    // Into the home town's guild, and up to the receptionist to ask about the arch by the hearth
+    const talk = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild" && each.place === "home");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.host.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 20 && player.map === "town"; k++) {
+            game.advance(0.25, { render: false });
+        }
+
+        const receptionist = game.battle.actors.find(({ map, role }) => map === player.map && role === "receptionist");
+
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const conversation = game.talking.conversation;
+        const say = (text) => {
+            conversation.choose(conversation.choices.findIndex((choice) => choice.text === text));
+
+            return conversation.line;
+        };
+        const asked = conversation.choices.map(({ text }) => text);
+        const portal = say("What's that archway by the hearth?");
+        const fare = say("What does it cost?");
+        const members = say("Can anyone use it?");
+
+        say("Good to know.");
+        say("I'd like to register as an adventurer.");
+        say("Thank you!");
+        say("What's that archway by the hearth?");
+
+        const copper = say("What does it cost?");
+
+        say("Good to know.");
+        game.talk.onClose?.();
+
+        return { map: player.map, asked, portal, fare, members, copper, rank: game.standing.guildTitle() };
+    });
+
+    expect(talk.map).toMatch(/^home:guild-\d+\/hall$/);
+    expect(talk.asked).toContain("What's that archway by the hearth?");
+    expect(talk.portal).toMatch(/^Oh, the portal! Every branch has one\..* any other branch you've been inside/);
+    expect(talk.fare).toMatch(/^Five gold to step through, and seven more for every kilometre .* Mithril go free! Register first/);
+    expect(talk.members).toMatch(/^Members only!/);
+    expect(talk.rank).toBe("Copper");
+    expect(talk.copper).toMatch(/You're Copper, so it's the full fare for now/);
+
+    // What's kept of where they've been now has the branches (worked out as they came in)
+    expect(new Set((await keptOf(page, "explored")).portals)).toEqual(new Set(open));
+
+    // Across the room from the portal, gold in hand, looking at it; tapped, they walk up to it,
+    // and the travel map opens on it
+    const at = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [ox, oz] = game.originOf(game.mapId);
+
+        game.progress.gold = 60;
+        Object.assign(player, { square: [11, 13], x: 11.5, y: 13.5, path: [], facing: Math.PI / 2 });
+
+        for (let k = 0; k < 12; k++) {
+            game.advance(0.25);
+        }
+
+        Object.assign(game.cameraFollow, { yaw: -Math.PI / 2 + 0.25, turning: 0, pitch: 30 });
+        game.cameraFollow.heading = { x: 0, z: 0 };
+        game.advance(0.05);
+        game.start();
+
+        return game.view.toScreen(game.view.camera.position.clone().set(ox + 19.6, 0.6, oz + 12.5));
+    });
+
+    await page.mouse.click(at.x, at.y);
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 30000, polling: 100 });
+
+    const map = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { title: document.querySelector("#worldmaptitle").textContent, text: document.querySelector("#worldmappicktext").textContent, key: document.querySelector("#worldmapkey").hidden, drawn: worldMap.drawn, travel: worldMap.travel, square: player.square, paused: !game.running };
+    });
+    const here = map.travel.find(({ here }) => here);
+    const there = map.travel.find(({ id }) => id === near.id);
+
+    expect(map.title).toBe("Guild portal");
+    expect(map.text).toBe("Tap a branch of the guild to step through to it.");
+    expect(map.key).toBe(true);
+    expect(map.paused).toBe(true);
+    expect(map.square).toEqual([18, 12]);
+
+    // (Only the branches open to them, the guild's icon over each, however far out; no pin, no marks)
+    expect(new Set(map.travel.map(({ id }) => id))).toEqual(new Set(open));
+    expect(map.drawn).toMatchObject({ branches: open.length, marks: 0, pin: false });
+    expect(map.drawn.icons.every((kind) => kind === "guild")).toBe(true);
+    expect(here.id).toBe(start.id);
+    expect(there.fare).toBe(fareOf(apart(near), 0));
+    expect(there.name).toBe(near.name);
+
+    // Where's a branch on the map, to tap
+    const spot = (branch) =>
+        page.evaluate(({ x, z }) => {
+            const map = window.pellagos.worldMap;
+            const rect = map.canvas.getBoundingClientRect();
+
+            return { x: rect.left + (x - map.view.x) / map.view.scale + rect.width / 2, y: rect.top + (z - map.view.z) / map.view.scale + rect.height / 2 };
+        }, branch);
+
+    // Here: nothing to do; the one nearest, asked first; stayed, still on the map
+    const home = await spot(here);
+
+    await page.mouse.click(home.x, home.y);
+    await expect(page.locator("#worldmapnote")).toHaveText("You're here");
+
+    const near1 = await spot(there);
+
+    await page.mouse.click(near1.x, near1.y);
+    await expect(page.locator("#portal")).toBeVisible();
+    await expect(page.locator("#portaltitle")).toHaveText(`Step through to ${near.name}?`);
+    await expect(page.locator("#portalnote")).toContainText(`${there.fare} gold. You have 60 gold.`);
+    await expect(page.locator("#portalgo")).toHaveText(`Pay ${there.fare} gold and step through`);
+    await page.locator("#portalback").click();
+    await expect(page.locator("#portal")).toBeHidden();
+    expect(await page.evaluate(() => document.querySelector("#worldmap").open)).toBe(true);
+
+    // Agreed to: paid, and out of that branch's portal, into its hall, facing into it
+    await page.mouse.click(near1.x, near1.y);
+    await page.locator("#portalgo").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+    await page.waitForFunction((id) => window.pellagos.game.battle.actor("player").map.startsWith(`${id}:guild-`), near.id, { timeout: 10000 });
+
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        for (let k = 0; k < 4; k++) {
+            game.advance(0.25);
+        }
+
+        return { map: player.map, shown: game.mapId, square: player.square, facing: player.facing, gold: game.progress.gold, plate: document.querySelector("#playerplate")?.textContent ?? "", running: game.running };
+    });
+
+    expect(after.map).toMatch(new RegExp(`^${near.id}:guild-\\d+/hall$`));
+    expect(after.shown).toBe(after.map);
+    expect(after.square).toEqual([14, 12]);
+    expect(after.facing).toBeCloseTo(-Math.PI / 2);
+    expect(after.gold).toBe(60 - there.fare);
+    expect(after.plate).toContain(`${60 - there.fare} gold`);
+    expect(after.running).toBe(true);
+
+    // Home again for less than they have: they can't
+    const poor = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.progress.gold = 2;
+        Object.assign(player, { square: [18, 12], x: 18.5, y: 12.5, path: [] });
+        game.advance(0.1);
+
+        return game.openPortal().ok;
+    });
+
+    expect(poor).toBe(true);
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 10000 });
+
+    const back = await spot(here);
+
+    await page.mouse.click(back.x, back.y);
+    await expect(page.locator("#portalgo")).toHaveText("Not enough gold");
+    await expect(page.locator("#portalgo")).toBeDisabled();
 });
 
 test("trading with the guild's receptionist, she stays at her counter till it's done, though her rounds would take her off to the files and out of reach; done, or the player off to talk to someone else, she's back about her business", async ({ page }) => {

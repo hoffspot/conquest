@@ -300,12 +300,17 @@ export function saveTalks(save, { memory, knowledge }) {
 
 /**
  * What the character of a saved game ({ seed, created }) has found of its world (core/explored.js
- * Explored's toJSON: { entered, visited }); nothing yet for another game.
+ * Explored's toJSON: { entered, visited, portals }: no `portals` kept from before there were
+ * portals, worked out from the rest as they join); nothing yet for another game.
  */
 export function loadExplored(save) {
     const explored = own(save, "explored");
 
-    return explored ? { entered: explored.entered ?? [], visited: explored.visited ?? "" } : { entered: [], visited: "" };
+    if (!explored) {
+        return { entered: [], visited: "" };
+    }
+
+    return { entered: explored.entered ?? [], visited: explored.visited ?? "", ...(Array.isArray(explored.portals) ? { portals: explored.portals } : {}) };
 }
 
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
