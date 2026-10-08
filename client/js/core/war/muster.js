@@ -1,7 +1,6 @@
 // The war come to life near a player (docs/WAR.md M2, M6): where a town's soldiers stand guard,
 // and the rounds its patrols walk, worked out from the plan (the same every time for a place);
-// how a camp's laid out round its fire; and where a camp's sortie against its town sets out from
-// and makes for.
+// and how an army's camp is laid out round its fire.
 //
 // Guards stand in pairs either side of each road out of the town, just past its edge, facing out
 // (then round the edge, if it has fewer roads than guards); each patrol walks a round of the town
@@ -138,9 +137,6 @@ export function braziersOf(plan, place, { middle = place.at } = {}) {
  */
 export const CAMP = Object.freeze({ sentries: 6, ring: 8, tents: 5, pitch: 4.5 });
 
-/** How far past its town's edge a camp's sortie sets out from (metres). */
-export const SORTIE_OUT = 40;
-
 // A number from an id, the same every time (to turn each camp a little its own way)
 const hashOf = (id) => [...String(id)].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 7) >>> 0;
 
@@ -162,19 +158,3 @@ export function campOf(camp, { sentries = CAMP.sentries } = {}) {
 
     return { fire: [cx, cy], tents: round(CAMP.tents, CAMP.pitch, 0, true), posts: round(sentries, CAMP.ring, 0.5, false) };
 }
-
-/**
- * Where a camp's sortie against its town sets out from, and makes for (the world's metres): from
- * `SORTIE_OUT` past the town's edge on the camp's side, to its fields just outside its edge (a
- * raid: "raid") or into it (an assault): { from, to, facing (the way they go) }.
- */
-export function sortieOf(place, camp, kind, { middle = place.at } = {}) {
-    const radius = SETTLEMENT_KINDS[place.kind].radius;
-    const [dx, dy] = [camp.at[0] - middle[0], camp.at[1] - middle[1]];
-    const length = hypot(dx, dy);
-    const [ux, uy] = length > 1e-6 ? [dx / length, dy / length] : [1, 0];
-    const at = (distance) => [middle[0] + ux * distance, middle[1] + uy * distance];
-
-    return { from: at(radius + SORTIE_OUT), to: kind === "raid" ? at(radius + GUARD_OUT + 2) : at(radius * 0.3), facing: facingAlong(-ux, -uy) };
-}
-

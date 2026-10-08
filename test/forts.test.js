@@ -253,16 +253,19 @@ describe("the fortifications in the war (war.js)", () => {
         assert.ok(events.some(({ type, fort: id }) => type === "abandoned" && id === fort.id));
     });
 
-    it("has an enemy's army near one fall on it, losing some to its defenders, and raze it at nothing; not while a player's near it", () => {
-        const { war, fort, capital } = withTower();
+    it("has an enemy's army attacking it from a camp in reach fall on it, losing some to its defenders, and raze it at nothing; not while a player's near it", () => {
+        const { war, fort } = withTower();
 
         atWar(war, "human", "orc");
 
-        const home = war.towns.find(({ owner }) => owner === "orc").id;
         const at = [fort.at[0] + 100, fort.at[1]];
-        const camp = { id: "force-test", realm: "orc", kind: "camp", size: 30, at, path: [at], leg: 0, target: capital.id, home, mission: null, about: null, since: war.turn };
+        const home = war.realm("orc").seat;
 
-        war.forces.push(camp);
+        war.camps.push({ id: "camp-test", realm: "orc", at, guard: 6, built: 0, done: 0, toward: fort.id, used: 1e6, skirmished: 1e6 });
+
+        const army = { id: "force-test", realm: "orc", kind: "army", size: 30, at: [...fort.at], path: [[...fort.at]], leg: 0, target: fort.id, home, mission: "attack", about: null, camp: "camp-test", orders: null, went: 30, arrived: null, since: 0 };
+
+        war.forces.push(army);
         war.watch([fort.id]);
         war.step();
         assert.equal(fort.hp, FORTS.tower.hp, "a player's near: played out in the world");
@@ -271,7 +274,7 @@ describe("the fortifications in the war (war.js)", () => {
         fort.hp = 1000;
         war.step();
         assert.ok(fort.hp < 1000, `${fort.hp}: fallen on`);
-        assert.ok(camp.size < 30, "its defenders bring some down");
+        assert.ok(army.size < 30, "its defenders bring some down");
 
         for (let k = 0; k < 10 && war.fort(fort.id); k++) {
             war.step();

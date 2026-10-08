@@ -489,7 +489,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -3019,7 +3019,8 @@ export class Game {
 
         const stage = STAGES[this.host.war.stage];
         const said = {
-            taken: `${town.name} is taken! Its barracks put to the sword, the ${peopleOf(by)} hold it now.`,
+            taken: `${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`,
+            garrison: `${town.name}'s barracks is cleared. The town's the ${peopleOf(by)}' once the rest of its garrison is put down too.`,
             peace: `${town.name}'s barracks is cleared, but the ${peopleOf(by)} aren't at war with the ${peopleOf(people)}: it isn't theirs to take.`,
             age: `${town.name}'s barracks is cleared, but no ${town.kind} is taken in ${stage.name.replace(/^An? /, "the ").toLowerCase()}. Its garrison will be back.`,
         }[how];
@@ -3028,6 +3029,20 @@ export class Game {
             this.hud.message(said, 5);
             this.sound?.play("wake");
         }
+    }
+
+    // A town taken by the player's people, the last of its garrison put down near them (not in its
+    // barracks: that's said there): the player told
+    #townTaken({ town: id, by }) {
+        const town = this.host?.war?.town(id);
+        const me = this.battle.actor(this.me);
+
+        if (!town || by !== this.self?.realm || this.host?.quartered.get(id)?.map === me?.map) {
+            return;
+        }
+
+        this.hud.message(`${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`, 5);
+        this.sound?.play("wake");
     }
 
     /**
@@ -5430,16 +5445,6 @@ export class Game {
         }
     }
 
-    // A camp's sortie out against the town the player's at: its raiders or attackers to be drawn,
-    // and the player told
-    #sortie({ kind, people, name, ids }) {
-        const them = `the ${peopleOf(people)}`;
-
-        this.enlisting.push(...ids);
-        this.hud.message(kind === "raid" ? `Raiders of ${them} are coming for ${name}'s fields!` : `${them[0].toUpperCase()}${them.slice(1)} are storming ${name}!`, 4);
-        this.sound?.play("newsHeard");
-    }
-
     // An envoy near the player at the end of their road, or waylaid on it: the player told
     #envoyed({ people, to, over, by }) {
         const theirs = `The ${ADJECTIVES[people] ?? people} envoy`;
@@ -6238,11 +6243,10 @@ export class Game {
                 this.#greet(event);
                 break;
             case "strike":
-            case "sortied":
                 this.#strike(event);
                 break;
-            case "sortie":
-                this.#sortie(event);
+            case "taken":
+                this.#townTaken(event);
                 break;
             case "envoy":
                 this.enlisting.push(...event.ids);

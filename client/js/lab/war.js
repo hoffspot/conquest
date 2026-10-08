@@ -115,15 +115,16 @@ function draw() {
         context.fill();
     }
 
-    // The forces out: each camp's and expedition's way to its target, then the forces themselves
+    // The forces out: each one's way to where it's going (an army's, a band's, an envoy's, a
+    // convoy's, reinforcements'), each camp's to what it was built before; then the forces themselves
     context.lineWidth = 1.5;
 
     for (const force of war.forces) {
         const colour = PEOPLE_COLOURS[force.realm];
 
-        if (force.kind === "expedition" || force.kind === "relief" || force.kind === "envoy" || force.kind === "convoy") {
-            context.strokeStyle = `${colour}${force.kind === "convoy" ? "66" : "aa"}`;
-            context.setLineDash(force.kind === "envoy" || force.kind === "convoy" ? [2, 4] : [6, 4]);
+        if (force.leg < force.path.length - 1 && (force.kind !== "reserve" || force.size > 0)) {
+            context.strokeStyle = `${colour}${force.kind === "convoy" || force.kind === "reinforcement" ? "66" : "aa"}`;
+            context.setLineDash(force.kind === "envoy" || force.kind === "convoy" || force.kind === "reinforcement" ? [2, 4] : [6, 4]);
             context.beginPath();
             context.moveTo(...toScreen(...force.at));
 
@@ -132,17 +133,19 @@ function draw() {
             }
 
             context.stroke();
-        } else if (force.kind === "camp") {
-            const town = war.town(force.target);
+        }
+    }
 
-            if (town) {
-                context.strokeStyle = colour;
-                context.setLineDash([2, 3]);
-                context.beginPath();
-                context.moveTo(...toScreen(...force.at));
-                context.lineTo(...toScreen(...town.at));
-                context.stroke();
-            }
+    for (const camp of war.camps ?? []) {
+        const toward = war.town(camp.toward) ?? war.workAt(camp.toward) ?? war.fort?.(camp.toward);
+
+        if (toward) {
+            context.strokeStyle = PEOPLE_COLOURS[camp.realm];
+            context.setLineDash([2, 3]);
+            context.beginPath();
+            context.moveTo(...toScreen(...camp.at));
+            context.lineTo(...toScreen(...toward.at));
+            context.stroke();
         }
     }
 
@@ -239,24 +242,50 @@ function draw() {
         context.stroke();
     }
 
-    // The forces themselves: camps as tents, expeditions and relief as shields, envoys as scrolls,
-    // convoys as wagons
+    // The camps as tents (hollow while they're going up)
+    for (const camp of war.camps ?? []) {
+        const [sx, sy] = toScreen(...camp.at);
+        const size = 6;
+
+        context.fillStyle = PEOPLE_COLOURS[camp.realm];
+        context.strokeStyle = camp.built === null ? PEOPLE_COLOURS[camp.realm] : "#101418";
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.moveTo(sx, sy - size);
+        context.lineTo(sx + size, sy + size * 0.8);
+        context.lineTo(sx - size, sy + size * 0.8);
+        context.closePath();
+
+        if (camp.built !== null) {
+            context.fill();
+        }
+
+        context.stroke();
+    }
+
+    // The forces themselves: armies and bands as shields, reserves as banners, reinforcements as
+    // dots, envoys as scrolls, convoys as wagons
     for (const force of war.forces) {
         const [sx, sy] = toScreen(...force.at);
         const colour = PEOPLE_COLOURS[force.realm];
+
+        if (force.kind === "reserve" && force.size <= 0) {
+            continue;
+        }
 
         context.fillStyle = colour;
         context.strokeStyle = "#101418";
         context.lineWidth = 1.5;
         context.beginPath();
 
-        if (force.kind === "camp") {
-            const size = 5 + Math.min(6, force.size / 8);
+        if (force.kind === "reinforcement") {
+            context.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        } else if (force.kind === "reserve") {
+            const size = 4 + Math.min(5, force.size / 12);
 
-            context.moveTo(sx, sy - size);
-            context.lineTo(sx + size, sy + size * 0.8);
-            context.lineTo(sx - size, sy + size * 0.8);
-            context.closePath();
+            context.rect(sx - size, sy - size * 1.4, size * 2, size * 2.2);
+            context.moveTo(sx - size, sy - size * 1.4);
+            context.lineTo(sx - size, sy + size * 1.6);
         } else if (force.kind === "envoy") {
             context.rect(sx - 3, sy - 4, 6, 8);
         } else if (force.kind === "convoy") {
@@ -266,7 +295,7 @@ function draw() {
             context.moveTo(sx + 4.5, sy + 3.5);
             context.arc(sx + 3, sy + 3.5, 1.5, 0, Math.PI * 2);
         } else {
-            const size = 4 + Math.min(5, force.size / 8);
+            const size = 4 + Math.min(6, force.size / (force.kind === "army" ? 12 : 8));
 
             context.moveTo(sx - size, sy - size);
             context.lineTo(sx + size, sy - size);
@@ -279,7 +308,7 @@ function draw() {
         context.fill();
         context.stroke();
 
-        if (force.kind !== "envoy" && force.kind !== "convoy") {
+        if (force.kind !== "envoy" && force.kind !== "convoy" && force.kind !== "reinforcement") {
             context.font = "bold 10px system-ui, sans-serif";
             context.lineWidth = 3;
             context.strokeStyle = "rgb(10 12 14 / 85%)";
@@ -305,10 +334,22 @@ function forted(id) {
     return said.join(" · ");
 }
 
+// A realm's army and reserve, in words: "Army 56 of 80, attacking · Reserve 80 of 80 · 2 camps"
+function armed(id) {
+    const { war } = state;
+    const [army, reserve, full] = [war.armyOf(id), war.reserveOf(id), war.fullOf(id)];
+    const camps = war.camps.filter(({ realm }) => realm === id).length;
+
+    return [army ? `Army ${army.size} of ${full}, ${DOING[army.mission] ?? army.mission}` : "No army raised", `Reserve ${reserve?.size ?? 0} of ${full}`, `${camps} camp${camps === 1 ? "" : "s"}`].join(" · ");
+}
+
+// What an army's doing, in words (war.js forces' missions)
+const DOING = Object.freeze({ muster: "mustering at home", camp: "at its camp", attack: "attacking", regroup: "regrouping", home: "going home" });
+
 function showRealms() {
     const { war } = state;
 
-    $("#age").textContent = `Turn ${war.turn}: ${STAGES[war.stage].name}.${war.victor ? ` The ${peopleOf(war.victor)} rule the continent.` : ""} ${STAGES[war.stage].take.length ? `Their camps can take ${STAGES[war.stage].take.map((kind) => (kind === "city" ? "cities" : `${kind}s`)).join(", ")}.` : "Their camps can only raid."}`;
+    $("#age").textContent = `Turn ${war.turn}: ${STAGES[war.stage].name}.${war.victor ? ` The ${peopleOf(war.victor)} rule the continent.` : ""} ${STAGES[war.stage].take.length ? `Their armies can take ${STAGES[war.stage].take.map((kind) => (kind === "city" ? "cities" : `${kind}s`)).join(", ")}.` : "No army marches yet."}`;
 
     $("#realms").replaceChildren(
         ...war.realms.map((realm) => {
@@ -326,6 +367,7 @@ function showRealms() {
                 Object.assign(document.createElement("span"), { className: "holds", textContent: realm.alive ? `${towns} towns · ${war.works.filter(({ owner, held }) => owner === realm.id && !held).length} works · ${war.power(realm.id)} under arms · ${Math.floor(realm.treasury)} gold` : "No towns left" }),
                 Object.assign(document.createElement("span"), { className: "holds", textContent: RESOURCES.map((resource) => `${Math.floor(realm.stores[resource])} ${resource}`).join(" · ") }),
                 Object.assign(document.createElement("span"), { className: "holds", textContent: forted(realm.id) }),
+                Object.assign(document.createElement("span"), { className: "holds", textContent: realm.alive ? armed(realm.id) : "" }),
             );
 
             return li;
@@ -447,15 +489,20 @@ function describe(sx, sy) {
         lines.push(`The ${own(fort.realm)} ${fort.kind === "garrison" ? "forward garrison" : "guard tower"} by ${where}: ${Math.round(fort.hp)} of ${FORTS[fort.kind].hp} standing`);
     }
 
+    for (const camp of near(war.camps ?? [])) {
+        lines.push(`The ${own(camp.realm)} camp${camp.built === null ? " going up" : ""}: ${camp.guard} holding it`);
+    }
+
     for (const force of near(war.forces)) {
         const works = war.workAt(force.target);
-        const target = war.town(force.target)?.name ?? (works ? `the ${works.name} ${works.kind}` : force.kind === "envoy" ? `the ${peopleOf(force.target)}` : "a camp");
+        const target = war.town(force.target)?.name ?? (works ? `the ${works.name} ${works.kind}` : force.kind === "envoy" ? `the ${peopleOf(force.target)}` : war.fort?.(force.target) ? "a fortification" : "a camp");
         const home = war.workAt(force.home);
         const carrying = Object.entries(force.cargo ?? {}).map(([resource, amount]) => `${Math.floor(amount)} ${resource}`).join(", ");
         const what = {
-            expedition: force.mission === "retake" ? `going to win back ${target}` : `marching on ${target}`,
-            camp: `camped outside ${target}`,
-            relief: `going to relieve ${target === "a camp" ? "a town" : target}`,
+            army: force.mission === "attack" ? `the army, attacking ${target}` : force.mission === "camp" && force.target ? `the army, going to camp within a march of ${target}` : `the army, ${DOING[force.mission] ?? force.mission}`,
+            reserve: force.mission === "defend" ? "the reserve, out against an enemy army" : "the reserve",
+            reinforcement: `on their way to join their ${war.force(force.target)?.kind ?? "army"}`,
+            expedition: `going to win back ${target}`,
             envoy: `an envoy to ${target}`,
             convoy: force.back ? `a convoy going back to the ${home?.name} ${home?.kind}` : `a convoy carrying ${carrying} to ${target}`,
         }[force.kind];

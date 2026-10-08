@@ -1,9 +1,10 @@
 // The barracks (docs/WAR.md M16): one in every settlement the war's fought over, a house made over
 // (setpieces/town.js), drawn in each people's look, its long room inside; its guardsmen and
-// captain stood up in it near a player, of whoever holds its town (core/host.js BARRACKS_NEAR);
-// put down, the town taken by the people of whoever put them down, if they're at war with its
-// holders and the age lets it be (core/war/war.js capture); the keep's request to take a town so;
-// and the war half as fast as it was (TURNS_PER_STAGE, SIEGE)
+// captain stood up in it near a player, of whoever holds its town (core/host.js BARRACKS_NEAR),
+// part of its garrison: the town taken by the people of whoever put the last of that down, if
+// they're at war with its holders and the age lets it be (core/war/war.js loss: docs/WAR.md
+// *Standing armies*); the keep's request to take a town so; and the war half as fast as it was
+// (TURNS_PER_STAGE)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 
@@ -30,7 +31,7 @@ const { barracksPosts, barracksRooms, ENTERABLE, ENTRANCES } = await import("../
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { QUARTERED } = await import("../client/js/core/war/muster.js");
 const { tell } = await import("../client/js/core/war/news.js");
-const { BARRACKS_TAKEN, HOLDINGS, SIEGE, STAGES, TURN_MS, TURNS_PER_STAGE, War } = await import("../client/js/core/war/war.js");
+const { HOLDINGS, STAGES, TAKEN, TURN_MS, TURNS_PER_STAGE, War } = await import("../client/js/core/war/war.js");
 const { planWorld } = await import("../client/js/core/worldplan/plan.js");
 const { offerRequest, OPENS, progressOf, REQUESTS, STANDINGS } = await import("../client/js/core/standing.js");
 const { createRandom } = await import("../client/js/core/random.js");
@@ -170,7 +171,7 @@ describe("a barracks drawn (art/kits/landmarks.js, art/peoples, app/mapicons.js)
     });
 });
 
-describe("a town taken by its barracks (war.js capture)", () => {
+describe("a town taken by putting its garrison down to the last (war.js loss)", () => {
     let plan;
 
     before(() => {
@@ -184,7 +185,7 @@ describe("a town taken by its barracks (war.js capture)", () => {
         return { war, town };
     };
 
-    it("is the people's who put its barracks down, at war with its holders, in an age that lets it be: held by a quarter of a full garrison of theirs", () => {
+    it("is the people's who put the last of it down, at war with its holders, in an age that lets it be: held by a quarter of a full garrison of theirs", () => {
         const { war, town } = fresh();
 
         atWar(war, "human", "orc");
@@ -192,30 +193,38 @@ describe("a town taken by its barracks (war.js capture)", () => {
 
         const grudge = war.realm("orc").standing.human ?? 0;
 
-        assert.equal(war.capture(town.id, "human"), "taken");
+        assert.equal(war.loss(town.id, town.garrison - 1, { by: "human" }), null, "(not with one of it left)");
+        assert.equal(town.owner, "orc");
+        assert.equal(war.loss(town.id, 1, { by: "human" }), "taken");
         assert.equal(town.owner, "human");
-        assert.equal(town.garrison, Math.ceil(HOLDINGS.town.garrison * BARRACKS_TAKEN));
+        assert.equal(town.garrison, Math.ceil(HOLDINGS.town.garrison * TAKEN));
         assert.ok(war.realm("orc").standing.human < grudge, "the orcs bear a grudge");
 
         const event = war.events.find(({ type }) => type === "taken");
 
-        assert.deepEqual({ ...event, turn: 0 }, { type: "taken", turn: 0, town: town.id, from: "orc", to: "human", how: "barracks" });
-        assert.match(tell(event, war), /has fallen to the .+, its barracks put to the sword/);
+        assert.deepEqual({ ...event, turn: 0 }, { type: "taken", turn: 0, town: town.id, from: "orc", to: "human", how: "played" });
+        assert.match(tell(event, war), /has fallen to the .+, its garrison put to the sword/);
     });
 
     it("isn't, when they're not at war, or the age doesn't let towns of its kind be taken, or it's theirs", () => {
         const { war, town } = fresh();
+        const downBy = (by) => {
+            town.garrison = 1;
+
+            return war.loss(town.id, 1, { by });
+        };
 
         war.stage = STAGES.length - 1;
-        assert.equal(war.capture(town.id, "human"), "peace");
+        assert.equal(downBy("human"), null, "(at peace)");
 
         atWar(war, "human", "orc");
         war.stage = 0;
-        assert.equal(war.capture(town.id, "human"), "age");
+        assert.equal(downBy("human"), null, "(the uneasy peace)");
         war.stage = STAGES.findIndex(({ take }) => take.includes("village"));
-        assert.equal(war.capture(town.id, "human"), "age", "only villages, in border wars");
-        assert.equal(war.capture(town.id, "orc"), null, "their own");
-        assert.equal(war.capture("nowhere", "human"), null);
+        assert.equal(downBy("human"), null, "only villages, in border wars");
+        war.stage = STAGES.length - 1;
+        assert.equal(downBy("orc"), null, "their own");
+        assert.equal(war.loss("nowhere", 1, { by: "human" }), null);
         assert.equal(town.owner, "orc");
     });
 
@@ -225,7 +234,7 @@ describe("a town taken by its barracks (war.js capture)", () => {
 
         atWar(war, "human", "orc");
         war.stage = STAGES.length - 1;
-        assert.equal(war.capture(seat.id, "human"), "taken");
+        assert.equal(war.loss(seat.id, seat.garrison, { by: "human" }), "taken");
         assert.equal(war.realm("orc").overlord, "human");
         assert.equal(seat.owner, "orc", "theirs to rule from, under the humans");
     });
@@ -332,15 +341,19 @@ describe("a barracks' garrison near a player (host.js BARRACKS_NEAR)", () => {
         assert.equal(out.ids.length, 1 + Math.ceil((1 / HOLDINGS[town.kind].garrison) * QUARTERED[town.kind]));
     });
 
-    it("put down by the player, its town's theirs: their people's soldiers out round it, and in it once they've left", () => {
+    it("put down by the player, the last of its town's garrison, its town's theirs: their people's soldiers out round it, and in it once they've left", () => {
         const { host, war, town, building, me, out } = inBarracks();
+
+        // (The rest of the garrison down already: those in the barracks all that's left of it)
+        town.garrison = out.ids.length;
+
         const events = putDown(host, out);
 
         assert.ok(out.ids.every((id) => !host.battle.actor(id) || host.battle.actor(id).dead));
         assert.ok(events.some(({ type, town: id, how, by }) => type === "barracks" && id === town.id && how === "taken" && by === "human"));
-        assert.ok(events.some(({ type, event }) => type === "war" && event.type === "taken" && event.how === "barracks"));
+        assert.ok(events.some(({ type, event }) => type === "war" && event.type === "taken" && event.how === "played"));
         assert.equal(town.owner, "human");
-        assert.equal(town.garrison, Math.ceil(HOLDINGS[town.kind].garrison * BARRACKS_TAKEN));
+        assert.equal(town.garrison, Math.ceil(HOLDINGS[town.kind].garrison * TAKEN));
 
         // (Round it, its new holders' soldiers)
         assert.equal(host.mustered.get(town.id)?.people, "human");
@@ -357,6 +370,15 @@ describe("a barracks' garrison near a player (host.js BARRACKS_NEAR)", () => {
         assert.ok(now.ids.every((id) => host.battle.actor(id)?.team === "human"));
         assert.ok(after.some(({ type }) => type === "unquartered") && after.some(({ type }) => type === "quartered"));
         assert.ok(war.realm("orc").standing.human < 0);
+    });
+
+    it("put down by the player with the rest of its town's garrison standing, is cleared, its town not taken", () => {
+        const { host, town, out } = inBarracks();
+        const events = putDown(host, out);
+
+        assert.ok(events.some(({ type, how }) => type === "barracks" && how === "garrison"));
+        assert.equal(town.owner, "orc");
+        assert.equal(town.garrison, HOLDINGS[town.kind].garrison - out.ids.length);
     });
 
     it("put down by a player whose people aren't at war with its holders, isn't taken, and is made up again once they've left it a while", () => {
@@ -449,9 +471,9 @@ describe("the keep's request to take a town by its barracks (standing.js take)",
 
         assert.equal(request.target.town, target.id);
         assert.equal(request.until, war.turn + REQUESTS.take.turns);
-        assert.match(request.text, new RegExp(`^${target.name} is held by .+\\. Get into its (barracks|guardhouse) and put down its guardsmen and their captain`));
+        assert.match(request.text, new RegExp(`^${target.name} is held by .+\\. Put its whole garrison to the sword: its guards and patrols, and the guardsmen and their captain in its (barracks|guardhouse)`));
         assert.equal(progressOf(request), `Get to ${target.name}.`);
-        assert.match(progressOf({ ...request, there: true }), /^Get into its (barracks|guardhouse), and put down its guardsmen and their captain\.$/);
+        assert.match(progressOf({ ...request, there: true }), /^Put down its guards and patrols, and the guardsmen and their captain in its (barracks|guardhouse)\.$/);
 
         // (In an uneasy peace, none)
         const peace = new War(planWorld(3));
@@ -461,10 +483,9 @@ describe("the keep's request to take a town by its barracks (standing.js take)",
     });
 });
 
-describe("the war half as fast (war.js TURNS_PER_STAGE, SIEGE)", () => {
-    it("brings each age on after three hours of play (180 turns) without the players' might, and has a camp sit six turns before it storms", () => {
+describe("the war half as fast (war.js TURNS_PER_STAGE)", () => {
+    it("brings each age on after three hours of play (180 turns) without the players' might, and takes no town before it", () => {
         assert.equal(TURNS_PER_STAGE, 180);
-        assert.equal(SIEGE, 6);
         assert.equal(TURN_MS, 60000);
 
         const war = new War(planWorld(4));

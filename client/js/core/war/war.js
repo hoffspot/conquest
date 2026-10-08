@@ -1,8 +1,8 @@
 // The war for the continent, played out as numbers (docs/WAR.md): the six peoples' realms, the
-// towns they hold and the garrisons in them, their treasuries, the forces they send out
-// (expeditions that camp by an enemy's town and raid it, then take it; relief for a town under
-// threat; envoys between the rulers), what they think of each other, and who's brought whom
-// under them.
+// towns they hold and the garrisons in them, their treasuries, their standing armies and
+// defensive reserves (armies.js: made up from their towns, staged from forward camps, taking a
+// town only by putting its garrison to the sword), the envoys between their rulers and the
+// convoys from their works, what they think of each other, and who's brought whom under them.
 //
 // It moves on a turn at a time (TURN_MS of play: advance), each realm's rulers deciding what to
 // do by their traits (peoples.js). How far the war's got (its stage) goes up with the players'
@@ -18,10 +18,13 @@
 
 import { createRandom } from "../random.js";
 import { RACES, WORKS } from "../worldplan/races.js";
+import { ARMY, CAMP, campSite, CLOSE, fullOf, HELD, LEADERS, REINFORCE, WATCH_TURNS } from "./armies.js";
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
-import { Roads } from "./roads.js";
-import { hypot } from "../exact.js";
+import { ACROSS_COUNTRY, Roads } from "./roads.js";
+import { atan2, cos, hypot, sin } from "../exact.js";
+import { landAt } from "../worldplan/plan.js";
+import { WATER } from "../worldplan/terrain.js";
 
 /** A turn every so much play (ms). */
 export const TURN_MS = 60000;
@@ -29,54 +32,43 @@ export const TURN_MS = 60000;
 /**
  * What the places the war's fought over are worth (the plan's hamlets and farmsteads go with the
  * town nearest them): the garrison each holds when it's full, the taxes it pays a turn, how much
- * its walls help its defenders, and how many patrols go out from it (from M2).
+ * its walls help its defenders, how many patrols go out from it (from M2), and how many soldiers
+ * it can raise a turn (`produce`: for its garrison, or its people's army and reserve: armies.js).
  */
 export const HOLDINGS = Object.freeze({
-    capital: { garrison: 40, tax: 6, walls: 1.6, patrols: 3, worth: 4 },
-    city: { garrison: 24, tax: 4, walls: 1.35, patrols: 2, worth: 3 },
-    town: { garrison: 12, tax: 2, walls: 1.15, patrols: 1, worth: 2 },
-    village: { garrison: 5, tax: 1, walls: 1, patrols: 1, worth: 1 },
+    capital: { garrison: 40, tax: 9, walls: 1.6, patrols: 3, worth: 4, produce: 4 },
+    city: { garrison: 24, tax: 6, walls: 1.35, patrols: 2, worth: 3, produce: 3 },
+    town: { garrison: 12, tax: 3, walls: 1.15, patrols: 1, worth: 2, produce: 2 },
+    village: { garrison: 5, tax: 1.5, walls: 1, patrols: 1, worth: 1, produce: 1 },
 });
 
 /**
- * How far the war's got. Each stage says what can be taken (its camps only raid the rest), how
- * big an expedition can be, and how many each realm can have out at once. It comes with the
- * players' might (`might`: the strongest's), or after TURNS_PER_STAGE turns each whatever, and
- * never goes back.
+ * How far the war's got. Each stage says what can be taken, and how strong each people's army and
+ * reserve can be (`army`: a share of the most, armies.js ARMY); no army marches before the border
+ * wars. It comes with the players' might (`might`: the strongest's), or after TURNS_PER_STAGE
+ * turns each whatever, and never goes back.
  */
 export const STAGES = Object.freeze([
-    { id: "unease", name: "An uneasy peace", take: [], most: 8, fielded: 1, might: 0 },
-    { id: "border", name: "Border wars", take: ["village"], most: 16, fielded: 2, might: 2 },
-    { id: "war", name: "War", take: ["village", "town", "city"], most: 30, fielded: 3, might: 4 },
-    { id: "conquest", name: "Conquest", take: ["village", "town", "city", "capital"], most: 60, fielded: 4, might: 6 },
+    { id: "unease", name: "An uneasy peace", take: [], army: 0.25, might: 0 },
+    { id: "border", name: "Border wars", take: ["village"], army: 0.5, might: 2 },
+    { id: "war", name: "War", take: ["village", "town", "city"], army: 0.75, might: 4 },
+    { id: "conquest", name: "Conquest", take: ["village", "town", "city", "capital"], army: 1, might: 6 },
 ]);
 export const TURNS_PER_STAGE = 180;
 
 /** What things cost (gold): a troop raised, a troop's keep a turn, an envoy; and what a realm starts with. */
-export const COSTS = Object.freeze({ troop: 5, upkeep: 0.1, envoy: 10, start: 60 });
+export const COSTS = Object.freeze({ troop: 5, upkeep: 0.06, envoy: 10, start: 60 });
 
-/** How far forces go in a turn (metres). */
+/** How far forces go in a turn (metres): a band winning back a works, an envoy. */
 export const SPEEDS = Object.freeze({ march: 250, envoy: 400 });
 
-/** How many turns a camp sits before its town before it can storm it (raiding meanwhile). */
-export const SIEGE = 6;
-
-/** How likely a camp is to raid its town each turn it doesn't storm it. */
-export const RAIDING = 0.4;
-
 /**
- * How many turns a camp's sortie against a town a player's near (a raid or an assault, played out
- * in the world: M6) may go on before the rest of it is reckoned here.
+ * How near (metres): two peoples' towns or forces for them to meet; a band to the works it's
+ * winning back, to fall on it; an enemy force to an envoy, to waylay it (or to a convoy, to fall
+ * on it); an enemy army or camp to a town, to threaten it; a wild camp of brigands to a convoy's
+ * way, to fall on it.
  */
-export const SORTIE_TURNS = 3;
-
-/**
- * How near (metres): two peoples' towns or forces for them to meet; an expedition to its target
- * to camp; a relief force to the camp it's after, to fall on it (an expedition to a works, too);
- * an enemy force to an envoy, to waylay it (or to a convoy, to fall on it); an enemy camp to a
- * town, to threaten it; a wild camp of brigands to a convoy's way, to fall on it.
- */
-export const REACH = Object.freeze({ sight: 1500, camp: 350, fall: 120, waylay: 300, threat: 1000, ambush: 250 });
+export const REACH = Object.freeze({ sight: 1500, fall: 120, waylay: 300, threat: 1000, ambush: 250 });
 
 /** A vassal's share of its taxes paid to its overlord. */
 export const TRIBUTE = 0.5;
@@ -88,10 +80,12 @@ export const SERVES = 60;
  * A people's rising (docs/WAR.md M10). Serving another, or fallen, its unrest grows towards `ready`:
  * by `perTurn` while it serves (and by `grudge` more if it bears its overlord a grudge), and by
  * what its players do (stir). Ready, it rises; a player's counsel can call it sooner (as early
- * as `early` of the way for the weightiest). A fallen people rises in one of its old towns, held
- * by `garrison` of the soldiers a town of its kind keeps.
+ * as `early` of the way for the weightiest). A fallen people rises in one of its old towns: as
+ * many rebels as `garrison` of the soldiers a town of its kind keeps, `rebels` times over, who must
+ * put its garrison to the sword to take it (docs/WAR.md *Standing armies*), and hold it with those
+ * of them left.
  */
-export const RISING = Object.freeze({ ready: 100, perTurn: 0.25, grudge: 0.25, early: 0.5, garrison: 0.6 });
+export const RISING = Object.freeze({ ready: 100, perTurn: 0.25, grudge: 0.25, early: 0.5, garrison: 0.6, rebels: 2.5 });
 
 /** How many turns a player's counsel is heeded (if it's not been acted on sooner). */
 export const COUNSEL_TURNS = 20;
@@ -153,13 +147,13 @@ export const SQUADS = Object.freeze({ patrols: 2, patrol: 4, assault: 6, round: 
 export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols }, (_, k) => `patrol-${k}`), "assault"]);
 
 /**
- * A town taken in the world by putting down its barracks' guardsmen and captain (docs/WAR.md M16:
- * `capture`): how big its new holders' garrison is, a share of a full one's (rounded up).
+ * A town taken in the world (docs/WAR.md *Standing armies*): its whole garrison put down by a
+ * player's people. How big its new holders' garrison is, a share of a full one's (rounded up).
  */
-export const BARRACKS_TAKEN = 0.25;
+export const TAKEN = 0.25;
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 4;
+export const WAR_VERSION = 5;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -176,6 +170,9 @@ const noStores = () => Object.fromEntries(RESOURCES.map((resource) => [resource,
 // A forward garrison's squads, whole (SQUADS): { squads (as SQUAD_NAMES), mustered (the turn it
 // was last made up) }
 const fullSquads = (turn) => ({ squads: SQUAD_NAMES.map((name) => (name === "assault" ? SQUADS.assault : SQUADS.patrol)), mustered: turn });
+
+// The forces that fall on an envoy or a convoy passing (an army, a reserve, a band winning back a works)
+const FIGHTING = Object.freeze(["army", "reserve", "expedition"]);
 
 // The wild camps whose brigands fall on a convoy passing (worldplan/races.js FACTIONS), and how
 // likely they are to each turn it's near one
@@ -256,17 +253,34 @@ export class War {
         this.works = worksOf(plan);
 
         /**
-         * The forces out in the world: { id, realm, kind ("expedition", "camp", "relief",
-         * "envoy", "convoy"), size, at ([x, y] metres), path (the way it's going), leg (the point
-         * on it it's gone past), target (a town's id, or a works' for an expedition against it; a
-         * camp's, for relief; a realm's, for an envoy; its seat, for a convoy), home (the town it
-         * set out from; a convoy's works), mission and about (an envoy's; "retake" for an
-         * expedition to win back its people's own works from the wild), cargo (a convoy's: {
-         * [resource]: amount }, while it's carrying), back (a convoy going home empty), since
-         * (the turn it set out) }.
+         * The forces out in the world: { id, realm, kind ("army", "reserve", "reinforcement",
+         * "expedition", "envoy", "convoy"), size, at ([x, y] metres), path (the way it's going),
+         * leg (the point on it it's gone past), target, home (the town it set out from, an army's
+         * or reserve's its people's seat; a convoy's works), mission, about, since (the turn it
+         * set out) }.
+         * - An army (armies.js): `mission` "muster" (at home, being made up), "camp" (going to
+         *   build a camp, or to its camp), "attack" (on what it's attacking: `target`, a town's,
+         *   a works', a fortification's or a camp's id), "regroup" (beaten back to its camp, being
+         *   made up), "home"; `camp` (the camp it's staged from), `orders` (a player's: { kind,
+         *   about, by }, until they're carried out), `went` (its strength when it went in).
+         * - A reserve: `mission` "home" (at its people's seat), "defend" (`target`: the enemy
+         *   army it's going to fall on), "back".
+         * - Reinforcements: `target` (the army's or reserve's id they're joining).
+         * - An expedition, now only to win back its people's works from the wild ("retake").
+         * - An envoy's `mission` and `about`; a convoy's `cargo` ({ [resource]: amount }, while it's
+         *   carrying) and `back` (going home empty).
          */
         this.forces = [];
         this.nextForce = 1;
+
+        /**
+         * The forward camps the armies are staged from (armies.js CAMP): { id, realm, at, guard
+         * (those holding it), built (the turn it was finished: null while it's going up), done
+         * (when it will be), toward (the town or works it was built before), used (the turn an
+         * army was last near it), skirmished (the turn its skirmishers last went out) }.
+         */
+        this.camps = [];
+        this.nextCamp = 1;
 
         /**
          * The fortifications built (forts.js FORTS, docs/WAR.md *Fortifications*): { id, kind
@@ -303,6 +317,11 @@ export class War {
          */
         this.places = {};
 
+        // (Each people's reserve, at its seat, made up as its towns can: armies.js)
+        for (const realm of this.realms) {
+            this.#reserveFor(realm);
+        }
+
         this.#discover({ quietly: true });
     }
 
@@ -318,6 +337,29 @@ export class War {
 
     force(id) {
         return this.forces.find((force) => force.id === id) ?? null;
+    }
+
+    /** A camp (by its id), or null. */
+    camp(id) {
+        return this.camps.find((camp) => camp.id === id) ?? null;
+    }
+
+    /** A people's army (armies.js), or null if it has none raised. */
+    armyOf(id) {
+        return this.forces.find((force) => force.kind === "army" && force.realm === id) ?? null;
+    }
+
+    /** A people's reserve, or null. */
+    reserveOf(id) {
+        return this.forces.find((force) => force.kind === "reserve" && force.realm === id) ?? null;
+    }
+
+    /**
+     * How strong a people's army (or reserve) can be now (armies.js fullOf): the stage's share of
+     * the most, half that for a vassal.
+     */
+    fullOf(id) {
+        return fullOf(STAGES[this.stage].army, { vassal: Boolean(this.realm(id)?.overlord) });
     }
 
     /** A works (by its plan site's id), or null. */
@@ -389,12 +431,13 @@ export class War {
         return ["self", "allied", "vassal", "overlord"].includes(this.relation(a, b));
     }
 
-    /** A realm's own forces: its garrisons, its works' guards and convoys' at home, and those it has out (envoys aside). */
+    /** A realm's own forces: its garrisons, its works' guards and convoys' at home, those it has out (envoys aside), and its camps'. */
     power(id) {
         return (
             this.towns.filter(({ owner }) => owner === id).reduce((sum, { garrison }) => sum + garrison, 0) +
             this.works.filter(({ owner, held }) => owner === id && !held).reduce((sum, { guard, escort }) => sum + guard + escort, 0) +
-            this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").reduce((sum, { size }) => sum + size, 0)
+            this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").reduce((sum, { size }) => sum + size, 0) +
+            this.camps.filter(({ realm }) => realm === id).reduce((sum, { guard }) => sum + guard, 0)
         );
     }
 
@@ -459,8 +502,8 @@ export class War {
         }
 
         this.#march();
-        this.#camps();
-        this.#besiege();
+        this.#encamp();
+        this.#engage();
         this.#replenish();
         this.#assaults();
         this.#waylay();
@@ -476,23 +519,44 @@ export class War {
     }
 
     /**
-     * Losses in a fight played out in the world (from M6): a town's garrison or a force (by id)
-     * loses `count`. A garrison or camp with none left is taken or broken at the next turn.
+     * Losses in a fight played out in the world (from M6): a town's garrison, a works' guard, a
+     * camp's guard or a force (by id) loses `count`, brought down by the people `by` (a realm's
+     * id, or null). A town's garrison put down to the last by a people at war with its holders is
+     * theirs (docs/WAR.md *Standing armies*: no other way to take one), held by a few of them
+     * (TAKEN), if the age lets towns of its kind be taken; a camp's, it's razed. Returns how it
+     * went: "taken", "razed", or null.
      */
-    loss(id, count) {
+    loss(id, count, { by = null } = {}) {
         const town = this.town(id);
         const works = town ? null : this.workAt(id);
-        const force = town || works ? null : this.force(id);
+        const camp = town || works ? null : this.camp(id);
+        const force = town || works || camp ? null : this.force(id);
         const lost = Math.max(0, Math.round(count));
 
         if (town) {
             town.garrison = Math.max(0, town.garrison - lost);
+
+            if (town.garrison <= 0 && by && this.realm(by)?.alive && this.hostile(by, town.owner) && STAGES[this.stage].take.includes(town.kind)) {
+                this.#hold(town, by, Math.ceil(HOLDINGS[town.kind].garrison * TAKEN), { how: "played" });
+
+                return "taken";
+            }
         } else if (works) {
             // (Its band, if the wild hold it; else its guard)
             works[works.held ? "band" : "guard"] = Math.max(0, works[works.held ? "band" : "guard"] - lost);
+        } else if (camp) {
+            camp.guard = Math.max(0, camp.guard - lost);
+
+            if (camp.guard <= 0 && !this.forces.some((force) => force.kind === "army" && force.camp === camp.id && apart(force.at, camp.at) <= CLOSE.fight)) {
+                this.#razeCamp(camp, by, { played: true });
+
+                return "razed";
+            }
         } else if (force) {
             force.size = Math.max(0, force.size - lost);
         }
+
+        return null;
     }
 
     /**
@@ -538,37 +602,10 @@ export class War {
     }
 
     /**
-     * A town's barracks put down in the world (docs/WAR.md M16): its guardsmen and captain, by a
-     * player of a people (`by`, a realm's id), or anyone fighting for them. If they're at war with
-     * its holders and the age lets towns of its kind be taken (STAGES), it's theirs, held by a
-     * garrison of theirs (BARRACKS_TAKEN of a full one), as a town stormed is (whether or not a
-     * fortification covers it: that's for camps). Returns how it went: "taken", "peace" (not at
-     * war with its holders), "age" (not yet), or null (no such town, or their own or a friend's).
-     */
-    capture(id, by) {
-        const town = this.town(id);
-
-        if (!town || !this.realm(by)?.alive || this.friendly(by, town.owner)) {
-            return null;
-        }
-
-        if (!this.hostile(by, town.owner)) {
-            return "peace";
-        }
-
-        if (!STAGES[this.stage].take.includes(town.kind)) {
-            return "age";
-        }
-
-        this.#hold(town, by, Math.ceil(HOLDINGS[town.kind].garrison * BARRACKS_TAKEN), { how: "barracks" });
-
-        return "taken";
-    }
-
-    /**
-     * The towns, works and envoys a player's near (ids): a camp's raids and assaults on those
-     * towns are played out in the world, and those envoys go on it (move), as fast as they walk;
-     * those works aren't fallen on here, nor overrun, while a player's there.
+     * The towns, works, fortifications, camps and envoys a player's near (ids): an army waits
+     * before those it's attacking a while (WATCH_TURNS) rather than its fight being reckoned here,
+     * and those envoys go on as they're seen to (move), as fast as they walk; those works aren't
+     * fallen on here, nor overrun, while a player's there.
      */
     watch(ids) {
         this.watched = new Set(ids);
@@ -661,69 +698,6 @@ export class War {
         this.#emit("waylaid", { realm: envoy.realm, by: this.realm(by) ? by : null, to: envoy.target, mission: envoy.mission, force: envoy.id, played: true });
     }
 
-    /**
-     * A camp's sortie (a raid or an assault on its town, played out in the world near a player)
-     * over: its losses and the town's are in already (loss). A raid that `reached` the town's
-     * fields stops its taxes; an assault that left no one in the town takes it. With `reckon`, what's
-     * left of it is fought out here instead (the players gone). Returns how it ended: "raided",
-     * "repulsed", "taken", "broken", or null if the camp had none out.
-     */
-    settle(id, { reached = false, reckon = false } = {}) {
-        const camp = this.force(id);
-        const sortie = camp?.sortie;
-
-        if (!sortie) {
-            return null;
-        }
-
-        camp.sortie = null;
-
-        const town = this.town(camp.target);
-
-        if (!town) {
-            return null;
-        }
-
-        const killed = Math.max(0, sortie.garrison - town.garrison);
-        const lost = Math.max(0, sortie.size - camp.size);
-
-        if (reckon) {
-            return sortie.kind === "assault" ? this.#assault(camp, town, { killed, lost }) : this.#raid(camp, town, { killed, lost });
-        }
-
-        let result = "repulsed";
-
-        if (sortie.kind === "raid") {
-            if (reached) {
-                town.raidedAt = this.turn;
-                this.remember(town.owner, camp.realm, -3);
-                result = "raided";
-            }
-
-            this.#emit("raid", { realm: camp.realm, town: town.id, owner: town.owner, killed, lost, reached, played: true });
-        } else {
-            const won = town.garrison <= 0 && camp.size > 0;
-
-            this.remember(town.owner, camp.realm, -5);
-            this.#emit("assault", { realm: camp.realm, town: town.id, owner: town.owner, won, killed, lost, played: true });
-
-            if (won) {
-                this.#take(town, camp);
-
-                return "taken";
-            }
-        }
-
-        if (camp.size < 3) {
-            this.forces.splice(this.forces.indexOf(camp), 1);
-            this.#emit("broken", { realm: camp.realm, target: town.id });
-
-            return "broken";
-        }
-
-        return result;
-    }
-
     /** Gold given to a realm's treasury (a player's tithe). Returns whether it was taken. */
     give(id, amount) {
         const realm = this.realm(id);
@@ -740,7 +714,7 @@ export class War {
     /**
      * A player's counsel to a realm's rulers (not a vassal's: its overlord's decide), weighing
      * `weight` (0 to 1, by their standing: core/standing.js COUNSEL):
-     * - { march: a town's id }: the next expedition sent against it (one of an enemy's towns);
+     * - { march: a town's id }: its army sent against it next (one of an enemy's towns);
      * - { peace: a realm's id }: an envoy sent to it for a truce (a realm they're at war with);
      * - { war: a realm's id }: war declared on it (a realm they know, and are neutral with).
      * Heeded for COUNSEL_TURNS, or until it's acted on; a newer counsel takes the place of the
@@ -775,6 +749,78 @@ export class War {
 
         realm.counsel = { [kind]: about, weight: clamp(weight, 0, 1), until: this.turn + COUNSEL_TURNS };
         this.#emit("counsel", { realm: id, [kind]: about });
+
+        return true;
+    }
+
+    /**
+     * A player's orders to their people's army (docs/WAR.md *Standing armies*: a Lord's or a
+     * Councillor's, from the war table at their seat; core/standing.js OPENS), carried out before
+     * anything its rulers would have it do, until they are (or can't be):
+     * - { raise: true }: an army raised at its seat, made up from its towns as they can;
+     * - { disband: true }: its army sent home, each of it back into the garrison of one of their
+     *   towns, the nearest first;
+     * - { camp: [x, y] }: to build a camp there (or to go to theirs there), and hold;
+     * - { attack: an id }: to attack an enemy's town, works, fortification or camp within reach
+     *   of one of their camps (CAMP.reach), till it's taken or razed, falling back to be made up
+     *   as it must;
+     * - { home: true }: back to its seat.
+     * `by`: the player's people (whose orders they were, for the news). Returns whether they could
+     * be given.
+     */
+    order(id, orders, { by = null } = {}) {
+        const realm = this.realm(id);
+        const [kind, about] = Object.entries(orders ?? {}).find(([key]) => ["raise", "disband", "camp", "attack", "home"].includes(key)) ?? [];
+        const army = this.armyOf(id);
+
+        if (!realm?.alive || !kind) {
+            return false;
+        }
+
+        if (kind === "raise") {
+            if (army) {
+                return false;
+            }
+
+            this.#raise(realm, { by });
+
+            return true;
+        }
+
+        if (!army) {
+            return false;
+        }
+
+        if (kind === "disband") {
+            this.#disbandArmy(army, { by });
+
+            return true;
+        }
+
+        if (kind === "camp") {
+            const at = Array.isArray(about) && about.length === 2 && about.every(Number.isFinite) ? [Math.round(about[0]), Math.round(about[1])] : null;
+
+            if (!at) {
+                return false;
+            }
+
+            army.orders = { kind, about: at, by };
+            this.#toCamp(army, at);
+        } else if (kind === "attack") {
+            const target = this.#targetOf(about);
+
+            if (!target || !this.hostile(id, target.realm) || !this.#reaches(id, target.at, target.edge)) {
+                return false;
+            }
+
+            army.orders = { kind, about, by };
+            this.#toAttack(army, about);
+        } else {
+            army.orders = { kind, about: null, by };
+            this.#goHome(army);
+        }
+
+        this.#emit("ordered", { realm: id, army: army.id, [kind]: about ?? true, by });
 
         return true;
     }
@@ -962,6 +1008,8 @@ export class War {
             nextForce: this.nextForce,
             forts: this.forts,
             nextFort: this.nextFort,
+            camps: this.camps,
+            nextCamp: this.nextCamp,
             relations: this.relations,
             known: this.known,
             victor: this.victor,
@@ -973,7 +1021,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && ![1, 2, 3].includes(snapshot.version)) {
+        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -1004,6 +1052,27 @@ export class War {
         // (version 3), each forward garrison's are whole)
         war.forts = (kept.forts ?? []).map((fort) => ({ ...fort, struck: fort.struck ?? null, ...(fort.kind === "garrison" && !fort.squads ? fullSquads(kept.turn) : {}) }));
         war.nextFort = kept.nextFort ?? 1;
+        war.camps = kept.camps ?? [];
+        war.nextCamp = kept.nextCamp ?? 1;
+
+        // (A war kept before the standing armies (version 4 or before): its expeditions against
+        // towns and works, its camps and its relief all home in their garrisons, and each people's
+        // reserve at its seat, to be made up)
+        if (kept.version < 5) {
+            for (const force of war.forces.filter(({ kind, mission }) => kind === "camp" || kind === "relief" || (kind === "expedition" && mission !== "retake"))) {
+                const home = war.town(force.home);
+
+                if (home?.owner === force.realm) {
+                    home.garrison = Math.min(Math.round(HOLDINGS[home.kind].garrison * 1.5), home.garrison + force.size);
+                }
+            }
+
+            war.forces = war.forces.filter(({ kind, mission }) => !(kind === "camp" || kind === "relief" || (kind === "expedition" && mission !== "retake")));
+
+            for (const realm of war.realms.filter(({ alive }) => alive)) {
+                war.#reserveFor(realm);
+            }
+        }
 
         return war;
     }
@@ -1038,8 +1107,8 @@ export class War {
             spots.get(town.owner)?.push(town.at);
         }
 
-        for (const force of this.forces) {
-            spots.get(force.realm)?.push(force.at);
+        for (const each of [...this.forces, ...this.camps]) {
+            spots.get(each.realm)?.push(each.at);
         }
 
         for (const [k, a] of this.realms.entries()) {
@@ -1091,6 +1160,11 @@ export class War {
                     town.garrison = Math.floor(town.garrison * 0.95);
                 }
 
+                // (And some of its army and reserve desert)
+                for (const force of this.forces.filter(({ realm: id, kind }) => id === realm.id && (kind === "army" || kind === "reserve"))) {
+                    force.size = Math.floor(force.size * 0.95);
+                }
+
                 this.#emit("unpaid", { realm: realm.id });
             }
 
@@ -1117,8 +1191,6 @@ export class War {
 
     // A liege's rulers decide what to do this turn, for their realm and its vassals
     #decide(realm) {
-        const { traits } = realm.leader;
-
         // (A player's counsel is heeded only so long)
         if (realm.counsel && this.turn > realm.counsel.until) {
             realm.counsel = null;
@@ -1127,49 +1199,73 @@ export class War {
         const own = [realm, ...this.realms.filter((other) => other.alive && other.overlord && this.liege(other.id) === realm.id)];
 
         for (const each of own) {
-            this.#garrison(each);
+            this.#muster(each);
             this.#fortify(each);
         }
 
         this.#diplomacy(realm);
         this.#declare(realm);
 
-        // Relief for its own and its allies' towns under threat first, its works won back from the
-        // wild, then the war carried to the enemy
+        // Each people's reserve out against an enemy army in its lands (or home), its works won
+        // back from the wild, and its army sent where the war needs it
         for (const each of own) {
-            this.#relieve(each, realm);
+            this.#defend(each);
             this.#retake(each);
-        }
-
-        if (this.enemiesOf(realm.id).length) {
-            for (const each of own) {
-                this.#expedition(each, realm, traits);
-            }
+            this.#command(each, realm);
         }
     }
 
-    // Fill up the garrisons: the seat first, then those threatened, then the emptiest (keeping
-    // some gold back for the war, more the more warlike)
-    #garrison(realm) {
+    // A people's towns raise what soldiers they can this turn (HOLDINGS produce each, a troop's
+    // cost each, keeping some gold back for the war, the more the more warlike), in this order
+    // (docs/WAR.md *Standing armies*): their garrisons to half (the seat first, then those
+    // threatened, then the emptiest); its reserve made up, then its army, from the towns nearest
+    // them, sent as reinforcements; then its garrisons to the full. Then its works' guards, and
+    // their convoys'
+    #muster(realm) {
         const towns = this.towns.filter(({ owner }) => owner === realm.id);
         const upkeep = this.power(realm.id) * COSTS.upkeep * 3;
-        const reserve = upkeep + (this.enemiesOf(this.liege(realm.id)).length ? 15 + realm.leader.traits.aggression * 40 : 10);
-        const order = towns
-            .map((town) => ({ town, want: HOLDINGS[town.kind].garrison - town.garrison, first: town.id === realm.seat ? 2 : this.#threatened(town) ? 1 : 0 }))
-            .filter(({ want }) => want > 0)
-            .sort((a, b) => b.first - a.first || b.want - a.want || (a.town.id < b.town.id ? -1 : 1));
+        const keep = upkeep + (this.enemiesOf(this.liege(realm.id)).length ? 15 + realm.leader.traits.aggression * 40 : 10);
+        const left = new Map(towns.map((town) => [town.id, HOLDINGS[town.kind].produce]));
+        let afford = Math.max(0, Math.floor((realm.treasury - keep) / COSTS.troop));
+        const raise = (town, count) => {
+            left.set(town.id, left.get(town.id) - count);
+            realm.treasury -= count * COSTS.troop;
+            afford -= count;
+        };
+        const first = (town) => (town.id === realm.seat ? 2 : this.#threatened(town) ? 1 : 0);
+        const garrisons = (to) => {
+            const order = towns
+                .map((town) => ({ town, want: Math.ceil(HOLDINGS[town.kind].garrison * to) - town.garrison }))
+                .filter(({ want }) => want > 0)
+                .sort((a, b) => first(b.town) - first(a.town) || b.want - a.want || (a.town.id < b.town.id ? -1 : 1));
 
-        for (const { town, want } of order) {
-            const afford = Math.floor((realm.treasury - reserve) / COSTS.troop);
-            const raised = Math.min(want, afford, 5);
+            for (const { town, want } of order) {
+                const raised = Math.min(want, left.get(town.id), afford);
 
-            if (raised <= 0) {
-                break;
+                if (raised > 0) {
+                    town.garrison += raised;
+                    raise(town, raised);
+                }
             }
+        };
 
-            town.garrison += raised;
-            realm.treasury -= raised * COSTS.troop;
+        garrisons(0.5);
+
+        for (const force of [this.reserveOf(realm.id), this.armyOf(realm.id)]) {
+            let short = force ? this.fullOf(realm.id) - force.size - this.#coming(force) : 0;
+
+            for (const town of short > 0 ? [...towns].sort((a, b) => apart(a.at, force.at) - apart(b.at, force.at) || (a.id < b.id ? -1 : 1)) : []) {
+                const sent = Math.min(short, left.get(town.id), afford);
+
+                if (sent > 0) {
+                    this.#reinforce(town, force, sent);
+                    raise(town, sent);
+                    short -= sent;
+                }
+            }
         }
+
+        garrisons(1);
 
         // Then its works' guards, and their convoys' (the emptiest first): a few a turn each
         const works = this.works
@@ -1179,7 +1275,6 @@ export class War {
             .sort((a, b) => b.want - a.want || (a.each.id < b.each.id ? -1 : 1));
 
         for (const { each } of works) {
-            const afford = Math.floor((realm.treasury - reserve) / COSTS.troop);
             const guard = Math.min(WORKED.guard - each.guard, afford, 3);
             const escort = this.#convoyOf(each) ? 0 : Math.min(CONVOY.guards + 1 - each.escort, afford - Math.max(0, guard), 3);
 
@@ -1190,6 +1285,7 @@ export class War {
             each.guard += Math.max(0, guard);
             each.escort += Math.max(0, escort);
             realm.treasury -= (Math.max(0, guard) + Math.max(0, escort)) * COSTS.troop;
+            afford -= Math.max(0, guard) + Math.max(0, escort);
         }
     }
 
@@ -1278,33 +1374,6 @@ export class War {
         }
     }
 
-    // The enemy camps and armies near a fortification fall on it (FORT_SIEGE), and its defenders bring
-    // some of them down; brought to nothing, it's razed by them. Not one a player's near: that's
-    // played out in the world
-    #besiege() {
-        for (const fort of [...this.forts]) {
-            if (this.watched.has(fort.id)) {
-                continue;
-            }
-
-            // (Those near it, and the camps before a town it covers: FORT_COVER)
-            const near = this.forces.filter((force) => (force.kind === "camp" || force.kind === "expedition") && force.size > 0 && this.hostile(force.realm, fort.realm) && (apart(force.at, fort.at) <= FORT_SIEGE.reach || force.against === fort.id));
-
-            for (const force of near) {
-                const toll = Math.min(force.size, fort.kind === "garrison" ? FORT_SIEGE.garrison : FORT_SIEGE.tower);
-
-                fort.hp = Math.max(0, fort.hp - force.size * FORT_SIEGE.hp);
-                fort.struck = this.turn;
-                force.size -= toll;
-
-                if (fort.hp <= 0) {
-                    this.#raze(fort, force.realm);
-                    break;
-                }
-            }
-        }
-    }
-
     // Each forward garrison's squads made up as they've fallen (SQUADS): one of them every so many
     // turns, the emptiest squad first, while its people can pay
     #replenish() {
@@ -1385,9 +1454,9 @@ export class War {
         }
     }
 
-    // Is there an enemy camp near a town?
+    // Is there an enemy army or camp near a town?
     #threatened(town) {
-        return this.forces.some((force) => force.kind === "camp" && this.hostile(force.realm, town.owner) && apart(force.at, town.at) <= REACH.threat);
+        return [...this.forces.filter(({ kind }) => kind === "army"), ...this.camps].some((each) => this.hostile(each.realm, town.owner) && apart(each.at, town.at) <= REACH.threat);
     }
 
     // Envoys: sue for peace in a war going badly, win over a neutral against a shared enemy, or
@@ -1529,58 +1598,9 @@ export class War {
         this.relations[pair(a, b)] = { state, since: this.turn };
     }
 
-    // Relief for a town of its own or an ally's with an enemy camp by it stronger than its
-    // garrison: from the nearest town that can spare it
-    #relieve(realm, liege) {
-        const { traits } = liege.leader;
-
-        if (this.#fielded(realm.id) >= STAGES[this.stage].fielded) {
-            return;
-        }
-
-        for (const camp of this.forces.filter(({ kind }) => kind === "camp")) {
-            const town = this.town(camp.target);
-
-            if (!town || !this.hostile(camp.realm, realm.id) || camp.size <= town.garrison || this.forces.some(({ kind, target }) => kind === "relief" && target === camp.id)) {
-                continue;
-            }
-
-            const mine = town.owner === realm.id;
-
-            if (!mine && !(this.friendly(realm.id, town.owner) && this.random.chance(traits.loyalty * 0.6))) {
-                continue;
-            }
-
-            const size = Math.min(STAGES[this.stage].most, Math.ceil(camp.size * 1.3), Math.floor(this.#spare(realm) / COSTS.troop));
-
-            if (size < 4) {
-                continue;
-            }
-
-            const from = this.#nearestOwn(realm.id, camp.at);
-            const route = from && this.#routeTo(from.id, camp.at);
-
-            if (!route) {
-                continue;
-            }
-
-            realm.treasury -= size * COSTS.troop;
-            this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "relief", size, at: [...route[0]], path: route, leg: 0, target: camp.id, home: from.id, mission: null, about: null, since: this.turn });
-            this.#emit("relief", { realm: realm.id, camp: camp.id, against: camp.realm, town: town.id, size });
-
-            return;
-        }
-    }
-
     // The gold a realm can spend on the war (keeping enough back for a couple of turns' keep)
     #spare(realm) {
         return realm.treasury - this.power(realm.id) * COSTS.upkeep * 2;
-    }
-
-    // How many forces a realm has in the field (envoys and convoys aside, and those winning back its
-    // works from the wild)
-    #fielded(id) {
-        return this.forces.filter(({ realm, kind, mission }) => realm === id && kind !== "envoy" && kind !== "convoy" && mission !== "retake").length;
     }
 
     // The realm's own town nearest a point
@@ -1604,103 +1624,33 @@ export class War {
         return route ? [...route.points, [Math.round(at[0]), Math.round(at[1])]] : null;
     }
 
-    // An expedition against the enemy: at its weakest near town (one a camp of its already
-    // threatens first, to reinforce it), as big as it takes, as the stage and the treasury allow
-    #expedition(realm, liege, traits) {
-        const stage = STAGES[this.stage];
-
-        if (this.#fielded(realm.id) >= stage.fielded) {
-            return;
-        }
-
-        const enemies = this.enemiesOf(liege.id);
-        // (Their towns, and once the war's far enough on, their works: docs/WAR.md *The works*)
-        const targets = [
-            ...this.towns.filter((town) => enemies.includes(this.liege(town.owner))),
-            ...(this.stage >= WORKED.from ? this.works.filter((works) => !works.held && this.realm(works.owner)?.alive && enemies.includes(this.liege(works.owner))) : []),
-        ];
-
-        if (!targets.length) {
-            return;
-        }
-
-        const scored = targets
-            .map((target) => {
-                const from = this.#nearestOwn(realm.id, target.at);
-                const distance = from ? apart(from.at, target.at) : Infinity;
-
-                // (A works: worth its taking, the more so for what the realm's short of)
-                if (YIELDS[target.kind]) {
-                    const short = realm.stores[YIELDS[target.kind]] < WORKED.yard ? 0.5 : 0;
-
-                    return { target, from, score: distance / 1000 + target.guard / 15 - WORKED.worth * traits.greed - short + this.random.range(0, 0.5) };
-                }
-
-                const town = target;
-                const camped = this.forces.some(({ realm: id, kind, target: at }) => id === realm.id && kind === "camp" && at === town.id);
-                const takeable = stage.take.includes(town.kind);
-
-                // (Their rulers' seat, to bring them under: when it can be taken, and it's strong enough to)
-                const seat = takeable && town.id === this.realm(town.owner).seat && this.strength(liege.id) >= this.strength(this.liege(town.owner));
-
-                // (And where a player's counselled them to march)
-                const counselled = liege.counsel?.march === town.id ? 4 * liege.counsel.weight : 0;
-
-                return { target, from, score: distance / 1000 + town.garrison / 15 - (camped ? 2 : 0) - (takeable ? HOLDINGS[town.kind].worth * traits.greed : 0) - (seat ? 3 * traits.aggression : 0) - counselled + this.random.range(0, 0.5) };
-            })
-            .filter(({ from }) => from)
-            .sort((a, b) => a.score - b.score);
-
-        const { target, from } = scored[0] ?? {};
-
-        if (!target) {
-            return;
-        }
-
-        const works = Boolean(YIELDS[target.kind]);
-        const needed = works ? Math.ceil(target.guard * 1.5) : Math.ceil(target.garrison * HOLDINGS[target.kind].walls * (1.5 - traits.aggression * 0.4));
-        const size = Math.min(stage.most, Math.max(6, needed), Math.floor(this.#spare(realm) / COSTS.troop));
-
-        if (size < 6) {
-            return;
-        }
-
-        const route = works ? this.#routeTo(from.id, target.at) : this.roads.route(from.id, target.id)?.points;
-
-        if (!route) {
-            return;
-        }
-
-        // (Counsel acted on)
-        if (liege.counsel?.march === target.id) {
-            liege.counsel = null;
-        }
-
-        realm.treasury -= size * COSTS.troop;
-        this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "expedition", size, at: [...route[0]], path: route, leg: 0, target: target.id, home: from.id, mission: null, about: null, since: this.turn });
-        this.#emit("marched", { realm: realm.id, from: from.id, target: target.id, size });
-    }
-
-    // Everyone on the move goes on: expeditions camp by their target, relief falls on the camp,
-    // envoys are heard
+    // Everyone on the move goes on: armies and reserves where they're going, reinforcements to
+    // theirs, a band winning back its works to them, envoys to be heard, convoys to their seat
     #march() {
         for (const force of [...this.forces]) {
-            // (Camps stay put; an envoy or a convoy a player's near goes as it's seen to go there:
-            // move)
-            if (force.kind === "camp" || !this.forces.includes(force) || ((force.kind === "envoy" || force.kind === "convoy") && this.watched.has(force.id))) {
+            // (An envoy or a convoy a player's near goes as it's seen to go there: move)
+            if (!this.forces.includes(force) || ((force.kind === "envoy" || force.kind === "convoy") && this.watched.has(force.id))) {
                 continue;
             }
 
-            this.#go(force, force.kind === "envoy" ? SPEEDS.envoy : force.kind === "convoy" ? CONVOY.speed : SPEEDS.march);
-
-            if (force.kind === "expedition") {
+            if (force.kind === "army") {
+                this.#onArmy(force);
+            } else if (force.kind === "reserve") {
+                this.#onReserve(force);
+            } else if (force.kind === "reinforcement") {
+                this.#onReinforcement(force);
+            } else if (force.kind === "expedition") {
+                this.#go(force, SPEEDS.march);
                 this.#onExpedition(force);
-            } else if (force.kind === "relief") {
-                this.#onRelief(force);
             } else if (force.kind === "convoy") {
+                this.#go(force, CONVOY.speed);
                 this.#onConvoy(force);
-            } else if (force.leg >= force.path.length - 1) {
-                this.#hear(force);
+            } else {
+                this.#go(force, SPEEDS.envoy);
+
+                if (force.leg >= force.path.length - 1) {
+                    this.#hear(force);
+                }
             }
         }
     }
@@ -1726,77 +1676,19 @@ export class War {
         force.at = [Math.round(force.at[0] * 10) / 10, Math.round(force.at[1] * 10) / 10];
     }
 
+    // A band winning back its people's works from the wild, on its way
     #onExpedition(force) {
         const works = this.workAt(force.target);
 
         if (works) {
             this.#onWorks(force, works);
-
-            return;
-        }
-
-        const town = this.town(force.target);
-
-        // (No longer an enemy's: home again)
-        if (!town || !this.hostile(force.realm, town.owner)) {
-            this.#disband(force, "withdrew");
-
-            return;
-        }
-
-        if (apart(force.at, town.at) > REACH.camp && force.leg < force.path.length - 1) {
-            return;
-        }
-
-        // By its target: it camps (or joins its people's camp there)
-        const camp = this.forces.find(({ kind, realm, target }) => kind === "camp" && realm === force.realm && target === town.id);
-
-        if (camp) {
-            camp.size += force.size;
-            this.forces.splice(this.forces.indexOf(force), 1);
-            this.#emit("reinforced", { realm: force.realm, target: town.id, size: camp.size });
         } else {
-            Object.assign(force, { kind: "camp", since: this.turn });
-            this.#emit("camped", { realm: force.realm, target: town.id, size: force.size, force: force.id });
-        }
-    }
-
-    #onRelief(force) {
-        const camp = this.force(force.target);
-
-        if (!camp || camp.kind !== "camp" || !this.hostile(force.realm, camp.realm)) {
             this.#disband(force, "withdrew");
-
-            return;
         }
-
-        // (The camp's where it was: straight at it)
-        if (apart(force.at, camp.at) > REACH.fall) {
-            if (force.leg >= force.path.length - 1) {
-                force.path = [force.at, camp.at];
-                force.leg = 0;
-            }
-
-            return;
-        }
-
-        const { attackers, defenders } = this.#fight(force.size, camp.size, 1);
-
-        this.#emit("battle", { realm: force.realm, against: camp.realm, at: camp.at, won: defenders === 0, killed: camp.size - defenders, lost: force.size - attackers });
-        this.remember(camp.realm, force.realm, -5);
-        force.size = attackers;
-        camp.size = defenders;
-
-        if (!camp.size) {
-            this.forces.splice(this.forces.indexOf(camp), 1);
-        }
-
-        this.#disband(force, null);
     }
 
-    // An expedition against a works, there: it falls on its guard (or on the band holding it, to
-    // win back its own people's works from the wild: "retake"); not while a player's near it, for
-    // as long as a sortie would wait (SORTIE_TURNS). What's left of it goes home after
+    // A band before the works it's winning back from the wild: it falls on those holding it; not
+    // while a player's near it, for a while (WATCH_TURNS). What's left of it goes home after
     #onWorks(force, works) {
         const retake = force.mission === "retake";
 
@@ -1813,7 +1705,7 @@ export class War {
         // (There: waiting, while a player's near it)
         force.arrived ??= this.turn;
 
-        if (this.watched.has(works.id) && this.turn - force.arrived < SORTIE_TURNS) {
+        if (this.watched.has(works.id) && this.turn - force.arrived < WATCH_TURNS) {
             return;
         }
 
@@ -2006,136 +1898,846 @@ export class War {
         this.#emit("treaty", { from: from.id, to: to.id, mission: envoy.mission, about: envoy.about, accepted, force: envoy.id });
     }
 
-    // The camps: an assault on their town if the stage allows it and they're strong enough; else
-    // a raid on it. A garrison much stronger than the camp by it sallies out against it
-    #camps() {
+    // --- The standing armies and reserves (armies.js; docs/WAR.md *Standing armies*) ---
+
+    // A people's reserve at its seat, if it has none (made up as its towns can: #muster)
+    #reserveFor(realm) {
+        const seat = this.town(realm.seat);
+
+        if (!realm.alive || !seat || this.reserveOf(realm.id)) {
+            return;
+        }
+
+        this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "reserve", size: 0, at: [...seat.at], path: [[...seat.at]], leg: 0, target: null, home: seat.id, mission: "home", about: null, since: this.turn });
+    }
+
+    // A people's army raised at its seat (by a player's orders, `by`, or its rulers'), made up
+    // from its towns as they can (#muster: mustered over time, none of it at first)
+    #raise(realm, { by = null } = {}) {
+        const seat = this.town(realm.seat);
+
+        if (!seat || this.armyOf(realm.id)) {
+            return null;
+        }
+
+        const army = { id: `force-${this.nextForce++}`, realm: realm.id, kind: "army", size: 0, at: [...seat.at], path: [[...seat.at]], leg: 0, target: null, home: seat.id, mission: "muster", about: null, camp: null, orders: null, went: 0, arrived: null, since: this.turn };
+
+        this.forces.push(army);
+        this.#emit("raised", { realm: realm.id, army: army.id, by });
+
+        return army;
+    }
+
+    // An army disbanded (by a player's orders, `by`): each of it back into the garrison of one of
+    // its people's towns, the nearest first, as many as each holds (half again its full), and its
+    // reinforcements on their way too
+    #disbandArmy(army, { by = null } = {}) {
+        let left = army.size + this.#coming(army);
+
+        for (const column of this.forces.filter(({ kind, target }) => kind === "reinforcement" && target === army.id)) {
+            this.forces.splice(this.forces.indexOf(column), 1);
+        }
+
+        for (const town of this.towns.filter(({ owner }) => owner === army.realm).sort((a, b) => apart(a.at, army.at) - apart(b.at, army.at) || (a.id < b.id ? -1 : 1))) {
+            const back = Math.min(left, Math.max(0, Math.round(HOLDINGS[town.kind].garrison * 1.5) - town.garrison));
+
+            town.garrison += back;
+            left -= back;
+        }
+
+        this.forces.splice(this.forces.indexOf(army), 1);
+        this.#emit("disbanded", { realm: army.realm, army: army.id, by });
+    }
+
+    // A vassal's army and reserve cut to what a vassal keeps (fullOf): the rest of each back into
+    // its towns' garrisons, the nearest first (as an army disbanded)
+    #trim(realm) {
+        for (const force of [this.armyOf(realm.id), this.reserveOf(realm.id)]) {
+            let left = force ? force.size - this.fullOf(realm.id) : 0;
+
+            if (left <= 0) {
+                continue;
+            }
+
+            force.size -= left;
+
+            for (const town of this.towns.filter(({ owner }) => owner === realm.id).sort((a, b) => apart(a.at, force.at) - apart(b.at, force.at) || (a.id < b.id ? -1 : 1))) {
+                const back = Math.min(left, Math.max(0, Math.round(HOLDINGS[town.kind].garrison * 1.5) - town.garrison));
+
+                town.garrison += back;
+                left -= back;
+            }
+        }
+    }
+
+    // How many are on their way to join an army or reserve
+    #coming(force) {
+        return this.forces.filter(({ kind, target }) => kind === "reinforcement" && target === force.id).reduce((sum, { size }) => sum + size, 0);
+    }
+
+    // Soldiers raised in a town for its people's army or reserve (`force`): into it at once if it's
+    // there, else out on their way to it, with any column for it leaving the town already
+    #reinforce(town, force, count) {
+        if (apart(town.at, force.at) <= REINFORCE.join) {
+            force.size += count;
+
+            return;
+        }
+
+        const column = this.forces.find((each) => each.kind === "reinforcement" && each.target === force.id && apart(each.at, town.at) <= REINFORCE.band);
+
+        if (column) {
+            column.size += count;
+
+            return;
+        }
+
+        this.forces.push({ id: `force-${this.nextForce++}`, realm: force.realm, kind: "reinforcement", size: count, at: [...town.at], path: [[...town.at], [...force.at]], leg: 0, target: force.id, home: town.id, mission: null, about: null, since: this.turn });
+    }
+
+    // Reinforcements on their way: straight for their army or reserve, where it is now, banding
+    // with another column for it once they're near, and joining it once there. Theirs gone, into
+    // the nearest of their people's towns
+    #onReinforcement(column) {
+        const force = this.force(column.target);
+
+        if (!force) {
+            const home = this.#nearestOwn(column.realm, column.at);
+
+            if (home) {
+                home.garrison = Math.min(Math.round(HOLDINGS[home.kind].garrison * 1.5), home.garrison + column.size);
+            }
+
+            this.forces.splice(this.forces.indexOf(column), 1);
+
+            return;
+        }
+
+        Object.assign(column, { path: [[...column.at], [...force.at]], leg: 0 });
+        this.#go(column, REINFORCE.speed);
+
+        if (apart(column.at, force.at) <= REINFORCE.join) {
+            force.size += column.size;
+            this.forces.splice(this.forces.indexOf(column), 1);
+
+            return;
+        }
+
+        const other = this.forces.find((each) => each !== column && each.kind === "reinforcement" && each.target === column.target && apart(each.at, column.at) <= REINFORCE.band);
+
+        if (other) {
+            // (The one nearer it takes the other in)
+            const [keep, merged] = apart(other.at, force.at) <= apart(column.at, force.at) ? [other, column] : [column, other];
+
+            keep.size += merged.size;
+            this.forces.splice(this.forces.indexOf(merged), 1);
+        }
+    }
+
+    // The way from a point to another for an army or reserve: by the roads, from the place nearest
+    // it to the place nearest there, if that's no longer than going straight across country is
+    // reckoned to be (roads.js ACROSS_COUNTRY); else straight there
+    #wayTo(from, to) {
+        const [a, b] = [this.roads.nearest(from), this.roads.nearest(to)];
+        const route = a && b && a.id !== b.id ? this.roads.route(a.id, b.id) : null;
+        const byRoad = route ? apart(from, a.at) + route.length + apart(b.at, to) : Infinity;
+
+        return byRoad <= apart(from, to) * ACROSS_COUNTRY ? [[...from], ...route.points, [...to]] : [[...from], [...to]];
+    }
+
+    // Something of an enemy's an army can attack, by its id: { kind ("town", "works", "fort",
+    // "camp"), realm (whose it is), at, edge (how far its ground reaches from there), thing }, or null
+    #targetOf(id) {
+        const town = this.town(id);
+
+        if (town) {
+            return { kind: "town", realm: town.owner, at: town.at, edge: this.#radius(town.id), thing: town };
+        }
+
+        const works = this.workAt(id);
+
+        if (works) {
+            return works.held ? null : { kind: "works", realm: works.owner, at: works.at, edge: 0, thing: works };
+        }
+
+        const fort = this.fort(id);
+
+        if (fort) {
+            return { kind: "fort", realm: fort.realm, at: fort.at, edge: 0, thing: fort };
+        }
+
+        const camp = this.camp(id);
+
+        return camp ? { kind: "camp", realm: camp.realm, at: camp.at, edge: 0, thing: camp } : null;
+    }
+
+    // A people's camp (built, or going up) with something within its reach (CAMP.reach, of the
+    // thing's edge: `edge` metres from `at`), the nearest; or null
+    #campFor(realm, at, edge = 0) {
+        let best = null;
+
+        for (const camp of this.camps) {
+            const distance = apart(camp.at, at) - edge;
+
+            if (camp.realm === realm && distance <= CAMP.reach && (!best || distance < best.distance)) {
+                best = { camp, distance };
+            }
+        }
+
+        return best?.camp ?? null;
+    }
+
+    // Whether a people's camps reach a point (with an edge)
+    #reaches(realm, at, edge = 0) {
+        return Boolean(this.#campFor(realm, at, edge));
+    }
+
+    // Where a camp before something may go: `out` metres from it on the way from `from`, or turned
+    // a little either way, on dry land off the roads; or there anyway, failing that
+    #siteFor(from, to, out) {
+        const [dx, dy] = [from[0] - to[0], from[1] - to[1]];
+        const heading = atan2(dx, dy);
+
+        for (const turn of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
+            const at = campSite([to[0] + sin(heading + turn) * (out + 1), to[1] + cos(heading + turn) * (out + 1)], to, out);
+            const land = landAt(this.plan, at[0], at[1]);
+
+            if (land.water === WATER.none && !land.road && land.biome !== "sea") {
+                return at;
+            }
+        }
+
+        return campSite(from, to, out);
+    }
+
+    // An army sent to build a camp at a point (or to its people's camp there), and to attack from it
+    // what it's to (`objective`: an id) once it's up
+    #toCamp(army, at, objective = null) {
+        const camp = this.camps.find((each) => each.realm === army.realm && apart(each.at, at) <= CLOSE.fight);
+        const there = camp?.at ?? at;
+
+        Object.assign(army, { mission: "camp", camp: camp?.id ?? null, about: [...there], target: objective, arrived: null, path: this.#wayTo(army.at, there), leg: 0 });
+    }
+
+    // An army sent against something of the enemy's (its id), from the camp of its people's in
+    // reach of it. Whether it could be
+    #toAttack(army, id) {
+        const target = this.#targetOf(id);
+        const camp = target && this.#campFor(army.realm, target.at, target.edge);
+
+        if (!camp) {
+            return false;
+        }
+
+        Object.assign(army, { mission: "attack", camp: camp.id, target: id, about: null, went: army.size, arrived: null, path: this.#wayTo(army.at, target.at), leg: 0 });
+
+        return true;
+    }
+
+    // An army back to its camp to be made up (or home, with none)
+    #regroup(army) {
+        const camp = this.camp(army.camp);
+
+        if (!camp) {
+            this.#goHome(army);
+
+            return;
+        }
+
+        Object.assign(army, { mission: "regroup", about: [...camp.at], arrived: null, path: this.#wayTo(army.at, camp.at), leg: 0 });
+    }
+
+    // An army home to its people's seat
+    #goHome(army) {
+        const seat = this.town(this.realm(army.realm)?.seat);
+
+        if (seat) {
+            Object.assign(army, { mission: "home", target: null, about: null, home: seat.id, arrived: null, path: this.#wayTo(army.at, seat.at), leg: 0 });
+        }
+    }
+
+    // What an army's done with: orders carried out (cleared), and back to its camp to wait for what
+    // its rulers will have it do next (or home, with none). Ordered against something else (a town
+    // whose cover it had to raze first), at that now
+    #done(army) {
+        if (army.orders?.kind === "attack" && army.orders.about !== army.target && this.#targetOf(army.orders.about) && this.#toAttack(army, army.orders.about)) {
+            return;
+        }
+
+        if (army.orders && army.orders.kind !== "camp") {
+            army.orders = null;
+        }
+
+        army.target = null;
+
+        const camp = this.camp(army.camp);
+
+        if (camp) {
+            Object.assign(army, { mission: "camp", about: [...camp.at], arrived: null, path: this.#wayTo(army.at, camp.at), leg: 0 });
+        } else {
+            this.#goHome(army);
+        }
+    }
+
+    // A people's army this turn, as a player's orders have it (until they're carried out), or as its
+    // rulers would: raised once its people are at war (and the age is past its uneasy peace);
+    // marching once it's made up enough (ARMY.ready); made up again at its camp when it's been
+    // beaten back, and back at what it was attacking; home once there's peace
+    #command(realm, liege) {
+        const army = this.armyOf(realm.id);
+        const atWar = this.enemiesOf(liege.id).length > 0;
+
+        if (!army) {
+            if (atWar && this.stage >= 1) {
+                this.#raise(realm);
+            }
+
+            return;
+        }
+
+        const ready = army.size >= Math.max(1, this.fullOf(realm.id) * ARMY.ready);
+
+        if (army.orders) {
+            // (Beaten back, or home, and made up again: at what it was ordered to again)
+            const { kind, about } = army.orders;
+
+            if ((army.mission === "regroup" || army.mission === "muster") && army.leg >= army.path.length - 1 && ready) {
+                if (kind === "camp") {
+                    this.#toCamp(army, about);
+                } else if (kind === "attack" && !this.#toAttack(army, about)) {
+                    this.#done(army);
+                }
+            }
+
+            return;
+        }
+
+        if (!atWar) {
+            if (army.mission !== "home" && army.mission !== "muster") {
+                this.#goHome(army);
+            }
+
+            return;
+        }
+
+        if (this.stage < 1 || !ready) {
+            return;
+        }
+
+        const there = army.leg >= army.path.length - 1;
+
+        if (army.mission === "muster" || (army.mission === "camp" && there && !army.target && this.camp(army.camp)?.built !== null)) {
+            this.#campaign(army, liege);
+        } else if (army.mission === "regroup" && there && !(army.target && this.#targetOf(army.target) && this.#toAttack(army, army.target))) {
+            this.#campaign(army, liege);
+        }
+    }
+
+    // An army ready to march given what to attack by its rulers: the enemy's weakest near town of a
+    // kind the age lets be taken (or a works, once the war's far enough on), as their traits weigh
+    // it and a player's counsel would have it; the fortification covering a town first. From one of
+    // its people's camps in reach of it, or a camp built before it. Whether it was sent
+    #campaign(army, liege) {
+        const { traits } = liege.leader;
         const stage = STAGES[this.stage];
+        const enemies = this.enemiesOf(liege.id);
+        const targets = [
+            ...this.towns.filter((town) => enemies.includes(this.liege(town.owner)) && stage.take.includes(town.kind)),
+            ...(this.stage >= WORKED.from ? this.works.filter((works) => !works.held && this.realm(works.owner)?.alive && enemies.includes(this.liege(works.owner))) : []),
+        ];
 
-        for (const camp of this.forces.filter(({ kind }) => kind === "camp")) {
-            if (!this.forces.includes(camp)) {
+        if (!targets.length) {
+            return false;
+        }
+
+        const realm = this.realm(army.realm);
+        const scored = targets
+            .map((target) => {
+                const distance = apart(army.at, target.at) / 1000;
+                const near = this.#reaches(army.realm, target.at, this.town(target.id) ? this.#radius(target.id) : 0) ? 1 : 0;
+
+                // (A works: worth its taking, the more so for what the realm's short of)
+                if (YIELDS[target.kind]) {
+                    const short = realm.stores[YIELDS[target.kind]] < WORKED.yard ? 0.5 : 0;
+
+                    return { target, score: distance + target.guard / 15 - WORKED.worth * traits.greed - short - near + this.random.range(0, 0.5) };
+                }
+
+                // (Their rulers' seat, to bring them under, when it's strong enough to; and where a
+                // player's counselled them to march)
+                const seat = target.id === this.realm(target.owner).seat && this.strength(liege.id) >= this.strength(this.liege(target.owner));
+                const counselled = liege.counsel?.march === target.id ? 4 * liege.counsel.weight : 0;
+
+                return { target, score: distance + target.garrison / 15 - HOLDINGS[target.kind].worth * traits.greed - (seat ? 3 * traits.aggression : 0) - counselled - near + this.random.range(0, 0.5) };
+            })
+            .sort((a, b) => a.score - b.score || (a.target.id < b.target.id ? -1 : 1));
+        const { target } = scored[0];
+
+        if (liege.counsel?.march === target.id) {
+            liege.counsel = null;
+        }
+
+        // (A town covered by its holders' fortification: that first)
+        const aim = (this.town(target.id) && this.coverOf(target)) || target;
+        const { at, edge } = this.#targetOf(aim.id);
+
+        if (!this.#toAttack(army, aim.id)) {
+            this.#toCamp(army, this.#siteFor(army.at, at, edge + CAMP.reach * 0.6), aim.id);
+        }
+
+        this.#emit("marched", { realm: army.realm, army: army.id, target: aim.id, size: army.size });
+
+        return true;
+    }
+
+    // An army on the move, or there: at a camp's site, it builds the camp (or joins its people's
+    // there), and once it's up goes against what it was to (a player's orders to camp there carried
+    // out); home, it's made up there
+    #onArmy(army) {
+        // (Going against something that moves, a camp's: straight for it)
+        this.#go(army, ARMY.speed.army);
+
+        if (army.leg < army.path.length - 1) {
+            return;
+        }
+
+        if (army.mission === "home") {
+            const seat = this.town(this.realm(army.realm)?.seat);
+
+            army.mission = "muster";
+            army.home = seat?.id ?? army.home;
+
+            if (army.orders?.kind === "home") {
+                army.orders = null;
+            }
+
+            return;
+        }
+
+        if (army.mission !== "camp") {
+            return;
+        }
+
+        const camp = this.camp(army.camp) ?? this.#buildCamp(army);
+
+        if (!camp || camp.built === null) {
+            return;
+        }
+
+        if (army.orders?.kind === "camp") {
+            army.orders = null;
+        }
+
+        if (army.target && !this.#toAttack(army, army.target)) {
+            army.target = null;
+        }
+    }
+
+    // A camp built where an army's come to build it (CAMP: its cost paid, if its people can; a few
+    // of the army left to hold it), going up for a while; the oldest of its people's struck, if it
+    // has as many as it keeps. Null if it can't be paid for yet
+    #buildCamp(army) {
+        const realm = this.realm(army.realm);
+
+        if (!realm || realm.treasury < CAMP.cost) {
+            return null;
+        }
+
+        const mine = this.camps.filter((each) => each.realm === army.realm).sort((a, b) => a.used - b.used || (a.id < b.id ? -1 : 1));
+
+        if (mine.length >= CAMP.most) {
+            this.#strikeCamp(mine[0]);
+        }
+
+        const guard = Math.min(CAMP.guard, Math.max(0, army.size - 1));
+        const camp = { id: `camp-${this.nextCamp++}`, realm: army.realm, at: [...(army.about ?? army.at)], guard, built: null, done: this.turn + CAMP.build, toward: army.target, used: this.turn, skirmished: this.turn };
+
+        realm.treasury -= CAMP.cost;
+        army.size -= guard;
+        army.camp = camp.id;
+        this.camps.push(camp);
+
+        return camp;
+    }
+
+    // A camp struck by its own people (no army's needed it a while, or it's one too many): those
+    // holding it back into the nearest of their towns
+    #strikeCamp(camp) {
+        const home = this.#nearestOwn(camp.realm, camp.at);
+
+        if (home) {
+            home.garrison = Math.min(Math.round(HOLDINGS[home.kind].garrison * 1.5), home.garrison + camp.guard);
+        }
+
+        this.#dropCamp(camp);
+        this.#emit("struck", { realm: camp.realm, camp: camp.id, at: [...camp.at] });
+    }
+
+    // A camp razed by an enemy (`by`, a realm's id, or null), or given up by a fallen people
+    #razeCamp(camp, by, { abandoned = false, played = false } = {}) {
+        this.#dropCamp(camp);
+        this.#emit(abandoned ? "abandoned" : "razed", { camp: camp.id, kind: "camp", realm: camp.realm, at: [...camp.at], toward: camp.toward, about: camp.toward, by: by ?? null, ...(played ? { played } : {}) });
+
+        if (by && this.realm(by)) {
+            this.remember(camp.realm, by, -4);
+        }
+    }
+
+    // A camp gone: the armies staged from it from none
+    #dropCamp(camp) {
+        if (!this.camps.includes(camp)) {
+            return;
+        }
+
+        this.camps.splice(this.camps.indexOf(camp), 1);
+
+        for (const army of this.forces.filter((force) => force.kind === "army" && force.camp === camp.id)) {
+            army.camp = null;
+        }
+    }
+
+    // The camps this turn: going up (finished once they've stood long enough: CAMP.build); held
+    // (made up from their army while it's there); their skirmishers out against the enemy near
+    // (not where a player's near: that's played out in the world); struck once no army's needed
+    // them a while (CAMP.idle)
+    #encamp() {
+        for (const camp of [...this.camps]) {
+            if (!this.camps.includes(camp)) {
                 continue;
             }
 
-            const town = this.town(camp.target);
-
-            if (!town || !this.hostile(camp.realm, town.owner)) {
-                this.#disband(camp, "withdrew");
+            if (!this.realm(camp.realm)?.alive) {
+                this.#razeCamp(camp, null, { abandoned: true });
                 continue;
             }
 
-            // (Out against a town a player's near: played out there, until it's settled, or it's
-            // gone on too long, and the rest of it is reckoned here)
-            if (camp.sortie) {
-                if (this.turn - camp.sortie.turn >= SORTIE_TURNS) {
-                    this.settle(camp.id, { reckon: true });
+            const army = this.forces.find((force) => force.kind === "army" && force.realm === camp.realm && apart(force.at, camp.at) <= CLOSE.fight);
+
+            if (army) {
+                const made = Math.min(CAMP.guard - camp.guard, army.size - 1);
+
+                camp.used = this.turn;
+
+                if (made > 0) {
+                    camp.guard += made;
+                    army.size -= made;
+                }
+            }
+
+            if (camp.built === null) {
+                if (this.turn >= camp.done) {
+                    camp.built = this.turn;
+                    this.#emit("camped", { realm: camp.realm, camp: camp.id, target: camp.toward, at: [...camp.at] });
                 }
 
                 continue;
             }
 
-            if (camp.size < 3) {
-                this.forces.splice(this.forces.indexOf(camp), 1);
-                this.#emit("broken", { realm: camp.realm, target: town.id });
+            if (this.turn - camp.used > CAMP.idle) {
+                this.#strikeCamp(camp);
                 continue;
             }
 
-            const { traits } = this.realm(this.liege(camp.realm)).leader;
-            const walls = HOLDINGS[town.kind].walls;
-            const watched = this.watched.has(town.id);
-            // (Covered by its holders' fortification: not to be stormed till that's razed, and
-            // fallen on first: #besiege)
-            const cover = this.coverOf(town);
+            if (this.turn - camp.skirmished >= CAMP.every && camp.guard >= CAMP.pair && !this.watched.has(camp.id)) {
+                camp.skirmished = this.turn;
+                this.#skirmish(camp);
+            }
+        }
+    }
 
-            camp.against = cover?.id ?? null;
+    // A pair of a camp's skirmishers out against the nearest of the enemy's within reach
+    // (CAMP.skirmish): a town's garrison (its taxes lost for a turn; never its last), a works'
+    // guard, an army, a reserve, reinforcements, a convoy, a camp. Each of them may bring one down,
+    // or be lost
+    #skirmish(camp) {
+        const enemy = (realm) => this.hostile(camp.realm, realm);
+        const targets = [
+            ...this.towns.filter((town) => enemy(town.owner) && town.garrison > 1).map((town) => ({ id: town.id, realm: town.owner, at: town.at, hit: () => ((town.garrison -= 1), (town.raidedAt = this.turn)) })),
+            ...this.works.filter((works) => !works.held && enemy(works.owner) && works.guard > 0).map((works) => ({ id: works.id, realm: works.owner, at: works.at, hit: () => (works.guard -= 1) })),
+            ...this.forces.filter((force) => ["army", "reserve", "reinforcement", "convoy"].includes(force.kind) && enemy(force.realm) && force.size > 0).map((force) => ({ id: force.id, realm: force.realm, at: force.at, hit: () => (force.size -= 1) })),
+            ...this.camps.filter((other) => other !== camp && enemy(other.realm) && other.guard > 1).map((other) => ({ id: other.id, realm: other.realm, at: other.at, hit: () => (other.guard -= 1) })),
+        ].filter(({ id, at }) => apart(at, camp.at) <= CAMP.skirmish && !this.watched.has(id));
+        const target = targets.sort((a, b) => apart(a.at, camp.at) - apart(b.at, camp.at) || (a.id < b.id ? -1 : 1))[0];
 
-            // A sally
-            if (town.garrison > camp.size * 1.6 + 4) {
-                const out = town.garrison - Math.ceil(HOLDINGS[town.kind].garrison / 4);
-                const { attackers, defenders } = this.#fight(out, camp.size, 1);
+        if (!target) {
+            return;
+        }
 
-                town.garrison += attackers - out;
-                this.#emit("sally", { realm: town.owner, town: town.id, against: camp.realm, won: defenders === 0, killed: camp.size - defenders, lost: out - attackers });
-                camp.size = defenders;
+        let [killed, lost] = [0, 0];
 
-                if (!camp.size) {
-                    this.forces.splice(this.forces.indexOf(camp), 1);
+        for (let k = 0; k < CAMP.pair; k++) {
+            if (this.random.chance(CAMP.hits)) {
+                target.hit();
+                killed++;
+            }
+
+            if (this.random.chance(CAMP.lost)) {
+                lost++;
+            }
+        }
+
+        camp.guard -= lost;
+        this.remember(target.realm, camp.realm, -1);
+        this.#emit("skirmish", { realm: camp.realm, camp: camp.id, against: target.realm, target: target.id, killed, lost });
+    }
+
+    // A people's reserve this turn: out against the enemy army nearest it in its people's own lands
+    // (within CLOSE.threat of one of their towns: never beyond), one attacking one of them first, if
+    // it's not much the weaker; home to its seat again once there's none
+    #defend(realm) {
+        const reserve = this.reserveOf(realm.id);
+
+        if (!reserve) {
+            this.#reserveFor(realm);
+
+            return;
+        }
+
+        const towns = this.towns.filter(({ owner }) => owner === realm.id);
+        const threat = this.forces
+            .filter((force) => force.kind === "army" && force.size > 0 && this.hostile(force.realm, realm.id) && towns.some((town) => apart(town.at, force.at) <= CLOSE.threat))
+            .map((force) => ({ force, attacking: force.mission === "attack" && this.#targetOf(force.target)?.realm === realm.id ? 1 : 0 }))
+            .sort((a, b) => b.attacking - a.attacking || apart(a.force.at, reserve.at) - apart(b.force.at, reserve.at) || (a.force.id < b.force.id ? -1 : 1))[0]?.force;
+
+        if (threat && reserve.size >= threat.size * 0.4) {
+            Object.assign(reserve, { mission: "defend", target: threat.id, path: [[...reserve.at], [...threat.at]], leg: 0 });
+
+            return;
+        }
+
+        const seat = this.town(realm.seat);
+
+        if (seat && (reserve.mission === "defend" || reserve.home !== seat.id)) {
+            Object.assign(reserve, { mission: "back", target: null, home: seat.id, path: this.#wayTo(reserve.at, seat.at), leg: 0 });
+        }
+    }
+
+    // A reserve on the move: home at its seat
+    #onReserve(reserve) {
+        this.#go(reserve, ARMY.speed.reserve);
+
+        if (reserve.mission === "back" && reserve.leg >= reserve.path.length - 1) {
+            reserve.mission = "home";
+        }
+    }
+
+    // The fighting this turn: each army and reserve upon an enemy's (within CLOSE.fight) fights it,
+    // and the beaten falls back; reinforcements caught by an enemy army are fallen on; then each
+    // army attacking what it's after once it's there (not one a player's near, a while:
+    // WATCH_TURNS)
+    #engage() {
+        const fighters = () => this.forces.filter(({ kind, size }) => (kind === "army" || kind === "reserve") && size > 0);
+
+        for (const a of fighters()) {
+            for (const b of fighters()) {
+                if (a.id < b.id && this.forces.includes(a) && this.forces.includes(b) && a.size > 0 && b.size > 0 && (a.kind === "army" || b.kind === "army") && !this.#fleeing(a) && !this.#fleeing(b) && this.hostile(a.realm, b.realm) && apart(a.at, b.at) <= CLOSE.fight) {
+                    this.#battle(a.kind === "reserve" ? b : a, a.kind === "reserve" ? a : b);
+                }
+            }
+        }
+
+        for (const column of this.forces.filter(({ kind }) => kind === "reinforcement")) {
+            const by = fighters().find((force) => force.kind === "army" && this.hostile(force.realm, column.realm) && apart(force.at, column.at) <= CLOSE.fight);
+
+            if (by && this.forces.includes(column)) {
+                const { attackers, defenders } = this.#fight(by.size, column.size, 1);
+
+                this.#emit("intercepted", { realm: column.realm, by: by.realm, killed: column.size - defenders, lost: by.size - attackers, at: [...column.at] });
+                by.size = attackers;
+                column.size = defenders;
+
+                if (!column.size) {
+                    this.forces.splice(this.forces.indexOf(column), 1);
+                }
+            }
+        }
+
+        for (const army of this.forces.filter(({ kind, mission }) => kind === "army" && mission === "attack")) {
+            if (!this.forces.includes(army) || army.mission !== "attack") {
+                continue;
+            }
+
+            const target = this.#targetOf(army.target);
+
+            if (!target || !this.hostile(army.realm, target.realm)) {
+                this.#done(army);
+                continue;
+            }
+
+            if (apart(army.at, target.at) > CLOSE.attack + target.edge) {
+                continue;
+            }
+
+            // (Before what a player's near: a while, for it to be played out there)
+            army.arrived ??= this.turn;
+
+            if (this.watched.has(target.thing.id) && this.turn - army.arrived < WATCH_TURNS) {
+                continue;
+            }
+
+            this.#attack(army, target);
+        }
+    }
+
+    // Two peoples' forces fight it out in the field (`army` upon `other`, an army or a reserve): the
+    // beaten falls back (not to be fallen on again while it gets away: ARMY.flee), an army to its
+    // camp to be made up (gone, with none of it left), a reserve home
+    #battle(army, other) {
+        const before = [army.size, other.size];
+        const { attackers, defenders } = this.#fight(army.size, other.size, 1);
+
+        army.size = attackers;
+        other.size = defenders;
+        this.remember(other.realm, army.realm, -4);
+        this.#emit("battle", { realm: army.realm, against: other.realm, at: [...other.at], won: defenders < attackers, killed: before[1] - defenders, lost: before[0] - attackers, army: army.id, other: other.id, kind: other.kind });
+
+        for (const [force, won] of [
+            [army, attackers >= defenders],
+            [other, defenders > attackers],
+        ]) {
+            if (won) {
+                continue;
+            }
+
+            force.beaten = this.turn;
+
+            if (force.kind === "army" && force.size <= 0) {
+                this.#destroyed(force);
+            } else if (force.kind === "army") {
+                this.#regroup(force);
+            } else {
+                const seat = this.town(this.realm(force.realm)?.seat);
+
+                if (seat) {
+                    Object.assign(force, { mission: "back", target: null, path: this.#wayTo(force.at, seat.at), leg: 0 });
+                }
+            }
+        }
+    }
+
+    // Whether a force beaten in the field is still getting away (not to be fallen on again for
+    // ARMY.flee turns)
+    #fleeing(force) {
+        return this.turn - (force.beaten ?? -Infinity) < ARMY.flee;
+    }
+
+    // An army put to the sword to the last: gone (its people can raise another)
+    #destroyed(army) {
+        this.forces.splice(this.forces.indexOf(army), 1);
+        this.#emit("destroyed", { realm: army.realm, army: army.id, at: [...army.at] });
+    }
+
+    // An army's attack this turn on what it's after (docs/WAR.md *Standing armies*):
+    // - a town: its garrison fought behind its walls, its people's reserve beside it if it's there,
+    //   and a seat's ruler and captain of its guard (LEADERS) last; put to the sword to the last,
+    //   the town is theirs, a few of the army left to hold it (HELD). No other way to take one;
+    // - a works: its guard; put down, it's seized;
+    // - a fortification: battered (FORT_SIEGE), its defenders bringing some of the army down;
+    //   razed at nothing;
+    // - a camp: its guard; put down, it's razed.
+    // Beaten back below what it went in with by too much (ARMY.regroup), the army falls back to its
+    // camp to be made up, and comes back to it after (#command)
+    #attack(army, { kind, thing }) {
+        const went = army.size;
+
+        if (kind === "town") {
+            // (Covered by its holders' fortification: that first, from a camp built within reach of
+            // it if none of theirs is; what it was sent against, after)
+            const cover = this.coverOf(thing);
+
+            if (cover) {
+                if (!this.#toAttack(army, cover.id)) {
+                    this.#toCamp(army, this.#siteFor(army.at, cover.at, CAMP.reach * 0.6), cover.id);
                 }
 
-                continue;
+                return;
             }
 
-            if (!cover && stage.take.includes(town.kind) && this.turn - camp.since >= SIEGE && camp.size >= town.garrison * walls * (1.25 - traits.aggression * 0.35)) {
-                if (watched) {
-                    this.#sortie(camp, town, "assault", camp.size);
+            const seat = this.realm(thing.owner)?.seat === thing.id;
+            const reserve = this.reserveOf(thing.owner);
+            const helping = reserve && reserve.size > 0 && apart(reserve.at, thing.at) <= CLOSE.fight + this.#radius(thing.id) ? reserve : null;
+            const defenders = thing.garrison + (helping?.size ?? 0) + (seat ? LEADERS : 0);
+            const { attackers, defenders: left } = this.#fight(army.size, defenders, HOLDINGS[thing.kind].walls);
+            // (The reserve's fallen first, then the garrison's; the leaders last)
+            const killed = defenders - left;
+            const fromReserve = Math.min(helping?.size ?? 0, killed);
+
+            if (helping) {
+                helping.size -= fromReserve;
+            }
+
+            thing.garrison -= Math.min(thing.garrison, killed - fromReserve);
+            army.size = attackers;
+            this.remember(thing.owner, army.realm, -5);
+            this.#emit("assault", { realm: army.realm, town: thing.id, owner: thing.owner, won: left <= 0 && attackers > 0, killed, lost: went - attackers, army: army.id });
+
+            if (left <= 0 && attackers > 0) {
+                const garrison = Math.min(army.size, Math.ceil(HOLDINGS[thing.kind].garrison * HELD));
+
+                army.size -= garrison;
+                this.#hold(thing, army.realm, Math.max(1, garrison), { how: "army" });
+
+                if (army.size <= 0) {
+                    this.#destroyed(army);
                 } else {
-                    this.#assault(camp, town);
+                    this.#done(army);
                 }
 
-                continue;
+                return;
+            }
+        } else if (kind === "works") {
+            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1);
+            const won = defenders === 0 && attackers > 0;
+
+            this.#emit("battle", { realm: army.realm, against: thing.owner, works: thing.id, at: [...thing.at], won, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
+            army.size = attackers;
+            thing.guard = defenders;
+
+            if (won) {
+                const guard = Math.min(WORKED.guard, Math.max(1, Math.floor(army.size / 4)));
+
+                army.size -= guard;
+                this.#seize(thing, army.realm, { guard });
+                this.#done(army);
+
+                return;
             }
 
-            // A raid: a few of the camp out against the town's fields and roads
-            if (this.random.chance(RAIDING)) {
-                const party = Math.max(1, Math.ceil(camp.size * 0.3));
+            this.remember(thing.owner, army.realm, -5);
+        } else if (kind === "fort") {
+            const toll = Math.min(army.size, thing.kind === "garrison" ? FORT_SIEGE.garrison : FORT_SIEGE.tower);
 
-                if (watched) {
-                    this.#sortie(camp, town, "raid", party);
-                } else {
-                    this.#raid(camp, town, { party });
-                }
+            thing.hp = Math.max(0, thing.hp - army.size * FORT_SIEGE.hp);
+            thing.struck = this.turn;
+            army.size -= toll;
+
+            if (thing.hp <= 0) {
+                this.#raze(thing, army.realm);
+                this.#done(army);
+
+                return;
+            }
+        } else {
+            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1);
+
+            this.#emit("battle", { realm: army.realm, against: thing.realm, camp: thing.id, at: [...thing.at], won: defenders === 0, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
+            army.size = attackers;
+            thing.guard = defenders;
+
+            if (!defenders) {
+                this.#razeCamp(thing, army.realm);
+                this.#done(army);
+
+                return;
             }
         }
-    }
 
-    // A camp's sortie against a town a player's near: out, to be played out in the world (the
-    // host's), and settled (settle)
-    #sortie(camp, town, kind, party) {
-        camp.sortie = { kind, turn: this.turn, party, size: camp.size, garrison: town.garrison };
-        this.#emit("sortie", { kind, realm: camp.realm, force: camp.id, town: town.id, owner: town.owner, party });
-    }
-
-    // A camp storms its town, reckoned here, round by round (with what's been killed and lost
-    // already, in a sortie played out before it: `before`)
-    #assault(camp, town, before = { killed: 0, lost: 0 }) {
-        const walls = HOLDINGS[town.kind].walls;
-        const start = { camp: camp.size, town: town.garrison };
-        const { attackers, defenders } = this.#fight(camp.size, town.garrison, walls);
-
-        camp.size = attackers;
-        town.garrison = defenders;
-        this.#emit("assault", { realm: camp.realm, town: town.id, owner: town.owner, won: defenders === 0, killed: before.killed + start.town - defenders, lost: before.lost + start.camp - attackers });
-        this.remember(town.owner, camp.realm, -5);
-
-        if (!defenders && camp.size > 0) {
-            this.#take(town, camp);
-
-            return "taken";
+        if (army.size <= 0) {
+            this.#destroyed(army);
+        } else if (army.size < army.went * ARMY.regroup) {
+            this.#emit("fellBack", { realm: army.realm, army: army.id, from: thing.id });
+            this.#regroup(army);
         }
-
-        if (camp.size < 3) {
-            this.forces.splice(this.forces.indexOf(camp), 1);
-            this.#emit("broken", { realm: camp.realm, target: town.id });
-
-            return "broken";
-        }
-
-        return "repulsed";
-    }
-
-    // A camp's raid on its town's fields and roads, reckoned here: a few of its guard killed, a
-    // few of the raiders lost, and its taxes stopped (with what's been killed and lost already)
-    #raid(camp, town, { party = Math.max(1, Math.ceil(camp.size * 0.3)), killed: before = 0, lost: gone = 0 } = {}) {
-        const killed = Math.min(town.garrison, Math.round(party * 0.3 * this.random.range(0.5, 1.5)));
-        const lost = Math.min(party, camp.size, Math.round(town.garrison * 0.08 * this.random.range(0.5, 1.5)));
-
-        town.garrison -= killed;
-        camp.size -= lost;
-        town.raidedAt = this.turn;
-        this.remember(town.owner, camp.realm, -3);
-        this.#emit("raid", { realm: camp.realm, town: town.id, owner: town.owner, killed: before + killed, lost: gone + lost });
-
-        // (A camp too few to hold is broken at its next turn)
-        return "raided";
     }
 
     // Two sides fight it out, round by round, until one's gone or the attack breaks. The
@@ -2158,15 +2760,10 @@ export class War {
         return { attackers: a, defenders: d };
     }
 
-    // A town stormed: the camp's people hold it now, the camp its garrison
-    #take(town, camp) {
-        this.forces.splice(this.forces.indexOf(camp), 1);
-        this.#hold(town, camp.realm, Math.min(Math.round(HOLDINGS[town.kind].garrison * 1.5), camp.size));
-    }
-
-    // A town taken (stormed, or its barracks put down: `how`): `realm`'s people hold it now, with
-    // `garrison` of theirs (its folk stay, under their new rulers). Its rulers' seat taken, the
-    // realm is the taker's vassal, and rules from it again under them
+    // A town taken (its garrison put to the sword: by an army, `how` "army", or played out in the
+    // world, "played"): `realm`'s people hold it now, with `garrison` of theirs (its folk stay,
+    // under their new rulers). Its rulers' seat taken, the realm is the taker's vassal, and rules
+    // from it again under them
     #hold(town, realm, garrison, { how = null } = {}) {
         const from = town.owner;
 
@@ -2223,6 +2820,17 @@ export class War {
         }
 
         realm.seat = left[0].id;
+
+        // (Its army and reserve cut to what a vassal keeps, and its army's orders and aims done with)
+        this.#trim(realm);
+
+        const army = this.armyOf(realm.id);
+
+        if (army) {
+            army.orders = null;
+            this.#goHome(army);
+        }
+
         this.#emit("subjugated", { realm: realm.id, by, was });
     }
 
@@ -2247,13 +2855,18 @@ export class War {
             this.forces.splice(this.forces.indexOf(force), 1);
         }
 
+        for (const camp of this.camps.filter(({ realm: id }) => id === realm.id)) {
+            this.#dropCamp(camp);
+        }
+
         this.#emit("fallen", { realm: realm.id });
     }
 
-    // Envoys passing an enemy's forces may be waylaid (the more warlike the enemy, the likelier)
+    // Envoys passing an enemy's army, reserve or band may be waylaid (the more warlike the enemy,
+    // the likelier)
     #waylay() {
         for (const envoy of this.forces.filter(({ kind, id }) => kind === "envoy" && !this.watched.has(id))) {
-            const by = this.forces.find((force) => force.kind !== "envoy" && force.kind !== "convoy" && this.hostile(force.realm, envoy.realm) && apart(force.at, envoy.at) <= REACH.waylay);
+            const by = this.forces.find((force) => FIGHTING.includes(force.kind) && force.size > 0 && this.hostile(force.realm, envoy.realm) && apart(force.at, envoy.at) <= REACH.waylay);
 
             if (by && this.random.chance(this.realm(this.liege(by.realm)).leader.traits.aggression * 0.25)) {
                 this.forces.splice(this.forces.indexOf(envoy), 1);
@@ -2307,7 +2920,7 @@ export class War {
                 continue;
             }
 
-            const by = this.forces.find((force) => force.kind !== "envoy" && force.kind !== "convoy" && this.hostile(force.realm, convoy.realm) && apart(force.at, convoy.at) <= REACH.waylay);
+            const by = this.forces.find((force) => FIGHTING.includes(force.kind) && force.size > 0 && this.hostile(force.realm, convoy.realm) && apart(force.at, convoy.at) <= REACH.waylay);
             const camp = by ? null : this.plan.camps.find((each) => BRIGANDS.includes(each.faction) && apart(each.at, convoy.at) <= REACH.ambush);
             const chance = by ? this.realm(this.liege(by.realm)).leader.traits.aggression * 0.5 : camp ? AMBUSH : 0;
 
@@ -2427,12 +3040,26 @@ export class War {
         const town = near ? old.reduce((best, each) => (apart(each.at, near) < apart(best.at, near) ? each : best)) : old.reduce((best, each) => (each.garrison < best.garrison ? each : best));
         const from = town.owner;
 
-        Object.assign(town, { owner: realm.id, garrison: Math.ceil(HOLDINGS[town.kind].garrison * RISING.garrison) });
-        Object.assign(realm, { alive: true, overlord: null, seat: town.id, treasury: Math.max(realm.treasury, COSTS.start / 2) });
+        // (Its folk risen within the walls: they take it only by putting its garrison to the sword
+        // to the last, as an army would; else the rising's crushed, and they wait to rise again)
+        const rebels = Math.ceil(HOLDINGS[town.kind].garrison * RISING.garrison * RISING.rebels);
+        const { attackers, defenders } = this.#fight(rebels, town.garrison, 1);
 
-        // (Any camp before it was the old holders' friends': now it's a camp against a rising)
-        this.#set(realm.id, this.liege(from), "hostile");
+        town.garrison = defenders;
         this.remember(this.liege(from), realm.id, -30);
+
+        if (defenders > 0 || attackers <= 0) {
+            this.#emit("crushed", { realm: realm.id, town: town.id, from, against, led, killed: rebels - attackers });
+
+            return;
+        }
+
+        Object.assign(town, { owner: realm.id, garrison: Math.min(attackers, HOLDINGS[town.kind].garrison) });
+        Object.assign(realm, { alive: true, overlord: null, seat: town.id, treasury: Math.max(realm.treasury, COSTS.start / 2) });
+        this.#reserveFor(realm);
+
+        // (Any army before it was the old holders' friends': now it's against a rising)
+        this.#set(realm.id, this.liege(from), "hostile");
         this.#emit("risen", { realm: realm.id, town: town.id, from, against, led });
     }
 
