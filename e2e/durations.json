@@ -22,6 +22,7 @@
     "pellagos.spec.js › Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered": 109.4,
     "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops": 14.3,
     "pellagos.spec.js › a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been": 55.5,
+    "pellagos.spec.js › a convoy on the road near the player: its wagons drawn, an ox in each one's shafts and its goods aboard, its captain and guards of its people; said; emptied at the road's end": 58.9,
     "pellagos.spec.js › a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns": 23.2,
     "pellagos.spec.js › a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap": 23.8,
     "pellagos.spec.js › a new character with a sword carries a round shield, with a wand a spellward; the orc's blows from in front caught on it show \"Blocked\", the shield arm braced into them": 76.2,
