@@ -167,8 +167,8 @@ export const ITEMS = Object.freeze({
     warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.021, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.hammer },
     // (Held as the war hammer is, two-handed: the greatsword's right hand by its guard, the left by
     // its pommel; the axe's left at the foot of its haft)
-    greatsword: { label: "Greatsword", slot: "mainHand", model: "greatsword", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.hammer, haft: [-0.17, -0.12], haftRound: 0.016, sheath: SHEATHS.greatsword },
-    battleAxe: { label: "Battle axe", slot: "mainHand", model: "battleAxe", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.02, hold: HOLDS.hammer, haft: [-0.24, -0.18], haftRound: 0.019, sheath: SHEATHS.axe },
+    greatsword: { label: "Greatsword", slot: "mainHand", model: "greatsword", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.016, sheath: SHEATHS.greatsword },
+    battleAxe: { label: "Battle axe", slot: "mainHand", model: "battleAxe", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.02, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.axe },
     cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.015, hilt: [-0.06, 0.054], hold: HOLDS.sword, sheath: SHEATHS.cleaver },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },

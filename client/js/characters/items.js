@@ -392,14 +392,15 @@ function warHammer() {
 }
 
 function greatsword() {
-    // A long, broad blade over a wide cross; a grip as long as two hands (the right by the cross,
-    // the left by the pommel: equipment.js `haft`) bound in leather, a heavy pommel
+    // A long, broad blade over a wide cross; a grip a third of a metre long, as a two-handed
+    // sword's is (the right hand by the cross, the left by the pommel, as far apart as a war
+    // hammer's: equipment.js `haft`), bound in leather, a heavy pommel
     return assemble([
         [blade(1.0, 0.058, 0.011, 0.1, 0.18), "steel"],
-        [at(new THREE.BoxGeometry(0.034, 0.026, 0.3), 0, 0.083, 0), "darkSteel"],
+        [at(new THREE.BoxGeometry(0.034, 0.026, 0.26), 0, 0.083, 0), "darkSteel"],
         [at(new THREE.BoxGeometry(0.022, 0.05, 0.07), 0, 0.12, 0), "darkSteel"],
-        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.28, 10), 0, -0.06, 0), "darkLeather"],
-        [at(new THREE.CylinderGeometry(0.024, 0.02, 0.05, 8), 0, -0.225, 0), "darkSteel"],
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.32, 10), 0, -0.08, 0), "darkLeather"],
+        [at(new THREE.CylinderGeometry(0.024, 0.02, 0.05, 8), 0, -0.265, 0), "darkSteel"],
     ], "greatsword");
 }
 
@@ -411,7 +412,7 @@ function battleAxe() {
         [at(new THREE.CylinderGeometry(0.017, 0.019, 1.1, 10), 0, 0.28, 0), "wood"],
         [at(new THREE.CylinderGeometry(0.021, 0.021, 0.16, 10), 0, 0, 0), "leather"],
         [at(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 10), 0, -0.29, 0), "iron"],
-        [at(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 16, 1, false, -0.95, 1.9), 0, 0.72, -0.045, 0, 0, Math.PI / 2), "steel"],
+        [at(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 16, 1, false, -0.95, 1.9), 0, 0.72, -0.035, 0, 0, Math.PI / 2), "steel"],
         [at(new THREE.BoxGeometry(0.03, 0.12, 0.08), 0, 0.73, 0.02), "darkSteel"],
         [at(new THREE.BoxGeometry(0.044, 0.1, 0.05), 0, 0.73, -0.02), "iron"],
         [at(new THREE.BoxGeometry(0.03, 0.04, 0.05), 0, 0.73, -0.065), "darkSteel"],
