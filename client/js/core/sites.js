@@ -18,6 +18,7 @@ import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, citadelWays, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
+import { WORKS_SIZE } from "./setpieces/works.js";
 import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
@@ -486,8 +487,9 @@ export class Sites {
         // looked at once, however many of the tries it's under)
         const looked = new Map();
         // (A site no people keeps minds the roads and the water, but not the foot paths: its own
-        // trail comes up to its front, trails.js)
-        const neutral = isNeutral(site);
+        // trail comes up to its front, trails.js. A people's works minds the paths too: others'
+        // trails branch from its own, by its yard)
+        const neutral = isNeutral(site) && !WORKS_SIZE[site.kind];
         const clear = (i, j) => {
             if (i < 0 || j < 0 || i >= size || j >= size) {
                 return false;
