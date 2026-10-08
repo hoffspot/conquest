@@ -17,7 +17,7 @@
 // viewer, the news (news.js) and, later, the world.
 
 import { createRandom } from "../random.js";
-import { RACES } from "../worldplan/races.js";
+import { RACES, WORKS } from "../worldplan/races.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { Roads } from "./roads.js";
 import { hypot } from "../exact.js";
@@ -71,10 +71,11 @@ export const SORTIE_TURNS = 3;
 
 /**
  * How near (metres): two peoples' towns or forces for them to meet; an expedition to its target
- * to camp; a relief force to the camp it's after, to fall on it; an enemy force to an envoy, to
- * waylay it; an enemy camp to a town, to threaten it.
+ * to camp; a relief force to the camp it's after, to fall on it (an expedition to a works, too);
+ * an enemy force to an envoy, to waylay it (or to a convoy, to fall on it); an enemy camp to a
+ * town, to threaten it; a wild camp of brigands to a convoy's way, to fall on it.
  */
-export const REACH = Object.freeze({ sight: 1500, camp: 350, fall: 120, waylay: 300, threat: 1000 });
+export const REACH = Object.freeze({ sight: 1500, camp: 350, fall: 120, waylay: 300, threat: 1000, ambush: 250 });
 
 /** A vassal's share of its taxes paid to its overlord. */
 export const TRIBUTE = 0.5;
@@ -94,14 +95,60 @@ export const RISING = Object.freeze({ ready: 100, perTurn: 0.25, grudge: 0.25, e
 /** How many turns a player's counsel is heeded (if it's not been acted on sooner). */
 export const COUNSEL_TURNS = 20;
 
-/** Bumped whenever what a snapshot holds changes. */
-export const WAR_VERSION = 1;
+/** What each people builds with (docs/WAR.md *The works*): its realm's stores of each. */
+export const RESOURCES = Object.freeze(["wood", "stone", "metal"]);
+
+/**
+ * Each people's works (worldplan/races.js WORKS: two lumber mills, two mines and two quarries in
+ * their lands): what each yields a turn, of what it yields (`yields`: a mill's wood, a mine's
+ * metal, a quarry's stone), while it's held and guarded, into its yard, which holds `yard` at
+ * most; its guard when full (`guard`), raised and paid for as a garrison is; what it's worth to
+ * take (`worth`, as a town's: HOLDINGS); and from which stage of the war it can be taken (`from`).
+ */
+export const WORKED = Object.freeze({ yields: { wood: 3, stone: 2, metal: 1.5 }, yard: 120, guard: 6, worth: 1.5, from: 1 });
+
+/**
+ * A works' convoy (docs/WAR.md *Convoys*): `wagons` wagons of `load` each, guarded by `guards`
+ * and their captain, going `speed` metres a turn from its works to its people's seat and back.
+ * It sets out once there's a wagon's load in its yard and at least `fewest` of its guards are
+ * home; each is raised and paid for as a garrison's are.
+ */
+export const CONVOY = Object.freeze({ wagons: 3, load: 20, guards: 6, fewest: 4, speed: 200 });
+
+/**
+ * How a works is overrun by the wild's bands (docs/WAR.md *The works*): each turn it's held, by a
+ * chance of `base`, and `weak` more the emptier its guard is (by the square of how empty); a band
+ * `band` strong holds it then, its guard put to the sword and its yard looted. A works cleared of
+ * them, or seized, is held by `held` of its new holders at first.
+ */
+export const OVERRUN = Object.freeze({ base: 0.001, weak: 0.025, band: 6, held: 2 });
+
+/** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
+export const WAR_VERSION = 2;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
 
 // The kinds of place fought over
 const FOUGHT_OVER = Object.keys(HOLDINGS);
+
+// The kinds of works, and what each yields
+const YIELDS = Object.fromEntries(WORKS.map(({ kind, yields }) => [kind, yields]));
+
+// A realm's stores, empty
+const noStores = () => Object.fromEntries(RESOURCES.map((resource) => [resource, 0]));
+
+// The wild camps whose brigands fall on a convoy passing (worldplan/races.js FACTIONS), and how
+// likely they are to each turn it's near one
+const BRIGANDS = Object.freeze(["bandits", "raiders", "goblins"]);
+const AMBUSH = 0.12;
+
+// The works of a plan (WORKED), each held by its own people, its guard and its convoy's full
+function worksOf(plan) {
+    return plan.sites
+        .filter(({ kind }) => YIELDS[kind])
+        .map(({ id, kind, name, at, race }) => ({ id, kind, name, at: [...at], race, owner: race, guard: WORKED.guard, escort: CONVOY.guards + 1, yard: 0, held: false, band: 0 }));
+}
 
 const apart = ([ax, ay], [bx, by]) => hypot(ax - bx, ay - by);
 const pair = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -131,7 +178,7 @@ export class War {
          * overlord (a realm's id, or null), since (the turn it last changed hands), standing (what
          * it thinks of each other realm: grudges below 0, favours above), counsel (a player's,
          * heeded for a while: counsel()), unrest (towards rising, serving or fallen: RISING),
-         * alive }.
+         * alive, stores (what it has to build with: RESOURCES, from its works' convoys) }.
          */
         this.realms = RACES.map((race) => {
             const capital = plan.places.find((place) => place.race === race.id && place.kind === "capital");
@@ -150,6 +197,7 @@ export class War {
                 counsel: null,
                 unrest: 0,
                 alive: true,
+                stores: noStores(),
             };
         });
 
@@ -159,10 +207,22 @@ export class War {
             .map(({ id, kind, name, at, race }) => ({ id, kind, name, at: [...at], race, owner: race, garrison: HOLDINGS[kind].garrison, raidedAt: -Infinity }));
 
         /**
+         * Each people's works (WORKED): { id (its plan site's), kind ("lumber mill", "mine",
+         * "quarry"), name, at, race (whose it was), owner (whose it is), guard, escort (its
+         * convoy's guards, home), yard (what's waiting there to be carted), held (overrun by the
+         * wild: OVERRUN), band (how strong those holding it are) }.
+         */
+        this.works = worksOf(plan);
+
+        /**
          * The forces out in the world: { id, realm, kind ("expedition", "camp", "relief",
-         * "envoy"), size, at ([x, y] metres), path (the way it's going), leg (the point on it it's
-         * gone past), target (a town's id; a camp's, for relief; a realm's, for an envoy), home
-         * (the town it set out from), mission and about (an envoy's), since (the turn it set out) }.
+         * "envoy", "convoy"), size, at ([x, y] metres), path (the way it's going), leg (the point
+         * on it it's gone past), target (a town's id, or a works' for an expedition against it; a
+         * camp's, for relief; a realm's, for an envoy; its seat, for a convoy), home (the town it
+         * set out from; a convoy's works), mission and about (an envoy's; "retake" for an
+         * expedition to win back its people's own works from the wild), cargo (a convoy's: {
+         * [resource]: amount }, while it's carrying), back (a convoy going home empty), since
+         * (the turn it set out) }.
          */
         this.forces = [];
         this.nextForce = 1;
@@ -208,6 +268,11 @@ export class War {
 
     force(id) {
         return this.forces.find((force) => force.id === id) ?? null;
+    }
+
+    /** A works (by its plan site's id), or null. */
+    workAt(id) {
+        return this.works.find((each) => each.id === id) ?? null;
     }
 
     /** The realm at the top of whoever a realm serves (itself, if no one). */
@@ -274,9 +339,13 @@ export class War {
         return ["self", "allied", "vassal", "overlord"].includes(this.relation(a, b));
     }
 
-    /** A realm's own forces: its garrisons and those it has out (envoys aside). */
+    /** A realm's own forces: its garrisons, its works' guards and convoys' at home, and those it has out (envoys aside). */
     power(id) {
-        return this.towns.filter(({ owner }) => owner === id).reduce((sum, { garrison }) => sum + garrison, 0) + this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").reduce((sum, { size }) => sum + size, 0);
+        return (
+            this.towns.filter(({ owner }) => owner === id).reduce((sum, { garrison }) => sum + garrison, 0) +
+            this.works.filter(({ owner, held }) => owner === id && !held).reduce((sum, { guard, escort }) => sum + guard + escort, 0) +
+            this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").reduce((sum, { size }) => sum + size, 0)
+        );
     }
 
     /** A liege's strength: its own and all its vassals' (and theirs). */
@@ -329,6 +398,7 @@ export class War {
         this.#stageUp();
         this.#discover();
         this.#collect();
+        this.#work();
         this.#fade();
 
         for (const realm of this.realms) {
@@ -340,6 +410,8 @@ export class War {
         this.#march();
         this.#camps();
         this.#waylay();
+        this.#ambush();
+        this.#overrun();
         this.#rebel();
         this.#reckon();
     }
@@ -355,19 +427,66 @@ export class War {
      */
     loss(id, count) {
         const town = this.town(id);
-        const force = town ? null : this.force(id);
+        const works = town ? null : this.workAt(id);
+        const force = town || works ? null : this.force(id);
         const lost = Math.max(0, Math.round(count));
 
         if (town) {
             town.garrison = Math.max(0, town.garrison - lost);
+        } else if (works) {
+            // (Its band, if the wild hold it; else its guard)
+            works[works.held ? "band" : "guard"] = Math.max(0, works[works.held ? "band" : "guard"] - lost);
         } else if (force) {
             force.size = Math.max(0, force.size - lost);
         }
     }
 
     /**
-     * The towns and envoys a player's near (ids): a camp's raids and assaults on those towns are
-     * played out in the world, and those envoys go on it (move), as fast as they walk.
+     * A works won in the world (docs/WAR.md *The works*): its guard, or the band holding it, put
+     * to the sword by a player of a people (`by`, a realm's id). Held by the wild, it's cleared:
+     * its own people's again, or `by`'s if they're at war with them. Held by a people at war with
+     * `by`, it's seized. Either way it's held by a few of its new holders (OVERRUN.held). Returns
+     * how it went: "cleared", "seized", or null if it wasn't to be won (anyone left, or a friend's).
+     */
+    win(id, by) {
+        const works = this.workAt(id);
+        const realm = this.realm(by);
+
+        if (!works || !realm?.alive) {
+            return null;
+        }
+
+        if (works.held) {
+            if (works.band > 0) {
+                return null;
+            }
+
+            const from = works.owner;
+            const owner = this.realm(from)?.alive && !this.hostile(by, from) ? from : by;
+
+            Object.assign(works, { held: false, band: 0, owner, guard: OVERRUN.held, yard: 0 });
+            this.#emit("cleared", { works: works.id, by, owner, played: true });
+
+            if (owner !== by && this.realm(owner)) {
+                this.remember(owner, by, 8);
+            }
+
+            return "cleared";
+        }
+
+        if (works.guard > 0 || !this.hostile(by, works.owner)) {
+            return null;
+        }
+
+        this.#seize(works, by, { played: true });
+
+        return "seized";
+    }
+
+    /**
+     * The towns, works and envoys a player's near (ids): a camp's raids and assaults on those
+     * towns are played out in the world, and those envoys go on it (move), as fast as they walk;
+     * those works aren't fallen on here, nor overrun, while a player's there.
      */
     watch(ids) {
         this.watched = new Set(ids);
@@ -612,6 +731,7 @@ export class War {
             might: this.might,
             realms: this.realms,
             towns: this.towns,
+            works: this.works,
             forces: this.forces,
             nextForce: this.nextForce,
             relations: this.relations,
@@ -625,7 +745,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION) {
+        if (snapshot.version !== WAR_VERSION && snapshot.version !== 1) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -642,6 +762,14 @@ export class War {
         war.watched = new Set(kept.watched ?? []);
         // (A war kept before places were cleared has none)
         war.places = kept.places ?? {};
+
+        // (A war kept before the works (version 1) has every works as it would start, and every
+        // realm's stores empty)
+        war.works = kept.works ?? worksOf(plan);
+
+        for (const realm of war.realms) {
+            realm.stores ??= noStores();
+        }
 
         return war;
     }
@@ -771,10 +899,11 @@ export class War {
         this.#diplomacy(realm);
         this.#declare(realm);
 
-        // Relief for its own and its allies' towns under threat first, then the war carried to
-        // the enemy
+        // Relief for its own and its allies' towns under threat first, its works won back from the
+        // wild, then the war carried to the enemy
         for (const each of own) {
             this.#relieve(each, realm);
+            this.#retake(each);
         }
 
         if (this.enemiesOf(realm.id).length) {
@@ -805,6 +934,27 @@ export class War {
 
             town.garrison += raised;
             realm.treasury -= raised * COSTS.troop;
+        }
+
+        // Then its works' guards, and their convoys' (the emptiest first): a few a turn each
+        const works = this.works
+            .filter(({ owner, held }) => owner === realm.id && !held)
+            .map((each) => ({ each, want: WORKED.guard - each.guard + (this.#convoyOf(each) ? 0 : CONVOY.guards + 1 - each.escort) }))
+            .filter(({ want }) => want > 0)
+            .sort((a, b) => b.want - a.want || (a.each.id < b.each.id ? -1 : 1));
+
+        for (const { each } of works) {
+            const afford = Math.floor((realm.treasury - reserve) / COSTS.troop);
+            const guard = Math.min(WORKED.guard - each.guard, afford, 3);
+            const escort = this.#convoyOf(each) ? 0 : Math.min(CONVOY.guards + 1 - each.escort, afford - Math.max(0, guard), 3);
+
+            if (guard <= 0 && escort <= 0) {
+                break;
+            }
+
+            each.guard += Math.max(0, guard);
+            each.escort += Math.max(0, escort);
+            realm.treasury -= (Math.max(0, guard) + Math.max(0, escort)) * COSTS.troop;
         }
     }
 
@@ -1000,9 +1150,10 @@ export class War {
         return realm.treasury - this.power(realm.id) * COSTS.upkeep * 2;
     }
 
-    // How many forces a realm has in the field (envoys aside)
+    // How many forces a realm has in the field (envoys and convoys aside, and those winning back its
+    // works from the wild)
     #fielded(id) {
-        return this.forces.filter(({ realm, kind }) => realm === id && kind !== "envoy").length;
+        return this.forces.filter(({ realm, kind, mission }) => realm === id && kind !== "envoy" && kind !== "convoy" && mission !== "retake").length;
     }
 
     // The realm's own town nearest a point
@@ -1036,17 +1187,30 @@ export class War {
         }
 
         const enemies = this.enemiesOf(liege.id);
-        const targets = this.towns.filter((town) => enemies.includes(this.liege(town.owner)));
+        // (Their towns, and once the war's far enough on, their works: docs/WAR.md *The works*)
+        const targets = [
+            ...this.towns.filter((town) => enemies.includes(this.liege(town.owner))),
+            ...(this.stage >= WORKED.from ? this.works.filter((works) => !works.held && this.realm(works.owner)?.alive && enemies.includes(this.liege(works.owner))) : []),
+        ];
 
         if (!targets.length) {
             return;
         }
 
         const scored = targets
-            .map((town) => {
-                const from = this.#nearestOwn(realm.id, town.at);
-                const distance = from ? apart(from.at, town.at) : Infinity;
-                const camped = this.forces.some(({ realm: id, kind, target }) => id === realm.id && kind === "camp" && target === town.id);
+            .map((target) => {
+                const from = this.#nearestOwn(realm.id, target.at);
+                const distance = from ? apart(from.at, target.at) : Infinity;
+
+                // (A works: worth its taking, the more so for what the realm's short of)
+                if (YIELDS[target.kind]) {
+                    const short = realm.stores[YIELDS[target.kind]] < WORKED.yard ? 0.5 : 0;
+
+                    return { target, from, score: distance / 1000 + target.guard / 15 - WORKED.worth * traits.greed - short + this.random.range(0, 0.5) };
+                }
+
+                const town = target;
+                const camped = this.forces.some(({ realm: id, kind, target: at }) => id === realm.id && kind === "camp" && at === town.id);
                 const takeable = stage.take.includes(town.kind);
 
                 // (Their rulers' seat, to bring them under: when it can be taken, and it's strong enough to)
@@ -1055,38 +1219,39 @@ export class War {
                 // (And where a player's counselled them to march)
                 const counselled = liege.counsel?.march === town.id ? 4 * liege.counsel.weight : 0;
 
-                return { town, from, score: distance / 1000 + town.garrison / 15 - (camped ? 2 : 0) - (takeable ? HOLDINGS[town.kind].worth * traits.greed : 0) - (seat ? 3 * traits.aggression : 0) - counselled + this.random.range(0, 0.5) };
+                return { target, from, score: distance / 1000 + town.garrison / 15 - (camped ? 2 : 0) - (takeable ? HOLDINGS[town.kind].worth * traits.greed : 0) - (seat ? 3 * traits.aggression : 0) - counselled + this.random.range(0, 0.5) };
             })
             .filter(({ from }) => from)
             .sort((a, b) => a.score - b.score);
 
-        const { town, from } = scored[0] ?? {};
+        const { target, from } = scored[0] ?? {};
 
-        if (!town) {
+        if (!target) {
             return;
         }
 
-        const needed = Math.ceil(town.garrison * HOLDINGS[town.kind].walls * (1.5 - traits.aggression * 0.4));
+        const works = Boolean(YIELDS[target.kind]);
+        const needed = works ? Math.ceil(target.guard * 1.5) : Math.ceil(target.garrison * HOLDINGS[target.kind].walls * (1.5 - traits.aggression * 0.4));
         const size = Math.min(stage.most, Math.max(6, needed), Math.floor(this.#spare(realm) / COSTS.troop));
 
         if (size < 6) {
             return;
         }
 
-        const route = this.roads.route(from.id, town.id);
+        const route = works ? this.#routeTo(from.id, target.at) : this.roads.route(from.id, target.id)?.points;
 
         if (!route) {
             return;
         }
 
         // (Counsel acted on)
-        if (liege.counsel?.march === town.id) {
+        if (liege.counsel?.march === target.id) {
             liege.counsel = null;
         }
 
         realm.treasury -= size * COSTS.troop;
-        this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "expedition", size, at: [...route.points[0]], path: route.points, leg: 0, target: town.id, home: from.id, mission: null, about: null, since: this.turn });
-        this.#emit("marched", { realm: realm.id, from: from.id, target: town.id, size });
+        this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "expedition", size, at: [...route[0]], path: route, leg: 0, target: target.id, home: from.id, mission: null, about: null, since: this.turn });
+        this.#emit("marched", { realm: realm.id, from: from.id, target: target.id, size });
     }
 
     // Everyone on the move goes on: expeditions camp by their target, relief falls on the camp,
@@ -1098,12 +1263,14 @@ export class War {
                 continue;
             }
 
-            this.#go(force, force.kind === "envoy" ? SPEEDS.envoy : SPEEDS.march);
+            this.#go(force, force.kind === "envoy" ? SPEEDS.envoy : force.kind === "convoy" ? CONVOY.speed : SPEEDS.march);
 
             if (force.kind === "expedition") {
                 this.#onExpedition(force);
             } else if (force.kind === "relief") {
                 this.#onRelief(force);
+            } else if (force.kind === "convoy") {
+                this.#onConvoy(force);
             } else if (force.leg >= force.path.length - 1) {
                 this.#hear(force);
             }
@@ -1132,6 +1299,14 @@ export class War {
     }
 
     #onExpedition(force) {
+        const works = this.workAt(force.target);
+
+        if (works) {
+            this.#onWorks(force, works);
+
+            return;
+        }
+
         const town = this.town(force.target);
 
         // (No longer an enemy's: home again)
@@ -1189,6 +1364,160 @@ export class War {
         }
 
         this.#disband(force, null);
+    }
+
+    // An expedition against a works, there: it falls on its guard (or on the band holding it, to
+    // win back its own people's works from the wild: "retake"); not while a player's near it, for
+    // as long as a sortie would wait (SORTIE_TURNS). What's left of it goes home after
+    #onWorks(force, works) {
+        const retake = force.mission === "retake";
+
+        if (retake ? works.owner !== force.realm || !works.held : works.held || !this.hostile(force.realm, works.owner)) {
+            this.#disband(force, "withdrew");
+
+            return;
+        }
+
+        if (apart(force.at, works.at) > REACH.fall && force.leg < force.path.length - 1) {
+            return;
+        }
+
+        // (There: waiting, while a player's near it)
+        force.arrived ??= this.turn;
+
+        if (this.watched.has(works.id) && this.turn - force.arrived < SORTIE_TURNS) {
+            return;
+        }
+
+        const [sent, holding] = [force.size, retake ? works.band : works.guard];
+        const { attackers, defenders } = this.#fight(sent, holding, 1);
+        const won = defenders === 0 && attackers > 0;
+
+        force.size = attackers;
+        works[retake ? "band" : "guard"] = defenders;
+        this.#emit("battle", { realm: force.realm, against: retake ? null : works.owner, works: works.id, at: works.at, won, killed: holding - defenders, lost: sent - attackers });
+
+        if (won && retake) {
+            const guard = Math.min(WORKED.guard, attackers);
+
+            Object.assign(works, { held: false, band: 0, guard, yard: 0 });
+            force.size -= guard;
+            this.#emit("retaken", { works: works.id, realm: force.realm });
+        } else if (won) {
+            const guard = Math.min(WORKED.guard, attackers);
+
+            force.size -= guard;
+            this.#seize(works, force.realm, { guard });
+        } else if (!retake) {
+            this.remember(works.owner, force.realm, -5);
+        }
+
+        this.#disband(force, null);
+    }
+
+    // A works seized by a realm (`by`): held by `guard` of theirs, its convoy's guards that were
+    // home gone, what's in its yard theirs now; its old holders bear them a grudge
+    #seize(works, by, { guard = OVERRUN.held, played = false } = {}) {
+        const from = works.owner;
+
+        Object.assign(works, { owner: by, guard, escort: 0, held: false, band: 0 });
+        this.remember(from, by, -10);
+        this.#emit("seized", { works: works.id, from, to: by, ...(played ? { played } : {}) });
+    }
+
+    // A works' convoy out, if it has one (its holders')
+    #convoyOf(works) {
+        return this.forces.find((force) => force.kind === "convoy" && force.home === works.id && force.realm === works.owner) ?? null;
+    }
+
+    // The way from a works to a town (its id): to the place nearest the works, and on by road
+    #routeFrom(at, toId) {
+        const way = this.#routeTo(toId, at);
+
+        return way ? [...way].reverse() : null;
+    }
+
+    // A convoy at the end of its way: at its people's seat, its cargo into their stores (a
+    // vassal's tribute in it to its liege), and back for more; home at its works, its guards home
+    // there too (or, the works no longer theirs, into the nearest of their towns)
+    #onConvoy(convoy) {
+        if (convoy.leg < convoy.path.length - 1) {
+            return;
+        }
+
+        if (!convoy.back) {
+            const seat = this.town(convoy.target);
+            const realm = this.realm(convoy.realm);
+
+            if (seat?.owner === convoy.realm && realm?.alive) {
+                const liege = realm.overlord ? this.realm(this.liege(realm.id)) : null;
+
+                for (const [resource, amount] of Object.entries(convoy.cargo)) {
+                    realm.stores[resource] = Math.round((realm.stores[resource] + amount * (liege ? 1 - TRIBUTE : 1)) * 10) / 10;
+
+                    if (liege) {
+                        liege.stores[resource] = Math.round((liege.stores[resource] + amount * TRIBUTE) * 10) / 10;
+                    }
+                }
+
+                this.#emit("delivered", { realm: convoy.realm, works: convoy.home, cargo: convoy.cargo, force: convoy.id });
+            } else {
+                this.#emit("plundered", { realm: convoy.realm, by: seat?.owner ?? null, works: convoy.home, cargo: convoy.cargo, force: convoy.id });
+            }
+
+            Object.assign(convoy, { cargo: null, back: true, path: [...convoy.path].reverse(), leg: 0 });
+
+            return;
+        }
+
+        const works = this.workAt(convoy.home);
+
+        if (works?.owner === convoy.realm && !works.held) {
+            works.escort += convoy.size;
+            this.forces.splice(this.forces.indexOf(convoy), 1);
+        } else {
+            const home = this.#nearestOwn(convoy.realm, convoy.at);
+
+            if (home) {
+                home.garrison = Math.min(Math.round(HOLDINGS[home.kind].garrison * 1.5), home.garrison + convoy.size);
+            }
+
+            this.forces.splice(this.forces.indexOf(convoy), 1);
+        }
+    }
+
+    // A realm sends a force to win back each of its own works the wild hold, none on its way there
+    // already: out of the garrison of its town nearest it, if it can spare them (keeping half of
+    // it), or else raised, if it can spare the gold
+    #retake(realm) {
+        for (const works of this.works.filter(({ owner, held }) => owner === realm.id && held)) {
+            if (this.forces.some(({ realm: id, target }) => id === realm.id && target === works.id)) {
+                continue;
+            }
+
+            const size = Math.max(6, Math.ceil(works.band * 1.6));
+            const from = this.#nearestOwn(realm.id, works.at);
+            const spared = from && from.garrison - Math.ceil(HOLDINGS[from.kind].garrison / 2) >= size;
+
+            if (!from || (!spared && size > Math.floor(this.#spare(realm) / COSTS.troop))) {
+                continue;
+            }
+
+            const route = this.#routeTo(from.id, works.at);
+
+            if (!route) {
+                continue;
+            }
+
+            if (spared) {
+                from.garrison -= size;
+            } else {
+                realm.treasury -= size * COSTS.troop;
+            }
+
+            this.forces.push({ id: `force-${this.nextForce++}`, realm: realm.id, kind: "expedition", size, at: [...route[0]], path: route, leg: 0, target: works.id, home: from.id, mission: "retake", about: null, since: this.turn });
+            this.#emit("marched", { realm: realm.id, from: from.id, target: works.id, size, mission: "retake" });
+        }
     }
 
     // A force goes home: what's left of it back in its home town's garrison, if it's still theirs
@@ -1463,6 +1792,13 @@ export class War {
         realm.alive = false;
         realm.overlord = null;
 
+        // (Its works whoever holds most of its old towns', or left to the wild)
+        const heir = this.oppressor(realm.id);
+
+        for (const works of this.works.filter(({ owner }) => owner === realm.id)) {
+            Object.assign(works, heir ? { owner: heir, guard: Math.min(works.guard, OVERRUN.held), escort: 0 } : { held: true, band: OVERRUN.band, guard: 0, escort: 0, yard: 0 });
+        }
+
         for (const vassal of this.realms.filter(({ overlord }) => overlord === realm.id)) {
             vassal.overlord = null;
             vassal.since = this.turn;
@@ -1478,12 +1814,107 @@ export class War {
     // Envoys passing an enemy's forces may be waylaid (the more warlike the enemy, the likelier)
     #waylay() {
         for (const envoy of this.forces.filter(({ kind, id }) => kind === "envoy" && !this.watched.has(id))) {
-            const by = this.forces.find((force) => force.kind !== "envoy" && this.hostile(force.realm, envoy.realm) && apart(force.at, envoy.at) <= REACH.waylay);
+            const by = this.forces.find((force) => force.kind !== "envoy" && force.kind !== "convoy" && this.hostile(force.realm, envoy.realm) && apart(force.at, envoy.at) <= REACH.waylay);
 
             if (by && this.random.chance(this.realm(this.liege(by.realm)).leader.traits.aggression * 0.25)) {
                 this.forces.splice(this.forces.indexOf(envoy), 1);
                 this.remember(envoy.realm, by.realm, -10);
                 this.#emit("waylaid", { realm: envoy.realm, by: by.realm, to: envoy.target, mission: envoy.mission, force: envoy.id });
+            }
+        }
+    }
+
+    // The works: each held and guarded fills its yard; a convoy sets out from it once there's a
+    // wagon's load waiting and enough of its guards home, for its people's seat
+    #work() {
+        for (const works of this.works) {
+            const owner = this.realm(works.owner);
+
+            if (!owner?.alive || works.held) {
+                continue;
+            }
+
+            const resource = YIELDS[works.kind];
+
+            if (works.guard > 0) {
+                works.yard = Math.min(WORKED.yard, Math.round((works.yard + WORKED.yields[resource]) * 10) / 10);
+            }
+
+            if (works.yard < CONVOY.load || works.escort < CONVOY.fewest || this.#convoyOf(works)) {
+                continue;
+            }
+
+            const seat = this.town(owner.seat);
+            const path = seat && this.#routeFrom(works.at, seat.id);
+
+            if (!path) {
+                continue;
+            }
+
+            const amount = Math.min(works.yard, CONVOY.wagons * CONVOY.load);
+
+            works.yard = Math.round((works.yard - amount) * 10) / 10;
+            this.forces.push({ id: `force-${this.nextForce++}`, realm: owner.id, kind: "convoy", size: works.escort, at: [...path[0]], path, leg: 0, target: seat.id, home: works.id, mission: null, about: null, cargo: { [resource]: amount }, back: false, since: this.turn });
+            works.escort = 0;
+        }
+    }
+
+    // Convoys on the roads may be fallen on (not those a player's near): by an enemy's forces
+    // passing (the more warlike, the likelier), who carry off half of what it carried; or by the
+    // brigands of a wild camp near its way, who carry off the lot
+    #ambush() {
+        for (const convoy of this.forces.filter(({ kind, id }) => kind === "convoy" && !this.watched.has(id))) {
+            if (!convoy.cargo) {
+                continue;
+            }
+
+            const by = this.forces.find((force) => force.kind !== "envoy" && force.kind !== "convoy" && this.hostile(force.realm, convoy.realm) && apart(force.at, convoy.at) <= REACH.waylay);
+            const camp = by ? null : this.plan.camps.find((each) => BRIGANDS.includes(each.faction) && apart(each.at, convoy.at) <= REACH.ambush);
+            const chance = by ? this.realm(this.liege(by.realm)).leader.traits.aggression * 0.5 : camp ? AMBUSH : 0;
+
+            if (!chance || !this.random.chance(chance)) {
+                continue;
+            }
+
+            const { attackers, defenders } = this.#fight(by ? by.size : OVERRUN.band, convoy.size, 1);
+
+            if (by) {
+                by.size = attackers;
+                this.remember(convoy.realm, by.realm, -8);
+            }
+
+            convoy.size = defenders;
+
+            if (defenders > 0) {
+                this.#emit("ambushed", { realm: convoy.realm, by: by?.realm ?? null, faction: camp?.faction ?? null, works: convoy.home, beaten: true, force: convoy.id });
+                continue;
+            }
+
+            // (Lost: what it carried, half of it the enemy's)
+            const plunderer = by && this.realm(by.realm);
+
+            for (const [resource, amount] of Object.entries(plunderer ? convoy.cargo : {})) {
+                plunderer.stores[resource] = Math.round((plunderer.stores[resource] + amount / 2) * 10) / 10;
+            }
+
+            this.forces.splice(this.forces.indexOf(convoy), 1);
+            this.#emit("ambushed", { realm: convoy.realm, by: by?.realm ?? null, faction: camp?.faction ?? null, works: convoy.home, cargo: convoy.cargo, beaten: false, force: convoy.id });
+        }
+    }
+
+    // The wild's bands overrun a works now and then (not one a player's near): the likelier the
+    // emptier its guard (OVERRUN), its guard and its convoy's put to the sword and its yard looted
+    #overrun() {
+        for (const works of this.works) {
+            if (works.held || !this.realm(works.owner)?.alive || this.watched.has(works.id)) {
+                continue;
+            }
+
+            const empty = 1 - Math.min(1, works.guard / WORKED.guard);
+
+            if (this.random.chance(OVERRUN.base + OVERRUN.weak * empty * empty)) {
+                Object.assign(works, { held: true, band: OVERRUN.band, guard: 0, escort: 0, yard: 0 });
+                this.#emit("overrun", { works: works.id, owner: works.owner });
             }
         }
     }
