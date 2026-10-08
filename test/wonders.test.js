@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AFFLICTIONS } from "../client/js/core/afflictions.js";
 import { CREATURES } from "../client/js/core/creatures.js";
-import { Battle, FEAR_MEMORY, SEE_THROUGH, STAMINA_DRAIN, STEP_MS } from "../client/js/core/battle.js";
-import { COMPANION, HOST_PLAYER, Host, SUMMONING_MS } from "../client/js/core/host.js";
+import { Battle, FEAR_MEMORY, FOLLOW, SEE_THROUGH, STAMINA_DRAIN, STEP_MS } from "../client/js/core/battle.js";
+import { HOST_PLAYER, Host, SUMMONING_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { SPELL_XP, SPELLS, WARD } from "../client/js/core/spells.js";
@@ -492,7 +492,7 @@ describe("the tomes' wonders (host.js)", () => {
         // (Stuck far behind: brought to them)
         Object.assign(risen, { square: [me.square[0] + 30, me.square[1]], x: me.square[0] + 30.5, path: [] });
         steps(host, STEP_MS * 2);
-        assert.ok(Math.hypot(risen.x - me.x, risen.y - me.y) < COMPANION.far);
+        assert.ok(Math.hypot(risen.x - me.x, risen.y - me.y) < FOLLOW.lost);
 
         // (Five minutes, then gone)
         assert.ok(host.companions.get(id).until - host.battle.time > SPELLS.zombify.lasts - 1000);

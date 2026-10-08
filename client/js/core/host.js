@@ -15,7 +15,7 @@
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
-import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
+import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
@@ -143,11 +143,11 @@ const FALLEN_MS = 10000;
 const CORPSE_MS = 30000;
 
 /**
- * The creatures at a player's side by magic (Zombify's risen dead, Summon's): how far behind them
- * one can fall (m: stuck, or left on another floor) before it's brought to them, a few squares
- * behind them (`behind`).
+ * Those at a player's side (their followers, and the creatures there by magic: Zombify's risen
+ * dead, Summon's), brought to them when they've fallen too far behind (battle.js FOLLOW.lost):
+ * how far behind them they're put (m: `behind`, the way they face; a free square near it).
  */
-export const COMPANION = Object.freeze({ far: 14, behind: 2 });
+export const COMPANION = Object.freeze({ behind: 2 });
 
 /** How long a player being summoned by another has to come (ms): no answer, and they've resisted. */
 export const SUMMONING_MS = 30000;
@@ -1055,7 +1055,7 @@ export class Host {
             }
         }
 
-        this.#companionsKept();
+        this.#keepUp();
 
         // (Summoned, and no answer in time: resisted)
         for (const [id, asked] of [...this.summonings]) {
@@ -3784,7 +3784,7 @@ export class Host {
 
     // The creatures at the players' sides: gone when their time's up (or their player's gone);
     // one fallen too far behind (stuck, or left on another floor) brought to them, behind them
-    #companionsKept() {
+    #keepUp() {
         for (const [id, one] of [...this.companions]) {
             const actor = this.battle.actor(id);
             const leader = this.battle.actor(one.leader);
@@ -3794,15 +3794,46 @@ export class Host {
                 continue;
             }
 
-            if (!actor.dead && !leader.dead && (actor.map !== leader.map || hypot(actor.x - leader.x, actor.y - leader.y) > COMPANION.far)) {
-                const square = this.#behind(leader);
-
-                if (square) {
-                    Object.assign(actor, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, path: [], offPath: false, pathGoal: null, target: null });
-                    this.#event("companion", { id: one.leader, companion: id, creature: one.creature, change: "caught up" });
-                }
+            if (this.#caughtUp(actor, leader)) {
+                this.#event("companion", { id: one.leader, companion: id, creature: one.creature, change: "caught up" });
             }
         }
+
+        for (const [id, one] of this.followers) {
+            const actor = this.battle.actor(id);
+            const leader = this.battle.actor(one.leader);
+
+            if (actor && leader && !one.waiting) {
+                this.#caughtUp(actor, leader);
+            }
+        }
+    }
+
+    // One with a player (a follower, or a companion by magic: not one told to wait) fallen too far
+    // behind them (battle.js FOLLOW.lost: stuck, or left on another floor) brought to them, quietly,
+    // to a free square behind them (COMPANION.behind), out of any fight it was in: unless the
+    // player's in a fight too, while it's in one. Whether it was
+    #caughtUp(actor, leader) {
+        if (actor.dead || leader.dead || (actor.map === leader.map && hypot(actor.x - leader.x, actor.y - leader.y) <= FOLLOW.lost)) {
+            return false;
+        }
+
+        // (Fighting, it fights on while its leader's fighting too; else it breaks off)
+        const fighting = leader.target !== null || leader.attack || this.battle.actors.some((other) => other.target === leader.id && !other.dead);
+
+        if ((actor.target !== null || actor.attack) && fighting) {
+            return false;
+        }
+
+        const square = this.#behind(leader);
+
+        if (!square || !this.battle.place(actor.id, leader.map, square, { facing: leader.facing })) {
+            return false;
+        }
+
+        actor.spawnMap = leader.map;
+
+        return true;
     }
 
     // A companion gone (its time up; lost when its player was carried off): crumbled, or vanished

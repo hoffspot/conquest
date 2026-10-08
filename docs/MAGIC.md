@@ -250,8 +250,11 @@ same for everyone playing (docs/GAME.md: hosting and joining):
 - **Zombify** raises an enemy creature fallen in the last half minute (they lie 30 s: long enough)
   as the caster's companion, and **Summon** (on a creature) calls one of the creatures of these
   parts as one: a companion follows its player and fights their enemies, five minutes (its time
-  up, it's gone). One left more than 14 metres behind (stuck, or on another floor) is brought to
-  a few squares behind them (`COMPANION`). They're lost when their player's carried off by magic.
+  up, it's gone). It keeps up as a follower does (docs/WAR.md *Following*: at its player's pace,
+  a sprint as they sprint, faster the further behind), and one left more than 20 metres behind
+  (stuck, or on another floor) is brought quietly to a few squares behind them (`FOLLOW.lost`,
+  `COMPANION.behind`), out of a fight its player isn't in. They're lost when their player's
+  carried off by magic.
 - **Attraction** brings one of the creatures of these parts out of a puff of smoke in front of
   the caster: as wild as any other (to hunt, for its parts or a guild's contract).
 - **Summon** on a player (of a people not the caster's enemy) asks them to come: they have 30

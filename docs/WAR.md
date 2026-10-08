@@ -1028,8 +1028,18 @@ rank 5: `progress.js`). Command grows by leading: a share of every blow their fo
 Hired, an adventurer's gone from the guild for good (`host.hired`). Asked without the gold, they
 say what they'd want and stay where they are.
 
-**Following** (`battle.js`, ai `"follow"`, `FOLLOW`):
-- a follower keeps within 3 steps of their leader, at their pace (running when they run);
+**Following** (`battle.js`, ai `"follow"`, `FOLLOW`; companions by magic too: docs/MAGIC.md):
+- a follower keeps within 3 steps of their leader while they stand, 2 while they're on the move
+  (so as not to stop and start behind them);
+- they go at their leader's pace, a sprint as they sprint (or their own, if that's faster), never
+  tiring; and the further behind, the faster than them (`keepingUp`): a little (1.1 times their
+  pace) out to 10 m, and up to half as fast again (1.5 times) by 20 m, so they keep within about
+  10 m of them;
+- more than 20 m behind (stuck where the way round's long, or left on another floor), they're
+  brought quietly (no puff) to a free square 2 m behind their leader, the way they face (host.js
+  `#keepUp`, `COMPANION.behind`): out of any fight they were in, unless their leader's in a fight
+  too (someone's after them, or they're after someone), when they fight on where they are. One
+  told to wait stays where they were told;
 - they go after any enemy of their leader's they can see within 12 steps of them;
 - through a door or up the stairs, they come out beside their leader;
 - they stand with their leader against the wild, and as their people stand with the others;
