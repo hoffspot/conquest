@@ -352,6 +352,72 @@ export async function hall(piece) {
     return solid.toObject();
 }
 
+/**
+ * The barracks (a village's guardhouse): a long house of white plaster on a low terrace, a band
+ * of glyphs along its front and a stepped cornice of red and lime over it, its name over its
+ * door, a rack of bamboo spears tipped with obsidian, and a war drum on its stand.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const random = randomFor(piece, 47);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const name = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const front = D - m(ENTRY) + m(0.4);
+    const floor = m(0.3);
+    const [x0, x1, z0] = [m(0.6), W - m(0.6), m(0.6)];
+    const width = x1 - x0;
+
+    toned(solid, random, []);
+    solid.extrude([[x0 - m(0.3), z0 - m(0.3)], [x1 + m(0.3), z0 - m(0.3)], [x1 + m(0.3), front + m(0.3)], [x0 - m(0.3), front + m(0.3)]], 0, floor, material("stone-lime"));
+
+    const outline = [[x0, z0], [x1, z0], [x1, front], [x0, front]];
+    const bays = Math.max(3, Math.round(width / m(2.4))) | 1;
+    const openings = Array.from({ length: bays }, (_, k) => {
+        const u = ((k + 0.5) * width) / bays;
+        const middle = k === Math.floor(bays / 2);
+
+        return middle ? { u0: width / 2 - m(0.9), u1: width / 2 + m(0.9), v0: 0, v1: m(2.4), depth: m(0.5), back: material("planks-dark") } : { u0: u - m(0.2), u1: u + m(0.2), v0: m(1.5), v1: m(2.3), depth: m(0.4), back: material("shadow") };
+    });
+    const faces = solid.walls(outline, floor, m(3.4), { 2: openings }, material("plaster-white"));
+    const at = wallPoint(faces[2]);
+
+    solid.facing([at(0, m(2.85), m(0.05)), at(width, m(2.85), m(0.05)), at(width, m(3.4), m(0.05)), at(0, m(3.4), m(0.05))], [0, 0, 1], material("glyphs"));
+
+    let top = floor + m(3.4);
+
+    for (let k = 0; k < 2; k++) {
+        solid.extrude(inset(outline, -m(0.25) + k * m(0.5)), top, top + m(0.35), material(k === 0 ? "plaster-red" : "stone-lime"));
+        top += m(0.35);
+    }
+
+    board(solid, at, faces[2].out, [width / 2 - m(1.3), width / 2 + m(1.3), m(2.45), m(2.45) + m(2.6) * (9 / 56)], nameBoardTexture({ name, ground: "#264a3a", dark: "#10241a" }), `board ${name}`, m(0.12));
+
+    // The spears in their rack, to one side of the door; the drum on the other
+    const rack = Math.max(x0 + m(0.8), W / 2 - m(3.2));
+
+    pole(solid, [rack - m(0.75), m(1.3), front + m(0.4)], [rack + m(0.75), m(1.3), front + m(0.4)], m(0.04), "bamboo", { sides: 5 });
+
+    for (let k = 0; k < 6; k++) {
+        const x = rack - m(0.65) + k * m(0.26);
+
+        pole(solid, [x, floor, front + m(0.55)], [x, m(2.4), front + m(0.3)], m(0.025), "bamboo", { sides: 4 });
+        pole(solid, [x, m(2.4), front + m(0.3)], [x, m(2.7), front + m(0.27)], m(0.045), "obsidian", { top: 0, sides: 4 });
+    }
+
+    const drum = Math.min(x1 - m(0.8), W / 2 + m(3));
+
+    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        pole(solid, [drum + dx * m(0.35), floor, front + m(0.7) + dz * m(0.35)], [drum + dx * m(0.22), m(0.7), front + m(0.7) + dz * m(0.22)], m(0.04), "bamboo", { sides: 4 });
+    }
+
+    solid.lathe(drum, front + m(0.7), [[0, m(0.7)], [m(0.38), m(0.7)], [m(0.42), m(1)], [m(0.36), m(1.3)], [0, m(1.3)]], material("planks-pale"), { segments: 12 });
+    solid.extrude(circle(drum, front + m(0.7), m(0.37), 12), m(1.3), m(1.33), material("hide"));
+
+    return solid.toObject();
+}
+
 /** A capital's keep: a stepped platform with a palace block on it, its door at the foot. */
 export async function keep(piece) {
     await loadSignFont();
@@ -470,7 +536,7 @@ export function windmill(piece) {
     return market(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, market, windmill });
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);

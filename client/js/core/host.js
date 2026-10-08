@@ -29,13 +29,13 @@ import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
-import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
+import { barracksPosts, clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
-import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
+import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
@@ -132,6 +132,16 @@ export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.
  * metres out from its middle, or out against an enemy's fortification stood up within reach.
  */
 export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 9 });
+
+/**
+ * A town's barracks near a player (docs/WAR.md M16): its guardsmen (war/muster.js QUARTERED) and
+ * its captain stood up in it once it's got ready (a player at its door), of whoever holds the
+ * town; its captain the stronger (`captain`: their health and blows, as many times a guardsman's);
+ * how far from their posts they go after an enemy (`leash`, metres: the room); and how long after
+ * it's cleared, or its town's changed hands, or any of them fell, the garrison's made up in it,
+ * once no player's in it (`relief`, ms).
+ */
+export const BARRACKS_NEAR = Object.freeze({ captain: { hp: 2.5, power: 1.3 }, leash: 12, relief: 20000 });
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
@@ -298,7 +308,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 12;
+export const SNAPSHOT_VERSION = 13;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -539,6 +549,13 @@ export class Host {
          * team's out against, or null), broken (its garrison razed: let go as they're out of sight) }.
          */
         this.squadsOut = new Map();
+
+        /**
+         * Each town's barracks with its garrison stood up in it (BARRACKS_NEAR), by the town's id:
+         * { key (the building's), map (its room's), people (whose they are), ids (its captain's
+         * first), cleared (all of them put down), relief (when they're to be made up, or null) }.
+         */
+        this.quartered = new Map();
         this.wagons = new Map();
 
         /**
@@ -1282,6 +1299,10 @@ export class Host {
                 }
 
                 this.#fall(event.id, FALLEN_MS);
+
+                if (soldier.barracks) {
+                    this.#barracksFell(soldier.town, event.by);
+                }
             }
 
             // (A people's enemy brought down by a player, before their soldiers' eyes)
@@ -1472,6 +1493,7 @@ export class Host {
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
             squadsOut: [...this.squadsOut.entries()],
+            quartered: [...this.quartered.entries()],
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
@@ -1586,6 +1608,7 @@ export class Host {
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
         host.squadsOut = new Map(structuredClone(snapshot.squadsOut ?? []));
+        host.quartered = new Map(structuredClone(snapshot.quartered ?? []));
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
@@ -2775,6 +2798,7 @@ export class Host {
         }
 
         this.#tendSquads();
+        this.#tendBarracks();
 
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
@@ -3351,6 +3375,120 @@ export class Host {
 
             if (SQUAD_NAMES.every((name) => !out.ids[name].length)) {
                 this.squadsOut.delete(id);
+            }
+        }
+    }
+
+    // --- Barracks (docs/WAR.md M16) ---
+
+    // The war's town a barracks is in (its id: the one the player starts in, "home"), or null
+    #barracksTown(building) {
+        const id = building.place === "home" ? this.world.start?.id : building.place;
+
+        return this.war?.town(id) ? id : null;
+    }
+
+    // A town's barracks' garrison stood up in it (BARRACKS_NEAR), of whoever holds the town: its
+    // captain behind their desk, and its guardsmen at their posts, the furthest from the door
+    // first, as many as its garrison has (QUARTERED); each one of it (`share` 1). Their ids are
+    // stamped with when they came (the fallen of those before lie a while, under theirs)
+    #quarter(building) {
+        const id = this.#barracksTown(building);
+        const town = id && this.war.town(id);
+        const map = this.world.maps[building.maps[0]];
+
+        if (!town || !map || this.quartered.has(id)) {
+            return;
+        }
+
+        const most = QUARTERED[town.kind] ?? 0;
+        const count = Math.min(most, Math.ceil((town.garrison / HOLDINGS[town.kind].garrison) * most));
+        const { captain, posts } = barracksPosts(map);
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots(map.id);
+        const stamp = this.battle.time;
+        const strong = { hp: Math.round(KINDS.soldier.hp * BARRACKS_NEAR.captain.hp), power: { melee: BARRACKS_NEAR.captain.power, ranged: BARRACKS_NEAR.captain.power } };
+        const ids = [];
+
+        try {
+            for (const [k, post] of [captain, ...posts.slice(0, count)].entries()) {
+                const each = `${id}/barracks-${stamp}-${k}`;
+                const square = free(post.square);
+
+                this.#enlist(each, { people: town.owner, weapon: k % 2 ? patrolArms : guardArms, square, name: k ? "guardsman" : "captain", record: { town: id, barracks: true, share: 1 }, map: map.id, patrol: [square], leash: BARRACKS_NEAR.leash, facing: post.facing, ...(k ? {} : strong) });
+                ids.push(each);
+            }
+        } catch {
+            // (No free floor: those found are in it, and no more)
+        }
+
+        this.quartered.set(id, { key: building.key, map: map.id, people: town.owner, ids, cleared: false, relief: null });
+        this.#event("quartered", { town: id, people: town.owner, ids });
+    }
+
+    // A town's barracks' garrison let go (its building let go, or about to be made up): those
+    // standing gone from the battle (the fallen taken away as ever)
+    #unquarter(id) {
+        const out = this.quartered.get(id);
+
+        this.quartered.delete(id);
+
+        for (const each of out?.ids ?? []) {
+            const actor = this.battle.actor(each);
+
+            if (actor && !actor.dead) {
+                this.battle.remove(each);
+                this.soldiers.delete(each);
+            }
+        }
+
+        this.#event("unquartered", { town: id, ids: out?.ids ?? [] });
+    }
+
+    // One of a town's barracks' garrison fallen: made up a while after (RELIEF_MS); and once the
+    // last of them's down, captain and guardsmen, the barracks is cleared, and the town taken by
+    // the people of whoever brought the last down, if the war lets it be (war.capture: at war with
+    // its holders, and the age letting it be), and made up sooner (BARRACKS_NEAR.relief)
+    #barracksFell(id, by) {
+        const out = this.quartered.get(id);
+
+        if (!out || out.cleared) {
+            return;
+        }
+
+        if (out.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            out.relief = this.battle.time + RELIEF_MS;
+
+            return;
+        }
+
+        const realm = this.#realmOf(by);
+        const how = realm ? this.war.capture(id, realm) : null;
+
+        Object.assign(out, { cleared: true, relief: this.battle.time + BARRACKS_NEAR.relief });
+        this.#event("barracks", { town: id, by: realm, how, people: out.people });
+    }
+
+    // Each barracks' garrison made up, once no player's in it: its town changed hands (taken, or
+    // stormed while a player was near), or it's due (cleared, or some of it fallen, a while ago).
+    // Those still standing let go, and the town's garrison stood up in it afresh, of its holders
+    #tendBarracks() {
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter(Boolean);
+
+        for (const [id, out] of [...this.quartered]) {
+            const changed = this.war.town(id)?.owner !== out.people;
+            const due = out.relief !== null && this.battle.time >= out.relief;
+
+            if ((!changed && !due) || players.some((actor) => actor.map === out.map)) {
+                continue;
+            }
+
+            const building = this.world.interiors?.buildings.get(out.key);
+
+            this.#unquarter(id);
+
+            if (building && this.open.has(out.key)) {
+                this.#quarter(building);
             }
         }
     }
@@ -4860,7 +4998,7 @@ export class Host {
             squad.ids[soldier.squad] = (squad.ids[soldier.squad] ?? []).filter((each) => each !== id);
         }
 
-        const mustered = soldier && (soldier.envoy || soldier.fort ? null : soldier.camp ? this.camps.get(soldier.camp) : soldier.works ? this.worksOut.get(soldier.works) : this.mustered.get(soldier.town));
+        const mustered = soldier && (soldier.envoy || soldier.fort || soldier.barracks ? null : soldier.camp ? this.camps.get(soldier.camp) : soldier.works ? this.worksOut.get(soldier.works) : this.mustered.get(soldier.town));
 
         if (mustered) {
             mustered.ids = mustered.ids.filter((each) => each !== id);
@@ -6188,6 +6326,28 @@ export class Host {
 
                 return request.kind === "seize" && (works.held || works.owner !== request.target.realm) ? "void" : null;
             }
+            case "take": {
+                const town = war.town(request.target.town);
+
+                if (!town) {
+                    return "void";
+                }
+
+                if (!request.there && near(town.at, REQUEST_REACH.take)) {
+                    request.there = true;
+                    this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
+                }
+
+                // (Its barracks put down since it was asked, and it taken by the player's people:
+                // done. Taken some other way, or by anyone else: come to nothing)
+                const taken = war.log.findLast((event) => event.type === "taken" && event.town === town.id && event.turn >= request.given);
+
+                if (taken?.how === "barracks" && war.liege(taken.to) === liege) {
+                    return "ready";
+                }
+
+                return taken || town.owner !== request.target.realm ? "void" : null;
+            }
             default:
                 return null;
         }
@@ -6332,6 +6492,11 @@ export class Host {
 
         this.open.set(key, folk);
         this.#event("open", { key, folk });
+
+        // (A barracks: its garrison in it)
+        if (building.kind === "barracks") {
+            this.#quarter(building);
+        }
     }
 
     // Whether a place worth finding gone into (an abbey, a manor: `site:` its id) isn't its
@@ -6382,6 +6547,12 @@ export class Host {
         for (const id of folk) {
             this.battle.remove(id);
             this.folk.delete(id);
+        }
+
+        for (const [town, out] of [...this.quartered]) {
+            if (out.key === key) {
+                this.#unquarter(town);
+            }
         }
 
         this.#event("close", { key, folk });

@@ -16,6 +16,12 @@ import { atan2, cos, hypot, sin } from "../exact.js";
 /** How many guards each kind of place posts at most (the war's garrison, as far as it goes). */
 export const POSTED = Object.freeze({ capital: 8, city: 6, town: 4, village: 2 });
 
+/**
+ * How many guardsmen each kind of place's barracks holds (a village's guardhouse), its garrison
+ * full: fewer as its garrison's less, and its captain besides (docs/WAR.md M16).
+ */
+export const QUARTERED = Object.freeze({ capital: 6, city: 4, town: 3, village: 2 });
+
 /** How many soldiers walk each patrol. */
 export const PATROL_SIZE = 2;
 

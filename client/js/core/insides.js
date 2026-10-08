@@ -1,8 +1,8 @@
 // Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns,
-// smithies, temples and adventurers' guilds) in every settlement, its front door one of the
-// world's links, its floors made the first time they're wanted (the player's walking up to the
-// door, or through it) and kept, each at a place of its own far off in the 3D world, with its
-// folk.
+// smithies, temples, adventurers' guilds, town halls, keeps and barracks) in every settlement,
+// its front door one of the world's links, its floors made the first time they're wanted (the
+// player's walking up to the door, or through it) and kept, each at a place of its own far off in
+// the 3D world, with its folk.
 //
 // A building's door is where the art puts it (ENTRANCES: kits/landmarks.js builds it there): so
 // far in from the front of its lot, so far along it, so wide; the squares in front of it are
@@ -10,11 +10,12 @@
 // for its kind: a tavern's taproom (its tables set out one of several ways, its hearth, bar and
 // barrels, and stairs if it has a floor above) and upstairs, as its name has it (tavern lore:
 // rooms to let with an innkeeper at the counter; rooms with a courtesan or two; or a madam's
-// house); a smithy's workshop; a temple's nave; a guild's hall. Its folk are worked out from its
-// plan: a barkeep behind the bar and at the barrels, serving wenches between the bar and the
-// tables, patrons on the benches, whoever keeps upstairs, and the courtesans in their rooms; the
-// smith and the apprentice at their work; the priest, an acolyte and worshippers in the pews;
-// the guild's receptionist behind her counter and adventurers at the quest board and the tables.
+// house); a smithy's workshop; a temple's nave; a guild's hall; a barracks' long room. Its folk
+// are worked out from its plan: a barkeep behind the bar and at the barrels, serving wenches
+// between the bar and the tables, patrons on the benches, whoever keeps upstairs, and the
+// courtesans in their rooms; the smith and the apprentice at their work; the priest, an acolyte
+// and worshippers in the pews; the guild's receptionist behind her counter and adventurers at the
+// quest board and the tables. (A barracks' garrison is the host's, of whoever holds its town.)
 //
 // The town's own tavern, Wenches and Ale, is made with the town (world.js) and keeps its ids
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
@@ -44,10 +45,11 @@ export const ENTRANCES = Object.freeze({
     blacksmith: { depth: 2.2, offset: -1.2, width: 1.3, height: 2.1, floor: 0.3 },
     hall: { depth: 1.8, offset: 0, width: 2, height: 2.5, floor: 0.3 },
     keep: { depth: 1.4, offset: 0, width: 2.4, height: 3.2, floor: 0.8 },
+    barracks: { depth: 1.8, offset: 0, width: 1.8, height: 2.4, floor: 0.3 },
 });
 
 /** The kinds that can be gone into. */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep"]);
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks"]);
 
 /**
  * The doors of the peoples' own places out in the land that can be gone into (a site's kind, then
@@ -788,6 +790,50 @@ export function keepFolkOf(building, hall) {
     return folk;
 }
 
+// --- Barracks ---
+
+// A barracks' long room, 18 by 14 metres (a village's guardhouse's the same): the racks of the
+// garrison's arms along the north wall and its barrels beside them; the captain's desk in the
+// north-east, their post behind it and the garrison's rolls on the shelves at their back; bunks
+// along the west wall and at the south end of the east, the hearth between; the mess table and
+// its benches in the middle; strongboxes by the door. Where the guardsmen stand (`g`), the
+// furthest from the door first
+const BARRACKS = [
+    "RRRRRR.KK...eeeee.",
+    ".............l....",
+    "B...........MMMMM.",
+    "B...g.............",
+    "......bbbbbb.....H",
+    "B.....TTTTTT..g..H",
+    "B.....bbbbbb.....H",
+    "...g..............",
+    "B.............g..B",
+    "B......g.........B",
+    "..........g.......",
+    "B................B",
+    "B.............cc.B",
+    "........DD........",
+];
+
+/** A barracks' floors: its long room (a village's guardhouse's as a barracks'). */
+export function barracksRooms(building) {
+    return [{ suffix: "quarters", style: "barracks", name: building.name, rows: BARRACKS, ground: GROUND.planks, sound: "hall" }];
+}
+
+/**
+ * Where a barracks' garrison stands in it (host.js stands them there, of whoever holds its town):
+ * its captain behind their desk, and its guardsmen at their posts, the furthest from the door
+ * first. { captain: { square, facing }, posts: [{ square, facing }] }
+ */
+export function barracksPosts(quarters) {
+    const { n, s } = FACING;
+    const [captain] = quarters.marks.l;
+    const [door] = quarters.marks.D;
+    const posts = (quarters.marks.g ?? []).map(([x, y]) => ({ square: [x, y], facing: y < quarters.height / 2 ? s : n }));
+
+    return { captain: { square: [...captain], facing: s }, posts: posts.sort((a, b) => hypot(b.square[0] - door[0], b.square[1] - door[1]) - hypot(a.square[0] - door[0], a.square[1] - door[1])) };
+}
+
 // --- The places worth finding gone into (core/places.js; sites.js entranceAt) ---
 
 // An outlaws' cave, 16 by 16 metres: a passage in from its mouth (the door, south) to a chamber,
@@ -1057,6 +1103,8 @@ const KINDS = Object.freeze({
     guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
     hall: { first: "chamber", rooms: hallRooms, folk: (building, [chamber]) => hallFolkOf(building, chamber) },
     keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall, under]) => [...keepFolkOf(building, hall), ...(under ? undercroftFolkOf(building, under) : [])] },
+    // (A barracks: no folk, its garrison the host's, of whoever holds its town: barracksPosts)
+    barracks: { first: "quarters", rooms: barracksRooms, folk: () => [] },
     // (The places worth finding: no folk of their own, those who hold them the wild's: host.js)
     cave: { first: "cave", rooms: caveRooms, folk: () => [] },
     lair: { first: "lair", rooms: lairRooms, folk: () => [] },
@@ -1192,7 +1240,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -1274,7 +1322,7 @@ export class Interiors {
         const building = {
             key,
             kind: piece.name,
-            name: name ?? piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : null) ?? NAMES[piece.name] ?? piece.name,
+            name: name ?? piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : null) ?? (piece.name === "barracks" ? NAMES[piece.grade] : null) ?? NAMES[piece.name] ?? piece.name,
             piece,
             tavern: piece.tavern ?? null,
             patron: piece.patron ?? null,

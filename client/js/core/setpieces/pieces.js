@@ -49,8 +49,8 @@ export const OUTBUILDINGS = Object.freeze(["barn", "shed", "workshop", "stable"]
 
 /**
  * A town's special buildings, and their sizes. (A town hall and a keep are made over from the
- * biggest house by the market, whatever its size: setpieces/town.js; these are theirs as the
- * building lab shows them.)
+ * biggest house by the market, and a barracks from the biggest out towards the edge, whatever
+ * their size: setpieces/town.js; these are theirs as the building lab shows them.)
  */
 export const LANDMARKS = Object.freeze({
     tavern: [3, 3],
@@ -61,6 +61,7 @@ export const LANDMARKS = Object.freeze({
     windmill: [3, 3],
     hall: [2.5, 3],
     keep: [2.75, 3.25],
+    barracks: [2.5, 2.25],
 });
 
 /**
@@ -88,7 +89,7 @@ export const PEOPLE_PLACES = Object.freeze({
 });
 
 /** The special buildings that can be gone into. */
-export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild", "hall", "keep"]);
+export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild", "hall", "keep", "barracks"]);
 
 /** Small things standing in courtyards, squares and gardens, and their sizes. */
 export const PROPS = Object.freeze({

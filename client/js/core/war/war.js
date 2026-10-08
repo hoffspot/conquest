@@ -50,7 +50,7 @@ export const STAGES = Object.freeze([
     { id: "war", name: "War", take: ["village", "town", "city"], most: 30, fielded: 3, might: 4 },
     { id: "conquest", name: "Conquest", take: ["village", "town", "city", "capital"], most: 60, fielded: 4, might: 6 },
 ]);
-export const TURNS_PER_STAGE = 90;
+export const TURNS_PER_STAGE = 180;
 
 /** What things cost (gold): a troop raised, a troop's keep a turn, an envoy; and what a realm starts with. */
 export const COSTS = Object.freeze({ troop: 5, upkeep: 0.1, envoy: 10, start: 60 });
@@ -59,7 +59,7 @@ export const COSTS = Object.freeze({ troop: 5, upkeep: 0.1, envoy: 10, start: 60
 export const SPEEDS = Object.freeze({ march: 250, envoy: 400 });
 
 /** How many turns a camp sits before its town before it can storm it (raiding meanwhile). */
-export const SIEGE = 3;
+export const SIEGE = 6;
 
 /** How likely a camp is to raid its town each turn it doesn't storm it. */
 export const RAIDING = 0.4;
@@ -151,6 +151,12 @@ export const SQUADS = Object.freeze({ patrols: 2, patrol: 4, assault: 6, round: 
 
 /** The names of a forward garrison's squads, its patrols' and its assault team's (`squads` keys and indexes). */
 export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols }, (_, k) => `patrol-${k}`), "assault"]);
+
+/**
+ * A town taken in the world by putting down its barracks' guardsmen and captain (docs/WAR.md M16:
+ * `capture`): how big its new holders' garrison is, a share of a full one's (rounded up).
+ */
+export const BARRACKS_TAKEN = 0.25;
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
 export const WAR_VERSION = 4;
@@ -529,6 +535,34 @@ export class War {
         this.#seize(works, by, { played: true });
 
         return "seized";
+    }
+
+    /**
+     * A town's barracks put down in the world (docs/WAR.md M16): its guardsmen and captain, by a
+     * player of a people (`by`, a realm's id), or anyone fighting for them. If they're at war with
+     * its holders and the age lets towns of its kind be taken (STAGES), it's theirs, held by a
+     * garrison of theirs (BARRACKS_TAKEN of a full one), as a town stormed is (whether or not a
+     * fortification covers it: that's for camps). Returns how it went: "taken", "peace" (not at
+     * war with its holders), "age" (not yet), or null (no such town, or their own or a friend's).
+     */
+    capture(id, by) {
+        const town = this.town(id);
+
+        if (!town || !this.realm(by)?.alive || this.friendly(by, town.owner)) {
+            return null;
+        }
+
+        if (!this.hostile(by, town.owner)) {
+            return "peace";
+        }
+
+        if (!STAGES[this.stage].take.includes(town.kind)) {
+            return "age";
+        }
+
+        this.#hold(town, by, Math.ceil(HOLDINGS[town.kind].garrison * BARRACKS_TAKEN), { how: "barracks" });
+
+        return "taken";
     }
 
     /**
@@ -2124,22 +2158,28 @@ export class War {
         return { attackers: a, defenders: d };
     }
 
-    // A town taken: the camp's people hold it now (its folk stay, under their new rulers). Its
-    // rulers' seat taken, the realm is the taker's vassal, and rules from it again under them
+    // A town stormed: the camp's people hold it now, the camp its garrison
     #take(town, camp) {
+        this.forces.splice(this.forces.indexOf(camp), 1);
+        this.#hold(town, camp.realm, Math.min(Math.round(HOLDINGS[town.kind].garrison * 1.5), camp.size));
+    }
+
+    // A town taken (stormed, or its barracks put down: `how`): `realm`'s people hold it now, with
+    // `garrison` of theirs (its folk stay, under their new rulers). Its rulers' seat taken, the
+    // realm is the taker's vassal, and rules from it again under them
+    #hold(town, realm, garrison, { how = null } = {}) {
         const from = town.owner;
 
-        town.owner = camp.realm;
-        town.garrison = Math.min(Math.round(HOLDINGS[town.kind].garrison * 1.5), camp.size);
-        this.forces.splice(this.forces.indexOf(camp), 1);
-        this.remember(from, camp.realm, -20);
-        this.#emit("taken", { town: town.id, from, to: camp.realm });
+        town.owner = realm;
+        town.garrison = garrison;
+        this.remember(from, realm, -20);
+        this.#emit("taken", { town: town.id, from, to: realm, ...(how ? { how } : {}) });
 
         const loser = this.realm(from);
 
         if (loser && town.id === loser.seat) {
             town.owner = loser.id;
-            this.#subjugate(loser, this.liege(camp.realm));
+            this.#subjugate(loser, this.liege(realm));
         } else if (loser && !this.towns.some(({ owner }) => owner === loser.id)) {
             this.#fall(loser);
         }

@@ -30,6 +30,7 @@ rules the engine keeps so that other players can later **hop in and out** of a r
 | **Diplomats** | Travel the roads, and can be escorted, or waylaid. |
 | **Resources** | Wood, metal and stone, from each people's works (two lumber mills, two mines and two quarries in their lands), carried to their seat by guarded convoys. They pay for fortifications, as gold pays for soldiers. |
 | **Battle lines** | Towers and forward garrisons, built and kept up from the stores, in a people's own lands or near a town they've taken; a town covered by one can't be stormed till it's down. |
+| **Barracks** | One in every settlement fought over, its guardsmen and their captain in it. Put them down, at war with its holders, and the town's taken. |
 | **Pacing** | The war grows fiercer as the player grows stronger. |
 | **Growing stronger** | Skills that grow by being used, each unlocking stronger ones along its own tree (below). Gear, bought and found, counts too. |
 | **The rulers' temperaments** | Each people has its core temperament, but its rulers' traits are rolled a little differently in every world, so there's no one way to play any people. The player learns them from rumours of their leaders. |
@@ -208,7 +209,7 @@ The engine is built for this from the start. These are its rules:
 | **M13** | Built | Convoys in the world: their wagons, guards and captain on the road near a player, to see in or fall on; the keep's requests about the convoys and the works. |
 | **M14** | Built | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
 | **M15** | Built | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
-| **M16** | To come | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
+| **M16** | Built | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
 
 ## What's built
 
@@ -251,9 +252,9 @@ many forces each realm can have out:
 | Conquest | 6 | Capitals too | 60 | 4 |
 
 The next age comes with the strongest player's **might** (`war.setMight`, 0 to 8: from their
-skills, gear and followers, from M3), or after 90 turns each (an hour and a half of play) whatever.
-It never goes back. So a player has an hour and a half before a village can be taken, and far
-longer before a capital can.
+skills, gear and followers, from M3), or after 180 turns each (three hours of play) whatever
+(`TURNS_PER_STAGE`, M16). It never goes back. So a player has three hours before a village can be
+taken, and far longer before a capital can.
 
 **Each turn:**
 1. **The age** moves on, if it's time.
@@ -285,7 +286,7 @@ longer before a capital can.
    target camps there, or joins its people's camp there.
 7. **The camps.** Each turn a camp does one of these:
    - Is **sallied out** against by a garrison much stronger than it.
-   - **Storms** its town, if the age allows it, it's sat there 3 turns (`SIEGE`), and it's strong
+   - **Storms** its town, if the age allows it, it's sat there 6 turns (`SIEGE`), and it's strong
      enough for its ruler's taste. The fight goes round by round, the defenders' walls counting
      for them, until one side's gone or the attack breaks.
    - Otherwise it may **raid**: a few of its soldiers out against the town's fields, killing a few
@@ -745,6 +746,7 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 40 |
 | Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 35 |
 | Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 45 |
+| Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put down its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 80 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -1083,6 +1085,76 @@ once it's razed. Raids on its fields go on.
 
 **Kept.** The squads are kept in the war's snapshot (`WAR_VERSION` 4: a war kept before them has
 each garrison's whole), and those out near a player in the host's (`SNAPSHOT_VERSION` 12).
+
+### Barracks (M16)
+
+**Where.** Every village, town, city and capital (those the war's fought over: `HOLDINGS`) has a
+barracks; a village's is its guardhouse (`setpieces/town.js` `SETTLEMENT_KINDS` `barracks`). It's a
+house made over, as a town's hall is, and nothing else in the place moves:
+- the biggest house on a street out towards its edge (`BARRACKS_OUT`: a third to four fifths of
+  the way out, inside its walls where it has them), on dry land, its door opening onto the
+  street;
+- failing one there, the biggest on dry land anywhere; failing that, the biggest over a lagoon,
+  its door on a walk (the lizard folk's); and failing that, the biggest of the buildings behind
+  its houses, its door on dry land (a village with no house on its streets).
+
+**How it looks** (docs/GAME.md *The barracks*): each people's own, its name on a board, its arms
+racked before it. **Inside** (`insides.js` `BARRACKS`), its long room, 18 by 14 metres:
+- the garrison's arms racked along the north wall, its barrels beside them;
+- its captain's desk in the north-east, the shelves of its rolls behind it;
+- bunks two high along the walls, and the hearth;
+- the mess table and its benches in the middle, strongboxes by the door.
+
+**Its garrison** (`host.js` `BARRACKS_NEAR`, `#quarter`), stood up in it once it's got ready (a
+player at its door), of whoever holds the town:
+- **its captain** behind their desk, in a captain's cloak, two and a half times as hard to bring
+  down as a guardsman and striking 1.3 times as hard;
+- **its guardsmen** at their posts round the room, the furthest from the door first. How many: its
+  garrison's share of a full one's, rounded up, of `QUARTERED` (war/muster.js): a capital 6, a
+  city 4, a town 3, a village 2. One stands for one of the garrison: one fallen is one fewer in
+  the war (`war.loss`);
+- **made up** a while after any of them falls (`RELIEF_MS`), from the garrison as it is then, once
+  no player's in the room; let go with the building, when every player's far.
+
+**Taken.** Once its captain and every guardsman are down, the barracks is **cleared**
+(`#barracksFell`), and the town's taken by the people of whoever brought the last of them down
+(`war.capture`), if:
+- they're at war with its holders (else "peace": not theirs to take);
+- and the age lets towns of its kind be taken (`STAGES`: else "age").
+
+A town taken so is theirs as a town stormed is (`#hold`): its folk stay; its new holders' soldiers
+come out round it at once, and into its barracks once no player's in it; it's held by a quarter
+of a full garrison of theirs (`BARRACKS_TAKEN`: a village 2, a town 3, a city 6, a capital 10),
+which their rulers fill as ever; its old holders bear a grudge. A people's seat taken so makes
+them its takers' vassal. A fortification covering the town doesn't stop it: that's only for camps
+storming it. The news tells it ("…has fallen to the Humans, its barracks put to the sword"), and
+the player's told, in the barracks or of their people's doing: the town taken, or why it isn't.
+Cleared and not taken, it's made up sooner (`BARRACKS_NEAR.relief`, 20 seconds), once they've
+left it.
+
+**The keep's request** (`standing.js` *Take the town*): from a Knight, the nearest enemy town the
+age lets be taken. It's done once the player's people take it by its barracks, within 60 turns;
+it comes to nothing if it's taken any other way.
+
+**The war half as fast.** Each age comes after 180 turns without the players' might (three hours
+of play: `TURNS_PER_STAGE`, it was 90), and a camp sits 6 turns before its town before it may
+storm it (`SIEGE`, it was 3). Played out alone, six worlds, 1,080 turns (18 hours), no player's
+might:
+
+| | Before (M15) | Now |
+| --- | --- | --- |
+| First town taken | turn 90 to 166 | turn 180 to 192 |
+| First seat taken | turn 317 to 383 | turn 540 to 585 |
+| Towns taken by turn 360 | 20 to 31 | 5 to 11 |
+| Towns taken by turn 720 | 45 to 100 | 26 to 57 |
+| Towns taken by turn 1,080 | 89 to 141 | 58 to 100 |
+
+At the players' full might (every age open from the start), the sieges set the pace: 15 to 52
+towns taken in 400 turns, from 21 to 67. Either way the war still moves, peoples still fall, and
+the forts still go up and come down.
+
+**Kept.** Each barracks' garrison stood up is in the host's snapshot (`SNAPSHOT_VERSION` 13). The
+war keeps nothing new: a town taken so is told in its log (`taken`, `how: "barracks"`).
 
 ### Playing together (M11)
 

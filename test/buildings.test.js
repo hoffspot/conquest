@@ -1241,7 +1241,9 @@ describe("chimney smoke (world/smoke.js)", () => {
         const { chimneysOf } = await import("../client/js/world/smoke.js");
         let chimneys = 0;
 
-        for (const piece of houses.slice(0, 80)) {
+        // (Enough of them that there are over 30 chimneys among them: each village's biggest house
+        // out from its market is its guardhouse, and has none)
+        for (const piece of houses.slice(0, 90)) {
             const object = house(piece);
 
             object.updateMatrixWorld(true);

@@ -382,6 +382,42 @@ export async function hall(piece) {
     return solid.toObject();
 }
 
+/**
+ * The war band's lodge (a barracks; a village's guardhouse): a longhouse, its name on a board hung
+ * under the front of the porch over its door (out past the buttresses leaning on its walls),
+ * posts topped with skulls either side of the porch, a rack of spears to one side and a war
+ * banner to the other.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const random = randomFor(piece, 28);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const name = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const doorFace = D - m(ENTRY) + m(0.25);
+    const middle = Math.min(m(7.5), (doorFace - m(0.8)) * 0.85);
+    // (The lens's south side at its middle is its door's wall: middle / 2 from its line; the
+    // porch's front 2.7 m out from it, its eaves 3.25 m up: orc.js longhouse)
+    const cz = doorFace - middle / 2 - m(0.05);
+    const front = doorFace - m(0.05) + m(2.75);
+
+    toned(solid, random, [m(3.6)]);
+    longhouse(solid, m(1.3), W - m(1.3), cz, { middle, random, wealth: 0.7, doorway: { width: m(1.8), height: m(2.4) }, plinth: m(0.3), ridge: m(7) });
+    board(solid, (u, v, w = 0) => [W / 2 - m(1) + u, v, front + w], [0, 0, 1], [0, m(2), m(2.55), m(2.55) + m(2) * (9 / 56)], nameBoardTexture({ name, ground: "#3a1a14", dark: "#1a0a08" }), `board ${name}`, m(0.06));
+
+    for (const side of [-1, 1]) {
+        pole(solid, [W / 2 + side * m(0.8), m(3.25), front], [W / 2 + side * m(0.8), m(2.85), front], m(0.015), "rope", { sides: 3 });
+        post(solid, W / 2 + side * m(2.3), 0, doorFace + m(1.2), m(2.9), m(0.14), "timber", { sides: 6 });
+        skull(solid, [W / 2 + side * m(2.3), m(3.05), doorFace + m(1.3)], 0, m(0.28));
+    }
+
+    rack(solid, W / 2 - m(4.2), doorFace + m(0.9), { random, kind: "weapons", length: m(2) });
+    warBanner(solid, W / 2 + m(4), 0, doorFace + m(1), m(4.2), { cloth: random.pick(["war-red", "black"]) });
+
+    return solid.toObject();
+}
+
 /** A capital's keep: a tall broch on a mound, a spiked gallery, banners, steps to its door. */
 export async function keep(piece) {
     await loadSignFont();
@@ -450,7 +486,7 @@ export function windmill(piece) {
     return lookout(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, market, windmill });
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);
