@@ -57,6 +57,8 @@ export const GEAR = Object.freeze({
     wand: { label: "Wand", slot: "mainHand", hands: 1, price: 40, magic: true, ward: true },
     staff: { label: "Staff", slot: "mainHand", hands: 2, price: 20 },
     hammer: { label: "War hammer", slot: "mainHand", hands: 2, price: 35 },
+    greatsword: { label: "Greatsword", slot: "mainHand", hands: 2, price: 45 },
+    axe: { label: "Battle axe", slot: "mainHand", hands: 2, price: 40 },
     bow: { label: "Bow", slot: "mainHand", hands: 2, price: 35, quiver: true },
     gauntlets: { label: "Spiked gauntlets", slot: "mainHand", hands: 2, price: 25 },
     // (Held open in both hands, its spells a quarter stronger again than a wand's: `spellTimes`)
@@ -155,7 +157,7 @@ export const STATS = Object.freeze({
 });
 
 // Which pieces can have which bonuses (by slot, or a weapon by how it fights)
-const MELEE_WEAPONS = ["sword", "staff", "hammer", "gauntlets"];
+const MELEE_WEAPONS = ["sword", "staff", "hammer", "greatsword", "axe", "gauntlets"];
 const MAGIC_WEAPONS = ["wand", "grimoire", "staff"];
 const ARMOUR_SLOTS = ["head", "chest", "bracers", "gloves", "belt", "legs", "boots", "cloak", "offHand"];
 const JEWELS = ["amulet", "ring"];

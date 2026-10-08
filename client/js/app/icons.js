@@ -887,6 +887,26 @@ export const ITEM_ICONS = Object.freeze({
             <path d="M-12,-2 h18" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
         </g>`,
 
+    // A greatsword, point up and leaning: a long blade, a wide cross, a long grip and its pommel
+    greatsword: `
+        <g transform="rotate(35)">
+            <path d="M-2.4,-9 L-2.4,-23 L0,-27 L2.4,-23 L2.4,-9 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.1"/>
+            <path d="M0,-25 L0,-10" stroke="#ffffff" stroke-width="0.7" opacity="0.6"/>
+            <rect x="-9" y="-10" width="18" height="3.2" rx="1" fill="#4a525a" stroke="#22282d" stroke-width="0.9"/>
+            <rect x="-1.9" y="-7" width="3.8" height="16" rx="1" fill="#3a2414" stroke="#1d120a" stroke-width="0.8"/>
+            <circle cx="0" cy="11" r="3" fill="#4a525a" stroke="#22282d" stroke-width="0.9"/>
+        </g>`,
+
+    // A battle axe: a long haft, a broad bearded blade
+    axe: `
+        <path d="M-14,19 L8,-8" stroke="#5e3a1c" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M-14,19 L-9,13" stroke="#2b1a0d" stroke-width="4.2" stroke-linecap="round"/>
+        <g transform="translate(6 -6) rotate(40)">
+            <path d="M-3,-4 L6,-11 C13,-8 15,6 8,12 L-3,4 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/>
+            <path d="M7,-9 C12,-5 13,5 8,10" fill="none" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
+            <rect x="-6" y="-3.5" width="5" height="7" rx="1" fill="#4a525a" stroke="#22282d" stroke-width="0.9"/>
+        </g>`,
+
     // A bow, strung, an arrow nocked
     bow: `
         <path d="M-8,-21 C12,-14 12,14 -8,21" fill="none" stroke="#6b4423" stroke-width="3.6" stroke-linecap="round"/>

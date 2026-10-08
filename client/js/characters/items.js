@@ -391,6 +391,34 @@ function warHammer() {
     ], "hammer");
 }
 
+function greatsword() {
+    // A long, broad blade over a wide cross; a grip a third of a metre long, as a two-handed
+    // sword's is (the right hand by the cross, the left by the pommel, as far apart as a war
+    // hammer's: equipment.js `haft`), bound in leather, a heavy pommel
+    return assemble([
+        [blade(1.0, 0.058, 0.011, 0.1, 0.18), "steel"],
+        [at(new THREE.BoxGeometry(0.034, 0.026, 0.26), 0, 0.083, 0), "darkSteel"],
+        [at(new THREE.BoxGeometry(0.022, 0.05, 0.07), 0, 0.12, 0), "darkSteel"],
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.32, 10), 0, -0.08, 0), "darkLeather"],
+        [at(new THREE.CylinderGeometry(0.024, 0.02, 0.05, 8), 0, -0.265, 0), "darkSteel"],
+    ], "greatsword");
+}
+
+function battleAxe() {
+    // A long ash haft (gripped a quarter of the way up, the other hand by its foot) and a broad,
+    // bearded steel blade (a disc's sector, thin across x, its edge forward, +z) on an iron socket,
+    // a short lug behind
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.017, 0.019, 1.1, 10), 0, 0.28, 0), "wood"],
+        [at(new THREE.CylinderGeometry(0.021, 0.021, 0.16, 10), 0, 0, 0), "leather"],
+        [at(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 10), 0, -0.29, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 16, 1, false, -0.95, 1.9), 0, 0.72, -0.035, 0, 0, Math.PI / 2), "steel"],
+        [at(new THREE.BoxGeometry(0.03, 0.12, 0.08), 0, 0.73, 0.02), "darkSteel"],
+        [at(new THREE.BoxGeometry(0.044, 0.1, 0.05), 0, 0.73, -0.02), "iron"],
+        [at(new THREE.BoxGeometry(0.03, 0.04, 0.05), 0, 0.73, -0.065), "darkSteel"],
+    ], "battleAxe");
+}
+
 function grimoire() {
     // An open book lying on the palm: its spine along the fingers (+z), a cover and a block of
     // pages either side (across the hand, y), the pages facing away from the palm (-x)
@@ -1715,6 +1743,10 @@ export function buildItem(model, fit = {}) {
             return wand();
         case "warHammer":
             return warHammer();
+        case "greatsword":
+            return greatsword();
+        case "battleAxe":
+            return battleAxe();
         case "handTorch":
             return handTorch();
         case "grimoire":

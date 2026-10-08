@@ -13,13 +13,14 @@ let STEP_MS;
 let Host;
 let HOST_PLAYER;
 let FIELD_BATTLE;
+let ROLE_ARMS;
 let buildWorld;
 let squaresOf;
 let world;
 
 before(async () => {
     ({ Battle, STEP_MS } = await import("../client/js/core/battle.js"));
-    ({ Host, HOST_PLAYER, FIELD_BATTLE } = await import("../client/js/core/host.js"));
+    ({ Host, HOST_PLAYER, FIELD_BATTLE, ROLE_ARMS } = await import("../client/js/core/host.js"));
     ({ buildWorld } = await import("../client/js/core/overworld.js"));
     ({ squaresOf } = await import("../client/js/core/grid.js"));
     world = buildWorld({ seed: 2 });
@@ -148,15 +149,21 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
         assert.equal(theirs.length, 30);
         assert.deepEqual(events.find(({ type }) => type === "fieldBattle").ids.sort(), fielded.map(({ id }) => id).sort());
 
-        // (The player's people, and the orcs; each soldier with one of its people's weapons or a hammer)
-        assert.ok(ours.every(({ team, weapon }) => team === "human" && ["sword", "bow", ...FIELD_BATTLE.arms].includes(weapon)));
-        assert.ok(theirs.every(({ team, weapon }) => team === "orc" && ["cleaver", ...FIELD_BATTLE.arms].includes(weapon)));
+        // (The player's people, and the orcs; each soldier with what its people's carry in its role,
+        // in a line of battle of its own)
+        const armed = (actor, people) => actor.team === people && ROLE_ARMS[people][host.soldiers.get(actor.id).role].includes(actor.weapon);
 
-        // (North of the player, the way they faced: theirs nearer, the others further off)
+        assert.ok(ours.every((actor) => armed(actor, "human") && actor.formation.id === ours[0].formation.id));
+        assert.ok(theirs.every((actor) => armed(actor, "orc") && actor.formation.id === theirs[0].formation.id));
+        assert.notEqual(ours[0].formation.id, theirs[0].formation.id);
+
+        // (North of the player, the way they faced: theirs nearer, its rear `near` off, the others
+        // further, the fronts `apart`)
         const ahead = (actor) => me.y - actor.y;
+        const front = Math.max(...ours.map(ahead));
 
-        assert.ok(ours.every((actor) => ahead(actor) > 0 && ahead(actor) < FIELD_BATTLE.near + 6));
-        assert.ok(theirs.every((actor) => ahead(actor) > FIELD_BATTLE.far - 6));
+        assert.ok(Math.abs(Math.min(...ours.map(ahead)) - FIELD_BATTLE.near) < 2);
+        assert.ok(Math.abs(Math.min(...theirs.map(ahead)) - front - FIELD_BATTLE.apart) < 2);
 
         // (The others everyone's enemies; theirs the player's friends)
         assert.ok(theirs.every((actor) => host.battle.hostile(actor, me) && host.battle.hostile(actor, ours[0])));

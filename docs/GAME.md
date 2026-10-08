@@ -636,7 +636,49 @@ that at a sprint). Each looks only among those in the cells near enough, the nea
 and stops at cells too far off to hold anyone nearer than the nearest yet found; of two as near,
 the first in the battle's list, as looking through everyone found. It makes no difference to what
 happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
-(`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for.
+(`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for. Whether
+anyone's after one further off than it can see is looked up among who was after whom as the step
+began (`#chasers`), not through everyone.
+
+**Lines of battle** (`formation`; core/formation.js; the research behind them in
+[WAR.md](WAR.md#lines-of-battle-m17)). A formation is an army's line: where the middle of its
+front rank is (`anchor`), the way it faces, where it's marching and how fast, and whether,
+standing, it closes with the enemy (`advance`). Each soldier in one (`add`'s `formation`: its
+place, `[right, back]` in metres, and its role) keeps to its place as the line goes: its post is
+where its place is now (`#keepRank`), and it goes after enemies only as far from it as its role's
+leash (`ROLES`: the shield line 10 m, the two-handers 12, archers 15, casters 16, healers 5).
+
+- **Marching** (`#march`). The line walks on towards where it's sent at its pace, facing that
+  way, and stands there. While any of it's fighting, and 1.5 s after (`HOLD_MS`), it stands.
+- **Closing with the enemy.** A line that advances, standing, looks every quarter second for
+  the nearest enemy within 60 m of any of it (`ADVANCE.sight`; further than a soldier sees, as a
+  captain watches the field) and marches on them, its front stopping 2 m short.
+- **Closing its ranks** (`#closeRanks`). Once a second (`CLOSE_MS`), if any of it have fallen
+  (or joined), its line's laid out again for those left: the front ranks' places filled first,
+  and each rank's middle before its ends, each by whoever of its role was nearest it. So the
+  rank behind steps up into a gap in front, the line narrows as it thins (keeping two ranks
+  while it can), its rear guard comes into the line as the line needs it, and with none of its
+  shield line left its two-handers are its front. One more than 3 m from its place runs to it
+  (`RANKS_RUN`).
+- **Thinking less often.** One in a line looks again for whom to fight only every quarter second
+  (`RETHINK_MS`), meanwhile set on whoever it was set on (at once if they fall): hundreds looking
+  every step was most of what a field battle cost.
+
+**Casters and healers** (`add`'s `casts` and `heals`: spell ids). A caster casts at whoever it's
+set on the first of its spells that's ready, if they're within its reach and in sight
+(`#castAt`), before going after them; a soldier's are its people's school's first two, the
+stronger first (core/host.js `soldierOf`). A healer heals first: whoever of its own within its
+spells' reach and in sight is the most hurt, under 80% of their health (`HEALING.below`), with its
+weakest spell that's ready, or, under half (`HEALING.mend`), its strongest (`#mend`); with no one
+hurt enough, it fights as any other.
+
+**The player first** (`AGGRO`). An enemy within 15 squares of a player, that can see them and
+whose leash reaches them, goes for them before anyone else (`#drawnTo`), so long as there's room
+on them: at most 6 of their enemies up close and 4 shooting or casting at once (`#roomOn`, from
+who's on each player as the step begins, `#mustered`, and anyone newly set on them since). The
+same holds however they'd come to be on them: the nearest enemy, an alarm raised, or turning on
+whoever struck them (`#turnOn`). The rest fight whoever else is near: a player in a battle of
+hundreds has a fight, not a crowd, on them.
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
   ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds
@@ -788,6 +830,14 @@ would be one line in weapons.js):
 | Spiked gauntlets | punch | melee | 2–5 | 170 | 420 | 600 | 80 | punch |
 | Spiked boots | kick | melee | 3–7 | 360 | 760 | 1050 | 220 | kick |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
+| Greatsword | cleave | melee | 7–13 | 520 | 950 | 1250 | 300 | cleave |
+| Battle axe | chop | melee | 9–17 | 700 | 1200 | 1600 | 400 | chop |
+
+The greatsword and the battle axe are no one's to start with: the smith, the armoury and the watch
+sell them (45 and 40 gold), and a line of battle's two-handers carry them (core/host.js
+`ROLE_ARMS`). Both are two-handed and swing as the war hammer does (its guard, blows and sound),
+and over a fight strike about half again as hard as a sword, as the hammer does; the axe slower
+and heavier.
 
 | Spell | On | Reach | Casts in | Does | Cooldown |
 | --- | --- | --- | --- | --- | --- |
@@ -2884,7 +2934,8 @@ only once it's 3 places past the last drawn in full):
   smallest pieces let go (`CROWD.near`, `CROWD.far`): a figure is 3,500 to 5,400 triangles near and
   1,400 to 2,100 far (as a character drawn far off is 4,800 to 12,900).
 - **Its moves recorded.** On the template, its guard, its walk and its run (a stride each), its
-  weapon's blow, a flinch and its fall are played once (avatar.js, actions.js) and where each of
+  weapon's blow, a cast for a kind that casts (`CROWD_CASTS`: a grimoire's or wand's at an enemy,
+  a staff's healing), a flinch and its fall are played once (avatar.js, actions.js) and where each of
   its bones is, 20 times a second, is kept in a picture of numbers, a row a moment (`CROWD.fps`).
   It's merged before its fall is recorded, as falling it lets go of what it holds.
 - **Drawn all at once.** Everyone of a kind is an instance of its figure, drawn in one go near and
@@ -2894,7 +2945,7 @@ only once it's 3 places past the last drawn in full):
 - **To the game, avatars like any other** (`CrowdAvatar`). Each follows its actor on the same
   spring, faces the way it goes, and is told of blows, flinches and falls as an avatar is: it's
   drawn on guard, walking or running (its stride kept with how far it's gone), striking (the blow
-  recorded played as fast or slow as the battle's lasts), flinching, falling and lying. What lands
+  recorded played as fast or slow as the battle's lasts), casting, flinching, falling and lying. What lands
   on it (an arrow) stays at its chest. It casts no shadow, as no soldier does, and shows no wounds
   or flush of red. Whoever comes into the nearest few is built in full meanwhile, drawn in the
   crowd till it's ready, and goes back to the crowd when it's further off again.
@@ -2962,6 +3013,8 @@ each one it crossed, bigger and worse. The kind is the attack's reaction:
 | hack (orc cleaver) | a cut | a deep, wide gash, bleeding more |
 | pierce (bow) | a hole | a hole with the arrow left in it, blood welling and running |
 | crush (war hammer) | a bruise | a swollen bruise, split open and bleeding |
+| cleave (greatsword) | a cut | a long cut, longer than a sword's, bleeding more |
+| chop (battle axe) | a cut | a deep, wide gash, wider than a cleaver's, bleeding most |
 | strike (staff) | a welt | a long welt, raw and bleeding along the middle |
 | punch (spiked gauntlets) | a bruise pricked by spikes | a bruise torn by a row of spike holes, bleeding |
 | fire (grimoire) | a scorch | charred black, raw round it, glowing embers a few seconds; burnt through clothes |
@@ -3451,7 +3504,8 @@ played at its own volume:
   the recipes in `scripts/sounds/weapons.js`): real recordings, all CC0, played instead of the
   made swings, hits, draws and falls once they're in (for the made ones' places, from the start;
   those with none made, `RECORDED_ONLY`, a made one in their place till then, or nothing):
-  - **Swings**: one sabre's cuts for the sword, the cleaver (broader) and the hammer (flat, low);
+  - **Swings**: one sabre's cuts for the sword, the cleaver (broader) and the hammer (flat, low;
+    the greatsword's and battle axe's too);
     a bamboo staff; a sleeve's whoosh for a punch, a fighter's swish for a kick; a bamboo stick
     flicked for a wand. Each recording's loudest moment is known (`peak`), so it's timed to land
     with the blow.
@@ -4062,12 +4116,16 @@ casts shadows, and show the squares characters walk on (blocked ones red) with e
 (out in the world, the 160 squares round the player, shown afresh as they go).
 
 **Field battle** musters two armies of 10 to 200 a side before the player, the way the camera looks
-(core/host.js `FIELD_BATTLE`, the host's `fieldBattle` command and event): the player's people's 8
-metres ahead, the orcs' (the humans', for an orc) 56, in ranks 20 wide, each soldier carrying one of
-its people's two weapons or a hammer, the two making for each other. The player's people's fight
-beside them; the others are everyone's enemies. It's for seeing how many this device draws and
-plays smoothly, out on open ground: in the world, and only in a world the player opened (not one
-they've joined).
+(core/host.js `FIELD_BATTLE`, the host's `fieldBattle` command and event), each in a line of battle
+(the battle's *Lines of battle*): the player's people's ahead of them, its rear 8 metres off, the
+orcs' (the humans', for an orc) beyond, the two fronts 48 metres apart, facing each other. Each
+army's mixed as a standing army's is (core/formation.js `MIX`: two fifths shield line, a quarter
+archers, the rest two-handers, casters and healers), each soldier carrying what its people's carry
+in its role (`ROLE_ARMS`), casters casting their people's school's spells and healers healing
+(`soldierOf`). The two march to meet halfway and close with each other. The player's people's
+fight beside them; the others are everyone's enemies. It's for seeing how many this device draws
+and plays smoothly, out on open ground: in the world, and only in a world the player opened (not
+one they've joined).
 
 ## Performance
 

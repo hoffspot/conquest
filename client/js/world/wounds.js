@@ -46,6 +46,9 @@ const CELL = 0.02;
 export const KINDS = Object.freeze({
     slash: { heights: [0.45, 0.85], spread: 0.8, paint: "cut", length: 0.2, width: 0.011, blood: 1, drips: 3 },
     hack: { heights: [0.45, 0.85], spread: 0.8, paint: "cut", length: 0.25, width: 0.02, blood: 1.4, drips: 4 },
+    // (A greatsword's longer cut, and a battle axe's deeper, wider one)
+    cleave: { heights: [0.45, 0.88], spread: 0.85, paint: "cut", length: 0.3, width: 0.015, blood: 1.3, drips: 4 },
+    chop: { heights: [0.45, 0.85], spread: 0.8, paint: "cut", length: 0.27, width: 0.025, blood: 1.6, drips: 5 },
     pierce: { heights: [0.45, 0.82], spread: 0.7, paint: "puncture", radius: 0.007, blood: 1.1, drips: 2 },
     crush: { heights: [0.5, 0.86], spread: 0.9, paint: "bruise", radius: 0.08, blood: 0.8, drips: 2 },
     strike: { heights: [0.45, 0.86], spread: 0.9, paint: "welt", length: 0.18, radius: 0.028, blood: 0.6, drips: 1 },

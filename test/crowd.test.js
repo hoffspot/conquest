@@ -39,7 +39,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { CROWD, CrowdAvatar, figureOf, recordingMoves } = await import("../client/js/world/crowd.js");
+const { CROWD, CROWD_CASTS, CrowdAvatar, figureOf, recordingMoves } = await import("../client/js/world/crowd.js");
 
 const humanFiles = readHumanFiles();
 const human = new HumanData(humanFiles.manifest, humanFiles.data);
@@ -221,18 +221,18 @@ describe("a kind's figure (crowd.js figureOf)", () => {
 });
 
 describe("a kind's moves (crowd.js recordingMoves)", () => {
-    it("records its guard, walk, run, a blow, a flinch and its fall, each so many times a second", () => {
+    it("records its guard, walk, run, a blow, a cast (for one that casts), a flinch and its fall, each so many times a second", () => {
         const { character, look } = soldier();
-        const recorded = allAtOnce(recordingMoves(character, { walk: look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash" }));
+        const recorded = allAtOnce(recordingMoves(character, { walk: look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash", cast: CROWD_CASTS.grimoire }));
         const { moves, width, rows, data } = recorded;
 
         assert.equal(width, character.rig.skeleton.bones.length * 3);
         assert.equal(data.length, width * 4 * rows);
-        assert.deepEqual(Object.keys(moves).sort(), ["attack", "die", "guard", "hit", "run", "walk"]);
+        assert.deepEqual(Object.keys(moves).sort(), ["attack", "cast", "die", "guard", "hit", "run", "walk"]);
 
         let next = 0;
 
-        for (const name of ["guard", "walk", "run", "attack", "hit", "die"]) {
+        for (const name of ["guard", "walk", "run", "attack", "cast", "hit", "die"]) {
             const move = moves[name];
 
             assert.equal(move.start, next, `${name} follows the last`);
@@ -249,6 +249,8 @@ describe("a kind's moves (crowd.js recordingMoves)", () => {
         assert.ok(moves.run.stride > moves.walk.stride);
         assert.ok(moves.walk.length > 0.7 && moves.walk.length < 1.6, `a stride walking: ${moves.walk.length} s`);
         assert.ok(moves.attack.length >= WEAPONS.sword.attacks[0].duration / 1000);
+        assert.ok(!moves.cast.loop && moves.cast.length >= 1 && moves.cast.hitAt > 0 && moves.cast.hitAt < moves.cast.length);
+        assert.deepEqual(CROWD_CASTS, { grimoire: "castStun", wand: "castStun", staff: "castHeal" });
 
         // (Fallen, its hips are far lower than on guard)
         const hips = character.rig.skeleton.bones.findIndex(({ name }) => name === "Hips");
@@ -273,8 +275,9 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         hit: { start: 92, frames: 10, length: 0.5, loop: false },
         die: { start: 102, frames: 30, length: 1.5, loop: false, lands: 0.9 },
     };
-    const crowdOf = () => ({ kinds: new Map([["human:m:sword", { template: { table, height: 1.8 } }]]), members: new Set(), join(one) { this.members.add(one); }, leave(one) { this.members.delete(one); } });
-    const moveOf = (frame) => Object.entries(table).find(([, { start, frames }]) => frame[0] >= start && frame[0] < start + frames)[0];
+    const casting = { ...table, cast: { start: 132, frames: 20, length: 1, loop: false, hitAt: 0.6 } };
+    const crowdOf = () => ({ kinds: new Map([["human:m:sword", { template: { table, height: 1.8 } }], ["human:m:grimoire", { template: { table: casting, height: 1.8 } }]]), members: new Set(), join(one) { this.members.add(one); }, leave(one) { this.members.delete(one); } });
+    const moveOf = (frame) => Object.entries(casting).find(([, { start, frames }]) => frame[0] >= start && frame[0] < start + frames)[0];
 
     it("stands on guard, its guard played over and over", () => {
         const crowd = crowdOf();
@@ -328,6 +331,32 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
 
             // (Facing the way it's going)
             assert.ok(Math.abs(one.facing) < 0.01);
+        }
+    });
+
+    it("casts a spell as its kind casts, as long as the cast lasts; one whose kind doesn't, with its weapon", () => {
+        const crowd = crowdOf();
+
+        for (const [key, played] of [
+            ["human:m:grimoire", "cast"],
+            ["human:m:sword", "attack"],
+        ]) {
+            const one = new CrowdAvatar(crowd, key);
+            const moves = crowd.kinds.get(key).template.table;
+
+            one.place(0, 0, 0);
+            one.actions.startAttack("castStun", { hitAt: 0.6, duration: 1.2 });
+
+            for (let t = 0; t < 1.15; t += 0.05) {
+                one.update(0.05, 0, 0, 0);
+                assert.equal(moveOf(one.frameIn(moves)), played, `${key} at ${t}`);
+            }
+
+            // (And its weapon's blow as any other)
+            one.update(0.2, 0, 0, 0);
+            one.actions.startAttack("grimoire", { hitAt: 0.4, duration: 0.8 });
+            one.update(0.05, 0, 0, 0);
+            assert.equal(moveOf(one.frameIn(moves)), "attack");
         }
     });
 

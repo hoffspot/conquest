@@ -709,7 +709,7 @@ function shaped(look, body) {
 // --- The motions: everything the characters do ---
 
 // Each weapon's guard and blows (actions.js GUARDS, ATTACKS), as soldiers carry it (soldiers.js)
-const WEAPON_GUARD = { sword: "sword", staff: "staff", wand: "wand", grimoire: "grimoire", hammer: "hammer", bow: "bow", gauntlets: "punch", boots: "kick", cleaver: "cleaver" };
+const WEAPON_GUARD = { sword: "sword", staff: "staff", wand: "wand", grimoire: "grimoire", hammer: "hammer", greatsword: "hammer", axe: "hammer", bow: "bow", gauntlets: "punch", boots: "kick", cleaver: "cleaver" };
 // A spell's cast (a heal's, a hex's), as long as the game's are: from its hands raised to the
 // spell flying, and as long again and more while it's let go (app/game.js)
 const CASTS = { castHeal: SPELLS.mendWounds.castTime / 1000, castStun: SPELLS.shockbolt.castTime / 1000 };

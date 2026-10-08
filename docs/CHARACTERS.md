@@ -949,7 +949,11 @@ heels swinging up in a run.
 The game's weapons are items too: a sword, a mage's staff, a crystal-tipped wand, an open
 grimoire (in the left hand, the right hand free to cast), a two-handed war hammer, a longbow with
 a quiver of arrows on the back, spiked knuckle plates over plate gauntlets (one for each hand),
-and the orc's notched cleaver. Every character starts in the same outfit: a tunic, leather
+the orc's notched cleaver, and two more two-handers the shops sell and armies carry: a
+**greatsword** (a metre of broad blade over a wide cross, a grip long enough for both hands bound in
+leather, a heavy pommel) and a **battle axe** (a broad, bearded blade on a long ash haft, a lug
+behind). Both are held as the war hammer is (`HOLDS.hammer`), the right hand by the cross or a
+quarter of the way up the haft, the left by the pommel or the haft's foot. Every character starts in the same outfit: a tunic, leather
 bracers, leather pants and leather boots.
 
 **Spiked boots** are an item in several parts (`parts`), each on its own socket: a domed iron cap
@@ -976,7 +980,7 @@ into it.
 | Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt round the front of the hip, canted as the sword is, the grip forward, the blade down and back behind the thigh, its edge forward |
 | Wand | Tucked in the belt at the right hip, the tip down and a little back and out, clear of the thigh (nearer in, Vitruvian's thighs came into it as the legs came out of the guard; further out, the right arm swinging past) |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
-| Staff, war hammer | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's head side-on |
+| Staff, war hammer, greatsword, battle axe | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's and battle axe's heads side-on, the greatsword's blade flat to the back |
 | Bow | On the back across the quiver, the grip up behind the left shoulder for the left hand, a little off the back so the upper arm coming down passes it (a bow looks the same either way up) |
 | Spiked gauntlets | Worn: the hands just open |
 
@@ -1296,6 +1300,7 @@ battle knowing.
 | Bow | A side-on draw: turned side on, the bow at arm's length towards the target; drawn to the chin, loosed, the hand flying back past the ear | a high draw, a snap shot, a crouching shot, a canted draw |
 | Spiked gauntlets | A straight punch at head height from a boxer's guard (left and right in turn, whichever way) | a hook, an uppercut, a body blow, an overhand |
 | Orc cleaver | An overhead hack: raised high behind the head; hacked down | a backhand, a flat chop, a gut rip, a stab and rip |
+| Greatsword, battle axe | The war hammer's: they're swung as it is, both hands on the grip or haft | the war hammer's |
 
 **Two-handed blows keep the haft out in front.** A staff's or war hammer's second hand isn't moved
 out of the torso (above), so their keys hold both hands far enough out on every body: the haft
@@ -1610,6 +1615,8 @@ effect where it lands, so how a character reacts depends on what hit it:
 | pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | `Hit_Chest` | sparks |
 | punch (gauntlets) | the head snaps round | `Hit_Head`: the head jolted, the body knocked back a little | a flash and dust |
 | hack (orc cleaver) | a heavy cut that twists and staggers | | sparks |
+| cleave (greatsword) | a long cut that twists the body further away than a sword's and sets it back a little | | sparks |
+| chop (battle axe) | a heavy blow that drives the body down and round, forearms drawn in | | sparks |
 | kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | `Hit_Chest` | a flash and dust |
 
 Where a reaction has the animators' hits too (Mesh2Motion's, baked: *Clips in the game*, below),

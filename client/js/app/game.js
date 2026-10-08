@@ -70,7 +70,7 @@ import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SC
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
-import { Crowd, CrowdAvatar } from "../world/crowd.js";
+import { Crowd, CROWD_CASTS, CrowdAvatar } from "../world/crowd.js";
 import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
@@ -154,7 +154,7 @@ const ARMOUR_WORN = Object.freeze({ breastplate: "plate", mail: "mail", jerkin: 
 const armourOf = (character) => ARMOUR_WORN[character?.equipment?.get("armour")] ?? ARMOUR_WORN[character?.equipment?.get("chest")] ?? null;
 
 // The blows that ring steel on a shield's iron (a blade's), not thud on its boards (sound.js clash)
-const RINGING = new Set(["slash", "hack"]);
+const RINGING = new Set(["slash", "hack", "cleave", "chop"]);
 
 // How long after trading blows with the player a death's still theirs to be told of (s: #ours)
 const FOUGHT = 30;
@@ -2621,7 +2621,7 @@ export class Game {
 
         return {
             key,
-            spec: { look: soldierLook({ people, weapon, sex, seed: 1 }), guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 } },
+            spec: { look: soldierLook({ people, weapon, sex, seed: 1 }), guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null },
         };
     }
 

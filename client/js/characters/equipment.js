@@ -110,6 +110,10 @@ const SHEATHS = {
     // staff and the hammer angled a little off the back, clear of the buttocks as the back arches)
     staff: { socket: "back", at: [-0.2, 0.28, 0.02], point: [0.28, -0.92, -0.26], edge: [0, 0, 1], garment: "baldric" },
     hammer: { socket: "back", at: [-0.2, 0.28, 0.01], point: [0.28, -0.92, -0.27], edge: [0.95, 0.3, 0], garment: "baldric" },
+    // (The greatsword as the staff, its blade down the back; the battle axe as the hammer, its head
+    // down, its edge out to the side)
+    greatsword: { socket: "back", at: [-0.2, 0.28, 0.02], point: [0.28, -0.92, -0.26], edge: [0, 0, 1], garment: "baldric" },
+    axe: { socket: "back", at: [-0.2, 0.28, 0.01], point: [0.28, -0.92, -0.27], edge: [0.95, 0.3, 0], garment: "baldric" },
     // (On the back across the quiver, the grip up behind the left shoulder for the left hand, a
     // limb up past it, the other down to the right hip)
     bow: { socket: "back", at: [0.15, 0.22, -0.08], point: [-0.28, -0.96, -0.06], edge: [0, 0, 1], garment: "baldric" },
@@ -161,6 +165,10 @@ export const ITEMS = Object.freeze({
     staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.019, hold: HOLDS.staff, haft: [-0.7, -0.3], haftRound: 0.017, sheath: SHEATHS.staff },
     wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand, sheath: SHEATHS.wand },
     warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.021, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.hammer },
+    // (Held as the war hammer is, two-handed: the greatsword's right hand by its guard, the left by
+    // its pommel; the axe's left at the foot of its haft)
+    greatsword: { label: "Greatsword", slot: "mainHand", model: "greatsword", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.016, sheath: SHEATHS.greatsword },
+    battleAxe: { label: "Battle axe", slot: "mainHand", model: "battleAxe", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.02, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.axe },
     cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.015, hilt: [-0.06, 0.054], hold: HOLDS.sword, sheath: SHEATHS.cleaver },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },

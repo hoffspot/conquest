@@ -7078,7 +7078,7 @@ test.describe("on a phone", () => {
     });
 });
 
-test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; met, they fight, and the fallen lie", async ({ page }) => {
+test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {
     test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
@@ -7121,17 +7121,17 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(ground).not.toBeNull();
     await playUntil(page, () => false, { seconds: 4 });
 
-    // Mustered from the debug overlay, the way the camera looks: held where they stand till they're
-    // all drawn
+    // Mustered from the debug overlay, the way the camera looks, each army in its line of battle:
+    // the lines held where they stand till they're all drawn
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.fieldBattle(40);
         window.held = {};
 
-        for (const actor of game.battle.actors.filter(({ id }) => id.startsWith("field-"))) {
-            window.held[actor.id] = actor.patrol;
-            Object.assign(actor, { patrol: [actor.patrol[0]], patrolIndex: 0 });
+        for (const [id, { to, advance }] of Object.entries(game.battle.formations)) {
+            window.held[id] = { to, advance };
+            game.battle.formation(id, { to: null, advance: false });
         }
     });
 
@@ -7182,12 +7182,24 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(seen.instances).toBeGreaterThan(20);
     expect(seen.instances).toBeLessThanOrEqual(seen.crowded);
 
-    // Let go, they make for each other and fight: the fallen of the crowds lie where they fell
+    // (Each soldier of a line at its place in it, its role's arms in its hands: casters, healers and all)
+    const lines = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+
+        return { lines: Object.keys(window.held).length, roles: [...new Set(fielded.map(({ formation }) => formation?.role))].sort(), casters: fielded.filter(({ casts }) => casts?.length).length, healers: fielded.filter(({ heals }) => heals?.length).length };
+    });
+
+    expect(lines).toEqual({ lines: 2, roles: ["archer", "caster", "front", "healer", "heavy"], casters: expect.any(Number), healers: expect.any(Number) });
+    expect(lines.casters).toBeGreaterThan(4);
+    expect(lines.healers).toBeGreaterThan(4);
+
+    // Let go, the lines march to meet and fight: the fallen of the crowds lie where they fell
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
-        for (const [id, patrol] of Object.entries(window.held)) {
-            Object.assign(game.battle.actor(id), { patrol, patrolIndex: 1 });
+        for (const [id, { to, advance }] of Object.entries(window.held)) {
+            game.battle.formation(id, { to, advance });
         }
     });
 
