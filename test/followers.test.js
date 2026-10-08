@@ -5,8 +5,8 @@
 // with the character, and with the world
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { FOLLOW, STEP_MS } from "../client/js/core/battle.js";
-import { HIRES, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { FOLLOW, keepingUp, SPRINT, STEP_MS } from "../client/js/core/battle.js";
+import { COMPANION, HIRES, HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -224,5 +224,131 @@ describe("followers (host.js, battle.js)", () => {
 
         assert.equal(joined.name, one.name);
         assert.equal(elsewhere.battle.actor([...elsewhere.followers.keys()][0]).leader, HOST_PLAYER);
+    });
+});
+
+describe("followers keeping up (battle.js FOLLOW, host.js #keepUp)", () => {
+    // Out on open ground with a follower: the world, the player, the follower
+    const outWith = () => {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO, followers: [{ name: "Bram", calling: "warrior" }] });
+        run(host, 1000);
+
+        const [id] = [...host.followers.keys()];
+
+        return { host, me: host.battle.actor(HOST_PLAYER), follower: host.battle.actor(id), open: squaresOf(host.world.maps.town) };
+    };
+
+    it("goes at its leader's pace, a little faster the further behind it is, up to half as fast again by 20 m", () => {
+        assert.deepEqual(FOLLOW, { near: 3, close: 2, guard: 12, keep: 10, lost: 20, keeping: 1.1, catching: 1.5 });
+        assert.equal(keepingUp(0), 1);
+        assert.equal(keepingUp(FOLLOW.near), 1);
+        assert.ok(Math.abs(keepingUp(FOLLOW.keep) - 1.1) < 1e-9);
+        assert.ok(Math.abs(keepingUp(15) - 1.3) < 1e-9);
+        assert.equal(keepingUp(FOLLOW.lost), 1.5);
+        assert.equal(keepingUp(500), 1.5);
+
+        for (let metres = 0; metres < 25; metres += 0.5) {
+            assert.ok(keepingUp(metres + 0.5) >= keepingUp(metres));
+        }
+    });
+
+    it("sprints as its leader sprints, never tiring, keeping within about 10 m of them; stops by them when they stop", () => {
+        const { host, me, follower, open } = outWith();
+
+        put(follower, "town", nearestFree(open, [me.square[0] - 2, me.square[1]], { taken: new Set([squareKey(...me.square)]) }));
+
+        const goal = nearestFree(open, [me.square[0] + 70, me.square[1] + 10], { within: 30 });
+        const stamina = follower.stamina;
+        let [fastest, furthest] = [0, 0];
+
+        assert.equal(host.command(HOST_PLAYER, { type: "move", to: goal, run: true }).ok, true);
+
+        for (let t = 0; t < 30000 && (me.path.length || me.order); t += STEP_MS) {
+            host.advance(STEP_MS);
+            fastest = Math.max(fastest, follower.pace);
+
+            // (Once both are going: how far it's fallen behind)
+            if (t > 2000 && me.path.length) {
+                furthest = Math.max(furthest, Math.hypot(follower.x - me.x, follower.y - me.y));
+            }
+        }
+
+        assert.ok(me.running === false && !me.path.length, "(the player's arrived)");
+        assert.ok(fastest > follower.speed * SPRINT * 0.9, `it sprinted: ${fastest}`);
+        assert.ok(furthest <= FOLLOW.keep + 2, `within about 10 m: ${furthest}`);
+        assert.equal(follower.stamina, stamina, "(never tiring)");
+
+        run(host, 4000);
+        assert.ok(distanceBetween(follower.square, me.square) <= FOLLOW.near + 1);
+    });
+
+    it("left more than 20 m behind (stuck), is brought quietly to a free square behind its leader, facing their way", () => {
+        const { host, me, follower, open } = outWith();
+
+        me.facing = 0;
+        put(follower, "town", nearestFree(open, [me.square[0] + 30, me.square[1]], { within: 12 }));
+
+        // (Brought as the host's step ends: its placing heard in the next)
+        const events = [...host.advance(STEP_MS), ...host.advance(STEP_MS)];
+        const apart = Math.hypot(follower.x - me.x, follower.y - me.y);
+
+        assert.ok(apart <= COMPANION.behind + 4, `${apart} m off`);
+        assert.ok(follower.y < me.y + 1, "(behind them: they face south, +y)");
+        assert.equal(follower.facing, me.facing);
+        assert.ok(events.some(({ type, id, kind }) => type === "cross" && id === follower.id && kind === "magic"), "(placed: its avatar's put there)");
+        assert.ok(!events.some(({ type }) => type === "carried" || type === "companion"), "(quietly: no puff)");
+
+        // (Within 20 m: left to walk)
+        put(follower, "town", nearestFree(open, [me.square[0] + 12, me.square[1]], { within: 4 }));
+
+        const walked = host.advance(STEP_MS);
+
+        assert.ok(!walked.some(({ type, id }) => type === "cross" && id === follower.id));
+    });
+
+    it("fights on while its leader's fighting too; with them more than 20 m off and not fighting, breaks off and is brought to them; told to wait, stays put", () => {
+        const { host, me, follower, open } = outWith();
+        const far = nearestFree(open, [me.square[0] + 30, me.square[1]], { within: 12 });
+        // (An enemy after the follower, far off; and one after the player, if they're fighting too)
+        const fight = (both) => {
+            for (const id of ["brigand", "raider"]) {
+                host.battle.remove(id);
+            }
+
+            put(follower, "town", far);
+            host.battle.add({ id: "brigand", kind: "orc", name: "Brigand", weapon: "cleaver", team: "wild", square: nearestFree(open, [far[0] + 1, far[1]], { taken: new Set([squareKey(...far)]) }), map: "town", ai: null });
+            Object.assign(host.battle.actor("brigand"), { hp: 5000, maxHp: 5000, target: follower.id });
+
+            if (both) {
+                host.battle.add({ id: "raider", kind: "orc", name: "Raider", weapon: "cleaver", team: "wild", square: nearestFree(open, [me.square[0], me.square[1] - 3], { taken: new Set([squareKey(...me.square)]) }), map: "town", ai: null });
+                Object.assign(host.battle.actor("raider"), { hp: 5000, maxHp: 5000, target: HOST_PLAYER });
+            }
+        };
+
+        // (Both fighting: it fights on where it is)
+        fight(true);
+        host.advance(STEP_MS);
+        host.advance(STEP_MS);
+        assert.equal(follower.target, "brigand");
+        assert.ok(Math.hypot(follower.x - me.x, follower.y - me.y) > FOLLOW.lost);
+
+        // (Its leader not fighting: it breaks off, and comes to them; its foe no longer after it there)
+        fight(false);
+        host.advance(STEP_MS);
+        host.advance(STEP_MS);
+        assert.ok(Math.hypot(follower.x - me.x, follower.y - me.y) <= COMPANION.behind + 4);
+        assert.equal(follower.target, null);
+        assert.equal(host.battle.actor("brigand").target, null);
+
+        // (Told to wait: stays where it was told, however far)
+        host.battle.remove("brigand");
+        host.battle.remove("raider");
+        put(follower, "town", far);
+        host.followers.get(follower.id).waiting = true;
+        Object.assign(follower, { ai: "patrol", patrol: [[...far]], patrolIndex: 0 });
+        host.advance(STEP_MS);
+        assert.deepEqual(follower.square, far);
     });
 });

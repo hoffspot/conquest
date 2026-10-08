@@ -120,10 +120,34 @@ export const KINDS = Object.freeze({
 });
 
 /**
- * How a follower keeps with its leader (docs/WAR.md M9): how near (squares) it keeps, and how far
- * from its leader (squares) it goes after an enemy of theirs it can see.
+ * How a follower (or a companion by magic) keeps with its leader (docs/WAR.md M9): how near
+ * (squares) it keeps while they stand (`near`), and while they're on the move (`close`); how far
+ * from its leader (squares) it goes after an enemy of theirs it can see (`guard`). It goes at its
+ * leader's pace (theirs as they go, a sprint as they sprint; or its own, if that's faster), never
+ * tiring, and the further behind it is, the faster than them: a little (`keeping` times their pace)
+ * as far out as `keep` metres, and from there up to `catching` times by `lost` metres. Further
+ * behind than that (stuck, or left on another floor), and not in a fight its leader's in too, it's
+ * brought to them, a few squares behind them (host.js #keepUp).
  */
-export const FOLLOW = Object.freeze({ near: 3, guard: 12 });
+export const FOLLOW = Object.freeze({ near: 3, close: 2, guard: 12, keep: 10, lost: 20, keeping: 1.1, catching: 1.5 });
+
+/**
+ * How much faster than its leader's pace a follower goes, `metres` behind them (FOLLOW): none
+ * as near as it keeps, a little more out to `keep`, and up to `catching` times by `lost`.
+ */
+export function keepingUp(metres) {
+    const { near, keep, lost, keeping, catching } = FOLLOW;
+
+    if (metres <= near) {
+        return 1;
+    }
+
+    if (metres <= keep) {
+        return 1 + ((keeping - 1) * (metres - near)) / (keep - near);
+    }
+
+    return Math.min(catching, keeping + ((catching - keeping) * (metres - keep)) / (lost - keep));
+}
 
 /**
  * Are two characters' teams enemies: on different teams, and neither one of the folk no one
@@ -1844,9 +1868,15 @@ export class Battle {
         }
 
         actor.target = null;
-        actor.walkPace = Math.max(actor.speed, leader.walkPace ?? 0);
 
-        if (distanceBetween(actor.square, leader.square) > FOLLOW.near) {
+        // (At its leader's pace as they go, a sprint as they sprint, or its own if that's faster;
+        // the faster the further behind: FOLLOW. Closer while they're on the move, not to stop
+        // and start again behind them)
+        const moving = leader.path.length > 0;
+
+        actor.walkPace = Math.max(actor.speed, moving ? leader.pace : 0) * keepingUp(hypot(actor.x - leader.x, actor.y - leader.y));
+
+        if (distanceBetween(actor.square, leader.square) > (moving ? FOLLOW.close : FOLLOW.near)) {
             if (!actor.path.length || (!same(actor.pathGoal, leader.square) && this.time - actor.lastPathAt >= REPATH_MS)) {
                 this.#pathTo(actor, leader.square, [leader.x, leader.y]);
             }

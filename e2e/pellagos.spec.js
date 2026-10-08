@@ -3806,7 +3806,7 @@ test("where the player is is kept whenever the game stops (paused, the page clos
     expect(await continued()).toMatchObject(again);
 });
 
-test("an adventurer at the guild, hired for gold, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
+test("an adventurer at the guild, hired for gold, follows the player out and keeps up, sprinting as they sprint, and brought to them when left far behind; the journal shows their company, and they're with them the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
 
@@ -3886,9 +3886,35 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
         }
 
         game.advance(3, { render: false });
+
+        const after = { map: follower.map, apart: apart() };
+        const walked = Math.hypot(player.square[0] - start[0], player.square[1] - start[1]);
+
+        // A sprint back the way they came: the follower sprints too, keeping within about 10 m
+        let [furthest, fastest] = [0, 0];
+
+        game.battle.command("player", { type: "move", to: start, run: true });
+
+        for (let k = 0; k < 300 && (player.path.length || player.order); k++) {
+            game.advance(0.1, { render: false });
+            furthest = Math.max(furthest, apart());
+            fastest = Math.max(fastest, follower.pace);
+        }
+
+        // Left on another floor (the guild's hall), far from them: brought quietly behind them,
+        // drawn there
+        const hall = game.battle.links.find(({ id: link }) => link === door).ends[1].map;
+
+        Object.assign(follower, { map: hall, square: [10, 13], x: 10.5, y: 13.5, path: [], target: null });
+        game.advance(0.3);
+
+        const [ox, oz] = game.originOf(player.map);
+        const drawn = game.avatars.get(id)?.object.position;
+        const brought = { map: follower.map, apart: apart(), drawnAt: drawn ? Math.hypot(drawn.x - ox - follower.x, drawn.z - oz - follower.y) : null };
+
         game.start();
 
-        return { outside, walked: Math.hypot(player.square[0] - start[0], player.square[1] - start[1]), after: { map: follower.map, apart: apart() }, id };
+        return { outside, walked, after, sprint: { furthest, fastest, walk: follower.speed }, brought, id };
     }, guild.door);
 
     expect(out.outside).toEqual({ map: "town", apart: expect.any(Number), drawn: true });
@@ -3896,6 +3922,13 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     expect(out.walked).toBeGreaterThan(8);
     expect(out.after.map).toBe("town");
     expect(out.after.apart).toBeLessThan(5);
+
+    // (Sprinting with them, within about 10 m; and brought, with no puff, its figure put there)
+    expect(out.sprint.fastest).toBeGreaterThan(out.sprint.walk * 2);
+    expect(out.sprint.furthest).toBeLessThan(12);
+    expect(out.brought.map).toBe("town");
+    expect(out.brought.apart).toBeLessThan(6);
+    expect(out.brought.drawnAt).toBeLessThan(0.5);
 
     // The journal: who follows the player, and how they are
     const journal = page.getByRole("dialog", { name: "Journal" });
