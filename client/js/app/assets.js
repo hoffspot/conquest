@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "7ba0fe0c2c",
+    release: "c5e09bdd1c",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -118,6 +118,94 @@ export const ASSETS = Object.freeze({
                     "path": "textures/dungeons/floor-temple-normal.jpg",
                     "hash": "feb9a0be71",
                     "bytes": 45878
+                }
+            ]
+        },
+        "dungeon-prop-barrel": {
+            "tier": "demand",
+            "label": "A barrel (Poly Haven wine_barrel_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/barrel.glb",
+                    "hash": "c24ff5c8a0",
+                    "bytes": 395756
+                }
+            ]
+        },
+        "dungeon-prop-crate": {
+            "tier": "demand",
+            "label": "A crate (Poly Haven wooden_crate_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/crate.glb",
+                    "hash": "d6ab57e690",
+                    "bytes": 208240
+                }
+            ]
+        },
+        "dungeon-prop-table": {
+            "tier": "demand",
+            "label": "A rough table (Poly Haven wooden_table_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/table.glb",
+                    "hash": "f9f3456251",
+                    "bytes": 120836
+                }
+            ]
+        },
+        "dungeon-prop-fire-pit": {
+            "tier": "demand",
+            "label": "A fire pit ringed with stones (Poly Haven stone_fire_pit, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/fire-pit.glb",
+                    "hash": "f4bc9d7040",
+                    "bytes": 266972
+                }
+            ]
+        },
+        "dungeon-prop-boulder": {
+            "tier": "demand",
+            "label": "A fallen rock (Poly Haven moon_rock_02, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/boulder.glb",
+                    "hash": "ab7c849e18",
+                    "bytes": 148264
+                }
+            ]
+        },
+        "dungeon-prop-bust": {
+            "tier": "demand",
+            "label": "A marble bust on its plinth (Poly Haven marble_bust_01, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bust.glb",
+                    "hash": "20025455f3",
+                    "bytes": 199600
+                }
+            ]
+        },
+        "dungeon-prop-axe": {
+            "tier": "demand",
+            "label": "A woodsman's axe (Poly Haven wooden_axe, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/axe.glb",
+                    "hash": "6129ab2eac",
+                    "bytes": 65828
+                }
+            ]
+        },
+        "dungeon-prop-vase": {
+            "tier": "demand",
+            "label": "A brass vase, an altar's (Poly Haven brass_vase_04, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/vase.glb",
+                    "hash": "606d328146",
+                    "bytes": 61896
                 }
             ]
         }
