@@ -219,8 +219,10 @@ describe("the keep's requests about the convoys and the works (standing.js, host
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.known.push("human|orc");
 
+        // (Of theirs, the one nearest the keep: the one it asks for)
+        const seat = war.town(war.realm("human").seat).at;
         const lost = war.works.find(({ owner }) => owner === "human");
-        const taken = war.works.find(({ owner }) => owner === "orc");
+        const taken = war.works.filter(({ owner }) => owner === "orc").sort((a, b) => Math.hypot(a.at[0] - seat[0], a.at[1] - seat[1]) - Math.hypot(b.at[0] - seat[0], b.at[1] - seat[1]))[0];
 
         Object.assign(lost, { held: true, band: 3 });
 
