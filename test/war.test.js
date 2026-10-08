@@ -7,9 +7,9 @@ import { before, describe, it } from "node:test";
 import { describeLeader, REALMS, TEMPERAMENTS, TRAITS } from "../client/js/core/war/peoples.js";
 import { ACROSS_COUNTRY, Roads } from "../client/js/core/war/roads.js";
 import { tell } from "../client/js/core/war/news.js";
-import { COUNSEL_TURNS, HOLDINGS, REACH, SERVES, SIEGE, SORTIE_TURNS, STAGES, TURN_MS, TURNS_PER_STAGE, War } from "../client/js/core/war/war.js";
+import { CONVOY, COUNSEL_TURNS, HOLDINGS, OVERRUN, REACH, RESOURCES, SERVES, SIEGE, SORTIE_TURNS, STAGES, TRIBUTE, TURN_MS, TURNS_PER_STAGE, War, WORKED } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { planWorld, RACES } from "../client/js/core/worldplan/plan.js";
+import { planWorld, RACES, WORKS } from "../client/js/core/worldplan/plan.js";
 
 const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
 
@@ -466,7 +466,12 @@ describe("the war (core/war)", () => {
         assert.equal(war.counsel("elf", { war: enemy }, 1), false, "(a vassal's overlord decides)");
         war.realm("elf").overlord = null;
 
-        // Counselled to war, they go to war (sooner or later)
+        // Counselled to war, they go to war (sooner or later): the rest kept from declaring wars of
+        // their own meanwhile, so it's the counsel that brings it on
+        for (const realm of war.realms.filter(({ id }) => id !== "human")) {
+            realm.leader.traits.aggression = 0;
+        }
+
         const events = play(war, COUNSEL_TURNS);
 
         assert.ok(events.some(({ type, by, on }) => type === "declared" && by === "human" && on === enemy));
@@ -576,5 +581,209 @@ describe("the war (core/war)", () => {
         }
 
         assert.equal(war.relation("human", "human"), "self");
+    });
+});
+
+describe("the works in the war (core/war: docs/WAR.md *The works*)", () => {
+    let plan;
+
+    before(() => {
+        plan = planWorld(3);
+    });
+
+    // A war at peace and staying so, at the stage `stage`: no one going to war of their own accord
+    const quiet = (stage = 0) => {
+        const war = new War(plan);
+
+        war.stage = stage;
+
+        for (const realm of war.realms) {
+            realm.leader.traits = { aggression: 0, greed: 0, loyalty: 0.5, grudge: 0.5, caution: 1 };
+        }
+
+        return war;
+    };
+    const atWar = (war, a, b) => {
+        war.relations[[a, b].sort().join("|")] = { state: "hostile", since: 0 };
+        war.known.push([a, b].sort().join("|"));
+    };
+
+    it("gives each people its two lumber mills, mines and quarries, held and guarded by them, its convoys' guards home, its stores empty", () => {
+        const war = new War(plan);
+
+        assert.equal(war.works.length, RACES.length * 6);
+
+        for (const realm of war.realms) {
+            const own = war.works.filter(({ owner }) => owner === realm.id);
+
+            assert.deepEqual(realm.stores, Object.fromEntries(RESOURCES.map((resource) => [resource, 0])));
+            assert.deepEqual(own.map(({ kind }) => kind).sort(), WORKS.flatMap(({ kind, count }) => Array(count).fill(kind)).sort());
+            assert.ok(own.every((works) => works.race === realm.id && works.guard === WORKED.guard && works.escort === CONVOY.guards + 1 && works.yard === 0 && !works.held && works.name));
+        }
+
+        // (Their guards and convoys' count among their forces, and are paid for)
+        assert.equal(war.power("human"), war.towns.filter(({ owner }) => owner === "human").reduce((sum, { garrison }) => sum + garrison, 0) + 6 * (WORKED.guard + CONVOY.guards + 1));
+    });
+
+    it("fills each works' yard, sends a convoy of it to its people's seat, into their stores, and back for more", () => {
+        const war = quiet();
+        const works = war.works.find(({ owner, kind }) => owner === "elf" && kind === "quarry");
+        const elves = war.realm("elf");
+        const events = [];
+
+        // (A wagon's load waiting after a few turns: a convoy sets out with it and its guards)
+        for (let k = 0; k < 12 && !war.forces.some(({ kind, home }) => kind === "convoy" && home === works.id); k++) {
+            events.push(...play(war, 1));
+        }
+
+        const convoy = war.forces.find(({ kind, home }) => kind === "convoy" && home === works.id);
+
+        assert.ok(convoy, "a convoy set out");
+        assert.deepEqual(Object.keys(convoy.cargo), ["stone"]);
+        assert.ok(convoy.cargo.stone >= CONVOY.load && convoy.cargo.stone <= CONVOY.wagons * CONVOY.load);
+        assert.equal(convoy.size, CONVOY.guards + 1);
+        assert.equal(works.escort, 0);
+        assert.equal(convoy.target, elves.seat);
+
+        // (There, its stone in the elves' stores; then home, its guards home)
+        const carried = convoy.cargo.stone;
+
+        events.push(...play(war, Math.ceil(convoy.path.length * 3)));
+        assert.ok(elves.stores.stone >= carried, `${elves.stores.stone} stone`);
+        assert.ok(events.some(({ type, works: id }) => type === "delivered" && id === works.id));
+        assert.ok(!war.forces.includes(convoy) || convoy.back);
+        assert.match(tell(events.find(({ type }) => type === "delivered"), war), /^A convoy of \d+ (wood|stone|metal) from the .+ (lumber mill|mine|quarry) has reached the .+ seat\.$/);
+    });
+
+    it("pays a vassal's tribute to its liege from what its convoys bring in", () => {
+        const war = quiet();
+        const convoy = { id: "force-99", realm: "cat", kind: "convoy", size: 7, at: [...war.town(war.realm("cat").seat).at], path: [war.town(war.realm("cat").seat).at], leg: 0, target: war.realm("cat").seat, home: war.works.find(({ owner }) => owner === "cat").id, mission: null, about: null, cargo: { metal: 40 }, back: false, since: 0 };
+
+        war.realm("cat").overlord = "orc";
+        war.forces.push(convoy);
+        play(war, 1);
+        assert.equal(war.realm("cat").stores.metal >= 40 * (1 - TRIBUTE), true);
+        assert.equal(war.realm("orc").stores.metal >= 40 * TRIBUTE, true);
+    });
+
+    it("sends an expedition to seize an enemy's works once the war's far enough on, and holds it then", () => {
+        const war = quiet(WORKED.from);
+        const theirs = war.works.filter(({ owner }) => owner === "darkElf");
+
+        atWar(war, "human", "darkElf");
+        // (Greedy, but at war with no more than them: warlike enough for one war at a time)
+        war.realm("human").leader.traits = { aggression: 0.2, greed: 1, loyalty: 0.5, grudge: 0.5, caution: 0 };
+        war.realm("human").treasury = 1e4;
+
+        // (Their towns too strong to want: their works the weakest near)
+        for (const town of war.towns.filter(({ owner }) => owner === "darkElf")) {
+            town.garrison = 500;
+        }
+
+        const events = play(war, 40);
+        const seized = events.find(({ type, to }) => type === "seized" && to === "human");
+
+        assert.ok(events.some(({ type, realm, target }) => type === "marched" && realm === "human" && theirs.some(({ id }) => id === target)), "marched on their works");
+        assert.ok(seized, "seized one");
+        assert.equal(war.workAt(seized.works).owner, "human");
+        assert.ok(war.realm("darkElf").standing.human < 0, "a grudge for it");
+        assert.match(tell(seized, war), /^The Humans have seized the .+ from the Dark elves\.$/);
+    });
+
+    it("loses a works to the wild's bands now and then, the likelier its guard's empty; its people send a force to win it back", () => {
+        const war = quiet();
+        const works = war.works.find(({ owner }) => owner === "lizard");
+
+        works.guard = 0;
+
+        // (Unguarded: overrun before long)
+        const events = [];
+
+        for (let k = 0; k < 400 && !works.held; k++) {
+            events.push(...play(war, 1));
+            works.guard = 0;
+        }
+
+        assert.ok(works.held, "overrun");
+        assert.equal(works.band, OVERRUN.band);
+        assert.equal(works.yard, 0);
+        assert.match(tell(events.find(({ type }) => type === "overrun"), war), /^Brigands have overrun the .+\. Nothing comes out of it for the Lizard folk now\.$/);
+
+        // (Its people march to win it back, out of their nearest town's garrison, and do)
+        war.realm("lizard").treasury = 1e4;
+
+        const after = play(war, 30);
+
+        assert.ok(after.some(({ type, realm, target, mission }) => type === "marched" && realm === "lizard" && target === works.id && mission === "retake"));
+        assert.ok(after.some(({ type, works: id }) => type === "retaken" && id === works.id), "won back");
+        assert.ok(!works.held && works.guard > 0 && works.owner === "lizard");
+    });
+
+    it("hears of a works won in the world: cleared of the wild for its people, or seized from an enemy", () => {
+        const war = quiet();
+        const [mine, theirs] = [war.works.find(({ owner }) => owner === "human"), war.works.find(({ owner }) => owner === "orc")];
+
+        // (Cleared: back to its own people, a favour; still held while any of the band stands)
+        Object.assign(mine, { held: true, band: 3, guard: 0 });
+        assert.equal(war.win(mine.id, "elf"), null);
+        war.loss(mine.id, 3);
+        assert.equal(mine.band, 0);
+        assert.equal(war.win(mine.id, "elf"), "cleared");
+        assert.ok(!mine.held && mine.owner === "human" && mine.guard === OVERRUN.held);
+        assert.ok(war.realm("human").standing.elf > 0);
+
+        // (An enemy's: seized, once its guard's all down; not a friend's)
+        assert.equal(war.win(theirs.id, "elf"), null, "not at war with them");
+        atWar(war, "elf", "orc");
+        assert.equal(war.win(theirs.id, "elf"), null, "its guard's standing");
+        war.loss(theirs.id, WORKED.guard);
+        assert.equal(war.win(theirs.id, "elf"), "seized");
+        assert.equal(theirs.owner, "elf");
+        assert.ok(war.log.some(({ type, works, played }) => type === "seized" && works === theirs.id && played));
+    });
+
+    it("has a convoy fallen on by an enemy passing: its goods half theirs if it's beaten", () => {
+        const war = quiet();
+        const works = war.works.find(({ owner }) => owner === "human");
+        const convoy = { id: "force-98", realm: "human", kind: "convoy", size: 2, at: [...works.at], path: [works.at, war.town(war.realm("human").seat).at], leg: 0, target: war.realm("human").seat, home: works.id, mission: null, about: null, cargo: { wood: 60 }, back: false, since: 0 };
+
+        atWar(war, "human", "orc");
+        war.realm("orc").leader.traits.aggression = 1;
+        war.forces.push(convoy, { id: "force-97", realm: "orc", kind: "camp", size: 30, at: [works.at[0] + 50, works.at[1]], path: [], leg: 0, target: war.towns.find(({ owner }) => owner === "human").id, home: war.realm("orc").seat, mission: null, about: null, since: 0 });
+
+        let events = [];
+
+        for (let k = 0; k < 10 && war.forces.includes(convoy); k++) {
+            convoy.at = [...works.at];
+            convoy.leg = 0;
+            events = [...events, ...play(war, 1)];
+        }
+
+        const fell = events.find(({ type }) => type === "ambushed");
+
+        assert.ok(fell && !fell.beaten, "fallen on and beaten");
+        assert.equal(war.realm("orc").stores.wood, 30);
+        assert.match(tell(fell, war), /^The Humans' convoy from the .+ was fallen on by the Orcs, and its goods carried off\.$/);
+    });
+
+    it("carries on a war kept before there were works: every works its people's, every store empty", () => {
+        const war = new War(plan);
+
+        play(war, 5);
+
+        const kept = war.snapshot();
+
+        delete kept.works;
+        kept.version = 1;
+
+        for (const realm of kept.realms) {
+            delete realm.stores;
+        }
+
+        const again = War.restore(plan, kept);
+
+        assert.equal(again.works.length, war.works.length);
+        assert.ok(again.realms.every(({ stores }) => stores && RESOURCES.every((resource) => stores[resource] === 0)));
+        assert.doesNotThrow(() => play(again, 5));
     });
 });

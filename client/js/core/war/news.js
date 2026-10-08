@@ -8,6 +8,9 @@ import { hypot } from "../exact.js";
 
 const MISSIONS = Object.freeze({ truce: "a truce", alliance: "an alliance", break: "an end to their alliance" });
 
+// What the wild camps' brigands who fall on a convoy are called (worldplan/races.js FACTIONS)
+const FACTION_NAMES = Object.freeze({ bandits: "outlaws", raiders: "raiders", goblins: "goblins" });
+
 /** A people's name (the Humans...). */
 export const peopleOf = (id) => RACES.find((race) => race.id === id)?.name ?? id;
 
@@ -19,8 +22,20 @@ export function tell(event, war) {
     const people = (id) => `the ${peopleOf(id)}`;
     const People = (id) => `The ${peopleOf(id)}`;
     const own = (id) => (peopleOf(id).endsWith("s") ? `${peopleOf(id)}'` : `${peopleOf(id)}'s`);
-    const town = (id) => war.town(id)?.name ?? war.plan.places.find((place) => place.id === id)?.name ?? "a town";
-    const target = (id) => war.town(id)?.name ?? "their camp";
+    const town = (id) => war.town(id)?.name ?? (war.workAt?.(id) ? works(id) : null) ?? war.plan.places.find((place) => place.id === id)?.name ?? "a town";
+    const target = (id) => war.town(id)?.name ?? (war.workAt?.(id) ? works(id) : null) ?? "their camp";
+    // (A people's works: "the Oakstead lumber mill")
+    const works = (id) => {
+        const found = war.workAt?.(id);
+
+        return found ? `the ${found.name} ${found.kind}` : "a works";
+    };
+    const Works = (id) => works(id).replace(/^t/, "T");
+    const cargo = (load) =>
+        Object.entries(load ?? {})
+            .map(([resource, amount]) => `${Math.round(amount)} ${resource}`)
+            .join(" and ");
+    const brigands = (faction) => FACTION_NAMES[faction] ?? "brigands";
 
     switch (event.type) {
         case "stage":
@@ -44,7 +59,7 @@ export function tell(event, war) {
         case "waylaid":
             return `The ${own(event.realm)} envoy to ${people(event.to)} was waylaid on the road${event.by ? ` by ${people(event.by)}` : ""}.`;
         case "marched":
-            return `${People(event.realm)} march on ${town(event.target)}, ${event.size} strong.`;
+            return event.mission === "retake" ? `${People(event.realm)} march to win back ${works(event.target)} from the brigands holding it, ${event.size} strong.` : `${People(event.realm)} march on ${town(event.target)}, ${event.size} strong.`;
         case "camped":
             return `${People(event.realm)} have made camp outside ${town(event.target)}.`;
         case "reinforced":
@@ -76,6 +91,10 @@ export function tell(event, war) {
         case "relief":
             return `${People(event.realm)} send ${event.size} to relieve ${town(event.town)}.`;
         case "battle":
+            if (event.works) {
+                return !event.against ? (event.won ? `${People(event.realm)} fell upon the brigands at ${works(event.works)} and put them to the sword.` : `${People(event.realm)} fell upon the brigands at ${works(event.works)}, and were beaten off.`) : event.won ? `${People(event.realm)} fell upon ${works(event.works)} and took it from ${people(event.against)}.` : `${People(event.realm)} fell upon ${works(event.works)}, and its guard beat them off.`;
+            }
+
             return event.won ? `${People(event.realm)} fell upon the ${own(event.against)} camp and scattered it.` : `${People(event.realm)} fell upon the ${own(event.against)} camp, and were beaten off.`;
         case "broken":
             return `The ${own(event.realm)} camp outside ${town(event.target)} has broken up.`;
@@ -89,6 +108,24 @@ export function tell(event, war) {
             return event.march ? `${People(event.realm)} are counselled to march on ${town(event.march)}.` : event.peace ? `${People(event.realm)} are counselled to seek peace with ${people(event.peace)}.` : `${People(event.realm)} are counselled to war with ${people(event.war)}.`;
         case "undone":
             return `${People(event.realm)} no longer rule the whole continent.`;
+        case "delivered":
+            return `A convoy of ${cargo(event.cargo)} from ${works(event.works)} has reached the ${own(event.realm)} seat.`;
+        case "plundered":
+            return `The ${own(event.realm)} convoy from ${works(event.works)} came to its seat to find it in ${event.by ? `${people(event.by)}'` : "other"} hands, and lost its goods.`;
+        case "ambushed":
+            if (event.beaten) {
+                return `The ${own(event.realm)} convoy from ${works(event.works)} beat off ${event.by ? people(event.by) : brigands(event.faction)} on the road.`;
+            }
+
+            return `The ${own(event.realm)} convoy from ${works(event.works)} was fallen on by ${event.by ? people(event.by) : brigands(event.faction)}, and its goods carried off.`;
+        case "seized":
+            return `${People(event.to)} have seized ${works(event.works)} from ${people(event.from)}.`;
+        case "overrun":
+            return `Brigands have overrun ${works(event.works)}. Nothing comes out of it for ${people(event.owner)} now.`;
+        case "retaken":
+            return `${People(event.realm)} have won ${works(event.works)} back from the brigands.`;
+        case "cleared":
+            return `${Works(event.works)} has been cleared of the brigands holding it${event.owner !== event.by ? `, and is ${own(event.owner)} again` : `, and ${people(event.by)} hold it now`}.`;
         default:
             return event.type;
     }
@@ -99,7 +136,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced", "delivered"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
@@ -109,15 +146,15 @@ const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforc
 export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     const heard = [];
     const near = (id) => {
-        const town = war.town(id);
+        const place = war.town(id) ?? war.workAt?.(id);
 
-        return Boolean(town) && hypot(town.at[0] - at[0], town.at[1] - at[1]) <= reach;
+        return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
     };
 
     for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {
         const event = war.log[k];
 
-        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.target))) {
+        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target))) {
             continue;
         }
 

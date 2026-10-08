@@ -124,7 +124,7 @@ describe("the broken aqueducts (core/aqueducts.js)", () => {
         }
     });
 
-    it("take their standing piers' squares (walked round, not seen through), open under their arches; a fallen pier only rubble, walked over", () => {
+    it("take their standing piers' squares (walked round, not seen through), open under their arches; a fallen pier only rubble, walked over (unless it's in a river)", () => {
         const overworld = world.maps.town;
         let [standing, fallen] = [0, 0];
 
@@ -141,7 +141,8 @@ describe("the broken aqueducts (core/aqueducts.js)", () => {
                     assert.equal(feature.standing, false);
                     assert.deepEqual(feature.squares, []);
                     assert.deepEqual(pierSquares(aqueduct, pier), []);
-                    assert.ok(!overworld.squares.blocked(Math.floor(pier.x), Math.floor(pier.y)), `${aqueduct.id} pier ${n}: rubble walked over`);
+                    // (Unless it fell into the river it was crossing)
+                    assert.ok(!overworld.squares.blocked(Math.floor(pier.x), Math.floor(pier.y)) || chunk.water[at([Math.floor(pier.x), Math.floor(pier.y)])], `${aqueduct.id} pier ${n}: rubble walked over`);
                     continue;
                 }
 
