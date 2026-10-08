@@ -3582,7 +3582,7 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
-test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries; struck once the player's far", async ({ page }) => {
+test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     // An orc army's camp just outside the town, at war with the humans; the player by it
@@ -3644,6 +3644,26 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     });
 
     expect(struck).toEqual({ drawn: 0, pitched: 0 });
+
+    // Razed in the war, far off: the game goes on, nothing to draw again under it (as there is under
+    // a fortification razed)
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    const razed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const before = game.battle.time;
+
+        war.loss("camp-900", 6, { by: "human" });
+        game.advance(0.5);
+
+        return { gone: !war.camp("camp-900"), told: war.log.some(({ type, camp }) => type === "razed" && camp === "camp-900"), went: game.battle.time > before };
+    });
+
+    expect(razed).toEqual({ gone: true, told: true, went: true });
+    expect(errors).toEqual([]);
 });
 
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {

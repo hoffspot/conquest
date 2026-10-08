@@ -46,7 +46,7 @@ import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
 import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
-import { CLEARING, footprintOf } from "../core/war/forts.js";
+import { CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -6245,8 +6245,8 @@ export class Game {
                 break;
             case "war":
                 // (A fortification gone up or come down: the ground under it, and round it, drawn
-                // again: core/overworld.js setForts)
-                if (["built", "razed", "abandoned"].includes(event.event.type)) {
+                // again: core/overworld.js setForts. Not a camp: nothing's built under it)
+                if (["built", "razed", "abandoned"].includes(event.event.type) && FORTS[event.event.kind]) {
                     this.chunks?.redraw(footprintOf({ kind: event.event.kind, at: event.event.at }, CLEARING));
                 }
 
