@@ -13,8 +13,11 @@
 // offered (as many as they like), or taken back, and gold; once both agree, it changes hands.
 //
 // A thing is tapped to see what it is (app/gearinfo.js: its name in the colour of its make, what
-// it does, its set; gear in the pack compared with what's worn) with buttons for what can be done
-// with it. Held, a piece of gear goes on (or, worn, comes off, back into the pack); anything else
+// it does, its set; gear in the pack compared with what's worn), in a card beside it (over the
+// paperdoll, where there's room) with buttons for what can be done with it; one used, or a tap
+// anywhere else (or its ×, or Escape), and the card goes. In a list (a shop's wares, what's carried to sell, what's offered
+// in a trade) a row's tapped to open what it is beneath it, a shop's ware with what's rolled on it
+// as it's bought and what buying and putting it on would change. Held, a piece of gear goes on (or, worn, comes off, back into the pack); anything else
 // held (or right-clicked) opens a wheel of what can be done with it, like the action wheel
 // (app/wheel.js): use it, put it on an action wheel, split the stack, sell it (trading), throw it
 // away, or drop it. Dragged onto another slot of the pack, a stack moves there (onto things
@@ -26,6 +29,7 @@
 
 import { GEAR_SLOTS } from "../core/gear.js";
 import { PACK_PAGE, PACK_SIZE } from "../core/progress.js";
+import { MAKES } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { ActionWheel, directionOf } from "./wheel.js";
 
@@ -34,6 +38,12 @@ import { ActionWheel, directionOf } from "./wheel.js";
 const HOLD_MS = 400;
 const DRAG = 8;
 const FLICK = 30;
+
+// The card for what's tapped in the pack: at most this wide (px), and this far from it; beside it
+// only with at least ABOUT_SIDE (px) of room
+const ABOUT_WIDTH = 330;
+const ABOUT_GAP = 12;
+const ABOUT_SIDE = 220;
 
 // Where each thing that can be done with something goes on its wheel
 const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", drop: "w" };
@@ -62,6 +72,66 @@ function button(text, onClick, { label = text, disabled = false, className = "pa
 
 // A thing's icon, as SVG (a uniform's piece in its people's colours)
 const icon = (item, size = 40) => `<svg viewBox="-24 -24 48 48" width="${size}" height="${size}" aria-hidden="true">${typeof item === "string" ? (ITEM_ICONS[item] ?? "") : iconOf(item)}</svg>`;
+
+// What a thing is and does, in a card (app/gearinfo.js describe; or, not gear, what it does): its
+// name in the colour of its make (`named`; not where it's beside it already, with `count`), what
+// kind of thing it is and how well made, what it does, what's rolled on it as it's bought (a
+// shop's), what putting it on would change (headed `compare`), and what it sells for (`worth`)
+function card(thing, { named = true, count = 1, compare = "Put on instead of what's worn:", worth = false } = {}) {
+    const info = thing.info ?? null;
+    const quality = thing.quality ?? "common";
+    const box = element("div", `pack-card rarity-${quality}`);
+
+    if (named) {
+        const title = element("p", "pack-what");
+
+        title.append(element("strong", `pack-name rarity-${quality}`, `${thing.label}${count > 1 ? ` ×${count}` : ""}`));
+        box.append(title);
+    }
+
+    if (info?.kind) {
+        box.append(element("p", "pack-kind", `${info.kind}${quality !== "common" ? ` · ${MAKES[quality] ?? quality}` : ""}`));
+    }
+
+    if (info?.lines.length) {
+        const lines = element("ul", "pack-lines");
+
+        lines.append(...info.lines.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
+        box.append(lines);
+    } else if (!info && thing.about) {
+        // (What a thing that isn't gear does: "Heals 25 hit points.")
+        box.append(element("p", "pack-does", thing.about));
+    }
+
+    if (info?.rolls) {
+        const rolls = element("ul", "pack-rolls");
+
+        rolls.append(
+            element("li", "pack-rolls-title", info.rolls.title),
+            ...info.rolls.choices.map(({ name, text }) => {
+                const choice = element("li", "tone-roll");
+
+                choice.append(element("span", "pack-roll-name", name), document.createTextNode(` ${text}`));
+
+                return choice;
+            }),
+        );
+        box.append(rolls);
+    }
+
+    if (compare && info?.compare?.length) {
+        const changes = element("ul", "pack-compare");
+
+        changes.append(element("li", "pack-compare-title", compare), ...info.compare.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
+        box.append(changes);
+    }
+
+    if (worth && info?.price) {
+        box.append(element("p", "pack-worth", `Sells for ${info.price} gold${count > 1 ? " each" : ""}`));
+    }
+
+    return box;
+}
 
 export class PackPanel {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
@@ -96,6 +166,22 @@ export class PackPanel {
         this.panel.append(header, this.modes, this.body);
         root.append(this.panel);
 
+        // What's tapped in the pack (or worn), in a card beside it: kept in place as the pack's
+        // scrolled or the screen turned; gone at a tap anywhere else in the panel
+        this.about = element("div", "pack-about");
+        this.about.hidden = true;
+        this.about.setAttribute("role", "group");
+        this.about.setAttribute("aria-label", "What it is");
+        this.panel.append(this.about);
+        this.body.addEventListener("scroll", () => this.#placeAbout(), { passive: true });
+        this.resized = () => this.#placeAbout();
+        globalThis.addEventListener?.("resize", this.resized);
+        this.panel.addEventListener("pointerdown", (event) => {
+            if (!this.about.hidden && !event.target.closest?.(".pack-about, .pack-cell, .doll-slot, .pack-ask")) {
+                this.#select(null);
+            }
+        });
+
         // Where the game draws the player on the paperdoll (dragged, they turn round)
         this.dollView = element("div", "doll-view");
         this.dollView.setAttribute("aria-label", "You, as you're dressed");
@@ -125,6 +211,8 @@ export class PackPanel {
         this.trading = "buy";
         this.page = 0;
         this.selected = null;
+        this.peeking = null;
+        this.peeks = new WeakMap();
         this.press = null;
         this.target = null;
         this.asking = null;
@@ -175,10 +263,14 @@ export class PackPanel {
     show(view) {
         const { gold, pack, shop, trade = null } = view;
 
-        // (Trading with a shopkeeper anew: buying first)
+        // (Trading with a shopkeeper anew: buying first, nothing open)
         if (shop && this.view?.shop?.name !== shop.name) {
             this.trading = "buy";
+            this.peeking = null;
         }
+
+        // (Opened anew: from the top)
+        const opened = this.panel.hidden;
 
         useDefs();
         this.view = view;
@@ -202,6 +294,11 @@ export class PackPanel {
 
         this.page = Math.max(0, Math.min(Math.ceil(PACK_SIZE / PACK_PAGE) - 1, this.page));
         this.#showTabs();
+
+        if (opened) {
+            this.body.scrollTop = 0;
+        }
+
         this.#render();
     }
 
@@ -211,6 +308,24 @@ export class PackPanel {
         this.#endPress();
         this.#dolled(false);
         this.panel.hidden = true;
+        this.selected = null;
+        this.peeking = null;
+        this.about.hidden = true;
+    }
+
+    /** Put away what's open to see what it is (the card, or a row's): whether anything was. */
+    unpeek() {
+        const open = !this.about.hidden || this.peeking !== null;
+
+        if (!this.about.hidden) {
+            this.#select(null);
+        }
+
+        if (this.peeking !== null) {
+            this.#peek(null);
+        }
+
+        return open;
     }
 
     // The paperdoll showing (or not): the panel clear round it, and what's under the panel (the
@@ -223,6 +338,7 @@ export class PackPanel {
     /** Take it away (the game's done). */
     dispose() {
         document.removeEventListener("pointerdown", this.away, { capture: true });
+        globalThis.removeEventListener?.("resize", this.resized);
         this.#endPress();
         this.panel.remove();
         this.wheel.element.remove();
@@ -239,6 +355,7 @@ export class PackPanel {
                 const mode = button(label, () => {
                     if (this.trading !== id) {
                         this.onPage();
+                        this.peeking = null;
                     }
 
                     this.trading = id;
@@ -300,6 +417,7 @@ export class PackPanel {
             sections.push(this.#section("Skills", list));
             this.body.replaceChildren(...sections);
             this.#dolled(false);
+            this.about.hidden = true;
 
             return;
         }
@@ -308,6 +426,7 @@ export class PackPanel {
         if (shop) {
             this.body.replaceChildren(...(this.trading === "sell" ? this.#selling() : this.#buying()));
             this.#dolled(false);
+            this.about.hidden = true;
 
             return;
         }
@@ -330,6 +449,7 @@ export class PackPanel {
         this.body.replaceChildren(...sections);
         this.#dolled(this.dollView.isConnected);
         this.#listen(main);
+        this.#describe();
     }
 
     // --- Trading with a shopkeeper ---
@@ -346,15 +466,16 @@ export class PackPanel {
             const list = element("ul", "pack-list wares");
 
             list.append(
-                ...wares.map(({ item, label, price, affordable }) => {
-                    const row = element("li", `pack-row rarity-${item.quality ?? "common"}`);
-                    const picture = element("span", "pack-icon");
-
-                    picture.innerHTML = icon(item, 28);
-                    row.append(picture, element("span", "pack-label", label), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable }));
-
-                    return row;
-                }),
+                ...wares.map(({ item, label, price, affordable }) =>
+                    this.#row({
+                        thing: item,
+                        label,
+                        peek: `ware:${item.id}:${item.quality ?? "common"}:${item.people ?? ""}`,
+                        // (What it is worked out as it's opened: the shop's preview, app/gearinfo.js)
+                        about: () => card({ ...item, label, ...this.view.shop.preview?.(item) }, { named: false, compare: "Bought and put on instead of what's worn:" }),
+                        after: [element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable })],
+                    }),
+                ),
             );
 
             return this.#section(kind, list);
@@ -370,18 +491,19 @@ export class PackPanel {
 
         list.append(
             ...carried.map(({ stack, index }) => {
-                const row = element("li", `pack-row rarity-${stack.quality ?? "common"}${stack.wanted ? "" : " unwanted"}`);
-                const picture = element("span", "pack-icon");
-                const label = `${stack.label}${stack.count > 1 ? ` ×${stack.count}` : ""}`;
+                const row = this.#row({
+                    thing: stack,
+                    label: `${stack.label}${stack.count > 1 ? ` ×${stack.count}` : ""}`,
+                    className: stack.wanted ? "" : "unwanted",
+                    peek: `carried:${index}:${stack.id}:${stack.quality ?? "common"}`,
+                    about: () => card(stack, { named: false }),
+                    after: [
+                        element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : "Not bought here"),
+                        button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
+                    ],
+                });
 
-                picture.innerHTML = icon(stack, 28);
                 row.dataset.item = stack.id;
-                row.append(
-                    picture,
-                    element("span", "pack-label", label),
-                    element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : "Not bought here"),
-                    button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
-                );
 
                 return row;
             }),
@@ -400,6 +522,73 @@ export class PackPanel {
         }
 
         return [this.#section("Your pack", ...(carried.length ? [list] : []), ...notes)];
+    }
+
+    // A row of a list: a thing's picture and name, and whatever goes along it (`after`: its price,
+    // a button). Tapped anywhere but a button, what it is opens beneath it (`about`: made as it's
+    // opened), one row at a time (`peek`: which, kept as the list's shown again); tapped again,
+    // it closes.
+    #row({ thing, label, className = "", peek, about, after = [] }) {
+        const row = element("li", `pack-row peekable rarity-${thing.quality ?? "common"}${className ? ` ${className}` : ""}`);
+        const open = element("button", "pack-peek");
+        const picture = element("span", "pack-icon");
+
+        picture.innerHTML = icon(thing, 28);
+        open.type = "button";
+        open.setAttribute("aria-expanded", "false");
+        open.append(picture, element("span", "pack-label", label));
+        row.dataset.peek = peek;
+        this.peeks.set(row, about);
+        row.append(open, ...after);
+        row.addEventListener("click", (event) => {
+            if (!event.target.closest?.(".pack-button")) {
+                this.#peek(this.peeking === peek ? null : peek);
+            }
+        });
+
+        if (this.peeking === peek) {
+            this.#opened(row);
+        }
+
+        return row;
+    }
+
+    // One row's open to see what it is (`peek`, a row's), or none: the one that was closed, and
+    // the one opened scrolled into view, as much of it as there's room for
+    #peek(peek) {
+        this.peeking = peek;
+
+        for (const row of this.body.querySelectorAll(".pack-row.peeking")) {
+            row.classList.remove("peeking");
+            row.querySelector(".pack-peek")?.setAttribute("aria-expanded", "false");
+            row.querySelector(".pack-peeked")?.remove();
+        }
+
+        const row = [...this.body.querySelectorAll(".pack-row.peekable")].find((each) => each.dataset.peek === peek);
+
+        if (!row) {
+            return;
+        }
+
+        this.#opened(row);
+
+        const view = this.body.getBoundingClientRect();
+        const box = row.getBoundingClientRect();
+        const by = box.top < view.top ? box.top - view.top - 6 : box.bottom > view.bottom ? Math.min(box.bottom - view.bottom + 6, box.top - view.top - 6) : 0;
+
+        if (by) {
+            this.body.scrollBy?.({ top: by, behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        }
+    }
+
+    // A row opened: what it is beneath it
+    #opened(row) {
+        const peeked = element("div", "pack-peeked");
+
+        peeked.append(this.peeks.get(row)());
+        row.classList.add("peeking");
+        row.querySelector(".pack-peek")?.setAttribute("aria-expanded", "true");
+        row.append(peeked);
     }
 
     // --- The paperdoll ---
@@ -493,9 +682,10 @@ export class PackPanel {
         grid.setAttribute("aria-label", "Carried");
         this.grid = grid;
         this.#fillGrid();
-        this.about = element("div", "pack-about");
-        this.#describe();
-        section.append(element("h3", "pack-heading", "Carried"), tools, grid, this.about);
+
+        const hint = !this.view.pack.some(Boolean) ? "Nothing but lint." : this.view.trade ? "Tap something to see it, and offer it." : "Tap something to see what it does. Hold a piece of gear to put it on or take it off (or drag it); hold anything else (or right-click) for what to do with it.";
+
+        section.append(element("h3", "pack-heading", "Carried"), tools, grid, element("p", "pack-hint pack-tip", hint));
 
         return section;
     }
@@ -520,6 +710,7 @@ export class PackPanel {
         }
 
         this.#fillGrid();
+        this.#describe();
     }
 
     // A slot of the pack: its stack's icon, how many, and how well made
@@ -549,18 +740,16 @@ export class PackPanel {
     // What one side of a trade offers: its things and its gold (and, the player's, each to take back)
     #offered({ gold, items }, { mine = false } = {}) {
         const list = element("ul", `pack-list offer${mine ? " mine" : ""}`);
-        const rows = items.map(({ id, quality, count, label, people }) => {
-            const row = element("li", "pack-row");
-            const picture = element("span", "pack-icon");
+        const rows = items.map((item) => {
+            const { id, quality, count, label } = item;
 
-            picture.innerHTML = icon({ id, people }, 28);
-            row.append(picture, element("span", "pack-label", `${label}${count > 1 ? ` ×${count}` : ""}`));
-
-            if (mine) {
-                row.append(button("Take back", () => this.#reoffer({ item: { id, quality }, count: 0 }), { label: `Take back ${label}` }));
-            }
-
-            return row;
+            return this.#row({
+                thing: item,
+                label: `${label}${count > 1 ? ` ×${count}` : ""}`,
+                peek: `${mine ? "mine" : "theirs"}:${id}:${quality ?? "common"}`,
+                about: () => card(item, { named: false }),
+                after: mine ? [button("Take back", () => this.#reoffer({ item: { id, quality }, count: 0 }), { label: `Take back ${label}` })] : [],
+            });
         });
 
         if (gold) {
@@ -617,70 +806,112 @@ export class PackPanel {
 
     // --- What's tapped, in words ---
 
-    // The thing tapped (in the pack, or worn): what it is, and buttons for what can be done with it
+    // The thing tapped (in the pack, or worn), in its card beside it: what it is, and buttons for
+    // what can be done with it, the card put away as one's used (none, it isn't showing: on
+    // another page, none's tapped, or it was chosen for its wheel)
     #describe() {
-        if (!this.about) {
-            return;
-        }
-
         const worn = this.selected?.slot ? this.view.gear.find(({ slot }) => slot === this.selected.slot) : null;
         const stack = this.selected?.index !== undefined ? this.view.pack[this.selected.index] : null;
         const thing = worn?.item ?? stack;
 
-        if (!thing) {
-            const hint = !this.view.pack.some(Boolean) ? "Nothing but lint." : this.view.trade ? "Tap something to see it, and offer it." : "Tap something to see what it does. Hold a piece of gear to put it on or take it off (or drag it); hold anything else (or right-click) for what to do with it.";
-
-            this.about.replaceChildren(element("p", "pack-hint", hint));
+        if (!thing || this.selected.quiet || !this.#selectedElement()) {
+            this.about.hidden = true;
 
             return;
         }
 
-        const info = thing.info ?? null;
-        const card = element("div", `pack-card rarity-${thing.quality ?? "common"}`);
-        const title = element("p", "pack-what");
-
-        title.append(element("strong", `pack-name rarity-${thing.quality ?? "common"}`, `${thing.label}${stack?.count > 1 ? ` ×${stack.count}` : ""}`));
-        card.append(title);
-
-        if (info?.kind) {
-            card.append(element("p", "pack-kind", `${info.kind}${thing.quality && thing.quality !== "common" ? ` · ${thing.quality[0].toUpperCase()}${thing.quality.slice(1)}` : ""}`));
-        }
-
-        if (info?.lines.length) {
-            const lines = element("ul", "pack-lines");
-
-            lines.append(...info.lines.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
-            card.append(lines);
-        }
-
-        // (Gear in the pack: what putting it on would change)
-        if (stack && info?.compare.length) {
-            const compare = element("ul", "pack-compare");
-
-            compare.append(element("li", "pack-compare-title", "Put on instead of what's worn:"), ...info.compare.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
-            card.append(compare);
-        }
-
-        if (info?.price) {
-            card.append(element("p", "pack-worth", `Sells for ${info.price} gold${stack?.count > 1 ? " each" : ""}`));
-        }
-
-        // (What a thing that isn't gear does: "Healing draught Heals 25 hit points.")
-        if (!info?.lines.length && thing.about) {
-            title.append(document.createTextNode(` ${thing.about}`));
-        }
-
         const actions = element("div", "pack-actions");
+        const inner = element("div", "pack-about-body");
+        const index = this.selected.index;
+        const then = (done) => () => {
+            this.#select(null);
+            done();
+        };
 
         if (worn) {
             if (!this.view.shop && !this.view.trade) {
-                actions.append(button("Take off", () => this.onCommand({ type: "unequip", slot: worn.slot }), { label: `Take off ${thing.label}` }));
+                actions.append(button("Take off", then(() => this.onCommand({ type: "unequip", slot: worn.slot })), { label: `Take off ${thing.label}` }));
             }
         } else {
-            actions.append(...this.#actionsFor(stack).map(({ key, label }) => button(label, () => this.#do(key, this.selected.index), { label: `${label}: ${stack.label}` })));
+            actions.append(...this.#actionsFor(stack).map(({ key, label }) => button(label, then(() => this.#do(key, index)), { label: `${label}: ${stack.label}` })));
         }
 
-        this.about.replaceChildren(card, actions);
+        // (Its buttons beneath what it is, always in view: what it is scrolls, if it must)
+        inner.append(card(thing, { count: stack?.count ?? 1, compare: stack ? "Put on instead of what's worn:" : null, worth: true }));
+        this.about.className = `pack-about rarity-${thing.quality ?? "common"}`;
+        this.about.replaceChildren(inner, ...(actions.childElementCount ? [actions] : []), button("", () => this.#select(null), { label: "Put it away", className: "pack-about-close" }));
+        this.about.lastChild.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+        this.about.hidden = false;
+        this.#placeAbout();
+    }
+
+    // What's tapped, as it's shown: its slot of the pack (on the page showing), or of the paperdoll
+    #selectedElement() {
+        const { index, slot } = this.selected ?? {};
+
+        return index !== undefined ? this.body.querySelector(`.pack-cell[data-index="${index}"]`) : slot ? this.body.querySelector(`.doll-slot[data-slot="${slot}"]`) : null;
+    }
+
+    // The card put beside what it's about, its point at it, in view: beside it where there's room
+    // (over the paperdoll; as tall as what's in view, at most); else below it if it fits there,
+    // above it if it fits there, or wherever has more room (or over it, if neither has enough).
+    // Out of sight while what it's about is scrolled out of view.
+    #placeAbout() {
+        const target = this.about.hidden ? null : this.#selectedElement();
+
+        if (!target) {
+            return;
+        }
+
+        const panel = this.panel.getBoundingClientRect();
+        const view = this.body.getBoundingClientRect();
+        const box = target.getBoundingClientRect();
+        const style = this.about.style;
+        const margin = 8;
+        const clamp = (value, least, most) => Math.max(least, Math.min(most, value));
+        const room = { left: box.left - view.left - margin - ABOUT_GAP, right: view.right - box.right - margin - ABOUT_GAP };
+        // (Beside it only where the paperdoll is: its picture beside a slot of it, or all of it
+        // beside the pack's slots; not where it's above them, a narrow screen's one column)
+        const sideOf = (rect, level) => (!rect || (level && (rect.bottom <= box.top || rect.top >= box.bottom)) ? null : rect.right <= box.left ? "left" : rect.left >= box.right ? "right" : null);
+        const doll = this.dollView.isConnected ? this.dollView.getBoundingClientRect() : null;
+        const beside = sideOf(doll, true) ?? sideOf(this.dollView.closest(".doll-section")?.getBoundingClientRect(), false);
+        const side = beside && room[beside] >= ABOUT_SIDE ? beside : null;
+        let width;
+        let x;
+        let y;
+        let height;
+
+        style.visibility = box.bottom < view.top || box.top > view.bottom ? "hidden" : "";
+
+        if (side) {
+            width = Math.min(ABOUT_WIDTH, room[side]);
+            style.width = `${width}px`;
+            style.maxHeight = `${view.height - 2 * margin}px`;
+            height = this.about.offsetHeight;
+            x = side === "left" ? box.left - ABOUT_GAP - width : box.right + ABOUT_GAP;
+            y = clamp(box.top + box.height / 2 - height / 2, view.top + margin, view.bottom - margin - height);
+            style.setProperty("--point", `${clamp(box.top + box.height / 2 - y, 18, height - 18)}px`);
+        } else {
+            const below = view.bottom - box.bottom - ABOUT_GAP - margin;
+            const above = box.top - view.top - ABOUT_GAP - margin;
+
+            width = Math.min(ABOUT_WIDTH + 60, view.width - 2 * margin);
+            style.width = `${width}px`;
+            style.maxHeight = `${view.height - 2 * margin}px`;
+
+            const under = this.about.offsetHeight <= below || (this.about.offsetHeight > above && below >= above);
+
+            style.maxHeight = `${Math.max(under ? below : above, Math.min(200, view.height - 2 * margin))}px`;
+            height = this.about.offsetHeight;
+            x = clamp(box.left + box.width / 2 - width / 2, view.left + margin, view.right - margin - width);
+            y = clamp(under ? box.bottom + ABOUT_GAP : box.top - ABOUT_GAP - height, view.top + margin, view.bottom - margin - height);
+            style.setProperty("--point", `${clamp(box.left + box.width / 2 - x, 18, width - 18)}px`);
+        }
+
+        // (Its point at what it's about, unless it's had to go over it)
+        this.about.dataset.side = side ?? (y >= box.bottom ? "below" : y + height <= box.top ? "above" : "over");
+        style.left = `${x - panel.left}px`;
+        style.top = `${y - panel.top}px`;
     }
 
     // What can be done with a stack: [{ key, label }] (trading with another player, only offering it)
@@ -944,8 +1175,10 @@ export class PackPanel {
         }
     }
 
-    #select(place) {
-        this.selected = this.#thingAt(place) ? (place.slot ? { slot: place.slot } : { index: place.index }) : null;
+    // A place tapped (or null): what's there chosen, its card shown; `card` false, chosen without
+    // it (`quiet`: its wheel opened)
+    #select(place, { card = true } = {}) {
+        this.selected = this.#thingAt(place) ? { ...(place.slot ? { slot: place.slot } : { index: place.index }), ...(card ? {} : { quiet: true }) } : null;
 
         for (const cell of this.panel.querySelectorAll(".pack-cell")) {
             cell.setAttribute("aria-selected", String(Number(cell.dataset.index) === this.selected?.index));
@@ -964,6 +1197,7 @@ export class PackPanel {
         const thing = this.#thingAt(press.place);
 
         if (!press.ghost) {
+            this.#select(null);
             press.ghost = element("div", "pack-ghost");
             press.ghost.innerHTML = icon(thing, 44);
             document.body.append(press.ghost);
@@ -1053,7 +1287,7 @@ export class PackPanel {
         this.wheelFor = press.place.index;
         this.wheel.show(box.left + box.width / 2, box.top + box.height / 2, stack.id, slots, { looks, hub: iconOf(stack) });
         this.wheel.element.classList.toggle("clickable", Boolean(press.clicked));
-        this.#select(press.place);
+        this.#select(press.place, { card: false });
         globalThis.navigator?.vibrate?.(12);
     }
 

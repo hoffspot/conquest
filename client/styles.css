@@ -2166,10 +2166,186 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
 }
 
-/* The stack tapped: what it is, and what can be done with it */
+/* The thing tapped in the pack (or worn), in a card beside it, its point at it: over the paperdoll
+   where there's room, else above or below it; scrolling inside, if there's more than fits */
 .pack-about {
+    position: absolute;
+    z-index: 2;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px 12px 14px;
+    border-radius: 12px;
+    background: var(--panel-solid);
+    border: 1px solid color-mix(in srgb, var(--rarity, var(--gold)) 65%, transparent);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7);
+    animation: about-in 0.14s ease-out;
+}
+
+.pack-about[hidden] {
+    display: none;
+}
+
+/* (Its point, on the side facing what it's about, `--point` along it) */
+.pack-about::before {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    box-sizing: border-box;
+    background: var(--panel-solid);
+    border: 0 solid color-mix(in srgb, var(--rarity, var(--gold)) 65%, transparent);
+    transform: rotate(45deg);
+}
+
+.pack-about[data-side="left"]::before {
+    right: -7px;
+    top: calc(var(--point) - 6px);
+    border-width: 1px 1px 0 0;
+}
+
+.pack-about[data-side="right"]::before {
+    left: -7px;
+    top: calc(var(--point) - 6px);
+    border-width: 0 0 1px 1px;
+}
+
+.pack-about[data-side="below"]::before {
+    top: -7px;
+    left: calc(var(--point) - 6px);
+    border-width: 1px 0 0 1px;
+}
+
+.pack-about[data-side="above"]::before {
+    bottom: -7px;
+    left: calc(var(--point) - 6px);
+    border-width: 0 1px 1px 0;
+}
+
+.pack-about[data-side="over"]::before {
+    display: none;
+}
+
+.pack-about-body {
+    display: grid;
+    gap: 10px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 6px;
+}
+
+.pack-about .pack-what {
+    margin: 0;
+    padding-right: 30px;
+}
+
+.pack-about > .pack-actions {
+    flex: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--field-border);
+}
+
+.pack-about-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.pack-about-close:hover {
+    color: var(--ink);
+    background: var(--field);
+}
+
+.pack-about-close svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+}
+
+@keyframes about-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+}
+
+.pack-tip {
     margin-top: 8px;
+}
+
+/* A row of a list tapped open (a shop's ware, what's carried, what's offered): what it is,
+   beneath it; its chevron down, or (open) up */
+.pack-row.peekable {
+    flex-wrap: wrap;
+    row-gap: 0;
+    cursor: pointer;
+}
+
+.pack-row.peeking {
+    border-color: color-mix(in srgb, var(--rarity, var(--gold)) 55%, var(--field-border));
+}
+
+.pack-peek {
+    flex: 1;
+    min-width: 0;
     min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pack-peek::after {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin: 0 6px 4px 0;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    opacity: 0.75;
+    transform: rotate(45deg);
+    transition: transform 0.15s ease-out;
+}
+
+.pack-peek[aria-expanded="true"]::after {
+    transform: translateY(4px) rotate(-135deg);
+}
+
+.pack-peeked {
+    flex-basis: 100%;
+    margin: 2px 0 4px;
+    padding: 8px 6px 4px 38px;
+    border-top: 1px solid var(--field-border);
+    animation: peek-in 0.16s ease-out;
+}
+
+@keyframes peek-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
 }
 
 .pack-hint {
@@ -2553,6 +2729,40 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .tone-bonus {
     color: #8fb8ff;
+}
+
+/* (What a thing that isn't gear does; what's rolled on a shop's piece as it's bought, which of
+   those it could be and how much) */
+.pack-does {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.pack-rolls {
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    column-gap: 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.pack-rolls-title {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.tone-roll {
+    color: #a9c4f2;
+}
+
+.pack-roll-name {
+    color: var(--muted);
+    font-style: italic;
 }
 
 .tone-set,
@@ -3032,8 +3242,14 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 @media (prefers-reduced-motion: reduce) {
     .pack,
-    .journal {
+    .journal,
+    .pack-about,
+    .pack-peeked {
         animation: none;
+    }
+
+    .pack-peek::after {
+        transition: none;
     }
 }
 

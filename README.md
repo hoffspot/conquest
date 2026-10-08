@@ -338,8 +338,13 @@ pass for one of their soldiers (till one sees through it, or you strike one of t
 **The pack** (its button, or I) shows you in the middle of your gear, live, each slot round you
 (the other hand greyed out behind a two-handed weapon), with the totals of all you wear, and 40
 slots for what you carry, two pages of 20, each a stack of things alike with its icon and how
-many; "Sort" puts them in order. Tap anything to see what it does (a piece in the pack compared
-with what you're wearing); hold a piece of gear to put it on, or, worn, to take it off; hold
+many; "Sort" puts them in order. Tap anything to see what it does in a card beside it (a piece
+in the pack compared with what you're wearing), with buttons for what to do with it; tap anywhere
+else to put the card away. Trading with a shopkeeper, tap a ware to see what it
+does before you buy it: what's rolled on it as it's bought (a wand's spell power, a shield's
+block, the bonuses a better made piece comes with) as what it could be, and what buying and
+wearing it would change; tap something on the Sell tab, or what another player offers, to see it
+too. Hold a piece of gear to put it on, or, worn, to take it off; hold
 anything else (or right-click) and a wheel of what to do with it opens: drink or eat it, put it
 on an action wheel, split the stack (choosing how many), sell it when trading, throw it away
 (with a moment to undo), or drop it. Drag a stack onto one alike to put them together, or
@@ -555,7 +560,9 @@ client/                 The game (static files served to the browser)
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: the player live on a paperdoll, a slot for each part of them;
                         two pages of stacks (dragged, held, split, dropped, thrown away,
-                        sorted); the skills; a shop's wares. gearinfo.js says what gear does
+                        sorted; tapped, a card beside it says what it is); the skills; a
+                        shop's wares (tapped, a row opens to say what it is). gearinfo.js says
+                        what gear does, and what's rolled on a shop's as it's bought
     journal.js          The journal: the player's rank, their requests, their people, their
                         company
     spellbook.js        The spellbook: the schools, how far they've grown, every spell known
