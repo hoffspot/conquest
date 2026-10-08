@@ -5386,6 +5386,81 @@ test("a cave held by outlaws is gone into by its mouth: within, the rock all rou
     expect(within.lit).toBeGreaterThan(1);
 });
 
+test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const delved = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (The nearest dungeon to the start with two levels or more, by its icon on the maps)
+        const { buildDungeon } = await import("/js/core/dungeons/build.js");
+        const site = game.world.plan.sites
+            .filter(({ kind }) => kind === "dungeon")
+            .sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))
+            .find((one) => buildDungeon({ seed: one.seed, theme: one.theme, tier: 1 }).levels.length >= 2);
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 120) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const through = async (link) => {
+            const end = link.ends.find(({ map }) => map === player.map);
+            const from = player.map;
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, path: [], order: null, progress: null });
+            game.host.command("player", { type: "enter", link: link.id });
+            await until(() => player.map !== from, 300);
+            await until(() => game.interiors.get(player.map)?.object.visible || player.map === "town", 300);
+        };
+
+        Object.assign(player, { x: site.at[0] + 25, y: site.at[1], path: [], order: null, progress: null });
+        await settle(8);
+
+        const icon = game.dungeonIcons().find(({ id }) => id === site.id);
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        await through(building.door);
+
+        const first = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, foes: game.host.dungeons.get(site.id).awake[0]?.length ?? 0 };
+
+        await through(building.flights[0]);
+
+        const second = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), woken: game.host.dungeons.get(site.id).awake[1]?.length ?? 0 };
+
+        await through(building.flights[0]);
+        await through(building.door);
+
+        return { icon: Boolean(icon), maps: building.maps, first, second, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
+    });
+
+    expect(delved.icon).toBe(true);
+    expect(delved.first).toMatchObject({ map: delved.maps[0], drawn: true });
+    expect(delved.first.lit).toBeGreaterThan(1);
+    expect(delved.first.foes).toBeGreaterThan(0);
+    expect(delved.second).toMatchObject({ map: delved.maps[1], drawn: true });
+    expect(delved.second.woken).toBeGreaterThan(0);
+    expect(delved).toMatchObject({ out: "town", by: true });
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

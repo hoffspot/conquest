@@ -2693,7 +2693,7 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.cacheIcons()] : [],
         });
     }
 
@@ -2768,6 +2768,57 @@ export class Game {
         this.sound?.play("wake");
     }
 
+    // A dungeon's boss slain, or its hoard opened (host.js #delveFell, #openDungeonChest): said to
+    // whoever's in it; its icon greyed once it's cleared, and made again (#remakeDungeon) back as
+    // it was, nothing said
+    #delved({ site, change, name, boss = null }) {
+        const me = this.battle.actor(this.me);
+        const within = me && this.world.interiors?.buildings.get(`site:${site}`)?.maps.includes(me.map);
+        const called = name ? `${name[0].toUpperCase()}${name.slice(1)}` : "The dungeon";
+
+        if (!within) {
+            return;
+        }
+
+        if (change === "boss") {
+            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "Its master is"} slain, and the hoard it kept lies unlocked.`, 4);
+            this.sound?.play("wake");
+        } else if (change === "cleared") {
+            this.hud.message(`${called} is cleared. Something new will stir in it once everyone's left.`, 4);
+        }
+    }
+
+    /**
+     * The dungeons out in the world (core/worldplan/settle.js: their ways in), as icons for the
+     * maps: [{ id, kind ("dungeon"), x, z (metres: where its way in stands once it's set down, its
+     * plan's spot till then), rim (grey while it's cleared, till it's made again) }].
+     */
+    dungeonIcons() {
+        const plan = this.world.plan;
+        const sites = this.world.maps.town?.sites;
+
+        if (!plan?.sites) {
+            return [];
+        }
+
+        const known = (this.dungeonMarks ??= { placed: -1, icons: [] });
+
+        if (known.placed !== (sites?.set.size ?? 0)) {
+            known.icons = plan.sites.filter(({ kind }) => kind === "dungeon").map((site) => {
+                const [x, z] = sites ? sites.placedAt(site) : site.at;
+
+                return { id: site.id, kind: "dungeon", x, z, rim: null };
+            });
+            known.placed = sites?.set.size ?? 0;
+        }
+
+        for (const icon of known.icons) {
+            icon.rim = this.host?.dungeons?.get(icon.id)?.cleared ? PLACE_RIMS.cleared : null;
+        }
+
+        return known.icons;
+    }
+
     placeIcons() {
         const plan = this.world.plan;
         const war = this.host?.war;
@@ -2808,7 +2859,7 @@ export class Game {
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
     }
 
     // --- The world map's pin ---
@@ -4206,7 +4257,8 @@ export class Game {
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
-            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? "The adventurer's cache is open, your share in it: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic ? 4 : 3);
+            // (A dungeon's boss's hoard: a share of it for each player in the dungeon)
+            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? "The adventurer's cache is open, your share in it: tap it to take it." : event.hoard ? "The hoard is open, and your share of it lies before you: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic || event.hoard ? 4 : 3);
             this.sound?.play("lockpick");
             this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {
@@ -5635,6 +5687,9 @@ export class Game {
                 break;
             case "cleared":
                 this.#cleared(event);
+                break;
+            case "dungeon":
+                this.#delved(event);
                 break;
             case "cache":
                 // (A cache let go, every player gone far from it: off the maps)

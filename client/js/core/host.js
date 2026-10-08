@@ -18,6 +18,7 @@ import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
+import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -261,7 +262,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 7;
+export const SNAPSHOT_VERSION = 8;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -333,6 +334,7 @@ export const REFUSALS = Object.freeze({
     full: "Your pack is full.",
     locked: "It's locked fast, and its guardians still hold the place.",
     guarded: "It's locked fast, and those keeping it are still about.",
+    kept: "It's locked fast, and the one who keeps it still stands.",
     unknown: "You haven't learnt that.",
     item: "You can't do that with it.",
     shield: "Not with that weapon.",
@@ -515,6 +517,15 @@ export class Host {
         this.caches = new Map();
         this.nextCache = 1;
         this.travel = new Map();
+
+        /**
+         * The dungeons a player's come to (core/dungeons: docs/DUNGEONS.md), by site id: {
+         * generation (how many times it's been cleared and made again), awake (by level: the ids
+         * of its foes out now, or null), dead (its foes slain: foeKey's, staying slain till it's
+         * made again), opened (its chests opened: their ids), cleared (its hoard opened: it's made
+         * again once everyone's left) }.
+         */
+        this.dungeons = new Map();
 
 
         /**
@@ -1143,7 +1154,7 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
@@ -1171,6 +1182,10 @@ export class Host {
 
                 if (beast.cache) {
                     kept.add(beast.cache);
+                }
+
+                if (beast.dungeon) {
+                    this.#delveFell(beast, event.id);
                 }
             }
 
@@ -1357,6 +1372,7 @@ export class Host {
             slain: { ...this.slain },
             held: [...this.held.entries()],
             caches: structuredClone([...this.caches.entries()]),
+            dungeons: structuredClone([...this.dungeons.entries()]),
             nextCache: this.nextCache,
             travel: structuredClone([...this.travel.entries()]),
             ground: structuredClone([...this.ground.values()]),
@@ -1427,6 +1443,11 @@ export class Host {
         const host = this;
         const world = this.world;
 
+        // (The dungeons as many times made as they were, before any's made again)
+        for (const [id, { generation }] of snapshot.dungeons ?? []) {
+            world.interiors?.setGeneration(`site:${id}`, generation);
+        }
+
         for (const key of snapshot.made) {
             if (host.#building(key)) {
                 world.interiors.make(key);
@@ -1460,6 +1481,7 @@ export class Host {
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
         host.caches = new Map(structuredClone(snapshot.caches ?? []));
+        host.dungeons = new Map(structuredClone(snapshot.dungeons ?? []));
         host.nextCache = snapshot.nextCache ?? 1;
         host.travel = new Map(structuredClone(snapshot.travel ?? []));
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
@@ -1932,9 +1954,14 @@ export class Host {
             return refuse("far");
         }
 
-        // (A place's chest, or a cache, its guardians still about)
+        // (A place's chest, or a cache, its guardians still about; a dungeon's hoard, its boss)
         if (dropped.locked) {
-            return refuse(dropped.cache ? "guarded" : "locked");
+            return refuse(dropped.cache ? "guarded" : dropped.hoard ? "kept" : "locked");
+        }
+
+        // (A dungeon's chest: opened, a share in it for each player there)
+        if (dropped.chest && dropped.dungeon) {
+            return this.#openDungeonChest(dropped);
         }
 
         // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
@@ -2811,7 +2838,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -2824,6 +2851,7 @@ export class Host {
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
+        this.#dungeons(places);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
@@ -2833,7 +2861,7 @@ export class Host {
             }
 
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.lair && !one.place && !one.cache ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
@@ -2918,21 +2946,23 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, roam = null, temper = null, guard = null, round = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null }) {
         const spec = CREATURES[creature];
-        const power = tierPower(tier);
+        // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title)
+        const stands = CHAMPIONS[champion] ?? { hp: 1, power: 1 };
+        const power = tierPower(tier) * stands.power;
 
-        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}) });
+        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(dungeon ? { dungeon, foe, champion } : {}) });
         this.battle.add({
             id,
             kind: "beast",
-            name: spec.name,
+            name: title ?? spec.name,
             weapon: spec.weapon,
             team: WILD,
             square,
             map,
             ai: "wild",
-            hp: Math.round(spec.hp * power),
+            hp: Math.round(spec.hp * tierPower(tier) * stands.hp),
             speed: spec.speed,
             chase: spec.chase,
             power: { melee: power, ranged: power },
@@ -2964,6 +2994,12 @@ export class Host {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
+        }
+
+        const delve = one.dungeon ? this.dungeons.get(one.dungeon) : null;
+
+        if (delve) {
+            delve.awake = delve.awake.map((ids) => ids?.filter((each) => each !== id) ?? null);
         }
     }
 
@@ -3412,6 +3448,244 @@ export class Host {
         cache.opened = true;
         this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier });
         this.#event("cache", { cache: id, change: "opened" });
+    }
+
+    // --- The dungeons (core/dungeons: docs/DUNGEONS.md) ---
+
+    // The dungeons near the players, or with players in them: each made the first time a player
+    // comes within DELVES.near of its way in (its levels, as many times made again as it's been
+    // cleared); each level's foes woken while a player's on it or on the level above (the first
+    // while one's near its way in), and let go again once no one is, those slain staying slain;
+    // its chests set out with its level's foes, the boss's hoard locked while the boss stands; and
+    // once its hoard's been opened and every player's left it (none in it, none within DELVES.far),
+    // made again, anew
+    #dungeons(places) {
+        const interiors = this.world.interiors;
+
+        if (!interiors) {
+            return;
+        }
+
+        // (Which levels of which dungeons have players on them)
+        const on = new Map();
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+            const building = actor && !actor.dead ? interiors.of(actor.map) : null;
+
+            if (building?.kind === "dungeon") {
+                on.set(building.site, (on.get(building.site) ?? new Set()).add(building.maps.indexOf(actor.map)));
+            }
+        }
+
+        for (const site of this.world.plan.sites) {
+            if (site.kind !== "dungeon") {
+                continue;
+            }
+
+            const within = (reach) => places.some(([x, y]) => hypot(x - site.at[0], y - site.at[1]) < reach);
+            const near = within(DELVES.near);
+            const levels = on.get(site.id) ?? new Set();
+            let delve = this.dungeons.get(site.id);
+
+            if (!delve && !near && !levels.size) {
+                continue;
+            }
+
+            const key = `site:${site.id}`;
+            const building = this.#building(key);
+
+            if (!building) {
+                continue;
+            }
+
+            if (!delve) {
+                delve = { generation: building.generation ?? 0, awake: [], dead: [], opened: [], cleared: false };
+                this.dungeons.set(site.id, delve);
+            }
+
+            // (Cleared, and everyone gone: made again)
+            if (delve.cleared && !levels.size && !within(DELVES.far)) {
+                this.#remakeDungeon(site, building, delve);
+                continue;
+            }
+
+            if (!building.made && (near || levels.size)) {
+                interiors.make(key);
+            }
+
+            building.maps.forEach((map, k) => {
+                const wanted = levels.has(k) || levels.has(k - 1) || (k === 0 && near);
+
+                if (wanted && !delve.awake[k]) {
+                    this.#wakeLevel(site, building, delve, k);
+                } else if (!wanted && delve.awake[k]) {
+                    this.#sleepLevel(building, delve, k);
+                }
+            });
+        }
+    }
+
+    // A dungeon's level's foes woken (those not slain), each pack of them a pack, its boss and
+    // mini-bosses their titles, all keeping to their rooms; and its chests set out (those not
+    // opened), the hoard locked while the boss stands
+    #wakeLevel(site, building, delve, k) {
+        const level = building.dungeon.levels[k];
+        const map = building.maps[k];
+        const ids = [];
+
+        for (const pack of level.packs) {
+            const group = `pack-${this.nextWild}`;
+            const out = [];
+
+            pack.foes.forEach((foe, j) => {
+                const key = foeKey(k, pack.id, j);
+
+                if (delve.dead.includes(key)) {
+                    return;
+                }
+
+                const id = `wild-${this.nextWild++}`;
+                const champion = foe.boss ? "boss" : foe.mini ? "mini" : null;
+
+                this.#rouse(id, foe.creature, foe.tier, [...foe.at], { pack: group, leader: out[0] ?? null, master: Boolean(champion), map, dungeon: site.id, foe: key, champion, title: foe.title ?? null, roam: champion ? 3 : 4, temper: "territorial", guard: champion ? 9 : 7 });
+                out.push(id);
+            });
+
+            if (out.length) {
+                this.#event("roused", { ids: out, creature: pack.foes[0].creature });
+                ids.push(...out);
+            }
+        }
+
+        delve.awake[k] = ids;
+
+        const boss = level.packs.find(({ role }) => role === "boss");
+        const bossDown = !boss || delve.dead.includes(foeKey(k, boss.id, 0));
+
+        for (const chest of level.chests) {
+            const id = `chest-${site.id}/${chest.id}`;
+
+            if (!delve.opened.includes(chest.id) && !this.ground.has(id)) {
+                this.ground.set(id, { id, chest: true, locked: chest.kind === "hoard" && !bossDown, dungeon: site.id, coffer: chest.id, hoard: chest.kind === "hoard", for: null, map, square: [...chest.at], until: null });
+            }
+        }
+    }
+
+    // A dungeon's level's foes let go (those still on it and not fighting: the rest kept out till
+    // they are), the slain staying slain
+    #sleepLevel(building, delve, k) {
+        for (const id of [...(delve.awake[k] ?? [])]) {
+            const actor = this.battle.actor(id);
+
+            if (actor && !actor.dead && (actor.map !== building.maps[k] || actor.target !== null)) {
+                continue;
+            }
+
+            if (actor && !actor.dead) {
+                this.#release(id);
+            }
+
+            delve.awake[k] = delve.awake[k]?.filter((each) => each !== id) ?? null;
+        }
+
+        if (!delve.awake[k]?.length) {
+            delve.awake[k] = null;
+        }
+    }
+
+    // One of a dungeon's foes slain (`id`, its wild's record `beast`): slain for good (till it's
+    // made again); the boss: its hoard unlocked
+    #delveFell(beast, id) {
+        const delve = this.dungeons.get(beast.dungeon);
+
+        if (!delve || delve.dead.includes(beast.foe)) {
+            return;
+        }
+
+        delve.dead.push(beast.foe);
+
+        if (beast.champion === "boss") {
+            for (const dropped of this.ground.values()) {
+                if (dropped.dungeon === beast.dungeon && dropped.hoard) {
+                    dropped.locked = false;
+                }
+            }
+
+            this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
+        }
+    }
+
+    // A dungeon's chest opened (`dropped`, its ground's): in its stead a share of what's in it for
+    // each player there (a small chest's for those near it, rollCoffer at its level's tier; the
+    // hoard's for everyone in the dungeon, rollHoard at each one's own power), theirs alone to
+    // take, where it stood; the hoard opened, the dungeon cleared, to be made again once
+    // everyone's left
+    #openDungeonChest(dropped) {
+        const delve = this.dungeons.get(dropped.dungeon);
+        const building = this.world.interiors?.buildings.get(`site:${dropped.dungeon}`);
+        const k = building?.maps.indexOf(dropped.map) ?? -1;
+        const level = k >= 0 ? building.dungeon?.levels[k] : null;
+
+        if (!delve || !level) {
+            return refuse("gone");
+        }
+
+        this.ground.delete(dropped.id);
+        delve.opened.push(dropped.coffer);
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+            const there = actor && !actor.dead && (dropped.hoard ? building.maps.includes(actor.map) : actor.map === dropped.map && hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) <= SPOILS_REACH);
+
+            if (!there) {
+                continue;
+            }
+
+            const bundle = dropped.hoard ? rollHoard(hoardTier(level.tier, player.progress.might()), this.random) : rollCoffer(level.tier, this.random);
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: dropped.map, square: [...dropped.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: "chest", dungeon: dropped.dungeon, ...(dropped.hoard ? { hoard: true } : {}) });
+        }
+
+        if (dropped.hoard) {
+            delve.cleared = true;
+            this.#event("dungeon", { site: dropped.dungeon, change: "cleared", name: building.name });
+        }
+
+        return OK;
+    }
+
+    // A dungeon cleared and everyone gone from it, made again: its foes let go (wherever they
+    // are), what's left in it gone (the fallen, what's on the ground), its levels made anew the
+    // next time a player comes (Interiors.remake: the next generation)
+    #remakeDungeon(site, building, delve) {
+        for (const [id, one] of [...this.wild]) {
+            if (one.dungeon === site.id) {
+                if (this.battle.actor(id)) {
+                    this.battle.remove(id);
+                }
+
+                this.#unwild(id);
+            }
+        }
+
+        for (const actor of [...this.battle.actors]) {
+            if (building.maps.includes(actor.map) && !this.players.has(actor.id)) {
+                this.battle.remove(actor.id);
+            }
+        }
+
+        for (const [id, dropped] of [...this.ground]) {
+            if (building.maps.includes(dropped.map)) {
+                this.ground.delete(id);
+            }
+        }
+
+        this.world.interiors.remake(building.key);
+        Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false });
+        this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or

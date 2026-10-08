@@ -58,6 +58,49 @@ export function fillOf(colours, strengths, floor, fill) {
 }
 
 /**
+ * A room with more flames than the list holds (a dungeon's level, a long way across, torches all
+ * along its walls): lit by the ROOM_LIGHTS nearest the player (nearestOf), and all round by the
+ * flames within `reach` metres of them, each the less the further off (fillNear), as a room of
+ * `floor` square metres would be (a room's worth round the player, not the whole level's floor).
+ */
+export const NEAR_FILL = Object.freeze({ reach: 18, floor: 220 });
+
+/**
+ * The light a big room's flames give it all round where the player is (`at`: { x, y, z } world
+ * metres): their colours times their strengths now, those within NEAR_FILL.reach, fading to
+ * nothing at it, over NEAR_FILL.floor, BOUNCE times that. Into `fill` (a THREE.Color).
+ */
+export function fillNear(lights, colours, strengths, at, fill) {
+    fill.setRGB(0, 0, 0);
+
+    lights.forEach(({ x, y, z }, k) => {
+        const share = strengths[k] * Math.max(0, 1 - Math.hypot(x - at.x, y - at.y, z - at.z) / NEAR_FILL.reach);
+
+        fill.r += colours[k].r * share;
+        fill.g += colours[k].g * share;
+        fill.b += colours[k].b * share;
+    });
+
+    return fill.multiplyScalar(BOUNCE / NEAR_FILL.floor);
+}
+
+/**
+ * A room's lights by index, nearest the point `at` ({ x, y, z } world metres: the player) first,
+ * into `out` (an array, emptied first).
+ */
+export function nearestOf(lights, at, out = []) {
+    const away = (k) => Math.hypot(lights[k].x - at.x, lights[k].y - at.y, lights[k].z - at.z);
+
+    out.length = 0;
+
+    for (let k = 0; k < lights.length; k++) {
+        out.push(k);
+    }
+
+    return out.sort((a, b) => away(a) - away(b) || a - b);
+}
+
+/**
  * Lighting from the list (ROOM_LIGHT), in three.js's own shader for a lit material (as
  * onBeforeCompile is given it, its world position in `vCutWorld`: interiors3d.js cutShader):
  * each light as three.js lights a point light, decaying with the square of the distance, cut
