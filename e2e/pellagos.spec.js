@@ -5226,8 +5226,11 @@ test("a convoy on the road near the player: its wagons drawn, an ox in each one'
     expect(await page.evaluate(() => window.said.some((text) => /convoy of 60 wood is on the road to/.test(text)))).toBe(true);
 
     // (Drawn a few at a time, with the town's people about: each wagon an ox, the wagon behind it
-    // laden with logs)
+    // laden with logs. Held where it is the while, the war not told where it's got to, so it's
+    // drawn laden however long that takes)
+    await page.evaluate(() => (window.pellagos.game.host.convoys.get("force-990").over = "held"));
     expect(await playUntil(page, () => ["wagons", "ids"].every((key) => (window.pellagos.game.host.convoys.get("force-990")?.[key] ?? []).every((id) => window.pellagos.game.avatars.has(id))), { seconds: 90 })).toBe(true);
+    await page.evaluate(() => (window.pellagos.game.host.convoys.get("force-990").over = null));
 
     const drawn = await page.evaluate(() => {
         const { game } = window.pellagos;
