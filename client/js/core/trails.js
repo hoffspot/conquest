@@ -1,6 +1,7 @@
 // Foot paths up into the hills and mountains: one from the roads to each cave, ruin, shrine, ring of
 // standing stones, ruined castle and lair up there (the plan's sites on land TRAILS.height high and
-// more, within TRAILS.reach of a road), found its own way over the land (terrain/ways.js) at a
+// more, within TRAILS.reach of a road), and to each people's works wherever it is (the way its
+// wagons go), found its own way over the land (terrain/ways.js) at a
 // walker's grade, so it climbs in hairpins where the land's steep, and keeping out of the town and
 // the settlements. The roads through the mountains' feet thus lead on, by narrow paths, up to what
 // there is to find in them. Each site's turned to face the way its trail comes (sites.js), and
@@ -20,19 +21,22 @@ import { atan2, cos, hypot, sin } from "./exact.js";
 import { layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
 import { PLOT } from "./setpieces/pieces.js";
 import { CUT_EASE, cutOf, isNeutral, LIE, restingOf } from "./sites.js";
-import { CELL, CELLS, WORLD_SIZE } from "./worldplan/plan.js";
+import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
 
 /**
  * Trails: how high the land must be (the plan's height) for a site there to have one, how far from
  * a road it may be (metres), how much room a trail has round the straight way to it to find its
  * own (metres), its half-width (metres), how far before its site's front it ends (metres), and how
  * far clear of the sites no people keeps it goes round them (metres, past their plots). It climbs
- * no steeper than a path's GRADE, but in stone steps up mountainsides (ground.js STAIRS).
+ * no steeper than a path's GRADE, but in stone steps up mountainsides (ground.js STAIRS). A works'
+ * trail joins its road no nearer a town's ground than `byTown` (metres, past where the town's
+ * fingerpost may stand by its road out: signposts.js SIGNPOST).
  */
-export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2 });
+export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2, byTown: 48 });
 
-/** The sites a trail goes up to. */
+/** The sites a trail goes up to (in the hills); and each people's works, wherever they are (their convoys' way to the road). */
 export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", "dragon's lair"]);
+const WORKED = WORKS.map(({ kind }) => kind);
 
 // How far past a trail's room its land must be wanted for it to be found first (metres: as far as
 // its shoulders reach, so every chunk whose ground it levels has it from the first)
@@ -53,9 +57,10 @@ export class Trails {
         // The sites up in the hills, nearest a road first; each reached from its road, or from a
         // site reached already if that's nearer (so trails branch from each other, rather than
         // two running side by side from one road to sites near each other)
+        const byTown = (x, y) => keepOut.every(([x0, y0, x1, y1]) => x < x0 - TRAILS.byTown || y < y0 - TRAILS.byTown || x >= x1 + TRAILS.byTown || y >= y1 + TRAILS.byTown);
         const sites = plan.sites
-            .filter(({ kind, cell: [cx, cy] }) => TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height)
-            .map((site) => ({ site, road: nearestOn(lines, site.at) }))
+            .filter(({ kind, cell: [cx, cy] }) => (TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height) || WORKED.includes(kind))
+            .map((site) => ({ site, road: nearestOn(lines, site.at, WORKED.includes(site.kind) ? byTown : null) }))
             .filter(({ road }) => road)
             .map((each) => ({ ...each, gap: hypot(each.road[0] - each.site.at[0], each.road[1] - each.site.at[1]) }))
             .sort((a, b) => a.gap - b.gap || (a.site.id < b.site.id ? -1 : 1));
@@ -85,7 +90,11 @@ export class Trails {
             const ahead = cut ? Math.max(depth / 2 + TRAILS.front, laid.cut.y + 2 * cut + CUT_EASE - depth / 2) : depth / 2 + TRAILS.front;
             const to = [sx + sin(facing) * ahead, sy + cos(facing) * ahead];
 
-            reached.push(to);
+            // (No trail branches from a works': it's only its convoys' way to the road, and no
+            // other trail moves for it)
+            if (!WORKED.includes(site.kind)) {
+                reached.push(to);
+            }
             this.facings.set(site.id, facing);
 
             const box = [
@@ -199,10 +208,10 @@ function inRoom([cx, cy, facing, a, b], x, y) {
     return Math.abs(dx * c - dy * s) < a && Math.abs(dx * s + dy * c) < b;
 }
 
-// The nearest point to `at` on any of the lines ([x, y], metres), or null if there are none
-// (compared by the square of the distance: no segment further off than the nearest yet, by its
-// bounds, is looked at closer)
-function nearestOn(lines, [px, py]) {
+// The nearest point to `at` on any of the lines ([x, y], metres), or null if there are none; of
+// those `keep(x, y)` will have, if given (compared by the square of the distance: no segment
+// further off than the nearest yet, by its bounds, is looked at closer)
+function nearestOn(lines, [px, py], keep = null) {
     let [best, gap] = [null, Infinity];
 
     for (const { planned } of lines) {
@@ -215,6 +224,23 @@ function nearestOn(lines, [px, py]) {
             }
 
             const [dx, dy] = [bx - ax, by - ay];
+
+            // (Only where `keep(x, y)` will have it: the nearest such point along it, 2 m at a time)
+            if (keep) {
+                const steps = Math.max(1, Math.ceil(hypot(dx, dy) / 2));
+
+                for (let step = 0; step <= steps; step++) {
+                    const [x, y] = [ax + (dx * step) / steps, ay + (dy * step) / steps];
+                    const off = (px - x) * (px - x) + (py - y) * (py - y);
+
+                    if (off < gap && keep(x, y)) {
+                        [best, gap] = [[x, y], off];
+                    }
+                }
+
+                continue;
+            }
+
             const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
             const [x, y] = [ax + dx * t, ay + dy * t];
             const off = (px - x) * (px - x) + (py - y) * (py - y);

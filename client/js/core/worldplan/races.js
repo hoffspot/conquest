@@ -144,6 +144,18 @@ export const FACTIONS = Object.freeze([
 ]);
 
 /**
+ * Each people's works (docs/WAR.md *The works*): where what they build with comes from, `count` of
+ * each in their lands. A lumber mill in the woods, a mine and a quarry up in the hills, where
+ * there are any (`biomes`, `hills`: the land each would rather be in; anywhere in their lands
+ * otherwise); and what each yields (`yields`): wood, metal or stone.
+ */
+export const WORKS = Object.freeze([
+    { kind: "lumber mill", count: 2, yields: "wood", biomes: ["woods", "elfwood", "darkwood", "jungle", "marsh", "savannah"], hills: false },
+    { kind: "mine", count: 2, yields: "metal", biomes: ["mountain", "badlands", "volcanic", "heath", "tundra"], hills: true },
+    { kind: "quarry", count: 2, yields: "stone", biomes: ["mountain", "heath", "badlands", "meadow", "tundra", "savannah"], hills: true },
+]);
+
+/**
  * The places between the settlements: what they are, how many in a world, and where they're
  * found (biomes; `wild`: only outside every people's lands; `race`: in each people's lands).
  */

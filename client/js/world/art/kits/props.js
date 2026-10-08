@@ -25,7 +25,7 @@ const ground = (point, normal) => {
 
 // A log (or a wheel, a butt of straw): an n-sided prism from `a` to `b`, `r` round, its sides in
 // `side` and its ends in `end`
-function prism(solid, a, b, r, side, end, sides = 8) {
+export function prism(solid, a, b, r, side, end, sides = 8) {
     const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const length = Math.hypot(...d);
     const axis = d.map((v) => v / length);

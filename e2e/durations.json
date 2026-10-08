@@ -39,6 +39,7 @@
     "pellagos.spec.js › dragging turns the camera round the player and tilts it; it holds while they stand, and swings back behind them once they walk": 59.4,
     "pellagos.spec.js › drawn at the screen's own pixels › keeps up: draws fewer pixels, then a level lower, while it can't, says so in Game options and debug mode; Visual quality and Adaptive in Game options": 44.8,
     "pellagos.spec.js › drawn at the screen's own pixels › the town's guards stand at its ways out under its people's banner, and talk of the town and the war; a people at war with the player's attacks them": 67.3,
+    "pellagos.spec.js › each people's works out in their lands: a lumber mill in its ring of trees, its guards out at their posts and on their round, of its people, drawn; on the minimap; the journal tells of the works held and what's in the stores": 78.2,
     "pellagos.spec.js › every tavern can be gone into: got ready as the player comes near, its own room and folk inside; let go once they're far off, and built at once if they walk straight in": 49.2,
     "pellagos.spec.js › holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal": 90.4,
     "pellagos.spec.js › how the player is, kept with where they are: hurt and tired, poisoned, a spell on them, blessed, a power strike waiting; the next time, each as it was, with what was left of it": 83.7,

@@ -1,8 +1,11 @@
 // The war (war.html): the war for the continent (core/war) played out on a world's map, turn by
 // turn, to watch how it goes for a seed:
 // - every town in the colour of whoever holds it, its garrison beside it;
-// - the forces out: expeditions on the march, the camps outside their targets, relief, envoys;
-// - each realm, its ruler and what they're like, what it holds and its gold;
+// - each people's works (lumber mills, mines and quarries) in their holder's colour, or dark and
+//   ringed in red where brigands hold them;
+// - the forces out: expeditions on the march, the camps outside their targets, relief, envoys,
+//   and convoys carrying the works' goods to their seats;
+// - each realm, its ruler and what they're like, what it holds, its gold and its stores;
 // - how each stands with each other;
 // - the news of it all.
 //
@@ -14,7 +17,7 @@
 
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, tell } from "../core/war/news.js";
-import { HOLDINGS, STAGES, War } from "../core/war/war.js";
+import { HOLDINGS, RESOURCES, STAGES, War } from "../core/war/war.js";
 import { CELL, planWorld, RACES, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { paintLand, PEOPLE_COLOURS, PIXELS } from "./land.js";
 
@@ -23,6 +26,12 @@ const $ = (selector) => document.querySelector(selector);
 // How far round each town it holds the land (metres), shown in its holder's colour
 const HELD = { capital: 520, city: 380, town: 260, village: 160 };
 const DOT = { capital: 7, city: 5.5, town: 4, village: 3 };
+
+// Each kind of works' letter on the map
+const WORKS_LETTERS = { "lumber mill": "L", mine: "M", quarry: "Q" };
+
+// What's too everyday for the news (each works' convoys coming in: seen in the realms' stores)
+const QUIET = new Set(["delivered"]);
 
 // The events worth making much of in the news
 const BIG = new Set(["declared", "taken", "subjugated", "rebelled", "victory", "undone", "stage", "fallen"]);
@@ -110,9 +119,9 @@ function draw() {
     for (const force of war.forces) {
         const colour = PEOPLE_COLOURS[force.realm];
 
-        if (force.kind === "expedition" || force.kind === "relief" || force.kind === "envoy") {
-            context.strokeStyle = `${colour}aa`;
-            context.setLineDash(force.kind === "envoy" ? [2, 4] : [6, 4]);
+        if (force.kind === "expedition" || force.kind === "relief" || force.kind === "envoy" || force.kind === "convoy") {
+            context.strokeStyle = `${colour}${force.kind === "convoy" ? "66" : "aa"}`;
+            context.setLineDash(force.kind === "envoy" || force.kind === "convoy" ? [2, 4] : [6, 4]);
             context.beginPath();
             context.moveTo(...toScreen(...force.at));
 
@@ -182,7 +191,30 @@ function draw() {
         }
     }
 
-    // The forces themselves: camps as tents, expeditions and relief as shields, envoys as scrolls
+    // The works: a diamond in their holder's colour, its kind's letter in it (dark and ringed in
+    // red, held by brigands)
+    for (const works of war.works) {
+        const [sx, sy] = toScreen(...works.at);
+        const r = 6;
+
+        context.fillStyle = works.held ? "#2a1a14" : PEOPLE_COLOURS[works.owner];
+        context.strokeStyle = works.held ? "#d0413a" : "#101418";
+        context.lineWidth = works.held ? 2 : 1.2;
+        context.beginPath();
+        context.moveTo(sx, sy - r);
+        context.lineTo(sx + r, sy);
+        context.lineTo(sx, sy + r);
+        context.lineTo(sx - r, sy);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.font = "bold 8px system-ui, sans-serif";
+        context.fillStyle = works.held ? "#d0413a" : "#101418";
+        context.fillText(WORKS_LETTERS[works.kind], sx, sy + 0.5);
+    }
+
+    // The forces themselves: camps as tents, expeditions and relief as shields, envoys as scrolls,
+    // convoys as wagons
     for (const force of war.forces) {
         const [sx, sy] = toScreen(...force.at);
         const colour = PEOPLE_COLOURS[force.realm];
@@ -201,6 +233,12 @@ function draw() {
             context.closePath();
         } else if (force.kind === "envoy") {
             context.rect(sx - 3, sy - 4, 6, 8);
+        } else if (force.kind === "convoy") {
+            context.rect(sx - 5, sy - 3, 10, 5);
+            context.moveTo(sx - 1.5, sy + 3.5);
+            context.arc(sx - 3, sy + 3.5, 1.5, 0, Math.PI * 2);
+            context.moveTo(sx + 4.5, sy + 3.5);
+            context.arc(sx + 3, sy + 3.5, 1.5, 0, Math.PI * 2);
         } else {
             const size = 4 + Math.min(5, force.size / 8);
 
@@ -215,7 +253,7 @@ function draw() {
         context.fill();
         context.stroke();
 
-        if (force.kind !== "envoy") {
+        if (force.kind !== "envoy" && force.kind !== "convoy") {
             context.font = "bold 10px system-ui, sans-serif";
             context.lineWidth = 3;
             context.strokeStyle = "rgb(10 12 14 / 85%)";
@@ -248,7 +286,8 @@ function showRealms() {
                 Object.assign(document.createElement("span"), { className: "swatch", style: `background: ${PEOPLE_COLOURS[realm.id]}` }),
                 Object.assign(document.createElement("strong"), { textContent: `${realm.name[0].toUpperCase()}${realm.name.slice(1)}${serves}` }),
                 Object.assign(document.createElement("span"), { className: "leader", textContent: `${realm.leader.title} ${realm.leader.name}${said.length ? `: ${said.join(", ")}` : ""}` }),
-                Object.assign(document.createElement("span"), { className: "holds", textContent: realm.alive ? `${towns} towns · ${war.power(realm.id)} under arms · ${Math.floor(realm.treasury)} gold` : "No towns left" }),
+                Object.assign(document.createElement("span"), { className: "holds", textContent: realm.alive ? `${towns} towns · ${war.works.filter(({ owner, held }) => owner === realm.id && !held).length} works · ${war.power(realm.id)} under arms · ${Math.floor(realm.treasury)} gold` : "No towns left" }),
+                Object.assign(document.createElement("span"), { className: "holds", textContent: RESOURCES.map((resource) => `${Math.floor(realm.stores[resource])} ${resource}`).join(" · ") }),
             );
 
             return li;
@@ -278,13 +317,17 @@ function showRealms() {
 
 function showNews() {
     $("#news").replaceChildren(
-        ...state.news.slice(-80).reverse().map((event) => {
-            const li = Object.assign(document.createElement("li"), { textContent: tell(event, state.war), value: event.turn });
+        ...state.news
+            .filter(({ type }) => !QUIET.has(type))
+            .slice(-80)
+            .reverse()
+            .map((event) => {
+                const li = Object.assign(document.createElement("li"), { textContent: tell(event, state.war), value: event.turn });
 
-            li.classList.toggle("big", BIG.has(event.type));
+                li.classList.toggle("big", BIG.has(event.type));
 
-            return li;
-        }),
+                return li;
+            }),
     );
 }
 
@@ -354,9 +397,24 @@ function describe(sx, sy) {
         lines.push(`${town.name}: ${held} ${town.kind}, ${town.garrison} of ${HOLDINGS[town.kind].garrison} on guard`);
     }
 
+    for (const works of near(war.works)) {
+        const held = works.held ? `held by brigands, ${works.band} strong` : `the ${own(works.owner)}${works.owner === works.race ? "" : ` (the ${own(works.race)} once)`}, ${works.guard} on guard, ${Math.floor(works.yard)} waiting in its yard`;
+
+        lines.push(`The ${works.name} ${works.kind}: ${held}`);
+    }
+
     for (const force of near(war.forces)) {
-        const target = war.town(force.target)?.name ?? (force.kind === "envoy" ? `the ${peopleOf(force.target)}` : "a camp");
-        const what = { expedition: `marching on ${target}`, camp: `camped outside ${target}`, relief: `going to relieve ${target === "a camp" ? "a town" : target}`, envoy: `an envoy to ${target}` }[force.kind];
+        const works = war.workAt(force.target);
+        const target = war.town(force.target)?.name ?? (works ? `the ${works.name} ${works.kind}` : force.kind === "envoy" ? `the ${peopleOf(force.target)}` : "a camp");
+        const home = war.workAt(force.home);
+        const carrying = Object.entries(force.cargo ?? {}).map(([resource, amount]) => `${Math.floor(amount)} ${resource}`).join(", ");
+        const what = {
+            expedition: force.mission === "retake" ? `going to win back ${target}` : `marching on ${target}`,
+            camp: `camped outside ${target}`,
+            relief: `going to relieve ${target === "a camp" ? "a town" : target}`,
+            envoy: `an envoy to ${target}`,
+            convoy: force.back ? `a convoy going back to the ${home?.name} ${home?.kind}` : `a convoy carrying ${carrying} to ${target}`,
+        }[force.kind];
 
         lines.push(`The ${own(force.realm)} ${force.kind === "envoy" ? what : `${force.size}, ${what}`}`);
     }

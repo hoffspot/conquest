@@ -19,6 +19,7 @@ import { Solid } from "../engine/solid.js";
 import { brokenRim, brokenTop, buttress, crumbledRing, crumbledWall, perched, stringCourse, talus, topAt, tumbled } from "./decay.js";
 import { IVY, ivyAlong, ringFace, wallFace } from "./ivy.js";
 import { brokenCart, fallenTimbers, oldBarrel, oldCrate } from "./leftovers.js";
+import { buildWorksPart } from "./works.js";
 
 // World pixels in a metre
 const M = 5;
@@ -1216,8 +1217,11 @@ export function neutral(piece) {
     const random = createRandom(((part.seed ?? piece.seed ?? 1) ^ Math.round((part.x ?? part.x0 ?? 0) * 977 + (part.y ?? part.y0 ?? 0) * 131)) >>> 0);
     const solid = new Solid();
 
-    solid.tone = weathered(random.int(1, 1e6), { moss: piece.people === "cat" ? 0.1 : 0.6 });
-    BUILD[part.part]?.(solid, piece, random, part);
+    // (A people's works, worked rather than ruined: kits/works.js)
+    if (!buildWorksPart(solid, piece, random)) {
+        solid.tone = weathered(random.int(1, 1e6), { moss: piece.people === "cat" ? 0.1 : 0.6 });
+        BUILD[part.part]?.(solid, piece, random, part);
+    }
 
     return solid.toObject();
 }

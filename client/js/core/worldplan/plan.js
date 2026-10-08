@@ -12,7 +12,7 @@ import { CELL, CELLS, cellIndex, shapeLand, WATER, WORLD_SIZE } from "./terrain.
 import { watersOf } from "../terrain/waters.js";
 import { hypot } from "../exact.js";
 
-export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES } from "./races.js";
+export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES, WORKS } from "./races.js";
 export { BUILT, campTier, REACH, ROAD, SETTLEMENTS } from "./settle.js";
 export { CELL, CELLS, WATER, WORLD_SIZE } from "./terrain.js";
 

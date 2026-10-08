@@ -7,7 +7,8 @@
 //
 // ?seed=N&people=human|elf|darkElf|cat|lizard|orc&show=street|landmarks|structures|insides|town|
 // village|hamlet|farmstead|city|capital choose (another people's settlements laid out on their
-// own), or
+// own), or show=place&site=mine (or any kind of the people's sites: lumber mill, quarry, their own
+// places) for the first of it, or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
 // from any settlement or road (&undergrowth=0.5 to thin it, 0 for none), or show=home for the
 // middle of the people's homeland; window.buildingLab is there for tests.
@@ -353,7 +354,8 @@ async function build() {
         const overworld = world.maps.town;
         const distance = ({ at }) => Math.hypot(at[0] - world.start.at[0], at[1] - world.start.at[1]);
         const whose = ({ race }) => state.people === "human" || race === state.people;
-        const site = sited ? world.plan.sites.filter(({ race, kind }) => race === state.people && (state.show === "castle" ? kind === "castle" : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
+        const wanted = params.get("site");
+        const site = sited ? world.plan.sites.filter(({ race, kind }) => race === state.people && (state.show === "castle" ? kind === "castle" : wanted ? kind === wanted : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
         const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
         const chunks = new Chunks(world);
 
@@ -370,9 +372,11 @@ async function build() {
         view.scene.add(chunks.object);
         state.built = chunks.object;
         state.chunks = chunks;
-        orbit.focus.set(fx, 2, fz);
+        orbit.focus.set(fx, overworld.heightAt(fx, fz) + 2, fz);
         orbit.distance = sited ? Math.max(30, (set?.radius ?? 20) * 2.6) : { capital: 170, city: 130, town: 90, village: 60, hamlet: 45, farmstead: 40 }[state.show];
         state.place = place;
+        // (Which way a site faces: the camera's put before it from there, yaw = facing)
+        state.facing = set?.facing ?? 0;
         state.frames = [{ label: state.show, x: fx, z: fz, w: orbit.distance, d: orbit.distance }];
         // (And the yards behind its houses: kits/yards.js)
         state.yards = sited ? 0 : overworld.settlements.laid.get(place.id).town.yards.length;

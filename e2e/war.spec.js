@@ -36,13 +36,14 @@ test("lays out the war for a seed: each realm, its ruler and how they stand, the
             age: document.querySelector("#age").textContent,
             colours: colours.size,
             capital: state.war.towns.find(({ kind, race }) => kind === "capital" && race === "human"),
+            works: state.war.works.find(({ race }) => race === "human"),
         };
     });
 
     expect(start.seed).toBe(3);
     expect(start.turn).toBe(0);
     expect(start.realms).toHaveLength(6);
-    expect(start.realms[0]).toMatch(/^The Kingdom of .+(King|Queen) .+\d+ towns · \d+ under arms · 60 gold$/);
+    expect(start.realms[0]).toMatch(/^The Kingdom of .+(King|Queen) .+\d+ towns · 6 works · \d+ under arms · 60 gold0 wood · 0 stone · 0 metal$/);
     expect(start.cells).toBe(36);
     expect(start.age).toContain("An uneasy peace");
     expect(start.age).toContain("can only raid");
@@ -54,6 +55,12 @@ test("lays out the war for a seed: each realm, its ruler and how they stand, the
 
     await page.mouse.move(box.x + x, box.y + y);
     await expect(page.locator("#hover")).toContainText(`${start.capital.name}: the Humans' capital, 40 of 40 on guard`);
+
+    // And at one of their works, whose it is, its guard and what's waiting in its yard
+    const [wx, wy] = await page.evaluate((at) => window.warViewer.toScreen(...at), start.works.at);
+
+    await page.mouse.move(box.x + wx, box.y + wy);
+    await expect(page.locator("#hover")).toContainText(`The ${start.works.name} ${start.works.kind}: the Humans', 6 on guard, 0 waiting in its yard`);
 });
 
 test("plays the war on: forces march and camp, the news tells of it, and the players' might brings on the next age", async ({ page }) => {
@@ -67,6 +74,7 @@ test("plays the war on: forces march and camp, the news tells of it, and the pla
         return {
             turn: viewer.state.war.turn,
             forces: viewer.state.war.forces.map(({ kind, realm, at }) => ({ kind, realm, at })),
+            stores: viewer.state.war.realms.map(({ stores }) => stores.wood + stores.stone + stores.metal),
             news: [...document.querySelectorAll("#news li")].map((li) => ({ text: li.textContent, turn: li.value })),
             wars: document.querySelectorAll("#relations td.hostile").length,
         };
@@ -79,8 +87,13 @@ test("plays the war on: forces march and camp, the news tells of it, and the pla
     expect(war.news.every(({ text }) => !/undefined|null/.test(text))).toBe(true);
     expect(war.wars).toBeGreaterThan(0);
 
+    // Their works' convoys have brought wood, stone and metal into every people's stores (too
+    // everyday to be in the news)
+    expect(war.stores.every((stores) => stores > 0)).toBe(true);
+    expect(war.news.some(({ text }) => /^A convoy of/.test(text))).toBe(false);
+
     // Pointing at a force says whose it is and what it's about
-    const force = war.forces.find(({ kind }) => kind !== "envoy");
+    const force = war.forces.find(({ kind }) => kind !== "envoy" && kind !== "convoy");
 
     if (force) {
         const [x, y] = await page.evaluate((at) => window.warViewer.toScreen(...at), force.at);

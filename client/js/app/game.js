@@ -43,11 +43,11 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { PLACE_RIMS } from "./mapicons.js";
+import { PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
+import { CAMP_HOURS, campFor, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -56,7 +56,7 @@ import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, 
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
-import { RISING, STAGES } from "../core/war/war.js";
+import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { nearestFree, squaresOf } from "../core/grid.js";
@@ -475,7 +475,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2711,7 +2711,7 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.cacheIcons()] : [],
         });
     }
 
@@ -2730,6 +2730,53 @@ export class Game {
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
             }
         }
+    }
+
+    /**
+     * Each people's works (docs/WAR.md *The works*), as icons for the maps: [{ id, kind (mill,
+     * mine or quarry: app/mapicons.js), x, z (metres: its heart once it's set down, its plan's
+     * spot till then), rim (by who holds it and how they stand with the player's people:
+     * WORKS_RIMS) }].
+     */
+    worksIcons() {
+        const war = this.host?.war;
+
+        if (!war?.works) {
+            return [];
+        }
+
+        const mine = this.self?.realm;
+        const sites = this.world.maps.town?.sites;
+
+        return war.works.map((works) => {
+            const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
+            const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
+
+            return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance] };
+        });
+    }
+
+    // A works won near the player, or by their people (host.js #worksFell): said
+    #worksWon({ works: id, how, by, owner }) {
+        const works = this.host?.war?.workAt(id);
+        const me = this.battle.actor(this.me);
+        const ours = by === this.self?.realm;
+
+        if (!works || (!ours && (!me || me.map !== "town" || Math.hypot(me.x - works.at[0], me.y - works.at[1]) > WORKS_OUT.far))) {
+            return;
+        }
+
+        const name = `the ${works.name} ${works.kind}`;
+
+        if (how === "seized") {
+            this.hud.message(ours ? `${name[0].toUpperCase()}${name.slice(1)} is ours: the ${peopleOf(by)} hold it now.` : `The ${peopleOf(by)} have seized ${name}.`, 4);
+        } else {
+            const whose = peopleOf(owner).endsWith("s") ? `${peopleOf(owner)}'` : `${peopleOf(owner)}'s`;
+
+            this.hud.message(`${name[0].toUpperCase()}${name.slice(1)} is cleared of its brigands, and the ${whose} again.`, 4);
+        }
+
+        this.sound?.play("wake");
     }
 
     /**
@@ -2877,7 +2924,7 @@ export class Game {
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
     }
 
     // --- The world map's pin ---
@@ -4572,6 +4619,13 @@ export class Game {
                       war: war.enemiesOf(liege).map(people),
                       allies: war.realms.filter((other) => other.alive && other.id !== realm.id && war.friendly(realm.id, other.id)).map(({ id }) => people(id)),
                       towns: war.towns.filter(({ owner }) => owner === realm.id).length,
+                      // (Their works, their stores, and those of theirs another people or brigands
+                      // hold: docs/WAR.md *The works*)
+                      works: war.works.filter(({ owner, held }) => owner === realm.id && !held).length,
+                      stores: RESOURCES.map((resource) => `${Math.floor(realm.stores?.[resource] ?? 0)} ${resource}`).join(", "),
+                      lost: war.works
+                          .filter(({ race, owner, held }) => race === realm.id && (held || owner !== realm.id))
+                          .map((works) => `${works.held ? "Brigands hold" : `${people(works.owner)[0].toUpperCase()}${people(works.owner).slice(1)} hold`} the ${works.name} ${works.kind}.`),
                       regard: war.realms
                           .filter((other) => other.alive && war.liege(other.id) !== liege && war.relation(other.id, realm.id) !== "unknown")
                           .map((other) => ({ name: people(other.id), ...regardOf(other.standing[realm.id] ?? 0) })),
@@ -5705,6 +5759,25 @@ export class Game {
                 break;
             case "cleared":
                 this.#cleared(event);
+                break;
+            case "worksOut":
+                // (A works' guards out near the player, to be drawn; the brigands holding one are
+                // roused, as the wild's are)
+                if (event.people) {
+                    this.enlisting.push(...event.ids);
+                }
+
+                break;
+            case "worksDown":
+                this.#unenlist(event.ids);
+
+                for (const id of event.ids) {
+                    this.#undress(id);
+                }
+
+                break;
+            case "works":
+                this.#worksWon(event);
                 break;
             case "dungeon":
                 this.#delved(event);

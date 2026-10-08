@@ -204,10 +204,11 @@ and 40 to 55 farmsteads.
 | Ruined castles | 5 | Only in the wild |
 | A dragon's lair | 1 | Volcanic ground, mountains or snow, in the wild |
 | An old graveyard | 1 for each people | Outside their start town, 8 to 17 cells out (about 250 to 550 m), in their lands, as near a road as there's room (`graveyards`) |
+| Each people's works | 2 lumber mills, 2 mines and 2 quarries for each people | In their lands, not on their edge (`WORKINGS`), on gentle dry ground: mills in the woods, mines and quarries up in the hills, where there are any; by a road where there's one; two of a kind 24 cells apart (`workings`; docs/WAR.md, *The works*) |
 
-Ruins, castles and people's buildings have names. The graveyards are laid out last, once every
-place has been moved out of the water, from random numbers of their own, so nothing else in the
-world moves for them.
+Ruins, castles, people's buildings and works have names. The graveyards are laid out last, once
+every place has been moved out of the water, from random numbers of their own, so nothing else in
+the world moves for them; then the works, the same way.
 
 **Enemy camps.** There are 72 camps, of eight factions:
 

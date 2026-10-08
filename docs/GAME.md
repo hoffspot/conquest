@@ -157,6 +157,46 @@ back to the same world:
     must be: a ruined castle's courtyard, a cave's dug floor or pit. Moss on what faces up, dark
     at the foot.
   - **Its trail comes to its front** (WORLD.md, *Trails*).
+- **Each people's works** (`core/setpieces/works.js` `layoutWorks`, laid out and set down as the
+  sites no people keeps are; built by `art/kits/works.js` in each people's own timber, roofing
+  and stone, `WORKS_STUFF`; docs/WAR.md, *The works*). Worked as such places were before there
+  were engines to do it, and kept up: fresh timber and fresh-cut stone, the dirt of work at
+  their feet. Each has its yard open at its front, where its wagons are loaded, four posts for its
+  guards and a round for the rest to walk.
+  - **A lumber mill** (`MILL`), 36 by 32 m: a clearing in the woods, the trees standing round it
+    at its back and down its sides (real trees, of the woods' kinds or the people's own, blocking
+    as the land's do), its front open, the stumps of those felled between. A saw shed in the
+    middle at the back: an open roof on posts over two tall trestles, a log along them and a
+    long two-man saw standing in its cut, a plank sawn off leaning on a trestle, sawdust under
+    it, as a pit saw's worked. The logs dragged in, piled on their skids, staked; the planks
+    sawn from them stacked to dry, sticks between their courses. The woodcutters' lodge of
+    boards, its door to the yard, a bench by it, its stone chimney smoking, its firewood stacked
+    along its back; a chopping block, an axe in it; a heap of sawdust; and a charcoal clamp, a
+    mound of earth and turf sooty at its crown, smoke seeping from its top and its vents, billets
+    waiting by it.
+  - **A mine** (`MINE`), 32 by 32 m: a hole in the ground. A pit sunk 3.6 m into it (a pad, as a
+    cave's pit is), its floor trodden earth with loose stone about it, a crib of logs holding back
+    the foot of its bank at the back, timber steps down its front, a ladder up its back. Over the
+    shaft at its middle (a square collar of timbers round its black mouth), a headframe: two
+    trestles, a beam across their tops and the wheel on it, the rope from the windlass at its
+    front going up over the wheel and down the shaft; the bucket set down by the collar. Its
+    spoil heaped round its rim, between the stops of its guards' round. At its front the ore
+    heaped, red with iron; a bloomery's clay furnace glowing at its mouth, smoke from its top,
+    its bellows beside it, under a roof on posts, its slag tipped by it; charcoal heaped for it;
+    a tool shed, open at its front, the picks and shovels leaning in it; a wheelbarrow.
+  - **A quarry** (`QUARRY`), 36 by 32 m: stone round it on three sides. Its faces, at the back
+    and down each side, cut back into the rock in two benches, square as the blocks were taken
+    from them a course at a time, so their skyline steps along them, the land's turf over their
+    tops, the rock behind falling away to the land outside; a block half split from the lower
+    bench, the iron wedges in a row along its split. A shear-legs crane leaning out over the back
+    face, stayed back to it, a windlass between its feet winding a block up from the floor. Rough
+    blocks stacked on its floor; the dressed stone stacked by the masons' lodge, a lean-to over
+    their banker with a block on it being dressed and templates leaning on its back wall; their
+    chippings heaped; a block on a sledge, rollers laid before it; boulders round its back.
+  - **From afar** (`far/shapes.js` `worksShapes`): a quarry's faces, a mine's spoil heaps and
+    headframe, the roofs of the sheds. A mill's trees are the land's from afar.
+  - **On the maps:** each works' icon, rimmed by who holds it (`mapicons.js`; docs/WAR.md, *The
+    works*).
 
 `generateWorld({ seed, kind, exits })` makes the town:
 
