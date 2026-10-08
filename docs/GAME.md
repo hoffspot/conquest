@@ -627,6 +627,17 @@ Each step makes events (`attack`, `draw`, `projectile`, `hit`, `miss`, `death`, 
 of them since it was last called (so a spell cast between frames is shown too). Nothing in it
 draws anything.
 
+**Among those near** (`#indexed`). A field battle has hundreds in it, and each of them looks for
+the nearest enemy it can see, whoever's after it, whoever's in its way and whoever's on a square
+it might step to, every step. So the battle keeps where everyone stands by cell, 8 metres a side
+(`INDEX_CELL`), made again at the start of each step and whenever anyone's put somewhere new, or
+has walked more than a metre from where it has them (`INDEX_SLACK`: a step's walk is a fifth of
+that at a sprint). Each looks only among those in the cells near enough, the nearest cells first,
+and stops at cells too far off to hold anyone nearer than the nearest yet found; of two as near,
+the first in the battle's list, as looking through everyone found. It makes no difference to what
+happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
+(`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for.
+
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
   ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds
   its way over its map's navigation mesh (`core/navigation.js` `navigatorOf`, below, and
@@ -2851,6 +2862,52 @@ the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people
 to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what
 they wear.
 
+### Soldiers in their crowds (world/crowd.js)
+
+A field battle of a hundred a side couldn't be drawn character by character: each soldier is a
+dozen meshes and a skin of its own, posed every frame, and built a few a second (a hundred took
+about a minute to come). So with a battle's soldiers about the player (more than 24, which a town's
+own guards never are: `MARSHAL.from`), those nearest, and whoever's fighting the player, are drawn
+in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10), and the
+rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the crowd
+only once it's 3 places past the last drawn in full):
+
+- **One figure for each kind.** A soldier of each people, sex and weapon (`human:m:sword`) is
+  built once, as a template: a character as any soldier is (`soldierLook`), its weapon drawn. Its
+  body, clothes, hair and all it carries are merged into one mesh at the far level of detail,
+  bound to its skeleton: everything carried bound to the bone it's held by, so a sword stays in the
+  hand. One picture holds its skin's and its clothes' pictures side by side and its hair's below
+  them (256 or 512 pixels square each, by quality); what's only coloured (its eyes, its weapon's
+  parts) is coloured at its corners, and a shield's painted device by its picture's colour, all
+  told. Then it's lowered, in the lower-detail worker, to about 45% of its triangles for those
+  near the camera and 18% for those 24 metres or more from it, its picture's seams and its
+  smallest pieces let go (`CROWD.near`, `CROWD.far`): a figure is 3,500 to 5,400 triangles near and
+  1,400 to 2,100 far (as a character drawn far off is 4,800 to 12,900).
+- **Its moves recorded.** On the template, its guard, its walk and its run (a stride each), its
+  weapon's blow, a flinch and its fall are played once (avatar.js, actions.js) and where each of
+  its bones is, 20 times a second, is kept in a picture of numbers, a row a moment (`CROWD.fps`).
+  It's merged before its fall is recorded, as falling it lets go of what it holds.
+- **Drawn all at once.** Everyone of a kind is an instance of its figure, drawn in one go near and
+  one far: a draw or two a kind, whatever how many. Each is posed on the graphics card from the
+  picture of moves, between the two moments it's between (`crowdFrame`), nothing of it posed on the
+  page. Those out of view aren't drawn.
+- **To the game, avatars like any other** (`CrowdAvatar`). Each follows its actor on the same
+  spring, faces the way it goes, and is told of blows, flinches and falls as an avatar is: it's
+  drawn on guard, walking or running (its stride kept with how far it's gone), striking (the blow
+  recorded played as fast or slow as the battle's lasts), flinching, falling and lying. What lands
+  on it (an arrow) stays at its chest. It casts no shadow, as no soldier does, and shows no wounds
+  or flush of red. Whoever comes into the nearest few is built in full meanwhile, drawn in the
+  crowd till it's ready, and goes back to the crowd when it's further off again.
+- **Made as they're wanted.** A kind's template is made a step at a time with half of each frame's
+  time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
+  workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,
+  nor built in full; where a kind couldn't be made, its soldiers are built in full after all.
+
+Drawn so, a frame's work hardly grows with the crowd: in headless Chromium on "medium", out on open
+ground with every soldier in the crowds, a frame's update took 14 ms for 50 a side and 18 ms for
+100, where the battle's own steps are most of it; the crowds themselves don't show among what a
+frame's JavaScript spends its time on.
+
 ### The paperdoll (app/pack.js, world/view.js)
 
 The pack's Gear tab shows the player themself in the middle of its slots, drawn live
@@ -4003,6 +4060,14 @@ switched off (in the game, under the minimap). It folds away to just the frame r
 Its controls change the quality level, the render scale (drawing fewer pixels), whether the sun
 casts shadows, and show the squares characters walk on (blocked ones red) with everyone's path
 (out in the world, the 160 squares round the player, shown afresh as they go).
+
+**Field battle** musters two armies of 10 to 200 a side before the player, the way the camera looks
+(core/host.js `FIELD_BATTLE`, the host's `fieldBattle` command and event): the player's people's 8
+metres ahead, the orcs' (the humans', for an orc) 56, in ranks 20 wide, each soldier carrying one of
+its people's two weapons or a hammer, the two making for each other. The player's people's fight
+beside them; the others are everyone's enemies. It's for seeing how many this device draws and
+plays smoothly, out on open ground: in the world, and only in a world the player opened (not one
+they've joined).
 
 ## Performance
 

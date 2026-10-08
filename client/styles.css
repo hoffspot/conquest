@@ -3931,6 +3931,20 @@ dialog#menu.wide {
     border-radius: 4px;
 }
 
+#debugcontrols .field {
+    grid-template-columns: 6em 1fr auto;
+}
+
+#debugcontrols .field button {
+    font: inherit;
+    color: inherit;
+    background: rgba(120, 200, 160, 0.18);
+    border: 1px solid rgba(120, 200, 160, 0.4);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+}
+
 #debugcontrols .check {
     grid-template-columns: auto 1fr;
 }

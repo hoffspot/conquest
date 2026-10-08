@@ -280,6 +280,14 @@ export const SCRUTINY = Object.freeze({ reach: 3, chance: 0.02 });
 export const UNDO_MS = 8000;
 
 /** What each people's soldiers fight with: guards the first, patrols each in turn (characters/soldiers.js dresses them to match). */
+/**
+ * A field battle (Host #fieldBattle: the debug overlay's, to see how many a device draws and plays
+ * smoothly): `most` a side at most, in ranks `rank` wide and `apart` metres apart, theirs `near`
+ * metres ahead of the player and the others `far`, each going after the other as far as `leash`
+ * metres from its line; each carrying one of its people's two weapons (SOLDIERS_ARMS), or `arms`.
+ */
+export const FIELD_BATTLE = Object.freeze({ most: 200, rank: 20, apart: 1.6, near: 8, far: 56, leash: 80, arms: Object.freeze(["hammer"]) });
+
 export const SOLDIERS_ARMS = Object.freeze({
     human: ["sword", "bow"],
     elf: ["bow", "sword"],
@@ -308,7 +316,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 13;
+export const SNAPSHOT_VERSION = 14;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -497,6 +505,9 @@ export class Host {
         this.mustered = new Map();
         this.soldiers = new Map();
         this.fallen = [];
+
+        // How many have been mustered for field battles (#fieldBattle: each by its number)
+        this.fielded = 0;
 
         /**
          * The works whose guards are out near a player, or the brigands holding them (by the
@@ -1095,6 +1106,8 @@ export class Host {
                 return this.#cancel(player, command.with ?? null);
             case "travel":
                 return this.#travel(player, actor, command.to);
+            case "fieldBattle":
+                return playerId === HOST_PLAYER ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             default:
                 return refuse("command");
         }
@@ -1518,6 +1531,7 @@ export class Host {
             nextCompanion: this.nextCompanion,
             summonings: structuredClone([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
+            fielded: this.fielded,
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
@@ -1633,6 +1647,7 @@ export class Host {
         host.nextCompanion = snapshot.nextCompanion ?? 1;
         host.summonings = new Map(structuredClone(snapshot.summonings ?? []));
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
+        host.fielded = snapshot.fielded ?? 0;
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
 
@@ -2529,6 +2544,11 @@ export class Host {
     // enemies, and the soldiers' and followers' when they're a menace or fighting; no one else's
     // (the orc's)
     #against(a, b) {
+        // (A field battle's other army, everyone's enemy; and everyone theirs: #fieldBattle)
+        if (this.soldiers.get(a.id)?.field === "foe" || this.soldiers.get(b.id)?.field === "foe") {
+            return this.soldiers.get(a.id)?.field !== this.soldiers.get(b.id)?.field;
+        }
+
         if (a.team === WILD || b.team === WILD) {
             const [beast, other] = a.team === WILD ? [a, b] : [b, a];
 
@@ -2947,6 +2967,54 @@ export class Host {
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
         this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", shield: shieldOf(weapon, captain ? "captain" : "soldier"), ...orders });
+    }
+
+    // A field battle, to see how many a device draws and plays smoothly (the debug overlay's: its
+    // Field battle): two armies of `size` each (FIELD_BATTLE.most at most) mustered out in the
+    // world before a player, in ranks across the way they look (`facing`: radians from south,
+    // towards east), theirs `near` metres ahead and another people's (the orcs', or the humans' for
+    // the orcs) `far`, each making for the other (as near as there's room). Their people's soldiers
+    // fight beside them; the others are everyone's enemies. Each carries one of its people's two
+    // weapons, or a hammer (FIELD_BATTLE.arms)
+    #fieldBattle(player, actor, size, facing) {
+        if (actor.map !== "town" || !Number.isInteger(size) || size < 1 || size > FIELD_BATTLE.most || !Number.isFinite(facing)) {
+            return refuse("command");
+        }
+
+        const free = this.#spots();
+        const [ahead, across] = [[sin(facing), cos(facing)], [cos(facing), -sin(facing)]];
+        const at = (forward, side) => [actor.x + ahead[0] * forward + across[0] * side, actor.y + ahead[1] * forward + across[1] * side];
+        const width = Math.min(size, FIELD_BATTLE.rank);
+        const ids = [];
+
+        for (const [side, people, from, to] of [
+            ["friend", player.realm, FIELD_BATTLE.near, FIELD_BATTLE.far],
+            ["foe", player.realm === "orc" ? "human" : "orc", FIELD_BATTLE.far, FIELD_BATTLE.near],
+        ]) {
+            const arms = [...(SOLDIERS_ARMS[people] ?? SOLDIERS_ARMS.human), ...FIELD_BATTLE.arms];
+            const back = Math.sign(from - to);
+
+            for (let k = 0; k < size; k++) {
+                const [rank, file] = [Math.floor(k / width), (k % width) - (width - 1) / 2];
+                let square;
+
+                try {
+                    square = free(at(from + back * rank * FIELD_BATTLE.apart, file * FIELD_BATTLE.apart));
+                } catch {
+                    continue;
+                }
+
+                const id = `field-${this.fielded++}`;
+                const goal = at(to, file * FIELD_BATTLE.apart).map(Math.floor);
+
+                this.#enlist(id, { people, weapon: arms[k % arms.length], square, name: "soldier", record: { field: side }, patrol: [square, goal], leash: FIELD_BATTLE.leash, armed: true });
+                ids.push(id);
+            }
+        }
+
+        this.#event("fieldBattle", { ids, size });
+
+        return { ok: true };
     }
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken

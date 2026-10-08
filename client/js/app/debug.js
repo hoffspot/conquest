@@ -8,8 +8,9 @@
 //  - how long each group of files took to download, and each part of the world to build
 //  - the downloader (app/fetcher.js): its rate, the queueing it sees, what it's fetching and what's
 //    queued, and why it's quiet
-// and controls to see what things cost: quality, render scale, shadows, and the squares
-// characters walk on (with their paths).
+// and controls to see what things cost: quality, render scale, shadows, the squares
+// characters walk on (with their paths), and a field battle of so many a side mustered before the
+// player (core/host.js FIELD_BATTLE).
 //
 // No Three.js here: the overlay reads what it's given.
 
@@ -17,6 +18,10 @@ import { formatBytes } from "./loader.js";
 
 // How often the numbers are updated (ms)
 const EVERY = 500;
+
+// The armies a field battle can muster before the player, so many a side (app/game.js fieldBattle):
+// to see how many this device draws and plays smoothly
+const FIELD_SIZES = [10, 25, 50, 75, 100, 150, 200];
 
 const element = (tag, attributes = {}, ...children) => {
     const node = document.createElement(tag);
@@ -299,6 +304,8 @@ export class Debug {
         const shadows = element("input", { type: "checkbox", onchange: () => change("shadows", shadows.checked) });
         const squares = element("input", { type: "checkbox", onchange: () => change("squares", squares.checked) });
         const navigation = element("input", { type: "checkbox", onchange: () => change("navigation", navigation.checked) });
+        const armies = element("select", {}, ...FIELD_SIZES.map((size) => element("option", { value: size }, `${size} a side`)));
+        const muster = element("button", { type: "button", onclick: () => this.game?.fieldBattle(Number(armies.value)) }, "Muster");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -312,6 +319,7 @@ export class Debug {
             element("label", { class: "check" }, shadows, "Shadows"),
             element("label", { class: "check" }, squares, "Squares and paths"),
             element("label", { class: "check" }, navigation, "Navigation mesh"),
+            element("label", { class: "field" }, "Field battle", armies, muster),
         );
     }
 }

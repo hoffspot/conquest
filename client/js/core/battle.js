@@ -301,6 +301,13 @@ const BLOCKED_REPATH_MS = 2000;
 // How near a corner of its way a character that's stepped aside needs to come to it (metres)
 const CORNER_SLACK = 0.6;
 
+// Where everyone stands, kept by cell (INDEX_CELL metres a side), so that the nearest enemy, who's
+// in the way and who's on a square are looked for among those near, not everyone: a field battle's
+// hundreds (#indexed). Made again at the start of each step, and as soon as anyone's put somewhere
+// new or has gone further than INDEX_SLACK metres from where it was made (a step's walk is far less)
+const INDEX_CELL = 8;
+const INDEX_SLACK = 1;
+
 // Getting no nearer where it's going (by PROGRESS metres) for STUCK_MS, jostling with others in
 // a narrow way, a character squeezes past them for SQUEEZE_MS, through anyone (not walls)
 const PROGRESS = 0.3;
@@ -317,12 +324,29 @@ const MOVE_LEGS = 8;
 // To the centimetre (the ways found, as a host sends them)
 const cm = (value) => Math.round(value * 100) / 100;
 
+// A cell of the index of where everyone stands (INDEX_CELL), as a number
+const cellOf = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
+
 // The eight squares round one, and how many squares at most are looked through for a place to
 // talk to someone from
 const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const TALK_SEARCH = 800;
 
 export class Battle {
+    /**
+     * Whether the nearest enemy, who's in the way and who's on a square are looked for among those
+     * near (#indexed), as they always are, or among everyone: only for the tests that check it
+     * makes no difference.
+     */
+    static indexing = true;
+
+    // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
+    // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
+    #ids = null;
+    #roster = 0;
+    #index = null;
+    #version = 0;
+
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
      * @param {object} [options]
@@ -508,12 +532,20 @@ export class Battle {
         };
 
         this.actors.push(actor);
+        this.#roster++;
+        this.#version++;
 
         return actor;
     }
 
     actor(id) {
-        return this.actors.find((actor) => actor.id === id) ?? null;
+        const ids = this.#ids;
+
+        if (!ids || ids.actors !== this.actors || ids.length !== this.actors.length || ids.roster !== this.#roster) {
+            this.#ids = { actors: this.actors, length: this.actors.length, roster: this.#roster, of: new Map(this.actors.map((actor) => [actor.id, actor])) };
+        }
+
+        return this.#ids.of.get(id) ?? null;
     }
 
     /**
@@ -564,6 +596,7 @@ export class Battle {
         const from = actor.map;
 
         Object.assign(actor, { map, square: there, x: there[0] + 0.5, y: there[1] + 0.5, path: [], offPath: false, pathGoal: null, facing: facing ?? actor.facing, pace: actor.walkPace, attack: null, casting: null, order: null, target: null, crossed: null });
+        this.#version++;
 
         // (No one's after them where they were)
         for (const other of this.actors) {
@@ -744,6 +777,8 @@ export class Battle {
         }
 
         this.actors.splice(this.actors.indexOf(actor), 1);
+        this.#roster++;
+        this.#version++;
         this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
 
         for (const other of this.actors) {
@@ -1289,6 +1324,7 @@ export class Battle {
 
     #step() {
         this.time += STEP_MS;
+        this.#version++;
 
         for (const actor of this.actors) {
             this.#arm(actor);
@@ -1351,17 +1387,24 @@ export class Battle {
             return true;
         }
 
+        const after = (other) => other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id);
+
         // (The cheap checks first: whether it's after it, or near enough to be seen, before how
-        // their peoples stand, and only then whether anything's in the way)
-        return this.actors.some((other) => {
-            if (other.dead || other.map !== actor.map) {
-                return false;
-            }
+        // their peoples stand, and only then whether anything's in the way. Those near first; then
+        // anyone further off after it)
+        return (
+            this.#nearSquare(actor, SIGHT).some((k) => {
+                const other = this.actors[k];
 
-            const after = other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id);
+                if (other.dead || other.map !== actor.map) {
+                    return false;
+                }
 
-            return (after || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (after || this.canSee(actor, other));
-        });
+                const chasing = after(other);
+
+                return (chasing || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (chasing || this.canSee(actor, other));
+            }) || this.actors.some((other) => !other.dead && other.map === actor.map && after(other) && this.hostile(other, actor))
+        );
     }
 
     // --- Deciding what to do ---
@@ -2007,18 +2050,35 @@ export class Battle {
     #nearestEnemy(actor, test, within = Infinity) {
         let best = null;
         let bestDistance = Infinity;
+        let bestK = Infinity;
 
-        // (The cheap checks first, and `test` for none no nearer than the nearest yet)
-        for (const other of this.actors) {
-            if (other.dead || other.map !== actor.map || !this.#near(actor, other, within) || !this.hostile(other, actor) || !this.#noticed(actor, other)) {
-                continue;
+        // (The cheap checks first, and `test` for none no nearer than the nearest yet; only those
+        // near enough to be within `within`, if it's not everyone, the nearest cells first, and
+        // none in cells too far off to beat the nearest yet. Of two as near, the first)
+        for (const ring of within === Infinity ? [this.actors.keys()] : this.#ringsNear(actor, within)) {
+            if (ring.least > bestDistance) {
+                break;
             }
 
-            const distance = distanceBetween(actor.square, other.square);
+            for (const k of ring) {
+                const other = this.actors[k];
 
-            if (distance < bestDistance && test(other)) {
-                best = other;
-                bestDistance = distance;
+                if (other.dead || other.map !== actor.map || !this.#near(actor, other, within)) {
+                    continue;
+                }
+
+                // (Further either way than the nearest yet is: no nearer, and not worth working out)
+                if (Math.abs(actor.square[0] - other.square[0]) > bestDistance || Math.abs(actor.square[1] - other.square[1]) > bestDistance) {
+                    continue;
+                }
+
+                const distance = distanceBetween(actor.square, other.square);
+
+                if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && this.hostile(other, actor) && this.#noticed(actor, other) && test(other)) {
+                    best = other;
+                    bestDistance = distance;
+                    bestK = k;
+                }
             }
         }
 
@@ -2036,9 +2096,12 @@ export class Battle {
     #alarmed(actor) {
         let best = null;
         let bestDistance = Infinity;
+        let bestK = Infinity;
 
-        // (The cheap checks first, and sight last)
-        for (const other of this.actors) {
+        // (The cheap checks first, and sight last. Of two as near, the first)
+        for (const k of this.#nearSquare(actor, SIGHT)) {
+            const other = this.actors[k];
+
             if (other === actor || other.dead || other.target === null || other.ai !== "patrol" || other.team !== actor.team || other.map !== actor.map || !this.#near(actor, other, SIGHT)) {
                 continue;
             }
@@ -2046,9 +2109,10 @@ export class Battle {
             const foe = this.actor(other.target);
             const distance = distanceBetween(actor.square, other.square);
 
-            if (distance < bestDistance && foe && !foe.dead && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.canSee(actor, other)) {
+            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && foe && !foe.dead && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.canSee(actor, other)) {
                 best = foe;
                 bestDistance = distance;
+                bestK = k;
             }
         }
 
@@ -2059,6 +2123,126 @@ export class Battle {
     // either way? (Cheap, before anything dearer: how their peoples stand, what's between them)
     #near(a, b, reach) {
         return Math.abs(a.square[0] - b.square[0]) <= reach && Math.abs(a.square[1] - b.square[1]) <= reach;
+    }
+
+    // Where everyone stands, kept by cell (INDEX_CELL): made again if it might be out of date. {
+    // cells: map id -> cell -> indices into `actors` (in their order), at: where each was (x, y),
+    // order: each one's index }
+    #indexed() {
+        const index = this.#index;
+
+        if (index && index.actors === this.actors && index.length === this.actors.length && index.version === this.#version) {
+            return index;
+        }
+
+        const cells = new Map();
+        const at = new Float64Array(this.actors.length * 2);
+        const order = new Map();
+
+        this.actors.forEach((actor, k) => {
+            const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
+            const cell = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
+            const list = mine.get(cell);
+
+            if (list) {
+                list.push(k);
+            } else {
+                mine.set(cell, [k]);
+            }
+
+            at[2 * k] = actor.x;
+            at[2 * k + 1] = actor.y;
+            order.set(actor, k);
+        });
+
+        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order });
+    }
+
+    // Everyone on a map who might be within `reach` metres either way of a point (x, y): their
+    // places in `actors`, in no order (whoever asks breaks ties between them by it, as though
+    // they'd gone through `actors` in order); none further, though some may be (cells are coarse)
+    #within(mapId, x, y, reach) {
+        if (!Battle.indexing) {
+            return [...this.actors.keys()];
+        }
+
+        const index = this.#indexed();
+        const cells = index.cells.get(mapId);
+        const out = reach + INDEX_SLACK;
+        const found = [];
+
+        if (!cells) {
+            return found;
+        }
+
+        for (let cy = Math.floor((y - out) / INDEX_CELL); cy <= Math.floor((y + out) / INDEX_CELL); cy++) {
+            for (let cx = Math.floor((x - out) / INDEX_CELL); cx <= Math.floor((x + out) / INDEX_CELL); cx++) {
+                for (const k of cells.get(cellOf(cx, cy)) ?? []) {
+                    found.push(k);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    // The same as #nearSquare, in rings of cells round the character's, nearest first: each its
+    // places in `actors`, and `least`, how near any of them could be (squares, distanceBetween)
+    #ringsNear(actor, reach) {
+        if (!Battle.indexing) {
+            return [Object.assign([...this.actors.keys()], { least: -Infinity })];
+        }
+
+        const index = this.#indexed();
+        const cells = index.cells.get(actor.map);
+        const [x, y] = [actor.square[0] + 0.5, actor.square[1] + 0.5];
+        const out = reach + 1 + INDEX_SLACK;
+        const [cx, cy] = [Math.floor(x / INDEX_CELL), Math.floor(y / INDEX_CELL)];
+        const [left, right, top, bottom] = [Math.floor((x - out) / INDEX_CELL), Math.floor((x + out) / INDEX_CELL), Math.floor((y - out) / INDEX_CELL), Math.floor((y + out) / INDEX_CELL)];
+        const rings = [];
+
+        if (!cells) {
+            return rings;
+        }
+
+        for (let r = 0; r <= Math.max(cx - left, right - cx, cy - top, bottom - cy); r++) {
+            // (Anyone in a cell r out is at least r - 1 cells' width off, less how far they may
+            // have gone since the index was made, and a square's rounding)
+            const ring = Object.assign([], { least: (r - 1) * INDEX_CELL - INDEX_SLACK - 2 });
+
+            for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
+                for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
+                    if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
+                        for (const k of cells.get(cellOf(nx, ny)) ?? []) {
+                            ring.push(k);
+                        }
+                    }
+                }
+            }
+
+            rings.push(ring);
+        }
+
+        return rings;
+    }
+
+    // Everyone who might be within `reach` squares either way of a character's square (#near)
+    #nearSquare(actor, reach) {
+        return this.#within(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
+    }
+
+    // A character's walked on: the index made again before it's next asked, if it's gone further
+    // than INDEX_SLACK from where the index has it
+    #moved(actor) {
+        const index = this.#index;
+
+        if (index?.version === this.#version) {
+            const k = index.order.get(actor);
+
+            if (k === undefined || Math.abs(actor.x - index.at[2 * k]) > INDEX_SLACK || Math.abs(actor.y - index.at[2 * k + 1]) > INDEX_SLACK) {
+                this.#version++;
+            }
+        }
     }
 
     // --- Walking ---
@@ -2077,7 +2261,11 @@ export class Battle {
      * their body over its middle?
      */
     #occupied(mapId, [x, y], except) {
-        return this.actors.some((other) => other !== except && !other.dead && other.map === mapId && ((other.square[0] === x && other.square[1] === y) || hypot(other.x - (x + 0.5), other.y - (y + 0.5)) < 2 * BODY));
+        return this.#within(mapId, x + 0.5, y + 0.5, 2 * BODY + 1).some((k) => {
+            const other = this.actors[k];
+
+            return other !== except && !other.dead && other.map === mapId && ((other.square[0] === x && other.square[1] === y) || hypot(other.x - (x + 0.5), other.y - (y + 0.5)) < 2 * BODY);
+        });
     }
 
     /**
@@ -2196,6 +2384,7 @@ export class Battle {
             attack: null,
             crossed: { link: link.id, from, to: there.map, time: this.time },
         });
+        this.#version++;
 
         if (actor.order?.type === "enter") {
             actor.order = null;
@@ -2324,6 +2513,7 @@ export class Battle {
             }
 
             [actor.x, actor.y] = next;
+            this.#moved(actor);
             actor.facing = atan2(heading[0], heading[1]);
             actor.blockedSince = null;
             budget -= step;
@@ -2384,16 +2574,22 @@ export class Battle {
         let nearest = null;
         let best = Infinity;
 
-        for (const other of this.actors) {
+        let nearestK = Infinity;
+
+        // (Of two as near, the first)
+        for (const k of this.#within(actor.map, x, y, 2 * BODY)) {
+            const other = this.actors[k];
+
             if (other === actor || other.dead || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
                 continue;
             }
 
             const after = hypot(other.x - x, other.y - y);
 
-            if (after < 2 * BODY && after < hypot(other.x - actor.x, other.y - actor.y) && after < best) {
+            if (after < 2 * BODY && after < hypot(other.x - actor.x, other.y - actor.y) && (after < best || (after === best && k < nearestK))) {
                 nearest = other;
                 best = after;
+                nearestK = k;
             }
         }
 
@@ -3197,6 +3393,7 @@ export class Battle {
             drawing: null,
             foughtAt: -Infinity,
         });
+        this.#version++;
         this.#emit("respawn", { id: actor.id, square, map: actor.map, from });
     }
 }
