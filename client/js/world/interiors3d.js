@@ -38,8 +38,8 @@ import { gather, roomLit } from "./roomlight.js";
 import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { WATER_DETAIL } from "./water.js";
-import { cavern, SHELLS } from "./caverns.js";
-import { rockMaterial } from "./dungeons3d.js";
+import { cavern, SHELLS, tiles } from "./caverns.js";
+import { Blocks, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
@@ -3497,14 +3497,16 @@ function towerTop(map) {
 
 // --- A dungeon's levels (core/dungeons: docs/DUNGEONS.md) ---
 
-// How each theme's levels are drawn (by its look: core/dungeons/themes.js): what's underfoot; its
-// rock (crags `low` to `high` metres, the roof a little over them) or its walls of dressed stone
-// (`walls`, `tall` metres high, a vault over them); what its heaps of fallen stuff are; and
+// How each theme's levels are drawn (by its look: core/dungeons/themes.js): its rock as one surface
+// (`shell`: caverns.js SHELLS) or its walls of dressed stone (`walls`, `tall` metres high, a vault
+// over them); the pictures they're drawn with (`picture`, and underfoot `underfoot`: dungeons3d.js
+// ROCK_PICTURES) in the colours `tint` and `ground` (the pictures' own, if not given); what its
+// heaps of fallen stuff are (`rubble`, and `rock` the stuff of what stands up from its floor); and
 // whether its tunnels are shored up with timber (an outlaws' hideout's)
 const DUNGEON_LOOKS = Object.freeze({
-    caves: { floor: "road", rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
-    hideout: { floor: "road", rock: "rock", shell: "dug", picture: "rock-cave", underfoot: "ground-dug", rubble: "rock", shored: true, tint: 0x8a7458, ground: 0x6e5440 },
-    ancient: { floor: "stone", walls: "stone-old", tall: 4.2, rubble: "rubble-old" },
+    caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
+    hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
+    ancient: { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple" },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -3515,34 +3517,32 @@ const FLIGHT = Object.freeze({ steps: 6, rise: 0.32, deep: 2.6 });
 // squares along it, `tall` metres to the cap
 const SHORING = Object.freeze({ widest: 6, every: 4, tall: 2.5 });
 
-// A level's floor (`stuff`), all but where a flight of stairs goes down through it (`hole`: its
-// plan's piece, or none)
-function floorAround(solid, map, hole, stuff) {
-    const [w, h] = [m(map.width + 1), m(map.height + 1)];
-    const ground = material(stuff);
+// A level's floor (`blocks`: dungeons3d.js's, metres), all but where a flight of stairs goes down
+// through it (`hole`: its plan's piece, or none)
+function floorAround(blocks, map, hole) {
+    const [w, h] = [map.width + 1, map.height + 1];
 
     if (!hole) {
-        solid.box(-m(1), -0.5, -m(1), w, 0, h, ground);
+        blocks.box(-1, -0.1, -1, w, 0, h);
 
         return;
     }
 
-    const [x0, z0, x1, z1] = [m(hole.x), m(hole.y), m(hole.x + hole.w), m(hole.y + hole.h)];
+    const [x0, z0, x1, z1] = [hole.x, hole.y, hole.x + hole.w, hole.y + hole.h];
 
-    solid.box(-m(1), -0.5, -m(1), w, 0, z0, ground);
-    solid.box(-m(1), -0.5, z1, w, 0, h, ground);
-    solid.box(-m(1), -0.5, z0, x0, 0, z1, ground);
-    solid.box(x1, -0.5, z0, w, 0, z1, ground);
+    blocks.box(-1, -0.1, -1, w, 0, z0);
+    blocks.box(-1, -0.1, z1, w, 0, h);
+    blocks.box(-1, -0.1, z0, x0, 0, z1);
+    blocks.box(x1, -0.1, z0, w, 0, z1);
 }
 
-// A level's walls of dressed stone (`walls`, `tall` metres high): each run along a row of its
-// plan's rock squares by open ground as one, a plinth of darker stone along its foot and a cornice
-// under the vault; and the vault over all (as a ceiling)
-function dressedWalls(solid, map, { walls, tall }) {
+// A level's walls of dressed stone (`blocks`: dungeons3d.js's, metres; `tall` metres high): each
+// run along a row of its plan's rock squares by open ground as one, a plinth of darker stone along
+// its foot and a cornice under the vault; and the vault over all
+function dressedWalls(blocks, map, { tall }) {
     const rock = (x, y) => x < 0 || y < 0 || x >= map.width || y >= map.height || map.plan[y][x] === "#";
     const near = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
     const edge = (x, y) => rock(x, y) && near.some(([dx, dy]) => !rock(x + dx, y + dy));
-    const top = m(tall);
 
     for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
@@ -3556,16 +3556,14 @@ function dressedWalls(solid, map, { walls, tall }) {
                 end++;
             }
 
-            const [x0, z0, x1, z1] = [m(x), m(y), m(end + 1), m(y + 1)];
-
-            solid.box(x0, 0, z0, x1, top, z1, material(walls, WALL));
-            solid.box(x0 - 0.4, 0, z0 - 0.4, x1 + 0.4, m(0.35), z1 + 0.4, material("stone-dark", WALL));
-            solid.box(x0 - 0.5, top - m(0.3), z0 - 0.5, x1 + 0.5, top, z1 + 0.5, material("stone-dark", WALL));
+            blocks.box(x, 0, y, end + 1, tall, y + 1, 0.85 + 0.15 * roughOf(x, y));
+            blocks.box(x - 0.08, 0, y - 0.08, end + 1.08, 0.35, y + 1.08, 0.55);
+            blocks.box(x - 0.1, tall - 0.3, y - 0.1, end + 1.1, tall, y + 1.1, 0.6);
             x = end;
         }
     }
 
-    solid.box(-m(1), top, -m(1), m(map.width + 1), top + m(0.4), m(map.height + 1), material(walls, CEILING), { under: material(walls, CEILING) });
+    blocks.box(-1, tall, -1, map.width + 1, tall + 0.4, map.height + 1, 0.7);
 }
 
 // A flight of stairs dug into a level's rock (its plan's piece) from the landing before it: down
@@ -3617,12 +3615,12 @@ function flight(solid, map, piece, stuff, { down, inset }) {
 }
 
 // An outlaws' hideout's tunnels shored up: every few squares along a tunnel (open ground between
-// rock, clear of every room's bounds), a post against the rock either side and a cap across between them
-function shoring(solid, map) {
+// rock, clear of every room's bounds), a post against the rock either side and a cap across between
+// them (`blocks`: dungeons3d.js's, metres)
+function shoring(blocks, map) {
     const open = (x, y) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.plan[y][x] !== "#";
     const roomed = new Uint8Array(map.width * map.height);
-    const timber = material("timber");
-    const tall = m(SHORING.tall);
+    const tall = SHORING.tall;
 
     for (const room of map.dungeon?.rooms ?? []) {
         for (let y = room.y; y < room.y + room.h; y++) {
@@ -3634,7 +3632,7 @@ function shoring(solid, map) {
     // west, along a column: `u` across, `v` along)
     for (const across of [true, false]) {
         const at = (u, v) => (across ? [u, v] : [v, u]);
-        const box = (u0, u1, v0, v1, y0, y1) => (across ? solid.box(m(u0), y0, m(v0), m(u1), y1, m(v1), timber) : solid.box(m(v0), y0, m(u0), m(v1), y1, m(u1), timber));
+        const box = (u0, u1, v0, v1, y0, y1, shade) => (across ? blocks.box(u0, y0, v0, u1, y1, v1, shade) : blocks.box(v0, y0, u0, v1, y1, u1, shade));
         const [wide, long] = across ? [map.width, map.height] : [map.height, map.width];
 
         for (let v = SHORING.every; v < long - 1; v += SHORING.every) {
@@ -3655,9 +3653,11 @@ function shoring(solid, map) {
                 const tunnel = run.length <= SHORING.widest && run.every(([x, y]) => map.plan[y][x] === "." && !roomed[y * map.width + x]) && open(...at(middle, v - 1)) && open(...at(middle, v + 1));
 
                 if (tunnel) {
-                    box(u - 0.05, u + 0.2, v + 0.35, v + 0.65, 0, tall);
-                    box(end + 0.8, end + 1.05, v + 0.35, v + 0.65, 0, tall);
-                    box(u - 0.1, end + 1.1, v + 0.32, v + 0.68, tall - m(0.25), tall);
+                    // (The posts set back into the rock's hollows, as the rock stands back from the
+                    // open ground: caverns.js)
+                    box(u - 0.45, u - 0.15, v + 0.35, v + 0.65, -0.1, tall, 0.9);
+                    box(end + 1.15, end + 1.45, v + 0.35, v + 0.65, -0.1, tall, 0.9);
+                    box(u - 0.5, end + 1.5, v + 0.32, v + 0.68, tall - 0.25, tall, 0.75);
                 }
 
                 u = end;
@@ -3804,12 +3804,16 @@ function dungeon(map) {
         lights.push(light);
     };
 
+    // (What's drawn with the pictures as boxes: a temple's walls, floor and vault, a hideout's
+    // timbers)
+    const [walls, floor, timber] = [new Blocks(), new Blocks(), new Blocks()];
+
     if (!shell) {
-        floorAround(solid, map, at("stairs-down")[0], look.floor);
+        floorAround(floor, map, at("stairs-down")[0]);
     }
 
     if (look.walls) {
-        dressedWalls(solid, map, look);
+        dressedWalls(walls, map, look);
     }
 
     if (map.marks.D) {
@@ -3823,7 +3827,7 @@ function dungeon(map) {
     }
 
     if (look.shored) {
-        shoring(solid, map);
+        shoring(timber, map);
     }
 
     for (const piece of map.pieces) {
@@ -3917,7 +3921,9 @@ function dungeon(map) {
         }
     }
 
-    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell) };
+    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls"), floor.mesh(look.underfoot, look.ground ?? null, "floor"), timber.mesh("timber", 0x8a7a66, "timbers")].filter(Boolean);
+
+    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell), blocks };
 }
 
 // The rock round a dungeon's level as one surface (caverns.js), a step at a time: its walls and
@@ -3932,33 +3938,32 @@ function* rockShell(map, look, shell) {
     const made = yield* cavern(map.width, map.height, rock, shell, { seed: [...map.id].reduce((hash, c) => Math.imul(hash, 31) + c.charCodeAt(0), 7), least, hole });
     const group = new THREE.Group();
 
-    // (Its points coloured as the theme has it, shaded as caverns.js has them)
-    const meshOf = ({ positions, indices, shade }, colour, picture, name) => {
-        const geometry = new THREE.BufferGeometry();
-        const tint = new THREE.Color(colour);
-        const colours = new Float32Array(shade.length * 3);
+    // (Its points coloured as the theme has it, shaded as caverns.js has them, a tile at a time)
+    const meshesOf = (surface, colour, picture, name) => {
+        const tint = colour === null ? new THREE.Color().setRGB(...ROCK_PICTURES[picture].mean, THREE.LinearSRGBColorSpace) : new THREE.Color(colour);
 
-        for (let k = 0; k < shade.length; k++) {
-            colours[k * 3] = tint.r * shade[k];
-            colours[k * 3 + 1] = tint.g * shade[k];
-            colours[k * 3 + 2] = tint.b * shade[k];
+        for (const { positions, normals, indices, shade } of tiles(surface)) {
+            const geometry = new THREE.BufferGeometry();
+            const colours = new Float32Array(shade.length * 3);
+
+            shade.forEach((each, k) => colours.set([tint.r * each, tint.g * each, tint.b * each], k * 3));
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+            geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+            geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+            const mesh = new THREE.Mesh(geometry, rockMaterial(picture));
+
+            mesh.name = name;
+            // (A floor casts no shadow on anything)
+            mesh.userData.shadowless = name === "floor";
+            group.add(mesh);
         }
-
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-        geometry.computeVertexNormals();
-
-        const mesh = new THREE.Mesh(geometry, rockMaterial(picture));
-
-        mesh.name = name;
-
-        return mesh;
     };
 
-    group.add(meshOf(made, look.tint, look.picture, "rock"));
+    meshesOf(made, look.tint ?? null, look.picture, "rock");
     yield;
-    group.add(meshOf(made.floor, look.ground, look.underfoot, "floor"));
+    meshesOf(made.floor, look.ground ?? null, look.underfoot, "floor");
 
     return group;
 }
@@ -4272,6 +4277,10 @@ export function* buildingInterior(map) {
         object.add(yield* built.shell);
     }
 
+    for (const each of built.blocks ?? []) {
+        object.add(each);
+    }
+
     const animated = new THREE.Group();
 
     animated.scale.setScalar(1 / M);
@@ -4312,7 +4321,7 @@ export function* buildingInterior(map) {
     // the daylight comes in through)
     object.traverse((node) => {
         if (node.isMesh && node.material.type !== "ShaderMaterial") {
-            node.castShadow = !node.material.name.startsWith("window");
+            node.castShadow = !node.material.name.startsWith("window") && !node.userData.shadowless;
             node.receiveShadow = true;
         }
     });

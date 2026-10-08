@@ -8,19 +8,17 @@
 import * as THREE from "three";
 import { ASSETS } from "../app/assets.js";
 import { hashed } from "../app/catalog.js";
+import { DUNGEON_PICTURES } from "./dungeonpictures.js";
 import { roomLit } from "./roomlight.js";
 
 /**
- * The pictures a dungeon's rock and stone can be drawn with, by name: each a catalog entry
- * (app/assets.js) of a colour picture and a normal map (OpenGL's way up), how many metres one
- * repeat of it covers (`metres`), and its average colour (`mean`, 0 to 1: the picture's grain is
- * taken as how far it is from that, the colour itself being the theme's).
+ * The pictures a dungeon's rock and stone can be drawn with, by name (dungeonpictures.js, made by
+ * scripts/build-textures.js): each a catalog entry (app/assets.js) of a colour picture and a
+ * normal map (OpenGL's way up), how many metres one repeat of it covers (`metres`), and its
+ * average colour (`mean`, 0 to 1: the picture's grain is taken as how far it is from that, the
+ * colour itself being the theme's).
  */
-export const ROCK_PICTURES = {
-    "rock-cave": { entry: "dungeon-rock-cave", metres: 2.6, mean: [0.0739, 0.0708, 0.0551] },
-    "ground-cave": { entry: "dungeon-ground-cave", metres: 2.2, mean: [0.2547, 0.2498, 0.2305] },
-    "ground-dug": { entry: "dungeon-ground-dug", metres: 1.8, mean: [0.0681, 0.0372, 0.0253] },
-};
+export const ROCK_PICTURES = DUNGEON_PICTURES;
 
 // A picture's texture, by its file: made at once, and drawn once its picture's come and been
 // decoded (until then `loaded` says it isn't, and the rock's drawn without it)
@@ -155,4 +153,77 @@ if (rockBumps > 0.5) {
     rocks.set(name, result);
 
     return result;
+}
+
+// Each face of a box: its four corners (which of x0/x1, y0/y1, z0/z1: 0 or 1 each), counter-
+// clockwise seen from outside, and which way it faces
+const FACES = [
+    { corners: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], normal: [1, 0, 0] },
+    { corners: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], normal: [-1, 0, 0] },
+    { corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], normal: [0, 1, 0] },
+    { corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], normal: [0, -1, 0] },
+    { corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], normal: [0, 0, 1] },
+    { corners: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], normal: [0, 0, -1] },
+];
+
+/**
+ * Boxes drawn with one of the pictures (ROCK_PICTURES), each its own shade of the colour it's
+ * given (a temple's walls and floor, a hideout's timbers): metres, as the level's laid out.
+ */
+export class Blocks {
+    constructor() {
+        this.positions = [];
+        this.normals = [];
+        this.shades = [];
+        this.indices = [];
+    }
+
+    /** A box from (x0, y0, z0) to (x1, y1, z1), `shade` times as dark as the colour (0 to 1). */
+    box(x0, y0, z0, x1, y1, z1, shade = 1) {
+        const at = [
+            [x0, x1],
+            [y0, y1],
+            [z0, z1],
+        ];
+
+        for (const { corners, normal } of FACES) {
+            const first = this.positions.length / 3;
+
+            for (const corner of corners) {
+                this.positions.push(at[0][corner[0]], at[1][corner[1]], at[2][corner[2]]);
+                this.normals.push(...normal);
+                this.shades.push(shade);
+            }
+
+            this.indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+        }
+    }
+
+    /**
+     * The boxes as a mesh drawn with a picture (ROCK_PICTURES' name) in `colour` (a hex colour;
+     * the picture's own, if none), or null if there are none.
+     */
+    mesh(picture, colour = null, name = picture) {
+        if (!this.indices.length) {
+            return null;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        const tint = colour === null ? new THREE.Color().setRGB(...ROCK_PICTURES[picture].mean, THREE.LinearSRGBColorSpace) : new THREE.Color(colour);
+        const colours = new Float32Array(this.shades.length * 3);
+
+        this.shades.forEach((shade, k) => colours.set([tint.r * shade, tint.g * shade, tint.b * shade], k * 3));
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(this.positions, 3));
+        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(this.normals, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+        geometry.setIndex(this.positions.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(this.indices, 1) : new THREE.Uint16BufferAttribute(this.indices, 1));
+
+        const result = new THREE.Mesh(geometry, rockMaterial(picture));
+
+        result.name = name;
+        // (A floor casts no shadow on anything)
+        result.userData.shadowless = name === "floor";
+
+        return result;
+    }
 }

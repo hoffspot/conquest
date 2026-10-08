@@ -14,9 +14,10 @@
  * How a level's rock is worked out: the lattice's spacing (`step`, metres), how far the walls
  * stand back into the rock from the open ground's edge (`back`), how much further they're
  * hollowed in places (`hollow`), from what height they're let lean in and bulge out (`lean`), and
- * how far below the floor they go (`below`, under the floor drawn over them).
+ * how far below the floor they go (`below`, under the floor drawn over them); and how big the
+ * square tiles it's drawn in are (`tile`, metres: tiles).
  */
-export const CAVERNS = Object.freeze({ step: 0.4, back: 0.2, hollow: 0.55, lean: 2.3, below: 0.8 });
+export const CAVERNS = Object.freeze({ step: 0.45, back: 0.2, hollow: 0.55, lean: 2.3, below: 0.8, tile: 16 });
 
 /**
  * Each kind of rock's way (by a look's `shell`): how much it bulges and hollows (`rough`, metres),
@@ -278,13 +279,91 @@ export function cavernAt(open, shell, seed, least = null) {
 }
 
 /**
+ * Each point's normal (unit length), from the triangles round it, each as much as its area: so
+ * the surface is smooth across where it's cut into tiles (tiles).
+ */
+export function normalsOf(positions, indices) {
+    const normals = new Float32Array(positions.length);
+
+    for (let t = 0; t < indices.length; t += 3) {
+        const [a, b, c] = [indices[t] * 3, indices[t + 1] * 3, indices[t + 2] * 3];
+        const [ux, uy, uz] = [positions[b] - positions[a], positions[b + 1] - positions[a + 1], positions[b + 2] - positions[a + 2]];
+        const [vx, vy, vz] = [positions[c] - positions[a], positions[c + 1] - positions[a + 1], positions[c + 2] - positions[a + 2]];
+        const [nx, ny, nz] = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+
+        for (const p of [a, b, c]) {
+            normals[p] += nx;
+            normals[p + 1] += ny;
+            normals[p + 2] += nz;
+        }
+    }
+
+    for (let p = 0; p < normals.length; p += 3) {
+        const length = Math.hypot(normals[p], normals[p + 1], normals[p + 2]) || 1;
+
+        normals[p] /= length;
+        normals[p + 1] /= length;
+        normals[p + 2] /= length;
+    }
+
+    return normals;
+}
+
+/**
+ * A surface ({ positions, normals, indices, shade }) cut into square tiles `size` metres across
+ * (each triangle in the tile its middle's in), each a surface of its own with only its own points:
+ * so what's out of sight, or out of a light's reach, is left undrawn a tile at a time.
+ */
+export function tiles({ positions, normals, indices, shade }, size = CAVERNS.tile) {
+    const byTile = new Map();
+
+    for (let t = 0; t < indices.length; t += 3) {
+        const [a, b, c] = [indices[t], indices[t + 1], indices[t + 2]];
+        const x = (positions[a * 3] + positions[b * 3] + positions[c * 3]) / 3;
+        const z = (positions[a * 3 + 2] + positions[b * 3 + 2] + positions[c * 3 + 2]) / 3;
+        const key = `${Math.floor(x / size)},${Math.floor(z / size)}`;
+
+        if (!byTile.has(key)) {
+            byTile.set(key, []);
+        }
+
+        byTile.get(key).push(a, b, c);
+    }
+
+    return [...byTile.values()].map((own) => {
+        const index = new Map();
+        const kept = [];
+
+        for (const p of own) {
+            if (!index.has(p)) {
+                index.set(p, kept.length);
+                kept.push(p);
+            }
+        }
+
+        const tile = { positions: new Float32Array(kept.length * 3), normals: new Float32Array(kept.length * 3), shade: new Float32Array(kept.length), indices: new Uint16Array(own.length) };
+
+        kept.forEach((p, k) => {
+            tile.positions.set(positions.subarray(p * 3, p * 3 + 3), k * 3);
+            tile.normals.set(normals.subarray(p * 3, p * 3 + 3), k * 3);
+            tile.shade[k] = shade[p];
+        });
+        own.forEach((p, k) => {
+            tile.indices[k] = index.get(p);
+        });
+
+        return tile;
+    });
+}
+
+/**
  * A level's floor under its rock (`open`: openness's), as a lattice of squares a `step` across
  * (metres): all of it that's within reach of the open ground (on under the walls, so they stand
  * on it), but not where a hole (`hole`: { x, y, w, h } squares, or null) goes down through it; its
  * points shaded darker towards the walls, as the light that reaches them is: { positions,
  * indices, shade } as cavern's.
  */
-export function cavernFloor(width, height, open, { hole = null, step = 0.5 } = {}) {
+export function cavernFloor(width, height, open, { hole = null, step = 1 } = {}) {
     const [nx, nz] = [Math.ceil((width + 2) / step) + 1, Math.ceil((height + 2) / step) + 1];
     const positions = new Float32Array(nx * nz * 3);
     const shade = new Float32Array(nx * nz);
@@ -476,5 +555,15 @@ export function* cavern(width, height, rock, shell, { seed = 1, least = null, ho
 
     yield;
 
-    return { positions: new Float32Array(positions), indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices), shade, floor: cavernFloor(width, height, open, { hole }) };
+    const surface = { positions: new Float32Array(positions), indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices), shade };
+
+    surface.normals = normalsOf(surface.positions, surface.indices);
+
+    yield;
+
+    const floor = cavernFloor(width, height, open, { hole });
+
+    floor.normals = normalsOf(floor.positions, floor.indices);
+
+    return { ...surface, floor };
 }
