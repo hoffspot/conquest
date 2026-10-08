@@ -388,9 +388,12 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
-    it("plays footsteps barely heard, everyone's alike, well under the blows: walking about a fourteenth of a slash, running about a ninth", () => {
+    it("plays footsteps barely heard, everyone's alike, well under the blows: walking about a fourteenth of a slash, running about a ninth", (t) => {
         const sound = new Sound({ fetch: fromDisk, enabled: false });
         const heard = [];
+
+        // (Each step as loud as the middle of its jitter: how loud each footing is, the jitter's checked below)
+        const random = t.mock.method(Math, "random", () => 0.5);
 
         sound.play = (name, { volume }) => heard.push({ name, loud: volume * SOUNDS[name].volume });
 
@@ -413,6 +416,7 @@ describe("playing sounds (sound.js)", () => {
         assert.ok(heard.every(({ loud }) => loud < SOUNDS.slash.volume / 7), "running");
 
         // (Each a little louder or softer than the last, never by much)
+        random.mock.restore();
         heard.length = 0;
 
         for (let k = 0; k < 40; k++) {
