@@ -37,6 +37,7 @@ import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
+import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
@@ -798,6 +799,9 @@ export class Game {
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
+
+        // The map whose guild's portal the player's walking up to (tapped: #keepToPortal), or null
+        this.toPortal = null;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -2164,6 +2168,7 @@ export class Game {
         this.ailments?.update(dt);
         this.#keepTalking();
         this.#keepShopping();
+        this.#keepToPortal();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
@@ -4231,6 +4236,8 @@ export class Game {
         return {
             guildRank: card?.title ?? "No",
             guildNext: !card ? "" : next ? `${card.to - card.merit} more merit and you're ${next.title}: ${next.opens.charAt(0).toLowerCase()}${next.opens.slice(1)}` : "Mithril! I've never stamped a Mithril card before. Can I... can I touch it?",
+            // (What their rank takes off the portals' fares: core/portals.js)
+            portalShare: !card ? "Register first, and they're yours to use too!" : card.rank === 0 ? "You're Copper, so it's the full fare for now, I'm afraid. Every rank takes a fifth off!" : fareOff(card.rank) >= 1 ? "And you're Mithril, so you don't pay a copper. Not one!" : `You're ${card.title}, so that's ${Math.round(fareOff(card.rank) * 100)}% off for you!`,
         };
     }
 
@@ -5690,9 +5697,14 @@ export class Game {
 
                 break;
             case "explored":
-                // (Marked on the maps, and kept)
+                // (Marked on the maps, and kept; a branch of the guild's portal open to them now,
+                // said)
                 if (event.id === this.me) {
                     this.#explored();
+
+                    if (event.portal) {
+                        this.hud.message("This branch of the guild is open to you now: step through to it from any other branch's portal.", 4);
+                    }
                 }
 
                 break;
@@ -5814,7 +5826,9 @@ export class Game {
                 }
 
                 if (event.id === this.me) {
-                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.` }[event.why] ?? "", 3);
+                    const branch = event.why === "portal" ? this.world.plan?.places.find(({ id }) => id === event.to)?.name : null;
+
+                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.`, portal: `Through the portal: the guild's branch in ${branch ?? "another town"}${event.fare ? `, for ${event.fare} gold` : ""}.` }[event.why] ?? "", 3);
                 }
 
                 break;
@@ -6635,10 +6649,105 @@ export class Game {
 
         const enemy = who;
         const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
-        const ground = enemy || door ? null : this.view.pickGround(clientX, clientY);
+        const portal = enemy || door ? null : this.#portalAt(clientX, clientY);
+        const ground = enemy || door || portal ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, door, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    // The portal of the guild's hall the player's in (core/portals.js), if that's what was tapped:
+    // its arch, or the step before it
+    #portalAt(clientX, clientY) {
+        const portal = portalOn(this.world.maps?.[this.mapId]);
+
+        if (!portal) {
+            return null;
+        }
+
+        const [ox, oz] = this.originOf(this.mapId);
+        const box = new THREE.Box3(new THREE.Vector3(ox + portal.x - 1, 0, oz + portal.y), new THREE.Vector3(ox + portal.x + portal.w, 2.9, oz + portal.y + portal.h));
+
+        return this.view.rayAt(clientX, clientY).intersectsBox(box) ? portal : null;
+    }
+
+    // Walking up to the portal (it was tapped): there and stopped, the travel map opens; told to
+    // do anything else, gone through a door, or stopped short, it's forgotten
+    #keepToPortal() {
+        if (!this.toPortal) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const portal = portalOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || me.map !== this.toPortal || !portal) {
+            this.toPortal = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        this.toPortal = null;
+
+        if (atPortal(portal, me.x, me.y)) {
+            this.openPortal();
+        }
+    }
+
+    /**
+     * Open the travel map at the guild's portal the player stands at (core/portals.js): the
+     * branches open to them, each with its fare at their rank; one chosen and agreed to, they step
+     * through (`travel`). Returns { ok, branches } ([{ id, name, x, z, metres, fare, here }]), or
+     * why not ({ ok: false, reason }: not at a portal, or not a member of the guild: said).
+     */
+    openPortal() {
+        const me = this.battle.actor(this.me);
+        const here = branchOf(this.world.interiors?.of(this.mapId), this.world.start);
+        const portal = portalOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || !here || !portal || !atPortal(portal, me.x, me.y)) {
+            return { ok: false, reason: "portal" };
+        }
+
+        const rank = this.standing.guildRank();
+
+        if (rank === null) {
+            this.hud.message("The veil stays dark: the portals are for the guild's members. Register at the counter first.", 4);
+
+            return { ok: false, reason: "unregistered" };
+        }
+
+        const branches = branchesFrom(this.world.plan, this.explored.portals ?? new Set(), here, rank);
+
+        this.onWorldMap({ travel: { branches, gold: this.progress.gold, rank: GUILD_RANKS[rank].title, off: fareOff(rank), choose: (id) => this.travel(id) } });
+
+        return { ok: true, branches };
+    }
+
+    /**
+     * Step through the portal the player stands at to another branch of the guild they've been
+     * into (`to`: its place's id), for its fare: the host's (core/host.js #travel). Its result, as
+     * the host gave it (refused: said).
+     */
+    travel(to) {
+        return this.#command({ type: "travel", to }, (result) => {
+            if (!result?.ok) {
+                this.hud.message(REFUSALS[result?.reason] ?? REFUSALS.command, 3);
+
+                if (result?.reason === "gold") {
+                    this.sound?.play("buyDenied");
+                }
+
+                return;
+            }
+
+            this.hud.setGold(this.progress.gold);
+            this.onProgress(this.progress);
+        });
     }
 
     /**
@@ -7178,7 +7287,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -7210,6 +7319,24 @@ export class Game {
         if (door) {
             this.#command({ type: "enter", link: door.link.id, run });
             this.doors.light(door, this.clock);
+
+            return;
+        }
+
+        // The guild's portal: up to it, and its travel map opens (#keepToPortal)
+        if (portal) {
+            const [ox, oz] = this.originOf(player.map);
+            const square = beforePortal(portal);
+
+            if (atPortal(portal, player.x, player.y) && !player.path.length) {
+                this.openPortal();
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toPortal = player.map;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
 
             return;
         }
@@ -7263,10 +7390,12 @@ export class Game {
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         // (Anything the player does themselves ends running somewhere far: not resisting a
-        // summons, done for them)
+        // summons, done for them; and walking up to the portal)
         if (!this.journeying && !(command.type === "summoned" && !command.come)) {
             this.journey = null;
         }
+
+        this.toPortal = null;
 
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));

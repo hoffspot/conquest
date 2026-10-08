@@ -258,7 +258,7 @@ describe("a temple's nave and folk (insides.js)", () => {
 });
 
 describe("a guild's hall and folk (insides.js)", () => {
-    it("has its counter, shelves, quest board, tables and hearth, all got to from the door, the receptionist behind the counter and adventurers at the board and tables", () => {
+    it("has its counter, shelves, quest board, tables, hearth and portal, all got to from the door, the receptionist behind the counter and adventurers at the board and tables", () => {
         for (const seed of [1, 2, 3, 4, 5, 6]) {
             const building = { key: `test:guild:${seed}`, name: "the Adventurers' Guild", seed };
             const [floor] = guildRooms(building);
@@ -270,6 +270,14 @@ describe("a guild's hall and folk (insides.js)", () => {
             assert.equal(floor.sound, "guild");
             assert.ok(count("counter") === 1 && count("shelves") === 1 && count("board") === 1 && count("hearth") === 1);
             assert.ok(count("table") === 4 && count("barrels") === 2);
+
+            // The portal on the east wall, across the room from the board on the west, beside the
+            // hearth; the middle of the square before it got to from the door
+            const portal = hall.pieces.find(({ kind }) => kind === "portal");
+
+            assert.ok(portal && portal.x === hall.width - 1 && portal.w === 1 && portal.h === 3);
+            assert.equal(hall.pieces.find(({ kind }) => kind === "board").x, 0);
+            assert.ok(reachable(hall, door, [portal.x - 1, portal.y + 1]) && !hall.blocked[portal.y + 1][portal.x - 1]);
 
             const folk = guildFolkOf(building, hall);
             const [receptionist, ...adventurers] = folk;

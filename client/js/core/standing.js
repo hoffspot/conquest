@@ -77,15 +77,16 @@ export const REQUESTS = Object.freeze({
  * guilds' merit). Each rank's title, the merit it takes, and what the guilds give at it: the work
  * it opens (REQUESTS' `rank`, and the biggest place to clear, GUILD_SIZES), how many more foes or
  * parts each contract asks for than a Copper's (`more`), the least level of beasts asked for
- * (`level`: as near as the land has them), and what it pays, times the Copper's (`pay`).
+ * (`level`: as near as the land has them), what it pays, times the Copper's (`pay`), and what a
+ * step through the guild's portals costs them, times the Copper's (`fare`: core/portals.js).
  */
 export const GUILD_RANKS = Object.freeze([
-    { title: "Copper", merit: 0, more: 0, level: 1, pay: 1, opens: "Beasts on the roads, parts wanted at the guild, sealed packages, and the small places to clear." },
-    { title: "Iron", merit: 10, more: 1, level: 1, pay: 1.1, opens: "Bounties on the soldiers of a people at war, and more of everything asked." },
-    { title: "Bronze", merit: 30, more: 1, level: 2, pay: 1.25, opens: "The camps outside the walls, the middling places to clear, and beasts of level 2 or more." },
-    { title: "Silver", merit: 70, more: 2, level: 3, pay: 1.4, opens: "Beasts of level 3 or more, and more of everything asked." },
-    { title: "Gold", merit: 140, more: 3, level: 4, pay: 1.6, opens: "The great places to clear, beasts of level 4 or more, and more of everything asked." },
-    { title: "Mithril", merit: 250, more: 4, level: 5, pay: 1.8, opens: "The hardest work the guilds have, beasts of level 5 or more, and the best pay." },
+    { title: "Copper", merit: 0, more: 0, level: 1, pay: 1, fare: 1, opens: "Beasts on the roads, parts wanted at the guild, sealed packages, and the small places to clear." },
+    { title: "Iron", merit: 10, more: 1, level: 1, pay: 1.1, fare: 0.8, opens: "Bounties on the soldiers of a people at war, more of everything asked, and a fifth off the portals." },
+    { title: "Bronze", merit: 30, more: 1, level: 2, pay: 1.25, fare: 0.6, opens: "The camps outside the walls, the middling places to clear, beasts of level 2 or more, and two fifths off the portals." },
+    { title: "Silver", merit: 70, more: 2, level: 3, pay: 1.4, fare: 0.4, opens: "Beasts of level 3 or more, more of everything asked, and three fifths off the portals." },
+    { title: "Gold", merit: 140, more: 3, level: 4, pay: 1.6, fare: 0.2, opens: "The great places to clear, beasts of level 4 or more, more of everything asked, and four fifths off the portals." },
+    { title: "Mithril", merit: 250, more: 4, level: 5, pay: 1.8, fare: 0, opens: "The hardest work the guilds have, beasts of level 5 or more, the best pay, and the portals free." },
 ]);
 
 /** The guild rank at which each size of place held is first given to clear (and from it, the biggest near). */
