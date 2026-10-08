@@ -3089,6 +3089,7 @@ export class Game {
         }
 
         this.#endTalk();
+        this.#tradeOver(npc);
 
         if (this.battle.canTalk(player, npc)) {
             this.approaching = null;
@@ -3100,6 +3101,14 @@ export class Game {
 
         this.approaching = npc.id;
         this.#command({ type: "approach", target: npc.id, run });
+    }
+
+    // Trading with someone else than `npc`, the player off to talk to them: the trade's done, and
+    // the one they were trading with let go
+    #tradeOver(npc) {
+        if (this.shopping && this.shopping.keeper !== npc?.id) {
+            this.closePack();
+        }
     }
 
     // Start talking to one of the folk: they stop and face the player, and the talk shows
@@ -3115,6 +3124,8 @@ export class Game {
         if (!tree) {
             return;
         }
+
+        this.#tradeOver(npc);
 
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
@@ -3483,7 +3494,15 @@ export class Game {
             return;
         }
 
-        this.#command({ type: "talk", with: null });
+        // (Over to trade with them: they're still the player's, standing at their counter or
+        // wherever they were, rather than going back about their business, maybe off out of reach
+        // and the trade with it, till it's done: #stopShopping)
+        const trading = this.shopWanted?.keeper === this.talking.id;
+
+        if (!trading) {
+            this.#command({ type: "talk", with: null });
+        }
+
         this.#talkingFace(this.talking.id, false);
         this.talking = null;
         this.talk?.hide();
@@ -4532,7 +4551,7 @@ export class Game {
             this.sound?.play("packClose");
         }
 
-        this.shopping = null;
+        this.#stopShopping();
         this.pack?.hide();
 
         // (Trading with another player: closed, it's called off)
@@ -4600,7 +4619,7 @@ export class Game {
                 return;
             case "open":
                 this.closeJournal();
-                this.shopping = null;
+                this.#stopShopping();
                 this.hud.message(`Trading with ${them}: offer what you will, then agree.`, 3);
                 break;
             case "offer":
@@ -4657,6 +4676,18 @@ export class Game {
         this.closeJournal();
         this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
         this.#showPack();
+    }
+
+    // Done trading with a shopkeeper: they're let go, back about their business (they were kept
+    // standing for it, as they are talking: #endTalk), unless the player's talking to them again
+    #stopShopping() {
+        const keeper = this.shopping?.keeper;
+
+        this.shopping = null;
+
+        if (keeper && this.talking?.id !== keeper) {
+            this.#command({ type: "talk", with: null });
+        }
     }
 
     // The pack as it is now (and the shop's wares, trading)
