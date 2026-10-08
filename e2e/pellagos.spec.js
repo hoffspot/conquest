@@ -7139,7 +7139,10 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
         const { game } = window.pellagos;
         const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
 
-        return fielded.length === 80 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy;
+        // (And the nearest built in full, in the crowd till they are)
+        const building = [...game.enlisting, ...game.enlistees.keys()].some((id) => id.startsWith("field-"));
+
+        return fielded.length === 80 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building;
     };
 
     expect(await playUntil(page, drawn, { seconds: 120 })).toBe(true);
@@ -7166,14 +7169,17 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
         };
     });
 
-    // (The few nearest in full, as many as the quality level draws so, and the rest in their kind's crowd)
-    expect(seen.full).toBe(seen.soldiers.full);
-    expect(seen.crowded).toBe(80 - seen.soldiers.full);
+    // (The few nearest in full, as many as the quality level draws so (and up to 3 more drawn so
+    // already, let go only once they're further: app/game.js MARSHAL), the rest in their kind's crowd)
+    expect(seen.full).toBeGreaterThanOrEqual(seen.soldiers.full);
+    expect(seen.full).toBeLessThanOrEqual(seen.soldiers.full + 3);
+    expect(seen.crowded).toBe(80 - seen.full);
 
-    // (Each kind drawn in one go, or two, near and far: a few dozen instances in a handful of draws)
+    // (Each kind drawn in one go, or two, near and far: a few dozen instances, those in view, in a
+    // handful of draws)
     expect(seen.kinds).toBeGreaterThanOrEqual(3);
     expect(seen.batches).toBeLessThanOrEqual(2 * seen.kinds);
-    expect(seen.instances).toBeGreaterThan(40);
+    expect(seen.instances).toBeGreaterThan(20);
     expect(seen.instances).toBeLessThanOrEqual(seen.crowded);
 
     // Let go, they make for each other and fight: the fallen of the crowds lie where they fell

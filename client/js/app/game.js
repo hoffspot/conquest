@@ -1288,7 +1288,8 @@ export class Game {
     // The same, a step at a time (each a yield: Character.building's), so that drawing someone new
     // is spread over frames. Returns their avatar (none if they've gone meanwhile)
     *#dressing(actor) {
-        if (this.avatars.has(actor.id)) {
+        // (Drawn already: but one of a crowd's built in full, to take its place)
+        if (this.#drawnInFull(actor.id)) {
             return this.avatars.get(actor.id);
         }
 
