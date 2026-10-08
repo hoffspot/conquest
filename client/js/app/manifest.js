@@ -174,7 +174,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/setpieces/works.js", 15945],
             ["js/core/settlements.js", 11767],
             ["js/core/signposts.js", 4763],
-            ["js/core/sites.js", 47771],
+            ["js/core/sites.js", 47946],
             ["js/core/spoils.js", 11857],
             ["js/core/standing.js", 50024],
             ["js/core/steps.js", 2973],
