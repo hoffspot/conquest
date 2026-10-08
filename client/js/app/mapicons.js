@@ -5,8 +5,9 @@
 // crown for a keep. And the places worth finding out in the world (core/places.js; the terrain
 // plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
 // spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
-// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS). Drawn on a
-// canvas, from paths on a grid 24 across, centred on 0, 0.
+// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); and
+// an adventurers' cache once it's been seen (a chest). Drawn on a canvas, from paths on a grid 24
+// across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
 const LOOKS = {
@@ -218,6 +219,18 @@ const LOOKS = {
             ["M-10,9 q10,-4.6 20,0 z", "#6f7a5e", "#1e2420", 0.9],
             ["M-9,7.4 v-6.4 a2.6,2.6 0 0 1 5.2,0 v5.6 z M3.8,6.6 v-5.6 a2.6,2.6 0 0 1 5.2,0 v6.4 z", "#b0ab9c", "#1e2420", 1],
             ["M-1.1,6 v-10.5 h2.2 v10.5 z M-3.6,-1.6 h7.2 v2.2 h-7.2 z", "#c4bfb0", "#1e2420", 1],
+        ],
+    },
+    // (An adventurers' cache out in the wilds, once seen: core/caches.js)
+    cache: {
+        rim: "#e8c35a",
+        parts: [
+            // A chest: its rounded lid and its body, the iron bands over both, and its lock
+            ["M-8.5,-1 v-3 a8.5,5 0 0 1 17,0 v3 z", "#8a5a2e", "#2a1608", 1],
+            ["M-8.5,-1 h17 v9 h-17 z", "#a06a36", "#2a1608", 1],
+            ["M-5,-8.4 v16.4 M5,-8.4 v16.4", null, "#d9b04a", 1.4],
+            ["M-8.5,-1 h17", null, "#2a1608", 1.2],
+            ["M-1.8,-2.6 h3.6 v4.8 h-3.6 z", "#e8c35a", "#2a1608", 0.8],
         ],
     },
     camp: {
