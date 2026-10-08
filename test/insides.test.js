@@ -391,10 +391,10 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.equal(home.folk, world.folk);
     });
 
-    it("puts every settlement's taverns', smithies', temples' and guilds' doors among the world's links as it's laid out, their insides still to make", () => {
+    it("puts every settlement's taverns', smithies', temples', guilds' and barracks' doors among the world's links as it's laid out, their insides still to make", () => {
         const entered = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
 
-        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church", "guild"]));
+        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church", "guild", "barracks"]));
 
         for (const piece of entered) {
             const building = interiors.buildings.get(`${settlement.place.id}:${piece.id}`);
@@ -404,7 +404,7 @@ describe("the buildings (insides.js Interiors)", () => {
 
             // (Where it stands, for its icon on the maps: its middle, a few steps from its door)
             assert.ok(Math.hypot(building.at[0] - outside.squares[0][0], building.at[1] - outside.squares[0][1]) < 12, `${building.key}: at ${building.at}`);
-            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild" }[piece.name]));
+            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild", barracks: piece.grade === "guardhouse" ? "the guardhouse" : "the barracks" }[piece.name]));
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);
             assert.ok(inside.pending);

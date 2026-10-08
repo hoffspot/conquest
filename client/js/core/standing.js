@@ -17,6 +17,7 @@ import { bandOf, holderOf, placesOf } from "./places.js";
 import { PARTS, SPOILS } from "./spoils.js";
 import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
+import { STAGES } from "./war/war.js";
 import { hypot } from "./exact.js";
 import { landAt } from "./worldplan/plan.js";
 
@@ -31,7 +32,7 @@ export const STANDINGS = Object.freeze([
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, convoy: 2, retake: 2, march: 3, build: 3, escort: 3, waylay: 3, plunder: 3, seize: 3, rise: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, convoy: 2, retake: 2, march: 3, build: 3, escort: 3, waylay: 3, plunder: 3, seize: 3, take: 3, rise: 3, peace: 4, war: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
@@ -62,6 +63,8 @@ export const REQUESTS = Object.freeze({
     plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 40 } },
     retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 35 } },
     seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 45 } },
+    // (An enemy's town taken by its barracks: docs/WAR.md M16)
+    take: { title: "Take the town", rank: OPENS.take, turns: 60, reward: { standing: 120, gold: 80 } },
     // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
     // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
     // rank each is first offered at (GUILD_RANKS)
@@ -141,7 +144,7 @@ const many = (label) => (/(s|y|dust|silk|meat|jelly|blood|skin)$/i.test(label) ?
  * How near (m) a player goes to see what they're scouting, to be there to hold a town (from its
  * middle), to be with an envoy or a convoy, and at a works to win it.
  */
-export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60, convoy: 60, works: 120 });
+export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60, convoy: 60, works: 120, take: 150 });
 
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
@@ -278,7 +281,11 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.liege(each.owner) !== liege) && !has("retake", each.id)) : [];
     const theirWorks = rank >= OPENS.seize ? works.filter((each) => !each.held && war.hostile(liege, war.liege(each.owner)) && war.liege(each.race) !== liege && !has("seize", each.id)) : [];
 
-    for (const [kind, found] of [["convoy", ourConvoys], ["plunder", theirConvoys], ["retake", lost], ["seize", theirWorks]]) {
+    // An enemy's town taken, its barracks' guardsmen and captain put down, while the age lets
+    // towns of its kind be taken (docs/WAR.md M16)
+    const takeable = post === "keep" && rank >= OPENS.take ? war.towns.filter((each) => war.hostile(liege, war.liege(each.owner)) && STAGES[war.stage].take.includes(each.kind) && !has("take", each.id)) : [];
+
+    for (const [kind, found] of [["convoy", ourConvoys], ["plunder", theirConvoys], ["retake", lost], ["seize", theirWorks], ["take", takeable]]) {
         if (found.length) {
             kinds.push(kind);
         }
@@ -289,7 +296,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     }
 
     // (The keep asks the weightier things when it can)
-    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "convoy", "plunder", "retake", "seize", "bounty"].includes(kind));
+    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "convoy", "plunder", "retake", "seize", "take", "bounty"].includes(kind));
     const kind = random.pick(post === "keep" && weighty.length ? weighty : kinds);
     const times = post === "keep" ? KEEP_REWARD : 1;
     const worth = (standing, gold) => ({ standing: Math.round(standing * times), gold: Math.round(gold * times) });
@@ -451,6 +458,19 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: works.id,
                 target: { works: works.id, at: [...works.at], name: name.replace(/^the /, ""), realm: works.owner },
                 text: `${name[0].toUpperCase()}${name.slice(1)} keeps ${war.realm(works.owner).name} in ${YIELDED[works.kind] ?? "goods"}. Bring its guard down and it's ours, and its goods with it.`,
+                until: war.turn + turns,
+                reward: worth(reward.standing, reward.gold),
+            };
+        }
+        case "take": {
+            const there = nearestTo(takeable, town.at);
+            const quarters = there.kind === "village" ? "guardhouse" : "barracks";
+
+            return {
+                ...base,
+                key: there.id,
+                target: { town: there.id, at: [...there.at], name: there.name, realm: there.owner, quarters },
+                text: `${there.name} is held by ${war.realm(there.owner).name}. Get into its ${quarters} and put down its guardsmen and their captain, and it's ours: our soldiers in it, and its taxes ours.`,
                 until: war.turn + turns,
                 reward: worth(reward.standing, reward.gold),
             };
@@ -958,6 +978,8 @@ export function progressOf(request) {
         case "retake":
         case "seize":
             return request.there ? "Bring down whoever holds it." : `Get to the ${target.name}.`;
+        case "take":
+            return request.there ? `Get into its ${target.quarters ?? "barracks"}, and put down its guardsmen and their captain.` : `Get to ${target.name}.`;
         default:
             return "";
     }

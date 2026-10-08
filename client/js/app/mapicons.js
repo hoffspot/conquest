@@ -1,17 +1,18 @@
 // Icons for the buildings the player has gone into, on the minimap and the world map: a round
 // badge, rimmed in the colour of what the building is, with its sign in it: a foaming tankard
 // for a tavern, an anvil for a smithy, a temple's columns under its pediment for a temple,
-// crossed swords behind a shield for an adventurers' guild, crossed keys for a town hall, and a
-// crown for a keep. And the places worth finding out in the world (core/places.js; the terrain
-// plan's M7.5): a castle, a manor, an abbey, a windmill, a watchtower, a people's hall, a holy
-// spring, a great rock, a totem, ruins, a ruined castle, a cave, the dragon's lair, a shrine,
-// standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); a
-// dungeon's way in (an arch over steps going down, grey while it's cleared); an adventurers' cache
-// once it's been seen (a chest); and each people's works, a lumber mill (a log and an axe), a mine
-// (a pick over its ore) and a quarry (a squared block), rimmed in their holder's colour; and their
-// fortifications, a guard tower (a battlemented tower) and a forward garrison (a curtain wall
-// between two turrets, its gate in it), rimmed as the works are. Drawn on a canvas, from paths on
-// a grid 24 across, centred on 0, 0.
+// crossed swords behind a shield for an adventurers' guild, crossed keys for a town hall, a
+// crown for a keep, and a crested helm for a barracks. And the places worth finding out in the
+// world (core/places.js; the terrain plan's M7.5): a castle, a manor, an abbey, a windmill, a
+// watchtower, a people's hall, a holy spring, a great rock, a totem, ruins, a ruined castle, a
+// cave, the dragon's lair, a shrine, standing stones, a graveyard and a camp, each rimmed in the
+// colour of who holds it (PLACE_RIMS); a dungeon's way in (an arch over steps going down, grey
+// while it's cleared); an adventurers' cache once it's been seen (a chest); and each people's
+// works, a lumber mill (a log and an axe), a mine (a pick over its ore) and a quarry (a squared
+// block), rimmed in their holder's colour; and their fortifications, a guard tower (a
+// battlemented tower) and a forward garrison (a curtain wall between two turrets, its gate in
+// it), rimmed as the works are. Drawn on a canvas, from paths on a grid 24 across, centred on
+// 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
 const LOOKS = {
@@ -75,6 +76,17 @@ const LOOKS = {
             ["M-9,6 L-9,-5 L-4.5,0 L0,-8 L4.5,0 L9,-5 L9,6 z", "#e2b54a", "#2a1a0e", 1.1],
             ["M-9,-5.5 a1.4,1.4 0 1 1 0.01,0 z M0,-8.5 a1.4,1.4 0 1 1 0.01,0 z M9,-5.5 a1.4,1.4 0 1 1 0.01,0 z", "#d0413a", "#2a1a0e", 0.8],
             ["M-4,3 h8", null, "#8f6ad6", 2],
+        ],
+    },
+    barracks: {
+        rim: "#6f8fb3",
+        parts: [
+            // A soldier's helm: its crest, its dome and brim, and the guard down over the nose
+            ["M0,-5.2 c1.6,-3.2 4.8,-5.2 8.5,-5.2 c-1.4,2.8 -4.6,4.8 -8.5,5.2 z", "#c0392b", "#2a1a0e", 0.9],
+            ["M-7.2,3 a7.2,8 0 0 1 14.4,0 z", "#aeb6bf", "#1e2328", 1.1],
+            ["M-8.4,3 h16.8 v2.8 h-16.8 z", "#7d868f", "#1e2328", 1],
+            ["M-1.3,5.8 h2.6 v4.6 l-1.3,1.4 l-1.3,-1.4 z", "#aeb6bf", "#1e2328", 0.9],
+            ["M-4.2,-1.5 a4.5,5 0 0 1 3,-3.6", null, "#e6ebf0", 1.1],
         ],
     },
     // The places worth finding

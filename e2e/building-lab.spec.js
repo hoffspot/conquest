@@ -31,7 +31,7 @@ test("builds a street of every style of house in a few draw calls, and the town"
     expect(town.address).toBe("?seed=7&show=town");
 });
 
-test("builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall and a keep", async ({ page }) => {
+test("builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, and barracks and a guardhouse", async ({ page }) => {
     await page.goto("/building-lab.html?seed=7&show=landmarks");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
 
@@ -48,14 +48,16 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     });
 
     // (Four taverns, the guild, a church of each grade and build, the smithy, the market hall,
-    // the windmill, a town hall and a keep)
-    expect(built.stats.pieces).toBe(14);
+    // the windmill, a town hall, a keep, two barracks and a guardhouse)
+    expect(built.stats.pieces).toBe(17);
     expect(built.stats.calls).toBeLessThan(60);
 
     // Each tavern's name on its board and its sign by the door, the guild's, the churches'
-    // patrons' signs, the town hall's board and sign, and the keep's crown
-    expect(built.names.filter((name) => name.startsWith("board ")).length).toBe(6);
-    expect(built.names.filter((name) => name.startsWith("sign ")).length).toBeGreaterThanOrEqual(10);
+    // patrons' signs, the town hall's board and sign, the keep's crown, and the barracks' and
+    // guardhouse's boards and shields
+    expect(built.names.filter((name) => name.startsWith("board ")).length).toBe(8);
+    expect(built.names.filter((name) => name.startsWith("sign ")).length).toBeGreaterThanOrEqual(12);
+    expect(built.names).toEqual(expect.arrayContaining(["board Barracks", "sign Barracks", "board Guardhouse", "sign Guardhouse"]));
     expect(built.names).toContain("sign guild");
     expect(built.names).toContain("sign blacksmith");
     expect(built.names).toEqual(expect.arrayContaining(["board hall", "sign hall", "sign keep"]));

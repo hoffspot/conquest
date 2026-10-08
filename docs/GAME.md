@@ -284,7 +284,11 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
 - **Where it's ruled from**: in a town or a city, a town hall; in a capital, the keep. Once all
   else is laid out, the biggest house within six tenths of the radius of the market (the nearest,
   of two as big) is made over into it, keeping its style and storeys (two at least), so nothing
-  else in the layout moves. It can be entered too (`ENTERED` has them all). A tavern has its name, sign and storeys, and what's
+  else in the layout moves. It can be entered too (`ENTERED` has them all).
+- **Where its garrison's quartered** (docs/WAR.md M16): in a village, a town, a city or a
+  capital, a barracks (a village's guardhouse: `barracks`), made over in the same way from the
+  biggest house on a street out towards its edge, on dry land (failing that, as near to it as
+  there is). It can be entered. A tavern has its name, sign and storeys, and what's
   upstairs (`core/lore/taverns.js`: below); a church its patron, one of the Six
   (`core/lore/gods.js`: below), and its grade and build (`churchOf`: a village's parish church,
   a town's church, Romanesque or Gothic by its seed, a city's minster; taking nothing from the
@@ -428,7 +432,7 @@ of each map on the way: a list of them by map, made again when links are added).
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns, smithies, temples, adventurers' guilds, town halls and keeps), in the start town and in
+into (`ENTERABLE`: taverns, smithies, temples, adventurers' guilds, town halls, keeps and barracks), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -539,6 +543,11 @@ are kept.
   (warrior, ranger, mage, rogue or cleric: every one before any comes twice), dressed and armed
   as it has them, their weapons sheathed; those at the tables hold tankards instead of their
   swords, staves and hammers. The quest board's notices can't be taken yet.
+- **A barracks** (`barracksRooms`) is a long room 18 by 14 metres: the garrison's arms racked along
+  the north wall and its barrels beside them, its captain's desk before the shelves of its rolls,
+  bunks two high along the walls, the hearth, the mess table and its benches, and strongboxes by
+  the door. No folk: its garrison is the host's, of whoever holds the town (`barracksPosts`: its
+  captain behind the desk, its guardsmen at their posts; docs/WAR.md M16).
 - **A town hall** (`hallRooms`) is a chamber 18 by 14 metres: shelves of the town's rolls along
   the north wall and the reeve's long desk before them, the council table with its benches, the
   notices on the west wall, a hearth on the east, strongboxes, and petitioners' benches by the
@@ -2500,6 +2509,19 @@ facing south; each is turned about its middle to face the way the layout says:
   - **The town hall**: the house it was, in its street's look (a cottage's made timber, for a
     storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
     dark red board over it, the sign of the town's keys by the door, and a lantern either side.
+  - **The barracks** (a village's guardhouse): the house it was, in its street's look (a
+    cottage's made stone), its door in the middle of its front up a step, "Barracks" (or
+    "Guardhouse") on a board over it or along the floor above, the sign of a shield by it, a
+    torch either side of the door, shields hung on its front between the windows, a rack of
+    spears against it on one side and a straw butt with painted rings on the other. Each people
+    builds its own (*Each people's buildings*): the elves a round hall of marble under one petal
+    roof, its name on a board standing by the way in; the dark elves a thorn house with a rack of
+    glaives and iron spikes along its plinth; the cat folk a town house with a lookout tower at
+    one front corner; the lizard folk a long house of white plaster on a low terrace, a rack of
+    spears tipped with obsidian and a war drum; the orcs a longhouse, its name hung under the front
+    of the porch over its door, posts topped with skulls either side, a rack of spears and a war
+    banner. The building lab
+    (`building-lab.html?show=landmarks`) shows each people's, and its inside (`show=insides`).
   - **The keep**: a great stone tower, battlemented, a round turret at each corner under a cone
     of slate, a hipped roof inside the battlements, arrow slits and taller lights on every face,
     and a door of dressed stone up two steps between two long banners of the crown (stirring in
@@ -2965,7 +2987,8 @@ the player has been inside (a house that can't be entered never has one): a roun
 rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
 anvil throwing a spark for a smithy (steel), a temple's columns under its pediment for a temple
 (white and gold), crossed swords behind a blue shield for an adventurers' guild (gold), crossed
-gold keys for a town hall (red), and a jewelled crown for a keep (violet). They're
+gold keys for a town hall (red), a jewelled crown for a keep (violet), and a crested helm for a
+barracks (steel blue). They're
 drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
 map (24) and its key.
 

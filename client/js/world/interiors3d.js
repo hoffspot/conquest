@@ -4214,8 +4214,115 @@ function* rockShell(map, look, shell) {
     return group;
 }
 
+// A bunk (a plan's "B" run, a metre wide and two long, along the wall it stands by): two beds one
+// over the other on four posts, a straw mattress and a blanket on each, a bolster at the head
+function bunk(solid, piece, blanket) {
+    const along = piece.h >= piece.w;
+    const [x0, z0, x1, z1] = [m(piece.x + 0.08), m(piece.y + 0.08), m(piece.x + piece.w - 0.08), m(piece.y + piece.h - 0.08)];
+    const top = m(1.75);
+
+    for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+        solid.box(x - (x === x0 ? 0 : 0.5), 0, z - (z === z0 ? 0 : 0.5), x + (x === x0 ? 0.5 : 0), top, z + (z === z0 ? 0.5 : 0), material("timber"));
+    }
+
+    for (const y of [m(0.3), m(1.2)]) {
+        solid.box(x0 + 0.2, y - m(0.08), z0 + 0.2, x1 - 0.2, y, z1 - 0.2, material("planks-dark"));
+        solid.box(x0 + 0.5, y, z0 + 0.5, x1 - 0.5, y + m(0.12), z1 - 0.5, material("canvas-sack"));
+        solid.box(x0 + 0.45, y + m(0.12), along ? z0 + m(0.55) : z0 + 0.45, x1 - 0.45, y + m(0.16), z1 - 0.45, material(blanket));
+
+        const head = along ? [x0 + 0.6, z0 + 0.6, x1 - 0.6, z0 + m(0.45)] : [x0 + 0.6, z0 + 0.6, x0 + m(0.45), z1 - 0.6];
+
+        solid.box(head[0], y + m(0.12), head[1], head[2], y + m(0.24), head[3], material("linen"));
+    }
+}
+
+// A barracks' long room: limewashed walls and boards underfoot, the garrison's arms on their racks
+// along the north wall and its barrels beside them, the captain's desk before the shelves of its
+// rolls, bunks two high along the walls, the mess table and its benches, the hearth, strongboxes
+// by the door, a banner of its people's colours over the racks, and torches on the walls
+function barracks(map) {
+    const solid = new Solid();
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    walledIn(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 1, to: doorMiddle + 1, lintel: 2.5 }], [{ side: "s", at: 3.5 }, { side: "s", at: 14.5 }, { side: "w", at: 4 }, { side: "w", at: 10 }, { side: "e", at: 2.5 }]);
+    solid.box(m(doorMiddle - 1), 0, h - 0.2, m(doorMiddle + 1), m(2.5), h + 0.4, material("planks-dark", WALL));
+    ceiling(solid, map);
+
+    for (const rack of at("rack")) {
+        armoury(solid, rack);
+    }
+
+    for (const barrels of at("barrels")) {
+        for (let x = barrels.x; x < barrels.x + barrels.w; x++) {
+            const [cx, cz] = [m(x + 0.5), m(barrels.y + 0.5)];
+
+            solid.cylinder(cx, cz, 0, m(0.9), m(0.38), m(0.38), material("planks"), { segments: 12 });
+            solid.cylinder(cx, cz, m(0.15), m(0.2), m(0.4), m(0.4), material("iron"), { segments: 12 });
+            solid.cylinder(cx, cz, m(0.7), m(0.75), m(0.4), m(0.4), material("iron"), { segments: 12 });
+        }
+    }
+
+    for (const shelf of at("shelves")) {
+        rollShelves(solid, shelf, "wool-blue");
+    }
+
+    for (const counter of at("counter")) {
+        desk(solid, counter, "wool-blue");
+    }
+
+    for (const bed of at("bed")) {
+        bunk(solid, bed, (bed.x + bed.y) % 2 ? "wool-blue" : "wool-green");
+    }
+
+    // The mess table: bowls, a loaf, tankards and a candle down it
+    for (const piece of at("table")) {
+        const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+
+        table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
+        candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+
+        for (let x = x0 + m(0.6), k = 0; x < x1 - m(0.4); x += m(1.1), k++) {
+            if (k % 2) {
+                tankard(solid, x, z0 + m(0.3), m(0.78), true);
+            } else {
+                solid.cylinder(x, z1 - m(0.3), m(0.78), m(0.84), m(0.1), m(0.13), material("planks"), { segments: 10 });
+            }
+        }
+
+        solid.cylinder(x0 + m(1.6), (z0 + z1) / 2, m(0.78), m(0.9), m(0.16), m(0.12), material("bread"), { segments: 10 });
+    }
+
+    for (const run of benchRuns(map)) {
+        bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+    }
+
+    for (const box of at("chest")) {
+        chest(solid, m(box.x + 0.5), m(box.y + 0.5));
+    }
+
+    wallBanner(solid, m(6.5), 0.3, "z", "velvet", "cloth-gold", { low: 1.2, high: 2.9 });
+
+    const [hearth] = at("hearth");
+    const fire = sideHearth(solid, map, hearth);
+    const torches = [[0.3, 7], [map.width - 0.3, 10], [6, map.height - 0.3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
+
+    return {
+        solid,
+        moving: [],
+        flames: [fire.fire, ...torches.map(({ fire: flame }) => flame)],
+        lights: [fire.light, ...torches.map(({ light }) => light)],
+        hearth: fire.at,
+    };
+}
+
 // (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, barracks, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
 
 // --- Each people's own ---
 

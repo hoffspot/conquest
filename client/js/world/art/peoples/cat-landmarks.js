@@ -582,6 +582,52 @@ export async function hall(piece) {
 }
 
 /**
+ * The barracks (a village's guardhouse): a town house of one storey or two, a lookout tower at
+ * one front corner with ears on its top, "Barracks" (or "Guardhouse") over its door bay, and a
+ * rack of spears against its front.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const random = randomFor(piece, 7);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const label = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const name = random.pick(["mud", "mud-red", "mud-dark"]);
+    const solid = new Solid();
+    const front = D - m(ENTRY) + m(0.35);
+    const storeys = (piece.storeys ?? 1) > 1 ? [m(3.2), m(2.9)] : [m(3.6)];
+
+    toned(solid, random, [storeys.reduce((a, b) => a + b, 0) + m(0.5)]);
+
+    const boardOf = (length) => Math.min(m(3.6), length - m(5.2));
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 0.6, paint: null, doorway: { width: m(1.8), height: m(2.4) }, plinth: m(0.3), roofHouse: false, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
+    const at = wallPoint(house.front, { lean: house.lean });
+    const middle = house.front.length / 2;
+    const boardWidth = boardOf(house.front.length);
+
+    // (Its lookout at the front corner on the right as it's faced, rising past its roof)
+    tower(solid, [W - m(2.6), front - m(2.4), W - m(0.2), front + m(0.1)], 0, house.top + m(2.4), name, random, { lean: house.lean, cap: "ears" });
+
+    if (boardWidth > m(1.5)) {
+        plaque(solid, at, house.front.out, [middle - boardWidth / 2, middle + boardWidth / 2, house.bayTop + m(0.1), house.bayTop + m(0.1) + (boardWidth * 9) / 56], nameBoardTexture({ name: label, ground: "#5a2410", dark: "#2a1006" }), `board ${label}`, { proud: m(0.45) });
+    }
+
+    // The spears, leaning in a rack against the front on the left (its front runs east to west)
+    const [rx0, , rz0] = at(Math.max(middle + m(2.2), house.front.length - m(2.4)), 0, m(0.5));
+
+    solid.box(rx0 - m(0.7), m(0.3), rz0 - m(0.1), rx0 + m(0.7), m(0.4), rz0 + m(0.2), material("timber"));
+
+    for (let k = 0; k < 5; k++) {
+        const x = rx0 - m(0.55) + k * m(0.27);
+
+        pole(solid, [x, m(0.3), rz0 + m(0.1)], [x, m(2.5), rz0 - m(0.3)], m(0.025), "timber", { sides: 4 });
+        pole(solid, [x, m(2.5), rz0 - m(0.3)], [x, m(2.85), rz0 - m(0.36)], m(0.05), "iron", { top: 0, sides: 4 });
+    }
+
+    return solid.toObject();
+}
+
+/**
  * A capital's keep: a kasbah's tower house, rammed earth below and smooth mud above, battered,
  * a taller tower at each corner with ears on its top, bands of relief chevrons round its upper
  * storeys, its door up a flight of steps between two long banners.
@@ -730,7 +776,7 @@ export function windmill(piece) {
 }
 
 /** Every one of the cat folk's special buildings, by name. */
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, market, windmill });
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
 
 /** A cat folk town's special building (its layout piece). */
 export function landmark(piece) {

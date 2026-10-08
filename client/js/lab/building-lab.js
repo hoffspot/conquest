@@ -24,7 +24,7 @@ import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
 import { RACES } from "../core/worldplan/races.js";
 import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
-import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
+import { barracksRooms, guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
 import { fortObject } from "../world/art/kits/forts.js";
 import { Camps } from "../world/camps3d.js";
@@ -143,7 +143,9 @@ const FINGERPOST = [
 ];
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
-// the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep
+// the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep;
+// a barracks (of one storey and of two, among the humans) and a village's guardhouse, each of a
+// house's size as its people builds them (setpieces/town.js makes one over: BARRACKS_SIZES)
 function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
@@ -158,6 +160,8 @@ function landmarksOf(seed, people = "human") {
         ...(own ? [] : [{ name: "windmill" }]),
         { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2, ...(own ? { size: [3, 3.25] } : {}) },
         { name: "keep", ...(own ? { size: [3.5, 4] } : {}) },
+        ...(own ? [{ storeys: 1 }, { storeys: 2 }] : [{ storeys: 1, style: "stone" }, { storeys: 2, style: "timber" }]).map((more) => ({ name: "barracks", grade: "barracks", ...more, size: BARRACKS_SIZES[people] })),
+        { name: "barracks", grade: "guardhouse", storeys: 1, style: "cottage", size: BARRACKS_SIZES[people].map((plots) => plots - 0.25) },
     ].map((piece) => (own ? { ...piece, people } : piece));
     let x = 4;
 
@@ -170,6 +174,10 @@ function landmarksOf(seed, people = "human") {
 
     return { width: Math.ceil(x + 4), height: 40, pieces };
 }
+
+// How big a barracks is in the building lab, by people (plots: a big house of theirs, as their
+// lots run: setpieces/town.js PEOPLE_TOWNS)
+const BARRACKS_SIZES = Object.freeze({ human: [2.5, 2.5], cat: [3, 3], orc: [4.5, 2.25], lizard: [2.5, 2.5], elf: [3.25, 3.25], darkElf: [2.5, 2.75] });
 
 // A spot in the middle of a stretch of a land (metres), as far from the plan's places and roads as
 // can be found: the land itself, as the game draws it. `land` a land's id, or a people's
@@ -230,7 +238,7 @@ function framesOf(pieces) {
 }
 
 // A people's insides, side by side, roofless: a tavern's taproom and upstairs, a smithy, a temple,
-// a guild, a town hall and a keep, each as its people builds and dresses it, its lamps lit
+// a guild, a town hall, a keep and a barracks, each as its people builds and dresses it, its lamps lit
 function insidesOf(seed, people) {
     const group = new THREE.Group();
     const kinds = [
@@ -240,6 +248,7 @@ function insidesOf(seed, people) {
         [guildRooms, {}],
         [hallRooms, {}],
         [keepRooms, {}],
+        [barracksRooms, {}],
     ];
     const frames = [];
     let x = 0;
