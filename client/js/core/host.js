@@ -16,6 +16,7 @@
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
+import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
@@ -26,7 +27,7 @@ import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES,
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
 import { clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -260,7 +261,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 6;
+export const SNAPSHOT_VERSION = 7;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -331,6 +332,7 @@ export const REFUSALS = Object.freeze({
     shop: "They've nothing like that to sell.",
     full: "Your pack is full.",
     locked: "It's locked fast, and its guardians still hold the place.",
+    guarded: "It's locked fast, and those keeping it are still about.",
     unknown: "You haven't learnt that.",
     item: "You can't do that with it.",
     shield: "Not with that weapon.",
@@ -500,6 +502,19 @@ export class Host {
         // by the place's id, { ids (the band, its leader first), leader, at, tier, holder, chest
         // (its square), race (the place's people, or null), cleared }
         this.held = new Map();
+
+        /**
+         * The adventurers' caches out in the wilds (core/caches.js), by id: { id, at ([x, y]: its
+         * heart, where its guards walk round), chest (its square), band (CACHE_BANDS' id), tier
+         * (its band's, their leader's CACHES.lead more), ids (its guards, their leader first),
+         * opened }; and how far each player's crossed the wilds since the last was put out
+         * before them (by id: { at, walked, next (how far it's to be: CACHES.every, rolled once
+         * they're as far as the least it could be; null till then), heading (the way they were
+         * last going: [x, y], one long; or null) }).
+         */
+        this.caches = new Map();
+        this.nextCache = 1;
+        this.travel = new Map();
 
 
         /**
@@ -1110,8 +1125,9 @@ export class Host {
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
         // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
         // players', a good while; a place's band, the place cleared once the last falls, after all
-        // that fell with them)
+        // that fell with them; and a cache's guards, it opened once the last does)
         const bands = new Set();
+        const kept = new Set();
 
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
@@ -1127,7 +1143,7 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
@@ -1151,6 +1167,10 @@ export class Host {
 
                 if (beast.place) {
                     bands.add(beast.place);
+                }
+
+                if (beast.cache) {
+                    kept.add(beast.cache);
                 }
             }
 
@@ -1209,6 +1229,10 @@ export class Host {
 
         for (const place of bands) {
             this.#placeFell(place);
+        }
+
+        for (const cache of kept) {
+            this.#cacheFell(cache);
         }
 
         while (this.fallen.length && this.fallen[0].at <= this.battle.time) {
@@ -1332,6 +1356,9 @@ export class Host {
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
+            caches: structuredClone([...this.caches.entries()]),
+            nextCache: this.nextCache,
+            travel: structuredClone([...this.travel.entries()]),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -1432,6 +1459,9 @@ export class Host {
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
+        host.caches = new Map(structuredClone(snapshot.caches ?? []));
+        host.nextCache = snapshot.nextCache ?? 1;
+        host.travel = new Map(structuredClone(snapshot.travel ?? []));
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -1902,9 +1932,9 @@ export class Host {
             return refuse("far");
         }
 
-        // (A place's chest, its guardians still about)
+        // (A place's chest, or a cache, its guardians still about)
         if (dropped.locked) {
-            return refuse("locked");
+            return refuse(dropped.cache ? "guarded" : "locked");
         }
 
         // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
@@ -2781,7 +2811,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -2793,6 +2823,7 @@ export class Host {
         this.#wildCamps(homes);
         this.#lairs(places);
         this.#places(places, homes);
+        this.#caches(homes);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
@@ -2802,7 +2833,7 @@ export class Host {
             }
 
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.lair && !one.place ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.lair && !one.place && !one.cache ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
@@ -2857,8 +2888,9 @@ export class Host {
     }
 
     // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
-    // on a building's `map`), the first its leader; what they're of (`camp`, `lair`, `place`) and
-    // how they keep (`roam`, `temper`, `guard`): their ids
+    // on a building's `map`), the first its leader; what they're of (`camp`, `lair`, `place`,
+    // `cache`) and how they keep (`roam`, `temper`, `guard`, the `round` they walk; one `pack` with
+    // others, if it's given): their ids
     #pack({ creature, tier, count }, [x, y], { master = false, map = "town", ...more } = {}) {
         const free = this.#spots(map);
         const pack = `pack-${this.nextWild}`;
@@ -2886,11 +2918,11 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, roam = null, temper = null, guard = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, roam = null, temper = null, guard = null, round = null }) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
 
-        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}) });
+        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -2907,7 +2939,7 @@ export class Host {
             armor: spec.armor ?? 0,
             // (One holding a place gone into, `wary`: a moment's pause on first seeing someone come
             // in, battle.js WARY_MS)
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town" },
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(round ? { round: round.stops, stop: round.at } : {}) },
         });
     }
 
@@ -2928,7 +2960,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -3201,11 +3233,12 @@ export class Host {
         this.#event("cleared", { place: id, holder: held.holder });
     }
 
-    // A place's chest (`kind`: "chest", or a dragon's "hoard") opened: in its stead, a share of
-    // what's in it for each player at the place (core/progress.js LOOT: the gear in it of the
-    // place's `people`, a human's at the ruins and the caves; more gold the more dangerous its land,
-    // CHEST_GOLD; and what the dead guarded, one of their old relics each, `relic`), theirs alone
-    // to take, where it stood (`map`, `square`)
+    // A place's chest (`kind`: "chest", or a dragon's "hoard"; or an adventurers' "cache") opened:
+    // in its stead, a share of what's in it for each player at the place (core/progress.js LOOT:
+    // the gear in it of the place's `people`, a human's at the ruins and the caves; more gold the
+    // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
+    // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
+    // alone to take, where it stood (`map`, `square`)
     #opened(id, kind, { at, maps, map, square, people, tier, relic = false }) {
         this.ground.delete(`chest-${id}`);
 
@@ -3216,15 +3249,17 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollLoot(kind, this.random, { people, relic });
+            const bundle = kind === "cache" ? rollCache(tier, this.random, { people }) : rollLoot(kind, this.random, { people, relic });
 
-            bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
+            if (kind !== "cache") {
+                bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
+            }
 
             const ground = `ground-${this.nextGround++}`;
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map, square: [...square], until: this.battle.time + GROUND_MS });
             // (Told of the relic in it by name, if there's one: the last thing in it)
-            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(kind === "cache" ? { cache: true } : {}), ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
         }
     }
 
@@ -3250,6 +3285,133 @@ export class Host {
                 }
             }
         }
+    }
+
+    // The adventurers' caches (core/caches.js): those every player's left far behind let go (their
+    // guards, and the cache); and, for each player crossing the wilds (out of the settlements),
+    // one put out ahead of them once they've crossed as far as the last one's CACHES.every had it
+    #caches(homes) {
+        for (const [id, cache] of [...this.caches]) {
+            const fighting = cache.ids.some((each) => (this.battle.actor(each)?.target ?? null) !== null);
+
+            if (!fighting && !homes.some(({ at: [x, y] }) => hypot(x - cache.at[0], y - cache.at[1]) < CACHES.far)) {
+                for (const each of [...cache.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.ground.delete(`chest-${id}`);
+                this.caches.delete(id);
+                this.#event("cache", { cache: id, change: "gone" });
+            }
+        }
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const at = [actor.x, actor.y];
+            const was = this.travel.get(player.id);
+
+            if (!was) {
+                this.travel.set(player.id, { at, walked: 0, next: null, heading: null });
+
+                continue;
+            }
+
+            // (Crossing the wilds: not a step carried by magic, nor one in a settlement)
+            const [dx, dy] = [at[0] - was.at[0], at[1] - was.at[1]];
+            const step = hypot(dx, dy);
+
+            if (step > 0.2 && step <= CACHES.jump) {
+                was.heading = [dx / step, dy / step];
+
+                if (clearOfSettlements(this.world.plan, at, WILDS.clear)) {
+                    was.walked += step;
+                }
+            }
+
+            was.at = at;
+
+            // (How far the next is, rolled once they're as far as the least it could be)
+            if (was.next === null && was.walked >= CACHES.every[0]) {
+                was.next = this.random.int(...CACHES.every);
+            }
+
+            if (was.next !== null && was.walked >= was.next && this.#putCache(actor, was.heading, homes)) {
+                was.walked = 0;
+                was.next = null;
+            }
+        }
+    }
+
+    // A cache put out ahead of a player (`actor`, going the way of `heading`, or any way), as
+    // CACHES has it, where it may be (cacheClear: off the roads, away from everywhere; openAround:
+    // on open ground): its band of the land there, as strong as the land or the mightiest player
+    // near it, their leader by it and the rest on their round about it; whether it could be
+    #putCache(actor, heading, homes) {
+        const plan = this.world.plan;
+        const overworld = this.world.maps.town;
+        const squares = squaresOf(overworld);
+        const others = [...this.caches.values()].map(({ at }) => at);
+        const [hx, hy] = heading ?? [0, 1];
+
+        for (let tries = 0; tries < 12; tries++) {
+            const turn = (this.random.next() * 2 - 1) * (heading && tries < 8 ? CACHES.spread : Math.PI);
+            const reach = CACHES.ahead[0] + this.random.next() * (CACHES.ahead[1] - CACHES.ahead[0]);
+            const [c, s] = [cos(turn), sin(turn)];
+            const at = [actor.x + (hx * c - hy * s) * reach, actor.y + (hx * s + hy * c) * reach];
+
+            const chest = [Math.floor(at[0]), Math.floor(at[1])];
+            const heart = [chest[0] + 0.5, chest[1] + 0.5];
+
+            if (!cacheClear(plan, heart, { nearRoad: (x, y, within) => overworld.nearRoad?.(x, y, within) ?? false, others }) || !openAround(heart, (x, y) => squares.blocked(x, y))) {
+                continue;
+            }
+
+            const might = Math.max(0, ...[...this.players.values()].filter((player) => {
+                const each = this.battle.actor(player.id);
+
+                return each && each.map === "town" && hypot(each.x - heart[0], each.y - heart[1]) <= CACHES.near;
+            }).map((player) => player.progress.might()));
+            const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
+            const band = cacheBand(landAt(plan, ...heart).biome, this.random);
+            const count = cacheCount(tier, this.random);
+            const id = `cache-${this.nextCache++}`;
+            const keeps = { cache: id, pack: id, temper: "territorial", guard: CACHES.guard };
+            const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2 });
+            const round = roundOf(heart);
+
+            startsOf(count - 1).forEach((stop) => {
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop } }));
+            });
+
+            this.caches.set(id, { id, at: heart, chest, band: band.id, tier, ids, opened: false });
+            this.ground.set(`chest-${id}`, { id: `chest-${id}`, chest: true, locked: true, cache: id, for: null, map: "town", square: [...chest], until: null });
+            this.#event("cache", { cache: id, change: "put", band: band.id, at: heart, ids });
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // One of a cache's guards fallen: once every one of them is, it's opened, a share of what's in
+    // it for each player near
+    #cacheFell(id) {
+        const cache = this.caches.get(id);
+
+        if (!cache || cache.opened || cache.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        cache.opened = true;
+        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier });
+        this.#event("cache", { cache: id, change: "opened" });
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or

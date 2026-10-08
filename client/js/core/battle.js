@@ -201,6 +201,10 @@ const PATROL_PAUSE_MS = 1500;
 const WILD_REST = [4000, 12000];
 const WILD_PACK = 3;
 
+// How long one walking a round (an adventurers' cache's guards: core/caches.js) stands at each
+// stop on it before going on to the next (ms)
+const ROUND_REST = [1500, 3500];
+
 // How often a chase finds a new path to a target that has moved (ms)
 const REPATH_MS = 500;
 
@@ -464,7 +468,8 @@ export class Battle {
             patrolIndex: patrol && patrol.length > 1 ? 1 : 0,
             waitUntil: 0,
             // (One of the wild's creatures: { creature, tier, temper, guard, roam, leash, leader,
-            // wary }: #wild; and, wary, till when it waits on first seeing someone)
+            // wary, round (the stops of a round it walks, [[x, y], ...], and `stop`: the one it's
+            // at) }: #wild; and, wary, till when it waits on first seeing someone)
             wild,
             waryUntil: 0,
         };
@@ -1733,7 +1738,7 @@ export class Battle {
 
     /**
      * One of the wild's creatures (core/creatures.js): wandering near where it was found (a pack
-     * keeping with its leader), resting between; fighting as its temper has it (whoever it sees,
+     * keeping with its leader; a guard walking its round, `round`), resting between; fighting as its temper has it (whoever it sees,
      * if it's aggressive; whoever comes within its guard, if it's territorial; only whoever's
      * struck it or its pack, if it's defensive); never going further than its leash from where it
      * was found after anyone, and making its way back there if it's further.
@@ -1791,8 +1796,9 @@ export class Battle {
             return;
         }
 
-        // Keeping with its pack's leader, or wandering from place to place near home (back there,
-        // first, if it's strayed), resting a while at each
+        // Keeping with its pack's leader, walking its round (on to the next stop on it, standing
+        // a moment once there), or wandering from place to place near home (back there, first,
+        // if it's strayed), resting a while at each
         const leader = wild.leader === null ? null : this.actor(wild.leader);
         const away = distanceBetween(actor.square, home) > wild.leash;
         let goal = null;
@@ -1803,6 +1809,13 @@ export class Battle {
             }
 
             actor.waitUntil = this.time + REPATH_MS;
+        } else if (wild.round && !away) {
+            wild.stop = (wild.stop + 1) % wild.round.length;
+
+            const [x, y] = wild.round[wild.stop];
+
+            goal = [Math.floor(x), Math.floor(y)];
+            actor.waitUntil = this.time + (distanceBetween(actor.square, goal) / actor.speed) * 1000 + ROUND_REST[0] + actor.chance.next() * (ROUND_REST[1] - ROUND_REST[0]);
         } else {
             const angle = actor.chance.next() * Math.PI * 2;
             const reach = away ? 0 : actor.chance.next() * wild.roam;

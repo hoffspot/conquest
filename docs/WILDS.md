@@ -8,7 +8,8 @@ how strong, how they behave, how they're kept about the players, and how they're
 animated.
 
 The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how they fight),
-`core/host.js` (keeping them about the players), `core/weapons.js` `NATURAL` (their fangs, claws
+`core/host.js` (keeping them about the players), `core/caches.js` (the adventurers' caches and
+the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
 and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
 `client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
 (their fire, venom, webs and roots, and what shows on whoever they hit). The creature lab
@@ -107,6 +108,54 @@ camp's folk come out when a player's 60 m from it and go once everyone's 140 m o
 always something about, and never more than a player can see: the creatures are shared by everyone
 playing (whoever's near sees the same ones and can fight them together), and each is kept, moved
 and fought by the host like anyone else, so it plays out the same on every machine.
+
+## Adventurers' caches
+
+Here and there out in the wilds lies a chest some adventurer stowed and never came back for, and a
+band of the land's brigands has found it and keeps it (`core/caches.js`, the host's `#caches`).
+- **Where.** About every half a kilometre a player crosses the wilds (350 to 650 m, rolled each
+  time: `CACHES.every`), one turns up 70 to 100 m ahead of them, within about 35° of the way
+  they're going. Only ground crossed on foot out of the settlements counts: not a step in a town,
+  nor a leap of more than 20 m in half a second (carried by magic or a portal). It's put on open,
+  dry ground (85% of the squares out to its guards' round free to walk on, and every stop on the
+  round: `openAround`), at least 25 m from every road, track and trail with its guards' round and
+  all (32 m from the cache), 80 m clear of every settlement, 90 m from the places worth finding and
+  the wild camps, and 150 m from any other cache (`cacheClear`). Nowhere like that ahead, it's
+  tried for again on the next look, and it may then turn up any way about them.
+- **Who keeps it** (`CACHE_BANDS`), brigands of that land, all with hands:
+  - outlaws under a bandit chief in the farmland, meadows, woods, elfwood, heath and on the beaches;
+  - goblin raiders under an ogre in the badlands, the savannah and on the heath;
+  - goblins under a troll in the mountains, the snows and the tundra;
+  - the restless dead (skeletons, a stronger one leading) in the marshes and on the tundra;
+  - cultists in the marshes, dark woods, jungle and the burning lands.
+
+  Where more than one band's found, it's any of them.
+- **How strong.** As strong as its land (`tierAt`), or as the mightiest player within 120 m of it
+  (their might, 0 to 8, a tier above it: `cacheTier`), whichever's the more. So it's never weaker
+  than what lives there, and a strong player meets a band to match them anywhere. Three keep it
+  near home, up to four from the third tier and up to five from the fifth (`cacheCount`, their
+  leader too), their leader two tiers above the rest (`CACHES.lead`). Hard to beat alone.
+- **How they keep it.** Their leader stands by the cache; the rest walk a round seven metres about
+  it, six stops spread round it (`roundOf`), each starting at its own and standing a moment (1.5 to
+  3.5 s) at each before walking on to the next (`wild.round`, battle.js `#wild`). Each goes for
+  anyone who comes within 8 m of them (`CACHES.guard`), and they're one pack, so strike one and the
+  rest who see it come too.
+- **Its chest** is the places' chest (drawn by `world/drops3d.js`), locked while any of them stands
+  ("It's locked fast, and those keeping it are still about."). Once the last falls it opens, a share
+  for each player within 39 m of it, theirs alone to take (`rollCache`): 20 to 45 gold, 35% more for
+  each tier above the first; two or three pieces of gear (any but a people's uniform), as well made
+  as the band was strong (`CACHE_MAKES`: mostly common and fine near home, masterwork and
+  legendary for the mightiest), a wand's or grimoire's boost rolled as a shop's is; and a healing
+  draught, more often than not.
+- **On the maps.** Once a player's within 60 m of it, it's said ("An adventurer's cache, and
+  outlaws keeping it.") and marked on their minimap and world map with a chest's icon, rimmed grey
+  once it's opened.
+- **Gone** once every player's 200 m from it (and none of its guards is fighting): its guards let
+  go, and the cache with them. Another comes later. Its guards don't count among those kept about
+  the players, and the ground where they fall isn't marked cleared.
+
+The caches and how far each player's crossed the wilds since the last are kept in a snapshot
+(`SNAPSHOT_VERSION` 7), so a player joining finds them where they are.
 
 ## By night
 

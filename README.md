@@ -54,8 +54,8 @@ engine, and [docs/WORLD.md](docs/WORLD.md) the world: its plan, and how it's bui
 chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that's being built,
 and how the engine's made ready for other players to hop in and out of a running world.
 [docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
-how they behave, what lingers after their blows and its cures, what they leave, trading between
-players, and how they're built and animated in code. [docs/MAGIC.md](docs/MAGIC.md) describes
+the adventurers' caches their brigands keep, how they behave, what lingers after their blows and
+its cures, what they leave, trading between players, and how they're built and animated in code. [docs/MAGIC.md](docs/MAGIC.md) describes
 magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
 the host works, the spellbook, and how every spell looks.
 
@@ -259,6 +259,14 @@ bridges, through fields, meadows and woods; walk anywhere you can, as far as you
 is drawn round you as you go, with no loading screens: only its far edge in the fog is ever
 being built. The hamlets, villages, towns and cities of the world plan are there, each with its
 own buildings; the ruins and the enemy camps are still to come.
+
+**Adventurers' caches.** About every half a kilometre you cross the wilds, a chest some adventurer
+left behind turns up ahead of you, well away from the roads, kept by three to five brigands of that
+land (outlaws, goblins under an ogre or a troll, the restless dead, cultists) as strong as the land
+or you, whichever's the more, their leader stronger still, the rest walking a round about it. It's
+marked on your minimap once you've seen it, and stays locked till the last of them falls; then
+your share of it is yours to take: some gold, and a few pieces of gear as good as they were
+strong. Walk on and it's gone, and another comes later. See [docs/WILDS.md](docs/WILDS.md).
 
 **The minimap**, in the top left corner (the spellbook, journal, pack and menu buttons are in the top right), shows where you are from above: out in
 the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
@@ -595,6 +603,7 @@ client/                 The game (static files served to the browser)
                         damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks (and the wild's creatures' own)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
+    caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     spoils.js           What they leave: their parts, and what the guild pays for them
     afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,

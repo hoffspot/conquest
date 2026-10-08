@@ -2916,6 +2916,12 @@ they are: every site the world plan puts out between the settlements and every w
   `campPlacedAt`) and at its plan's spot till then. On the world map, only those within a chunk
   of where the player's been.
 
+**An adventurers' cache** (`core/caches.js`; docs/WILDS.md, *Adventurers' caches*) is marked with
+a chest's icon (`cache`: its rounded lid, iron bands and gold lock, rimmed gold) once the player's
+come within 60 m of it (`CACHE_SEEN`, app/game.js `cachesSeen`; said as it's seen), on the minimap
+and the world map alike; rimmed grey once it's opened, and gone with it, once every player's left
+it far behind (the host's "cache" event, `gone`).
+
 **Who holds them** is mixed by the war, a world at a time (`heldAtStart`):
 - Each people's castle is theirs.
 - Their other places (manors, abbeys, halls, temples, watchtowers and the like) are theirs, or

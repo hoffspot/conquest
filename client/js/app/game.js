@@ -33,6 +33,7 @@ import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/da
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
+import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
@@ -327,6 +328,10 @@ const TOGETHER = Object.freeze({
 // How far away (metres, either way) anyone's drawn out in the world: another player far off, and
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
+
+// How near (metres) an adventurers' cache has to be to be seen, and marked on the maps from then
+// on (core/caches.js: they're put out further off than this, ahead of the player)
+const CACHE_SEEN = 60;
 // Someone looking at the player passing near (#noticing): within `near` metres and `round` degrees
 // of ahead, for `look` seconds (from, to), then not for `rest` more; and where on someone they look
 // (a share of their height: their eyes)
@@ -796,6 +801,8 @@ export class Game {
         this.onExplore = onExplore;
         this.onWorldMap = onWorldMap;
         this.landmarks = { version: -1, icons: [] };
+        /** The adventurers' caches the player's seen (their ids: core/caches.js), marked on the maps. */
+        this.cachesSeen = new Set();
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
@@ -2172,6 +2179,7 @@ export class Game {
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
+        this.#spyCaches();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -2685,8 +2693,39 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.cacheIcons()] : [],
         });
+    }
+
+    // An adventurers' cache come within sight of the player for the first time (CACHE_SEEN): said,
+    // and marked on their maps from then on
+    #spyCaches() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.caches?.size) {
+            return;
+        }
+
+        for (const cache of this.host.caches.values()) {
+            if (!this.cachesSeen.has(cache.id) && !cache.opened && Math.hypot(me.x - cache.at[0], me.y - cache.at[1]) <= CACHE_SEEN) {
+                this.cachesSeen.add(cache.id);
+                this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
+            }
+        }
+    }
+
+    /**
+     * The adventurers' caches out in the world the player's seen (core/caches.js), as icons for the
+     * maps: [{ id, kind ("cache"), x, z (metres), rim (grey once it's opened) }]; gone with it.
+     */
+    cacheIcons() {
+        const caches = this.host?.caches;
+
+        if (!caches?.size || !this.cachesSeen.size) {
+            return [];
+        }
+
+        return [...caches.values()].filter(({ id }) => this.cachesSeen.has(id)).map(({ id, at: [x, z], opened }) => ({ id, kind: "cache", x, z, rim: opened ? PLACE_RIMS.cleared : null }));
     }
 
     /**
@@ -2769,7 +2808,7 @@ export class Game {
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen)], marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
     }
 
     // --- The world map's pin ---
@@ -4165,8 +4204,9 @@ export class Game {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
             this.sound?.play("drop");
         } else if (event.type === "spoils" && event.creature === "chest") {
-            // (The dead's, an old relic of theirs in it, named: its lock turned, and its lid up)
-            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : "The chest's open, your share in it: tap it to take it.", event.relic ? 4 : 3);
+            // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
+            // turned, and its lid up)
+            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? "The adventurer's cache is open, your share in it: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic ? 4 : 3);
             this.sound?.play("lockpick");
             this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {
@@ -5589,6 +5629,13 @@ export class Game {
                 break;
             case "cleared":
                 this.#cleared(event);
+                break;
+            case "cache":
+                // (A cache let go, every player gone far from it: off the maps)
+                if (event.change === "gone") {
+                    this.cachesSeen.delete(event.cache);
+                }
+
                 break;
             case "muster":
                 this.#muster(event);

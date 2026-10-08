@@ -5147,6 +5147,119 @@ test("a place's outlaws or dead hold it round their leader by a locked chest, th
     expect(cleared.told).toContain(`The chest's open, and in your share an old relic of theirs: the ${cleared.relic.name}. Tap it to take it.`);
 });
 
+test("an adventurer's cache turns up ahead of a player crossing the wilds, off the roads, its brigands walking their round; marked on the maps once seen; locked till they fall, then opened, the player's share in it; gone once they've left it far behind", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const cache = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Every word on the banner kept)
+        const told = [];
+
+        new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        const settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const goTo = (x, y) => Object.assign(player, { x, y, path: [], order: null, progress: null, target: null });
+
+        // Out in the wilds 600 m north of the start town, going north, owed one (as far crossed as
+        // the next was to be)
+        const at = [player.x, player.y - 600];
+
+        goTo(...at);
+        host.travel.set("player", { at, walked: 600, next: 600, heading: [0, -1] });
+        await settle(4);
+
+        const [put] = host.caches.values();
+
+        if (!put) {
+            return null;
+        }
+
+        const ids = put.ids.map((id) => game.battle.actor(id));
+        const before = { seen: game.cachesSeen.has(put.id), icons: game.cacheIcons().length };
+
+        // Within sight of it (but out of its guards' reach): said, and marked on the maps
+        goTo(put.at[0], put.at[1] + 45);
+        await settle(4, true);
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const seen = { seen: game.cachesSeen.has(put.id), minimap: game.minimap.icons.includes("cache"), map: game.worldMapView().icons.some(({ kind }) => kind === "cache"), chest: game.drops.drawn.get(`chest-${put.id}`)?.object.children[0].name };
+
+        // Its chest, locked while they keep it
+        const chest = host.ground.get(`chest-${put.id}`);
+
+        goTo(chest.square[0] + 0.5, chest.square[1] + 1.2);
+
+        const locked = host.command("player", { type: "pickUp", ground: chest.id });
+
+        // Put down: opened, the player's share in it
+        for (const id of put.ids) {
+            game.battle.afflict(id, "poison", { by: "player", damage: 1e7 });
+        }
+
+        await settle(12);
+        game.advance(0.1);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const share = [...host.ground.values()].find((dropped) => dropped.from === "chest" && dropped.for === "player");
+        const opened = { opened: put.opened, open: game.drops.drawn.get(share?.id)?.object.children[0].name, gold: share?.bundle.gold, items: share?.bundle.items.length, rim: game.cacheIcons()[0]?.rim };
+
+        // Left far behind: gone, off the maps
+        goTo(put.at[0], put.at[1] + 260);
+        await settle(4);
+
+        return {
+            ahead: put.at[1] < at[1] && Math.hypot(put.at[0] - at[0], put.at[1] - at[1]),
+            road: game.world.maps.town.nearRoad(...put.at, 32),
+            band: put.band,
+            creatures: ids.map((one) => one.wild.creature),
+            round: ids.slice(1).every((one) => one.wild.round?.length === 6),
+            tiers: ids.map((one) => one.wild.tier),
+            before,
+            seen,
+            locked,
+            opened,
+            gone: !host.caches.has(put.id) && !game.cacheIcons().length,
+            told,
+        };
+    });
+
+    expect(cache).not.toBeNull();
+    expect(cache.ahead).toBeGreaterThan(65);
+    expect(cache.ahead).toBeLessThan(105);
+    expect(cache.road).toBe(false);
+    expect(cache.creatures.length).toBeGreaterThanOrEqual(3);
+    expect(cache.creatures.length).toBeLessThanOrEqual(5);
+    expect(cache.round).toBe(true);
+    // (Their leader two tiers above the rest)
+    expect(cache.tiers[0]).toBe(cache.tiers[1] + 2);
+    expect(cache.before).toEqual({ seen: false, icons: 0 });
+    expect(cache.seen).toEqual({ seen: true, minimap: true, map: true, chest: "chest" });
+    expect(cache.told.some((text) => /^An adventurer's cache, and .+ keeping it\. Put them all down to open it\.$/.test(text)), JSON.stringify(cache.told)).toBe(true);
+    expect(cache.locked).toEqual({ ok: false, reason: "guarded" });
+    expect(cache.opened).toMatchObject({ opened: true, open: "chest-open", rim: "#8a8a8a" });
+    expect(cache.opened.gold).toBeGreaterThan(0);
+    expect(cache.opened.items).toBeGreaterThanOrEqual(2);
+    expect(cache.told).toContain("The adventurer's cache is open, your share in it: tap it to take it.");
+    expect(cache.gone).toBe(true);
+});
+
 test("a cave held by outlaws is gone into by its mouth: within, the rock all round, their fire, their chief by the locked chest; and out again the same way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
