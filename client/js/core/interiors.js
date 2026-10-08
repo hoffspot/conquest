@@ -83,6 +83,15 @@ export const PLAN_KEY = Object.freeze({
     m: { kind: "rubble", blocks: true },
     // A castle keep's undercroft (its armoury): a stand wearing a suit of its armour
     n: { kind: "stand", blocks: true },
+    // A dungeon's (core/dungeons): the stairs down to the next level (dug into the floor, a hole
+    // to see over) and up from it (rising into the rock), rock standing up from a cave's floor,
+    // an outlaws' crates and sacks, a brazier burning, and a small chest left about
+    V: { kind: "stairs-down", blocks: true, joins: true },
+    "^": { kind: "stairs-up", blocks: true, opaque: true, joins: true },
+    "*": { kind: "stalagmite", blocks: true, opaque: true },
+    "%": { kind: "crates", blocks: true },
+    y: { kind: "brazier", blocks: true },
+    $: { kind: "coffer" },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in
