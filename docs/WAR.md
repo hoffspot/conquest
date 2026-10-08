@@ -28,6 +28,8 @@ rules the engine keeps so that other players can later **hop in and out** of a r
 | **Where the rulers sit** | A keep in each capital, and a town hall in each town and city. |
 | **Scale** | Skirmishes of 20 to 30 real people near a player. |
 | **Diplomats** | Travel the roads, and can be escorted, or waylaid. |
+| **Resources** | Wood, metal and stone, from each people's works (two lumber mills, two mines and two quarries in their lands), carried to their seat by guarded convoys. They pay for fortifications, as gold pays for soldiers. |
+| **Battle lines** | Towers and forward garrisons, built and kept up from the stores, in a people's own lands or near a town they've taken; a town covered by one can't be stormed till it's down. |
 | **Pacing** | The war grows fiercer as the player grows stronger. |
 | **Growing stronger** | Skills that grow by being used, each unlocking stronger ones along its own tree (below). Gear, bought and found, counts too. |
 | **The rulers' temperaments** | Each people has its core temperament, but its rulers' traits are rolled a little differently in every world, so there's no one way to play any people. The player learns them from rumours of their leaders. |
@@ -202,6 +204,11 @@ The engine is built for this from the start. These are its rules:
 | **M9** | Built | Followers, mercenaries and adventurers for hire. |
 | **M10** | Built | The end: victory, and serving an overlord until the rising. |
 | **M11** | Built | Hop in, hop out: other players joining a running world. |
+| **M12** | Built | The works: each people's lumber mills, mines and quarries, the stores of wood, metal and stone they fill, convoys carrying them to the seat, works seized, overrun and won back. |
+| **M13** | To come | Convoys in the world: their wagons, guards and captain on the road near a player, to escort or ambush. |
+| **M14** | To come | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
+| **M15** | To come | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
+| **M16** | To come | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
 
 ## What's built
 
@@ -308,7 +315,8 @@ stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied.
 - `war.watch(ids)`: the towns and envoys a player's near, whose raids and assaults are played out
   there, and who go at their own pace (M6, M7);
 - `war.settle(camp, { reached, reckon })`: a sortie over (M6);
-- `war.move(envoy, at, leg)`, `war.waylaid(envoy, by)`: an envoy's way in the world (M7).
+- `war.move(envoy, at, leg)`, `war.waylaid(envoy, by)`: an envoy's way in the world (M7);
+- `war.win(works, by)`: a works won in the world, seized or cleared (M12).
 
 **The news** (`news.js` `tell`): every event in words, "The Orcs have declared war on the
 Humans.", for the war page now and the taverns later.
@@ -804,6 +812,110 @@ enemy camp outside one of their towns (above).
 
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+
+### The works (M12)
+
+Each people has six works in its lands, where what it builds with comes from
+(`worldplan/settle.js` `workings`, `races.js` `WORKS`):
+
+| Works | How many | Where it would rather be | Yields a turn (`WORKED`) |
+| --- | --- | --- | --- |
+| Lumber mill | 2 | In the woods: woods, elfwood, darkwood, jungle, marsh, savannah | 3 wood |
+| Mine | 2 | Up in the hills, or on mountains, badlands, volcanic ground, heath, tundra | 1.5 metal |
+| Quarry | 2 | Up in the hills, or on mountains, heath, badlands, meadow, tundra, savannah | 2 stone |
+
+- **Where:** in their lands, but not on their very edge, on gentle, dry ground. They keep clear:
+  of settlements by 5 cells, of other sites by 8, of wild camps by 4; two of a people's of one
+  kind are 24 cells apart. Each would rather be by a road. A trail runs to each from its road
+  (`trails.js`), which it faces. Each is named in its people's tongue.
+- **Laid out last,** after the graveyards, from random numbers of their own, so nothing else in
+  the world moves for them. How each looks: GAME.md, *Each people's works*.
+
+**In the war** (`war.works`):
+- **Held and guarded.** Each is held by its people to start with:
+  - its guard is 6 (`WORKED.guard`), raised and paid for as a garrison is (5 gold each, 0.1 a turn);
+  - its convoy's 6 guards and their captain are home.
+  - A realm tops its works' guards and convoys' guards up after its towns' garrisons, three a
+    turn at most each.
+- **Yields.** While it's held and guarded, it yields into its **yard** (120 at most).
+- **Convoys** (`CONVOY`):
+  - **Setting out:** once its yard holds a wagon's load (20) and at least 4 of its convoy's guards
+    are home.
+  - **What goes:** 3 wagons, up to 60 of what it yields, guarded by the 6 and their captain. They go
+    200 m a turn by road (`roads.js`), from the works to its people's seat.
+  - **At the seat:** the goods go into their **stores**. A vassal pays its liege half of each
+    delivery, as it does its taxes. Then the convoy goes back for more; home, its guards are the
+    works' again.
+  - **A seat lost meanwhile:** a convoy that arrives finds it in other hands, and loses its goods.
+- **Fallen on, on the road**, one of two ways (not a convoy a player's near):
+  - **An enemy's forces** passing within 300 m. The more warlike the enemy, the likelier: their
+    aggression × 0.5 a turn. Beating it, they carry off half of what it carried.
+  - **The brigands of a wild camp** of outlaws, raiders or goblins within 250 m of its way: 0.12
+    a turn. Beating it, they carry off the lot.
+- **Seized.** From Border wars on (`WORKED.from`), a realm's expeditions go for an enemy's works
+  as well as its towns:
+  - a works is worth half again a village (`WORKED.worth`), and more if the realm's stores are
+    short of what it yields;
+  - the expedition falls on its guard once within 120 m; won, the works is theirs, held by up to
+    6 of them, and its yard with it. Its old holders bear them a grudge (10);
+  - while a player's near the works, the expedition waits there, for 3 turns at most.
+- **Overrun.** Any turn, the wild's bands may overrun a works (`OVERRUN`):
+  - the chance is 0.1%, and up to 2.5% more the emptier its guard (by the square of how empty);
+  - overrun, its guard and its convoy's guards at home are put to the sword, its yard is
+    looted, and a band 6 strong holds it. It yields nothing;
+  - **won back:** its people send a force at it (`retake`). It comes out of the garrison of their
+    town nearest it, if that can spare it (keeping half), or else is raised for gold. Won, the
+    works is held by those who won it. These forces don't count against those a realm may field.
+- **A people fallen:** its works go to whoever holds most of its old towns, or to the wild.
+- **What the stores are for** comes with M14: towers and forward garrisons, built and kept up
+  from them.
+
+**Near a player** (`host.js`, `WORKS_OUT`):
+- **The guards come out** once a player's within 120 m of the works, and are let go once every
+  player's beyond 250 m:
+  - 4 stand at its posts, facing out from its heart; the rest walk its round, each from a stop of
+    their own (`setpieces/works.js`);
+  - each stands for a share of its guard (`war.loss`). One who falls is relieved a minute after,
+    out of sight, while the works has guards to spare.
+- **Overrun, the brigands holding it** are out instead:
+  - the band is the land's (`caches.js` `CACHE_BANDS`: outlaws, goblin raiders, goblins under a
+    troll, the restless dead, cultists), the same band at the same works;
+  - there are as many as hold it, up to 8, their leader two tiers above the rest at its heart.
+- **Won.** Once every one out is down (the rest of its guard or band with them), it's won by the
+  people of whoever felled the last: a player's, their followers' and the creatures they've
+  called up (`war.win`):
+  - **an enemy's works** is seized, held by 2 of the winners;
+  - **one held by brigands** is cleared: back to its people, who owe the winner a favour (8), or
+    the winners' own if they're at war with its people.
+- **Left be.** The war leaves a works be while a player's near it: none falls on it, nor overruns
+  it.
+
+**On the screen:**
+- **The maps** show each works' icon: a log and an axe, a pick over its ore, a squared block
+  (`mapicons.js`). The world map shows them once the land round them is explored. Each icon's rim
+  (`WORKS_RIMS`) says who holds it:
+  - gold: the player's people's, or an ally's;
+  - burnt orange: an enemy's;
+  - pale: anyone else's;
+  - red: brigands'.
+- **Said:** a works seized or cleared near the player, or by their people: "The Calbury mine is
+  ours: the Humans hold it now."
+- **The journal** says how many towns and works their people hold, what's in their stores, and
+  which of their works another people or brigands hold.
+- **The war page** (`war.html`):
+  - the works as diamonds, with their kind's letter, in their holder's colour, or dark and ringed
+    in red when brigands hold them;
+  - convoys as wagons, with the way they're going;
+  - each realm's stores;
+  - pointing at a works says whose it is, its guard and its yard.
+
+**The news** (`news.js`) tells of works seized, overrun, won back and cleared, and of convoys
+fallen on (beaten off, or their goods carried off) or arriving to find their seat lost. A convoy's
+goods arriving aren't news.
+
+**Kept.** The works and the realms' stores are kept in the war's snapshot (`WAR_VERSION` 2). A war
+kept before the works (version 1) carries on with every works its own people's and every store
+empty. The works' guards and bands out are kept in the host's snapshot.
 
 ### Playing together (M11)
 

@@ -5,8 +5,9 @@
 //   merit to the next, and what each gives;
 // - the requests they carry: who asked, what, how far it's come, where to go and how long's left
 //   (each can be given up);
-// - their people: who rules, whom they're at war with and allied to, how many towns they hold,
-//   and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
+// - their people: who rules, whom they're at war with and allied to, how many towns and works
+//   they hold, what's in their stores and which of their works others hold (docs/WAR.md *The
+//   works*), and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
 // - the requests lately done, failed or given up;
 // - where their people stand at the war's end: serving another and how near to rising, fallen, or
 //   ruling the continent (docs/WAR.md M10);
@@ -186,7 +187,9 @@ export class JournalPanel {
                 element("p", "journal-line", `Ruled by ${people.ruler}, from ${people.seat}.`),
                 element("p", "journal-line", people.war.length ? `At war with ${people.war.join(", ")}.` : "At peace."),
                 element("p", "journal-line", people.allies.length ? `Allied with ${people.allies.join(", ")}.` : "Allied with no one."),
-                element("p", "journal-note", `${people.towns} ${people.towns === 1 ? "town" : "towns"} held.`),
+                element("p", "journal-note", `${people.towns} ${people.towns === 1 ? "town" : "towns"} and ${people.works} works held.`),
+                element("p", "journal-note", `In their stores: ${people.stores}.`),
+                ...(people.lost ?? []).map((line) => element("p", "journal-note journal-lost", line)),
             );
 
             // (How the peoples they've met regard them)

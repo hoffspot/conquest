@@ -5091,6 +5091,73 @@ test("an old graveyard outside the start town: walled, its graves, tombs and yew
     expect(new Set(graveyard.band.slice(1))).toEqual(new Set(["skeleton", "ghost"]));
 });
 
+test("each people's works out in their lands: a lumber mill in its ring of trees, its guards out at their posts and on their round, of its people, drawn; on the minimap; the journal tells of the works held and what's in the stores", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const works = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // The humans' lumber mill nearest the start town, and the player gone to its yard
+        const mill = game.host.war.works
+            .filter(({ owner, kind }) => owner === "human" && kind === "lumber mill")
+            .sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+        const site = game.world.plan.sites.find(({ id }) => id === mill.id);
+        const set = (game.world.maps.town.sites.heartOf(site), game.world.maps.town.sites.set.get(mill.id));
+
+        Object.assign(player, { x: set.yard[0] + 0.5, y: set.yard[1] + 0.5, square: [Math.floor(set.yard[0]), Math.floor(set.yard[1])], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 40; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const out = game.host.worksOut.get(mill.id);
+        const chunk = 64;
+
+        window.worksSeen = mill.id;
+        const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [Math.floor(set.x / chunk) + dx, Math.floor(set.y / chunk) + dy]));
+
+        return {
+            parts: [...new Set(set.pieces.map(({ part }) => part?.part))].sort(),
+            trees: near.flatMap(([cx, cy]) => game.world.maps.town.sites.treesIn(cx, cy).filter((tree) => tree.site === mill.id)).length,
+            guards: out?.ids.map((id) => ({ id, team: game.battle.actor(id)?.team })) ?? [],
+            minimap: game.minimap.icons.includes("mill"),
+            icon: game.worksIcons().find(({ id }) => id === mill.id),
+        };
+    });
+
+    expect(works.parts).toEqual(expect.arrayContaining(["clamp", "cordwood", "lodge", "logdeck", "planks", "sawshed", "stump"]));
+    expect(works.trees).toBeGreaterThanOrEqual(14);
+    expect(works.guards).toHaveLength(6);
+    expect(works.guards.every(({ team }) => team === "human")).toBe(true);
+    expect(works.guards.filter(({ id }) => id.includes("/guard-"))).toHaveLength(4);
+    expect(works.minimap).toBe(true);
+    expect(works.icon).toMatchObject({ kind: "mill", rim: "#e2c25a" });
+
+    // (Drawn a few at a time, as a town's soldiers are)
+    expect(await playUntil(page, () => (window.pellagos.game.host.worksOut.get(window.worksSeen)?.ids ?? []).every((each) => window.pellagos.game.avatars.has(each)))).toBe(true);
+
+    // The journal: their works held, and what's in their stores
+    const journal = page.getByRole("dialog", { name: "Journal" });
+
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+    await expect(journal.locator(".journal-people")).toContainText(/\d+ towns? and 6 works held\./);
+    await expect(journal.locator(".journal-people")).toContainText(/In their stores: \d+ wood, \d+ stone, \d+ metal\./);
+});
+
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

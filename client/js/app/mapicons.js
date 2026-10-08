@@ -288,6 +288,16 @@ const LOOKS = {
  */
 export const PLACE_RIMS = Object.freeze({ friendly: "#e2c25a", bandits: "#d0413a", dead: "#7fe0b8", beast: "#ff7a1a", cleared: "#8a8a8a" });
 
+/**
+ * The rim a people's works' icon has (docs/WAR.md *The works*), by who holds it and how they
+ * stand with the player's people: theirs or an ally's gold, a people at war with them a burnt
+ * orange, anyone else's pale; brigands' the outlaws' red.
+ */
+export const WORKS_RIMS = Object.freeze({ own: "#e2c25a", enemy: "#e07a2a", other: "#a8b8c8", held: "#d0413a" });
+
+/** Each kind of works' icon (LOOKS). */
+export const WORKS_ICONS = Object.freeze({ "lumber mill": "mill", mine: "mine", quarry: "quarry" });
+
 // The paths, made once (Path2D: only in the browser)
 let paths = null;
 
