@@ -236,17 +236,51 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
   crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
   altars, shrines and braziers; gold heaped either side of the hoard.
-- **Furnished with scanned models** (`dungeons3d.js` `furnish`, CC0, from Poly Haven, made by
-  `npm run build:props`): barrels, crates (one on another now and then), rough tables end to end
-  along a table's piece (an axe laid on one, tankards), a stone fire pit round a camp fire, fallen
-  boulders in a cave or a hideout, white stone busts on pedestals of dressed stone for a temple's
-  statues and shrines, brass vases on its altars. The temple's fallen stone, pillars and
-  pedestals are blocks of its dressed stone. The level's built with them placed
-  (`dungeon`'s `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn` and
-  `roll`, `on` what it stands on, its `tint`), and they're added once their models have come:
-  each model's copies in each 16 m tile drawn at once (instanced), so what's out of sight or a
-  light's reach isn't drawn. They're in the catalog, downloaded only once a dungeon's wanted
-  (about 1.5 MB in all, fetched as soon as a level's begun); one that can't be had is left out.
+- **Furnished with scanned and modelled things** (`dungeons3d.js` `furnish`, made by
+  `npm run build:props`, 150 of them in 116 files): mostly CC0, from Poly Haven
+  (furniture, barrels, crates, tableware, food, tools and arms, statues, rocks, logs, a rat),
+  OpenGameArt (a skull; skulls and bones heaped, crossed, scattered) and museums' scans mirrored
+  on Zenodo and Objaverse (a bronze cauldron, a sheepskin, a stone sarcophagus, a winged guardian,
+  urns, a ritual bronze, a wolf's and a cave bear's skulls); some CC BY 4.0 from Sketchfab's makers
+  through the same mirrors (a handcart, a wheelbarrow, an old chest, a weapon rack, a sword, a
+  painted coffin, a carved urn, a clay basin, mushrooms, bracket fungus, a cow's, a stag's and a
+  ram's skulls), and a ribcage and a pelvis from anatomy scans (NIH 3D, the Human Reference
+  Atlas: CC BY 4.0, without pictures, coloured as bone), each maker named in the catalog and the
+  README. A model that's a set (three candleholders, a heap of rocks, skulls and bones) is a prop
+  for each thing in it, one file between them. The level's built with them placed (`dungeon`'s
+  `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn`, `pitch` and
+  `roll`, `on` what it stands on, its `tint`, whether it casts a `shadow`), and they're added once
+  their models have come: each model's copies in each of the rock's 16 m tiles drawn at once
+  (instanced, one for each of its materials), so what's out of sight or a light's reach isn't
+  drawn; small things cast no shadow. In the busiest room seen (an outlaws' chief's hall, from
+  inside) that's about 390 draw calls (270 before, 250 of them the rock, lights and the rest);
+  most rooms are 20 to 60 more than they were, 100 to 190 in all. Bigger squares (32 m) drew no
+  fewer, and a lamp's shadow then drew a quarter to four fifths more triangles, every copy in
+  the square, near or not.
+  They're in the catalog, downloaded only once a dungeon's wanted (each dungeon only its
+  theme's: about 4 to 9 MB), fetched as soon as a level's begun; one that can't be had is left
+  out, and what's on it.
+- **Dressed by its theme's rooms** (`dungeondressing.js`): each piece of the plan is dressed as
+  its room's look has it, the same way every time (by the numbers of its own square):
+  - what's left against a wall (`d`): a cave's mossy rocks, boulders, logs, roots, branches,
+    mushrooms, bones and heaped skulls; an outlaws' buckets, baskets, barrels and staves, crates
+    with something on them, jars, tools leant on the wall, a ladder, a cauldron, a chest, a
+    shield, rats; a temple's urns and vessels, candleholders, skulls in a row, a painted coffin
+    stood up (`CLUTTER`, by theme and look);
+  - the remains of someone who died there (`i`): a skull, ribs, hips and the long bones laid out
+    a body's length, now and then a sword or an estoc, a shield, a lantern gone out; old bones
+    (`j`): a heap, a skull on crossed bones, a ribcage, or a skull and its bones scattered (the
+    same in the dragon's lair, crypts and ruined halls); beasts' skulls by a cave's or a kennel's
+    walls;
+  - shelves (`e`) and what's kept on them, a side table (`o`) with a light on it, a stand of arms
+    (`n`: a shield and weapons leant on the wall, or a weapon rack), an offering's vessels (`v`),
+    a workbench (`X`) and its tools, a chopping block (`A`), a handcart or a barrow (`J`);
+  - round what's built: stools and tableware at a table, a pot or a cauldron and firewood by a
+    fire, a light and a sheepskin by a bedroll, a sheepskin before the chief's chair, swords and
+    estocs by a rack, a stone sarcophagus for some tombs, a winged guardian for some statues,
+    bronze vessels on altars, plunder in the hoard;
+  - and small things along the walls to walk over (stones, bark, a branch, a dropped bone,
+    mushrooms), casting no shadow.
 - **Its stairs**: down through the floor into the dark, or up into the rock, the dark at their
   head. They glow green to tap as a building's stairs do (`app/doors.js`).
 - **Daylight at the way in** on its first level; **torches** on its walls.
@@ -303,9 +337,12 @@ must suit every tier (a test checks a pack suits each tier from 1 to 10, within 
 it's met in the wilds). New art goes in by the theme's `style`: a look in `interiors3d.js`
 `DUNGEON_LOOKS` (its rock's shell, `caverns.js` `SHELLS`, or walls of dressed stone; its pictures,
 added to `scripts/build-textures.js` `PICTURES` and made with `npm run build:textures`). New
-furniture: a CC0 model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, how big its
-pictures, how many triangles at most), made with `npm run build:props`, named in `dungeons3d.js`
-`DUNGEON_PROPS`, and placed in `dungeon` for a plan character. Its bosses' and mini-bosses' looks:
+furniture: a model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, or its own files:
+a GLB, or an OBJ or STL and its pictures, with whose it is and its licence; how big its pictures,
+how many triangles at most; a set's pieces), made with `npm run build:props` (then `npm run
+build:manifest`), and placed by `dungeondressing.js` (a kind of what's left against a wall, in a
+theme's `CLUTTER`) or in `dungeon` for a plan character. Only CC0 or CC BY (its maker named), and
+only what can be downloaded without an account. Its bosses' and mini-bosses' looks:
 an entry each in `beasts/champions.js` `REGALIA`, by its id (one not there looks as its rank has it).
 
 ## The creature lab (`creature-lab.html`, `js/lab/creature-lab.js`)
@@ -379,6 +416,11 @@ code is here.
   bigger than its kind (a boss more than a mini-boss, none made taller than 3.3 m by it), wearing only what a people-shaped one can on
   its head, in place of what was there; and a sculpted one bigger, its body tinted and what glows
   on it brighter. `test/delves.test.js` checks the boss carries its rank and its id.
+- **`test/dressing.test.js`**, the rooms dressed: every theme's every look leaves its own things
+  against a wall, each kind of them sound by every wall (models in the catalog, sizes and turns
+  that are numbers, nothing far off its square); the same square dressed the same way every time,
+  and squares differently; tables, seats, shelves, side tables, workbenches, stands, vessels,
+  blocks, bones and remains sound; small things strewn by the walls that cast no shadow.
 - **`test/furnishings.test.js`**, the scanned models: each in the catalog, on disk, and small;
   every theme's levels furnished on open ground, each thing on what's placed before it, with the
   models each theme wants; and the models placed as asked (on the floor or on what's under them,

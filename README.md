@@ -477,7 +477,7 @@ npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
 npm run build:sounds    # remakes client/sounds, the recorded sounds, from their CC0 recordings (scripts/sounds)
 npm run build:textures  # remakes client/textures/dungeons, the dungeons' photographs, from CC0 scans
-npm run build:props     # remakes client/models/dungeons, the dungeons' furniture, from CC0 scanned models
+npm run build:props     # remakes client/models/dungeons, the dungeons' furniture and dressing, from CC0 and CC BY models
 npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
 
@@ -522,10 +522,11 @@ client/                 The game (static files served to the browser)
   models/assets.json    The catalog: what's downloaded only as it's wanted (the dungeons'
                         photographs and furniture), each file's hash and size added by npm run
                         build:manifest into js/app/assets.js
-  models/dungeons/      The scanned models a dungeon's furnished with (barrels, crates, tables, a
-                        fire pit, boulders, a bust, a vase, an axe), each a GLB with its colour
-                        picture and normal map (made by npm run build:props from Poly Haven's CC0
-                        models)
+  models/dungeons/      The scanned and modelled things a dungeon's furnished and dressed with
+                        (furniture, barrels, crates, tableware, tools and arms, statues, rocks,
+                        logs, skulls and bones, a cart, a sarcophagus, urns), each a GLB with its
+                        colour picture and normal map (made by npm run build:props from Poly
+                        Haven's, OpenGameArt's and museums' CC0 models and makers' CC BY ones)
   textures/dungeons/    The photographs a dungeon's rock, earth, stone and timber are drawn with,
                         each a colour picture and a normal map (made by npm run build:textures
                         from ambientCG's and Poly Haven's CC0 scans)
@@ -684,6 +685,9 @@ client/                 The game (static files served to the browser)
                         over its rock from all three sides (dungeonpictures.js lists them); and
                         the scanned models it's furnished with, read once, each model's copies
                         drawn at once a tile at a time
+    dungeondressing.js  What a dungeon's rooms are dressed with by theme and look: what's left
+                        by the walls, bones and remains, shelves, stands, vessels, workbenches,
+                        and what goes round a table, a fire or a bed
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and
@@ -793,9 +797,32 @@ asset out of this public repository.
   (<https://ambientcg.com>: Rock028, Ground022, Ground048) and Poly Haven
   (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles),
   CC0, made smaller by `scripts/build-textures.js`.
-- The dungeons' furniture is models scanned or made by Poly Haven (<https://polyhaven.com>:
-  wine_barrel_01, wooden_crate_02, wooden_table_02, stone_fire_pit, moon_rock_02, marble_bust_01,
-  brass_vase_04, wooden_axe), CC0, made simpler and smaller by `scripts/build-props.js`.
+- The dungeons' furniture and dressing, made simpler and smaller by `scripts/build-props.js`
+  (each listed in `client/models/assets.json` with whose it is):
+  - scanned or made by Poly Haven (<https://polyhaven.com>), CC0: its tables, stools, benches,
+    chairs, shelves, cabinet and ladder; barrels, crates, buckets and baskets; goblets, bowls,
+    plates, pots, food, vases, candlesticks and candleholders, a lantern; axes, tools, swords, a
+    mace, a war hammer and a shield; busts, statues and beasts' heads; a fire pit, boulders,
+    mossy rocks, stones, pebbles, logs, roots, stumps, branches and bark; a rat;
+  - from OpenGameArt (<https://opengameart.org>), CC0: "Human Skull" by CDmir, and "3D dungeon
+    debris: skull and bones" by Paul_Wortmann (after Ouren's bone);
+  - museums' scans, CC0, through Zenodo's mirror (<https://zenodo.org>): the Hunt Museum's
+    Ballyscullion Bronze Cauldron and Sheep Skin, the Minneapolis Institute of Art's Sarcophagus
+    of Prince Yuan Mi, the Smithsonian's Kneeling Winged Monster and square lidded ritual wine
+    container (fangyi), the Archaeological Museum in Kraków's Face urn and a wolf's skull (Virtual
+    Małopolska); and "Vertebrate: Ursus spelaeus (PRI 50009)" by Digital Atlas of Ancient Life,
+    through Objaverse (<https://huggingface.co/datasets/allenai/objaverse>);
+  - from Sketchfab's makers through Zenodo's mirror, CC BY 4.0
+    (<https://creativecommons.org/licenses/by/4.0/>), made smaller: "Wooden Cart" by
+    filip.hans.nyberg, "Mining cart medieval" by tijerin_art, "Old wooden chest" by Tim0,
+    "Medieval weapon rack" by JosueBorghi, "Sæbø / Thurmuth sword" by JohnyNawalony, "Sarcophagus
+    of Hunefer" and "Urn (cinerarium)" by The Fitzwilliam Museum, "Etruscan brazier" by
+    GlobalDigitalHeritage, "Leponogi Goban Boletus calopus" by Prirodoslovni_muzej_Slovenije, and
+    "Some kind of Fungus" by nebulousflynn; and through Objaverse, "Cow Skull" by IsraelK, "Deer
+    Skull - Photoscan" by Dmitry Schnein and "sheep skull 3D scan" by Model Thomas (daaanin);
+  - bones without pictures, CC BY 4.0, coloured as bone: "Rib Cage_Human Skeleton" (3DPX-016836) by
+    My Segmenter on NIH 3D (<https://3d.nih.gov>), and the Human Reference Atlas's male pelvis
+    (<https://humanatlas.io>).
 - The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
   (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
   (`client/models/jmi/LICENSE`).

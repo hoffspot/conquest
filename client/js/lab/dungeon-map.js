@@ -46,6 +46,17 @@ const PROPS = {
     Y: "#b88f3a",
     $: "#f0c75a",
     h: "#ffe14a",
+    // (What a room's dressed with: left by a wall, someone's remains, shelves, a side table, a stand
+    // of arms, an offering's vessels, a workbench, an anvil, a cart)
+    d: "#8a7a66",
+    i: "#e8e0cc",
+    e: "#7a5634",
+    o: "#6e4a2e",
+    n: "#8c8f96",
+    v: "#b8a27a",
+    X: "#80603c",
+    A: "#55585e",
+    J: "#9c6a3a",
 };
 
 const FOES = { boss: ["#ff3b30", 1.15], mini: ["#ff9500", 0.85], pack: ["#e86a5a", 0.5] };
