@@ -112,6 +112,17 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
 export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
 
 /**
+ * A people's army or reserve out in the field near a player (docs/WAR.md *The armies near a
+ * player*, M20; not one mustering at its seat, nor a reserve at home: they're within its walls):
+ * met once a player's this near (metres), or once it's within `fight` of an enemy's that's met, and
+ * let go once every player's this far. Up to `most` of it stood up, one for each of it, in its line
+ * of battle (core/formation.js), marching where the war has it going at `pace` metres a second, a
+ * point on its way passed once it's `past` metres from it; turned on an enemy's met within `fight`,
+ * marching on it till their fronts are `close`, then closing with it as a line does.
+ */
+export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close: 20, most: 80, pace: 1.4, past: 8 });
+
+/**
  * A fortification near a player (docs/WAR.md *Fortifications*): stood up in the battle once a
  * player's this near (metres), shooting from its loops at what comes within reach of them, and let
  * go once every player's this far; how much of a blow its stone takes off (`armor`, by kind).
@@ -345,7 +356,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 16;
+export const SNAPSHOT_VERSION = 17;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -557,6 +568,14 @@ export class Host {
          * (its sentries'), share (how many of its guard each stands for), fire, tents }.
          */
         this.camps = new Map();
+
+        /**
+         * The armies and reserves met in the field near a player (by the force's id: ARMY_NEAR):
+         * { people, kind ("army" or "reserve"), formation (its line's, in the battle), ids (its
+         * soldiers'), at (where its line was last) }. Its soldiers are each { force, role, ... } in
+         * `soldiers`.
+         */
+        this.armies = new Map();
 
         /**
          * The envoys met on the road near a player (by the envoy's id): { people, to (whose seat
@@ -1327,6 +1346,9 @@ export class Host {
                 } else if (soldier.convoy) {
                     this.war?.loss(soldier.convoy, 1);
                     this.#convoyFell(soldier.convoy, event.by);
+                } else if (soldier.force) {
+                    // (One of an army or reserve met in the field: one of it fewer in the war)
+                    this.war?.loss(soldier.force, 1, { by: this.#realmOf(event.by) });
                 } else if (soldier.works) {
                     this.war?.loss(soldier.works, this.worksOut.get(soldier.works)?.share ?? 1);
                     this.#worksFell(soldier.works, event.by);
@@ -1528,6 +1550,7 @@ export class Host {
             worksOut: [...this.worksOut.entries()],
             townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
+            armies: [...this.armies.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
@@ -1643,6 +1666,7 @@ export class Host {
             }),
         );
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
+        host.armies = new Map(structuredClone(snapshot.armies ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
@@ -2795,6 +2819,35 @@ export class Host {
             }
         }
 
+        // The armies and reserves near a player met in the field, in their lines of battle, and an
+        // enemy's near enough to one met to fight it; let go once every player's far, or they're
+        // gone (or home within their walls)
+        for (const [id, met] of [...this.armies]) {
+            const force = war.force(id);
+
+            if (!force || force.size <= 0 || !this.#afield(force) || !near({ at: met.at }, ARMY_NEAR.far)) {
+                this.#letArmyGo(id);
+            }
+        }
+
+        const afield = war.forces.filter((force) => (force.kind === "army" || force.kind === "reserve") && force.size > 0 && this.#afield(force));
+
+        for (const force of afield) {
+            if (!this.armies.has(force.id) && near(force, ARMY_NEAR.near)) {
+                this.#meetArmy(force);
+            }
+        }
+
+        for (const force of afield) {
+            const foe = () => [...this.armies.keys()].some((id) => war.hostile(war.force(id)?.realm, force.realm) && hypot(war.force(id).at[0] - force.at[0], war.force(id).at[1] - force.at[1]) <= ARMY_NEAR.fight);
+
+            if (!this.armies.has(force.id) && foe()) {
+                this.#meetArmy(force);
+            }
+        }
+
+        this.#watchArmies();
+
         // The envoys near a player met on the road, and let go once they're far (or gone, and far)
         for (const [id, met] of [...this.envoys]) {
             if (!near({ at: met.at }, ENVOY.far) || (!met.over && war.force(id)?.kind !== "envoy")) {
@@ -2845,7 +2898,7 @@ export class Host {
 
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
-        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -3063,6 +3116,177 @@ export class Host {
 
             return square;
         };
+    }
+
+    // --- The armies near a player (docs/WAR.md *The armies near a player*) ---
+
+    // Whether a people's army or reserve is out in the field: not an army mustering at its seat,
+    // nor a reserve at home (both within its walls)
+    #afield(force) {
+        return force.kind === "army" ? force.mission !== "muster" : force.mission !== "home";
+    }
+
+    // An army or reserve met in the field near a player: one of it stood up for each of it
+    // (ARMY_NEAR.most at most) in its line of battle, mixed as its people's are (DOCTRINES), each
+    // carrying what its people's do in its role, the line where the war has it, facing the way it's
+    // going and marching for the next point on its way
+    #meetArmy(force) {
+        const drawn = Math.min(force.size, ARMY_NEAR.most);
+        const roles = rolesOf(drawn, DOCTRINES[force.realm]);
+        const places = linePlaces(roles);
+        const to = force.path[Math.min(force.leg + 1, force.path.length - 1)] ?? force.at;
+        const facing = hypot(to[0] - force.at[0], to[1] - force.at[1]) > 1 ? atan2(to[0] - force.at[0], to[1] - force.at[1]) : 0;
+        const formation = `army-${force.id}`;
+        const free = this.#spots();
+        const counts = {};
+        const ids = [];
+
+        this.battle.formation(formation, { anchor: force.at, facing, to: [...to], speed: ARMY_NEAR.pace, advance: true });
+
+        roles.forEach((role, k) => {
+            let square;
+
+            try {
+                square = free(placeAt({ anchor: force.at, facing }, places[k]));
+            } catch {
+                return;
+            }
+
+            const id = `${force.id}/soldier-${this.fielded++}`;
+            const kit = soldierOf(force.realm, role, (counts[role] = (counts[role] ?? -1) + 1));
+
+            this.#enlist(id, { people: force.realm, ...kit, square, name: "soldier", record: { force: force.id, role }, patrol: [square], facing, leash: ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
+            ids.push(id);
+        });
+
+        this.armies.set(force.id, { people: force.realm, kind: force.kind, formation, ids, at: [...force.at] });
+        this.#event("army", { force: force.id, people: force.realm, kind: force.kind, ids, met: true });
+    }
+
+    // The armies and reserves met, each on its way: its line marching for the next point on it as
+    // the war has it, the war told where it's got to (war.move); turned on an enemy's met within
+    // ARMY_NEAR.fight (marching on it, and once their fronts are ARMY_NEAR.close, closing with it as
+    // a line does: battle.js ADVANCE), and on its way again once there's none; as many of it stood up as the war has of it (those it's lost elsewhere, or
+    // deserted, let go from the back; those joined it stood up at the back)
+    #watchArmies() {
+        const war = this.war;
+
+        for (const [id, met] of this.armies) {
+            const force = war.force(id);
+            const formation = this.battle.formations[met.formation];
+
+            if (!force || !formation) {
+                continue;
+            }
+
+            met.at = [...formation.anchor];
+
+            let leg = force.leg;
+
+            while (leg < force.path.length - 1 && hypot(force.path[leg + 1][0] - met.at[0], force.path[leg + 1][1] - met.at[1]) <= ARMY_NEAR.past) {
+                leg++;
+            }
+
+            war.move(id, met.at, leg);
+
+            // (An enemy's met within reach: on it; within sight of it, closing with it)
+            const foe = [...this.armies]
+                .filter(([other]) => other !== id && war.hostile(war.force(other)?.realm, force.realm))
+                .map(([, other]) => this.battle.formations[other.formation]?.anchor)
+                .filter(Boolean)
+                .map((at) => ({ at, distance: hypot(at[0] - met.at[0], at[1] - met.at[1]) }))
+                .filter(({ distance }) => distance <= ARMY_NEAR.fight)
+                .sort((a, b) => a.distance - b.distance)[0];
+            const to = foe ? (foe.distance <= ARMY_NEAR.close ? null : foe.at) : force.leg < force.path.length - 1 ? force.path[force.leg + 1] : null;
+
+            if (String(to) !== String(formation.to)) {
+                this.battle.formation(met.formation, { to: to ? [...to] : null });
+
+                // (Nothing to march for: closing with whoever's in sight, and no further)
+                if (!to) {
+                    formation.to = null;
+                }
+            }
+
+            this.#keepUpArmy(force, met);
+        }
+    }
+
+    // As many of an army or reserve met stood up as the war has of it now: the rearmost let go if
+    // it's lost some elsewhere, more stood up behind its line (in its people's mix) if some have
+    // joined it, up to ARMY_NEAR.most
+    #keepUpArmy(force, met) {
+        const alive = met.ids.filter((each) => this.battle.actor(each) && !this.battle.actor(each).dead);
+        const want = Math.min(force.size, ARMY_NEAR.most);
+
+        if (alive.length > want) {
+            const rearmost = alive.map((each) => this.battle.actor(each)).sort((a, b) => b.formation.slot[1] - a.formation.slot[1] || (a.id < b.id ? -1 : 1));
+
+            for (const actor of rearmost.slice(0, alive.length - want)) {
+                this.battle.remove(actor.id);
+                this.soldiers.delete(actor.id);
+                met.ids.splice(met.ids.indexOf(actor.id), 1);
+            }
+
+            this.#event("parted", { army: force.id, ids: rearmost.slice(0, alive.length - want).map(({ id }) => id) });
+        } else if (alive.length < want) {
+            const have = {};
+            const formation = this.battle.formations[met.formation];
+            const behind = Math.max(0, ...alive.map((each) => this.battle.actor(each).formation.slot[1])) + 2;
+            const free = this.#spots();
+            const ids = [];
+
+            for (const each of alive) {
+                const role = this.battle.actor(each).formation.role;
+
+                have[role] = (have[role] ?? 0) + 1;
+            }
+
+            // (The roles its people's mix wants that it's short of, as many as have joined it)
+            const roles = rolesOf(want, DOCTRINES[force.realm])
+                .filter((role) => !((have[role] ?? 0) > 0 && have[role]--))
+                .concat(Array(want).fill("front"))
+                .slice(0, want - alive.length);
+
+            for (const role of roles) {
+                let square;
+
+                try {
+                    square = free(placeAt(formation, [0, behind]));
+                } catch {
+                    break;
+                }
+
+                const id = `${force.id}/soldier-${this.fielded++}`;
+                const kit = soldierOf(force.realm, role, ids.length);
+
+                this.#enlist(id, { people: force.realm, ...kit, square, name: "soldier", record: { force: force.id, role }, patrol: [square], facing: formation.facing, leash: ROLES[role].leash, armed: true, formation: { id: met.formation, slot: [0, behind], role } });
+                ids.push(id);
+            }
+
+            met.ids.push(...ids);
+
+            if (ids.length) {
+                this.#event("army", { force: force.id, people: force.realm, kind: force.kind, ids });
+            }
+        }
+    }
+
+    // An army or reserve met let go: its soldiers gone from the world (with it, in the war), its line
+    // with them
+    #letArmyGo(id) {
+        const { ids, formation } = this.armies.get(id);
+
+        this.armies.delete(id);
+        this.battle.formation(formation, null);
+
+        for (const each of ids) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("parted", { army: id, ids });
     }
 
     // --- Convoys (docs/WAR.md *Convoys*) ---

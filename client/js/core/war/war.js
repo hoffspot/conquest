@@ -547,8 +547,8 @@ export class War {
      * camp's or a depot's guard or a force (by id) loses `count`, brought down by the people `by`
      * (a realm's id, or null). A town's garrison put down to the last by a people at war with its
      * holders is theirs (docs/WAR.md *Standing armies*: no other way to take one), held by a few of
-     * them (TAKEN), if the age lets towns of its kind be taken; a camp's or a depot's, it's razed.
-     * Returns how it went: "taken", "razed", or null.
+     * them (TAKEN), if the age lets towns of its kind be taken; a camp's or a depot's, it's razed;
+     * an army put down to the last is gone. Returns how it went: "taken", "razed", or null.
      */
     loss(id, count, { by = null } = {}) {
         const town = this.town(id);
@@ -584,6 +584,11 @@ export class War {
             }
         } else if (force) {
             force.size = Math.max(0, force.size - lost);
+
+            // (An army put to the sword to the last in the world: gone)
+            if (force.kind === "army" && force.size <= 0) {
+                this.#destroyed(force);
+            }
         }
 
         return null;
@@ -647,13 +652,21 @@ export class War {
     }
 
     /**
-     * An envoy or a convoy a player's near, where it's got to in the world: `at` ([x, y] metres),
-     * past the point `leg` of its path. At the end of it, an envoy's heard (and gone); a convoy's
-     * goods go into its people's stores (and it turns for home), or it's home. Returns whether it's
-     * at the end of its way.
+     * An envoy, a convoy, an army or a reserve a player's near, where it's got to in the world: `at`
+     * ([x, y] metres), past the point `leg` of its path. At the end of it, an envoy's heard (and
+     * gone); a convoy's goods go into its people's stores (and it turns for home), or it's home; an
+     * army or reserve does what it does there at its next turn (#march). Returns whether an envoy
+     * or a convoy is at the end of its way.
      */
     move(id, at, leg) {
         const force = this.force(id);
+
+        if (force?.kind === "army" || force?.kind === "reserve") {
+            force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
+            force.leg = Math.max(force.leg, Math.min(leg, force.path.length - 1));
+
+            return false;
+        }
 
         if (force?.kind !== "envoy" && force?.kind !== "convoy") {
             return false;
@@ -1700,10 +1713,11 @@ export class War {
                 continue;
             }
 
+            // (An army or reserve a player's near goes as it marches there: move)
             if (force.kind === "army") {
-                this.#onArmy(force);
+                this.#onArmy(force, { still: this.watched.has(force.id) });
             } else if (force.kind === "reserve") {
-                this.#onReserve(force);
+                this.#onReserve(force, { still: this.watched.has(force.id) });
             } else if (force.kind === "reinforcement") {
                 this.#onReinforcement(force);
             } else if (force.kind === "supply") {
@@ -2369,9 +2383,11 @@ export class War {
     // An army on the move, or there: at a camp's site, it builds the camp (or joins its people's
     // there), and once it's up goes against what it was to (a player's orders to camp there carried
     // out); home, it's made up there
-    #onArmy(army) {
+    #onArmy(army, { still = false } = {}) {
         // (Going against something that moves, a camp's: straight for it)
-        this.#go(army, ARMY.speed.army);
+        if (!still) {
+            this.#go(army, ARMY.speed.army);
+        }
 
         if (army.leg < army.path.length - 1) {
             return;
@@ -2609,9 +2625,11 @@ export class War {
         }
     }
 
-    // A reserve on the move: home at its seat
-    #onReserve(reserve) {
-        this.#go(reserve, ARMY.speed.reserve);
+    // A reserve on the move (not one a player's near: it goes as it marches there): home at its seat
+    #onReserve(reserve, { still = false } = {}) {
+        if (!still) {
+            this.#go(reserve, ARMY.speed.reserve);
+        }
 
         if (reserve.mission === "back" && reserve.leg >= reserve.path.length - 1) {
             reserve.mission = "home";
@@ -2879,7 +2897,7 @@ export class War {
     }
 
     // The fighting this turn: each army and reserve upon an enemy's (within CLOSE.fight) fights it,
-    // and the beaten falls back; supply wagons caught by an enemy army or reserve are taken, and
+    // and the beaten falls back (not those a player's near: that's fought out in the world); supply wagons caught by an enemy army or reserve are taken, and
     // depots it's upon fallen on; reinforcements caught by an enemy army are fallen on; then each
     // army attacking what it's after once it's there (not one a player's near, a while:
     // WATCH_TURNS). An army mustering at its seat is within its walls, not in the field: it fights
@@ -2889,7 +2907,7 @@ export class War {
 
         for (const a of fighters()) {
             for (const b of fighters()) {
-                if (a.id < b.id && this.forces.includes(a) && this.forces.includes(b) && a.size > 0 && b.size > 0 && (a.kind === "army" || b.kind === "army") && !this.#fleeing(a) && !this.#fleeing(b) && this.hostile(a.realm, b.realm) && apart(a.at, b.at) <= CLOSE.fight) {
+                if (a.id < b.id && this.forces.includes(a) && this.forces.includes(b) && a.size > 0 && b.size > 0 && (a.kind === "army" || b.kind === "army") && !this.#fleeing(a) && !this.#fleeing(b) && !this.watched.has(a.id) && !this.watched.has(b.id) && this.hostile(a.realm, b.realm) && apart(a.at, b.at) <= CLOSE.fight) {
                     this.#battle(a.kind === "reserve" ? b : a, a.kind === "reserve" ? a : b);
                 }
             }

@@ -3666,6 +3666,76 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     expect(errors).toEqual([]);
 });
 
+test("an army in the field near the player, in its line of battle: the player told of it, its soldiers drawn, marching where the war has it going; the orcs' their enemies, their own people's their friends", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // An orc army out east of the player's town, at war with the humans, and the humans' own west
+    // of it; the player in the town between them
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const field = (id, realm, at, to, size) => war.forces.push({ id, realm, kind: "army", size, at, path: [at, to], leg: 0, target: null, home: war.realm(realm).seat, mission: "camp", about: to, camp: null, orders: null, went: size, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 });
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        field("force-900", "orc", [mx + 230, my + 40], [mx + 230, my - 160], 12);
+        field("force-901", "human", [mx - 230, my], [mx - 230, my - 100], 8);
+        game.advance(0.5);
+    });
+
+    // (Both met, and their soldiers drawn over a few seconds)
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const ids = ["force-900", "force-901"].flatMap((id) => game.host.armies.get(id)?.ids ?? []);
+
+        return ids.length === 20 && ids.every((id) => game.avatars.has(id));
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 60 })).toBe(true);
+
+    const met = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const side = (id) => game.host.armies.get(id).ids.map((each) => game.battle.actor(each));
+        const formation = game.battle.formations[game.host.armies.get("force-900").formation];
+
+        return {
+            said: window.said.filter((text) => /in the field near you/.test(text)).sort(),
+            orcs: side("force-900").map((actor) => ({ name: actor.name, hostile: game.battle.hostile(actor, player), lined: actor.formation?.id === "army-force-900" })),
+            ours: side("force-901").map((actor) => ({ name: actor.name, hostile: game.battle.hostile(actor, player) })),
+            from: [...formation.anchor],
+        };
+    });
+
+    expect(met.said).toEqual(["Our army is in the field near you, 8 strong.", "The Orcish army is in the field near you, 12 strong."]);
+    expect(met.orcs.every(({ name, hostile, lined }) => name === "Orcish soldier" && hostile && lined)).toBe(true);
+    expect(met.ours.every(({ name, hostile }) => name === "Human soldier" && !hostile)).toBe(true);
+
+    // (Marching north, where it's going, at its pace)
+    await playUntil(page, () => false, { seconds: 5 });
+
+    const now = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return [...game.battle.formations[game.host.armies.get("force-900").formation].anchor];
+    });
+
+    expect(now[1]).toBeLessThan(met.from[1] - 3);
+});
+
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
