@@ -625,7 +625,8 @@ client/                 The game (static files served to the browser)
                         forces, turns and conquest; peoples.js their temperaments and rulers;
                         roads.js the ways their forces go; news.js the war told in words;
                         muster.js where a town's guards stand and its patrols go, and how a
-                        camp is laid out; armies.js the standing armies' and their camps' sizes
+                        camp is laid out; armies.js the standing armies' and their camps' sizes;
+                        supply.js their supply wagons and depots
     battle.js           Moving (over the navigation meshes, round each other), fighting,
                         damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks (and the wild's creatures' own)

@@ -43,7 +43,7 @@ test("lays out the war for a seed: each realm, its ruler and how they stand, the
     expect(start.seed).toBe(3);
     expect(start.turn).toBe(0);
     expect(start.realms).toHaveLength(6);
-    expect(start.realms[0]).toMatch(/^The Kingdom of .+(King|Queen) .+\d+ towns · 6 works · \d+ under arms · 60 gold0 wood · 0 stone · 0 metal0 guard towers · 0 forward garrisonsNo army raised · Reserve 0 of 20 · 0 camps$/);
+    expect(start.realms[0]).toMatch(/^The Kingdom of .+(King|Queen) .+\d+ towns · 6 works · \d+ under arms · 60 gold0 wood · 0 stone · 0 metal0 guard towers · 0 forward garrisonsNo army raised · Reserve 0 of 20 · 0 camps · 0 depots$/);
     expect(start.cells).toBe(36);
     expect(start.age).toContain("An uneasy peace");
     expect(start.age).toContain("No army marches yet.");

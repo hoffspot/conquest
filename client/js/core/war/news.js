@@ -41,17 +41,32 @@ export function tell(event, war) {
             .map(([resource, amount]) => `${Math.round(amount)} ${resource}`)
             .join(" and ");
     const brigands = (faction) => FACTION_NAMES[faction] ?? "brigands";
-    // (Whatever an army goes against: a town, a works, a fortification or a camp)
+    // (Whatever an army goes against: a town, a works, a fortification, a camp or a supply depot)
     const thing = (id) => {
         const fort = war.fort?.(id);
         const camp = war.camp?.(id);
+        const depot = war.depot?.(id);
 
         if (fort) {
             return `the ${own(fort.realm)} ${FORT_NAMES[fort.kind] ?? fort.kind} ${where(fort)}`;
         }
 
+        if (depot) {
+            return `the ${own(depot.realm)} supply depot`;
+        }
+
         return camp ? `the ${own(camp.realm)} camp${war.town(camp.toward) ? ` before ${war.town(camp.toward).name}` : ""}` : town(id);
     };
+    // (Whatever skirmishers fall on: a place, or forces out, by their kind)
+    const fallenOn = ({ target: id, kind, against }) =>
+        ({
+            army: `the ${own(against)} army`,
+            reserve: `the ${own(against)} reserve`,
+            reinforcement: `soldiers on their way to join the ${own(against)} army`,
+            convoy: `a ${own(against)} convoy`,
+            supply: `a ${own(against)} supply wagon`,
+            depot: `the ${own(against)} supply depot`,
+        })[kind] ?? thing(id);
 
     switch (event.type) {
         case "stage":
@@ -83,7 +98,7 @@ export function tell(event, war) {
         case "camped":
             return event.target ? `${People(event.realm)} have made camp within a march of ${thing(event.target)}.` : `${People(event.realm)} have made camp in the field.`;
         case "skirmish":
-            return `Skirmishers out of the ${own(event.realm)} camp fell on ${thing(event.target)}${event.killed ? `, and brought ${event.killed === 1 ? "one" : event.killed} of ${people(event.against)} down` : ""}.`;
+            return `Skirmishers out of the ${own(event.realm)} camp fell on ${fallenOn(event)}${event.killed ? `, and brought ${event.killed === 1 ? "one" : event.killed} of ${people(event.against)} down` : ""}.`;
         case "assault":
             return event.won ? `The ${own(event.realm)} army put the last of ${town(event.town)}'s defenders to the sword.` : `The ${own(event.realm)} army fell on ${town(event.town)}'s defenders, ${event.killed} of them killed, ${event.lost} of its own lost.`;
         case "taken":
@@ -97,9 +112,25 @@ export function tell(event, war) {
         case "crushed":
             return `${People(event.realm)} rose in ${town(event.town)}, and ${people(event.from)} put the rising down.`;
         case "ordered":
-            return `The ${own(event.realm)} army has its orders.`;
+            return event.depot ? `${People(event.realm)} have ordered a supply depot built.` : event.supply ? `The ${own(event.realm)} army has sent for supplies.` : `The ${own(event.realm)} army has its orders.`;
         case "struck":
-            return `${People(event.realm)} have struck one of their camps.`;
+            return `${People(event.realm)} have struck one of their ${event.depot ? "supply depots" : "camps"}.`;
+        case "depot":
+            return `${People(event.realm)} have set up a supply depot${war.town(event.toward) ? ` on the way to ${war.town(event.toward).name}` : ""}.`;
+        case "supplied":
+            return `Supplies have reached the ${own(event.realm)} army.`;
+        case "provisioned":
+            return `Supplies have reached the ${own(event.realm)} supply depot.`;
+        case "wagonLost":
+            return `A supply wagon on its way to the ${own(event.realm)} ${event.depot ? "supply depot" : "army"} was fallen on by ${event.by ? people(event.by) : brigands(event.faction)}, and taken.`;
+        case "unsupplied":
+            if (event.missed === 1) {
+                return `The ${own(event.realm)} army's supplies haven't got through${event.why === "unpaid" ? ": there's no gold to pay for them" : event.why === "cut off" ? ": there's nowhere to send them from" : ""}.`;
+            }
+
+            return `Its supplies cut off again, ${event.deserted} of the ${own(event.realm)} army have deserted.`;
+        case "starved":
+            return `Its supplies cut off too long, the ${own(event.realm)} army has broken up and gone home hungry.`;
         case "subjugated":
             return `The ${own(event.realm)} seat has fallen. They bend the knee to ${people(event.by)}.`;
         case "fallen":
@@ -119,6 +150,12 @@ export function tell(event, war) {
                 return event.won ? `The ${own(event.realm)} army fell upon the ${own(event.against)} camp and put its guard to the sword.` : `The ${own(event.realm)} army fell upon the ${own(event.against)} camp, and were beaten off.`;
             }
 
+            if (event.depot) {
+                const who = event.reserve ? `The ${own(event.realm)} reserve` : `The ${own(event.realm)} army`;
+
+                return event.won ? `${who} fell upon the ${own(event.against)} supply depot and put its guard to the sword.` : `${who} fell upon the ${own(event.against)} supply depot, and were beaten off.`;
+            }
+
             return `The ${own(event.realm)} army met the ${own(event.against)} ${event.kind === "reserve" ? "reserve" : "army"} in the field, ${event.killed} of them killed and ${event.lost} of its own lost, and ${event.won ? "drove them off" : "was driven off"}.`;
         case "withdrew":
             return `${People(event.realm)} have turned back from ${target(event.target)}.`;
@@ -129,6 +166,10 @@ export function tell(event, war) {
         case "built":
             return `${People(event.realm)} have raised a ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "razed":
+            if (event.depot) {
+                return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} supply depot${war.town(event.about) ? ` on the way to ${war.town(event.about).name}` : ""}.`;
+            }
+
             if (event.camp) {
                 return `${event.by ? People(event.by) : "Their enemies"} have razed the ${own(event.realm)} camp${war.town(event.toward) ? ` before ${war.town(event.toward).name}` : ""}.`;
             }
@@ -137,7 +178,7 @@ export function tell(event, war) {
         case "assailed":
             return `An assault team of ${people(event.by)} has fallen on the ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)}.`;
         case "abandoned":
-            return event.camp ? `The ${own(event.realm)} camp has been given up.` : `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
+            return event.depot ? `The ${own(event.realm)} supply depot has been given up.` : event.camp ? `The ${own(event.realm)} camp has been given up.` : `The ${own(event.realm)} ${FORT_NAMES[event.kind] ?? event.kind} ${where(event)} has been given up, unkept.`;
         case "counsel":
             if (event.build) {
                 return `${People(event.realm)} are counselled where to build.`;
@@ -174,7 +215,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmish", "intercepted"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmish", "intercepted", "supplied", "provisioned"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
@@ -184,7 +225,7 @@ const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assai
 export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     const heard = [];
     const near = (id, there) => {
-        const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? (there ? { at: there } : null);
+        const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? war.depot?.(id) ?? (there ? { at: there } : null);
 
         return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
     };
