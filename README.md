@@ -15,7 +15,10 @@ roads between them, and the ruins, caves and enemy camps in the wild), is at
 <https://hoffspot.github.io/conquest/world-map.html>. The town map, laying out a settlement (a
 farmstead, hamlet, village, town, city or capital) from a seed as the game's are laid out (streets wandering out from a market place,
 lanes curving round between them, and houses turned every way to face them), is at
-<https://hoffspot.github.io/conquest/town-map.html>. The building lab, building a street of every
+<https://hoffspot.github.io/conquest/town-map.html>. The dungeon map, drawing a dungeon cooked up
+from a seed and a theme (caves, an outlaws' hideout or an ancient temple) level by level, with its
+rooms, stairs, boss, mini-bosses, packs, chests, props and torches, is at
+<https://hoffspot.github.io/conquest/dungeon-map.html>. The building lab, building a street of every
 style of house, the taverns (each named, with its own painted sign), the adventurers' guild, the
 temples and the smithy, a whole town, any kind of settlement out in the world, or a stretch of
 any land (its rocks, fallen trees, grass and wildflowers), for any of the six peoples (each
@@ -55,7 +58,10 @@ chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that
 and how the engine's made ready for other players to hop in and out of a running world.
 [docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
 the adventurers' caches their brigands keep, how they behave, what lingers after their blows and
-its cures, what they leave, trading between players, and how they're built and animated in code. [docs/MAGIC.md](docs/MAGIC.md) describes
+its cures, what they leave, trading between players, and how they're built and animated in code.
+[docs/DUNGEONS.md](docs/DUNGEONS.md) describes the dungeon builder: dungeons one to three levels
+deep cooked up from a seed and a theme, how each kind is dug, what's put in them, and how to add a
+theme. [docs/MAGIC.md](docs/MAGIC.md) describes
 magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
 the host works, the spellbook, and how every spell looks.
 
@@ -525,6 +531,7 @@ client/                 The game (static files served to the browser)
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
   town-map.html         The town map (with world-map.css)
+  dungeon-map.html      The dungeon map: a dungeon level by level (with world-map.css)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
   creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
@@ -611,6 +618,9 @@ client/                 The game (static files served to the browser)
     weapons.js          The weapons and their attacks (and the wild's creatures' own)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
+    dungeons/           The dungeon builder (see docs/DUNGEONS.md): build.js cooks a dungeon up
+                        from a seed and a theme; themes.js the themes; layouts.js how each is dug;
+                        place.js what's put in; graph.js, grid.js and seeds.js what they share
     spoils.js           What they leave: their parts, and what the guild pays for them
     afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
@@ -710,6 +720,7 @@ client/                 The game (static files served to the browser)
   js/lab/uniform-lab.js The uniform lab: each people's soldiers and officials side by side
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map
+  js/lab/dungeon-map.js The dungeon map
   js/lab/war.js         The war
   js/lab/land.js        The land of a world plan painted as a picture, for the maps
   js/lab/building-lab.js  The building lab
@@ -731,6 +742,7 @@ docs/CHARACTERS.md      The character engine, and the research behind it
 docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
 docs/WAR.md             The war between the peoples, and playing with others (hop in, hop out)
 docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how they're built
+docs/DUNGEONS.md        The dungeon builder: themes, layouts, what's put in, adding a theme
 docs/MAGIC.md           Magic: the schools, wands, tomes, wonders, the spellbook, and the spells' looks
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
