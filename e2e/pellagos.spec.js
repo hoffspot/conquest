@@ -4163,6 +4163,19 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
     await expect(pack.locator(".pack-about")).toContainText("Blocks 35% of a blow caught on it (up to 52% for its make)");
     await expect(pack.locator(".pack-about .pack-compare")).toContainText("The weapon in hand takes both hands.");
 
+    // Its card beside it, put away by a tap anywhere else, its ×, or Escape (the pack still open)
+    await cell("kiteShield").click();
+    await expect(pack.locator(".pack-about .pack-name")).toBeVisible();
+    await pack.locator(".pack-title").click();
+    await expect(pack.locator(".pack-about")).toBeHidden();
+    await cell("kiteShield").click();
+    await pack.locator(".pack-about").getByRole("button", { name: "Put it away" }).click();
+    await expect(pack.locator(".pack-about")).toBeHidden();
+    await cell("kiteShield").click();
+    await page.keyboard.press("Escape");
+    await expect(pack.locator(".pack-about")).toBeHidden();
+    await expect(pack).toBeVisible();
+
     // Held, the sword goes on (the staff into the pack), and the other hand's free for the shield
     await hold(cell("sword"));
     await expect(slot("mainHand")).toHaveText(/^Weapon\s*Sword$/);
@@ -4281,6 +4294,18 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(modes.getByRole("tab", { name: "Buy" })).toHaveAttribute("aria-selected", "true");
     await expect(pack.locator(".pack-heading")).toHaveText(["Food, drink and draughts"]);
     await expect(pack.locator(".wares .pack-row")).toHaveText(["Hot meal5 goldBuy", "Tankard of ale2 goldBuy"]);
+
+    // Tapped, a ware opens to say what it is (one at a time); tapped again, it closes
+    const ware = (name) => pack.locator(".wares .pack-row", { hasText: name });
+
+    await ware("Hot meal").locator(".pack-peek").click();
+    await expect(ware("Hot meal").locator(".pack-peeked")).toHaveText("Heals 15 hit points.");
+    await expect(ware("Hot meal").locator(".pack-peek")).toHaveAttribute("aria-expanded", "true");
+    await ware("Tankard of ale").locator(".pack-price").click();
+    await expect(ware("Tankard of ale").locator(".pack-peeked")).toHaveText("Fills your stamina.");
+    await expect(pack.locator(".pack-peeked")).toHaveCount(1);
+    await ware("Tankard of ale").locator(".pack-peek").click();
+    await expect(pack.locator(".pack-peeked")).toHaveCount(0);
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
     await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
@@ -4292,6 +4317,8 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack.locator(".wares")).toHaveCount(0);
     expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion", "ale"]);
     await expect(pack.locator('.selling .pack-row[data-item="ale"]')).toHaveText("Tankard of ale1 goldSell");
+    await pack.locator('.selling .pack-row[data-item="potion"] .pack-peek').click();
+    await expect(pack.locator('.selling .pack-row[data-item="potion"] .pack-peeked')).toHaveText("Heals 25 hit points.");
     await pack.getByRole("button", { name: "Sell Tankard of ale for 1 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("29 gold");
     expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion"]);
@@ -4909,6 +4936,15 @@ test("a people's castle's undercroft, down the stairs from its great hall: the c
     await expect(pack.locator(".pack-title")).toContainText("Trading with");
     await expect(pack.locator(".pack-heading")).toHaveText(["Weapons", "Shields and off hand", "Clothes and armour"]);
     await expect(pack.locator(".wares .pack-row.rarity-legendary").first()).toBeVisible();
+
+    // A legendary piece tapped: what it does, the bonuses it comes with (rolled as it's bought),
+    // and what buying and putting it on would change
+    const legendary = pack.locator(".wares .pack-row.rarity-legendary").first();
+
+    await legendary.locator(".pack-peek").click();
+    await expect(legendary.locator(".pack-peeked .pack-kind")).toContainText("Legendary");
+    await expect(legendary.locator(".pack-peeked .pack-rolls")).toContainText("rolled as it's bought, and a name of its own:");
+    await expect(legendary.locator(".pack-peeked .pack-compare")).toContainText("Bought and put on instead of what's worn:");
 });
 
 test("the places worth finding are on the minimap near them and on the world map once the player's been by, rimmed in who holds them, a cleared one grey till it's held again", async ({ page }) => {
