@@ -1508,6 +1508,12 @@ export class Game {
             this.#listen();
         }
 
+        // (Stopped while steered by held keys or the thumb stick, nothing held now: stopping)
+        if (this.stopOnStart) {
+            this.stopOnStart = false;
+            this.#command({ type: "stop" });
+        }
+
         if (this.running) {
             return;
         }
@@ -1578,6 +1584,18 @@ export class Game {
         this.pointers.clear();
         this.pinch = null;
         this.wheel?.hide();
+
+        // (Whatever was steering the player as their keys and thumb stop being listened to: if the
+        // world goes on, they're stopped now; if it's stopped, as soon as it starts again; never left
+        // walking on with nothing held to stop them)
+        if (this.steering?.steering) {
+            if (this.running) {
+                this.#command({ type: "stop" });
+            } else {
+                this.stopOnStart = true;
+            }
+        }
+
         this.steering?.dispose();
         this.steering = null;
     }
