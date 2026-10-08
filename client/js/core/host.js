@@ -40,6 +40,8 @@ import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
+import { dropTiles } from "./navigation.js";
+import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
@@ -115,6 +117,13 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
  * of each of its goods); its wagons stand where they were left.
  */
 export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
+
+/**
+ * A fortification near a player (docs/WAR.md *Fortifications*): stood up in the battle once a
+ * player's this near (metres), shooting from its loops at what comes within reach of them, and let
+ * go once every player's this far; how much of a blow its stone takes off (`armor`, by kind).
+ */
+export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.25, garrison: 0.2 } });
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
@@ -281,7 +290,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 10;
+export const SNAPSHOT_VERSION = 11;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -457,6 +466,7 @@ export class Host {
 
         /** The war between the peoples (war/war.js), in a world laid out from a plan. */
         this.war = world.plan ? Host.#war(world.plan, war) : null;
+        this.#fortsChanged();
         this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
         this.#wire();
 
@@ -511,6 +521,9 @@ export class Host {
          * wagon (by id): { convoy, people, load (what it's laden with: a resource, or null), seed }.
          */
         this.convoys = new Map();
+
+        /** The fortifications stood up near a player (by the fortification's id): { realm, kind }. */
+        this.fortsOut = new Map();
         this.wagons = new Map();
 
         /**
@@ -1282,6 +1295,23 @@ export class Host {
                 this.#bring(event.id);
             }
 
+            // A fortification struck: the less of it stands in the war (war.strike), razed at nothing
+            if ((event.type === "hit" || event.type === "death") && this.fortsOut.has(event.id)) {
+                const [struck, fort] = [this.battle.actor(event.id), this.war?.fort(event.id)];
+
+                // (By a player's people, a soldier's, or any of a people's in the battle)
+                const team = this.battle.actor(event.by)?.team;
+                const by = this.#realmOf(event.by) ?? (this.war?.realm(team) ? team : null);
+
+                // (Felled: all it had left, whatever the battle has of it now. Razed, let go at once,
+                // as razed by them, before anything else finds it gone)
+                const lost = fort && event.type === "death" ? fort.hp : struck && fort ? fort.hp - struck.hp : 0;
+
+                if (lost > 0 && !this.war.strike(event.id, lost, by)) {
+                    this.#letFortGo(event.id, { razed: true, by });
+                }
+            }
+
             // A soldier struck by someone whose people aren't at war with theirs: a grudge
             // between the peoples (and the soldier's fellows fight back: battle.js foes)
             if (event.type === "hit" && event.by && this.soldiers.has(event.id)) {
@@ -1381,6 +1411,15 @@ export class Host {
             this.#event("war", { event });
             this.#fate(event);
 
+            // (A fortification gone up or come down: the world told, and one stood up let go)
+            if (event.type === "built" || event.type === "razed" || event.type === "abandoned") {
+                this.#fortsChanged();
+
+                if (event.type !== "built" && this.fortsOut.has(event.fort)) {
+                    this.#letFortGo(event.fort, event.type === "razed" ? { razed: true, by: event.by } : {});
+                }
+            }
+
             // (A camp's sortie against a town a player's near: out into the world)
             if (event.type === "sortie") {
                 this.#setOut(event);
@@ -1414,6 +1453,7 @@ export class Host {
             sorties: [...this.sorties.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
+            fortsOut: [...this.fortsOut.entries()],
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
@@ -1526,6 +1566,7 @@ export class Host {
         host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
+        host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
@@ -2699,9 +2740,24 @@ export class Host {
 
         this.#watchConvoys();
 
+        // The fortifications near a player stood up, and let go once they're far, or gone
+        for (const [id] of [...this.fortsOut]) {
+            const fort = war.fort(id);
+
+            if (!fort || !near(fort, FORT_NEAR.far)) {
+                this.#letFortGo(id);
+            }
+        }
+
+        for (const fort of war.forts) {
+            if (!this.fortsOut.has(fort.id) && near(fort, FORT_NEAR.near)) {
+                this.#raiseFort(fort);
+            }
+        }
+
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
-        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -3064,6 +3120,51 @@ export class Host {
         this.#event("parted", { convoy: id, ids: [...ids, ...wagons] });
     }
 
+    // --- Fortifications (docs/WAR.md *Fortifications*) ---
+
+    // The fortifications standing told to the world (overworld.js setForts): the squares under any
+    // gone up or come down made again, and the navigation mesh's tiles there with them
+    #fortsChanged() {
+        const town = this.world.maps?.town;
+
+        for (const box of town?.setForts?.(this.war?.forts ?? []) ?? []) {
+            dropTiles(town, box);
+        }
+    }
+
+    // A fortification near a player stood up in the battle: over its squares, shooting at its
+    // people's enemies from its loops, as strong as it stands in the war
+    #raiseFort(fort) {
+        const spec = FORTS[fort.kind];
+
+        this.battle.add({
+            id: fort.id,
+            kind: "fort",
+            name: `${ADJECTIVES[fort.realm] ?? fort.realm} ${fort.kind === "garrison" ? "forward garrison" : "guard tower"}`,
+            team: fort.realm,
+            square: [Math.floor(fort.at[0]), Math.floor(fort.at[1])],
+            ai: "fort",
+            weapon: fort.kind,
+            armed: true,
+            hp: spec.hp,
+            armor: FORT_NEAR.armor[fort.kind] ?? 0,
+            footprint: footprintOf(fort),
+        });
+        Object.assign(this.battle.actor(fort.id), { hp: fort.hp });
+        this.fortsOut.set(fort.id, { realm: fort.realm, kind: fort.kind });
+        this.#event("fortOut", { fort: fort.id, kind: fort.kind, people: fort.realm });
+    }
+
+    // A fortification let go: gone from the battle (it stands on in the war, unless it's razed: by
+    // the people `by`, if anyone's)
+    #letFortGo(id, { razed = false, by = null } = {}) {
+        const { realm, kind } = this.fortsOut.get(id) ?? {};
+
+        this.battle.remove(id);
+        this.fortsOut.delete(id);
+        this.#event("fortDown", { fort: id, kind, people: realm, ...(razed ? { razed, by } : {}) });
+    }
+
     // --- The works (docs/WAR.md *The works*) ---
 
     // Where a works is set down in the world (sites.js: its heart, yard, posts and round), or null
@@ -3251,7 +3352,7 @@ export class Host {
     #realmOf(id) {
         const leader = this.followers.get(id)?.leader ?? this.companions.get(id)?.leader ?? id;
 
-        return this.players.get(leader)?.realm ?? this.soldiers.get(id)?.people ?? null;
+        return this.players.get(leader)?.realm ?? this.soldiers.get(id)?.people ?? this.fortsOut.get(id)?.realm ?? null;
     }
 
     // A camp near a player pitched (docs/WAR.md M6): its tents round its fire, and its sentries

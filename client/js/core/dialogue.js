@@ -922,7 +922,8 @@ export const TREES = Object.freeze({
     // people's (`own`), whether they've room for more work (`room`), what's offered (`offer`),
     // whether they've something to tell of (`due`), how it went (`reported`), whether they've the
     // rank for the keep (`keep`), an armoury gift due (`armoury`), counsel they can give
-    // (`counselMarch`, `counselPeace`, `counselWar`) and its choices (`march1`... `war3`); serving
+    // (`counselMarch`, `counselPeace`, `counselWar`) and its choices (`march1`... `war3`), and where
+    // to build (`counselBuild`, whether the council has `plans`: the building screen); serving
     // another people, whether it's time to rise (`counselRise`, `ready`: docs/WAR.md M10)
     reeve: {
         start: "greet",
@@ -1038,6 +1039,7 @@ export const TREES = Object.freeze({
                     { if: { counselMarch: true }, say: "Where will we strike next?", next: "march" },
                     { if: { counselPeace: true }, say: "Have you thought of peace?", next: "peace" },
                     { if: { counselWar: true }, say: "There are others we could bring to heel.", next: "warOn" },
+                    { if: { counselBuild: true }, say: "Where should we build our defences?", next: "build" },
                     { if: { counselRise: true }, say: "Is it time we rose against {oppressor}?", next: "rise" },
                     { say: "How goes the war?", next: "war" },
                     { say: "By your leave.", next: null },
@@ -1088,6 +1090,21 @@ export const TREES = Object.freeze({
                     { if: { war3: true }, say: "{war3}.", next: "heeded", do: [{ counsel: { war: 3 } }] },
                     { say: "Forget I spoke.", next: "more" },
                 ],
+            },
+            // (The building screen: app/building.js, its words filled in once a plan's chosen)
+            build: {
+                say: [
+                    { if: { plans: true }, lines: ["The council's walked the borders. Here's where they'd raise towers and garrisons, and what each would cost us. Which first?", "Towers, garrisons... the council has its plans, and the stores are never deep enough. Look them over. Which would you have first?"] },
+                    { lines: ["The council sees nowhere we need build just now. Ask again when the borders shift.", "Nowhere, for now. We've what we need, or nothing to build it with."] },
+                ],
+                choices: [
+                    { if: { plans: true }, say: "Show me the plans.", next: "planning", do: [{ plans: "open" }] },
+                    { say: "Another time.", next: "more" },
+                ],
+            },
+            planning: {
+                say: ["{planned}"],
+                choices: "more",
             },
             rise: {
                 say: [

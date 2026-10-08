@@ -8,9 +8,10 @@
 // standing stones, a graveyard and a camp, each rimmed in the colour of who holds it (PLACE_RIMS); a
 // dungeon's way in (an arch over steps going down, grey while it's cleared); an adventurers' cache
 // once it's been seen (a chest); and each people's works, a lumber mill (a log and an axe), a mine
-// (a pick over its ore) and a quarry (a squared block), rimmed in their holder's colour. Drawn on a
-// canvas, from paths on a grid 24
-// across, centred on 0, 0.
+// (a pick over its ore) and a quarry (a squared block), rimmed in their holder's colour; and their
+// fortifications, a guard tower (a battlemented tower) and a forward garrison (a curtain wall
+// between two turrets, its gate in it), rimmed as the works are. Drawn on a canvas, from paths on
+// a grid 24 across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
 const LOOKS = {
@@ -282,6 +283,29 @@ const LOOKS = {
             ["M-4.4,-6.2 l1.4,-4 l1.4,4 z", "#9aa4ae", "#1e2328", 0.8],
         ],
     },
+    // (Each people's fortifications: docs/WAR.md *Fortifications*; rimmed as the works are)
+    guardTower: {
+        rim: "#c9a24a",
+        parts: [
+            // A stout square tower, battlemented, two loops in it and its door
+            ["M-4.5,-4.5 h9 v13 h-9 z", "#bdb5a5", "#1e1e1a", 1],
+            ["M-5.5,-4.5 v-4.1 h2.2 v2 h2.2 v-2 h2.2 v2 h2.2 v-2 h2.2 v4.1 z", "#a8a092", "#1e1e1a", 1],
+            ["M-0.6,-2.6 h1.2 v3 h-1.2 z", "#1a1410", null, 0],
+            ["M-1.8,8.5 v-3.6 a1.8,1.8 0 0 1 3.6,0 v3.6 z", "#2a1a10", null, 0],
+        ],
+    },
+    garrison: {
+        rim: "#c9a24a",
+        parts: [
+            // A curtain wall, battlemented, its gate in it, a turret at each end
+            ["M-7.8,-0.5 h15.6 v7 h-15.6 z", "#bdb5a5", "#1e1e1a", 1],
+            ["M-3.6,-0.5 v-1.8 h1.8 v1.8 z M-0.9,-0.5 v-1.8 h1.8 v1.8 z M1.8,-0.5 v-1.8 h1.8 v1.8 z", "#bdb5a5", "#1e1e1a", 0.8],
+            ["M-7.8,-3.5 h3.2 v10 h-3.2 z M4.6,-3.5 h3.2 v10 h-3.2 z", "#a8a092", "#1e1e1a", 1],
+            ["M-8.1,-3.5 v-2.5 h1.27 v1.2 h1.26 v-1.2 h1.27 v2.5 z M4.3,-3.5 v-2.5 h1.27 v1.2 h1.26 v-1.2 h1.27 v2.5 z", "#a8a092", "#1e1e1a", 1],
+            ["M-6.6,0 h0.8 v2.6 h-0.8 z M5.8,0 h0.8 v2.6 h-0.8 z", "#1a1410", null, 0],
+            ["M-2.2,6.5 v-3.9 a2.2,2.2 0 0 1 4.4,0 v3.9 z", "#2a1a10", null, 0],
+        ],
+    },
     camp: {
         rim: "#d0413a",
         parts: [
@@ -309,6 +333,9 @@ export const WORKS_RIMS = Object.freeze({ own: "#e2c25a", enemy: "#e07a2a", othe
 
 /** Each kind of works' icon (LOOKS). */
 export const WORKS_ICONS = Object.freeze({ "lumber mill": "mill", mine: "mine", quarry: "quarry" });
+
+/** Each kind of fortification's icon (LOOKS), rimmed as a works' is, by its people (WORKS_RIMS). */
+export const FORT_ICONS = Object.freeze({ tower: "guardTower", garrison: "garrison" });
 
 // The paths, made once (Path2D: only in the browser)
 let paths = null;

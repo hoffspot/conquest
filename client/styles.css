@@ -1255,6 +1255,22 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     height: 10px;
 }
 
+/* A fortification's (a guard tower's, a forward garrison's): broader, its bar heavier, edged in
+   stone */
+.floater.fort {
+    min-width: 170px;
+    border-color: #9a9488;
+}
+
+.floater.fort .bar {
+    height: 15px;
+}
+
+.floater.fort .bar .value {
+    font-size: 11px;
+    line-height: 15px;
+}
+
 /* The minimap, in the top left corner (the four buttons in the top right: any room left along
    the top between them) */
 #minimap {

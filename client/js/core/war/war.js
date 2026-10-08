@@ -18,6 +18,7 @@
 
 import { createRandom } from "../random.js";
 import { RACES, WORKS } from "../worldplan/races.js";
+import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { Roads } from "./roads.js";
 import { hypot } from "../exact.js";
@@ -123,8 +124,17 @@ export const CONVOY = Object.freeze({ wagons: 3, load: 20, guards: 6, fewest: 4,
  */
 export const OVERRUN = Object.freeze({ base: 0.001, weak: 0.025, band: 6, held: 2 });
 
+/**
+ * A fortification under siege (docs/WAR.md *Fortifications*): an enemy camp or army within `reach`
+ * metres of it falls on it each turn, taking `hp` of its strength for each of them; its defenders
+ * bring down `tower` of them a turn (a garrison `garrison`). Kept up, it's mended `mend` of its
+ * strength a turn; not kept up (its people's stores short of its upkeep), it falls `decay` into
+ * ruin a turn, and is given up at nothing.
+ */
+export const FORT_SIEGE = Object.freeze({ reach: 250, hp: 10, tower: 1, garrison: 2, mend: 0.02, decay: 0.02 });
+
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 2;
+export const WAR_VERSION = 3;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -178,7 +188,8 @@ export class War {
          * overlord (a realm's id, or null), since (the turn it last changed hands), standing (what
          * it thinks of each other realm: grudges below 0, favours above), counsel (a player's,
          * heeded for a while: counsel()), unrest (towards rising, serving or fallen: RISING),
-         * alive, stores (what it has to build with: RESOURCES, from its works' convoys) }.
+         * alive, stores (what it has to build with: RESOURCES, from its works' convoys), build (a
+         * player's counsel on what to build: { key (forts.js plansFor's), weight, until }) }.
          */
         this.realms = RACES.map((race) => {
             const capital = plan.places.find((place) => place.race === race.id && place.kind === "capital");
@@ -198,6 +209,7 @@ export class War {
                 unrest: 0,
                 alive: true,
                 stores: noStores(),
+                build: null,
             };
         });
 
@@ -226,6 +238,15 @@ export class War {
          */
         this.forces = [];
         this.nextForce = 1;
+
+        /**
+         * The fortifications built (forts.js FORTS, docs/WAR.md *Fortifications*): { id, kind
+         * ("tower", "garrison"), realm (whose it is), at ([x, y] metres), hp, about (the town's or
+         * works' id it guards), toward (the town it faces), built (the turn it was), by (a player's
+         * people who counselled it, or null) }.
+         */
+        this.forts = [];
+        this.nextFort = 1;
 
         /** Between each two realms that have met (by pair key): { state: "neutral", "allied" or "hostile", since }. */
         this.relations = {};
@@ -398,6 +419,7 @@ export class War {
         this.#stageUp();
         this.#discover();
         this.#collect();
+        this.#keepUp();
         this.#work();
         this.#fade();
 
@@ -409,6 +431,7 @@ export class War {
 
         this.#march();
         this.#camps();
+        this.#besiege();
         this.#waylay();
         this.#ambush();
         this.#overrun();
@@ -666,7 +689,7 @@ export class War {
      */
     counsel(id, advice, weight) {
         const realm = this.realm(id);
-        const [kind, about] = Object.entries(advice ?? {}).find(([key]) => ["march", "peace", "war"].includes(key)) ?? [];
+        const [kind, about] = Object.entries(advice ?? {}).find(([key]) => ["march", "peace", "war", "build"].includes(key)) ?? [];
 
         if (!realm?.alive || realm.overlord || !kind || !(weight > 0)) {
             return false;
@@ -676,14 +699,81 @@ export class War {
             march: () => this.town(about) && this.hostile(id, this.liege(this.town(about).owner)),
             peace: () => this.realm(about)?.alive && this.hostile(id, about),
             war: () => this.realm(about)?.alive && !this.realm(about).overlord && this.relation(id, about) === "neutral",
+            build: () => plansFor(this, id).some(({ key }) => key === about),
         }[kind];
 
         if (!fitting()) {
             return false;
         }
 
+        // (What to build is counsel of its own, heeded alongside the rest)
+        if (kind === "build") {
+            realm.build = { key: about, weight: clamp(weight, 0, 1), until: this.turn + COUNSEL_TURNS };
+            this.#emit("counsel", { realm: id, build: about });
+
+            return true;
+        }
+
         realm.counsel = { [kind]: about, weight: clamp(weight, 0, 1), until: this.turn + COUNSEL_TURNS };
         this.#emit("counsel", { realm: id, [kind]: about });
+
+        return true;
+    }
+
+    /** A fortification, by its id (forts), or null. */
+    fort(id) {
+        return this.forts.find((fort) => fort.id === id) ?? null;
+    }
+
+    /**
+     * Build a fortification for a realm (forts.js): one of its council's plans (plansFor's: { kind,
+     * at, about, toward }), or anywhere else it may build (mayBuild), if its stores hold what it
+     * costs and it has fewer than the most of the kind it keeps. `by`: a player's people whose counsel
+     * it was, if any. Returns the fortification built, or null.
+     */
+    build(id, { kind, at, about = null, toward = null }, { by = null } = {}) {
+        const realm = this.realm(id);
+        const spec = FORTS[kind];
+
+        if (!realm?.alive || !spec || !mayBuild(this, id, at) || !affords(realm.stores, spec.cost)) {
+            return null;
+        }
+
+        if (this.forts.filter((fort) => fort.realm === id && fort.kind === kind).length >= spec.most) {
+            return null;
+        }
+
+        for (const [good, amount] of Object.entries(spec.cost)) {
+            realm.stores[good] = Math.round((realm.stores[good] - amount) * 10) / 10;
+        }
+
+        const fort = { id: `fort-${this.nextFort++}`, kind, realm: id, at: [...at], hp: spec.hp, about, toward, built: this.turn, by };
+
+        this.forts.push(fort);
+        this.#emit("built", { fort: fort.id, kind, realm: id, at: [...at], about, by });
+
+        return fort;
+    }
+
+    /**
+     * A fortification struck in the world (from the host): `amount` of its strength lost to the
+     * people `by` (a realm's id, or null for the wild). Brought to nothing, it's razed. Returns
+     * whether it's still standing.
+     */
+    strike(id, amount, by = null) {
+        const fort = this.fort(id);
+
+        if (!fort) {
+            return false;
+        }
+
+        fort.hp = Math.max(0, Math.round((fort.hp - amount) * 10) / 10);
+
+        if (fort.hp <= 0) {
+            this.#raze(fort, by, { played: true });
+
+            return false;
+        }
 
         return true;
     }
@@ -773,6 +863,8 @@ export class War {
             works: this.works,
             forces: this.forces,
             nextForce: this.nextForce,
+            forts: this.forts,
+            nextFort: this.nextFort,
             relations: this.relations,
             known: this.known,
             victor: this.victor,
@@ -784,7 +876,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && snapshot.version !== 1) {
+        if (snapshot.version !== WAR_VERSION && snapshot.version !== 1 && snapshot.version !== 2) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -808,7 +900,12 @@ export class War {
 
         for (const realm of war.realms) {
             realm.stores ??= noStores();
+            realm.build ??= null;
         }
+
+        // (A war kept before the fortifications (version 2 or before) has none)
+        war.forts = kept.forts ?? [];
+        war.nextFort = kept.nextFort ?? 1;
 
         return war;
     }
@@ -933,6 +1030,7 @@ export class War {
 
         for (const each of own) {
             this.#garrison(each);
+            this.#fortify(each);
         }
 
         this.#diplomacy(realm);
@@ -994,6 +1092,127 @@ export class War {
             each.guard += Math.max(0, guard);
             each.escort += Math.max(0, escort);
             realm.treasury -= (Math.max(0, guard) + Math.max(0, escort)) * COSTS.troop;
+        }
+    }
+
+    // --- Fortifications (docs/WAR.md *Fortifications*) ---
+
+    // Each fortification kept up from its people's stores (FORTS upkeep): mended a little while it
+    // is, falling into ruin while it isn't, and given up at nothing; a fallen people's given up
+    #keepUp() {
+        for (const fort of [...this.forts]) {
+            const realm = this.realm(fort.realm);
+            const spec = FORTS[fort.kind];
+
+            if (!realm?.alive) {
+                this.#raze(fort, null, { abandoned: true });
+                continue;
+            }
+
+            if (affords(realm.stores, spec.upkeep)) {
+                for (const [good, amount] of Object.entries(spec.upkeep)) {
+                    realm.stores[good] = Math.round((realm.stores[good] - amount) * 100) / 100;
+                }
+
+                fort.hp = Math.min(spec.hp, Math.round(fort.hp + spec.hp * FORT_SIEGE.mend));
+            } else {
+                fort.hp = Math.max(0, Math.round(fort.hp - spec.hp * FORT_SIEGE.decay));
+
+                if (fort.hp <= 0) {
+                    this.#raze(fort, null, { abandoned: true });
+                }
+            }
+        }
+    }
+
+    // A realm's council sits (forts.js plansFor): the best of its plans it can afford, keeping back
+    // enough of its stores to keep up what it has (COUNCIL.reserve turns of it), is built; a
+    // player's counsel weighs for the one they counselled. One a turn at most
+    #fortify(realm) {
+        if (realm.build && this.turn > realm.build.until) {
+            realm.build = null;
+        }
+
+        // (Nothing to build with yet: the council needn't sit)
+        if (!Object.values(FORTS).some(({ cost }) => affords(realm.stores, cost))) {
+            return;
+        }
+
+        const plans = plansFor(this, realm.id);
+
+        if (!plans.length) {
+            return;
+        }
+
+        const upkeep = {};
+
+        for (const fort of this.forts.filter((each) => each.realm === realm.id)) {
+            for (const [good, amount] of Object.entries(FORTS[fort.kind].upkeep)) {
+                upkeep[good] = (upkeep[good] ?? 0) + amount * COUNCIL.reserve;
+            }
+        }
+
+        const weighed = plans
+            .map((plan) => ({ plan, score: plan.score * (realm.build?.key === plan.key ? 1 + COUNCIL.counsel * realm.build.weight : 1) }))
+            .sort((a, b) => b.score - a.score || (a.plan.key < b.plan.key ? -1 : 1));
+
+        for (const { plan } of weighed) {
+            const needs = Object.fromEntries(Object.entries(plan.cost).map(([good, amount]) => [good, amount + (upkeep[good] ?? 0)]));
+
+            if (affords(realm.stores, needs)) {
+                const counselled = realm.build?.key === plan.key;
+                const fort = this.build(realm.id, plan, { by: counselled ? realm.id : null });
+
+                if (fort && counselled) {
+                    realm.build = null;
+                }
+
+                return;
+            }
+
+            // (The best it can't afford yet it saves for, rather than building lesser ones)
+            if (plan === weighed[0].plan) {
+                return;
+            }
+        }
+    }
+
+    // The enemy camps and armies near a fortification fall on it (FORT_SIEGE), and its defenders bring
+    // some of them down; brought to nothing, it's razed by them. Not one a player's near: that's
+    // played out in the world
+    #besiege() {
+        for (const fort of [...this.forts]) {
+            if (this.watched.has(fort.id)) {
+                continue;
+            }
+
+            const near = this.forces.filter((force) => (force.kind === "camp" || force.kind === "expedition") && force.size > 0 && this.hostile(force.realm, fort.realm) && apart(force.at, fort.at) <= FORT_SIEGE.reach);
+
+            for (const force of near) {
+                const toll = Math.min(force.size, fort.kind === "garrison" ? FORT_SIEGE.garrison : FORT_SIEGE.tower);
+
+                fort.hp = Math.max(0, fort.hp - force.size * FORT_SIEGE.hp);
+                force.size -= toll;
+
+                if (fort.hp <= 0) {
+                    this.#raze(fort, force.realm);
+                    break;
+                }
+            }
+        }
+    }
+
+    // A fortification gone: razed by a people (`by`), or given up by its own
+    #raze(fort, by, { abandoned = false, played = false } = {}) {
+        if (!this.forts.includes(fort)) {
+            return;
+        }
+
+        this.forts.splice(this.forts.indexOf(fort), 1);
+        this.#emit(abandoned ? "abandoned" : "razed", { fort: fort.id, kind: fort.kind, realm: fort.realm, at: [...fort.at], about: fort.about, by: by ?? null, ...(played ? { played } : {}) });
+
+        if (by && this.realm(by)) {
+            this.remember(fort.realm, by, -6);
         }
     }
 

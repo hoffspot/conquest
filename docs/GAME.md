@@ -206,6 +206,17 @@ back to the same world:
     two, a rough one over them; or iron in bars, laid along and across, with red ore heaped by
     them. Emptied once its goods are in, and going back for more. The creature lab
     (`creature-lab.html?creature=ox&load=stone&people=orc`) shows one.
+- **Each people's fortifications** (`art/kits/forts.js` `fortObject`, set down by
+  `world/forts3d.js` where the war builds them; docs/WAR.md, *Fortifications*):
+  - **a guard tower:** 3.6 m square and 9.5 m high, two rows of loops in each face, its door at
+    the back with a torch by it, and its top as its people build it (`FORT_LOOKS`);
+  - **a forward garrison:** a 10 m curtain of stone or a palisade of stakes, a turret at each
+    corner, its gate at the back, its barracks' roof showing over the wall;
+  - **round it:** the ground cleared, 3 m round its squares (`CLEARING`: no crops, no trees), and
+    its people's banner by its door or gate;
+  - **seen:** whole within 200 m, from afar as boxes and roofs in its people's colours;
+  - **on the maps:** its icon, rimmed by its people (`mapicons.js` `FORT_ICONS`);
+  - **the building lab:** `building-lab.html?show=forts` shows every people's.
 
 `generateWorld({ seed, kind, exits })` makes the town:
 

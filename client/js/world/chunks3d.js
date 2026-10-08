@@ -273,6 +273,24 @@ export class Chunks {
         }
     }
 
+    /**
+     * Draw again, at once, the chunks drawn over a box of squares ([x0, y0, x1, y1], metres): what
+     * stands on them has changed (a fortification gone up, or come down: core/overworld.js
+     * setForts).
+     */
+    redraw([x0, y0, x1, y1]) {
+        for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
+            for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
+                const drawn = this.drawn.get(key(cx, cy));
+
+                if (drawn && !drawn.drawing) {
+                    this.#forget(drawn);
+                    this.#draw(cx, cy);
+                }
+            }
+        }
+    }
+
     /** Whether a chunk (cx, cy) is drawn, all of it (its ground in sight). */
     isDrawn(cx, cy) {
         const drawn = this.drawn.get(key(cx, cy));

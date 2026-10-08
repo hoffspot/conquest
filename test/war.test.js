@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { describeLeader, REALMS, TEMPERAMENTS, TRAITS } from "../client/js/core/war/peoples.js";
 import { ACROSS_COUNTRY, Roads } from "../client/js/core/war/roads.js";
+import { FORTS } from "../client/js/core/war/forts.js";
 import { tell } from "../client/js/core/war/news.js";
 import { CONVOY, COUNSEL_TURNS, HOLDINGS, OVERRUN, REACH, RESOURCES, SERVES, SIEGE, SORTIE_TURNS, STAGES, TRIBUTE, TURN_MS, TURNS_PER_STAGE, War, WORKED } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -645,12 +646,21 @@ describe("the works in the war (core/war: docs/WAR.md *The works*)", () => {
         assert.equal(works.escort, 0);
         assert.equal(convoy.target, elves.seat);
 
-        // (There, its stone in the elves' stores; then home, its guards home)
+        // (There, its stone in the elves' stores, but for what their council's spent on their
+        // fortifications the while: built, and kept up; then home, its guards home)
         const carried = convoy.cargo.stone;
+        let spent = 0;
 
-        events.push(...play(war, Math.ceil(convoy.path.length * 3)));
-        assert.ok(elves.stores.stone >= carried, `${elves.stores.stone} stone`);
-        assert.ok(events.some(({ type, works: id }) => type === "delivered" && id === works.id));
+        for (let k = 0; k < Math.ceil(convoy.path.length * 3); k++) {
+            const turn = play(war, 1);
+
+            events.push(...turn);
+            spent += turn.filter(({ type, realm }) => type === "built" && realm === "elf").reduce((sum, { kind }) => sum + (FORTS[kind].cost.stone ?? 0), 0);
+            spent += war.forts.filter(({ realm }) => realm === "elf").reduce((sum, { kind }) => sum + (FORTS[kind].upkeep.stone ?? 0), 0);
+        }
+
+        assert.ok(elves.stores.stone + spent >= carried, `${elves.stores.stone} stone, ${spent} spent`);
+        assert.ok(events.some(({ type, works: id, cargo }) => type === "delivered" && id === works.id && cargo.stone === carried));
         assert.ok(!war.forces.includes(convoy) || convoy.back);
         assert.match(tell(events.find(({ type }) => type === "delivered"), war), /^A convoy of \d+ (wood|stone|metal) from the .+ (lumber mill|mine|quarry) has reached the .+ seat\.$/);
     });

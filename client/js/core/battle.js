@@ -120,6 +120,9 @@ export const KINDS = Object.freeze({
     // (A convoy's wagon and the ox drawing it: no one's foe, going where it's driven; host.js
     // CONVOY_NEAR)
     wagon: { hp: 200, speed: 1.1, respawn: Infinity },
+    // (A guard tower or a forward garrison (core/war/forts.js): standing over its `footprint`, never
+    // moving, shooting at whatever comes within reach of its loops; razed, it's gone)
+    fort: { hp: 1200, speed: 0, chase: 0, respawn: Infinity },
 });
 
 /**
@@ -373,7 +376,7 @@ export class Battle {
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
      * carrying a shield has `shield` (#hit: { chance, share, spells }).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null, footprint = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -478,6 +481,9 @@ export class Battle {
             respawnAt: 0,
             // What lingers on it after some blows (afflictions.js): poison, a web...
             afflictions: [],
+            // The squares it stands over, if more than its own (a fortification): [x0, y0, x1, y1],
+            // what's after it aimed at the nearest of them (#aimAt)
+            footprint: footprint ? [...footprint] : null,
             // The spells that last on it (Resist Fire, Reflect, Invisibility...): { kind (the
             // spell), until, by, level }
             buffs: [],
@@ -1373,6 +1379,13 @@ export class Battle {
             return;
         }
 
+        // (A fortification: it only shoots)
+        if (actor.ai === "fort") {
+            this.#hold(actor);
+
+            return;
+        }
+
         // Talking: facing whoever it's talking to (sitting, just the way it sits), nothing else
         // (once it's stopped where it was going)
         const partner = actor.talkingTo === null ? null : this.actor(actor.talkingTo);
@@ -1904,7 +1917,7 @@ export class Battle {
     // Go after a target: attack it if it's within reach, otherwise walk towards it (a creature
     // with a ranged attack not ready yet closing in to strike up close, if it can)
     #pursue(actor, target) {
-        const closing = actor.wild && this.time < actor.readyAt && ringsApart(actor.square, target.square) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
+        const closing = actor.wild && this.time < actor.readyAt && ringsApart(actor.square, this.#aimAt(target, actor.square)) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
 
         if (!closing && this.#reachable(actor, target) && (!actor.path.length || this.#stopsHere(actor, target))) {
             actor.path = [];
@@ -1915,12 +1928,13 @@ export class Battle {
 
         // A new path when the target has moved, or when there's none (at most every REPATH_MS,
         // in case there's no way to it)
-        const moved = !same(actor.pathGoal, target.square);
+        const goal = this.#goalOf(target, actor.square);
+        const moved = !same(actor.pathGoal, goal);
         const idle = !actor.path.length;
         const due = this.time - actor.lastPathAt >= REPATH_MS;
 
         if ((idle && moved) || ((idle || moved) && due)) {
-            this.#pathTo(actor, target.square, [target.x, target.y]);
+            this.#pathTo(actor, goal, target.footprint ? [goal[0] + 0.5, goal[1] + 0.5] : [target.x, target.y]);
         }
     }
 
@@ -1933,9 +1947,37 @@ export class Battle {
             return false;
         }
 
-        const attack = chooseAttack(actor.arms, actor.square, target.square);
+        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square));
 
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target, Math.max(SIGHT, attack.reach)));
+    }
+
+    // Where `actor` aims at `target` from `from` (squares): its own square; or, standing over more
+    // (a fortification's `footprint`), the one of them nearest
+    #aimAt(target, from) {
+        const box = target.footprint;
+
+        return box ? [Math.min(box[2], Math.max(box[0], from[0])), Math.min(box[3], Math.max(box[1], from[1]))] : target.square;
+    }
+
+    // Where `actor` goes to get at `target` from `from`: its square; or, standing over more, the
+    // square just outside them nearest
+    #goalOf(target, from) {
+        const box = target.footprint;
+
+        return box ? [Math.min(box[2] + 1, Math.max(box[0] - 1, from[0])), Math.min(box[3] + 1, Math.max(box[1] - 1, from[1]))] : target.square;
+    }
+
+    // A fortification (KINDS fort): the nearest enemy within reach of its loops shot at, whatever
+    // else; never moving
+    #hold(actor) {
+        const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy));
+
+        actor.target = target?.id ?? null;
+
+        if (target) {
+            this.#attack(actor, target);
+        }
     }
 
     /**
@@ -1947,7 +1989,7 @@ export class Battle {
         const [actor, target] = [this.actor(actorId), this.actor(targetId)];
         const reach = Math.max(0, ...actor.arms.filter(({ kind }) => kind === "ranged").map(({ reach }) => reach));
 
-        if (!target || target.map !== actor.map || distanceBetween(actor.square, target.square) > reach) {
+        if (!target || target.map !== actor.map || distanceBetween(actor.square, this.#aimAt(target, actor.square)) > reach) {
             return "range";
         }
 
@@ -2322,13 +2364,14 @@ export class Battle {
     // near them as it closes before striking?
     #stopsHere(actor, target) {
         // (Cheap first: no further than its longest reach, before what it can see)
-        if (distanceBetween(actor.square, target.square) > longestReach(actor.arms) + 1.5 || !this.#reachable(actor, target)) {
+        if (distanceBetween(actor.square, this.#aimAt(target, actor.square)) > longestReach(actor.arms) + 1.5 || !this.#reachable(actor, target)) {
             return false;
         }
 
-        const attack = chooseAttack(actor.arms, actor.square, target.square);
+        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square));
 
-        return attack.kind !== "melee" || hypot(target.x - actor.x, target.y - actor.y) <= MELEE_SPACING;
+        // (Up against a fortification's walls: as near as it gets)
+        return attack.kind !== "melee" || Boolean(target.footprint) || hypot(target.x - actor.x, target.y - actor.y) <= MELEE_SPACING;
     }
 
     // Who's in the way of a character stepping to a point: anyone else on its map whose body
@@ -2451,7 +2494,7 @@ export class Battle {
         }
 
         // (Kicking or using the weapon, at random, wearing spiked boots)
-        const attack = chooseAttack(actor.arms, actor.square, target.square, this.random);
+        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square), this.random);
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
         actor.readyAt = this.time + attack.interval;
