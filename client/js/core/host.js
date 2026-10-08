@@ -36,10 +36,10 @@ import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./w
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { HOLDINGS, RISING, War } from "./war/war.js";
+import { HOLDINGS, RISING, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
-import { cos, hypot, sin } from "./exact.js";
+import { atan2, cos, hypot, sin } from "./exact.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -74,6 +74,14 @@ export const LEASH = 14;
  * place (battle ms), if it still has them: out where no player sees them come.
  */
 export const RELIEF_MS = 60000;
+
+/**
+ * A people's works near a player (docs/WAR.md *The works*): its guards come out once a player's
+ * this near it (metres), and are let go once every player's this far; as many as its guard has,
+ * the first `posted` at its posts, the rest walking its round (setpieces/works.js); or, held by
+ * brigands, as many of them as hold it, `most` at most, their leader `lead` tiers above them.
+ */
+export const WORKS_OUT = Object.freeze({ near: 120, far: 250, posted: 4, most: 8, lead: 2 });
 
 /**
  * When a camp comes to life (docs/WAR.md M6): once a player's this near it (metres, out in the
@@ -261,7 +269,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 7;
+export const SNAPSHOT_VERSION = 8;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -448,6 +456,14 @@ export class Host {
         this.mustered = new Map();
         this.soldiers = new Map();
         this.fallen = [];
+
+        /**
+         * The works whose guards are out near a player, or the brigands holding them (by the
+         * works' id): { people (who holds it; null, the wild's), held, ids (its guards' or the
+         * brigands'), share (how much of its guard or its band each stands for), relief (when its
+         * fallen guards are relieved) }. Its soldiers are each { works, people, ... } in `soldiers`.
+         */
+        this.worksOut = new Map();
 
         /**
          * The settlements and castles whose townsfolk are out, near a player (core/townsfolk.js),
@@ -1143,7 +1159,7 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !beast.works && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
@@ -1169,6 +1185,13 @@ export class Host {
                     bands.add(beast.place);
                 }
 
+                // (One of the brigands holding a works: the fewer of them, and the works won once
+                // the last falls)
+                if (beast.works) {
+                    this.war?.loss(beast.works, this.worksOut.get(beast.works)?.share ?? 1);
+                    this.#worksFell(beast.works, event.by);
+                }
+
                 if (beast.cache) {
                     kept.add(beast.cache);
                 }
@@ -1181,6 +1204,9 @@ export class Host {
                     if (soldier.part === "envoy") {
                         this.#envoyFell(soldier.envoy, event.by);
                     }
+                } else if (soldier.works) {
+                    this.war?.loss(soldier.works, this.worksOut.get(soldier.works)?.share ?? 1);
+                    this.#worksFell(soldier.works, event.by);
                 } else {
                     this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
                 }
@@ -1342,6 +1368,7 @@ export class Host {
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
+            worksOut: [...this.worksOut.entries()],
             townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             sorties: [...this.sorties.entries()],
@@ -1437,6 +1464,7 @@ export class Host {
         host.#wire();
         host.lookAt = snapshot.lookAt;
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
+        host.worksOut = new Map(structuredClone(snapshot.worksOut ?? []));
         host.townsfolk = new Map(
             (snapshot.townsfolk ?? []).map(([place, folk]) => {
                 for (const one of folk) {
@@ -2549,6 +2577,23 @@ export class Host {
             }
         }
 
+        // The works near a player: their guards out, or the brigands holding them; let go once
+        // every player's far, or it's changed hands
+        for (const works of war.works) {
+            const out = this.worksOut.get(works.id);
+            const distances = places.map(([x, y]) => hypot(x - works.at[0], y - works.at[1]));
+
+            if (out && (out.held !== works.held || (!works.held && out.people !== works.owner) || distances.every((distance) => distance > WORKS_OUT.far))) {
+                this.#standDown(works.id);
+            }
+
+            if (!this.worksOut.has(works.id) && distances.some((distance) => distance < WORKS_OUT.near)) {
+                this.#manWorks(works);
+            } else if (this.worksOut.has(works.id) && !works.held) {
+                this.#relieveWorks(works);
+            }
+        }
+
         // The camps near a player pitched, and those far from every player (or gone) struck
         const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
 
@@ -2585,7 +2630,7 @@ export class Host {
 
         // (What a camp does against a town with its soldiers out is played out here, and the
         // envoys met go at their own pace)
-        war.watch([...this.mustered.keys(), ...[...this.envoys].filter(([, met]) => !met.over).map(([id]) => id)]);
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...[...this.envoys].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -2747,6 +2792,196 @@ export class Host {
         };
     }
 
+    // --- The works (docs/WAR.md *The works*) ---
+
+    // Where a works is set down in the world (sites.js: its heart, yard, posts and round), or null
+    #worksSet(works) {
+        const sites = this.world.maps.town?.sites;
+        const site = this.#siteOf(works.id);
+
+        if (!sites || !site) {
+            return null;
+        }
+
+        sites.heartOf(site);
+
+        return sites.set.get(site.id) ?? null;
+    }
+
+    // A works near a player: its guards out at its posts and on its round (#worksStations), as
+    // many as it has; or, the wild's, the brigands holding it (#holdWorks)
+    #manWorks(works) {
+        const set = this.#worksSet(works);
+
+        if (!set) {
+            return;
+        }
+
+        if (works.held) {
+            this.#holdWorks(works, set);
+
+            return;
+        }
+
+        const free = this.#spots();
+        const ids = [];
+
+        try {
+            for (const station of this.#worksStations(works, set)) {
+                this.#worksGuard(works, station, free(station.at));
+                ids.push(station.id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        this.worksOut.set(works.id, { people: works.owner, held: false, ids, share: works.guard / Math.max(1, ids.length), relief: null });
+        this.#event("worksOut", { works: works.id, people: works.owner, ids });
+    }
+
+    // Where a works' guards stand and walk, as many as its guard has: the first at its posts,
+    // facing out from its heart, and the rest on its round, each from a stop of their own:
+    // [{ id, weapon, at, orders }] (as a town's #stations)
+    #worksStations(works, set) {
+        const squares = squaresOf(this.world.maps.town);
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[works.owner] ?? SOLDIERS_ARMS.human;
+        const count = Math.min(WORKED.guard, Math.max(0, Math.round(works.guard)));
+        const posted = set.posts.slice(0, Math.min(WORKS_OUT.posted, count));
+        const stations = posted.map((at, k) => ({ id: `${works.id}/guard-${k}`, weapon: guardArms, at, orders: { leash: LEASH, facing: atan2(at[0] - set.heart[0], at[1] - set.heart[1]) } }));
+        const round = set.round.map(([x, y]) => nearestFree(squares, [Math.floor(x), Math.floor(y)], { within: 12 }));
+
+        for (let m = 0; posted.length + m < count; m++) {
+            const from = (m * 3) % round.length;
+
+            stations.push({ id: `${works.id}/round-${m}`, weapon: m % 2 ? guardArms : patrolArms, at: round[from], orders: { round: [...round.slice(from), ...round.slice(0, from)], leash: LEASH * 2 } });
+        }
+
+        return stations;
+    }
+
+    // One of a works' guards out at their station, on `square`
+    #worksGuard(works, { id, weapon, orders: { round, leash, facing } }, square) {
+        const orders = round ? { patrol: round, leash } : { patrol: [square], leash, facing };
+
+        this.#enlist(id, { people: works.owner, weapon, square, name: round ? "patrol" : "guard", record: { works: works.id }, ...orders });
+    }
+
+    // A works' fallen guards relieved (RELIEF_MS after the last was taken away), as many as its
+    // guard has now, each once no player can see where they'd come out (as a town's are: #relieve)
+    #relieveWorks(works) {
+        const out = this.worksOut.get(works.id);
+
+        if ((out.relief ?? null) === null || this.battle.time < out.relief) {
+            return;
+        }
+
+        const set = this.#worksSet(works);
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+        const stations = set ? this.#worksStations(works, set) : [];
+        const free = this.#spots();
+        const ids = [];
+        let waiting = false;
+
+        try {
+            for (const station of stations) {
+                if (out.ids.includes(station.id) || this.battle.actor(station.id)) {
+                    continue;
+                }
+
+                const square = free(station.at);
+
+                if (players.some((actor) => this.battle.canSee(actor, { map: "town", square }))) {
+                    waiting = true;
+                    continue;
+                }
+
+                this.#worksGuard(works, station, square);
+                ids.push(station.id);
+            }
+        } catch {
+            waiting = true;
+        }
+
+        out.ids.push(...ids);
+        out.share = works.guard / Math.max(1, out.ids.length);
+        out.relief = waiting ? out.relief : null;
+
+        if (ids.length) {
+            this.#event("relieved", { works: works.id, people: works.owner, ids });
+        }
+    }
+
+    // A works held by the wild's brigands, near a player: their leader at its heart, the rest on
+    // its round, as many as hold it (WORKS_OUT.most at most), of the band of the land it's in
+    // (caches.js CACHE_BANDS: the same band at the same works), as strong as its land is dangerous
+    #holdWorks(works, set) {
+        const plan = this.world.plan;
+        const biome = landAt(plan, ...set.heart).biome;
+        const band = cacheBand(biome, createRandom([...works.id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, plan.seed ?? 1) >>> 0));
+        const homes = [...this.players.values()].map((player) => this.#homeOf(player)).filter(Boolean);
+        const tier = homes.length ? tierAt(set.heart, homes, biome) : 1;
+        const count = Math.min(WORKS_OUT.most, Math.max(1, Math.round(works.band)));
+        const keeps = { works: works.id, temper: "territorial", guard: PLACE_BANDS.guard };
+        const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + WORKS_OUT.lead), count: 1 }, set.heart, { ...keeps, master: true, roam: 2 });
+
+        for (let k = 1; k < count; k++) {
+            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, set.round[k % set.round.length], { ...keeps, roam: 4 }));
+        }
+
+        this.worksOut.set(works.id, { people: null, held: true, band: band.id, ids, share: works.band / Math.max(1, ids.length), relief: null });
+        this.#event("worksOut", { works: works.id, people: null, band: band.id, ids });
+    }
+
+    // A works' guards, or the brigands holding it, let go (still with it, in the war)
+    #standDown(id) {
+        const { ids, held } = this.worksOut.get(id);
+
+        this.worksOut.delete(id);
+
+        for (const each of ids) {
+            if (held) {
+                if (!this.battle.actor(each)?.dead) {
+                    this.#release(each);
+                }
+            } else {
+                this.battle.remove(each);
+                this.soldiers.delete(each);
+            }
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("worksDown", { works: id, ids });
+    }
+
+    // One of a works' guards, or of the brigands holding it, fallen: once every one out is (the
+    // rest of its guard or band with them), it's won by the people of whoever felled the last
+    // (core/war.js win): seized from an enemy, or cleared of the wild
+    #worksFell(id, by) {
+        const out = this.worksOut.get(id);
+        const works = this.war?.workAt(id);
+
+        if (!out || !works || out.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        this.war.loss(id, works.held ? works.band : works.guard);
+
+        const realm = this.#realmOf(by);
+        const how = realm ? this.war.win(id, realm) : null;
+
+        if (how) {
+            this.#event("works", { works: id, how, by: realm, owner: works.owner });
+        }
+    }
+
+    // Whose people someone fights for (a realm's id): a player's, their followers' and the
+    // creatures they've called up, a people's soldiers'; or null
+    #realmOf(id) {
+        const leader = this.followers.get(id)?.leader ?? this.companions.get(id)?.leader ?? id;
+
+        return this.players.get(leader)?.realm ?? this.soldiers.get(id)?.people ?? null;
+    }
+
     // A camp near a player pitched (docs/WAR.md M6): its tents round its fire, and its sentries
     // round them, facing out, as many as it has (a third of it, up to CAMP.sentries)
     #pitch(camp) {
@@ -2811,7 +3046,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.works && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -2918,11 +3153,11 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, roam = null, temper = null, guard = null, round = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null }) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
 
-        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}) });
+        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -2960,7 +3195,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -3808,12 +4043,12 @@ export class Host {
         this.soldiers.delete(id);
         this.#unwild(id);
 
-        const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : this.mustered.get(soldier.town));
+        const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : soldier.works ? this.worksOut.get(soldier.works) : this.mustered.get(soldier.town));
 
         if (mustered) {
             mustered.ids = mustered.ids.filter((each) => each !== id);
 
-            // (One of a town's: relieved a while after, if it has soldiers left)
+            // (One of a town's or a works': relieved a while after, if it has soldiers left)
             if (!soldier.camp) {
                 mustered.relief = this.battle.time + RELIEF_MS;
             }

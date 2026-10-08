@@ -186,3 +186,133 @@ describe("each people's works in the world (sites.js, art/kits/works.js, far/sha
         }
     });
 });
+
+describe("each people's works come to life near a player (host.js)", () => {
+    const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
+    let STEP_MS;
+    let Host;
+    let HOST_PLAYER;
+    let WORKS_OUT;
+    let squaresOf;
+    let nearestFree;
+    let WORKED;
+    let OVERRUN;
+
+    before(async () => {
+        ({ STEP_MS } = await import("../client/js/core/battle.js"));
+        ({ Host, HOST_PLAYER, WORKS_OUT } = await import("../client/js/core/host.js"));
+        ({ squaresOf, nearestFree } = await import("../client/js/core/grid.js"));
+        ({ WORKED, OVERRUN } = await import("../client/js/core/war/war.js"));
+    });
+
+    const run = (host, ms) => {
+        const events = [];
+
+        for (let t = 0; t < ms; t += STEP_MS) {
+            events.push(...host.advance(STEP_MS));
+        }
+
+        return events;
+    };
+
+    // A world with its player in it, by the yard of a works (the nearest of `people`'s to where
+    // they start)
+    const atWorks = (people) => {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+
+        const start = host.world.start.at;
+        const works = host.war.works.filter(({ owner }) => owner === people).sort((a, b) => Math.hypot(a.at[0] - start[0], a.at[1] - start[1]) - Math.hypot(b.at[0] - start[0], b.at[1] - start[1]))[0];
+        const set = (host.world.maps.town.sites.heartOf(host.world.plan.sites.find(({ id }) => id === works.id)), host.world.maps.town.sites.set.get(works.id));
+        const actor = host.battle.actor(HOST_PLAYER);
+        const [x, y] = nearestFree(squaresOf(host.world.maps.town), [Math.floor(set.yard[0]), Math.floor(set.yard[1])], { within: 8 });
+
+        Object.assign(actor, { map: "town", square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
+
+        return { host, works, set, actor };
+    };
+
+    // Everyone out at a works put down by the player, made too strong to lose
+    const putDown = (host, actor, ids) => {
+        Object.assign(actor, { hp: 50000, maxHp: 50000 });
+
+        for (const id of ids) {
+            const one = host.battle.actor(id);
+
+            if (one) {
+                one.hp = 1;
+            }
+        }
+
+        const events = [];
+
+        for (let k = 0; k < 40 && ids.some((id) => host.battle.actor(id) && !host.battle.actor(id).dead); k++) {
+            const next = ids.find((id) => host.battle.actor(id) && !host.battle.actor(id).dead);
+            const one = host.battle.actor(next);
+
+            Object.assign(actor, { square: [one.square[0], one.square[1] + 1], x: one.square[0] + 0.5, y: one.square[1] + 1.5, path: [], order: null });
+            host.command(HOST_PLAYER, { type: "engage", target: next });
+            events.push(...run(host, 3000));
+        }
+
+        return events;
+    };
+
+    it("brings a works' guards out near a player, of its people, at its posts and on its round; lets them go once the player's far", () => {
+        const { host, works, set, actor } = atWorks("human");
+        const events = run(host, 1000);
+        const out = host.worksOut.get(works.id);
+        const guards = host.battle.actors.filter(({ id }) => id.startsWith(`${works.id}/`));
+
+        assert.ok(events.some(({ type, works: id }) => type === "worksOut" && id === works.id));
+        assert.equal(guards.length, WORKED.guard);
+        assert.equal(guards.filter(({ id }) => id.includes("/guard-")).length, WORKS_OUT.posted);
+        assert.ok(guards.every(({ team, kind }) => team === "human" && kind === "soldier"));
+        assert.ok(guards.filter(({ id }) => id.includes("/round-")).every(({ patrol }) => patrol.length === set.round.length));
+        assert.equal(out.share, 1);
+        assert.ok(host.war.watched.has(works.id), "the war leaves it be while the player's there");
+
+        // (Far off: let go)
+        Object.assign(actor, { square: [actor.square[0] + 400, actor.square[1]], x: actor.x + 400 });
+        run(host, 1000);
+        assert.ok(!host.worksOut.has(works.id));
+        assert.equal(host.battle.actors.filter(({ id }) => id.startsWith(`${works.id}/`)).length, 0);
+    });
+
+    it("has an enemy's works seized by the player's people once its guards are all put down; each one down its guard the fewer", () => {
+        const { host, works, actor } = atWorks("orc");
+
+        host.war.relations[["human", "orc"].sort().join("|")] = { state: "hostile", since: 0 };
+        host.war.known.push(["human", "orc"].sort().join("|"));
+        run(host, 1000);
+
+        const ids = [...host.worksOut.get(works.id).ids];
+        const events = putDown(host, actor, ids);
+
+        assert.ok(events.some(({ type, works: id, how, by }) => type === "works" && id === works.id && how === "seized" && by === "human"), "seized");
+        assert.equal(works.owner, "human");
+        assert.equal(works.guard, OVERRUN.held);
+
+        // (Its new holders' guards out in their place)
+        run(host, 1000);
+        assert.equal(host.worksOut.get(works.id).people, "human");
+    });
+
+    it("has a works overrun by brigands held by them near a player, and cleared for its people once they're all put down", () => {
+        const { host, works, actor } = atWorks("human");
+
+        Object.assign(works, { held: true, band: 4, guard: 0 });
+        run(host, 1000);
+
+        const out = host.worksOut.get(works.id);
+
+        assert.ok(out?.held && out.ids.length === 4, "the band out");
+        assert.ok(out.ids.every((id) => host.wild.get(id)?.works === works.id));
+
+        const events = putDown(host, actor, [...out.ids]);
+
+        assert.ok(events.some(({ type, works: id, how }) => type === "works" && id === works.id && how === "cleared"), "cleared");
+        assert.ok(!works.held && works.owner === "human" && works.guard === OVERRUN.held);
+    });
+});
