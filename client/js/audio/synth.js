@@ -257,6 +257,17 @@ export const SOUNDS = {
         volume: 0.8,
         make: (random) => add(add(burst(random, 0.2, "bandpass", 1500, 0.7, 0.001, 0.04), thump(140, 70, 0.18, 0.05), 1), ring([[1720, 0.1, 0.1], [2640, 0.07, 0.08]], 0.3)),
     },
+    // (A greatsword's cut: a longer, lower slash; a battle axe's chop: deeper than a hack, more thud)
+    cleave: {
+        variants: 3,
+        volume: 0.8,
+        make: (random) => add(add(burst(random, 0.25, "highpass", 1800, 0.8, 0.001, 0.05), thump(150, 85, 0.16, 0.04), 0.9), ring([[1850, 0.14, 0.12], [2900, 0.1, 0.09], [4200, 0.06, 0.07]], 0.35)),
+    },
+    chop: {
+        variants: 3,
+        volume: 0.85,
+        make: (random) => add(add(burst(random, 0.22, "bandpass", 1100, 0.7, 0.001, 0.05), thump(110, 55, 0.22, 0.06), 1.1), ring([[1400, 0.09, 0.1], [2200, 0.06, 0.08]], 0.25)),
+    },
     strike: {
         variants: 3,
         volume: 0.75,

@@ -56,7 +56,7 @@ export const CATALOG = Object.freeze({
     swingSword: { group: "Swings", label: "Sword", about: "A sabre cutting the air edge first: short and bright.", plays: "Every sword blow, loudest as it lands." },
     swingCleaver: { group: "Swings", label: "Cleaver", about: "The same sabre's broader cuts: a heavier swish.", plays: "Every cleaver blow, loudest as it lands." },
     swingStaff: { group: "Swings", label: "Staff", about: "A bamboo staff whooshing round.", plays: "Every quarterstaff blow, loudest as it lands." },
-    swingHammer: { group: "Swings", label: "War hammer", about: "The sabre swung flat: a low, slow whomp.", plays: "Every war hammer blow, loudest as it lands." },
+    swingHammer: { group: "Swings", label: "War hammer", about: "The sabre swung flat: a low, slow whomp.", plays: "Every war hammer, greatsword and battle axe blow (they swing alike), loudest as it lands." },
     swingPunch: { group: "Swings", label: "Punch", about: "A sleeve whooshing as the fist's thrown.", plays: "Every punch, loudest as it lands." },
     swingKick: { group: "Swings", label: "Kick", about: "A fighter's quick dodge and swing: a short swish of cloth.", plays: "Every kick, loudest as it lands." },
     swingWand: { group: "Swings", label: "Wand", about: "A thin bamboo stick flicked through the air.", plays: "Every flick of a wand, as its bolt's let go." },
@@ -64,6 +64,8 @@ export const CATALOG = Object.freeze({
     // Hits (sound.js hit: by the blow's reaction, core/weapons.js)
     slash: { group: "Hits", label: "Slash", about: "A blade biting: a sharp, wet slap (a wet towel on a bare back, its brighter half).", plays: "A sword's cut landing on anyone." },
     hack: { group: "Hits", label: "Hack", about: "A heavy blade chopping in: a deeper, wet slap.", plays: "A cleaver's blow landing." },
+    cleave: { group: "Hits", label: "Cleave", about: "A long blade sweeping through: a lower, longer slash, ringing.", plays: "A greatsword's cut landing." },
+    chop: { group: "Hits", label: "Chop", about: "An axe's broad blade driven in: deeper than a hack, more thud than ring.", plays: "A battle axe's blow landing." },
     strike: { group: "Hits", label: "Strike", about: "A wooden staff cracking on a body.", plays: "A staff's blow landing." },
     crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep, meaty thud.", plays: "A war hammer's blow landing." },
     block: { group: "Hits", label: "Block", about: "A blow caught on wood: a hard knock (a blade on an ash spear shaft).", plays: "A blow taken on a shield (a blade's rings on it instead: Clash)." },

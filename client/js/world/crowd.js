@@ -411,14 +411,24 @@ function recordPose(character, into, at) {
 }
 
 /**
- * A character's moves (guard, walk, run, attack, hit, die), each played on it once and recorded CROWD.fps times a second, a
- * step at a time (each a yield): { data (a row of three numbers' worth for each bone at each
- * moment), rows, width (texels: three a bone), moves: name -> { start, frames, length (seconds),
- * loop }, stride: how far a walk's and a run's go over theirs (metres) }. `walk` its walk's style;
- * `guard` how it fights (actions.js GUARDS); `attack` its weapon's blow ({ animation, hitAt,
- * duration }: weapons.js, ms); `reaction` how it flinches (actions.js REACTIONS).
+ * How one carrying a weapon casts (actions.js): a grimoire's or a wand's spells at an enemy, a
+ * staff's healing (a line of battle's casters and healers: core/formation.js); none, the rest.
  */
-export function* recordingMoves(character, { walk, guard, attack, reaction }) {
+export const CROWD_CASTS = Object.freeze({ grimoire: "castStun", wand: "castStun", staff: "castHeal" });
+
+// A cast as it's recorded (seconds): the hand's gathering till its release, the whole of it
+const CAST = Object.freeze({ hitAt: 0.6, duration: 1.0 });
+
+/**
+ * A character's moves (guard, walk, run, attack, hit, die, and cast for one that casts), each
+ * played on it once and recorded CROWD.fps times a second, a step at a time (each a yield): {
+ * data (a row of three numbers' worth for each bone at each moment), rows, width (texels: three a
+ * bone), moves: name -> { start, frames, length (seconds), loop }, stride: how far a walk's and a
+ * run's go over theirs (metres) }. `walk` its walk's style; `guard` how it fights (actions.js
+ * GUARDS); `attack` its weapon's blow ({ animation, hitAt, duration }: weapons.js, ms);
+ * `reaction` how it flinches (actions.js REACTIONS); `cast` how it casts (CROWD_CASTS), if it does.
+ */
+export function* recordingMoves(character, { walk, guard, attack, reaction, cast = null }) {
     const step = 1 / CROWD.fps;
     const width = character.rig.skeleton.bones.length * 3;
     const frames = [];
@@ -504,6 +514,18 @@ export function* recordingMoves(character, { walk, guard, attack, reaction }) {
     });
     moves.attack.hitAt = attack.hitAt / 1000;
     yield;
+
+    if (cast) {
+        play("cast", {
+            start: (avatar) => {
+                avatar.actions.setGuard(true);
+                avatar.actions.startAttack(cast, CAST);
+            },
+            until: (avatar, t) => t >= CAST.duration + step,
+        });
+        moves.cast.hitAt = CAST.hitAt;
+        yield;
+    }
 
     play("hit", {
         start: (avatar) => {
@@ -682,10 +704,11 @@ class Batch {
  * A kind's figure and its moves, made a step at a time (each a yield) from a character built as
  * `look` has it ({ shape, look, equipment, walk }: soldiers.js soldierLook), carrying `weapon`
  * (weapons.js: its first blow `attack`, `reaction` how a blow of it makes one flinch), fighting
- * as `guard` has it, its pictures `size` pixels square: returns { key, geometry, farIndex,
- * picture, moves (a texture), table (MOVES' rows and lengths), height }.
+ * as `guard` has it, casting as `cast` has it (CROWD_CASTS, or not at all), its pictures `size`
+ * pixels square: returns { key, geometry, farIndex, picture, moves (a texture), table (MOVES'
+ * rows and lengths), height }.
  */
-export function* makingTemplate(kit, key, { look, guard, attack, reaction = "slash", size = 256 }) {
+export function* makingTemplate(kit, key, { look, guard, attack, reaction = "slash", cast = null, size = 256 }) {
     const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: CROWD.hair, merge: true, far: true });
 
     try {
@@ -719,7 +742,7 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
 
         yield;
 
-        const recorded = yield* recordingMoves(character, { walk: look.walk, guard, attack, reaction });
+        const recorded = yield* recordingMoves(character, { walk: look.walk, guard, attack, reaction, cast });
         const moves = new THREE.DataTexture(recorded.data, recorded.width, recorded.rows, THREE.RGBAFormat, THREE.FloatType);
 
         moves.needsUpdate = true;
@@ -988,7 +1011,8 @@ export class CrowdAvatar {
             setGuard: (on) => (this.guarding = on),
             setWeapon() {},
             setSeated() {},
-            startAttack: (name, { duration = 1 } = {}) => this.#start("attack", duration),
+            // (A spell cast, as its kind casts if it does; any other, its weapon's blow)
+            startAttack: (name, { duration = 1 } = {}) => this.#start(name.startsWith("cast") && this.crowd.kinds.get(key)?.template?.table.cast ? "cast" : "attack", duration),
             react: () => this.#start("hit"),
             dodge: () => this.#start("hit"),
             knockdown: () => this.#start("hit"),

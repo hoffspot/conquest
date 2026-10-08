@@ -25,7 +25,8 @@ import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
-import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
+import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
+import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
@@ -279,15 +280,51 @@ export const SCRUTINY = Object.freeze({ reach: 3, chance: 0.02 });
 /** How long something thrown away can be taken back (ms). */
 export const UNDO_MS = 8000;
 
-/** What each people's soldiers fight with: guards the first, patrols each in turn (characters/soldiers.js dresses them to match). */
 /**
  * A field battle (Host #fieldBattle: the debug overlay's, to see how many a device draws and plays
- * smoothly): `most` a side at most, in ranks `rank` wide and `apart` metres apart, theirs `near`
- * metres ahead of the player and the others `far`, each going after the other as far as `leash`
- * metres from its line; each carrying one of its people's two weapons (SOLDIERS_ARMS), or `arms`.
+ * smoothly): `most` a side at most, each an army in a line of battle (core/formation.js: its mix
+ * of roles, its places), the rear of the player's people's `near` metres ahead of them and the
+ * two fronts `apart` metres apart, facing each other, marching to meet halfway at `march` metres
+ * a second.
  */
-export const FIELD_BATTLE = Object.freeze({ most: 200, rank: 20, apart: 1.6, near: 8, far: 56, leash: 80, arms: Object.freeze(["hammer"]) });
+export const FIELD_BATTLE = Object.freeze({ most: 200, near: 8, apart: 48, march: 1.1 });
 
+/**
+ * What each people's soldiers fight with in a line of battle, by their role (core/formation.js
+ * ROLES; the first of several the most): the shield line a sword or cleaver, the two-handers
+ * what's their own, the archers the bow, the casters a grimoire or wand, the healers a staff.
+ */
+export const ROLE_ARMS = Object.freeze({
+    human: Object.freeze({ front: ["sword"], heavy: ["greatsword", "hammer"], archer: ["bow"], caster: ["grimoire"], healer: ["staff"] }),
+    elf: Object.freeze({ front: ["sword"], heavy: ["greatsword"], archer: ["bow"], caster: ["wand"], healer: ["staff"] }),
+    darkElf: Object.freeze({ front: ["sword"], heavy: ["greatsword", "axe"], archer: ["bow"], caster: ["wand"], healer: ["staff"] }),
+    cat: Object.freeze({ front: ["sword"], heavy: ["gauntlets", "greatsword"], archer: ["bow"], caster: ["grimoire"], healer: ["staff"] }),
+    lizard: Object.freeze({ front: ["sword"], heavy: ["staff", "axe"], archer: ["bow"], caster: ["grimoire"], healer: ["staff"] }),
+    orc: Object.freeze({ front: ["cleaver"], heavy: ["axe", "hammer"], archer: ["bow"], caster: ["grimoire"], healer: ["staff"] }),
+});
+
+/** Each people's casters' school of magic (spells.js SCHOOLS): its first two spells theirs, the stronger first. */
+export const PEOPLE_SCHOOL = Object.freeze({ human: "fire", elf: "air", darkElf: "water", cat: "fire", lizard: "earth", orc: "earth" });
+
+/** A healer's spells, the weakest first (battle.js #mend). */
+export const HEALER_SPELLS = Object.freeze(["vigor", "mendWounds"]);
+
+/**
+ * What a soldier of a people in a role carries and casts (the `k`th of its role, for which of
+ * its role's weapons): { weapon, casts, heals }.
+ */
+export function soldierOf(people, role, k = 0) {
+    const arms = (ROLE_ARMS[people] ?? ROLE_ARMS.human)[role] ?? ROLE_ARMS.human.front;
+    const school = SCHOOLS[PEOPLE_SCHOOL[people] ?? "fire"];
+
+    return {
+        weapon: arms[k % arms.length],
+        casts: role === "caster" ? [school.tiers[1], school.tiers[0]] : null,
+        heals: role === "healer" ? [...HEALER_SPELLS] : null,
+    };
+}
+
+/** What each people's soldiers fight with: guards the first, patrols each in turn (characters/soldiers.js dresses them to match). */
 export const SOLDIERS_ARMS = Object.freeze({
     human: ["sword", "bow"],
     elf: ["bow", "sword"],
@@ -316,7 +353,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 14;
+export const SNAPSHOT_VERSION = 15;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -2971,45 +3008,56 @@ export class Host {
 
     // A field battle, to see how many a device draws and plays smoothly (the debug overlay's: its
     // Field battle): two armies of `size` each (FIELD_BATTLE.most at most) mustered out in the
-    // world before a player, in ranks across the way they look (`facing`: radians from south,
-    // towards east), theirs `near` metres ahead and another people's (the orcs', or the humans' for
-    // the orcs) `far`, each making for the other (as near as there's room). Their people's soldiers
-    // fight beside them; the others are everyone's enemies. Each carries one of its people's two
-    // weapons, or a hammer (FIELD_BATTLE.arms)
+    // world before a player, each in a line of battle (core/formation.js) across the way they look
+    // (`facing`: radians from south, towards east): theirs ahead of them, its rear `near` metres
+    // off, another people's (the orcs', or the humans' for the orcs) beyond, the fronts `apart`,
+    // facing each other, marching to meet halfway (and on, closing with the other). Each army's
+    // mixed as its people's are (DOCTRINES), each soldier carrying what its people's do in its role
+    // (ROLE_ARMS), casters their people's spells and healers theirs. Their people's fight beside
+    // the player; the others are everyone's enemies
     #fieldBattle(player, actor, size, facing) {
         if (actor.map !== "town" || !Number.isInteger(size) || size < 1 || size > FIELD_BATTLE.most || !Number.isFinite(facing)) {
             return refuse("command");
         }
 
         const free = this.#spots();
-        const [ahead, across] = [[sin(facing), cos(facing)], [cos(facing), -sin(facing)]];
-        const at = (forward, side) => [actor.x + ahead[0] * forward + across[0] * side, actor.y + ahead[1] * forward + across[1] * side];
-        const width = Math.min(size, FIELD_BATTLE.rank);
+        const ahead = [sin(facing), cos(facing)];
+        const at = (forward) => [actor.x + ahead[0] * forward, actor.y + ahead[1] * forward];
+        const foe = player.realm === "orc" ? "human" : "orc";
+        const lines = [player.realm, foe].map((people) => {
+            const roles = rolesOf(size, DOCTRINES[people]);
+
+            return { roles, places: linePlaces(roles) };
+        });
+        const front = FIELD_BATTLE.near + Math.max(0, ...lines[0].places.map(([, back]) => back));
+        const meet = at(front + FIELD_BATTLE.apart / 2);
         const ids = [];
 
-        for (const [side, people, from, to] of [
-            ["friend", player.realm, FIELD_BATTLE.near, FIELD_BATTLE.far],
-            ["foe", player.realm === "orc" ? "human" : "orc", FIELD_BATTLE.far, FIELD_BATTLE.near],
+        for (const [side, people, from, faces, { roles, places }] of [
+            ["friend", player.realm, front, facing, lines[0]],
+            ["foe", foe, front + FIELD_BATTLE.apart, facing + Math.PI, lines[1]],
         ]) {
-            const arms = [...(SOLDIERS_ARMS[people] ?? SOLDIERS_ARMS.human), ...FIELD_BATTLE.arms];
-            const back = Math.sign(from - to);
+            const formation = `field-${side}-${this.fielded}`;
+            const anchor = at(from);
+            const counts = {};
 
-            for (let k = 0; k < size; k++) {
-                const [rank, file] = [Math.floor(k / width), (k % width) - (width - 1) / 2];
+            this.battle.formation(formation, { anchor, facing: faces, to: [meet[0] - sin(faces) * 1.5, meet[1] - cos(faces) * 1.5], speed: FIELD_BATTLE.march, advance: true });
+
+            roles.forEach((role, k) => {
                 let square;
 
                 try {
-                    square = free(at(from + back * rank * FIELD_BATTLE.apart, file * FIELD_BATTLE.apart));
+                    square = free(placeAt({ anchor, facing: faces }, places[k]));
                 } catch {
-                    continue;
+                    return;
                 }
 
                 const id = `field-${this.fielded++}`;
-                const goal = at(to, file * FIELD_BATTLE.apart).map(Math.floor);
+                const kit = soldierOf(people, role, (counts[role] = (counts[role] ?? -1) + 1));
 
-                this.#enlist(id, { people, weapon: arms[k % arms.length], square, name: "soldier", record: { field: side }, patrol: [square, goal], leash: FIELD_BATTLE.leash, armed: true });
+                this.#enlist(id, { people, ...kit, square, name: "soldier", record: { field: side, role }, patrol: [square], facing: faces, leash: ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
                 ids.push(id);
-            }
+            });
         }
 
         this.#event("fieldBattle", { ids, size });

@@ -4,7 +4,7 @@
 import { render, SOUNDS, wind } from "./synth.js";
 
 // Footsteps, blows and hits first; cues and the environment after
-const FIRST = /^(step|swing)|^(slash|hack|strike|crush|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
+const FIRST = /^(step|swing)|^(slash|hack|cleave|chop|strike|crush|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
 
 self.addEventListener("message", () => {
     const names = Object.keys(SOUNDS).sort((a, b) => Number(FIRST.test(b)) - Number(FIRST.test(a)));

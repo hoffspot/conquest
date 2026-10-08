@@ -210,6 +210,8 @@ The engine is built for this from the start. These are its rules:
 | **M14** | Built | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
 | **M15** | Built | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
 | **M16** | Built | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
+| **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
+| **M18** | Planned | Standing armies and reserves in the war: raised and disbanded at the keep's war table, camps, scouts and skirmishers, capture by annihilation only, reinforcements, supply wagons and depots. |
 
 ## What's built
 
@@ -1155,6 +1157,87 @@ the forts still go up and come down.
 
 **Kept.** Each barracks' garrison stood up is in the host's snapshot (`SNAPSHOT_VERSION` 13). The
 war keeps nothing new: a town taken so is told in its log (`taken`, `how: "barracks"`).
+
+### Lines of battle (M17)
+
+The first of the standing armies' parts: how an army stands and fights. The armies themselves,
+their reserves, their supply and the war table come after; the battle's side of it is in
+[GAME.md](GAME.md#the-battle-corebattlejs) (*Lines of battle*, *Casters and healers*, *The
+player first*).
+
+**What history says.** Armies on foot have stood much the same way since the Greeks:
+- **A shield wall in front, ranks deep.** The hoplites' phalanx was eight deep; the Saxons' and
+  Norsemen's shield wall (*skjaldborg*) two or three; every rank behind ready to step into a gap.
+  The front rank holds; the ranks behind push and replace it.
+- **Shock troops on the line's ends.** The Landsknechts' *Doppelsöldner* (double-pay men) fought
+  with two-handed swords at the front and corners of the pike block, to break the enemy's pikes
+  and to fall on a flank; the huscarls with their Dane axes stood among the shield wall's best.
+  Two-handers are few, paid more, and placed where the line's weakest.
+- **Missiles behind and either side.** At Crécy and Agincourt the English longbowmen stood on the
+  flanks of the men-at-arms and shot over and past them; a Roman legion's *velites* skirmished in
+  front and fell back through the lines. Archers are many (a quarter to a third of an army) and
+  shoot from behind the line.
+- **The precious and the fragile in the middle, behind.** Artillery, and in fantasy wargames (the
+  Total War: Warhammer games among them) casters, stand in the centre behind the line where it
+  can shield them; the surgeons (the Romans' *capsarii*) behind them, near enough to reach the
+  wounded.
+- **A reserve and a rear guard.** The Romans' *triarii* knelt at the back, the last line; a few
+  always faced the rear.
+- **Closing the ranks.** When a man fell, the man behind stepped up, and the files closed towards
+  the centre ("close up!"): a line narrows as it thins but keeps its front whole. A Macedonian
+  file's last man (its *ouragos*) kept it together from behind.
+
+**What the game does** (`core/formation.js`):
+- **Roles** (`ROLES`), by weapon (`roleOf`): **the shield line** (a sword or cleaver and a
+  shield), **the two-handers** (greatsword, battle axe, war hammer, staff, gauntlets), **the
+  archers** (the bow), **the casters** (grimoire or wand, casting their people's school's first
+  two spells) and **the healers** (a staff, healing with Vigor and Mend Wounds). Each goes after
+  enemies only so far from its place: the shield line 10 m, the two-handers 12, archers 15,
+  casters 16 (their spells' reach), healers 5.
+- **The mix** (`MIX`, as many as whole soldiers go: `rolesOf`): favouring the line and the melee,
+  a good number of archers, few casters and healers, as you asked: two fifths shield line, 15%
+  two-handers, a quarter archers, a tenth casters and a tenth healers.
+- **Each people its own lean** (`DOCTRINES`), every one at least half up close, a fifth to a third
+  archers, no more than an eighth casters or healers:
+
+  | People | Shield line | Two-handers | Archers | Casters | Healers | Its lean |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Humans | 40% | 15% | 25% | 10% | 10% | Every arm in its place, as a late-medieval army |
+  | Elves | 38% | 12% | 32% | 9% | 9% | The bow, as Agincourt's English |
+  | Dark elves | 38% | 15% | 22% | 13% | 12% | Magic |
+  | Cats | 35% | 25% | 22% | 9% | 9% | The two-handers' shock, as the Doppelsöldner |
+  | Lizards | 45% | 15% | 20% | 8% | 12% | A deep, stubborn shield line, healed the most, as a phalanx |
+  | Orcs | 40% | 25% | 20% | 8% | 7% | Heavy shock, as the huscarls; fewest casting or healing |
+
+  What each carries in each role is its people's (core/host.js `ROLE_ARMS`): the orcs' line the
+  cleaver, their two-handers the axe and hammer; the elves' two-handers the greatsword; the
+  lizards' the staff and axe; the cats' gauntlets and greatsword.
+- **The line** (`placesOf`, every number in `FORMATION`), front to back, 1.6 m between files and
+  1.8 m between ranks:
+  1. the shield line, 4 to 24 files wide, in two ranks once it's 8 strong;
+  2. the two-handers in two blocks 3 wide, behind the line's outer thirds;
+  3. the casters in the middle and the archers either side of them, rows as wide as the line and a
+     file more each side, the rest of the archers in rows behind;
+  4. the healers, spread out;
+  5. the rear guard: an eighth of the shield line (once it's 8 strong), facing the rear.
+- **Closing the ranks.** Every second, a line with fallen is laid out again for those left: the
+  front ranks first, each rank's middle before its ends, each place taken by the nearest of its
+  role. Those behind step into the gaps, the line narrows, the rear guard joins the line as it's
+  needed, and with the shield line gone the two-handers are the front.
+- **Feel.** Each line marches as one, halts while any of it fights, and closes with the enemy it
+  sees; the shield lines meet and grind, the two-handers fall in at the ends, the archers and
+  casters shoot over them, and the healers keep the line standing. A player in among them has at
+  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`); the rest fight the
+  player's own.
+
+**Tried** (a field battle on open ground, `test/formation.test.js` and play-testing): 50 a side
+fight to the last few in under two minutes; 200 a side take longer, as a Total War battle
+does, the lines grinding. A step of a 200-a-side battle cost half what it did before lines
+(7.5 ms here, from 16): the soldiers in a line think again only every quarter second, and who's
+after whom is looked up rather than looked through.
+
+**Kept.** The lines (`formations`) and each soldier's place in one are in the battle's snapshot,
+and so the host's (`SNAPSHOT_VERSION` 15); the rules two games share changed (`NET_VERSION` 75).
 
 ### Playing together (M11)
 

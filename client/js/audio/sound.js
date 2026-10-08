@@ -540,7 +540,7 @@ export const ARMOUR = Object.freeze({
 });
 
 // The blows a body's armour is heard under (weapons.js reactions: not spells, not fire)
-const STRUCK = new Set(["slash", "hack", "strike", "crush", "pierce", "punch", "kick"]);
+const STRUCK = new Set(["slash", "hack", "cleave", "chop", "strike", "crush", "pierce", "punch", "kick"]);
 
 // A bow's shot: an arrow taken from the quiver as it starts, the string drawn back after (s)
 const DRAWN = 0.12;

@@ -1883,6 +1883,27 @@ export const REACTIONS = Object.freeze({
             return { ...spine({ flex: front * 20 * e, turn: -side * 8 * e }), Head: { flex: front * 10 * e }, RightArm: { flex: 20 * e }, LeftArm: { flex: 20 * e }, RightForeArm: { flex: 35 * e }, LeftForeArm: { flex: 35 * e }, offset: [0, -0.06 * e, -front * 0.11 * e] };
         },
     },
+    // A greatsword's cut: a long, sweeping blow, twisting the body away from it further than a
+    // sword's, and setting it back a little
+    cleave: {
+        length: 0.55,
+        effect: "sparks",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.2);
+
+            return { ...spine({ turn: -side * 28 * e, bend: side * 10 * e, flex: -front * 8 * e }), Neck: { turn: -side * 12 * e }, Head: { turn: -side * 16 * e, flex: -front * 8 * e }, RightArm: { abduct: 16 * e }, LeftArm: { abduct: 16 * e }, offset: [side * 0.03 * e, -0.03 * e, -front * 0.07 * e] };
+        },
+    },
+    // A battle axe's chop: a heavy blow that drives the body down and round, and staggers it
+    chop: {
+        length: 0.65,
+        effect: "sparks",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.22);
+
+            return { ...spine({ turn: -side * 16 * e, bend: side * 14 * e, flex: front * 14 * e }), Head: { turn: -side * 14 * e, flex: front * 14 * e }, RightArm: { abduct: 18 * e }, LeftArm: { abduct: 18 * e }, RightForeArm: { flex: 20 * e }, LeftForeArm: { flex: 20 * e }, offset: [side * 0.05 * e, -0.1 * e, -front * 0.09 * e] };
+        },
+    },
     // An orc's cleaver: a heavy cut that staggers
     hack: {
         length: 0.6,

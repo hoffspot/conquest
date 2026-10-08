@@ -45,8 +45,10 @@ const ranged = (settings) => ({ kind: "ranged", stagger: 150, ...settings });
  *
  * Those held in both hands (core/gear.js `hands`) do about half as much again as a sword in a
  * fight (their blows over time), for the shield they can't carry: the war hammer twice a sword's
- * blow, slower; the staff a little more than a sword's, quicker; the gauntlets' punches, quicker
- * still; the bow's arrows half as much again. The wand and the grimoire are for spells (a
+ * blow, slower; the battle axe heavier still, slower again; the greatsword two thirds as much
+ * again as a sword's, between them; the staff a little more than a sword's, quicker; the
+ * gauntlets' punches, quicker still; the bow's arrows half as much again. The greatsword and the
+ * battle axe are swung two-handed as the war hammer is (its `animation`: characters/actions.js). The wand and the grimoire are for spells (a
  * grimoire's a quarter stronger, for the spellward a wand leaves a hand for: progress.js).
  */
 export const WEAPONS = Object.freeze({
@@ -84,6 +86,20 @@ export const WEAPONS = Object.freeze({
         about: "A heavy two-handed hammer. Slow, crushing blows, twice a sword's, that knock back.",
         equipment: ["warHammer"],
         attacks: [melee({ id: "smash", damage: [8, 16], hitAt: 640, duration: 1100, interval: 1500, stagger: 450, reaction: "crush", animation: "hammer" })],
+    },
+    greatsword: {
+        label: "Greatsword",
+        school: "Melee",
+        about: "A long two-handed sword, its grip long enough for both hands. Sweeping cuts, two thirds as much again as a sword's, that check whoever they land on.",
+        equipment: ["greatsword"],
+        attacks: [melee({ id: "cleave", damage: [7, 13], hitAt: 520, duration: 950, interval: 1250, stagger: 300, reaction: "cleave", animation: "hammer" })],
+    },
+    axe: {
+        label: "Battle axe",
+        school: "Melee",
+        about: "A broad-bladed axe on a long haft, in both hands. Slow, heavy chops, more than twice a sword's, that stagger.",
+        equipment: ["battleAxe"],
+        attacks: [melee({ id: "chop", damage: [9, 17], hitAt: 700, duration: 1200, interval: 1600, stagger: 400, reaction: "chop", animation: "hammer" })],
     },
     bow: {
         label: "Bow",
