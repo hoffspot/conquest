@@ -8,7 +8,7 @@
 
 import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
-import { BIOME, BIOMES, FACTIONS, RACES, SITES } from "./races.js";
+import { BIOME, BIOMES, FACTIONS, RACES, SITES, WORKS } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
 import { stillWaterAt } from "../terrain/height.js";
 import { runningIn, watersOf } from "../terrain/waters.js";
@@ -78,6 +78,18 @@ const SITES_APART = 8;
 // wild's first tier); and how near a road it would rather be (cells), and how far a road's looked
 // for
 const GRAVEYARD = Object.freeze({ out: [8, 17], road: 2, look: 8 });
+
+/**
+ * Each people's works (races.js WORKS: docs/WAR.md *The works*), set out after everything else
+ * from numbers of their own: in their lands, but not on their very edge (`inland`: how far into
+ * them, as their lands were claimed: terrain.js claim's cost), on ground no steeper than `steep`
+ * (the plan's height between a cell and its neighbours) and dry; as far from the settlements and
+ * the other sites as the sites keep, `camps` cells from the wild camps, and two of a people's of
+ * one kind `apart` cells from each other. Each would rather be within `road` cells of a road (for
+ * its convoys: `off` as likely further off), and in the land it likes (`unliked` as likely in
+ * any other), up in the hills for a mine or a quarry (`hills`: how high).
+ */
+const WORKINGS = Object.freeze({ inland: 48, steep: 0.05, camps: 4, apart: 24, road: 6, off: 0.3, unliked: 0.04, hills: 0.5 });
 
 // Tiers of enemy camp: the first as far as TIER_FROM + TIER_EVERY metres from where the player
 // starts, then one more for each TIER_EVERY metres further, up to TIERS; and the camps pitched
@@ -620,6 +632,9 @@ export function settleLand(land, seed) {
     // of their own: nothing else laid out moves for them)
     sites.push(...graveyards(land, road, places, sites, camps, createRandom(seed * 37 + 11)));
 
+    // (Each people's works after them, the same way: docs/WAR.md *The works*)
+    sites.push(...workings(land, road, places, sites, camps, createRandom(seed * 41 + 13), used));
+
     // (And the land's waters, as far as they've been worked out, for the plan to take on: the same
     // land)
     return { places, road, roads, sites, camps, waters: watersOf(view) };
@@ -910,6 +925,97 @@ function graveyards(land, road, places, sites, camps, random) {
     });
 
     return found;
+}
+
+// Each people's works (races.js WORKS): in their lands, where each kind would rather be
+// (WORKINGS), by a road if it can be; each named in its people's tongue
+function workings(land, road, places, sites, camps, random, used) {
+    const { biome, water, territory, cost, height } = land;
+    const found = [];
+    // (The cells too near a settlement, a site or a wild camp for a works, marked round each)
+    const near = new Uint8Array(CELLS * CELLS);
+
+    for (const [things, within] of [
+        [places, (place) => place.radius / CELL + SITE_CLEAR],
+        [sites, () => SITES_APART],
+        [camps, () => WORKINGS.camps],
+    ]) {
+        for (const thing of things) {
+            stamp(near, thing.cell, within(thing));
+        }
+    }
+
+    // (Whether a road's within WORKINGS.road cells)
+    const byRoad = ([x, y]) => {
+        for (let dy = -WORKINGS.road; dy <= WORKINGS.road; dy++) {
+            for (let dx = -WORKINGS.road; dx <= WORKINGS.road; dx++) {
+                if (road[cellIndex(x + dx, y + dy)]) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+    // (How steep the ground's round a cell: the most it rises or falls to a neighbour)
+    const steep = ([x, y]) => NEIGHBOURS.some(([dx, dy]) => Math.abs(height[cellIndex(x + dx, y + dy)] - height[cellIndex(x, y)]) > WORKINGS.steep);
+    // (Every cell of each people's lands a works could stand on, whatever's put out before it)
+    const cells = RACES.map(() => []);
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        const cell = [k % CELLS, Math.floor(k / CELLS)];
+
+        if (!territory[k] || near[k] || cost[k] >= WORKINGS.inland || water[k] || road[k] || biome[k] === BIOME.beach) {
+            continue;
+        }
+
+        if (cell[0] < 4 || cell[1] < 4 || cell[0] > CELLS - 5 || cell[1] > CELLS - 5 || steep(cell) || !dry(land, ...cell, 1)) {
+            continue;
+        }
+
+        cells[territory[k] - 1].push({ cell, k, road: byRoad(cell) });
+    }
+
+    RACES.forEach((race, r) => {
+        for (const { kind, count, biomes, hills } of WORKS) {
+            for (let placed = 0; placed < count; placed++) {
+                const fits = cells[r].filter(({ cell }) =>
+                    found.every((site) => {
+                        const [dx, dy] = [site.cell[0] - cell[0], site.cell[1] - cell[1]];
+                        const d = site.kind === kind && site.race === race.id ? WORKINGS.apart : SITES_APART;
+
+                        return dx * dx + dy * dy >= d * d;
+                    }),
+                );
+
+                if (!fits.length) {
+                    break;
+                }
+
+                const liking = ({ k, road: by }) => (biomes.includes(BIOMES[biome[k]].id) || (hills && height[k] >= WORKINGS.hills) ? 1 : WORKINGS.unliked) * (by ? 1 : WORKINGS.off);
+                const { cell } = random.pickWeighted(fits, liking);
+
+                found.push({ id: `${kind.replace(/[^a-z]+/g, "-")}-${sites.length + found.length + 1}`, kind, race: race.id, name: nameIn(race, random, used), cell, at: centre(...cell), seed: random.seed() });
+            }
+        }
+    });
+
+    return found;
+}
+
+// Mark the cells nearer a cell than `within` cells (by their middles, exactly: their squares)
+function stamp(marks, [x, y], within) {
+    const reach = Math.ceil(within);
+
+    for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+            const k = cellIndex(x + dx, y + dy);
+
+            if (k >= 0 && dx * dx + dy * dy < within * within) {
+                marks[k] = 1;
+            }
+        }
+    }
 }
 
 /**

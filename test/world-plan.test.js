@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WORKS } from "../client/js/core/worldplan/plan.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
@@ -280,6 +280,46 @@ describe("the world plan (worldplan/plan.js)", () => {
             const caves = plan.sites.filter(({ kind }) => kind === "cave");
 
             assert.ok(caves.filter((cave) => plan.height[at(...cave.cell)] >= 0.5).length / caves.length > 0.6);
+        }
+    });
+
+    it("gives each people two lumber mills, two mines and two quarries in their lands, clear of the rest, mostly where each would rather be, named", () => {
+        for (const [seed, plan] of plans) {
+            const works = plan.sites.filter(({ kind }) => WORKS.some((each) => each.kind === kind));
+
+            RACES.forEach((race, r) => {
+                for (const { kind, count } of WORKS) {
+                    const own = works.filter((site) => site.kind === kind && site.race === race.id);
+
+                    assert.equal(own.length, count, `seed ${seed}: ${race.id}'s ${kind}s`);
+                    assert.ok(distance(own[0].at, own[1].at) >= 24 * CELL, `seed ${seed}: ${race.id}'s ${kind}s apart`);
+
+                    for (const site of own) {
+                        assert.equal(plan.territory[at(...site.cell)], r + 1);
+                        assert.equal(plan.water[at(...site.cell)], WATER.none);
+                        assert.equal(plan.road[at(...site.cell)], ROAD.none);
+                        assert.ok(site.name && site.seed !== undefined, `${site.id} named`);
+                    }
+                }
+            });
+
+            // (Clear of the settlements and the other sites as the sites keep, and of the wild camps)
+            for (const site of works) {
+                assert.ok(plan.places.every((place) => distance(place.at, site.at) >= place.radius + 5 * CELL - 1), `seed ${seed}: ${site.id} near a settlement`);
+                assert.ok(plan.sites.every((other) => other === site || distance(other.at, site.at) >= 8 * CELL - 1), `seed ${seed}: ${site.id} near a site`);
+                assert.ok(plan.camps.every((camp) => distance(camp.at, site.at) >= 4 * CELL - 1), `seed ${seed}: ${site.id} near a camp`);
+            }
+
+            // (Most in the land they like: woods for the mills, hills and the stony lands for the
+            // rest; and most by a road)
+            const liked = works.filter((site) => {
+                const { biomes, hills } = WORKS.find(({ kind }) => kind === site.kind);
+                const k = at(...site.cell);
+
+                return biomes.includes(BIOMES[plan.biome[k]].id) || (hills && plan.height[k] >= 0.5);
+            });
+
+            assert.ok(liked.length / works.length > 0.5, `seed ${seed}: ${liked.length} of ${works.length} where they'd rather be`);
         }
     });
 
