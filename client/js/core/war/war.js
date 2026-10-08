@@ -652,14 +652,36 @@ export class War {
     }
 
     /**
-     * An envoy, a convoy, an army or a reserve a player's near, where it's got to in the world: `at`
-     * ([x, y] metres), past the point `leg` of its path. At the end of it, an envoy's heard (and
-     * gone); a convoy's goods go into its people's stores (and it turns for home), or it's home; an
-     * army or reserve does what it does there at its next turn (#march). Returns whether an envoy
-     * or a convoy is at the end of its way.
+     * An envoy, a convoy, a supply wagon, an army or a reserve a player's near, where it's got to in
+     * the world: `at` ([x, y] metres), past the point `leg` of its path. At the end of it, an envoy's
+     * heard (and gone); a convoy's goods go into its people's stores (and it turns for home), or
+     * it's home; a supply wagon's load is its army's or depot's (or, they gone, it's gone); an army
+     * or reserve does what it does there at its next turn (#march). Returns whether an envoy, a
+     * convoy or a supply wagon is at the end of its way.
      */
     move(id, at, leg) {
         const force = this.force(id);
+
+        if (force?.kind === "supply") {
+            force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
+
+            const to = force.mission === "depot" ? this.depot(force.target) : this.force(force.target);
+
+            // (Its army or depot gone: it's gone too, as it would be on its own way)
+            if (!to) {
+                this.forces.splice(this.forces.indexOf(force), 1);
+
+                return true;
+            }
+
+            if (apart(force.at, to.at) <= SUPPLY.reach) {
+                this.#deliver(force, to);
+
+                return true;
+            }
+
+            return false;
+        }
 
         if (force?.kind === "army" || force?.kind === "reserve") {
             force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
@@ -889,6 +911,23 @@ export class War {
         }
 
         this.#emit("ordered", { realm: id, army: army.id, [kind]: about ?? true, by });
+
+        return true;
+    }
+
+    /**
+     * A supply wagon taken in the world (docs/WAR.md *Supply*): its guards all brought down by one
+     * of the people `by` (a realm's id, or null for anyone else). Its load's lost: for its army, a
+     * load that didn't get through. Returns whether it was a supply wagon.
+     */
+    wagonTaken(id, by = null) {
+        const wagon = this.force(id);
+
+        if (wagon?.kind !== "supply") {
+            return false;
+        }
+
+        this.#wagonLost(wagon, by);
 
         return true;
     }
@@ -1708,8 +1747,8 @@ export class War {
     // theirs, a band winning back its works to them, envoys to be heard, convoys to their seat
     #march() {
         for (const force of [...this.forces]) {
-            // (An envoy or a convoy a player's near goes as it's seen to go there: move)
-            if (!this.forces.includes(force) || ((force.kind === "envoy" || force.kind === "convoy") && this.watched.has(force.id))) {
+            // (An envoy, a convoy or a supply wagon a player's near goes as it's seen to go there: move)
+            if (!this.forces.includes(force) || (["envoy", "convoy", "supply"].includes(force.kind) && this.watched.has(force.id))) {
                 continue;
             }
 
@@ -2766,10 +2805,14 @@ export class War {
         Object.assign(wagon, { path: [[...wagon.at], [...to.at]], leg: 0 });
         this.#go(wagon, SUPPLY.speed);
 
-        if (apart(wagon.at, to.at) > SUPPLY.reach) {
-            return;
+        if (apart(wagon.at, to.at) <= SUPPLY.reach) {
+            this.#deliver(wagon, to);
         }
+    }
 
+    // A supply wagon at its army or depot: its load theirs (an army's hunger over, a depot's loads
+    // one more), and it's done
+    #deliver(wagon, to) {
         this.forces.splice(this.forces.indexOf(wagon), 1);
 
         if (wagon.mission === "depot") {

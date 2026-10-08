@@ -31,6 +31,7 @@
     "pellagos.spec.js › a spell tapped on a foe out of reach says so, flashes its slot red and starts nothing cooling down": 25,
     "pellagos.spec.js › an adventurer at the guild, hired for gold, follows the player out and keeps up, sprinting as they sprint, and brought to them when left far behind; the journal shows their company, and they're with them the next time": 123.4,
     "pellagos.spec.js › an army in the field near the player, in its line of battle: the player told of it, its soldiers drawn, marching where the war has it going; the orcs' their enemies, their own people's their friends": 66.4,
+    "pellagos.spec.js › an army's supply wagon near the player: its ox and wagon drawn laden with supplies, its guards of its people beside it, making for its army; a supply depot by them pitched with its stores": 61,
     "pellagos.spec.js › an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries; struck once the player's far; razed in the war, the game goes on": 48.7,
     "pellagos.spec.js › an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge": 44.8,
     "pellagos.spec.js › an old graveyard outside the start town: walled, its graves, tombs and yew laid out and drawn; its dead out by day, a skeleton leading them; on the minimap": 37.7,

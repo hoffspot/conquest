@@ -1,7 +1,8 @@
-// A works' wagon on the road in a convoy (core/host.js #meetConvoy), drawn: a four-wheeled wagon
-// of boards in its people's timber (kits/works.js WORKS_STUFF), an ox between its shafts drawing
-// it (beasts/looks.js ox), a yoke across the ox's neck. Laden with what its works yields: logs
-// stacked in two courses, stone squared and dressed, or iron, in bars and red ore heaped; or
+// A works' wagon on the road in a convoy (core/host.js #meetConvoy), or an army's supply wagon
+// (#meetWagon), drawn: a four-wheeled wagon of boards in its people's timber (kits/works.js
+// WORKS_STUFF), an ox between its shafts drawing it (beasts/looks.js ox), a yoke across the ox's
+// neck. Laden with what its works yields: logs stacked in two courses, stone squared and dressed,
+// or iron, in bars and red ore heaped; or with an army's supplies, barrels, sacks and a crate; or
 // empty, going back for more. Its wheels turn as it goes.
 //
 // Built as the kits are, in world pixels (a metre is five), then drawn at a metre's scale: the
@@ -11,7 +12,7 @@ import * as THREE from "three";
 import { createRandom } from "../../../core/random.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
-import { prism as log } from "./props.js";
+import { barrel, crate, prism as log, sack } from "./props.js";
 import { heap, WORKS_STUFF } from "./works.js";
 
 // World pixels in a metre
@@ -25,8 +26,8 @@ const m = (metres) => metres * M;
  */
 export const WAGON = Object.freeze({ long: 2.5, wide: 1.25, floor: 0.88, sides: 0.38, wheel: 0.46, spokes: 8, in: 0.42, gap: 0.35 });
 
-/** What a wagon can be laden with (core/war/war.js RESOURCES), or null: empty. */
-export const LADEN = Object.freeze(["wood", "stone", "metal"]);
+/** What a wagon can be laden with (core/war/war.js RESOURCES, or an army's supplies), or null: empty. */
+export const LADEN = Object.freeze(["wood", "stone", "metal", "supplies"]);
 
 /**
  * A wagon drawn behind an ox of `ox`'s measures (metres, as drawn: its body's `length`, how high
@@ -242,6 +243,18 @@ function loadOf(what, stuff, random) {
         }
 
         heap(solid, random, [0, long * 0.24], wide * 0.42, m(0.42), "rock-red", { lumps: 8, lump: "rust", round: 0.3, sunk: 0 });
+    } else if (what === "supplies") {
+        // An army's supplies: two barrels at its back, a crate in the middle, and sacks of grain
+        // slumped at its front
+        for (const x of [-0.27, 0.27]) {
+            barrel(solid, m(x), -long / 2 + m(0.36), m(0.62), m(0.22));
+        }
+
+        crate(solid, 0, m(0.05), m(0.5), random.range(-0.15, 0.15));
+
+        for (const [x, z] of [[-0.3, 0.62], [0, 0.78], [0.3, 0.6]]) {
+            sack(solid, m(x), m(z), m(random.range(0.48, 0.56)), m(random.range(-0.04, 0.04)));
+        }
     }
 
     return solid.toObject();

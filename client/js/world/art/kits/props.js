@@ -53,8 +53,8 @@ export function prism(solid, a, b, r, side, end, sides = 8) {
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const normalise = (a) => a.map((x) => x / (Math.hypot(...a) || 1));
 
-// A barrel standing at (x, z): staves bellying out, two iron hoops and a lid
-function barrel(solid, x, z, height = m(0.9), radius = m(0.28)) {
+/** A barrel standing at (x, z) (world pixels): staves bellying out, two iron hoops and a lid. */
+export function barrel(solid, x, z, height = m(0.9), radius = m(0.28)) {
     const staves = material("planks");
 
     solid.cylinder(x, z, 0, height * 0.5, radius * 0.86, radius, staves, { segments: 10, capped: false });
@@ -68,8 +68,8 @@ function barrel(solid, x, z, height = m(0.9), radius = m(0.28)) {
     }
 }
 
-// A crate at (x, z), `size` across, turned `turn`: boards, and battens round its edges
-function crate(solid, x, z, size, turn) {
+/** A crate at (x, z) (world pixels), `size` across, turned `turn`: boards, and battens round its edges. */
+export function crate(solid, x, z, size, turn) {
     solid.turnedBox(x, z, size / 2, size / 2, 0, size, turn, material("planks"));
 
     const [cos, sin] = [Math.cos(turn), Math.sin(turn)];
@@ -87,8 +87,8 @@ function crate(solid, x, z, size, turn) {
     }
 }
 
-// A sack of grain slumped at (x, z), tied at the neck
-function sack(solid, x, z, height, lean) {
+/** A sack of grain slumped at (x, z) (world pixels), tied at the neck. */
+export function sack(solid, x, z, height, lean) {
     const cloth = material("canvas-sack");
 
     solid.cylinder(x, z, 0, height * 0.7, m(0.25), m(0.27), cloth, { segments: 8, capped: false });
