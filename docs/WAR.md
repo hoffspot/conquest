@@ -205,7 +205,7 @@ The engine is built for this from the start. These are its rules:
 | **M10** | Built | The end: victory, and serving an overlord until the rising. |
 | **M11** | Built | Hop in, hop out: other players joining a running world. |
 | **M12** | Built | The works: each people's lumber mills, mines and quarries, the stores of wood, metal and stone they fill, convoys carrying them to the seat, works seized, overrun and won back. |
-| **M13** | To come | Convoys in the world: their wagons, guards and captain on the road near a player, to escort or ambush. |
+| **M13** | Built | Convoys in the world: their wagons, guards and captain on the road near a player, to see in or fall on; the keep's requests about the convoys and the works. |
 | **M14** | To come | Towers and forward garrisons, built from the stores and kept up from them, where a people may build them; counsel on where, in a building screen. |
 | **M15** | To come | Battle lines: a forward garrison's patrols and assault teams; a town covered by its holders' fortification can't be stormed. |
 | **M16** | To come | A barracks in every settlement, taken by putting down its guardsmen and captain; the war half as fast. |
@@ -741,6 +741,10 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 40 |
 | See the envoy there | from a Knight, at the keep, with one of their envoys on the road (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 40 |
 | Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road (M7) | they're waylaid by the player's people; failed if they get there | 70 and 50 |
+| See the convoy in | from a Retainer, at the keep, with one of their convoys on the road laden (M13) | the player was with it (within 60 m) and its goods are in; failed if it's fallen on | 45 and 30 |
+| Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 40 |
+| Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 35 |
+| Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 45 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -917,6 +921,39 @@ goods arriving aren't news.
 **Kept.** The works and the realms' stores are kept in the war's snapshot (`WAR_VERSION` 2). A war
 kept before the works (version 1) carries on with every works its own people's and every store
 empty. The works' guards and bands out are kept in the host's snapshot.
+
+### Convoys on the roads (M13)
+
+**Met.** A convoy on the road (one of the war's forces: a works' goods going to its people's
+seat, or its wagons going back for more) is met once a player's within 150 metres of it
+(`CONVOY_NEAR`), and let go once every player's more than 300 off:
+- **its wagons,** three of them, five metres apart along its road: each an ox in its shafts
+  (`beasts/looks.js` `ox`), a four-wheeled wagon of boards behind it in its people's timber,
+  laden with what its works yields (logs in two courses, squared and dressed stone, or iron in
+  bars with red ore heaped by them), or empty going home (`art/kits/wagon.js`). No one fights a
+  wagon (they're `neutral`);
+- **its captain** ahead, and **its guards** beside the wagons, two and a half metres off the road,
+  as many as its guard (the war's `size`), of its people, armed as their soldiers are;
+- they go along its road at the wagons' pace (1.1 metres a second), making for a point 24 metres
+  on at a time. While it's met the war doesn't move it on itself or fall on it: it's told where
+  the first wagon's got to (`war.move`), and takes its goods in at the road's end. Then its
+  wagons are emptied, and they turn for home.
+
+**Fallen on.** Once every one of its guard is down, its goods are carried off (`war.plundered`):
+- half of them go into the stores of the people of whoever felled the last (a player's, their
+  followers' or the creatures they've called up), and its people bear them a grudge (8);
+- each player there (within 150 m) finds a share of what they were worth in gold (0.3 of each of
+  its goods) by the first wagon;
+- its wagons stand where they were left, till they're let go.
+
+**Said.** A convoy met near the player ("A Human convoy of 60 wood is on the road to Calbury"),
+in with its goods, or fallen on (said too if it's the player's people's, or theirs who fell on
+it).
+
+**Requests** (above): the keep asks a Retainer to see one of its convoys in, or to win back one
+of its works held by others; a Knight to fall on an enemy's convoy, or take an enemy's works.
+
+**Kept.** The convoys met and their wagons are in the host's snapshot (`SNAPSHOT_VERSION` 10).
 
 ### Playing together (M11)
 

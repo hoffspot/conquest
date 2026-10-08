@@ -3,7 +3,9 @@
 //
 // ?creature=wolf&action=walk&seed=3 opens on one (a dungeon's boss or mini-boss:
 // ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js);
-// window.lab lets a script do the same and step time on exactly (for renders: .shots).
+// window.lab lets a script do the same and step time on exactly (for renders: .shots). The ox is
+// shown in its wagon's shafts, laden with ?load=wood (or stone, metal; none: empty) in
+// ?people=human's timber.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -13,6 +15,7 @@ import { LOOKS } from "../beasts/looks.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { THEMES } from "../core/dungeons/themes.js";
 import { WEAPONS } from "../core/weapons.js";
+import { hitch } from "../world/art/kits/wagon.js";
 
 const canvas = document.querySelector("#view");
 const status = document.querySelector("#status");
@@ -39,6 +42,7 @@ const ABOUT = {
     troll: ["Troll", "The far wilds", "hammer"],
     ogre: ["Ogre", "The far wilds", "hammer"],
     wyvern: ["Wyvern", "The far wilds, and the mountains"],
+    ox: ["Draught ox", "Not of the wild: drawing a works' wagon in a convoy"],
     blackShuck: ["Black shuck", "Only in the humans' wilds"],
     boggart: ["Boggart", "Only in the humans' wilds", "gauntlets"],
     wisp: ["Will-o'-wisp", "Only in the elves' wilds"],
@@ -165,6 +169,11 @@ function show(id, which = seed) {
     const kind = champion?.creature ?? id;
     const weapon = ABOUT[kind]?.[2] ?? null;
     const avatar = dressCreature(kit, kind, { seed: which, equipment: weapon ? WEAPONS[weapon].equipment : [], guard: weapon ? WEAPONS[weapon].attacks[0].animation : null, champion: champion?.rank ?? null, regalia: champion?.regalia ?? null });
+
+    // (An ox in its wagon's shafts)
+    if (id === "ox") {
+        hitch(avatar, LOOKS.ox, { load: params.get("load") ?? "wood", people: params.get("people") ?? "human", seed: which });
+    }
 
     scene.add(avatar.object);
     along = 0;

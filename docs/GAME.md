@@ -197,6 +197,15 @@ back to the same world:
     headframe, the roofs of the sheds. A mill's trees are the land's from afar.
   - **On the maps:** each works' icon, rimmed by who holds it (`mapicons.js`; docs/WAR.md, *The
     works*).
+  - **Its convoy's wagons** (`art/kits/wagon.js`; docs/WAR.md, *Convoys on the roads*): an ox in
+    each one's shafts (`beasts/looks.js` `ox`: deep and heavy, its head carried low, its horns out
+    to the sides and curving up), a yoke across its neck bowed down to the shafts. The wagon
+    behind it four-wheeled, of boards in its people's timber, a stake at each corner and two along
+    each side; its wheels of felloes and eight spokes, turning as it goes. Laden with what its works
+    yields: logs in two courses, a little longer than its bed; blocks squared and dressed, two by
+    two, a rough one over them; or iron in bars, laid along and across, with red ore heaped by
+    them. Emptied once its goods are in, and going back for more. The creature lab
+    (`creature-lab.html?creature=ox&load=stone&people=orc`) shows one.
 
 `generateWorld({ seed, kind, exits })` makes the town:
 

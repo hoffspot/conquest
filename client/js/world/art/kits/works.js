@@ -72,13 +72,13 @@ function worked(random) {
 
 // A heap (spoil, ore, sawdust, chippings, charcoal) at (cx, cz): `r` round at its foot, `h` high,
 // uneven all round (its radius and height varying as it was tipped), its faces laid flat so what
-// it's of shows as it lies, sunk a little into the ground; lumps of what it's of (`lump`) lying
+// it's of shows as it lies, sunk a little into the ground (`sunk`); lumps of what it's of (`lump`) lying
 // on it and tumbled about its foot
-function heap(solid, random, [cx, cz], r, h, stuff, { lumps = 0, lump = stuff, round = 0.25 } = {}) {
+export function heap(solid, random, [cx, cz], r, h, stuff, { lumps = 0, lump = stuff, round = 0.25, sunk = m(0.3) } = {}) {
     const sides = 10;
     const turn = random.range(0, Math.PI * 2);
     const rings = [
-        [1.08, -m(0.3)],
+        [1.08, -sunk],
         [1, 0],
         [0.74, 0.42],
         [0.46, 0.78],
