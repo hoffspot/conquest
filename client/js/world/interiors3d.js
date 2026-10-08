@@ -37,6 +37,7 @@ import { joined, partsOf } from "./town3d.js";
 import { gather, roomLit } from "./roomlight.js";
 import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
+import { WATER_DETAIL } from "./water.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
@@ -154,9 +155,14 @@ function material(asked, how = {}) {
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
-        } else if (name.startsWith("portal-")) {
-            // (A guild's portal: its veil, the swirl of light on it, and the runes round it, glowing)
-            result = new THREE.MeshBasicMaterial({ color: { "portal-veil": 0x1d4fa8, "portal-swirl": 0x8fd2ff, "portal-rune": 0xb8e6ff }[name] ?? 0x8fd2ff, toneMapped: false });
+        } else if (name === "portal-veil") {
+            // (A guild's portal's veil: its swirling light worked out as it's drawn, veilShader)
+            result = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+            result.name = name;
+            result.userData.veil = true;
+        } else if (name === "portal-rune") {
+            // (The runes round a portal, glowing)
+            result = new THREE.MeshBasicMaterial({ color: 0xb8e6ff, toneMapped: false });
             result.name = name;
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
@@ -206,8 +212,12 @@ function cutAway(target, cut) {
         if (target.userData.leaded) {
             leadedShader(shader);
         }
+
+        if (target.userData.veil) {
+            veilShader(shader);
+        }
     };
-    target.customProgramCacheKey = () => `interior-cut-${target.type}${target.userData.leaded ? "-leaded" : ""}`;
+    target.customProgramCacheKey = () => `interior-cut-${target.type}${target.userData.leaded ? "-leaded" : ""}${target.userData.veil ? "-veil" : ""}`;
     target.needsUpdate = true;
 }
 
@@ -276,6 +286,131 @@ function leadedShader(shader) {
     diffuseColor.rgb = mix(sky * (0.86 + 0.2 * tint), vec3(0.09, 0.08, 0.07), lead);
 }`,
         );
+}
+
+/**
+ * A guild's portal's veil: how long its swirl takes to come round to where it began (seconds:
+ * the time it's given runs from 0 to this, over and over, so it never grows too big for the
+ * graphics card to count finely), and the time in it (set as the room's drawn: update).
+ */
+export const VEIL = Object.freeze({ loop: 120, time: { value: 0 } });
+
+// A guild's portal's veil, as fluid swirling into a vortex: worked out for each point of it
+// (its shape's texture coordinates, art pixels: five to a metre from the middle of the opening's
+// foot), in log-polar coordinates about its eye (as far round as it is out, so its eddies stay
+// round), twisted into five arms that wind tighter towards the eye (still, as a galaxy's arms
+// are: only what flows along them moves, turning and falling inward, so it never winds up), a
+// noise flowing along them warped by another (the folds of a fluid), finer only where there's
+// room to draw it (band-limited), in the deep blues of the guild's portals: streaks of light
+// along the arms, a bright eye, the light drawn inward to it, a churning rim against the stone,
+// and the whole breathing slowly. Every way it moves comes round whole each loop (VEIL), so it
+// never jumps; the noise repeats round the eye, so there's no seam. Its finer fold at medium
+// quality and up (WATER_DETAIL, as the water's ripples)
+function veilShader(shader) {
+    Object.assign(shader.uniforms, { veilTime: VEIL.time, veilDetail: WATER_DETAIL });
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec2 vVeil;")
+        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvVeil = uv;");
+    shader.fragmentShader = shader.fragmentShader
+        .replace(
+            "#include <common>",
+            `#include <common>
+varying vec2 vVeil;
+uniform float veilTime;
+uniform float veilDetail;
+
+const float VEIL_LOOP = ${VEIL.loop.toFixed(1)};
+const float VEIL_ARMS = 5.0;
+const vec2 VEIL_PERIOD = vec2(VEIL_ARMS, 8.0);
+const vec2 VEIL_EYE = vec2(0.0, 1.35);
+
+// (A hash without sines, Dave Hoskins's; value noise on a lattice wrapped to its period, so it tiles
+// round the eye; and its octaves, each faded out where it would be finer than a pixel)
+float veilHash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+
+    p3 += dot(p3, p3.yzx + 33.33);
+
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+float veilNoise(vec2 p, vec2 period) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    vec2 i0 = mod(i, period);
+    vec2 i1 = mod(i + 1.0, period);
+
+    return mix(mix(veilHash(i0), veilHash(vec2(i1.x, i0.y)), u.x), mix(veilHash(vec2(i0.x, i1.y)), veilHash(i1), u.x), u.y);
+}
+
+float veilFbm(vec2 p, vec2 period, float footprint, int octaves) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    float total = 0.0;
+
+    for (int k = 0; k < 4; k++) {
+        if (k >= octaves) break;
+
+        sum += amplitude * (veilNoise(p, period) - 0.5) * smoothstep(1.0, 0.5, footprint);
+        total += amplitude;
+        p = p * 2.0 + 0.37;
+        period *= 2.0;
+        footprint *= 2.0;
+        amplitude *= 0.5;
+    }
+
+    return 0.5 + sum / total;
+}
+
+// (How far a point is inside the opening, negative within it: a semicircle size.x across, on
+// legs size.y long, from the middle of the semicircle's foot; Inigo Quilez's)
+float veilEdge(vec2 p, vec2 size) {
+    p.x = abs(p.x);
+    p.y = -p.y;
+
+    vec2 q = p - size;
+    float d1 = dot(vec2(max(q.x, 0.0), q.y), vec2(max(q.x, 0.0), q.y));
+
+    q.x = p.y > 0.0 ? q.x : length(p) - size.x;
+
+    float d2 = dot(vec2(q.x, max(q.y, 0.0)), vec2(q.x, max(q.y, 0.0)));
+    float d = sqrt(min(d1, d2));
+
+    return max(q.x, q.y) < 0.0 ? -d : d;
+}
+
+vec3 veilAt(vec2 at) {
+    vec2 d = at - VEIL_EYE;
+    float r = max(length(d), 1e-4);
+    vec2 lp = vec2(atan(d.y, d.x) / PI2 * VEIL_ARMS, log(r) * VEIL_ARMS / PI2);
+    float footprint = 1.5 * fwidth(lp.y);
+
+    lp.x += 0.5 * lp.y + VEIL_ARMS / PI2 * 1.2 / (r + 0.12);
+
+    vec2 flow = VEIL_PERIOD * vec2(4.0, 2.0) * (veilTime / VEIL_LOOP);
+    int octaves = veilDetail > 0.5 ? 3 : 2;
+    vec2 drift = lp + flow * 0.5;
+    vec2 q = vec2(veilFbm(drift, VEIL_PERIOD, footprint, 2), veilFbm(drift + vec2(2.0, 3.0), VEIL_PERIOD, footprint, 2));
+    vec2 swirl = lp + flow + 1.6 * (q - 0.5);
+    float f = veilFbm(swirl, VEIL_PERIOD, footprint, octaves);
+    float ridge = 1.0 - abs(2.0 * veilNoise(swirl * vec2(1.0, 3.0), VEIL_PERIOD * vec2(1.0, 3.0)) - 1.0);
+    vec3 deep = vec3(0.02, 0.05, 0.20);
+    vec3 middle = vec3(0.07, 0.30, 0.85);
+    vec3 high = vec3(0.45, 0.88, 1.0);
+    vec3 colour = mix(deep, middle, smoothstep(0.25, 0.8, f));
+
+    colour = mix(colour, high, 0.8 * smoothstep(0.55, 0.95, f));
+    colour += high * 0.6 * pow(ridge, 6.0) * smoothstep(1.0, 0.3, footprint * 3.0);
+    colour = mix(colour, vec3(0.85, 0.97, 1.0), exp(-r / 0.09));
+    colour *= (0.75 + 0.5 * exp(-r / 0.45)) * (0.93 + 0.07 * sin(PI2 * 15.0 * veilTime / VEIL_LOOP));
+    colour += vec3(0.35, 0.75, 1.0) * 0.9 * exp((veilEdge(at - vec2(0.0, 1.75), vec2(0.8, 1.75)) + 0.04 * (f - 0.5)) / 0.07);
+
+    // (Worked out as it's to be seen: into the light it's drawn in, as every colour is)
+    return pow(max(colour, 0.0), vec3(2.2));
+}`,
+        )
+        .replace("vec4 diffuseColor = vec4( diffuse, opacity );", `vec4 diffuseColor = vec4( veilAt(vVeil / ${M.toFixed(1)}), opacity );`);
 }
 
 // --- Flames ---
@@ -547,7 +682,7 @@ const FLAMES = Object.freeze({
     witchlight: { intensity: 4, distance: 9, flicker: 0.03, colour: 0xbc9cff, glow: 0.55 },
     shard: { intensity: 2.6, distance: 6, flicker: 0.02, colour: 0xa898ff, glow: 0.4 },
     // (A guild's portal: its veil's cold light, all but steady)
-    portal: { intensity: 3.4, distance: 8, flicker: 0.04, colour: 0x7fb2ff, glow: 1.1 },
+    portal: { intensity: 3.4, distance: 8, flicker: 0.04, colour: 0x7fb2ff, glow: 0.45 },
 });
 
 /**
@@ -1985,9 +2120,9 @@ function guild(map) {
 
     solid.add(objectSolid(skull));
 
-    // The portal beside it (core/portals.js), its veil turning
+    // The portal beside it (core/portals.js), its veil swirling
     for (const piece of at("portal")) {
-        moving.push(portal(solid, w, m(piece.y + piece.h / 2)));
+        portal(solid, w, m(piece.y + piece.h / 2));
     }
 
     // Barrels either side of the door
@@ -2015,8 +2150,7 @@ function guild(map) {
 
 // A guild's portal on the east wall (`w`: its x; `z` the middle of it, art pixels): an arch of
 // dressed stone (the people's), runes cut in its face glowing, a worn step before it, and in it a
-// veil of deep blue light with a swirl of paler light turning on it (the part that moves:
-// returned, for the room's `moving`), lighting the room round it a cold blue
+// veil of light swirling into a vortex (veilShader), lighting the room round it a cold blue
 function portal(solid, w, z) {
     const [spring, inner, outer, deep] = [m(1.75), m(0.8), m(1.2), m(0.5)];
     const shape = new THREE.Shape();
@@ -2065,25 +2199,8 @@ function portal(solid, w, z) {
 
     solid.box(face - m(0.45), 0, z - outer - m(0.1), face + m(0.1), m(0.08), z + outer + m(0.1), material("stone-dark"));
 
-    // The swirl: three arms of light winding out from the middle, turning about it
-    const swirl = new THREE.Group();
-
-    for (let arm = 0; arm < 3; arm++) {
-        for (let k = 0; k < 11; k++) {
-            const r = m(0.08 + k * 0.064);
-            const angle = (arm * Math.PI * 2) / 3 + k * 0.42;
-            const piece = new THREE.Mesh(new THREE.BoxGeometry(0.2, m(0.05 + k * 0.006), m(0.14)), material(k % 3 === 2 ? "portal-rune" : "portal-swirl"));
-
-            piece.position.set(0, Math.sin(angle) * r, Math.cos(angle) * r);
-            piece.rotation.x = -angle;
-            swirl.add(piece);
-        }
-    }
-
-    swirl.position.set(face + m(0.15), spring - m(0.45), z);
+    // (Its light, the colour of the veil's)
     lit("portal", face + m(0.1), spring - m(0.3), z, { glows: [[face + m(0.1), spring - m(0.3), z]] });
-
-    return { object: swirl, turn: 1.1, axis: "x" };
 }
 
 // A hearth set into a side wall (a piece along x = 0, the west wall, or the east), a fire in it:
@@ -3758,6 +3875,7 @@ export function* buildingInterior(map) {
             }
 
             INTERIOR_GLOW.time.value = time;
+            VEIL.time.value = time % VEIL.loop;
         },
         /**
          * Seen from the camera (world metres): its ceiling not drawn while it's all lower than the

@@ -2269,9 +2269,19 @@ framed board thick with notices, each pinned or sealed in red wax, some curling.
 tankards, a map, dice and candles; the hearth has a fire and a great horned skull over it; a ring
 of candles hangs over the tables. Beside the hearth stands the portal: an arch of dressed stone
 (the people's: marble for the elves, basalt for the orcs), nine runes up its face and two on each
-leg glowing pale blue, a worn step before it, and in it a veil of deep blue light with a swirl of
-paler light turning on it, lighting the room round it a cold blue (`FLAMES.portal`). In the guild
-the tavern's jig plays as lively as in a taproom.
+leg glowing pale blue, a worn step before it, and in it a veil of light swirling into a vortex,
+lighting the room round it a cold blue (`FLAMES.portal`). The veil is worked out as it's drawn
+(interiors3d.js `veilShader`, after the way games draw swirling fluid): in log-polar coordinates
+about its eye (so its eddies stay round however near the eye), twisted into five arms that wind
+tighter towards it and stay still, as a galaxy's do, while what's on them flows along, turning and
+falling inward (so it never winds itself up); a noise flowing along them, warped by another (the
+folds of a fluid: Inigo Quilez's domain warping), its finer folds only where there's room to draw
+them; in deep blues to cyan, with streaks of light along the arms, a bright eye, the light drawn in
+towards it, a churning rim against the stone, and the whole breathing slowly. Everything in it comes
+round whole every two minutes (`VEIL.loop`), the time it's given wrapping with it, so it never
+jumps; the noise repeats round the eye, so there's no seam. At medium quality and up its fluid has
+one fold more (as the water's ripples: `WATER_DETAIL`). In the guild the tavern's jig plays as
+lively as in a taproom.
 
 **Ceilings.** Every floor has its ceiling, 3 metres up (`STOREY`), each people's own way
 (`CEILINGS`): the humans' of limewashed plaster between joists half a metre apart, carried on great
