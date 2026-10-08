@@ -396,6 +396,8 @@ function aboutOf({ id, quality }) {
 const AILING = Object.freeze({
     poison: { bursts: ["venomBubbles", "venomDrip"], every: 0.18, at: [0.3, 0.8], round: 0.2, tint: [0, 0.1, 0], hurt: "venomBubbles" },
     disease: { bursts: ["flies", "miasma"], every: 0.35, at: [0.75, 0.95], round: 0.3, tint: [0.07, 0.06, 0], hurt: "miasma" },
+    // (What's caught at a bordello: a fly now and then, and a little sallow)
+    pox: { bursts: ["flies"], every: 0.9, at: [0.75, 0.95], round: 0.3, tint: [0.04, 0.035, 0], hurt: null },
     wither: { bursts: ["wither", "shadows"], every: 0.25, at: [0.2, 0.9], round: 0.3, tint: [0.04, 0, 0.08], hurt: "wither", drawn: "curse" },
     burn: { bursts: ["flames", "smoke"], every: 0.06, at: [0.05, 0.85], round: 0.18, tint: [0.24, 0.07, 0], hurt: "flames" },
     bleed: { bursts: ["drip"], every: 0.22, at: [0.4, 0.65], round: 0.17, tint: null, hurt: "blood" },
@@ -411,12 +413,12 @@ const HELD = Object.freeze({
 });
 
 // What the player's told when something takes hold of them
-const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
+const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", pox: "You've caught something upstairs: you're diseased!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
 
 // The icon, words and what's drawn for what's lingering on someone (its kind, and look)
 function ailmentOf(kind, look = null) {
     const held = kind === "slow" ? HELD[look] : null;
-    const icons = { poison: "poisoned", disease: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
+    const icons = { poison: "poisoned", disease: "diseased", pox: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
 
     return {
         icon: held?.icon ?? icons[kind],
@@ -531,8 +533,11 @@ export class Game {
      * @param {object} [options.place] - Where the player was out in the world when the game last
      *     stopped ({ x, y, facing }: save.js loadPlace), to carry on there; or null (where the
      *     world puts them: by their home town's tavern).
+     * @param {object} [options.vitals] - How the player was then (save.js loadVitals: core/host.js
+     *     vitalsOf: their hit points and stamina, what lingered and lasted on them, their boons,
+     *     their abilities' and spells' waits), to carry on so; or null (whole, nothing on them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -592,6 +597,9 @@ export class Game {
             if (actor && world.spawns?.player) {
                 actor.spawn = [...world.spawns.player];
             }
+
+            // (As they were: hurt, poisoned, blessed, a spell still on them)
+            this.host.restoreVitals(me, vitals);
         }
 
         this.onFollowers = onFollowers;
@@ -3081,6 +3089,7 @@ export class Game {
         }
 
         this.#endTalk();
+        this.#tradeOver(npc);
 
         if (this.battle.canTalk(player, npc)) {
             this.approaching = null;
@@ -3092,6 +3101,14 @@ export class Game {
 
         this.approaching = npc.id;
         this.#command({ type: "approach", target: npc.id, run });
+    }
+
+    // Trading with someone else than `npc`, the player off to talk to them: the trade's done, and
+    // the one they were trading with let go
+    #tradeOver(npc) {
+        if (this.shopping && this.shopping.keeper !== npc?.id) {
+            this.closePack();
+        }
     }
 
     // Start talking to one of the folk: they stop and face the player, and the talk shows
@@ -3107,6 +3124,8 @@ export class Game {
         if (!tree) {
             return;
         }
+
+        this.#tradeOver(npc);
 
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
@@ -3475,7 +3494,15 @@ export class Game {
             return;
         }
 
-        this.#command({ type: "talk", with: null });
+        // (Over to trade with them: they're still the player's, standing at their counter or
+        // wherever they were, rather than going back about their business, maybe off out of reach
+        // and the trade with it, till it's done: #stopShopping)
+        const trading = this.shopWanted?.keeper === this.talking.id;
+
+        if (!trading) {
+            this.#command({ type: "talk", with: null });
+        }
+
         this.#talkingFace(this.talking.id, false);
         this.talking = null;
         this.talk?.hide();
@@ -4301,6 +4328,14 @@ export class Game {
         return outside ? { x: outside[0] + 0.5, y: outside[1] + 0.5, facing: entrance?.facing ?? actor.facing } : null;
     }
 
+    /**
+     * How the player is, to carry on so next time (core/host.js vitalsOf: kept with where they are,
+     * save.js saveVitals), or null (a world joined: kept by its host).
+     */
+    vitals() {
+        return this.remote ? null : this.host.vitalsOf(this.me);
+    }
+
     // Where the player is in the world ([x, y] metres): out in it, or at the door of the building they're in
     #whereAmI() {
         const actor = this.battle.actor(this.me);
@@ -4516,7 +4551,7 @@ export class Game {
             this.sound?.play("packClose");
         }
 
-        this.shopping = null;
+        this.#stopShopping();
         this.pack?.hide();
 
         // (Trading with another player: closed, it's called off)
@@ -4584,7 +4619,7 @@ export class Game {
                 return;
             case "open":
                 this.closeJournal();
-                this.shopping = null;
+                this.#stopShopping();
                 this.hud.message(`Trading with ${them}: offer what you will, then agree.`, 3);
                 break;
             case "offer":
@@ -4641,6 +4676,18 @@ export class Game {
         this.closeJournal();
         this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
         this.#showPack();
+    }
+
+    // Done trading with a shopkeeper: they're let go, back about their business (they were kept
+    // standing for it, as they are talking: #endTalk), unless the player's talking to them again
+    #stopShopping() {
+        const keeper = this.shopping?.keeper;
+
+        this.shopping = null;
+
+        if (keeper && this.talking?.id !== keeper) {
+            this.#command({ type: "talk", with: null });
+        }
     }
 
     // The pack as it is now (and the shop's wares, trading)
@@ -5639,9 +5686,11 @@ export class Game {
                 this.#safety(event);
                 break;
             case "boon":
-                // (A Stamina Boost drunk, or a boon worn off)
+                // (A Stamina Boost drunk, a courtesan's afterglow, or a boon worn off)
                 if (event.id === this.me) {
-                    this.hud.message(event.change === "on" ? (event.boon === "staminaBoost" ? "Your stamina doubles, for five minutes." : `${event.label}.`) : `${event.label} wears off.`, 2.5);
+                    const on = { staminaBoost: "Your stamina doubles, for five minutes.", afterglow: `${event.label}, for an hour.` }[event.boon] ?? `${event.label}.`;
+
+                    this.hud.message(event.change === "on" ? on : `${event.label.split(":")[0]} wears off.`, 2.5);
                     this.#progressed(event);
                 }
 

@@ -63,8 +63,10 @@ the host works, the spellbook, and how every spell looks.
 
 **Loading.** The first screen lists everything the game downloads (about 3 MB: the 3D engine,
 the game's code, the body characters are made from, its skin details, and the props),
-with a bar for each and one for the whole. Then the title screen offers to **Continue** with your
-character, or make a **New character**.
+with a bar for each and one for the whole. Then the title screen offers to **Continue as** the
+character you played last, make a **New character**, or choose another of your **Saved
+characters**: up to six are kept. With six, a new one takes the place of one you choose, after
+asking you to be sure, as they're deleted for good; and any can be deleted from the list.
 
 **Making a character** takes three steps:
 
@@ -99,13 +101,14 @@ character, or make a **New character**.
    leg in turn.
 3. **Name.** Type one, or ask for a suggestion, and **Begin**.
 
-Your character is saved in the browser, with the town they live in.
+Your characters are saved in the browser, each with their own world: where they were and how,
+hurt, poisoned or blessed, a spell still on them, all carried on the next time as it was.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
 **an enemy** to go and fight them: a red ring round it marks it as your target, and its name
 lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
-it uses 3 points of **stamina** a second, and anything else gets 1 a second back. You have as
+it uses 1.5 points of **stamina** a second, and anything else gets 1 a second back. You have as
 much stamina as hit points (50). Your name and health are in the bottom left corner; while your
 stamina isn't full, an orange bar under your health shows what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
@@ -238,7 +241,11 @@ table) and talk: their name and what they are, what they say, and what you can s
 reply, or press its number). They stop and turn to you. Each sort has their own things to talk
 about: the barkeep sells ale and gossips about the orc, the wenches bring food and know everyone,
 the patrons have news and opinions, the madam offers a room, the courtesans flirt, dance, sell
-their callers' secrets and ask a favour; and some have their own stories.
+their callers' secrets and ask a favour; and some have their own stories. A courtesan's company
+(20 gold; the madam and the courtesans hint at what it does) leaves you, three times in four,
+with an hour's **afterglow**, your stamina coming back half again to twice as fast; the rest of
+the time you've caught something, and you're **diseased** for the hour (your stamina slow to
+come back), unless a Cure disease draught from the adventurers' guild ends it.
 They remember you, and what you've asked; and what you learn from one, another may know you
 know. Choices that would cost something or change the world (buying, renting, taking on a job)
 are there, but for now only the talk goes on. Walk off, or press Escape, to stop.
@@ -552,8 +559,9 @@ client/                 The game (static files served to the browser)
                         another, fallen, risen
     together.js         Playing together: a world opened to others, or another's joined, through
                         the relay (a WebSocket)
-    save.js             The saved character, what they've grown into and carry, what's been
-                        said and found, and settings (local storage)
+    save.js             The saved characters (up to six), what they've grown into and carry,
+                        what's been said and found, where they were and how; and settings
+                        (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its

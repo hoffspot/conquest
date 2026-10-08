@@ -251,7 +251,8 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      version can't join.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds.
    - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
-     set aside, not misread.
+     set aside, not misread; or, where it can be, moved to the new one, as version 1's one
+     character is (save.js `migrate`). Players keep their characters.
    - The caches' versions (the `-v2` in `client/sw.js`): never for a release. Data is kept by the
      hash of its bytes, so a changed model, body or image needs nothing. Change the shell's
      (`SHELL`) only to let go of code no release uses any more, such as an old Three.js's

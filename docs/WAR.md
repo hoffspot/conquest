@@ -583,7 +583,11 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     `#shopkeeper`).
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
-  The shop stays open while the player's within a few steps of the keeper.
+  The shop stays open while the player's within a few steps of the keeper. The keeper stays
+  where they were, facing the player, till the trade's done (the pack closed, or the player off
+  to talk to someone else), as they do in talk: one whose rounds would take them off, the
+  guild's receptionist to the files, keeps to their counter (app/game.js `#endTalk`,
+  `#stopShopping`).
 - **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
   little more of everything), shown on the player's plate while it lasts (a sword on a whetstone,

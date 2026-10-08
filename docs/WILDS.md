@@ -160,6 +160,10 @@ an adder's near home.
 | Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, the dragon's bite... | Bandage, 5 gold |
 | Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch | Quickening draught, 10 gold |
 
+Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
+**Diseased** too, for an hour: stamina comes back at 40%, but it doesn't hurt; the Cure disease
+draught ends it as it does the wild's sickness.
+
 A cure ends it at once (and only it: used with nothing to cure, it isn't used). Each can go on an
 action wheel, as a draught can.
 

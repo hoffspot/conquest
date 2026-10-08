@@ -196,6 +196,24 @@ h2 {
     transform: none;
 }
 
+/* For what can't be undone: deleting a character */
+.button.danger {
+    color: #fff3ee;
+    background: linear-gradient(180deg, #b3412f, #8f2f22);
+    border-color: #d8705c;
+}
+
+.button.danger:hover {
+    background: linear-gradient(180deg, #c44c38, #9c3426);
+}
+
+/* A smaller way on, beside what it's about (Change who comes) */
+.button.quiet {
+    min-height: 36px;
+    padding: 6px 14px;
+    font-size: 14px;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -3983,6 +4001,82 @@ p.code {
 dialog.together a {
     color: var(--gold-bright);
     word-break: break-all;
+}
+
+/* The characters kept: one card each (its name, people, weapon, gold, when last played), and,
+   to be played, a way to delete it */
+dialog.characters {
+    width: min(440px, calc(100% - 32px));
+}
+
+.character-list {
+    list-style: none;
+    margin: 12px 0 14px;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+}
+
+.character-list li {
+    display: flex;
+    gap: 8px;
+}
+
+.character-list .character {
+    appearance: none;
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.character-list .character:hover {
+    background: rgba(255, 244, 220, 0.12);
+    border-color: rgba(220, 180, 106, 0.5);
+}
+
+.character-list .name {
+    font-family: var(--font-display);
+    color: var(--gold-bright);
+    font-size: 17px;
+    overflow-wrap: anywhere;
+}
+
+.character-list .about,
+.character-list .when {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.character-list .forget {
+    appearance: none;
+    flex: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: #f2b4a6;
+    background: transparent;
+    border: 1px solid rgba(216, 112, 92, 0.55);
+    border-radius: 10px;
+    padding: 0 12px;
+    min-width: 44px;
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.character-list .forget:hover {
+    background: rgba(179, 65, 47, 0.25);
 }
 
 .together-players {

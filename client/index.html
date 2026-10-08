@@ -63,6 +63,7 @@
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
+                    <button type="button" id="savedbutton" class="button" hidden>Saved character</button>
                     <button type="button" id="joinbutton" class="button">Join a world</button>
                 </div>
                 <p class="note" id="savenote" hidden></p>
@@ -197,12 +198,35 @@
                 <label class="field" for="joincode">Code</label>
                 <input type="text" id="joincode" class="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD" required>
                 <p class="note" id="joinwho"></p>
+                <button type="button" class="button quiet" id="joinchange" hidden>Change who comes</button>
                 <p class="note warning" id="joinstatus" role="status"></p>
                 <div class="menu">
                     <button type="submit" class="button primary" id="joingo">Join</button>
                     <button type="button" class="button" id="joincancel">Back</button>
                 </div>
             </form>
+        </dialog>
+
+        <!-- The characters kept (up to six): one chosen to play or delete, to make way for a new one,
+             or to bring to someone's world -->
+        <dialog id="characters" class="together characters" aria-labelledby="characterstitle">
+            <h2 id="characterstitle">Saved characters</h2>
+            <p class="note" id="charactersnote"></p>
+            <ul class="character-list" id="characterlist"></ul>
+            <div class="menu">
+                <button type="button" class="button" id="charactersnew" hidden>A new character</button>
+                <button type="button" class="button" id="charactersback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- A character deleted, or replaced by a new one: asked first, as it's for good -->
+        <dialog id="forget" class="together" aria-labelledby="forgettitle" role="alertdialog" aria-describedby="forgetnote">
+            <h2 id="forgettitle">Delete?</h2>
+            <p class="note" id="forgetnote"></p>
+            <div class="menu">
+                <button type="button" class="button danger" id="forgetgo">Delete</button>
+                <button type="button" class="button" id="forgetback">Keep</button>
+            </div>
         </dialog>
 
         <!-- The world opened to others: its code, and who's come -->

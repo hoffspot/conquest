@@ -14,6 +14,7 @@
 //
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
+import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { isEmote } from "./emotes.js";
@@ -284,6 +285,21 @@ export const BOUGHT = Object.freeze({
     sharpening: { boon: { id: "sharpening", label: "A keen edge", melee: 0.1, ms: 600000 } },
     blessing: { boon: { id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000 } },
 });
+
+/** Every boon there is, bought or drunk, by its id: what one kept between visits is taken as (Host restoreVitals). */
+const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use)].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
+
+/**
+ * A courtesan's company, paid for by talking (dialogue.js courtesan, `{ company: true, price }`):
+ * three times in four (`chance`) an hour's afterglow, a boon that brings the breath back faster
+ * by a whole share rolled between half again and twice as fast (`faster`, per cent); else the pox
+ * caught (afflictions.js), for the hour too. Either for `ms`.
+ */
+export const COMPANY = Object.freeze({ chance: 0.75, faster: [50, 100], ms: 60 * 60000 });
+
+// A courtesan's afterglow (COMPANY), the breath back `faster` per cent faster: a boon of its own
+// for each roll, kept between visits with it (Host vitalsOf), as rolls go
+const afterglow = (faster) => ({ id: "afterglow", label: `Afterglow: stamina back ${faster}% faster`, recoveryTimes: 1 + faster / 100, faster, ms: COMPANY.ms });
 
 /**
  * A Scroll of Safety (progress.js ITEMS scrollOfSafety): read for `ms`, and the reader carried
@@ -622,6 +638,89 @@ export class Host {
         this.#event("join", { id, name: hero.name, realm: player.realm });
 
         return player;
+    }
+
+    /**
+     * How a player is just now, as it's kept between visits (app/save.js saveVitals): their hit
+     * points and stamina (hp null, fallen: they get up whole), and what's on them for a while,
+     * each by what's left of it (ms of the battle's time, which stands still while the game's
+     * stopped, so it's what's left when they come back): what lingers after blows, the spells
+     * lasting on them, their boons, and how long till each ability and spell can be used again.
+     * Null for no such player.
+     */
+    vitalsOf(id) {
+        const player = this.players.get(id);
+        const actor = this.battle.actor(id);
+
+        if (!player || !actor) {
+            return null;
+        }
+
+        const now = this.battle.time;
+        const left = (until) => Math.max(0, Math.round(until - now));
+        const waiting = (readyAt) => Object.fromEntries(Object.entries(readyAt ?? {}).filter(([, at]) => at > now).map(([key, at]) => [key, left(at)]));
+
+        return {
+            hp: actor.dead ? null : actor.hp,
+            stamina: actor.dead ? null : actor.stamina,
+            afflictions: actor.afflictions.filter(({ until }) => until > now).map(({ kind, until, damage, look }) => ({ kind, left: left(until), damage, look: look ?? null })),
+            buffs: actor.buffs.filter(({ until }) => until > now).map(({ kind, until, by, level }) => ({ kind, left: left(until), level, own: by === id })),
+            boons: player.boons.filter(({ until }) => until > now).map(({ id: boon, until, faster }) => ({ id: boon, left: left(until), ...(faster ? { faster } : {}) })),
+            abilities: waiting(player.readyAt),
+            spell: left(actor.spellReadyAt),
+            spells: waiting(actor.spellsReadyAt),
+        };
+    }
+
+    /**
+     * A player as they were kept (vitalsOf), just joined: their boons back first (what they make
+     * of their stamina), then their hit points and stamina (no more than they can have now; none
+     * kept, or fallen, whole), what lingers on them and lasts, and their abilities' and spells'
+     * waits, each with what was left of it. Anything the game no longer knows is let go.
+     */
+    restoreVitals(id, vitals) {
+        const player = this.players.get(id);
+        const actor = this.battle.actor(id);
+
+        if (!player || !actor || actor.dead || !vitals || typeof vitals !== "object") {
+            return;
+        }
+
+        const now = this.battle.time;
+        const ms = (value) => (Number.isFinite(value) && value > 0 ? Math.round(value) : 0);
+        const list = (value) => (Array.isArray(value) ? value.filter((each) => each && typeof each === "object") : []);
+        const waits = (value) => Object.entries(value && typeof value === "object" ? value : {}).filter(([, wait]) => ms(wait));
+
+        // (Each as the game has it, not as kept; an afterglow with its roll, as rolls go)
+        const [least, most] = COMPANY.faster;
+        const boonOf = ({ id: boon, faster }) => (boon === "afterglow" ? afterglow(Math.min(most, Math.max(least, Math.round(Number(faster)) || least))) : Object.hasOwn(BOONS, boon) ? BOONS[boon] : null);
+
+        player.boons = list(vitals.boons).map((kept) => [boonOf(kept), ms(kept.left)]).filter(([boon, left]) => boon && left).map(([boon, left]) => ({ ...boon, until: now + Math.min(left, boon.ms) }));
+        this.#outfit(player);
+
+        if (Number.isFinite(vitals.hp)) {
+            actor.hp = Math.max(1, Math.min(actor.maxHp, Math.round(vitals.hp)));
+        }
+
+        if (Number.isFinite(vitals.stamina)) {
+            actor.stamina = Math.max(0, Math.min(actor.maxStamina, Math.round(vitals.stamina)));
+        }
+
+        for (const { kind, left, damage, look } of list(vitals.afflictions)) {
+            if (AFFLICTIONS[kind] && ms(left)) {
+                this.battle.afflict(id, kind, { ms: ms(left), damage: Number.isFinite(damage) && damage > 0 ? damage : null, look: typeof look === "string" ? look : null });
+            }
+        }
+
+        for (const { kind, left, level, own } of list(vitals.buffs)) {
+            if (SPELLS[kind]?.lasts && ms(left)) {
+                this.battle.buff(id, kind, { ms: Math.min(ms(left), SPELLS[kind].lasts), by: own ? id : null, level: Number.isInteger(level) && level > 0 ? level : 1 });
+            }
+        }
+
+        player.readyAt = Object.fromEntries(waits(vitals.abilities).filter(([ability]) => ABILITIES[ability]).map(([ability, wait]) => [ability, now + Math.min(ms(wait), ABILITIES[ability].cooldown)]));
+        actor.spellReadyAt = now + ms(vitals.spell);
+        actor.spellsReadyAt = Object.fromEntries(waits(vitals.spells).filter(([spell]) => SPELLS[spell]).map(([spell, wait]) => [spell, now + ms(wait)]));
     }
 
     /**
@@ -1570,8 +1669,11 @@ export class Host {
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
 
-        // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts)
+        // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts;
+        // or how fast it comes back, an afterglow)
         const breath = player.boons.reduce((times, { staminaTimes = 1 }) => times * staminaTimes, 1);
+
+        actor.recovery = player.boons.reduce((times, { recoveryTimes = 1 }) => times * recoveryTimes, 1);
         const [hp, stamina] = [KINDS.player.hp + bonus.hp, Math.round((KINDS.player.hp + bonus.stamina) * breath)];
 
         if (actor.maxHp !== hp) {
@@ -2105,8 +2207,10 @@ export class Host {
             return OK;
         }
 
-        // (A cure: only for what's on them)
-        if (use.cure && !actor.afflictions.some(({ kind }) => kind === use.cure)) {
+        // (A cure: only for what's on them, and all its draught cures)
+        const cures = use.cure ? curedWith(use.cure) : [];
+
+        if (use.cure && !actor.afflictions.some(({ kind }) => cures.includes(kind))) {
             return refuse("unafflicted");
         }
 
@@ -2121,8 +2225,8 @@ export class Host {
 
         const item = player.progress.take(index, 1);
 
-        if (use.cure) {
-            this.battle.cure(actor.id, use.cure);
+        for (const kind of cures) {
+            this.battle.cure(actor.id, kind);
         }
 
         if (use.boon) {
@@ -4033,6 +4137,11 @@ export class Host {
             return this.#tell(player, actor, effect.follower);
         }
 
+        // (A courtesan's company: only hers to give)
+        if (effect.company && !this.#courtesan(actor)) {
+            return refuse("command");
+        }
+
         const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
 
         if (price > player.progress.gold) {
@@ -4059,6 +4168,10 @@ export class Host {
             this.#sleep(player, actor, "room");
         }
 
+        if (effect.company) {
+            this.#keptCompany(player, actor);
+        }
+
         this.#gain(player, "talk", XP.effect);
 
         const done = { ...structuredClone(effect), by: actor.talkingTo, player: actor.id, at: this.battle.time };
@@ -4068,6 +4181,29 @@ export class Host {
         this.#event("effect", { id: actor.id, effect: done });
 
         return OK;
+    }
+
+    // Whether the one a player's talking with is a courtesan (her company hers to give)
+    #courtesan(actor) {
+        const one = this.folk.get(actor.talkingTo);
+
+        return one?.role === "courtesan" || one?.talk === "courtesan";
+    }
+
+    // A courtesan's company kept (COMPANY): mostly an afterglow for the hour, the breath back
+    // faster by the share rolled (any before it gone: the latest's); else the pox caught
+    #keptCompany(player, actor) {
+        if (!this.random.chance(COMPANY.chance)) {
+            this.battle.afflict(actor.id, "pox", { ms: COMPANY.ms });
+
+            return;
+        }
+
+        const boon = afterglow(this.random.int(...COMPANY.faster));
+
+        player.boons = [...player.boons.filter(({ id }) => id !== boon.id), { ...boon, until: this.battle.time + boon.ms }];
+        this.#outfit(player);
+        this.#event("boon", { id: player.id, boon: boon.id, label: boon.label, change: "on" });
     }
 
     // --- Passing the time (the terrain plan's M7e, §9 Night in play) ---
