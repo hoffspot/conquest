@@ -597,14 +597,14 @@ describe("the battle (battle.js)", () => {
         assert.equal(player.pace, walk);
     });
 
-    it("uses 3 stamina a second running and gets 1 a second back otherwise, between none and its most", () => {
+    it("uses 1.5 stamina a second running and gets 1 a second back otherwise, between none and its most", () => {
         const battle = new Battle(open(60, 5), { seed: 1 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
 
         // As much stamina as hit points to start with
         assert.equal(player.stamina, KINDS.player.hp);
         assert.equal(player.maxStamina, KINDS.player.hp);
-        assert.equal(STAMINA_DRAIN, 3);
+        assert.equal(STAMINA_DRAIN, 1.5);
         assert.equal(STAMINA_RECOVERY, 1);
 
         battle.command("player", { type: "move", to: [58, 2], run: true });
@@ -666,7 +666,7 @@ describe("the battle (battle.js)", () => {
         const events = [];
         let lowest = Infinity;
 
-        player.stamina = 3;
+        player.stamina = STAMINA_DRAIN;
         battle.command("player", { type: "move", to: [40, 2], run: true });
 
         for (let t = 0; t < 30000; t += STEP_MS) {
@@ -682,7 +682,7 @@ describe("the battle (battle.js)", () => {
 
         assert.equal(exhausted.length, 1);
         assert.equal(exhausted[0].id, "player");
-        // A second's running (3 points), then down to a walk within about a second
+        // A second's running (STAMINA_DRAIN points), then down to a walk within about a second
         assert.ok(exhausted[0].time >= 1000 && exhausted[0].time <= 1100, `out of breath after ${exhausted[0].time} ms`);
         assert.ok(events.slow - exhausted[0].time <= 1000, `walking ${events.slow - exhausted[0].time} ms later`);
         assert.equal(lowest, 0);

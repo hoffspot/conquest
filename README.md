@@ -108,7 +108,7 @@ hurt, poisoned or blessed, a spell still on them, all carried on the next time a
 **an enemy** to go and fight them: a red ring round it marks it as your target, and its name
 lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
-it uses 3 points of **stamina** a second, and anything else gets 1 a second back. You have as
+it uses 1.5 points of **stamina** a second, and anything else gets 1 a second back. You have as
 much stamina as hit points (50). Your name and health are in the bottom left corner; while your
 stamina isn't full, an orange bar under your health shows what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
@@ -241,7 +241,11 @@ table) and talk: their name and what they are, what they say, and what you can s
 reply, or press its number). They stop and turn to you. Each sort has their own things to talk
 about: the barkeep sells ale and gossips about the orc, the wenches bring food and know everyone,
 the patrons have news and opinions, the madam offers a room, the courtesans flirt, dance, sell
-their callers' secrets and ask a favour; and some have their own stories.
+their callers' secrets and ask a favour; and some have their own stories. A courtesan's company
+(20 gold; the madam and the courtesans hint at what it does) leaves you, three times in four,
+with an hour's **afterglow**, your stamina coming back half again to twice as fast; the rest of
+the time you've caught something, and you're **diseased** for the hour (your stamina slow to
+come back), unless a Cure disease draught from the adventurers' guild ends it.
 They remember you, and what you've asked; and what you learn from one, another may know you
 know. Choices that would cost something or change the world (buying, renting, taking on a job)
 are there, but for now only the talk goes on. Walk off, or press Escape, to stop.

@@ -396,6 +396,8 @@ function aboutOf({ id, quality }) {
 const AILING = Object.freeze({
     poison: { bursts: ["venomBubbles", "venomDrip"], every: 0.18, at: [0.3, 0.8], round: 0.2, tint: [0, 0.1, 0], hurt: "venomBubbles" },
     disease: { bursts: ["flies", "miasma"], every: 0.35, at: [0.75, 0.95], round: 0.3, tint: [0.07, 0.06, 0], hurt: "miasma" },
+    // (What's caught at a bordello: a fly now and then, and a little sallow)
+    pox: { bursts: ["flies"], every: 0.9, at: [0.75, 0.95], round: 0.3, tint: [0.04, 0.035, 0], hurt: null },
     wither: { bursts: ["wither", "shadows"], every: 0.25, at: [0.2, 0.9], round: 0.3, tint: [0.04, 0, 0.08], hurt: "wither", drawn: "curse" },
     burn: { bursts: ["flames", "smoke"], every: 0.06, at: [0.05, 0.85], round: 0.18, tint: [0.24, 0.07, 0], hurt: "flames" },
     bleed: { bursts: ["drip"], every: 0.22, at: [0.4, 0.65], round: 0.17, tint: null, hurt: "blood" },
@@ -411,12 +413,12 @@ const HELD = Object.freeze({
 });
 
 // What the player's told when something takes hold of them
-const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
+const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", pox: "You've caught something upstairs: you're diseased!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
 
 // The icon, words and what's drawn for what's lingering on someone (its kind, and look)
 function ailmentOf(kind, look = null) {
     const held = kind === "slow" ? HELD[look] : null;
-    const icons = { poison: "poisoned", disease: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
+    const icons = { poison: "poisoned", disease: "diseased", pox: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
 
     return {
         icon: held?.icon ?? icons[kind],
@@ -5678,9 +5680,11 @@ export class Game {
                 this.#safety(event);
                 break;
             case "boon":
-                // (A Stamina Boost drunk, or a boon worn off)
+                // (A Stamina Boost drunk, a courtesan's afterglow, or a boon worn off)
                 if (event.id === this.me) {
-                    this.hud.message(event.change === "on" ? (event.boon === "staminaBoost" ? "Your stamina doubles, for five minutes." : `${event.label}.`) : `${event.label} wears off.`, 2.5);
+                    const on = { staminaBoost: "Your stamina doubles, for five minutes.", afterglow: `${event.label}, for an hour.` }[event.boon] ?? `${event.label}.`;
+
+                    this.hud.message(event.change === "on" ? on : `${event.label.split(":")[0]} wears off.`, 2.5);
                     this.#progressed(event);
                 }
 

@@ -14,7 +14,7 @@
 //
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
-import { AFFLICTIONS } from "./afflictions.js";
+import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { isEmote } from "./emotes.js";
@@ -288,6 +288,18 @@ export const BOUGHT = Object.freeze({
 
 /** Every boon there is, bought or drunk, by its id: what one kept between visits is taken as (Host restoreVitals). */
 const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use)].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
+
+/**
+ * A courtesan's company, paid for by talking (dialogue.js courtesan, `{ company: true, price }`):
+ * three times in four (`chance`) an hour's afterglow, a boon that brings the breath back faster
+ * by a whole share rolled between half again and twice as fast (`faster`, per cent); else the pox
+ * caught (afflictions.js), for the hour too. Either for `ms`.
+ */
+export const COMPANY = Object.freeze({ chance: 0.75, faster: [50, 100], ms: 60 * 60000 });
+
+// A courtesan's afterglow (COMPANY), the breath back `faster` per cent faster: a boon of its own
+// for each roll, kept between visits with it (Host vitalsOf), as rolls go
+const afterglow = (faster) => ({ id: "afterglow", label: `Afterglow: stamina back ${faster}% faster`, recoveryTimes: 1 + faster / 100, faster, ms: COMPANY.ms });
 
 /**
  * A Scroll of Safety (progress.js ITEMS scrollOfSafety): read for `ms`, and the reader carried
@@ -653,7 +665,7 @@ export class Host {
             stamina: actor.dead ? null : actor.stamina,
             afflictions: actor.afflictions.filter(({ until }) => until > now).map(({ kind, until, damage, look }) => ({ kind, left: left(until), damage, look: look ?? null })),
             buffs: actor.buffs.filter(({ until }) => until > now).map(({ kind, until, by, level }) => ({ kind, left: left(until), level, own: by === id })),
-            boons: player.boons.filter(({ until }) => until > now).map(({ id: boon, until }) => ({ id: boon, left: left(until) })),
+            boons: player.boons.filter(({ until }) => until > now).map(({ id: boon, until, faster }) => ({ id: boon, left: left(until), ...(faster ? { faster } : {}) })),
             abilities: waiting(player.readyAt),
             spell: left(actor.spellReadyAt),
             spells: waiting(actor.spellsReadyAt),
@@ -679,7 +691,11 @@ export class Host {
         const list = (value) => (Array.isArray(value) ? value.filter((each) => each && typeof each === "object") : []);
         const waits = (value) => Object.entries(value && typeof value === "object" ? value : {}).filter(([, wait]) => ms(wait));
 
-        player.boons = list(vitals.boons).filter(({ id: boon, left }) => BOONS[boon] && ms(left)).map(({ id: boon, left }) => ({ ...BOONS[boon], until: now + Math.min(ms(left), BOONS[boon].ms) }));
+        // (Each as the game has it, not as kept; an afterglow with its roll, as rolls go)
+        const [least, most] = COMPANY.faster;
+        const boonOf = ({ id: boon, faster }) => (boon === "afterglow" ? afterglow(Math.min(most, Math.max(least, Math.round(Number(faster)) || least))) : Object.hasOwn(BOONS, boon) ? BOONS[boon] : null);
+
+        player.boons = list(vitals.boons).map((kept) => [boonOf(kept), ms(kept.left)]).filter(([boon, left]) => boon && left).map(([boon, left]) => ({ ...boon, until: now + Math.min(left, boon.ms) }));
         this.#outfit(player);
 
         if (Number.isFinite(vitals.hp)) {
@@ -1653,8 +1669,11 @@ export class Host {
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
 
-        // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts)
+        // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts;
+        // or how fast it comes back, an afterglow)
         const breath = player.boons.reduce((times, { staminaTimes = 1 }) => times * staminaTimes, 1);
+
+        actor.recovery = player.boons.reduce((times, { recoveryTimes = 1 }) => times * recoveryTimes, 1);
         const [hp, stamina] = [KINDS.player.hp + bonus.hp, Math.round((KINDS.player.hp + bonus.stamina) * breath)];
 
         if (actor.maxHp !== hp) {
@@ -2188,8 +2207,10 @@ export class Host {
             return OK;
         }
 
-        // (A cure: only for what's on them)
-        if (use.cure && !actor.afflictions.some(({ kind }) => kind === use.cure)) {
+        // (A cure: only for what's on them, and all its draught cures)
+        const cures = use.cure ? curedWith(use.cure) : [];
+
+        if (use.cure && !actor.afflictions.some(({ kind }) => cures.includes(kind))) {
             return refuse("unafflicted");
         }
 
@@ -2204,8 +2225,8 @@ export class Host {
 
         const item = player.progress.take(index, 1);
 
-        if (use.cure) {
-            this.battle.cure(actor.id, use.cure);
+        for (const kind of cures) {
+            this.battle.cure(actor.id, kind);
         }
 
         if (use.boon) {
@@ -4116,6 +4137,11 @@ export class Host {
             return this.#tell(player, actor, effect.follower);
         }
 
+        // (A courtesan's company: only hers to give)
+        if (effect.company && !this.#courtesan(actor)) {
+            return refuse("command");
+        }
+
         const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
 
         if (price > player.progress.gold) {
@@ -4142,6 +4168,10 @@ export class Host {
             this.#sleep(player, actor, "room");
         }
 
+        if (effect.company) {
+            this.#keptCompany(player, actor);
+        }
+
         this.#gain(player, "talk", XP.effect);
 
         const done = { ...structuredClone(effect), by: actor.talkingTo, player: actor.id, at: this.battle.time };
@@ -4151,6 +4181,29 @@ export class Host {
         this.#event("effect", { id: actor.id, effect: done });
 
         return OK;
+    }
+
+    // Whether the one a player's talking with is a courtesan (her company hers to give)
+    #courtesan(actor) {
+        const one = this.folk.get(actor.talkingTo);
+
+        return one?.role === "courtesan" || one?.talk === "courtesan";
+    }
+
+    // A courtesan's company kept (COMPANY): mostly an afterglow for the hour, the breath back
+    // faster by the share rolled (any before it gone: the latest's); else the pox caught
+    #keptCompany(player, actor) {
+        if (!this.random.chance(COMPANY.chance)) {
+            this.battle.afflict(actor.id, "pox", { ms: COMPANY.ms });
+
+            return;
+        }
+
+        const boon = afterglow(this.random.int(...COMPANY.faster));
+
+        player.boons = [...player.boons.filter(({ id }) => id !== boon.id), { ...boon, until: this.battle.time + boon.ms }];
+        this.#outfit(player);
+        this.#event("boon", { id: player.id, boon: boon.id, label: boon.label, change: "on" });
     }
 
     // --- Passing the time (the terrain plan's M7e, §9 Night in play) ---

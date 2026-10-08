@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS, UNMASKED_MS } from "../client/js/core/battle.js";
-import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, SAFETY, UNDO_MS } from "../client/js/core/host.js";
+import { BOUGHT, COMPANY, GROUND_MS, HOST_PLAYER, Host, SAFETY, UNDO_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { PACK_SIZE, priceOf, RANKS, SHOPS, wareKind } from "../client/js/core/progress.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -358,6 +358,92 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         run(host, BOUGHT.blessing.boon.ms + STEP_MS);
         assert.equal(player.power.melee, 1);
         assert.ok(progress.skills.talk > 0 && progress.skills.trade > 0);
+    });
+
+    it("keeps a courtesan's company for gold: three times in four an hour's afterglow, the breath back half again to twice as fast; else the pox for the hour, which doesn't hurt, and a Cure disease draught ends", () => {
+        const host = hosted({ gold: 10000, pack: [{ id: "cureDisease", count: 1 }] });
+        const player = host.battle.actor(HOST_PLAYER);
+        const playing = host.players.get(HOST_PLAYER);
+        const keep = () => host.command(HOST_PLAYER, { type: "effect", effect: { company: true, price: 20 } });
+
+        // Only a courtesan's to give: nothing paid to the barkeep for it
+        host.command(HOST_PLAYER, { type: "talk", with: atTheBar(host).id });
+        assert.deepEqual(keep(), { ok: false, reason: "command" });
+        assert.equal(playing.progress.gold, 10000);
+
+        // (Next to her, in her room upstairs, talking to her)
+        const courtesan = host.battle.actor("courtesan");
+        const near = [[0, 1], [1, 0], [-1, 0], [0, -1]].find(([dx, dy]) => {
+            put(player, courtesan.map, [courtesan.square[0] + dx, courtesan.square[1] + dy]);
+
+            return host.command(HOST_PLAYER, { type: "talk", with: "courtesan" }).ok;
+        });
+
+        assert.ok(near, "talking with her");
+
+        // Kept many times: mostly an afterglow, each as much faster as it rolled
+        const kept = { afterglow: [], pox: 0 };
+
+        for (let k = 0; k < 200; k++) {
+            playing.boons = [];
+            player.afflictions = [];
+            assert.deepEqual(keep(), { ok: true });
+
+            const boon = playing.boons.find(({ id }) => id === "afterglow");
+
+            if (boon) {
+                kept.afterglow.push(Math.round((boon.recoveryTimes - 1) * 100));
+            } else {
+                assert.deepEqual(player.afflictions.map(({ kind }) => kind), ["pox"]);
+                kept.pox++;
+            }
+        }
+
+        assert.equal(playing.progress.gold, 10000 - 200 * 20);
+        assert.ok(kept.afterglow.length >= 125 && kept.afterglow.length <= 175, `${kept.afterglow.length} of 200`);
+        assert.ok(kept.afterglow.every((faster) => faster >= 50 && faster <= 100), `${kept.afterglow}`);
+        assert.ok(Math.min(...kept.afterglow) <= 55 && Math.max(...kept.afterglow) >= 95, "between half again and twice as fast");
+
+        // (Each as it's rolled from now on: an afterglow half again as fast, then the pox)
+        const rolls = { chance: host.random.chance, int: host.random.int };
+        const rolled = (afterglow) => {
+            Object.assign(host.random, { chance: () => afterglow, int: () => 50 });
+            keep();
+            Object.assign(host.random, rolls);
+        };
+
+        playing.boons = [];
+        player.afflictions = [];
+        rolled(true);
+        assert.deepEqual(playing.boons, [{ id: "afterglow", label: "Afterglow: stamina back 50% faster", recoveryTimes: 1.5, faster: 50, ms: COMPANY.ms, until: host.battle.time + COMPANY.ms }]);
+        assert.equal(COMPANY.ms, 60 * 60000, "an hour");
+        player.stamina = 0;
+        run(host, 1000);
+        assert.ok(Math.abs(player.stamina - 1.5) < 0.01, `${player.stamina}: half again as fast`);
+
+        // The pox: for the hour, the breath back at 40% (the afterglow's still on: 0.6), and no hurt
+        rolled(false);
+
+        const pox = player.afflictions.find(({ kind }) => kind === "pox");
+        const hp = player.hp;
+
+        assert.equal(pox.until, host.battle.time + COMPANY.ms);
+        player.stamina = 0;
+        run(host, 5000);
+        assert.ok(Math.abs(player.stamina - 5 * 1.5 * 0.4) < 0.05, `${player.stamina}`);
+        assert.equal(player.hp, hp, "no hurt");
+
+        // A Cure disease draught ends it; with nothing to cure, it's not drunk
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", item: "cureDisease" }), { ok: true });
+        assert.deepEqual(player.afflictions, []);
+        playing.progress.stow({ id: "cureDisease" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", item: "cureDisease" }), { ok: false, reason: "unafflicted" });
+
+        // The afterglow worn off: the breath back as fast as ever
+        playing.boons[0].until = host.battle.time + STEP_MS;
+        run(host, 200);
+        assert.deepEqual(playing.boons, []);
+        assert.equal(player.recovery, 1);
     });
 
     it("sells a Stamina Boost potion at the adventurers' guild: drunk, twice the stamina for five minutes, and only one at a time", () => {

@@ -744,6 +744,9 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         for (const { boon } of Object.values(BOUGHT).filter(({ boon }) => boon)) {
             assert.match(ICONS[boon.id], /<(path|circle|ellipse)/, `${boon.label} has an icon`);
         }
+
+        // (And a courtesan's afterglow: host.js COMPANY)
+        assert.match(ICONS.afterglow, /<(path|circle|ellipse)/);
     });
 
     it("gives everything that can be carried an icon, and puts things to use on the player's own wheel by a short name", () => {

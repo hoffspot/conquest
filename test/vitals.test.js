@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { BOUGHT, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { BOUGHT, COMPANY, HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { ABILITIES, ITEMS } from "../client/js/core/progress.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -128,5 +128,33 @@ describe("how a player is kept between visits (host.js vitalsOf, restoreVitals)"
         }
 
         assert.deepEqual([back.hp, back.stamina], [back.maxHp, 0]);
+    });
+
+    it("keeps a courtesan's afterglow with its roll and the pox, each for what was left of its hour; a roll kept is put back as rolls go", () => {
+        const host = hosted();
+        const now = host.battle.time;
+
+        host.players.get(HOST_PLAYER).boons = [{ id: "afterglow", label: "Afterglow: stamina back 73% faster", recoveryTimes: 1.73, faster: 73, ms: COMPANY.ms, until: now + 1000000 }];
+        host.battle.afflict(HOST_PLAYER, "pox", { ms: 2000000 });
+
+        const vitals = JSON.parse(JSON.stringify(host.vitalsOf(HOST_PLAYER)));
+
+        assert.deepEqual(vitals.boons, [{ id: "afterglow", left: 1000000, faster: 73 }]);
+        assert.deepEqual(vitals.afflictions.map(({ kind, left }) => [kind, left]), [["pox", 2000000]]);
+
+        const again = hosted();
+        const back = again.battle.actor(HOST_PLAYER);
+        const kept = () => again.players.get(HOST_PLAYER).boons.map(({ label, recoveryTimes, until }) => [label, recoveryTimes, until - again.battle.time]);
+
+        again.restoreVitals(HOST_PLAYER, vitals);
+        assert.deepEqual(kept(), [["Afterglow: stamina back 73% faster", 1.73, 1000000]]);
+        assert.equal(back.recovery, 1.73);
+        assert.deepEqual(back.afflictions.map(({ kind, until }) => [kind, until - again.battle.time]), [["pox", 2000000]]);
+
+        // (However it was kept: no faster than the fastest roll, no slower than the slowest, no longer than the hour)
+        again.restoreVitals(HOST_PLAYER, { boons: [{ id: "afterglow", left: COMPANY.ms * 5, faster: 1000 }] });
+        assert.deepEqual(kept(), [["Afterglow: stamina back 100% faster", 2, COMPANY.ms]]);
+        again.restoreVitals(HOST_PLAYER, { boons: [{ id: "afterglow", left: 5000, faster: "lots" }, { id: "constructor", left: 5000 }] });
+        assert.deepEqual(kept(), [["Afterglow: stamina back 50% faster", 1.5, 5000]]);
     });
 });

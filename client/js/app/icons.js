@@ -129,6 +129,15 @@ const ACTION_DEFS = `
     <stop offset="0.45" stop-color="#f6e9c6"/>
     <stop offset="1" stop-color="#cfae6e"/>
 </linearGradient>
+<radialGradient id="icon-afterglow">
+    <stop offset="0" stop-color="#ffe2ec" stop-opacity="0.95"/>
+    <stop offset="0.55" stop-color="#ff7aa8" stop-opacity="0.4"/>
+    <stop offset="1" stop-color="#e0507a" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="icon-afterglow-heart" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ff9ab8"/>
+    <stop offset="1" stop-color="#c0224e"/>
+</linearGradient>
 <radialGradient id="icon-safety-glow">
     <stop offset="0" stop-color="#eaf6ff" stop-opacity="0.95"/>
     <stop offset="0.55" stop-color="#4aa8ff" stop-opacity="0.45"/>
@@ -489,6 +498,13 @@ export const ICONS = Object.freeze({
         <circle cy="4" r="3" fill="#fffbe6"/>`,
     staminaBoost: STAMINA_BOOST,
     scrollOfSafety: SCROLL_OF_SAFETY,
+    // A courtesan's afterglow (host.js COMPANY): a rosy heart in a warm glow, the breath rising
+    // off it in three curls
+    afterglow: `
+        <circle r="22" fill="url(#icon-afterglow)"/>
+        <path d="M0,16 C-14,6 -17,-3 -12,-9 C-7,-14 -2,-11 0,-6 C2,-11 7,-14 12,-9 C17,-3 14,6 0,16 Z" fill="url(#icon-afterglow-heart)" stroke="#6a0e28" stroke-width="1.3" stroke-linejoin="round"/>
+        <ellipse cx="-7" cy="-4" rx="2.4" ry="3.8" fill="#ffffff" opacity="0.55" transform="rotate(-30 -7 -4)"/>
+        <path d="M-6,-14 C-9,-17 -3,-19 -6,-22 M0,-12 C-3,-16 3,-18 0,-22 M6,-14 C3,-17 9,-19 6,-22" fill="none" stroke="#fff0f4" stroke-width="1.6" stroke-linecap="round" filter="url(#icon-glow)"/>`,
     sharpening: `
         <rect x="-9" y="-3.3" width="18" height="6.6" rx="2" transform="translate(8 5) rotate(28)" fill="#80888f" stroke="#2f363b" stroke-width="1.1"/>
         <path d="M-7,-1 L7,-1" transform="translate(8 5) rotate(28)" stroke="#a8b0b6" stroke-width="1"/>

@@ -9,7 +9,7 @@
 // Once they've registered with the adventurers' guilds, their rank shows on their card by their
 // name, a chip of its metal (Copper to Mithril).
 
-import { ICONS } from "./icons.js";
+import { ICONS, useDefs } from "./icons.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -221,6 +221,10 @@ export class Hud {
 
         if (row.dataset.key !== key) {
             const more = element("span", "ail more", "…");
+
+            // (The icons' gradients and glows in the page, as the wheels and the pack put them:
+            // the plate may show one before either's been opened)
+            useDefs(this.root.ownerDocument);
 
             more.setAttribute("role", "img");
             row.dataset.key = key;
