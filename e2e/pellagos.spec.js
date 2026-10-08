@@ -4869,7 +4869,8 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.icons).toEqual(["tavern"]);
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(8);
+    // (Its key: each kind of building gone into, a barracks' among them; the fog; and the pin)
+    await expect(page.locator("#worldmapkey li")).toHaveCount(9);
 
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
@@ -5569,6 +5570,117 @@ test("a forward garrison of the player's people near them: its two patrols of fo
 
     expect(squads.patrols.flat().every(({ name }) => name === "Human patrol")).toBe(true);
     expect(squads.assault.every(({ name, gate }) => name === "Human vanguard" && gate < 8)).toBe(true);
+});
+
+test("the barracks of the town the player starts in, held by the orcs at war with their people: gone into, its captain and guardsmen are there, of the orcs, drawn; put down, the town's the humans', and said; the humans' garrison in it once the player's left", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    const inside = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const town = war.town(game.world.start.id);
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "barracks" && each.place === "home");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+        const pair = ["human", "orc"].join("|");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (The town the orcs', at war with the humans, in the age of conquest)
+        Object.assign(town, { owner: "orc", garrison: 12 });
+        war.relations[pair] = { state: "hostile", since: 0 };
+        war.known.push(pair);
+        war.stage = 3;
+
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.host.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 20 && player.map === "town"; k++) {
+            game.advance(0.25, { render: false });
+        }
+
+        // (Standing still while they're looked at, and put down at a blow each)
+        const out = game.host.quartered.get(town.id);
+
+        for (const id of out?.ids ?? []) {
+            Object.assign(game.battle.actor(id), { ai: null, hp: 1 });
+        }
+
+        window.barracks = { town: town.id, door: building.door.id, ids: [...(out?.ids ?? [])] };
+
+        return { map: player.map, inside: building.maps[0], name: building.name, ids: out?.ids ?? [] };
+    });
+
+    expect(inside.map).toBe(inside.inside);
+    expect(inside.name).toBe("the barracks");
+    expect(inside.ids).toHaveLength(4);
+
+    // Its captain and guardsmen, of the orcs, drawn
+    expect(await playUntil(page, () => window.barracks.ids.every((id) => window.pellagos.game.avatars.has(id)), { seconds: 60 })).toBe(true);
+
+    const garrison = await page.evaluate(() => window.barracks.ids.map((id) => ({ name: window.pellagos.game.battle.actor(id).name, team: window.pellagos.game.battle.actor(id).team, map: window.pellagos.game.battle.actor(id).map })));
+
+    expect(garrison.map(({ name }) => name)).toEqual(["Orcish captain", "Orcish guardsman", "Orcish guardsman", "Orcish guardsman"]);
+    expect(garrison.every(({ team, map }) => team === "orc" && map === inside.inside)).toBe(true);
+
+    // Put down by the player, one after another: the town the humans'
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                // (The fallen taken away a while after: down too)
+                const next = window.barracks.ids.find((id) => game.battle.actor(id) && !game.battle.actor(id).dead);
+
+                if (next && game.battle.actor("player").order?.target !== next) {
+                    game.host.command("player", { type: "engage", target: next });
+                }
+
+                return !next && game.host.war.town(window.barracks.town).owner === "human";
+            },
+            { seconds: 90 },
+        ),
+    ).toBe(true);
+
+    const taken = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const town = game.host.war.town(window.barracks.town);
+
+        return { said: window.said, garrison: town.garrison, name: town.name };
+    });
+
+    expect(taken.said).toContain(`${taken.name} is taken! Its barracks put to the sword, the Humans hold it now.`);
+    expect(taken.garrison).toBe(3);
+
+    // (Round it, the humans' soldiers out in the orcs' place)
+    expect(await playUntil(page, () => window.pellagos.game.host.mustered.get(window.barracks.town)?.people === "human", { seconds: 5 })).toBe(true);
+
+    // Out of it: the humans' garrison in it, drawn
+    await page.evaluate(() => window.pellagos.game.host.command("player", { type: "enter", link: window.barracks.door }));
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const out = game.host.quartered.get(window.barracks.town);
+
+                return game.battle.actor("player").map === "town" && out?.people === "human" && out.ids.every((id) => game.battle.actor(id)?.team === "human" && game.avatars.has(id));
+            },
+            { seconds: 60 },
+        ),
+    ).toBe(true);
 });
 
 test("a place's outlaws or dead hold it round their leader by a locked chest, the dead down in the crypt under the ruins: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {

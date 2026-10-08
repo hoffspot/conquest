@@ -1,6 +1,6 @@
 {
     "building-lab.spec.js › builds a street of every style of house in a few draw calls, and the town": 11.1,
-    "building-lab.spec.js › builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall and a keep": 6.3,
+    "building-lab.spec.js › builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, and barracks and a guardhouse": 6.3,
     "building-lab.spec.js › draws a people's homeland: its own ground, its own trees, and its own things lying about": 11,
     "building-lab.spec.js › draws a village out in the world in its chunks, with its tavern, church, smithy and guild": 13.6,
     "building-lab.spec.js › draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls": 10.2,
@@ -65,6 +65,7 @@
     "pellagos.spec.js › tapping the tavern's door lights its edge green, and the player walks in: well inside, facing into the room, the camera behind them under the ceiling; up the stairs (where a courtesan beckons), down, and out, facing out; each time a tap round them is a step, not back through": 82,
     "pellagos.spec.js › the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two": 72.4,
     "pellagos.spec.js › the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, she signs the player up, and gives them a package to carry off its board of four": 48.1,
+    "pellagos.spec.js › the barracks of the town the player starts in, held by the orcs at war with their people: gone into, its captain and guardsmen are there, of the orcs, drawn; put down, the town's the humans', and said; the humans' garrison in it once the player's left": 66.4,
     "pellagos.spec.js › the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name": 34.6,
     "pellagos.spec.js › the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next": 76.5,
     "pellagos.spec.js › the camera follows from the first step, swinging round behind the player": 32.7,

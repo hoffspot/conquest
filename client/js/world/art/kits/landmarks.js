@@ -2,8 +2,8 @@
 // pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
 // the houses, with their names and signs), the adventurers' guild's hall, a stone church as big as
 // its place (church.js), a blacksmith's smithy with an open forge, a market hall on columns with stalls
-// beneath, a windmill, a town hall, and a capital's keep. Each is built facing south; the town
-// turns it to face its street.
+// beneath, a windmill, a town hall, a capital's keep, and a barracks. Each is built facing south;
+// the town turns it to face its street.
 
 import { GODS } from "../../../core/lore/gods.js";
 import { createRandom } from "../../../core/random.js";
@@ -639,12 +639,134 @@ export async function keep(piece) {
     return solid.toObject();
 }
 
+/**
+ * A barracks (a village's guardhouse): the biggest house out towards its town's edge, made over
+ * (setpieces/town.js), in its street's look (but stone where it was a cottage): a door in the
+ * middle of its front up a step, "Barracks" (or "Guardhouse") on a board over it, or along the
+ * floor above, a sign of a shield by it, a torch either side of it, and outside a rack of the
+ * garrison's spears against the wall and a straw man on a post to practise on.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const { w, h } = piece;
+    const name = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const style = HOUSE_STYLES[piece.style] && piece.style !== "cottage" ? piece.style : "stone";
+    const reveal = HOUSE_STYLES[style].reveal + 0.04;
+    const [width, depth] = [w * 20, h * 20];
+    const board = Math.min(m(4.6), width - m(3.2));
+    const storeys = piece.storeys ?? 1;
+    const plan = planHouse({
+        w,
+        h,
+        style,
+        storeys,
+        seed: seedOf(piece),
+        x: piece.x,
+        y: piece.y,
+        facing: piece.facing,
+        front: depth - m(ENTRY) + m(reveal),
+        entrance: { width: m(1.8), height: m(2.4) },
+        board,
+        jettied: false,
+        lofty: m(storeys < 2 ? 4 : 3.2),
+    });
+    const solid = buildHouse(plan);
+    const oak = plan.frame ?? "timber";
+    const ground = plan.levels[0];
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const boardHeight = (board * 9) / 56;
+    const texture = nameBoardTexture({ name, ground: "#3a2a1a", dark: "#1c120a" });
+
+    // Its name: along the floor above, or over the door
+    if (plan.levels.length > 1) {
+        const level = plan.levels[1];
+        const v0 = Math.min(level.height - boardHeight - m(0.35), m(1.05));
+
+        nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], texture, `board ${name}`, oak);
+    } else {
+        const small = Math.min(board, m(4));
+        const v0 = m(2.6);
+
+        nameBoard(solid, face, [middle - small / 2, middle + small / 2, v0, v0 + Math.min((small * 9) / 56, ground.height - v0 - m(0.2))], texture, `board ${name}`, oak);
+    }
+
+    // Its sign by the door (past the board's end, on one storey), and a torch either side of it
+    const aside = plan.levels.length > 1 ? m(1.9) : Math.min(board, m(4)) / 2 + m(0.55);
+    const top = Math.min(m(3.2), ground.height - m(0.1));
+
+    hangingSign(solid, face, middle + aside, top, emblemSignTexture({ name, emblem: "shield", tint: seedOf(piece) % 6 }), `sign ${name}`, { width: 1, height: 1.2, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
+
+    // Shields hung along its front between the windows, clear of the door's torches and its sign:
+    // painted, a band across each, a boss in its middle
+    const openings = (plan.openings.front[0] ?? []).map(({ u0, u1 }) => [u0 - m(0.1), u1 + m(0.1)]);
+    const colours = ["paint-red", "paint-blue", "paint-green"];
+    const at = (u, v, out = m(0.08)) => [face.origin[0] + u, v, face.origin[2] + out];
+    let hung = 0;
+
+    for (let u = m(0.9); u < face.length - m(0.9) && hung < 4; u += m(0.3)) {
+        const clear = Math.abs(u - middle) > m(1.75) && Math.abs(u - middle - aside) > m(0.95) && openings.every(([a, b]) => u + m(0.36) < a || u - m(0.36) > b);
+
+        if (!clear) {
+            continue;
+        }
+
+        const v = Math.min(m(2.2), ground.height - m(0.6));
+        const paint = material(colours[(hung + seedOf(piece)) % colours.length]);
+
+        solid.facing([at(u - m(0.32), v + m(0.35)), at(u - m(0.32), v), at(u - m(0.18), v - m(0.3)), at(u, v - m(0.45)), at(u + m(0.18), v - m(0.3)), at(u + m(0.32), v), at(u + m(0.32), v + m(0.35))], [0, 0, 1], paint);
+        solid.box(face.origin[0] + u - m(0.32), v + m(0.02), face.origin[2] + m(0.08), face.origin[0] + u + m(0.32), v + m(0.14), face.origin[2] + m(0.1), material("paint-cream"));
+        solid.box(face.origin[0] + u - m(0.08), v - m(0.22), face.origin[2] + m(0.08), face.origin[0] + u + m(0.08), v - m(0.06), face.origin[2] + m(0.16), material("iron"));
+        hung++;
+        u += m(1);
+    }
+
+    const [x0, z] = [face.origin[0] + middle, face.origin[2]];
+
+    for (const side of [-1, 1]) {
+        torch(solid, [x0 + side * m(1.3), m(2.3), z], [0, 1]);
+    }
+
+    solid.box(x0 - m(1.2), 0, z, x0 + m(1.2), m(0.3), z + m(0.6), material("stone"));
+
+    // The spears racked against the wall on one side, a butt to shoot at on the other
+    const rack = x0 - m(2.6);
+
+    solid.box(rack - m(0.8), m(0.3), z + m(0.05), rack + m(0.8), m(0.4), z + m(0.35), material("timber"));
+    solid.box(rack - m(0.8), m(1.35), z + m(0.05), rack + m(0.8), m(1.45), z + m(0.25), material("timber"));
+
+    for (let k = 0; k < 6; k++) {
+        const x = rack - m(0.65) + k * m(0.26);
+
+        solid.cylinder(x, z + m(0.2), m(0.3), m(2.3), m(0.025), m(0.025), material("timber-light"), { segments: 5 });
+        solid.cylinder(x, z + m(0.2), m(2.3), m(2.55), m(0.045), 0, material("iron"), { segments: 5 });
+    }
+
+    // (The butt: a round of straw on three legs, facing the street, its rings painted on it)
+    const [bx, bz] = [x0 + m(2.8), z + m(0.75)];
+    const ring = (r, out, name) => solid.facing(Array.from({ length: 14 }, (_, k) => [bx + Math.cos((k * Math.PI * 2) / 14) * r, m(1.15) + Math.sin((k * Math.PI * 2) / 14) * r, bz + out]), [0, 0, 1], material(name));
+
+    for (const [dx, dz] of [[-0.35, -0.1], [0.35, -0.1], [0, -0.55]]) {
+        solid.beam([bx + m(dx), 0, bz + m(dz)], [bx + m(dx) * 0.2, m(1.2), bz - m(0.08)], m(0.04), m(0.04), material("timber"));
+    }
+
+    solid.cylinder(bx, bz - m(0.12), m(0.7), m(1.6), m(0.06), m(0.06), material("thatch"), { segments: 6 });
+    ring(m(0.48), 0, "thatch");
+    ring(m(0.38), m(0.01), "paint-cream");
+    ring(m(0.28), m(0.02), "paint-red");
+    ring(m(0.17), m(0.03), "paint-cream");
+    ring(m(0.08), m(0.04), "paint-gold");
+
+    return solid.toObject();
+}
+
 // Where a keep's door stands: this far in from the front of its lot (metres), and its size and sill
 const KEEP_ENTRY = 1.4;
 const KEEP_DOOR = Object.freeze({ width: 2.4, height: 3.2, floor: 0.8 });
 
 /** Every special building, by name (setpieces/pieces.js LANDMARKS). */
-export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep });
+export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep, barracks });
 
 /** A town's special building (its layout piece), filling its footprint. */
 export function landmark(piece) {

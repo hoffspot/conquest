@@ -480,7 +480,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2853,6 +2853,30 @@ export class Game {
         this.sound?.play("wake");
     }
 
+    // A barracks cleared, its captain and guardsmen put down (docs/WAR.md M16): told to the player
+    // if it was their people's doing, or they're in it: the town theirs now, or why it isn't
+    #barracksCleared({ town: id, by, how, people }) {
+        const town = this.host?.war?.town(id);
+        const me = this.battle.actor(this.me);
+        const inside = me && this.host?.quartered.get(id)?.map === me.map;
+
+        if (!town || (by !== this.self?.realm && !inside)) {
+            return;
+        }
+
+        const stage = STAGES[this.host.war.stage];
+        const said = {
+            taken: `${town.name} is taken! Its barracks put to the sword, the ${peopleOf(by)} hold it now.`,
+            peace: `${town.name}'s barracks is cleared, but the ${peopleOf(by)} aren't at war with the ${peopleOf(people)}: it isn't theirs to take.`,
+            age: `${town.name}'s barracks is cleared, but no ${town.kind} is taken in ${stage.name.replace(/^An? /, "the ").toLowerCase()}. Its garrison will be back.`,
+        }[how];
+
+        if (said) {
+            this.hud.message(said, 5);
+            this.sound?.play("wake");
+        }
+    }
+
     /**
      * The adventurers' caches out in the world the player's seen (core/caches.js), as icons for the
      * maps: [{ id, kind ("cache"), x, z (metres), rim (grey once it's opened) }]; gone with it.
@@ -4552,6 +4576,7 @@ export class Game {
                     camp: `You've found the camp outside ${request.target.name}. Bring its soldiers down.`,
                     retake: `You're at the ${request.target.name}. Bring down whoever holds it.`,
                     seize: `You're at the ${request.target.name}. Bring down whoever holds it.`,
+                    take: `You're at ${request.target.name}. Get into its ${request.target.quarters ?? "barracks"}, and put down its guardsmen and their captain.`,
                 }[request.kind] ?? `You're here to hold ${request.target.name}. Stay till they're gone.`,
                 done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}${event.reward?.tome ? ` And the Tome of ${SPELLS[event.reward.tome].label}.` : ""}`,
                 failed: `${request.title}: failed. ${request.from.post === "guild" ? "The guild marks it on your card." : "Your standing suffers."}`,
@@ -5975,8 +6000,21 @@ export class Game {
                 this.#cleared(event);
                 break;
             case "squadsOut":
-                // (A forward garrison's squads out near the player, or made up: to be drawn)
+            case "quartered":
+                // (A forward garrison's squads out near the player, or made up; a barracks'
+                // garrison in it: to be drawn)
                 this.enlisting.push(...event.ids);
+                break;
+            case "unquartered":
+                this.#unenlist(event.ids);
+
+                for (const id of event.ids) {
+                    this.#undress(id);
+                }
+
+                break;
+            case "barracks":
+                this.#barracksCleared(event);
                 break;
             case "worksOut":
                 // (A works' guards out near the player, to be drawn; the brigands holding one are

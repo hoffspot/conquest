@@ -547,6 +547,55 @@ export async function hall(piece) {
 }
 
 /**
+ * The barracks (a village's guardhouse): a thorn house of black stone, its name over its door, a
+ * rack of glaives against its front and iron spikes along its plinth either side of the steps.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const random = randomFor(piece, 88);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const name = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const front = D - m(ENTRY) + m(0.4);
+    const storeys = (piece.storeys ?? 1) > 1 ? 2 : 1;
+    // (An odd number of bays along its front, so its door's in the middle one, in the middle)
+    const asked = W - m(1.2);
+    const bays = Math.max(1, Math.round(asked / m(2.2)));
+    const width = bays % 2 ? asked : (bays - 0.51) * m(2.2);
+    const [x0, x1] = [(W - width) / 2, (W + width) / 2];
+
+    toned(solid, random, [m(storeys > 1 ? 7.3 : 4.1)]);
+    thornHouse(solid, x0, m(0.6), x1, front, { random, wealth: 0.7, storeys, door: { width: m(1.8), height: m(2.4) }, board: true });
+    board(solid, (u, v, w = 0) => [W / 2 - m(1.3) + u, v, front + w], [0, 0, 1], [0, m(2.6), m(2.75), m(2.75) + m(2.6) * (9 / 56)], nameBoardTexture({ name, ground: "#241a30", dark: "#100a16" }), `board ${name}`, m(0.15));
+
+    // The glaives, upright in their rack against the front, to one side
+    const rack = Math.max(x0 + m(0.6), W / 2 - m(3.4));
+
+    solid.box(rack - m(0.7), m(0.7), front + m(0.05), rack + m(0.7), m(0.8), front + m(0.35), material("timber-char"));
+
+    for (let k = 0; k < 5; k++) {
+        const x = rack - m(0.55) + k * m(0.27);
+
+        pole(solid, [x, m(0.7), front + m(0.22)], [x, m(2.9), front + m(0.12)], m(0.025), "timber-char", { sides: 4 });
+        spike(solid, [x, m(2.9), front + m(0.12)], [0, 1, -0.05], m(0.5), m(0.08), "iron-black", { sides: 4 });
+    }
+
+    // Spikes along the plinth's front
+    for (const side of [-1, 1]) {
+        for (let k = 0; k < 2; k++) {
+            const x = W / 2 + side * (m(1.5) + k * m(0.45));
+
+            if (x > x0 && x < x1) {
+                spike(solid, [x, m(0.7), front + m(0.15)], [0, 0.6, 1], m(0.4), m(0.06), "iron-black", { sides: 4 });
+            }
+        }
+    }
+
+    return solid.toObject();
+}
+
+/**
  * A capital's keep: the Black Tower, a great octagon crowned by a quincunx of needle spires (four
  * round a tall one), corbelled turrets, its door up steps between two stone spiders.
  */
@@ -638,7 +687,7 @@ export function windmill(piece) {
     return market(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, market, windmill });
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);

@@ -550,6 +550,67 @@ export async function hall(piece) {
 }
 
 /**
+ * The wardens' lodge (a barracks; a village's guardhouse): a round hall of marble under one
+ * petal roof, a crescent on its crown, bud lamps by its door; its name on a board standing beside
+ * the way to the door (out from under the roof's deep eaves), and a rack of silver-headed spears
+ * on the other side.
+ */
+export async function barracks(piece) {
+    await loadSignFont();
+
+    const random = randomFor(piece, 67);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const name = piece.grade === "guardhouse" ? "Guardhouse" : "Barracks";
+    const doorFace = D - m(ENTRY) + m(0.3);
+    const r = Math.min(m(4), W / 2 - m(1.4), (doorFace - m(0.8)) / 2);
+    const [cx, cz] = [W / 2, doorFace - r];
+    const outline = circle(cx, cz, r, 18, southSide(18));
+    const height = m(3.6);
+
+    toned(solid, random, [m(3.9)]);
+    solid.extrude(inset(outline, -m(0.3)), 0, m(0.3), material("stone-moon"));
+
+    const faces = solid.walls(outline, m(0.3), height, elvenOpenings(outline, random, { door: { width: m(1.8), height: m(2.4) }, windows: 0.7 }), material("marble"));
+    const top = petalRoof(solid, cx, cz, m(0.3) + height, r + m(0.9), r * 0.75, random.pick(ROOFS), { petals: 7, lift: m(0.6) });
+
+    crescent(solid, cx, top, cz, m(1), "silver");
+
+    const door = faces[0];
+    const at = wallPoint(door);
+
+    // Its name, on a board between two slender posts beside the way in
+    const [sx, sz] = [Math.min(W - m(1.1), cx + m(2.6)), doorFace + m(1)];
+
+    for (const side of [-1, 1]) {
+        post(solid, sx + side * m(0.95), 0, sz, m(2.1), m(0.05), "heartwood", { sides: 6 });
+        solid.lathe(sx + side * m(0.95), sz, [[0, m(2.1)], [m(0.08), m(2.12)], [0, m(2.3)]], material("silver"), { segments: 8 });
+    }
+
+    board(solid, (u, v, w = 0) => [sx - m(0.9) + u, v, sz + w], [0, 0, 1], [0, m(1.8), m(1.45), m(1.45) + m(1.8) * (9 / 56)], nameBoardTexture({ name, ground: "#1f3a30", dark: "#0c1a14" }), `board ${name}`, m(0.06));
+
+    for (const side of [-1, 1]) {
+        budLamp(solid, at(door.length / 2 + side * m(1.5), m(2.6), m(0.1)), [door.out[0], door.out[2]], { reach: m(0.5) });
+    }
+
+    // The spears, upright in a rack of heartwood before the front, to one side
+    const [rx0, rz0] = [Math.max(m(0.9), cx - m(3)), doorFace + m(0.8)];
+
+    for (const y of [m(0.35), m(1.4)]) {
+        pole(solid, [rx0 - m(0.75), y, rz0], [rx0 + m(0.75), y, rz0], m(0.04), "heartwood", { sides: 5 });
+    }
+
+    for (let k = 0; k < 6; k++) {
+        const x = rx0 - m(0.65) + k * m(0.26);
+
+        pole(solid, [x, 0, rz0 + m(0.05)], [x, m(2.4), rz0 - m(0.05)], m(0.022), "heartwood", { sides: 4 });
+        pole(solid, [x, m(2.4), rz0 - m(0.05)], [x, m(2.75), rz0 - m(0.07)], m(0.045), "silver", { top: 0, sides: 4 });
+    }
+
+    return solid.toObject();
+}
+
+/**
  * A capital's keep: a slender tower of pale stone in tiers, each under its own petal roof, moon
  * windows up it, its door up steps between two branching columns.
  */
@@ -647,7 +708,7 @@ export function windmill(piece) {
     return market(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, market, windmill });
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);
