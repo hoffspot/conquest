@@ -705,6 +705,7 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : war ? "The war table" : "The world";
     $("#worldmapkey").hidden = Boolean(travel || build || war);
     $("#warmapkey").hidden = !war;
+    $("#worldmaplegend").hidden = Boolean(travel || build);
 
     // (At the war table: the war as their council sees it, drawn again as it goes on; anything
     // tapped told of; nothing held or tapped twice)
@@ -985,6 +986,7 @@ function closeWorldMap() {
     $("#worldmaptitle").textContent = "The world";
     $("#worldmapkey").hidden = false;
     $("#warmapkey").hidden = true;
+    $("#worldmaplegend").hidden = false;
     $("#worldmapcancel").textContent = "Cancel";
     picking?.(null);
 
@@ -992,6 +994,18 @@ function closeWorldMap() {
         $("#worldmap").close();
         state.game?.start();
     }
+}
+
+// The map's key opened (above its "Key" button), or folded away again: folded away at first, so
+// the map's seen whole, and as it was left after
+function toggleLegend() {
+    const legend = $("#worldmaplegend");
+    const open = !legend.classList.contains("open");
+    const toggle = $("#worldmaplegendtoggle");
+
+    legend.classList.toggle("open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.title = open ? "Hide the key" : "Show the key";
 }
 
 // The map's key: each icon, and the fog
@@ -1063,6 +1077,7 @@ async function warKey(colour) {
 }
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);
+$("#worldmaplegendtoggle").addEventListener("click", toggleLegend);
 $("#worldmapcancel").addEventListener("click", closeWorldMap);
 $("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
 $("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));

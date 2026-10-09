@@ -3434,7 +3434,10 @@ Held on the minimap (or M on a keyboard), the whole screen becomes a map of the 
 paused under it, until it's closed (the cross, Escape, or M again). It opens on the player, about
 900 metres across the screen's shorter side; drag to look about, pinch or scroll to zoom (from a
 quarter of a metre to a pixel out to the whole world), or use its buttons: where you are, zoom in,
-zoom out. A key in the corner shows the four icons and the fog.
+zoom out. Its key (each building's icon, the fog and the pin) is folded away to a "Key" button in
+the bottom left corner, so the map's seen whole on a phone: tapped, the key opens above it; tapped
+again, it folds away. It stays as it was left till the game's loaded again. At the war table the
+same button holds the war's key.
 
 - **The land** is one picture of the world's plan, four pixels to a cell (32 metres), each cell in
   its land's grass colour as the minimap has it, shaded by the hills as if lit from the

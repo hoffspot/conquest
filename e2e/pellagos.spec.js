@@ -5349,10 +5349,28 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.icons).toEqual(["tavern"]);
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
-    // (Its key: each kind of building gone into, a barracks' and the seven shops among them; the
-    // fog; and the pin)
+    // (Its key folded away at first to its "Key" button in the corner, the map seen whole; tapped,
+    // open above it, within the screen: each kind of building gone into, a barracks' and the seven
+    // shops among them; the fog; and the pin. Tapped again, folded away)
+    const key = page.getByRole("button", { name: "Key", exact: true });
+    const viewport = page.viewportSize();
+
+    await expect(key).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#worldmapkey")).toBeHidden();
+    expect((await page.locator("#worldmaplegend").boundingBox()).height).toBeLessThan(60);
+    await key.click();
+    await expect(key).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#worldmapkey")).toBeVisible();
     await expect(page.locator("#worldmapkey li")).toHaveCount(16);
-    await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toHaveCount(1);
+    await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
+
+    const opened = await page.locator("#worldmaplegend").boundingBox();
+
+    expect(opened.y).toBeGreaterThanOrEqual(0);
+    expect(opened.y + opened.height).toBeLessThanOrEqual(viewport.height);
+    await key.click();
+    await expect(key).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#worldmapkey")).toBeHidden();
 
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
