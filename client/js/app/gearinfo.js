@@ -8,18 +8,20 @@
 
 import { AFFIXES, affixesFor, blockMost, disguiseOf, GEAR, GEAR_SLOTS, handsOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
-import { BOOSTS, priceOf, QUALITIES } from "../core/progress.js";
+import { charmOf } from "../core/goods.js";
+import { BOOSTS, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { WEAPONS } from "../core/weapons.js";
 
 /** Each make's name as shown (a common one, none), rarest last. */
-export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", legendary: "Legendary" });
+export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", rare: "Rare", veryRare: "Very rare", legendary: "Legendary" });
 
 // A bonus as shown: "+12% melee damage", "+5 hit points"; armour: "takes 4% off each blow"
 function worded(stat, value) {
-    const { label, share } = STATS[stat];
+    const { label, share, less } = STATS[stat];
     const amount = share ? `${Math.round(value * 100)}%` : `${Math.round(value)}`;
 
-    return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `${value < 0 ? "−" : "+"}${amount.replace("-", "")} ${label.toLowerCase()}`;
+    // (What's less the better shown less: a charm's "−8% fire's harm")
+    return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `${value < 0 !== Boolean(less) ? "−" : "+"}${amount.replace("-", "")} ${label.toLowerCase()}`;
 }
 
 // A bonus that could be anywhere from `least` to `most`, as shown: "+5–13% melee damage"
@@ -67,6 +69,17 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const def = GEAR[item.id];
     const quality = item.quality ?? "common";
     const lines = [];
+
+    // (A charm, core/goods.js: what it does carried, as well made as it is)
+    if (!def && ITEMS[item.id]?.charm) {
+        for (const [stat, value] of Object.entries(charmOf(item.id, quality))) {
+            lines.push({ text: worded(stat, value), tone: "base" });
+        }
+
+        lines.push({ text: "Carried in the pack; the best made of each kind counts", tone: "base" });
+
+        return { label, rarity: quality, kind: "Charm", lines, rolls: null, compare: [], price: priceOf(item, { haggle, selling: true }) };
+    }
 
     if (!def) {
         return { label, rarity: quality, kind: null, lines, rolls: null, compare: [], price: priceOf(item, { haggle, selling: true }) };

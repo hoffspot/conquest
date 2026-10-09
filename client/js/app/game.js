@@ -1235,7 +1235,7 @@ export class Game {
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
-        this.pack.onWheel = (id) => this.#putOnWheel(`item:${id}`);
+        this.pack.onWheel = (id) => this.#putOnWheel(`item:${id}`, actionOf(`item:${id}`)?.on === "enemy" ? "enemy" : "self");
         this.dollTurn = 0;
         this.pack.onTurn = (angle) => {
             this.dollTurn += angle;
@@ -5248,7 +5248,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
@@ -5325,7 +5325,7 @@ export class Game {
     // Something put on an action wheel (an ACTIONS key, or "item:" and a thing to use): the
     // player's own (`wheel`: "self"), or an enemy's; at the first empty slice
     #putOnWheel(key, wheel = "self") {
-        const label = actionOf(key)?.label ?? itemLabel({ id: key.slice(5) });
+        const label = key.startsWith("item:") ? itemLabel({ id: key.slice(5) }) : actionOf(key)?.label;
         const whose = wheel === "self" ? "your own wheel" : "an enemy's wheel";
         const where = (side, place) => `${whose} ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
         const sides = this.wheels[wheel];
@@ -7674,7 +7674,7 @@ export class Game {
             return this.#chooseCamp();
         }
 
-        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : emote ? { type: "emote", emote } : null;
+        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item, target: on } : emote ? { type: "emote", emote } : null;
 
         const heard = (result) => {
             // (Setting on someone: the lock heard, as a tap on an enemy)

@@ -6,6 +6,7 @@
 
 import { LIVERIES } from "../characters/liveries.js";
 import { GEAR } from "../core/gear.js";
+import { BREWS, CHARMS, SCROLLS } from "../core/goods.js";
 import { ELEMENT_TOMES, SPELLS, TOMES, tomeOf } from "../core/spells.js";
 import { PARTS } from "../core/spoils.js";
 import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
@@ -36,6 +37,11 @@ const ITEM_DEFS = `
 <pattern id="icon-rings" width="3.6" height="3.2" patternUnits="userSpaceOnUse">
     <circle cx="1.8" cy="1.6" r="1.25" fill="none" stroke="#3d454d" stroke-width="0.55"/>
 </pattern>
+<radialGradient id="icon-liquid" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.6"/>
+    <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    <stop offset="1" stop-color="#000000" stop-opacity="0.5"/>
+</radialGradient>
 <radialGradient id="icon-potion" cx="0.38" cy="0.35" r="0.7">
     <stop offset="0" stop-color="#ff9a8f"/>
     <stop offset="0.55" stop-color="#d9262e"/>
@@ -669,6 +675,73 @@ function draught(cures) {
         <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`;
 }
 
+// A draught of the alchemist's (core/goods.js BREWS): a round flask of its colour, shaded and
+// stoppered; an oil, a squat jar of it with what it leaves on a blade (a flame, a snowflake, a
+// drop of venom) on its label
+function flask(colour) {
+    return `
+        <circle cy="6" r="13.5" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
+        <path d="M-12.6,3 A13,13 0 1 0 12.6,3 Z" transform="translate(0 0.5) scale(0.97)" fill="${colour}"/>
+        <path d="M-12.6,3 A13,13 0 1 0 12.6,3 Z" transform="translate(0 0.5) scale(0.97)" fill="url(#icon-liquid)"/>
+        <path d="M-4,-14 L4,-14 L4,-6 L-4,-6 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.2"/>
+        <rect x="-5.5" y="-20" width="11" height="7" rx="1.8" fill="#8a5a2a" stroke="#3a2010" stroke-width="1"/>
+        <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`;
+}
+
+const OIL_MARKS = {
+    burn: `<path d="M0,-6 C5,0 5,6 0,8 C-5,6 -5,0 0,-6 Z M0,0 C2,3 2,6 0,7 C-2,6 -2,3 0,0 Z" fill="#ff6a1a" fill-rule="evenodd"/>`,
+    slow: `<path d="M0,-7 L0,7 M-6,-3.5 L6,3.5 M-6,3.5 L6,-3.5" stroke="#3a8ae8" stroke-width="1.8" stroke-linecap="round"/>`,
+    poison: `<path d="M0,-7 C4,-1 5,3 0,7 C-5,3 -4,-1 0,-7 Z" fill="#5aa018"/>`,
+};
+
+function oilJar(colour, kind) {
+    return `
+        <path d="M-13,-4 C-13,-10 13,-10 13,-4 L13,14 C13,19 -13,19 -13,14 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
+        <path d="M-12,0 L12,0 L12,14 C12,17.5 -12,17.5 -12,14 Z" fill="${colour}"/>
+        <path d="M-12,0 L12,0 L12,14 C12,17.5 -12,17.5 -12,14 Z" fill="url(#icon-liquid)"/>
+        <rect x="-8" y="-16" width="16" height="8" rx="2" fill="#6a4a2a" stroke="#2a1808" stroke-width="1"/>
+        <rect x="-8.5" y="2" width="17" height="11" rx="1.5" fill="#f2e6c8" stroke="#6a5a3a" stroke-width="0.8"/>
+        <g transform="translate(0 7.5) scale(0.7)">${OIL_MARKS[kind] ?? ""}</g>`;
+}
+
+// A spell's scroll (core/goods.js SCROLLS): a sheet between its two rolls, the spell's own icon
+// on it, tied with a ribbon of how rare it is (the makes' colours)
+const RIBBONS = { common: "#c8ccd4", fine: "#6aa6ff", masterwork: "#e8c35a", rare: "#b07cff", veryRare: "#ff6aa8", legendary: "#f08a3a" };
+
+function scrollIcon(spell, rarity) {
+    return `
+        <rect x="-12" y="-15" width="24" height="30" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.1"/>
+        <rect x="-15" y="-20" width="30" height="7" rx="3.5" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.2"/>
+        <rect x="-15" y="13" width="30" height="7" rx="3.5" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.2"/>
+        <g transform="translate(0 -0.5) scale(0.42)">${ICONS[spell] ?? ""}</g>
+        <path d="M-15,15.5 L15,15.5" stroke="${RIBBONS[rarity] ?? RIBBONS.common}" stroke-width="2.4"/>
+        <path d="M5,15 L3,23 L6,21.5 L8,24 L8,15 Z" fill="${RIBBONS[rarity] ?? RIBBONS.common}" stroke="#2a1a28" stroke-width="0.6"/>`;
+}
+
+// A charm (core/goods.js CHARMS) hanging from a cord: what it is drawn below the loop
+const CHARM_LOOKS = {
+    foot: `<ellipse cy="8" rx="6.5" ry="10" fill="#c8a070" stroke="#5a3a1a" stroke-width="1.2"/><path d="M-4,17 L-5,21 M0,18 L0,22 M4,17 L5,21" stroke="#3a2a1a" stroke-width="1.4" stroke-linecap="round"/><path d="M-6,-1 L6,-1 L5,3 L-5,3 Z" fill="#8a2a1a"/>`,
+    coin: `<circle cy="8" r="11" fill="#e0b040" stroke="#6a4a0a" stroke-width="1.4"/><circle cy="8" r="8" fill="none" stroke="#a87a1a" stroke-width="1"/><path d="${star(0, 8, 6, 2.4, 5, -Math.PI / 2)}" fill="#a87a1a"/>`,
+    tooth: `<path d="M-6,-1 C-6,8 -3,16 2,21 C1,13 4,6 6,-1 Z" fill="#f4ecd8" stroke="#6a5a40" stroke-width="1.2"/><path d="M-6,-1 L6,-1" stroke="#6a4a2a" stroke-width="2"/>`,
+    feather: `<path d="M0,-2 C9,4 8,16 -2,22 C-6,14 -6,4 0,-2 Z" fill="#a8743a" stroke="#4a2a10" stroke-width="1.1"/><path d="M0,-2 L-2,22 M-4,8 L4,6 M-4,13 L4,11 M-4,18 L3,16" stroke="#3a2010" stroke-width="0.9" fill="none"/>`,
+    moonstone: `<ellipse cy="9" rx="7.5" ry="10" fill="#dce8f4" stroke="#8a9aaa" stroke-width="1.4"/><ellipse cx="-2" cy="6" rx="2.5" ry="4" fill="#ffffff" opacity="0.8"/><path d="M-7.5,9 C-7.5,-3 7.5,-3 7.5,9" fill="none" stroke="#c8ccd4" stroke-width="1.6"/>`,
+    oak: `<circle cy="9" r="10" fill="url(#icon-wood)" stroke="#3a2010" stroke-width="1.3"/><circle cy="9" r="6" fill="none" stroke="#5a3a18" stroke-width="0.9"/><circle cy="9" r="2.6" fill="none" stroke="#5a3a18" stroke-width="0.8"/><path d="M-2,4 C2,0 7,2 6,7 C3,6 0,7 -2,4 Z" fill="#4a8a2a"/>`,
+    whistle: `<rect x="-4.5" y="-1" width="9" height="22" rx="4" fill="#efe6d0" stroke="#6a5a40" stroke-width="1.2"/><circle cy="6" r="1.6" fill="#3a2a1a"/><circle cy="12" r="1.6" fill="#3a2a1a"/><path d="M-4,17 C-1,15 1,15 4,17" stroke="#6a5a40" stroke-width="0.9" fill="none"/>`,
+    token: `<circle cy="9" r="10.5" fill="#d8dce4" stroke="#5a6070" stroke-width="1.4"/><path d="${star(0, 9, 7, 3.5, 8, 0)}" fill="#e8c35a" stroke="#8a6a1a" stroke-width="0.6"/>`,
+    ember: `<path d="M0,-1 L8,6 L6,18 L-6,18 L-8,6 Z" fill="#c8301a" stroke="#4a0a04" stroke-width="1.2"/><path d="M0,3 L4,8 L3,15 L-3,15 L-4,8 Z" fill="#ffb03a"/>`,
+    rime: `<path d="M0,-2 L7,8 L0,22 L-7,8 Z" fill="#bfeaff" stroke="#2a6aa8" stroke-width="1.2"/><path d="M0,-2 L0,22 M-7,8 L7,8" stroke="#ffffff" stroke-width="0.9" opacity="0.8"/>`,
+    storm: `<circle cy="9" r="10" fill="url(#icon-glass)" stroke="#3a4a6a" stroke-width="1.3"/><path d="M2,1 L-4,10 L1,10 L-2,18 L5,8 L0,8 L3,1 Z" fill="#fff6a0" stroke="#8a7a1a" stroke-width="0.7"/>`,
+    hag: `<path d="M-9,4 C-11,14 -4,21 3,20 C11,19 12,8 7,2 C3,-2 -6,-2 -9,4 Z" fill="#8a8a84" stroke="#3a3a36" stroke-width="1.2"/><ellipse cx="0" cy="10" rx="3.2" ry="3.8" fill="#2a2a28"/>`,
+    eye: `<circle cy="9" r="10.5" fill="#1a4ab8" stroke="#0a1a4a" stroke-width="1.3"/><circle cy="9" r="7.5" fill="#ffffff"/><circle cy="9" r="5" fill="#5ab0ff"/><circle cy="9" r="2.4" fill="#0a0a1a"/>`,
+};
+
+function charmIcon(look) {
+    return `
+        <path d="M-7,-21 C-9,-12 -3,-4 0,-2 C3,-4 9,-12 7,-21" fill="none" stroke="#6a4a2a" stroke-width="1.6"/>
+        <circle cy="-2" r="2" fill="#c8a050" stroke="#5a3a10" stroke-width="0.8"/>
+        ${CHARM_LOOKS[look] ?? CHARM_LOOKS.token}`;
+}
+
 // A spell's tome: a bound book, the spell's own icon on its cover, its corners as rare as it is
 // (silver, green, violet and gold)
 const CORNERS = { common: "#c8ccd4", uncommon: "#5ad06a", rare: "#c070ff" };
@@ -845,6 +918,10 @@ export const ITEM_ICONS = Object.freeze({
     // (The creatures' parts, each in its colour; gold; the spells' tomes)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
     ...Object.fromEntries([...TOMES, ...ELEMENT_TOMES].map((spell) => [tomeOf(spell), tomeIcon(spell)])),
+    // (The alchemist's brews and oils, the scriptorium's scrolls and the charms: core/goods.js)
+    ...Object.fromEntries(Object.entries(BREWS).map(([id, brew]) => [id, brew.oil ? oilJar(brew.colour, brew.use.boon.oil.kind) : flask(brew.colour)])),
+    ...Object.fromEntries(Object.entries(SCROLLS).map(([id, { spell, rarity }]) => [id, scrollIcon(spell, rarity)])),
+    ...Object.fromEntries(Object.entries(CHARMS).map(([id, { look }]) => [id, charmIcon(look)])),
     gold: COINS,
 
     sword: `<g transform="rotate(45)">${SWORD}</g>`,

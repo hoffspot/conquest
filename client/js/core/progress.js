@@ -20,6 +20,7 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
+import { BREWS, CHARMS, charmOf, SCROLLS } from "./goods.js";
 import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
@@ -72,11 +73,18 @@ export const ABILITIES = Object.freeze({
     hold: { label: "Hold", tree: "hexes", spell: "hold" },
 });
 
-/** How well made a piece of gear is: what it adds to (a weapon's blows, armour's protection), and what it costs. */
+/**
+ * How well made a piece of gear is, from the commonest to the rarest: what it adds to (a weapon's
+ * blows, armour's protection), what it costs, and how mighty it makes whoever has it on. Rare
+ * and very rare (the specialist shops' best, and the master shops': docs/WAR.md *Shops*) come
+ * between a masterwork and a legendary piece, which they took nothing from.
+ */
 export const QUALITIES = Object.freeze({
     common: { label: "", power: 1, price: 1, might: 0 },
     fine: { label: "Fine", power: 1.15, price: 3, might: 0.5 },
     masterwork: { label: "Masterwork", power: 1.3, price: 8, might: 1 },
+    rare: { label: "Rare", power: 1.38, price: 14, might: 1.2 },
+    veryRare: { label: "Very rare", power: 1.44, price: 21, might: 1.35 },
     legendary: { label: "Legendary", power: 1.5, price: 30, might: 1.5 },
 });
 
@@ -116,6 +124,11 @@ export const ITEMS = Object.freeze({
     // The elements' first spells' tomes (spells.js ELEMENT_TOMES): each read to open its school,
     // sold at any adventurers' guild
     ...Object.fromEntries(ELEMENT_TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, opens: SPELLS[spell].school, use: { learn: spell }, price: ELEMENT_TOME_PRICE }])),
+    // The alchemist's brews, the charms carried for luck (in every make, as gear is) and the
+    // occult scriptorium's spell scrolls (goods.js)
+    ...BREWS,
+    ...CHARMS,
+    ...SCROLLS,
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
@@ -146,14 +159,24 @@ export const SHOPS = Object.freeze({
  * weapons, what's held in the off hand, what's worn, jewellery, things to eat, drink and cure
  * with, tomes and scrolls, and the spoils of the wild.
  */
-export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", supplies: "Food, drink and draughts", tome: "Tomes and scrolls", spoils: "Spoils of the wild" });
+export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", charm: "Charms", supplies: "Food, drink and draughts", tome: "Tomes and scrolls", spoils: "Spoils of the wild" });
 
 /** Which of WARE_KINDS a thing is (its id). */
 export function wareKind(id) {
     const def = ITEMS[id];
 
-    return !def ? "supplies" : def.tome || def.scroll ? "tome" : def.part ? "spoils" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
+    return !def ? "supplies" : def.tome || def.scroll ? "tome" : def.part ? "spoils" : def.charm ? "charm" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
 }
+
+/** Whether a thing comes in every make (QUALITIES), as gear and charms do; else it's only ever common. */
+export const comesInMakes = (id) => Boolean(ITEMS[id]?.slot || ITEMS[id]?.charm);
+
+/**
+ * How rare a thing is (a QUALITIES make: the colour it's shown in, and the shops that keep it):
+ * gear and charms as well made as they are; a draught, scroll or tome as rare as it is
+ * (goods.js `rarity`), or common.
+ */
+export const gradeOf = ({ id, quality = "common" }) => (comesInMakes(id) ? (QUALITIES[quality] ? quality : "common") : (ITEMS[id]?.rarity ?? "common"));
 
 /**
  * The order a shop's wares are shown in ({ id, quality }, as wares has them): by kind
@@ -218,7 +241,7 @@ export function rollRelic(random) {
 }
 
 /** How likely a piece of gear found on a foe is to be of each make. */
-export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.07, legendary: 0.01 });
+export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.06, rare: 0.012, veryRare: 0.005, legendary: 0.003 });
 
 /**
  * How many slots a pack has, and how many are shown at a time (a page's). Each holds a stack of
@@ -380,7 +403,7 @@ export function wares(shop, people = "human") {
     const makes = Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
     const maker = UNIFORM_PEOPLES.includes(people) ? people : "human";
 
-    return items.flatMap((id) => (ITEMS[id].slot ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }]));
+    return items.flatMap((id) => (comesInMakes(id) ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }]));
 }
 
 /** A make, as likely as MAKES has it (random.js random). */
@@ -661,7 +684,7 @@ export class Progress {
 
     /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haggle, persuade, followers }. */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0, fortune: 0, endurance: 0, wardFire: 0, wardWater: 0, wardAir: 0, wardEarth: 0, wardMagic: 0 };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);
@@ -705,11 +728,34 @@ export class Progress {
             totals[stat] += value;
         }
 
+        // The charms carried (goods.js CHARMS): each kind's best made, never two alike
+        for (const [id, quality] of Object.entries(this.charms())) {
+            for (const [stat, value] of Object.entries(charmOf(id, quality))) {
+                totals[stat] += value;
+            }
+        }
+
         // (A grimoire held open in both hands: all of it a quarter stronger again)
         totals.spell = (1 + totals.spell) * (ITEMS[weapon?.id]?.spellTimes ?? 1) - 1;
         totals.armor = Math.min(ARMOR_CAP, totals.armor);
 
         return totals;
+    }
+
+    /** The charms carried that count (goods.js CHARMS): each kind's best made ({ id: quality }). */
+    charms() {
+        const makes = Object.keys(QUALITIES);
+        const best = {};
+
+        for (const stack of this.pack) {
+            const quality = QUALITIES[stack?.quality] ? stack.quality : "common";
+
+            if (stack && ITEMS[stack.id]?.charm && makes.indexOf(quality) > makes.indexOf(best[stack.id] ?? null)) {
+                best[stack.id] = quality;
+            }
+        }
+
+        return best;
     }
 
     /** The abilities the trees have brought. */

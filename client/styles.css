@@ -2553,13 +2553,22 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     clip: rect(0 0 0 0);
 }
 
-/* How well made things are: common plain, fine blue, masterwork gold, legendary orange */
+/* How well made things are: common plain, fine blue, masterwork gold, rare violet, very rare
+   rose, legendary orange */
 .rarity-fine {
     --rarity: #6aa6ff;
 }
 
 .rarity-masterwork {
     --rarity: #e8c35a;
+}
+
+.rarity-rare {
+    --rarity: #b07cff;
+}
+
+.rarity-veryRare {
+    --rarity: #ff6aa8;
 }
 
 .rarity-legendary {

@@ -93,7 +93,7 @@ describe("weapons in one hand or two (weapons.js, gear.js, progress.js)", () => 
 
 describe("shields (gear.js, progress.js)", () => {
     it("rolls how much of a blow each shield takes as it's made: half the most its make can to all of it, the more robust the more, a spellward half a tower shield's", () => {
-        assert.deepEqual(BLOCK_MOST, { common: 0.5, fine: 0.65, masterwork: 0.8, legendary: 1 });
+        assert.deepEqual(BLOCK_MOST, { common: 0.5, fine: 0.65, masterwork: 0.8, rare: 0.87, veryRare: 0.93, legendary: 1 });
         assert.equal(blockMost("towerShield", "legendary"), 1);
         assert.equal(blockMost("towerShield", "common"), 0.5);
         assert.equal(blockMost("spellward", "legendary"), 0.5, "(half a tower shield's)");

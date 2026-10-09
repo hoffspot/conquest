@@ -207,6 +207,19 @@ export const SEE_THROUGH = Object.freeze({ tier: 7, near: 8, perSecond: 0.02 });
 
 // The element of a blow that isn't a spell (for wards: spells.js `ward`), by what it throws
 const THROWN = Object.freeze({ bolt: "magic", wisp: "magic", curse: "magic", fireball: "fire", flame: "fire", lava: "fire", roots: "earth" });
+// How much of a blow or a spell's harm gets through the charms someone carries against its school
+// or element (actor.wards: host.js, core/goods.js CHARMS), every spell's too (`magic`): never less
+// than half of it
+const charmed = (target, school, element) => {
+    const wards = target.wards;
+
+    if (!wards || (!school && !element)) {
+        return 1;
+    }
+
+    return 1 - Math.min(0.5, (wards[school ?? element] ?? 0) + (school && school !== "magic" ? (wards.magic ?? 0) : 0));
+};
+
 const elementOf = (attack) => attack.element ?? THROWN[attack.projectile?.kind] ?? (attack.reaction === "fire" ? "fire" : attack.afflict?.look === "frost" ? "water" : null);
 
 // Is a blow magic (a spell, or a wand's or grimoire's bolt, a curse, a wisp's)? (Not a blow of the body: Surge and Inertial Barrier have nothing to do with it)
@@ -2971,7 +2984,7 @@ export class Battle {
         // the faster for what does them good (`recovery`) and the slower for what ails them
         actor.running = run && travelled > 0;
 
-        const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1);
+        const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1) * (1 - Math.min(0.5, actor.endurance ?? 0));
         const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 1000) / 1000));
@@ -3727,8 +3740,9 @@ export class Battle {
         const empowered = boosted?.factor ?? 1;
         const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
         const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
-        const warded = this.#warded(target, { school, element: spell ? null : elementOf(attack) });
-        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1);
+        const element = spell ? null : elementOf(attack);
+        const warded = this.#warded(target, { school, element });
+        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element);
         const whole = factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
         if (boosted) {
@@ -3789,6 +3803,14 @@ export class Battle {
         // A blow that leaves something lingering (venom, a web, fire...), sometimes
         if (attack.afflict && !blocked && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
             this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[spell ? "spell" : blow] ?? 1, look: attack.afflict.look ?? null });
+        }
+
+        // (A blow or a shot from a weapon with an oil on it, a player's: core/goods.js BREWS. What
+        // it leaves on them, sometimes)
+        const oil = !spell && !ground ? attacker?.oil : null;
+
+        if (oil && !blocked && target.hp > 0 && this.random.chance(oil.chance)) {
+            this.afflict(target.id, oil.kind, { by: attacker.id, power: attacker.power?.[blow] ?? 1, look: oil.look ?? null });
         }
 
         // A shield bash: stunned as well (a stronger stunner's, longer)

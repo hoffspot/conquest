@@ -28,7 +28,7 @@
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
-import { PACK_PAGE, PACK_SIZE } from "../core/progress.js";
+import { gradeOf, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
 import { MAKES } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { ActionWheel, directionOf } from "./wheel.js";
@@ -80,17 +80,19 @@ const icon = (item, size = 40) => `<svg viewBox="-24 -24 48 48" width="${size}" 
 function card(thing, { named = true, count = 1, compare = "Put on instead of what's worn:", worth = false } = {}) {
     const info = thing.info ?? null;
     const quality = thing.quality ?? "common";
-    const box = element("div", `pack-card rarity-${quality}`);
+    const box = element("div", `pack-card rarity-${gradeOf({ id: thing.id, quality })}`);
 
     if (named) {
         const title = element("p", "pack-what");
 
-        title.append(element("strong", `pack-name rarity-${quality}`, `${thing.label}${count > 1 ? ` ×${count}` : ""}`));
+        title.append(element("strong", `pack-name rarity-${gradeOf({ id: thing.id, quality })}`, `${thing.label}${count > 1 ? ` ×${count}` : ""}`));
         box.append(title);
     }
 
     if (info?.kind) {
-        box.append(element("p", "pack-kind", `${info.kind}${quality !== "common" ? ` · ${MAKES[quality] ?? quality}` : ""}`));
+        const grade = gradeOf({ id: thing.id, quality });
+
+        box.append(element("p", "pack-kind", `${info.kind}${grade !== "common" ? ` · ${MAKES[grade] ?? grade}` : ""}`));
     }
 
     if (info?.lines.length) {
@@ -253,7 +255,7 @@ export class PackPanel {
      * core/gear.js GEAR_SLOTS; what's in it, and gearinfo.js's description of it; `locked`: the
      * off hand behind a two-handed weapon; `only`: what alone it takes), totals (gearinfo.js
      * totals), pack: [a slot each: null, or { id, quality, count, label, about, use ("Drink",
-     * "Eat"), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold),
+     * "Eat", "Read", "Apply"), aimed (a spell's scroll: read at someone), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold),
      * wanted (whether the shop being traded with buys it), info }], shop: null or { name, wares:
      * [{ item, label, price, affordable, kind (what it's shown under) }] (in the order shown),
      * unwanted (what it won't buy, said, or null) }, trade: null or (trading
@@ -529,7 +531,7 @@ export class PackPanel {
     // opened), one row at a time (`peek`: which, kept as the list's shown again); tapped again,
     // it closes.
     #row({ thing, label, className = "", peek, about, after = [] }) {
-        const row = element("li", `pack-row peekable rarity-${thing.quality ?? "common"}${className ? ` ${className}` : ""}`);
+        const row = element("li", `pack-row peekable rarity-${gradeOf(thing)}${className ? ` ${className}` : ""}`);
         const open = element("button", "pack-peek");
         const picture = element("span", "pack-icon");
 
@@ -613,7 +615,7 @@ export class PackPanel {
 
     // A slot of the paperdoll: what's in it (edged by its make), or a faint picture of what goes there
     #slot({ slot, label, item, locked = false, only = null }) {
-        const cell = element("button", `doll-slot pack-worn${item ? ` rarity-${item.quality ?? "common"}` : " empty"}${locked ? " locked" : ""}`);
+        const cell = element("button", `doll-slot pack-worn${item ? ` rarity-${gradeOf(item)}` : " empty"}${locked ? " locked" : ""}`);
         const weapon = this.view.gear.find((each) => each.slot === "mainHand")?.item;
 
         cell.type = "button";
@@ -715,7 +717,7 @@ export class PackPanel {
 
     // A slot of the pack: its stack's icon, how many, and how well made
     #cell(stack, index) {
-        const cell = element("button", `pack-cell${stack ? ` made-${stack.quality} rarity-${stack.quality}` : " empty"}`);
+        const cell = element("button", `pack-cell${stack ? ` made-${stack.quality} rarity-${gradeOf(stack)}` : " empty"}`);
 
         cell.type = "button";
         cell.dataset.index = String(index);
@@ -838,7 +840,7 @@ export class PackPanel {
 
         // (Its buttons beneath what it is, always in view: what it is scrolls, if it must)
         inner.append(card(thing, { count: stack?.count ?? 1, compare: stack ? "Put on instead of what's worn:" : null, worth: true }));
-        this.about.className = `pack-about rarity-${thing.quality ?? "common"}`;
+        this.about.className = `pack-about rarity-${gradeOf(thing)}`;
         this.about.replaceChildren(inner, ...(actions.childElementCount ? [actions] : []), button("", () => this.#select(null), { label: "Put it away", className: "pack-about-close" }));
         this.about.lastChild.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.about.hidden = false;
@@ -927,8 +929,8 @@ export class PackPanel {
             actions.push({ key: "use", label: stack.use ?? stack.equip });
         }
 
-        // (A tome's read, not put on a wheel)
-        if (stack.use && stack.use !== "Read" && !trading) {
+        // (A tome's read, not put on a wheel; a spell's scroll can be, to read at an enemy)
+        if (stack.use && (stack.use !== "Read" || stack.aimed) && !trading) {
             actions.push({ key: "onWheel", label: "Put on a wheel" });
         }
 
