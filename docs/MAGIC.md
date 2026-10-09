@@ -171,9 +171,9 @@ above, are the guild's to sell, never found or given.)
 
 | Spell | Rarity | On | Casts in | Cooldown | Does |
 | --- | --- | --- | --- | --- | --- |
-| Resist Fire, Water, Air, Earth | common | oneself or a friend | 700 ms | 15 s | five minutes: 30% less from that element's spells and creatures' blows, and what it sets on them ends sooner |
-| Resist Magic | common | oneself or a friend | 700 ms | 15 s | 30% less from every spell, curses and wisps' bolts; hexes hold less long |
-| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | poison (or disease) hurts 30% less and ends sooner |
+| Resist Fire, Water, Air, Earth | common | oneself or a friend | 700 ms | 15 s | an hour (`WARDING`; five minutes till the user had it an hour: `NET_VERSION` 86): 30% less from that element's spells and creatures' blows, and what it sets on them ends sooner |
+| Resist Magic | common | oneself or a friend | 700 ms | 15 s | an hour: 30% less from every spell, curses and wisps' bolts; hexes hold less long |
+| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | an hour: poison (or disease) hurts 30% less and ends sooner |
 | Cure Poison, Cure Disease, Lift Curse, Quench, Staunch, Unbind | common | anyone | 500 ms | 6 s | ends poisoning, disease, withering, burning, bleeding, being slowed |
 | Embolden | common | anyone | 500 ms | 6 s | ends Fear |
 | Zombify | uncommon | one fallen | 1200 ms | 30 s | an enemy fallen in the last half minute rises to follow and fight for you, five minutes (a grimoire) |

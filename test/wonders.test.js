@@ -101,8 +101,11 @@ describe("the tomes' spells in the battle (battle.js)", () => {
         assert.equal(bare2.damage, 10);
         assert.ok(warded2.until < bare2.until);
 
-        // (And it lasts five minutes)
-        run(battle, SPELLS.resistPoison.lasts);
+        // (And it lasts an hour: on still a minute before, gone after)
+        assert.equal(SPELLS.resistPoison.lasts, 60 * 60 * 1000);
+        run(battle, SPELLS.resistPoison.lasts - 60000);
+        assert.ok(battle.buffOf(battle.actor("caster"), "resistPoison"));
+        run(battle, 60000);
         assert.equal(battle.buffOf(battle.actor("caster"), "resistPoison"), null);
     });
 
