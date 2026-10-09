@@ -711,7 +711,7 @@ export const TREES = Object.freeze({
                 choices: "more",
             },
             buys: {
-                say: "Anything you drag back from the wild! Pelts, fangs, scales, stings, a beast's bits and pieces, and spell tomes too. Nobody else in town will take those, and we pay what they're worth. Gear too, of course. And we sell supplies: draughts, cures, wands, and the tomes that open the elements' schools.",
+                say: "Anything you drag back from the wild! Pelts, fangs, scales, stings, a beast's bits and pieces. Nobody else in town will take those, and we pay what they're worth. And anything else you've found: the shops only buy their own trade, but we'll take it all. We sell what a new adventurer needs, too: draughts, cures, a wand, scrolls of the first spells, and the tomes that open the elements' schools.",
                 choices: [
                     { say: "Let's trade, then.", next: null, do: [{ shop: "guild" }] },
                     { say: "Good to know.", next: "more" },

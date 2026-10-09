@@ -56,6 +56,7 @@ import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, 
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { shopPrice } from "../core/stock.js";
 import { PACE } from "../core/netplay.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -4635,6 +4636,11 @@ export class Game {
 
     // The player's progress changed (a rank, loot, trade, gear): told, shown, and kept
     #progressed(event) {
+        // (Someone else buying from the shop this player's trading with: what it has left, shown)
+        if (event.type === "bought" && event.id !== this.me && event.from === this.shopping?.keeper && this.pack?.open) {
+            this.#showPack();
+        }
+
         if (event.id !== this.me) {
             return;
         }
@@ -5252,18 +5258,34 @@ export class Game {
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
-        // (A shop's wares by kind, the commoner made first; what it won't buy, said; what one is,
-        // worked out as it's looked at: a piece of gear's with what's rolled on it as it's bought)
+        // (A shop's wares by kind, the commoner made first: a blacksmith's as well made as the
+        // player's mighty; a shop with a daily stock's, what it has in today, how many of each left,
+        // and its daily special, as it is; what it won't buy, said; what one is, worked out as it's
+        // looked at: a piece of gear's with what's rolled on it as it's bought)
+        const stock = this.shopping && this.host.stockOf(this.shopping.keeper);
+        const ask = (item, special = false) => shopPrice(item, this.shopping.shop, { haggle, special });
         const shop = this.shopping && {
             name: this.shopping.name,
-            wares: wares(this.shopping.shop, this.shopping.people)
+            wares: (stock ? stock.wares : wares(this.shopping.shop, this.shopping.people, { might: progress.might() }))
                 .sort(shopOrder)
-                .map((item) => {
-                    const price = priceOf(item, { haggle });
+                .map((ware) => {
+                    const item = { id: ware.id, quality: ware.quality, ...(ware.people ? { people: ware.people } : {}) };
+                    const price = ask(item);
 
-                    return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)] };
+                    return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)], left: ware.left ?? null };
                 }),
-            unwanted: this.shopping.shop === "guild" ? null : "Only the adventurers' guild buys tomes and the spoils of the wild.",
+            special: stock?.special
+                ? {
+                      item: stock.special,
+                      label: itemLabel(stock.special),
+                      price: ask(stock.special, true),
+                      affordable: ask(stock.special, true) <= progress.gold,
+                      left: stock.specialLeft,
+                      about: aboutOf(stock.special),
+                      info: ITEMS[stock.special.id]?.slot ? describe(stock.special, progress, { label: itemLabel(stock.special), haggle }) : null,
+                  }
+                : null,
+            unwanted: this.shopping.shop === "guild" ? null : "They buy only their own line: the adventurers' guild buys everything.",
             preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
         };
 
@@ -5325,7 +5347,9 @@ export class Game {
     // Something put on an action wheel (an ACTIONS key, or "item:" and a thing to use): the
     // player's own (`wheel`: "self"), or an enemy's; at the first empty slice
     #putOnWheel(key, wheel = "self") {
-        const label = key.startsWith("item:") ? itemLabel({ id: key.slice(5) }) : actionOf(key)?.label;
+        // (A spell's scroll by its own name, not its spell's: "Scroll of Fireball")
+        const action = actionOf(key);
+        const label = ITEMS[action?.item]?.use?.cast ? itemLabel({ id: action.item }) : (action?.label ?? itemLabel({ id: key.slice(5) }));
         const whose = wheel === "self" ? "your own wheel" : "an enemy's wheel";
         const where = (side, place) => `${whose} ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
         const sides = this.wheels[wheel];

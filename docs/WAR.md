@@ -604,22 +604,34 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   comes into the pack goes onto the first stack alike, or else into the first empty slot
   (`Progress.stow`). Packs kept before things stacked are read in, those alike put together.
 - **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
-  sale?":
+  sale?" (`SHOPS`):
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
     healing);
-  - the smith and the apprentice: weapons, armour and shields, up to masterwork, and the pieces
-    of their people's uniform;
+  - the smith and the apprentice: every weapon, piece of armour and shield, and the pieces of
+    their people's uniform, as well made as the player buying is mighty (`tiered`,
+    `SMITH_MAKES`): common and fine to begin with (might 0 to 2), fine and masterwork as they grow
+    (3 to 5), masterwork alone for the mightiest (6 to 8). Better than that is the specialists';
   - the priest: healing draughts;
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
-    buy?", which she answers: the spoils of the wild and tomes, which no one else takes, and gear):
-    wands, grimoires, wizards' hats, jewellery, draughts and cures, the Stamina Boost potion and
-    the Scroll of Safety (below), and the tomes that open the elements' schools, up to fine;
+    buy?", which she answers: everything, the spoils of the wild that no one else takes too):
+    what a new adventurer needs, up to fine: wands, grimoires, spellwards, wizards' hats,
+    jewellery, draughts and cures, a glowcap draught, the Stamina Boost potion and the Scroll of
+    Safety (below), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), and
+    the tomes that open the elements' schools, and Light's;
+  - the specialists (in the towns and cities: their shops come into the world in the next of the
+    shops' changes), each with a new assortment each day, better made than a blacksmith's, and a
+    daily special (below): a swordsmith's arms (always a sword among them), an armorer's shields
+    and armour, an occult scriptorium's tomes, spell scrolls, charms and the arcane (wands,
+    grimoires, spellwards, wizards' hats), an alchemist's draughts, elixirs, oils and cures;
+  - the masters (one of each for each people, in a village, town or city of theirs: the same),
+    each with a new assortment each day of the rare, very rare and legendary, at twice the
+    price, and a legendary special: the Master Swordsmith's arms, the Master Armorer's armour,
+    and the Mystic Emporium's tomes, jewellery, charms and the arcane;
   - down in a people's castle's undercroft (GAME.md *Places worth finding*, *The undercroft*):
     its smith as a town's; its quartermaster ("Show me what's on the racks."): the castle's arms,
-    shields and armour and the pieces of its people's uniform, up to legendary, the only shop
-    that sells a legendary make (`SHOPS.armoury`); its arcanist ("What have you for sale?"):
-    wands, grimoires, staves, wizards' hats, jewellery, draughts and cures, up to masterwork, but
-    no tomes (`SHOPS.arcane`);
+    shields and armour and the pieces of its people's uniform, up to legendary (`SHOPS.armoury`);
+    its arcanist ("What have you for sale?"): wands, grimoires, staves, wizards' hats, jewellery,
+    draughts and cures, up to masterwork, but no tomes (`SHOPS.arcane`);
   - an abbey's herbalist ("What do you sell?"; a sun temple's and a ziggurat's too), at their
     counter in its nave: draughts, cures, amulets, rings and grimoires, up to masterwork
     (`SHOPS.abbey`);
@@ -627,6 +639,32 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     racks."): the garrison's plain arms and armour and the pieces of its people's uniform, up to
     fine (`SHOPS.watch`: their own shop, not their part's, as one of the folk can keep, host.js
     `#shopkeeper`).
+- **Each day's stock** (`core/stock.js` `dailyStock`). A specialist's or a master's shelves
+  change each day of the world (core/daytime.js `dayOf`: an hour of play), the same for everyone
+  who plays together, worked out from the world's seed, the shop (the building it's kept in:
+  `stockKey`) and the day:
+  - so many different things (`daily.picks`: a swordsmith 9, an armorer 10, an occult
+    scriptorium and an alchemist 12, the Master Swordsmith 7, the Master Armorer 8, the Mystic
+    Emporium 10), a piece of gear in two makes at most, each made as the shop's `grades` weigh
+    it (a specialist's fine 35%, masterwork 40%, rare 20%, very rare 5%; a master's rare 50%,
+    very rare 35%, legendary 15%; a scroll, tome or draught only if it's as rare as that);
+  - so many of each (a specialist 1 to 3, an alchemist 2 to 6, a master one), as many as there
+    are for everyone: once they're bought, "Sold out" till the next day ("They've sold all they
+    had of that today: there'll be more tomorrow."). The host keeps what's been sold today
+    (`stocks`, kept in snapshots: `SNAPSHOT_VERSION` 22), so a guest's shop is the host's;
+  - **the daily special**: one thing, of the rarest (a specialist's very rare or legendary, a
+    master's legendary; the dearer it is, the likelier), already made, its rolls on it and its
+    name, shown first, under "Today's special", in a gold frame, for a quarter more than it would
+    be on the shelves (`SPECIAL_MARKUP`). It can be bought once a day, by one player.
+
+  A master asks twice what a thing's worth (`markup`), the special a quarter more again
+  (`shopPrice`).
+- **What each buys.** Each shop buys only its own line (`line`, `LINES`): a smith arms and armour,
+  a swordsmith arms, an armorer armour, an occult scriptorium the arcane (wands, grimoires, a
+  spellward, a wizard's hat, tomes, scrolls, charms), the Mystic Emporium the arcane and jewellery,
+  an alchemist, a priest or an herbalist draughts, a tavern ale and meals; the adventurers' guild
+  everything, the creatures' parts too ("They don't buy that: the adventurers' guild buys
+  everything.").
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
   The shop stays open while the player's within a few steps of the keeper. The keeper stays
@@ -656,9 +694,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   ("You're reading one already."). It's played out by the host, so all who play together see it
   (`player.safety`, kept in snapshots; `NET_VERSION` 45).
 - **The specialists' goods** (`core/goods.js`, `NET_VERSION` 87): what the alchemists, the
-  occult scriptoria and the Mystic Emporia keep. No shop sells them yet: the shops that do
-  come with them in the next of the shops' changes.
-  - **The alchemist's brews** (`BREWS`, 20, each its own colour in the bottle; under "Food, drink
+  occult scriptoria and the Mystic Emporia keep (a few at the adventurers' guild).
+  - **The alchemist's brews** (`BREWS`, 22, each its own colour in the bottle; under "Food, drink
     and draughts"): stronger healing (a greater draught heals 60, 45 gold; a superior one 150,
     120 gold); a Draught of Endurance (breath back 60% faster, ten minutes); the elixirs, each a
     boon for ten minutes, one of each at a time (Strength: blows 15% stronger; the Hawk: shots
@@ -668,7 +705,10 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     docs/MAGIC.md); a Phial of Shadows (Invisibility, a minute); a glowcap draught (Light, a
     quarter of an hour); and the oils, applied to a weapon ("Apply"), one at a time, five
     minutes: a blow or a shot in four leaves what the oil's for on what it hits (fire oil
-    burning, frost oil a chill that slows, venom oil poison; battle.js `oil`).
+    burning, frost oil a chill that slows, venom oil poison; battle.js `oil`); and the rarest, an
+    alchemist's daily special: an Elixir of Heroes (blows, shots, spells and healing 20%
+    stronger, a quarter of an hour; very rare, 380 gold) and a phoenix draught (every hurt
+    healed and the breath back at once; legendary, 650 gold).
   - **Spell scrolls** (`SCROLLS`, under "Tomes and scrolls"): each casts its spell once, though
     it's never been learnt (docs/MAGIC.md *Spell scrolls*).
   - **Charms** (`CHARMS`, 13, under "Charms"): carried, not worn; each does its good while it's

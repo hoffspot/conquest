@@ -257,7 +257,10 @@ export class PackPanel {
      * totals), pack: [a slot each: null, or { id, quality, count, label, about, use ("Drink",
      * "Eat", "Read", "Apply"), aimed (a spell's scroll: read at someone), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold),
      * wanted (whether the shop being traded with buys it), info }], shop: null or { name, wares:
-     * [{ item, label, price, affordable, kind (what it's shown under) }] (in the order shown),
+     * [{ item, label, price, affordable, kind (what it's shown under), left (how many today, of
+     * a shop with a daily stock) }] (in the order shown), special (its daily special, or null: {
+     * item (as it is, rolls and all), label, price, affordable, left (whether it's still to be
+     * had), about, info }),
      * unwanted (what it won't buy, said, or null) }, trade: null or (trading
      * with another player) { name, mine, theirs (what each offers: { gold, items: [{ id, quality,
      * count, label }] }), agreed: { mine, theirs } } }.
@@ -456,32 +459,55 @@ export class PackPanel {
 
     // --- Trading with a shopkeeper ---
 
-    // The shop's wares, each kind under its heading (in the order the game gives them), to buy
+    // The shop's wares, each kind under its heading (in the order the game gives them), to buy:
+    // its daily special first, if it has one; and, for a shop with a daily stock, how many of
+    // each are left today
     #buying() {
         const kinds = new Map();
+        const { special } = this.view.shop;
+        const left = (count) => (count === null || count === undefined ? [] : [element("span", count ? "pack-left" : "pack-left gone", count ? `${count} left` : "Sold out")]);
 
         for (const ware of this.view.shop.wares) {
             kinds.set(ware.kind, [...(kinds.get(ware.kind) ?? []), ware]);
         }
 
-        return [...kinds].map(([kind, wares]) => {
+        const sections = [...kinds].map(([kind, wares]) => {
             const list = element("ul", "pack-list wares");
 
             list.append(
-                ...wares.map(({ item, label, price, affordable }) =>
+                ...wares.map(({ item, label, price, affordable, left: count = null }) =>
                     this.#row({
                         thing: item,
                         label,
                         peek: `ware:${item.id}:${item.quality ?? "common"}:${item.people ?? ""}`,
                         // (What it is worked out as it's opened: the shop's preview, app/gearinfo.js)
                         about: () => card({ ...item, label, ...this.view.shop.preview?.(item) }, { named: false, compare: "Bought and put on instead of what's worn:" }),
-                        after: [element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable })],
+                        after: [...left(count), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable || count === 0 })],
                     }),
                 ),
             );
 
             return this.#section(kind, list);
         });
+
+        // (The special: the one thing, as it is, rolls and all; gone once it's bought)
+        if (special) {
+            const list = element("ul", "pack-list wares special");
+
+            list.append(
+                this.#row({
+                    thing: special.item,
+                    label: special.label,
+                    peek: "ware:special",
+                    about: () => card({ ...special.item, label: special.label, about: special.about, info: special.info }, { named: false, compare: "Bought and put on instead of what's worn:" }),
+                    after: [...left(special.left ? null : 0), element("span", "pack-price", `${special.price} gold`), button("Buy", () => this.onCommand({ type: "buy", special: true }), { label: `Buy today's special, ${special.label}, for ${special.price} gold`, disabled: !special.affordable || !special.left })],
+                }),
+            );
+
+            sections.unshift(this.#section("Today's special", list));
+        }
+
+        return sections;
     }
 
     // What the player carries, each with what it fetches (each, of a stack) and a button to sell
