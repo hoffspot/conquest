@@ -11,11 +11,12 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { readPlan } from "../client/js/core/interiors.js";
 import { keepRooms } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { OPENS } from "../client/js/core/standing.js";
+import { OPENS, STANDINGS } from "../client/js/core/standing.js";
 import { SIGHT } from "../client/js/core/war/armies.js";
+import { DEPOT } from "../client/js/core/war/supply.js";
 import { STAGES, TURN_MS } from "../client/js/core/war/war.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../client/js/core/wartable.js";
-import { battleMapView } from "../client/js/app/battlemap.js";
+import { actionsAt, battleMapView, DEPOT_COST, heededText } from "../client/js/app/battlemap.js";
 import { reachable } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -223,3 +224,159 @@ describe("the camps' scouts lifting the fog (host.js)", () => {
         assert.ok(player.explored.visitedAt(camp.at[0], camp.at[1]));
     });
 });
+
+// An elf at the war table in the keep of their people's castle, at war with the orcs, as far on as
+// the war goes, of rank `rank`
+function atTheTable(rank = OPENS.orders) {
+    const world = buildWorld({ seed: 2 });
+    const host = new Host(world, { populate: false });
+    const war = host.war;
+
+    host.join({ id: HOST_PLAYER, hero: { ...HERO, race: "elf" } });
+    host.populate();
+    Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+    war.relations["elf|orc"] = { state: "hostile", since: 0 };
+    war.stage = STAGES.length - 1;
+
+    const site = world.plan.sites.find((each) => each.kind === "castle" && each.race === "elf");
+
+    world.maps.town.sites.heartOf(site);
+
+    const set = world.maps.town.sites.set.get(site.id);
+    const keep = world.interiors.buildings.get(`site:${site.id}`);
+    const me = host.battle.actor(HOST_PLAYER);
+    const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
+
+    Object.assign(me, { hp: 1e6, maxHp: 1e6, map: "town", square: out, x: out[0] + 0.5, y: out[1] + 0.5, path: [], order: null, target: null, spawn: out });
+    host.command(HOST_PLAYER, { type: "enter", link: keep.door.id });
+
+    for (let t = 0; t < 60000 && me.map === "town"; t += STEP_MS) {
+        host.advance(STEP_MS);
+    }
+
+    const [x, y] = beforeWarTable(warTableOn(world.maps[me.map]));
+
+    Object.assign(me, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null });
+    host.players.get(HOST_PLAYER).standing.points = STANDINGS[rank].points;
+
+    const order = (orders, realm) => host.command(HOST_PLAYER, { type: "table", orders, ...(realm ? { realm } : {}) });
+
+    return { host, war, me, order };
+}
+
+describe("orders and counsel at the war table (host.js #atTable, battlemap.js actionsAt)", () => {
+    it("takes a Lord's orders for their people's army there, telling why not when they can't be carried out", () => {
+        const { war, me, order } = atTheTable();
+        const orcs = war.towns.find(({ owner, kind }) => owner === "orc" && kind === "village");
+        const humans = war.towns.find(({ owner }) => owner === "human");
+
+        assert.equal(order({ home: true }).reason, "noArmy");
+        assert.equal(order({ raise: true }).ok, true);
+        assert.equal(order({ raise: true }).reason, "raised");
+
+        const army = war.armyOf("elf");
+
+        assert.ok(army);
+        assert.equal(order({ supply: true }).reason, "mustering");
+        assert.equal(order({ attack: humans.id }).reason, "peace");
+        assert.equal(order({ attack: orcs.id }).ok, true);
+        assert.deepEqual(army.orders, { kind: "attack", about: orcs.id, by: "elf" });
+        assert.equal(order({ disband: true }).ok, true);
+        assert.equal(war.armyOf("elf"), null);
+
+        // (Not at the table)
+        Object.assign(me, { x: me.x + 6 });
+        assert.equal(order({ raise: true }).reason, "table");
+    });
+
+    it("takes them for a vassal's army too, not anyone else's; none from a Knight, nor from a people serving another", () => {
+        const { war, order } = atTheTable();
+
+        war.realm("lizard").overlord = "elf";
+        assert.equal(order({ raise: true }, "lizard").ok, true);
+        assert.ok(war.armyOf("lizard"));
+        assert.equal(order({ raise: true }, "cat").reason, "notOurs");
+
+        war.realm("lizard").overlord = null;
+        war.realm("elf").overlord = "orc";
+        assert.equal(order({ raise: true }).reason, "serving");
+
+        const knight = atTheTable(OPENS.table);
+
+        assert.equal(knight.order({ raise: true }).reason, "orderRank");
+    });
+
+    it("takes a Knight's counsel to march on an enemy's town there", () => {
+        const { host, war } = atTheTable(OPENS.march);
+        const orcs = war.towns.find(({ owner }) => owner === "orc");
+        assert.equal(host.command(HOST_PLAYER, { type: "table", counsel: { march: orcs.id } }).ok, true);
+        assert.equal(war.realm("elf").counsel?.march, orcs.id);
+        assert.match(heededText({ counsel: { march: orcs.id } }, war), new RegExp(`^Your counsel's heard: ${orcs.name}, next`));
+    });
+
+    it("offers on the map what can be done with what's tapped, by rank: orders for the army, the enemy's attacked, supplies from a depot, camp or a depot on the ground; counsel from a Knight", () => {
+        const { host, war } = atTheTable();
+        const orcs = war.town(war.realm("orc").seat);
+        const explored = host.players.get(HOST_PLAYER).explored;
+        const lord = () => battleMapView(war, "elf", { rank: OPENS.orders, explored });
+
+        // (The orcs' seat uncovered on the player's map)
+        explored.visit(orcs.at[0], orcs.at[1]);
+
+        // (No army: raised at their seat; the ground, a depot built there)
+        let view = lord();
+        const seat = view.towns.find(({ id }) => id === war.realm("elf").seat);
+
+        assert.deepEqual(view.may, { counsel: true, orders: true });
+        assert.deepEqual(view.commands.map(({ realm, army }) => [realm, army]), [["elf", null]]);
+        assert.deepEqual(actionsAt(view, seat, null).map(({ orders }) => orders), [{ raise: true }]);
+        assert.deepEqual(actionsAt(view, null, [100.4, 200.6]).map(({ label, orders }) => [label, orders]), [[`Build a supply depot here (${DEPOT_COST} gold)`, { depot: [100, 201] }]]);
+
+        // (Raised and out: tapped, home, supplies or disbanded; the ground, camp made there too)
+        war.order("elf", { raise: true });
+
+        const army = war.armyOf("elf");
+
+        Object.assign(army, { size: 60, mission: "regroup", at: [orcs.at[0] + 900, orcs.at[1]], path: [[orcs.at[0] + 900, orcs.at[1]]], leg: 0 });
+        view = lord();
+
+        const ours = view.forces.find(({ id }) => id === army.id);
+
+        assert.equal(ours.command, "elf");
+        assert.deepEqual(actionsAt(view, ours, null).map(({ orders }) => Object.keys(orders)[0]), ["home", "supply", "disband"]);
+        assert.deepEqual(actionsAt(view, null, [5, 5]).map(({ orders }) => Object.keys(orders)[0]), ["camp", "depot"]);
+
+        // (The orcs' seat, seen by a camp of theirs: out of its reach, marched on; in it, attacked;
+        // counselled)
+        war.camps.push({ id: "camp-900", realm: "elf", at: [orcs.at[0], orcs.at[1] + 900], guard: 6, built: war.turn, done: war.turn, toward: null, used: 1e6, skirmished: war.turn });
+
+        const far = lord().towns.find(({ id }) => id === orcs.id);
+
+        assert.deepEqual([far.hostile, far.reach, far.garrison], [true, [], null]);
+        assert.deepEqual(actionsAt(lord(), far, null).map(({ label }) => label), ["March on it: make camp before it, then attack", "Counsel marching on it next"]);
+
+        war.camps.at(-1).at = [orcs.at[0], orcs.at[1] + 280];
+
+        const near = lord().towns.find(({ id }) => id === orcs.id);
+
+        assert.deepEqual(near.reach, ["elf"]);
+        assert.equal(actionsAt(lord(), near, null)[0].label, "Attack it");
+
+        // (A depot of theirs in reach of the army, with a load: supplies sent from it)
+        war.depots.push({ id: "depot-900", realm: "elf", at: [army.at[0] + 200, army.at[1]], guard: DEPOT.guard, built: 0, done: 0, level: 2, toward: null, used: 0, by: null });
+
+        const depot = lord().depots.find(({ id }) => id === "depot-900");
+
+        assert.deepEqual(depot.supplies, ["elf"]);
+        assert.deepEqual(actionsAt(lord(), depot, null).map(({ orders }) => orders), [{ supply: "depot-900" }]);
+
+        // (A Knight: counsel only)
+        const knight = battleMapView(war, "elf", { rank: OPENS.march, explored });
+
+        assert.deepEqual(knight.may, { counsel: true, orders: false });
+        assert.deepEqual(knight.commands, []);
+        assert.deepEqual(actionsAt(knight, knight.towns.find(({ id }) => id === orcs.id), null).map(({ counsel }) => counsel), [{ march: orcs.id }]);
+        assert.deepEqual(actionsAt(knight, null, [5, 5]), []);
+    });
+});
+

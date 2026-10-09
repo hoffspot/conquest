@@ -27,12 +27,12 @@ export const STANDINGS = Object.freeze([
     { title: "Freeholder", points: 60, opens: "Scouting for the reeves." },
     { title: "Retainer", points: 180, opens: "An audience at the keep, work from the ruler, and the pick of its armoury." },
     { title: "Knight", points: 400, opens: "The war table in the keep, a say in where the army marches next and where the council builds, and, serving another, when to rise." },
-    { title: "Lord", points: 800, opens: "A say in war and peace." },
+    { title: "Lord", points: 800, opens: "Orders for the army at the war table, and a say in war and peace." },
     { title: "Councillor", points: 1500, opens: "A seat on the council: your word weighs the most." },
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, convoy: 2, retake: 2, march: 3, build: 3, table: 3, escort: 3, waylay: 3, plunder: 3, seize: 3, take: 3, rise: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, convoy: 2, retake: 2, march: 3, build: 3, table: 3, escort: 3, waylay: 3, plunder: 3, seize: 3, take: 3, rise: 3, peace: 4, war: 4, orders: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);

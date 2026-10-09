@@ -916,14 +916,16 @@ export class War {
      * - { disband: true }: its army sent home, each of it back into the garrison of one of their
      *   towns, the nearest first;
      * - { camp: [x, y] }: to build a camp there (or to go to theirs there), and hold;
-     * - { attack: an id }: to attack an enemy's town, works, fortification or camp within reach
-     *   of one of their camps (CAMP.reach), till it's taken or razed, falling back to be made up
-     *   as it must;
+     * - { attack: an id }: to attack an enemy's town, works, fortification, camp or depot, till
+     *   it's taken or razed, falling back to be made up as it must: from the camp of theirs in
+     *   reach of it (CAMP.reach), or one built before it first, as its rulers would (#campBefore);
      * - { home: true }: back to its seat;
-     * - { supply: true }: supplies asked for (docs/WAR.md *Supply*): a wagon sent to it now, from
-     *   the depot nearest it that can supply it or its seat, if none's on its way already;
+     * - { supply: true, or a depot's id }: supplies asked for (docs/WAR.md *Supply*): a wagon sent
+     *   to it now, from that depot if it can supply it, else from the depot nearest it that can or
+     *   its seat, if none's on its way already;
      * - { depot: [x, y] }: a supply depot built there, if it's in another people's lands and they
      *   can pay for it (supply.js DEPOT).
+     * An army still mustering at its seat goes to camp or attack once it's made up (ARMY.ready).
      * `by`: the player's people (whose orders they were, for the news). Returns whether they could
      * be given.
      */
@@ -968,14 +970,23 @@ export class War {
         }
 
         if (kind === "supply") {
-            const sent = army.mission !== "muster" && this.#feed(army, { now: true });
+            const from = typeof about === "string" ? this.depot(about) : null;
+
+            if (typeof about === "string" && !this.#supplies(from, army)) {
+                return false;
+            }
+
+            const sent = army.mission !== "muster" && this.#feed(army, { now: true, from });
 
             if (sent) {
-                this.#emit("ordered", { realm: id, army: army.id, supply: true, by });
+                this.#emit("ordered", { realm: id, army: army.id, supply: true, ...(from ? { from: from.id } : {}), by });
             }
 
             return sent;
         }
+
+        // (Still mustering, not made up yet: to it once it is: #command)
+        const waits = army.mission === "muster" && army.size < Math.max(1, this.fullOf(id) * ARMY.ready);
 
         if (kind === "camp") {
             const at = point(about);
@@ -985,16 +996,22 @@ export class War {
             }
 
             army.orders = { kind, about: at, by };
-            this.#toCamp(army, at);
+
+            if (!waits) {
+                this.#toCamp(army, at);
+            }
         } else if (kind === "attack") {
             const target = this.#targetOf(about);
 
-            if (!target || !this.hostile(id, target.realm) || !this.#reaches(id, target.at, target.edge)) {
+            if (!target || !this.hostile(id, target.realm)) {
                 return false;
             }
 
             army.orders = { kind, about, by };
-            this.#toAttack(army, about);
+
+            if (!waits && !this.#toAttack(army, about)) {
+                this.#campBefore(army, about);
+            }
         } else {
             army.orders = { kind, about: null, by };
             this.#goHome(army);
@@ -2331,6 +2348,31 @@ export class War {
         return Boolean(this.#campFor(realm, at, edge));
     }
 
+    /**
+     * Whether a people's camps reach something of the war's (its id: a town, works, fortification,
+     * camp or depot), for its army to attack it from one of them (CAMP.reach, of a town's edge).
+     */
+    inReach(realm, id) {
+        const target = this.#targetOf(id);
+
+        return Boolean(target) && this.#reaches(realm, target.at, target.edge);
+    }
+
+    // An army sent to build a camp before something of the enemy's (its id) beyond its camps'
+    // reach, and to attack it from there once it's up, as its rulers would send it (#campaign).
+    // Whether it could be (it's there to attack)
+    #campBefore(army, id) {
+        const target = this.#targetOf(id);
+
+        if (!target) {
+            return false;
+        }
+
+        this.#toCamp(army, this.#siteFor(army.at, target.at, target.edge + CAMP.reach * 0.6), id);
+
+        return true;
+    }
+
     // Where a camp before something may go: `out` metres from it on the way from `from`, or turned
     // a little either way, on dry land off the roads; or there anyway, failing that
     #siteFor(from, to, out) {
@@ -2443,7 +2485,7 @@ export class War {
             if ((army.mission === "regroup" || army.mission === "muster") && army.leg >= army.path.length - 1 && ready) {
                 if (kind === "camp") {
                     this.#toCamp(army, about);
-                } else if (kind === "attack" && !this.#toAttack(army, about)) {
+                } else if (kind === "attack" && !this.#toAttack(army, about) && !this.#campBefore(army, about)) {
                     this.#done(army);
                 }
             }
@@ -2880,17 +2922,18 @@ export class War {
         }
     }
 
-    // An army's wagon, if it's due (or asked for `now`) and none's on its way: from the nearest depot
-    // that can supply it (one of its loads), or its seat (SUPPLY.cost of its people's gold). None
+    // An army's wagon, if it's due (or asked for `now`) and none's on its way: from the depot asked
+    // for (`from`), or else the nearest that can supply it (one of its loads), or its seat
+    // (SUPPLY.cost of its people's gold). None
     // sent when it's due (no gold, or neither to send it from) is a load that didn't get through
     // (#hunger). Whether one was sent
-    #feed(army, { now = false } = {}) {
+    #feed(army, { now = false, from = null } = {}) {
         if (this.#wagonFor(army.id) || (!now && this.turn < army.supply.due)) {
             return false;
         }
 
         const realm = this.realm(army.realm);
-        const source = this.#sourceFor(army);
+        const source = from ? { depot: from } : this.#sourceFor(army);
         const paid = source?.depot || (source?.seat && realm.treasury >= SUPPLY.cost);
 
         if (!paid) {
@@ -2923,10 +2966,16 @@ export class War {
         const home = seat?.owner === army.realm ? seat : null;
         const fromSeat = home ? apart(home.at, army.at) : Infinity;
         const depot = this.depots
-            .filter((each) => each.built !== null && each.level >= 1 && this.liege(each.realm) === this.liege(army.realm) && apart(each.at, army.at) <= Math.min(DEPOT.reach, fromSeat))
+            .filter((each) => this.#supplies(each, army) && apart(each.at, army.at) <= fromSeat)
             .sort((a, b) => apart(a.at, army.at) - apart(b.at, army.at) || (a.id < b.id ? -1 : 1))[0];
 
         return depot ? { depot } : home ? { seat: home } : null;
+    }
+
+    // Whether a depot can send an army a wagon now: up, a load in it, its people's or a friend's
+    // under the same liege, within reach of it (DEPOT.reach)
+    #supplies(depot, army) {
+        return Boolean(depot) && depot.built !== null && depot.level >= 1 && this.liege(depot.realm) === this.liege(army.realm) && apart(depot.at, army.at) <= DEPOT.reach;
     }
 
     // The supply wagon on its way to an army or a depot (by its id), if there is one

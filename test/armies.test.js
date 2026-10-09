@@ -405,9 +405,15 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         // (No reserve of theirs to come against it)
         war.realm("orc").treasury = 0;
         war.reserveOf("orc").size = 0;
-        army.size = 50;
-        assert.equal(war.order("human", { attack: town.id }), false, "(no camp in reach of it)");
+        army.size = war.fullOf("human");
         assert.equal(war.order("human", { attack: war.towns.find(({ owner }) => owner === "elf").id }), false, "(not at war with them)");
+
+        // (Beyond their camps' reach: to build a camp before it first, as their rulers would send
+        // it, and at it from there)
+        assert.equal(war.inReach("human", town.id), false);
+        assert.equal(war.order("human", { attack: town.id }), true);
+        assert.deepEqual([army.orders?.kind, army.mission, army.target], ["attack", "camp", town.id]);
+        assert.ok(apart(army.about, town.at) <= edgeOf(town.id) + CAMP.reach, "to camp within reach of it");
 
         // (Sent to camp before it: there, it builds one, and holds)
         const site = [Math.round(town.at[0] + edgeOf(town.id) + 150), Math.round(town.at[1])];
@@ -439,6 +445,28 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         assert.equal(war.armyOf("human"), null);
         assert.ok(war.power("human") >= before - left, "back in their towns");
         assert.equal(war.order("human", { home: true }), false);
+    });
+
+    it("holds a player's orders to an army still mustering at its seat till it's made up, then carries them out", () => {
+        const war = warOf();
+        const town = war.towns.find(({ owner, kind }) => owner === "orc" && kind === "village");
+
+        war.realm("orc").treasury = 0;
+        war.reserveOf("orc").size = 0;
+        war.order("human", { raise: true });
+
+        const army = war.armyOf("human");
+        const seat = war.town(war.realm("human").seat);
+
+        assert.equal(war.order("human", { attack: town.id }), true);
+        assert.deepEqual([army.orders?.kind, army.mission, army.at], ["attack", "muster", seat.at], "waiting at its seat");
+
+        army.size = Math.ceil(war.fullOf("human") * ARMY.ready);
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        play(war, 1);
+        assert.equal(army.orders?.kind, "attack");
+        assert.ok(["camp", "attack"].includes(army.mission), `on its way (${army.mission})`);
+        assert.equal(army.target, town.id);
     });
 
     it("sends its camps' skirmishers out against the enemy within reach, in pairs, now and then; strikes a camp no army's needed a while", () => {
