@@ -196,8 +196,14 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         assert.ok(war.towns.filter(({ owner }) => owner === "human").every((each) => apart(each.at, army.at) > CLOSE.threat));
         assert.notEqual(reserve.mission, "defend");
 
-        // (Before one of their towns: out against it, and fought)
+        // (Before one of their towns, but beaten back, falling back to its camp to be made up: not
+        // hunted down)
         Object.assign(army, { at: [town.at[0] + 200, town.at[1]], path: [[town.at[0] + 200, town.at[1]]], leg: 0 });
+        play(war, 2);
+        assert.notEqual(reserve.mission, "defend", "not hunted down");
+
+        // (Marching there: out against it, and fought)
+        army.mission = "camp";
 
         const events = play(war, 12);
 
@@ -364,12 +370,13 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         Object.assign(army, { size: 60, at: [...at], path: [[...at]], camp: "camp-f", mission: "camp" });
         assert.equal(war.order("human", { attack: town.id }), true);
 
-        // (The orcs kept from raising anyone meanwhile)
+        // (The orcs kept from raising anyone meanwhile, and no one's envoys suing for peace)
         const hold = (turns) => {
             const events = [];
 
             for (let k = 0; k < turns; k++) {
                 war.realm("orc").treasury = 0;
+                war.forces = war.forces.filter(({ kind }) => kind !== "envoy");
                 events.push(...play(war, 1));
             }
 
@@ -476,7 +483,16 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
 
         war.camps.push({ id: "camp-s", realm: "human", at, guard: CAMP.guard, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
 
-        const events = play(war, CAMP.every * 6);
+        // (The orcs' reserve kept from coming out against it meanwhile, and no one's envoys suing
+        // for peace)
+        const events = [];
+
+        for (let k = 0; k < CAMP.every * 6; k++) {
+            war.reserveOf("orc").size = 0;
+            war.forces = war.forces.filter(({ kind }) => kind !== "envoy");
+            events.push(...play(war, 1));
+        }
+
         const skirmishes = events.filter(({ type, camp }) => type === "skirmish" && camp === "camp-s");
 
         assert.ok(skirmishes.length >= 4, `${skirmishes.length}`);
@@ -486,6 +502,37 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         // (No army near it a while: struck, its guard home)
         play(war, CAMP.idle);
         assert.equal(war.camp("camp-s"), null);
+    });
+
+    it("sends its reserve against an enemy's camp in its own lands that no army of theirs holds, and razes it; not one their army's at", () => {
+        const war = warOf();
+        const town = war.towns.find(({ owner, kind }) => owner === "orc" && kind === "town");
+        const at = [town.at[0] + edgeOf(town.id) + 200, town.at[1]];
+        const reserve = war.reserveOf("orc");
+
+        // (The humans building no supply depot there meanwhile, for it to go against first)
+        reserve.size = 60;
+        war.realm("human").treasury = 0;
+        war.camps.push({ id: "camp-r", realm: "human", at, guard: CAMP.guard, built: 0, done: 0, toward: town.id, used: 1e6, skirmished: 1e6 });
+
+        // (Their army at it, beaten back and being made up there: the camp left be, and the army)
+        const army = { id: "force-human", realm: "human", kind: "army", size: 10, at: [...at], path: [[...at]], leg: 0, target: null, home: war.realm("human").seat, mission: "regroup", about: [...at], camp: "camp-r", orders: null, went: 60, arrived: null, since: 0 };
+
+        war.forces = war.forces.filter((force) => !(force.kind === "army" && force.realm === "human"));
+        war.forces.push(army);
+        play(war, 2);
+        assert.equal(reserve.mission, "home");
+        assert.ok(war.camp("camp-r"));
+
+        // (Gone from it: out against it, its guard put down, and razed)
+        war.forces.splice(war.forces.indexOf(army), 1);
+
+        const events = play(war, 30);
+        const battle = events.find(({ type, camp }) => type === "battle" && camp === "camp-r");
+
+        assert.ok(battle && battle.won && battle.reserve === reserve.id, "fought");
+        assert.ok(events.some(({ type, camp, by }) => type === "razed" && camp === "camp-r" && by === "orc"));
+        assert.equal(war.camp("camp-r"), null);
     });
 
     it("carries on a war kept before the standing armies: its expeditions, camps and relief home in their garrisons, each people's reserve at its seat", () => {

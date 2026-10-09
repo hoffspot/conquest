@@ -65,7 +65,8 @@ Then they're one of:
 
 **Diplomats** go by road between the capitals of peoples who know each other. A diplomat can:
 - ask an ally to break off their alliance (both become neutral);
-- ask a hostile people for a truce (both become neutral, with their vassals).
+- ask a hostile people for a truce (both become neutral, with their vassals). Neither goes to
+  war on the other again for an hour.
 
 A diplomat who doesn't arrive, waylaid on the road, carries nothing.
 
@@ -84,6 +85,7 @@ it; the camp sends out a scout and skirmishers.
 
 A town whose garrison is all put to the sword is **taken**, and only so:
 - a few of the attackers hold it;
+- they sack it for gold, the more the greedier their ruler;
 - its folk stay, under their new rulers;
 - its taxes go to its new realm.
 
@@ -281,14 +283,19 @@ taken, and far longer before a capital can.
      for the troops' keep and, at war, for the war (*Standing armies*): the garrisons to half (the
      seat first, then those threatened), the reserve, the army, the garrisons to the full.
    - **Envoys** (one out at a time, 10 gold), to the other ruler's seat:
-     - to sue for peace in a war going badly (the more cautious, the sooner);
+     - to sue for peace, with the strongest of their enemies, once all of them together are more
+       than they can bear (the more cautious, the sooner: `DECLARE`);
      - to part an enemy from its ally;
      - to win over a neutral against a shared enemy (the more loyal, the likelier).
-   - **War**, on a neutral they think they can beat or bear a grudge against. It's likelier the
-     more warlike and greedy the ruler, the further the war's come, and the longer it's gone on.
-     Its allies may join in against them. Once there's no one else to fight, the greedy and warlike
-     may break with their allies.
-   - **Each reserve** out against an enemy army in its people's lands, or home.
+   - **War**, on the neutral they think best to go to war on: one they think they can beat, or
+     bear a grudge against. It's likelier the more warlike and greedy the ruler, the further the
+     war's come, and the longer it's gone on. One war at a time: only the most warlike open a
+     second, and only while they're half again as strong as the enemy they're fighting
+     (`DECLARE`). Never on a people they made peace with (or broke with) within the hour. Its
+     allies may join in against them, unless they too made their peace with them within the hour.
+     Once there's no one else to fight, the greedy and warlike may break with their allies.
+   - **Each reserve** out against an enemy army in its people's lands (not one falling back), or
+     an enemy's supply depot or camp left there, or home.
    - **Bands** to win back their works from the wild.
    - **Each army** raised, sent, made up (*Standing armies*), and a supply depot built for it when
      it's far from home (*Supply*).
@@ -311,7 +318,9 @@ taken, and far longer before a capital can.
     can undo it.
 
 **A town taken** (its garrison put to the sword: *Standing armies*) is the attacker's: held by a
-few of their army, and its folk stay under their new rulers. **A realm's seat taken** makes it the
+few of their army, and its folk stay under their new rulers. Its takers sack it (`SACK`): gold of
+20 turns of its taxes, half that again and up to as much more the greedier their ruler (by their
+greed over nothing). **A realm's seat taken** makes it the
 taker's liege's **vassal**, with any realms that served it:
 - it gets a new ruler, and rules from its seat again (its seat is given back to it);
 - its own dealings end: its liege's friends and enemies are its own;
@@ -1261,8 +1270,9 @@ table they're ordered from (M21) come after.
   fight for its liege.
 
 **Mustered over time** (`#muster`). Each town raises as many a turn as it can (`HOLDINGS`
-`produce`: a capital 4, a city 3, a town 2, a village 1), 5 gold each. Its people keep gold back
-for three turns of keep and, at war, for the war (15, and 40 more the more warlike). In this order:
+`produce`: a capital 4, a city 3, a town 2, a village 1), 5 gold each; up to 30% more or fewer by
+how warlike its people's ruler is (`MUSTER`), a part of one now and then. Its people keep gold back
+for three turns of keep and, at war, 35 more for the war. In this order:
 1. the garrisons to half: the seat first, then those threatened (an enemy's army or camp within
    1 km), then the emptiest;
 2. the reserve made up, then the army, from the towns nearest them;
@@ -1295,16 +1305,18 @@ ground). So:
   world instead (M20, *A camp's scout and skirmishers near a player*).
 - **Struck:** a people keeps 3 camps at most, the least used struck for a new one; one no army's
   been near for 40 turns is struck too. Its guard goes into the nearest of their towns.
-- **Razed:** an enemy army puts its guard down; or, in the world, its sentries all brought down with
-  no army of theirs by it (`war.loss`).
+- **Razed:** an enemy army puts its guard down attacking it; an enemy's army or reserve within
+  120 m of it puts its guard down, if there's no army of its own within its reach (300 m); or, in
+  the world, its sentries all brought down with no army of theirs by it (`war.loss`).
 
 **The army's campaign** (`#command`, `#campaign`):
 - **Raised,** it waits at its seat till it's 70% of its full strength (`ARMY.ready`).
 - **Sent:** its rulers choose what to go against: the enemy's town that's nearest, weakest and worth
   most, of a kind the age lets be taken. A seat counts as nearer the more warlike they are, once
   they're strong enough to take it; so does a town a player's counselled them to march on (M4
-  *Counsel*). From Border wars on, a works too. A town covered by its holders' fortification (M15),
-  that first.
+  *Counsel*). A town held too strongly for it counts as further off: 2 km for each time the army
+  falls short of half again the garrison behind its walls (`CAMPAIGN`). From Border wars on, a
+  works too. A town covered by its holders' fortification (M15), that first.
 - **Beaten back** below half what it went in with (`ARMY.regroup`), it falls back to its camp to be
   made up, and goes back at it once it's ready again.
 - **Done,** it goes back to its camp to wait for what's next; at peace, home.
@@ -1321,17 +1333,30 @@ ground). So:
   - **a town:** its garrison behind its walls, its people's reserve beside it if that's within
     120 m (and their army, if it's mustering there), and at a seat its ruler and the captain of its
     guard (`LEADERS`, 2) last. Put to the sword to the last, the town is theirs, held by half a
-    full garrison of the army (`HELD`). There's no other way to take a town;
+    full garrison of the army (`HELD`), and sacked (`SACK`). There's no other way to take a town;
   - **a works:** its guard; put down, it's seized, held by up to 6 of the army;
   - **a fortification:** battered, 10 of its strength a turn for each of the army, its defenders
     bringing 1 or 2 down; razed at nothing;
   - **a camp:** its guard; put down, it's razed.
 - **Not what a player's near,** for 3 turns (`WATCH_TURNS`): that's played out in the world.
+- **Each people's lean** (`EDGES`): its soldiers strike harder attacking the more two-handers,
+  casters and archers its lines have beside the usual mix (`formation.js` `DOCTRINES`, M17), and
+  harder attacked the more shields, healers and archers (`EDGE`). What a people gains one way it
+  gives up the other:
+
+  | | Humans | Elves | Dark elves | Cat folk | Lizard folk | Orcs |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Attacking | ×1 | ×0.984 | ×1.012 | ×1.1 | ×0.964 | ×1.084 |
+  | Attacked | ×1 | ×0.992 | ×0.988 | ×0.916 | ×1.064 | ×0.944 |
 
 **The reserve** (`#defend`) goes out against an enemy army within 1 km of one of its people's towns,
-if it's at least 0.4 as strong: one attacking one of their towns first, then the nearest. It goes
-300 m a turn, anywhere in its own lands and never beyond them, and home to its seat once there's
-none. Beside a town attacked, it fights with its garrison. Two reserves never fight each other.
+if it's at least 0.4 as strong (`DEFEND`): one attacking one of their towns first, then the nearest.
+Not an army beaten back, falling back to its camp to be made up: a reserve drives an army off, it
+doesn't hunt it down, and meets it again when it comes back. With no army there, it goes against
+an enemy's supply depot or camp in its lands, the nearest, if it's half again as strong as its
+guard; not a camp with its army about it (within 300 m). It goes 300 m a turn, anywhere in its own
+lands and never beyond them, and home to its seat once there's none. Beside a town attacked, it
+fights with its garrison. Two reserves never fight each other.
 
 **A player's orders** (`war.order(realm, orders, { by })`), a Lord's or a Councillor's, from the
 war table in a keep (M21, *The war table*):
@@ -1370,7 +1395,8 @@ lands, and two armies seldom meet (2 to 6 times a world), each going for a diffe
 people's army raised again at its seat used to be put down there by an enemy's reserve, over and
 over, before it was ever made up (110 of 188 armies destroyed in one world): hence the rule above,
 that an army mustering at its seat is within its walls. The balance across many more wars, with
-the supply (M19, below) and the war table, is to come once they're built.
+the supply (M19, below) and the war table, is in *The balance of the standing armies*, after the
+war table (M21).
 
 **Kept.** The camps, the armies and reserves and their reinforcements are in the war's snapshot
 (`WAR_VERSION` 5). A war kept before them is carried on: its camps, relief and expeditions against
@@ -1698,6 +1724,114 @@ Grimhold, next, as the council sees fit."
 **Kept.** Nothing new: what's uncovered is kept with where the player's been, and orders with the
 armies (M18). What two games share changed (`NET_VERSION` 83): the host uncovers what the scouts
 see and says so, and takes orders and counsel at the war table.
+
+### The balance of the standing armies
+
+The standing armies (M18), their supply (M19) and the war table (M21) weighed together, and set
+right where they were out (`DECLARE`, `MUSTER`, `DEFEND`, `CAMPAIGN`, `SACK` in `war.js`; `EDGES`
+in `armies.js`). A war played out is chaotic: the least change anywhere changes everything after
+it in a world. So only many worlds tell: 72, each played out alone for 1,080 turns (18 hours of
+play), with no player's might (the ages coming every three hours) and at a player's full might (6:
+the age of conquest from the start), before and after. Each figure below is the median of the 72
+worlds, or their 10th, median and 90th percentiles.
+
+**What was out:**
+- **Armies were ground to nothing.** 71 destroyed in a world (81 at full might), raised again and
+  destroyed again: a reserve hunted an army beaten back all the way to its camp, through its lands,
+  and won 77% of its fights (71% at full might). Few armies lasted long enough in the field to go
+  hungry, so their supply hardly mattered. And no camp was ever fought: one with no army by it
+  stood, however deep in the enemy's lands.
+- **A people's fortune went by its temperament more than anything.** The orcs kept 0.55 of their
+  towns (of what they started with), the elves 1.40. The warlike and the faithless had the most
+  enemies at once (the orcs 2.3 on average, the elves 1.7), and sought a truce only once one of
+  them alone was as strong as them (twice as strong, for the boldest), however many there were.
+  A truce made, they could go to war again the turn after. Each ruler went to war on the first
+  people it fancied, not the likeliest.
+- **An army went against a town however strongly held,** if it was near and rich enough.
+
+**What changed** (each in the rules above):
+- **The reserve** drives an army off, it doesn't hunt it down: not one falling back to be made up.
+  With no army in its lands, it goes against an enemy's depot or camp left there; and any army or
+  reserve upon a camp with no army of its own by it razes it (M18, *Camps*, *The reserve*).
+- **War:** one at a time, and a second front only for the most warlike, while they're half again
+  as strong as the enemy they're fighting. On the people their rulers think best to go to war on,
+  the odds weighing more than they did (`DECLARE.odds` 0.8, from 0.3), and the age of the war more
+  (0.12 an age, from 0.08). Never within the hour of a truce.
+- **A truce** sought once all a people's enemies together are more than it can bear, with the
+  strongest of them: as strong as it is, for the most cautious; half again, for the boldest.
+- **Mustering:** the warlike raise their soldiers faster, up to 30% more (`MUSTER`); and every
+  people keeps back 35 gold at war, as warlike or not.
+- **A town taken is sacked** (`SACK`), so a war that goes well pays for itself.
+- **An army's rulers** send it against a town held too strongly for it only if there's nothing
+  better (`CAMPAIGN`).
+- **Each people's lean** in the war's reckoning (`EDGES`, M18 *The fighting*): the cats and the
+  orcs strike harder attacking, the lizards hold better attacked.
+
+**Tried, and left out:** an army waiting at its seat till it's 85% made up, not 70%: no better; a
+reserve going out only when it's 0.7 as strong as the army, not 0.4: the attackers won only 14% of
+the fights with it, and the war slowed; depots refilled from further off: no better.
+
+**Played out alone, no player's might** (10th / median / 90th percentile of 72 worlds):
+
+| | Before | Now |
+| --- | --- | --- |
+| First town taken | turn 196 / 208 / 234 | turn 198 / 211 / 263 |
+| First seat taken | turn 572 / 634 / 746 (in 67 worlds) | turn 553 / 608 / 810 (in 70) |
+| Towns taken by turn 360 | 5 / 12 / 19 | 6 / 15 / 22 |
+| Towns taken by turn 720 | 28 / 45 / 61 | 34 / 54 / 75 |
+| Towns taken by turn 1,080 | 49 / 67 / 90 | 61 / 84 / 118 |
+| Armies raised | 61 / 77 / 101 | 21 / 27 / 34 |
+| Armies destroyed | 53 / 71 / 94 | 9 / 14 / 21 |
+| Armies broken up for want of supply | 0 / 1 / 3 | 3 / 6 / 10 |
+| Soldiers deserted for want of supply | 28 / 66 / 145 | 141 / 241 / 369 |
+| A reserve's fights with an army | 494, the army winning 23% | 240, the army winning 38% |
+| Camps razed | 0 | 65 / 86 / 112 |
+| Peoples brought under | 2 / 5 / 11 | 3 / 6 / 14 |
+
+**At a player's full might:**
+
+| | Before | Now |
+| --- | --- | --- |
+| First town taken | turn 36 / 43 / 90 | turn 36 / 40 / 56 |
+| First seat taken | turn 89 / 169 / 297 | turn 71 / 96 / 258 |
+| Towns taken by turn 1,080 | 49 / 66 / 86 | 62 / 86 / 103 |
+| Armies destroyed | 57 / 81 / 99 | 7 / 11 / 19 |
+| Armies broken up for want of supply | 0 / 1 / 2 | 2 / 4 / 8 |
+| A reserve's fights with an army | 443, the army winning 29% | 202, the army winning 49% |
+| Camps razed | 0 | 40 / 61 / 83 |
+| Peoples brought under | 7 / 13 / 23 | 7 / 11 / 19 |
+
+**Each people's towns at the end,** of what it started with (the median of 72 worlds' average);
+and how many enemies it had at once, on average, with no player's might:
+
+| | No might, before | No might, now | Full might, before | Full might, now | Enemies at once, before | Now |
+| --- | --- | --- | --- | --- | --- | --- |
+| Humans | 0.91 | 1.09 | 0.91 | 1.07 | 1.86 | 0.95 |
+| Elves | 1.40 | 1.04 | 1.29 | 1.22 | 1.68 | 0.88 |
+| Dark elves | 0.77 | 0.76 | 0.74 | 0.83 | 2.04 | 1.08 |
+| Cat folk | 0.98 | 0.91 | 0.86 | 0.86 | 1.87 | 1.03 |
+| Lizard folk | 1.35 | 1.21 | 1.37 | 1.17 | 1.56 | 0.85 |
+| Orcs | 0.55 | 0.88 | 0.80 | 0.77 | 2.27 | 1.21 |
+
+**With a player's hand in it** (24 worlds each, at full might):
+- **A player's orders:** the humans at war with the orcs alone, a player raising their army and
+  sending it against the nearest orc village (and raising it again if it's destroyed), 400 turns.
+  Before, the village was taken in 19 worlds of 24 (on turn 73, the median), and 42 of their armies
+  were destroyed on the way, in all. Now it's taken in 17 (on turn 74), with 9 destroyed. Where
+  it's not, the orcs are too strong for them: in one followed through, the army was beaten in the
+  field, and the orcs brought the humans under before they could make it up again.
+- **An army cut off:** an orc army in the field, every wagon sent it taken as it sets out (as a
+  player falling on them would). Now it's broken up in 23 worlds of 24 (in the other, only 8
+  strong, it was gone before it could be), 12 turns after the first wagon taken (the median; 0 to
+  37), alerted, thinned and halved on the way (*Supply*). Before, it was broken up in 15 of 23,
+  after 15 turns; in 7 of the rest it was gone before it could be.
+
+**What's still out:** the dark elves, scheming and faithless, still keep fewest of their towns with
+no player's might, and the orcs at full might. Nearly every depot is razed in the end, about as many
+as are built. No people wins within 18 hours, before or now. The peoples left alone grow rich: the
+richest end with 21,000 gold, as they did with 15,000 before.
+
+**Kept.** Nothing new. What two games share changed (`NET_VERSION` 84): the war's reckoning.
 
 ### Playing together (M11)
 

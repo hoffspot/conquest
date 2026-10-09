@@ -6,6 +6,7 @@
 // Pure numbers, as the war is.
 
 import { hypot } from "../exact.js";
+import { DOCTRINES, MIX } from "../formation.js";
 
 /**
  * A people's army and its reserve, each as strong as `size` at the height of the war (the stage's
@@ -32,6 +33,32 @@ export const CAMP = Object.freeze({ reach: 300, build: 2, cost: 20, guard: 6, sc
  * camp's scout, an army or reserve, and a town (from its edge) or a depot.
  */
 export const SIGHT = Object.freeze({ scout: CAMP.scout, army: 150, holding: 150 });
+
+/**
+ * How much each role's share above (or below) the usual mix (formation.js MIX) adds to a people's
+ * soldiers' fighting in the war's reckoning (EDGES): its two-handers and casters when it attacks,
+ * its shield line and healers when it's attacked, and its archers either way. Each people's lean
+ * is as strong as any other's, all told: what it gains one way it gives up the other.
+ */
+export const EDGE = Object.freeze({ heavy: 1.2, caster: 0.8, front: 1.2, healer: 1.2, archer: 0.4 });
+
+/**
+ * How each people's soldiers fight in the war's reckoning (docs/WAR.md *Standing armies*), by its lean
+ * (formation.js DOCTRINES, M17): `attack`, how hard they strike attacking, the harder for its shock
+ * troops, casters and archers; `defend`, how hard they strike back attacked, the harder for its
+ * shield line, healers and archers. 1 each for a people mixed as MIX is (the humans).
+ */
+export const EDGES = Object.freeze(
+    Object.fromEntries(
+        Object.entries(DOCTRINES).map(([id, mix]) => [
+            id,
+            Object.freeze({
+                attack: Math.round((1 + EDGE.heavy * (mix.heavy - MIX.heavy) + EDGE.caster * (mix.caster - MIX.caster) + EDGE.archer * (mix.archer - MIX.archer)) * 1000) / 1000,
+                defend: Math.round((1 + EDGE.front * (mix.front - MIX.front) + EDGE.healer * (mix.healer - MIX.healer) + EDGE.archer * (mix.archer - MIX.archer)) * 1000) / 1000,
+            }),
+        ]),
+    ),
+);
 
 /**
  * Reinforcements on their way from a town to their army or reserve: going `speed` metres a turn,

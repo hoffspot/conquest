@@ -104,7 +104,7 @@ export function tell(event, war) {
         case "assault":
             return event.won ? `The ${own(event.realm)} army put the last of ${town(event.town)}'s defenders to the sword.` : `The ${own(event.realm)} army fell on ${town(event.town)}'s defenders, ${event.killed} of them killed, ${event.lost} of its own lost.`;
         case "taken":
-            return `${town(event.town)} has fallen to ${people(event.to)}, its garrison put to the sword. Its folk live under their rule now.`;
+            return `${town(event.town)} has fallen to ${people(event.to)}, its garrison put to the sword${event.sacked ? " and its coffers sacked" : ""}. Its folk live under their rule now.`;
         case "fellBack":
             return `The ${own(event.realm)} army has fallen back from ${thing(event.from)}, to be made up again.`;
         case "destroyed":
