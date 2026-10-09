@@ -31,7 +31,7 @@ const { barracksPosts, barracksRooms, ENTERABLE, ENTRANCES } = await import("../
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { QUARTERED } = await import("../client/js/core/war/muster.js");
 const { tell } = await import("../client/js/core/war/news.js");
-const { HOLDINGS, STAGES, TAKEN, TURN_MS, TURNS_PER_STAGE, War } = await import("../client/js/core/war/war.js");
+const { HOLDINGS, SACK, STAGES, TAKEN, TURN_MS, TURNS_PER_STAGE, War } = await import("../client/js/core/war/war.js");
 const { planWorld } = await import("../client/js/core/worldplan/plan.js");
 const { offerRequest, OPENS, progressOf, REQUESTS, STANDINGS } = await import("../client/js/core/standing.js");
 const { createRandom } = await import("../client/js/core/random.js");
@@ -192,6 +192,7 @@ describe("a town taken by putting its garrison down to the last (war.js loss)", 
         war.stage = STAGES.findIndex(({ take }) => take.includes("town"));
 
         const grudge = war.realm("orc").standing.human ?? 0;
+        const gold = war.realm("human").treasury;
 
         assert.equal(war.loss(town.id, town.garrison - 1, { by: "human" }), null, "(not with one of it left)");
         assert.equal(town.owner, "orc");
@@ -200,10 +201,16 @@ describe("a town taken by putting its garrison down to the last (war.js loss)", 
         assert.equal(town.garrison, Math.ceil(HOLDINGS.town.garrison * TAKEN));
         assert.ok(war.realm("orc").standing.human < grudge, "the orcs bear a grudge");
 
+        // (Sacked: so many turns of its taxes, the more the greedier the humans' ruler)
+        const sacked = Math.round(HOLDINGS.town.tax * SACK.turns * (0.5 + war.realm("human").leader.traits.greed));
+
+        assert.ok(sacked > 0);
+        assert.equal(war.realm("human").treasury, gold + sacked);
+
         const event = war.events.find(({ type }) => type === "taken");
 
-        assert.deepEqual({ ...event, turn: 0 }, { type: "taken", turn: 0, town: town.id, from: "orc", to: "human", how: "played" });
-        assert.match(tell(event, war), /has fallen to the .+, its garrison put to the sword/);
+        assert.deepEqual({ ...event, turn: 0 }, { type: "taken", turn: 0, town: town.id, from: "orc", to: "human", sacked, how: "played" });
+        assert.match(tell(event, war), /has fallen to the .+, its garrison put to the sword and its coffers sacked\./);
     });
 
     it("isn't, when they're not at war, or the age doesn't let towns of its kind be taken, or it's theirs", () => {

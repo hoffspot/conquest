@@ -18,7 +18,7 @@
 
 import { createRandom } from "../random.js";
 import { RACES, WORKS } from "../worldplan/races.js";
-import { ARMY, CAMP, campSite, CLOSE, fullOf, HELD, LEADERS, REINFORCE, SIGHT, WATCH_TURNS } from "./armies.js";
+import { ARMY, CAMP, campSite, CLOSE, EDGES, fullOf, HELD, LEADERS, REINFORCE, SIGHT, WATCH_TURNS } from "./armies.js";
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { ACROSS_COUNTRY, Roads } from "./roads.js";
@@ -59,6 +59,42 @@ export const TURNS_PER_STAGE = 180;
 
 /** What things cost (gold): a troop raised, a troop's keep a turn, an envoy; and what a realm starts with. */
 export const COSTS = Object.freeze({ troop: 5, upkeep: 0.06, envoy: 10, start: 60 });
+
+/**
+ * Going to war (#declare): how much the odds weigh (each people's strength over its foe's, less
+ * one, between -0.5 and 0.5), and each age of the war; how warlike a people's ruler must be to start a second war while
+ * it's fighting one, and how many times stronger than the enemy it's fighting it must be (no one
+ * starts a third); how many turns a peace holds (a truce, or an
+ * alliance broken off) before either goes to war with the other again, or joins a war against it;
+ * and how much stronger than a people all its enemies together may be before it seeks a truce
+ * (`bear` of its ruler's want of caution, over even).
+ */
+export const DECLARE = Object.freeze({ odds: 0.8, age: 0.12, twoFronts: 0.7, second: 1.5, truce: 60, bear: 0.5 });
+
+/**
+ * A people's reserve going out against an enemy's army in its lands (#defend): how strong it must
+ * be beside it (a share of the army's strength); else it waits for it at home.
+ */
+export const DEFEND = Object.freeze({ odds: 0.4 });
+
+/**
+ * An army's rulers choosing what to send it against (#campaign): how many times as strong as a
+ * town's garrison behind its walls it should be (`odds`), and how much further away (km) a town
+ * seems for each time short of that (`hopeless`).
+ */
+export const CAMPAIGN = Object.freeze({ odds: 1.5, hopeless: 2 });
+
+/**
+ * A town taken is sacked by its takers (#hold): gold of so many `turns` of its taxes, half that
+ * again and more the greedier their ruler (by their greed over nothing).
+ */
+export const SACK = Object.freeze({ turns: 20 });
+
+/**
+ * Mustering (#muster): how much readier a warlike people's folk are to take up arms (each town
+ * raising so many more a turn, or fewer, by its ruler's aggression over a half).
+ */
+export const MUSTER = Object.freeze({ warlike: 0.6 });
 
 /** How far forces go in a turn (metres): a band winning back a works, an envoy. */
 export const SPEEDS = Object.freeze({ march: 250, envoy: 400 });
@@ -1450,8 +1486,16 @@ export class War {
     #muster(realm) {
         const towns = this.towns.filter(({ owner }) => owner === realm.id);
         const upkeep = this.power(realm.id) * COSTS.upkeep * 3;
-        const keep = upkeep + (this.enemiesOf(this.liege(realm.id)).length ? 15 + realm.leader.traits.aggression * 40 : 10);
-        const left = new Map(towns.map((town) => [town.id, HOLDINGS[town.kind].produce]));
+        const keep = upkeep + (this.enemiesOf(this.liege(realm.id)).length ? 35 : 10);
+        // (The more warlike, the readier its folk to take up arms: MUSTER)
+        const readier = 1 + (realm.leader.traits.aggression - 0.5) * MUSTER.warlike;
+        const left = new Map(
+            towns.map((town) => {
+                const each = HOLDINGS[town.kind].produce * readier;
+
+                return [town.id, Math.floor(each) + (this.random.chance(each - Math.floor(each)) ? 1 : 0)];
+            }),
+        );
         let afford = Math.max(0, Math.floor((realm.treasury - keep) / COSTS.troop));
         const raise = (town, count) => {
             left.set(town.id, left.get(town.id) - count);
@@ -1709,12 +1753,16 @@ export class War {
             return;
         }
 
-        for (const enemy of enemies) {
-            if (this.strength(enemy) > strength * (1 + (1 - traits.caution)) && this.random.chance(0.5)) {
-                this.#envoy(realm, enemy, "truce");
+        // (Fighting more than they can bear, all their enemies together: a truce sought with the
+        // strongest of them, the warier the sooner)
+        const against = enemies.reduce((sum, enemy) => sum + this.strength(enemy), 0);
 
-                return;
-            }
+        if (enemies.length && against > strength * (1 + (1 - traits.caution) * DECLARE.bear) && this.random.chance(0.5)) {
+            const strongest = enemies.reduce((best, enemy) => (this.strength(enemy) > this.strength(best) ? enemy : best));
+
+            this.#envoy(realm, strongest, "truce");
+
+            return;
         }
 
         for (const enemy of enemies) {
@@ -1786,26 +1834,29 @@ export class War {
             return;
         }
 
-        if (this.enemiesOf(realm.id).length >= 1 + Math.round(traits.aggression * 2)) {
+        // (One war at a time; the most warlike open a second front, but only while they're winning)
+        const fighting = this.enemiesOf(realm.id);
+        const winning = traits.aggression >= DECLARE.twoFronts && strength > DECLARE.second * fighting.reduce((sum, enemy) => sum + this.strength(enemy), 0);
+
+        if (fighting.length >= (winning ? 2 : 1)) {
             return;
         }
 
-        for (const other of this.realms) {
-            if (!other.alive || other.overlord || other.id === realm.id || this.relation(realm.id, other.id) !== "neutral") {
-                continue;
-            }
+        // (Against whichever of them it thinks best to: the weaker, and those it bears a grudge
+        // against; and the longer the war goes on, the more every people wants its share)
+        const restless = Math.min(0.25, this.turn / 1200);
+        const [best] = this.realms
+            .filter((other) => other.alive && !other.overlord && other.id !== realm.id && this.relation(realm.id, other.id) === "neutral" && !this.#truce(realm.id, other.id))
+            .map((other) => {
+                const ratio = strength / Math.max(1, this.strength(other.id));
+                const grudge = clamp(-(realm.standing[other.id] ?? 0) / 100, -1, 1) * traits.grudge;
 
-            // (And the longer the war goes on, the more every people wants its share)
-            const ratio = strength / Math.max(1, this.strength(other.id));
-            const grudge = clamp(-(realm.standing[other.id] ?? 0) / 100, -1, 1) * traits.grudge;
-            const restless = Math.min(0.25, this.turn / 1200);
-            const score = traits.aggression * 0.8 + traits.greed * 0.3 - traits.caution * 0.3 + grudge + clamp(ratio - 1, -0.5, 0.5) * 0.3 + this.stage * 0.08 + restless;
+                return { other, score: traits.aggression * 0.8 + traits.greed * 0.3 - traits.caution * 0.3 + grudge + clamp(ratio - 1, -0.5, 0.5) * DECLARE.odds + this.stage * DECLARE.age + restless };
+            })
+            .sort((a, b) => b.score - a.score || (a.other.id < b.other.id ? -1 : 1));
 
-            if (score > 0.65 && this.random.chance(0.25)) {
-                this.#war(realm.id, other.id);
-
-                return;
-            }
+        if (best && best.score > 0.65 && this.random.chance(0.25)) {
+            this.#war(realm.id, best.other.id);
         }
     }
 
@@ -1816,7 +1867,7 @@ export class War {
         this.#emit("declared", { by, on });
 
         for (const ally of this.realms) {
-            if (ally.alive && !ally.overlord && ally.id !== by && ally.id !== on && this.relation(ally.id, on) === "allied" && this.relation(ally.id, by) !== "hostile" && this.random.chance(0.3 + ally.leader.traits.loyalty * 0.6)) {
+            if (ally.alive && !ally.overlord && ally.id !== by && ally.id !== on && this.relation(ally.id, on) === "allied" && this.relation(ally.id, by) !== "hostile" && !this.#truce(ally.id, by) && this.random.chance(0.3 + ally.leader.traits.loyalty * 0.6)) {
                 this.#set(ally.id, by, "hostile");
                 this.#emit("joined", { by: ally.id, on: by, for: on });
             }
@@ -1825,6 +1876,14 @@ export class War {
 
     #set(a, b, state) {
         this.relations[pair(a, b)] = { state, since: this.turn };
+    }
+
+    // Whether two peoples made their peace (or broke off their alliance) too lately for their rulers
+    // to go to war with each other again (DECLARE.truce)
+    #truce(a, b) {
+        const between = this.relations[pair(a, b)];
+
+        return between?.state === "neutral" && this.turn - between.since < DECLARE.truce;
     }
 
     // The gold a realm can spend on the war (keeping enough back for a couple of turns' keep)
@@ -1943,7 +2002,7 @@ export class War {
         }
 
         const [sent, holding] = [force.size, retake ? works.band : works.guard];
-        const { attackers, defenders } = this.#fight(sent, holding, 1);
+        const { attackers, defenders } = this.#fight(sent, holding, 1, { by: force.realm, against: retake ? null : works.owner });
         const won = defenders === 0 && attackers > 0;
 
         force.size = attackers;
@@ -2545,11 +2604,14 @@ export class War {
                 }
 
                 // (Their rulers' seat, to bring them under, when it's strong enough to; and where a
-                // player's counselled them to march)
+                // player's counselled them to march. Not what's held too strongly for it to take,
+                // however rich or proud: CAMPAIGN)
                 const seat = target.id === this.realm(target.owner).seat && this.strength(liege.id) >= this.strength(this.liege(target.owner));
                 const counselled = liege.counsel?.march === target.id ? 4 * liege.counsel.weight : 0;
+                const odds = army.size / Math.max(1, target.garrison * HOLDINGS[target.kind].walls + (seat ? LEADERS : 0));
+                const hopeless = Math.max(0, CAMPAIGN.odds - odds) * CAMPAIGN.hopeless;
 
-                return { target, score: distance + target.garrison / 15 - HOLDINGS[target.kind].worth * traits.greed - (seat ? 3 * traits.aggression : 0) - counselled - near + this.random.range(0, 0.5) };
+                return { target, score: distance + target.garrison / 15 - HOLDINGS[target.kind].worth * traits.greed - (seat ? 3 * traits.aggression : 0) + hopeless - counselled - near + this.random.range(0, 0.5) };
             })
             .sort((a, b) => a.score - b.score || (a.target.id < b.target.id ? -1 : 1));
         const { target } = scored[0];
@@ -2654,6 +2716,12 @@ export class War {
 
         this.#dropCamp(camp);
         this.#emit("struck", { realm: camp.realm, camp: camp.id, at: [...camp.at] });
+    }
+
+    // Whether a camp's own army is about it, within its reach (CAMP.reach: fighting from it, or by
+    // it), not left behind
+    #campHeld(camp) {
+        return this.forces.some((force) => force.kind === "army" && force.realm === camp.realm && force.size > 0 && apart(force.at, camp.at) <= CAMP.reach);
     }
 
     // A camp razed by an enemy (`by`, a realm's id, or null), or given up by a fallen people
@@ -2826,24 +2894,27 @@ export class War {
         }
 
         const towns = this.towns.filter(({ owner }) => owner === realm.id);
+        // (Not an army beaten back, falling back to its camp to be made up: a reserve drives an
+        // army off, it doesn't hunt it down; it'll meet it again when it comes back to the attack)
         const threat = this.forces
-            .filter((force) => force.kind === "army" && force.size > 0 && force.mission !== "muster" && this.hostile(force.realm, realm.id) && towns.some((town) => apart(town.at, force.at) <= CLOSE.threat))
+            .filter((force) => force.kind === "army" && force.size > 0 && force.mission !== "muster" && force.mission !== "regroup" && this.hostile(force.realm, realm.id) && towns.some((town) => apart(town.at, force.at) <= CLOSE.threat))
             .map((force) => ({ force, attacking: force.mission === "attack" && this.#targetOf(force.target)?.realm === realm.id ? 1 : 0 }))
             .sort((a, b) => b.attacking - a.attacking || apart(a.force.at, reserve.at) - apart(b.force.at, reserve.at) || (a.force.id < b.force.id ? -1 : 1))[0]?.force;
 
-        if (threat && reserve.size >= threat.size * 0.4) {
+        if (threat && reserve.size >= threat.size * DEFEND.odds) {
             Object.assign(reserve, { mission: "defend", target: threat.id, path: [[...reserve.at], [...threat.at]], leg: 0 });
 
             return;
         }
 
-        // (No army: an enemy's supply depot in its lands, the nearest, if it's stronger than its guard)
-        const depot = this.depots
+        // (No army: an enemy's supply depot or camp in its lands, the nearest, if it's stronger than
+        // its guard; not a camp its army's fighting from)
+        const held = [...this.depots, ...this.camps.filter((camp) => !this.#campHeld(camp))]
             .filter((each) => this.hostile(each.realm, realm.id) && towns.some((town) => apart(town.at, each.at) <= CLOSE.threat) && reserve.size > each.guard * 1.5)
             .sort((a, b) => apart(a.at, reserve.at) - apart(b.at, reserve.at) || (a.id < b.id ? -1 : 1))[0];
 
-        if (!threat && depot) {
-            Object.assign(reserve, { mission: "defend", target: depot.id, path: [[...reserve.at], [...depot.at]], leg: 0 });
+        if (!threat && held) {
+            Object.assign(reserve, { mission: "defend", target: held.id, path: [[...reserve.at], [...held.at]], leg: 0 });
 
             return;
         }
@@ -3168,7 +3239,7 @@ export class War {
             const by = !this.watched.has(depot.id) && fighters().find((force) => !this.#fleeing(force) && this.hostile(force.realm, depot.realm) && apart(force.at, depot.at) <= CLOSE.fight);
 
             if (by && this.depots.includes(depot)) {
-                const { attackers, defenders } = this.#fight(by.size, depot.guard, 1);
+                const { attackers, defenders } = this.#fight(by.size, depot.guard, 1, { by: by.realm, against: depot.realm });
 
                 this.#emit("battle", { realm: by.realm, against: depot.realm, depot: depot.id, at: [...depot.at], won: defenders === 0, killed: depot.guard - defenders, lost: by.size - attackers, [by.kind]: by.id });
                 by.size = attackers;
@@ -3180,13 +3251,31 @@ export class War {
             }
         }
 
+        // (A camp an enemy's army or reserve is upon, left behind by its own army: its guard put
+        // down, it's razed. Not one a player's near: that's fought out in the world)
+        for (const camp of [...this.camps]) {
+            const by = !this.watched.has(camp.id) && !this.#campHeld(camp) && fighters().find((force) => !this.#fleeing(force) && this.hostile(force.realm, camp.realm) && apart(force.at, camp.at) <= CLOSE.fight);
+
+            if (by && this.camps.includes(camp)) {
+                const { attackers, defenders } = this.#fight(by.size, camp.guard, 1, { by: by.realm, against: camp.realm });
+
+                this.#emit("battle", { realm: by.realm, against: camp.realm, camp: camp.id, at: [...camp.at], won: defenders === 0, killed: camp.guard - defenders, lost: by.size - attackers, [by.kind]: by.id });
+                by.size = attackers;
+                camp.guard = defenders;
+
+                if (!defenders) {
+                    this.#razeCamp(camp, by.realm);
+                }
+            }
+        }
+
         // (Reinforcements caught by an enemy army: cut down. Not those a player's near, nor by an
         // army a player's near: that's fought out in the world)
         for (const column of this.forces.filter(({ kind, id }) => kind === "reinforcement" && !this.watched.has(id))) {
             const by = fighters().find((force) => force.kind === "army" && !this.watched.has(force.id) && this.hostile(force.realm, column.realm) && apart(force.at, column.at) <= CLOSE.fight);
 
             if (by && this.forces.includes(column)) {
-                const { attackers, defenders } = this.#fight(by.size, column.size, 1);
+                const { attackers, defenders } = this.#fight(by.size, column.size, 1, { by: by.realm, against: column.realm });
 
                 this.#emit("intercepted", { realm: column.realm, by: by.realm, killed: column.size - defenders, lost: by.size - attackers, at: [...column.at] });
                 by.size = attackers;
@@ -3230,7 +3319,7 @@ export class War {
     // camp to be made up (gone, with none of it left), a reserve home
     #battle(army, other) {
         const before = [army.size, other.size];
-        const { attackers, defenders } = this.#fight(army.size, other.size, 1);
+        const { attackers, defenders } = this.#fight(army.size, other.size, 1, { by: army.realm, against: other.realm });
 
         army.size = attackers;
         other.size = defenders;
@@ -3305,7 +3394,7 @@ export class War {
             const seat = this.realm(thing.owner)?.seat === thing.id;
             const helping = [this.reserveOf(thing.owner), this.armyOf(thing.owner)].filter((force) => force && force.size > 0 && (force.kind === "reserve" || force.mission === "muster") && apart(force.at, thing.at) <= CLOSE.fight + this.#radius(thing.id));
             const defenders = thing.garrison + helping.reduce((sum, { size }) => sum + size, 0) + (seat ? LEADERS : 0);
-            const { attackers, defenders: left } = this.#fight(army.size, defenders, HOLDINGS[thing.kind].walls);
+            const { attackers, defenders: left } = this.#fight(army.size, defenders, HOLDINGS[thing.kind].walls, { by: army.realm, against: thing.owner });
             // (The reserve's fallen first, then the army's, then the garrison's; the leaders last)
             const killed = defenders - left;
             let toll = killed;
@@ -3337,7 +3426,7 @@ export class War {
                 return;
             }
         } else if (kind === "works") {
-            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1);
+            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1, { by: army.realm, against: thing.owner });
             const won = defenders === 0 && attackers > 0;
 
             this.#emit("battle", { realm: army.realm, against: thing.owner, works: thing.id, at: [...thing.at], won, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
@@ -3369,7 +3458,7 @@ export class War {
                 return;
             }
         } else {
-            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1);
+            const { attackers, defenders } = this.#fight(army.size, thing.guard, 1, { by: army.realm, against: thing.realm });
 
             this.#emit("battle", { realm: army.realm, against: thing.realm, [kind]: thing.id, at: [...thing.at], won: defenders === 0, killed: thing.guard - defenders, lost: went - attackers, army: army.id });
             army.size = attackers;
@@ -3397,13 +3486,15 @@ export class War {
     }
 
     // Two sides fight it out, round by round, until one's gone or the attack breaks. The
-    // defenders' walls count for them
-    #fight(attackers, defenders, walls) {
+    // defenders' walls count for them; and each side's people's lean (armies.js EDGES: `by`, the
+    // attackers' people, and `against`, the defenders', or null for anyone else's)
+    #fight(attackers, defenders, walls, { by = null, against = null } = {}) {
         let [a, d] = [attackers, defenders];
+        const [strike, back] = [EDGES[by]?.attack ?? 1, EDGES[against]?.defend ?? 1];
 
         for (let round = 0; round < 20 && a > 0 && d > 0; round++) {
-            const killed = Math.min(d, Math.max(1, Math.round((a * 0.12 * this.random.range(0.6, 1.4)) / walls)));
-            const lost = Math.min(a, Math.max(1, Math.round(d * 0.12 * this.random.range(0.6, 1.4) * walls)));
+            const killed = Math.min(d, Math.max(1, Math.round((a * 0.12 * this.random.range(0.6, 1.4) * strike) / walls)));
+            const lost = Math.min(a, Math.max(1, Math.round(d * 0.12 * this.random.range(0.6, 1.4) * walls * back)));
 
             d -= killed;
             a -= lost;
@@ -3422,11 +3513,19 @@ export class War {
     // from it again under them
     #hold(town, realm, garrison, { how = null } = {}) {
         const from = town.owner;
+        const taker = this.realm(realm);
+        // (Sacked by its takers: so many turns of its taxes, the more the greedier their ruler)
+        const sacked = taker ? Math.round(HOLDINGS[town.kind].tax * SACK.turns * (0.5 + taker.leader.traits.greed)) : 0;
 
         town.owner = realm;
         town.garrison = garrison;
+
+        if (taker) {
+            taker.treasury += sacked;
+        }
+
         this.remember(from, realm, -20);
-        this.#emit("taken", { town: town.id, from, to: realm, ...(how ? { how } : {}) });
+        this.#emit("taken", { town: town.id, from, to: realm, sacked, ...(how ? { how } : {}) });
 
         const loser = this.realm(from);
 
@@ -3594,7 +3693,7 @@ export class War {
                 continue;
             }
 
-            const { attackers, defenders } = this.#fight(by ? by.size : OVERRUN.band, convoy.size, 1);
+            const { attackers, defenders } = this.#fight(by ? by.size : OVERRUN.band, convoy.size, 1, { by: by?.realm ?? null, against: convoy.realm });
 
             if (by) {
                 by.size = attackers;
@@ -3709,7 +3808,7 @@ export class War {
         // (Its folk risen within the walls: they take it only by putting its garrison to the sword
         // to the last, as an army would; else the rising's crushed, and they wait to rise again)
         const rebels = Math.ceil(HOLDINGS[town.kind].garrison * RISING.garrison * RISING.rebels);
-        const { attackers, defenders } = this.#fight(rebels, town.garrison, 1);
+        const { attackers, defenders } = this.#fight(rebels, town.garrison, 1, { by: realm.id, against: town.owner });
 
         town.garrison = defenders;
         this.remember(this.liege(from), realm.id, -30);
