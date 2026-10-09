@@ -288,11 +288,12 @@ export function standingSign(solid, name, x, z) {
 
     const iron = material("iron-black");
     const picture = signMaterial(emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${name}`);
-    const [top, near, far] = [m(2.7), z + m(0.18), z + m(0.18) + m(0.75)];
+    // (Its board a hand's breadth or so out from the post, its stay up to the arm short of it)
+    const [top, near, far] = [m(2.7), z + m(0.3), z + m(0.3) + m(0.75)];
 
     solid.cylinder(x, z, 0, m(2.95), m(0.05), m(0.05), material("timber"), { segments: 6 });
     solid.beam([x, top + m(0.1), z], [x, top + m(0.1), far + m(0.1)], m(0.05), m(0.06), iron);
-    solid.beam([x, top - m(0.35), z], [x, top + m(0.08), z + m(0.4)], m(0.03), m(0.03), iron);
+    solid.beam([x, top - m(0.35), z], [x, top + m(0.08), z + m(0.24)], m(0.03), m(0.03), iron);
 
     const corners = [[x, top - m(0.9), near], [x, top - m(0.9), far], [x, top, far], [x, top, near]];
 

@@ -3621,6 +3621,14 @@ export class Game {
             names.hirePrice = String(hire.price);
         }
 
+        // (A shop with a daily stock: its special today, by name, and what it's asked for)
+        const stock = this.host.stockOf(npc.id);
+
+        if (stock?.special) {
+            names.special = itemLabel(stock.special).toLowerCase();
+            names.specialPrice = String(shopPrice(stock.special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true }));
+        }
+
         // (They stop and face the player, if they can talk now: the host says)
         if (!this.#command({ type: "talk", with: npc.id }, (result) => !result.ok && this.talking?.id === npc.id && this.#endTalk()).ok) {
             return;
@@ -3648,6 +3656,8 @@ export class Game {
                               ? Boolean(following?.waiting) === condition.waiting
                               : "member" in condition
                                 ? (this.standing.guildRank() !== null) === condition.member
+                                : "special" in condition
+                                  ? Boolean(stock?.specialLeft) === condition.special
                                 : official
                                   ? official.check(condition)
                                   : true,

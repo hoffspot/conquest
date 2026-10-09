@@ -766,16 +766,18 @@ export async function barracks(piece) {
 /**
  * A specialist's or a master's shop (shopfront.js SHOPFRONTS: a swordsmith's, an armorer's, an
  * occult scriptorium, an alchemist's; the Master Swordsmith's, the Master Armorer's, the Mystic
- * Emporium): the house it was, made over, its name along the floor above (or over the door), its
- * sign by the door, a striped awning over the window either side, and what it sells set out
- * before it (dressShop).
+ * Emporium): the house it was, made over (timber if it was a cottage), its name along the floor
+ * above (or over the door), its sign by the door, a striped awning over the window either side,
+ * and what it sells set out before it (dressShop).
  */
 export async function shop(piece) {
     await loadSignFont();
 
     const front = SHOPFRONTS[piece.name];
     const { w, h } = piece;
-    const style = HOUSE_STYLES[piece.style] ? piece.style : "timber";
+    // (In its street's look, but timber where it was a cottage: a cottage's rooms above are in its
+    // thatch, its eaves down over where the name would go)
+    const style = HOUSE_STYLES[piece.style] && piece.style !== "cottage" ? piece.style : "timber";
     const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(front.name.length > 12 ? 5.4 : 4.4), width - m(3.2));

@@ -27,7 +27,7 @@ import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "
 import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
-import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
+import { ENTERED, GROUND, PLOT, SHOP_LANDMARKS } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
 import { landAt, startFor } from "./worldplan/plan.js";
@@ -46,10 +46,13 @@ export const ENTRANCES = Object.freeze({
     hall: { depth: 1.8, offset: 0, width: 2, height: 2.5, floor: 0.3 },
     keep: { depth: 1.4, offset: 0, width: 2.4, height: 3.2, floor: 0.8 },
     barracks: { depth: 1.8, offset: 0, width: 1.8, height: 2.4, floor: 0.3 },
+    // (The specialists' and the masters' shops, made over from houses as a barracks is: art/kits/
+    // shopfront.js)
+    ...Object.fromEntries(SHOP_LANDMARKS.map((name) => [name, { depth: 1.8, offset: 0, width: 1.6, height: 2.3, floor: 0.3 }])),
 });
 
 /** The kinds that can be gone into. */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks"]);
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks", ...SHOP_LANDMARKS]);
 
 /**
  * The doors of the peoples' own places out in the land that can be gone into (a site's kind, then
@@ -834,6 +837,130 @@ export function barracksPosts(quarters) {
     return { captain: { square: [...captain], facing: s }, posts: posts.sort((a, b) => hypot(b.square[0] - door[0], b.square[1] - door[1]) - hypot(a.square[0] - door[0], a.square[1] - door[1])) };
 }
 
+// --- The specialists' and the masters' shops (docs/WAR.md *Shops*) ---
+
+// A swordsmith's, 18 by 12 metres: racks of blades along the back wall and down the walls, shelves
+// of hilts and scabbards between them, the counter across the room, two display tables either
+// side of the runner up from the door, a whetting bench and a grindstone, strongboxes by the door
+const SWORDSMITH = [
+    "RRRR..eeeeee..RRRR",
+    "..................",
+    "R.....MMMMMM.....R",
+    "R.......rr.......R",
+    "R...TT..rr..TT...R",
+    "R...TT..rr..TT...R",
+    "........rr........",
+    "X.......rr......G.",
+    "X.......rr........",
+    "R.......rr.......R",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// An armorer's: racks of shields behind the counter, shelves of helms and gauntlets either side,
+// harness on its stands in two rows down the room, workbenches for fitting
+const ARMORER = [
+    "eeee..RRRRRR..eeee",
+    "..................",
+    "n.....MMMMMM.....n",
+    "........rr........",
+    "n..n....rr....n..n",
+    "........rr........",
+    "n..n....rr....n..n",
+    "........rr........",
+    "X.......rr.......X",
+    "X.......rr.......X",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// An occult scriptorium: shelves of books and scrolls all round, the counter, two copying desks
+// either side, candle stands, lecterns by the walls
+const SCRIPTORIUM = [
+    "eeeeee.eeee.eeeeee",
+    "..................",
+    "e.....MMMMMM.....e",
+    "e.......rr.......e",
+    "e..TT...rr...TT..e",
+    "e..TT...rr...TT..e",
+    "e.......rr.......e",
+    "..v.....rr.....v..",
+    "e.......rr.......e",
+    "e..o....rr....o..e",
+    "e.......rr.......e",
+    "........DD........",
+];
+
+// An alchemist's: shelves of phials and jars all round, the counter, two worktables with their
+// stills, casks along the walls
+const ALCHEMIST = [
+    "eeeeee.eeee.eeeeee",
+    "..................",
+    "K.....MMMMMM.....K",
+    "K.......rr.......K",
+    "e..TT...rr...TT..e",
+    "e..TT...rr...TT..e",
+    "e.......rr.......e",
+    "........rr........",
+    "K.......rr.......e",
+    "K.......rr.......e",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// The Mystic Emporium: shelves of curios round the walls, the counter, a stand at each side
+// wearing a robe of the arcane, two tables with the orbs and the jewels, candles
+const EMPORIUM = [
+    "eeeeee.eeee.eeeeee",
+    "..................",
+    "e.....MMMMMM.....e",
+    "e.......rr.......e",
+    "e..n....rr....n..e",
+    "........rr........",
+    "e..TT...rr...TT..e",
+    "e..TT...rr...TT..e",
+    "..v.....rr.....v..",
+    "e.......rr.......e",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+/**
+ * Each shop inside: its plan, and its keeper's part (`role`: how they dress), title, and the
+ * name the shop goes by (`named`: by the keeper's family name, or its own).
+ */
+export const SHOP_INSIDES = Object.freeze({
+    swordsmith: { rows: SWORDSMITH, role: "smith", title: "Swordsmith", named: (family) => `${family}'s Blades` },
+    armorer: { rows: ARMORER, role: "smith", title: "Armorer", named: (family) => `${family}'s Harness` },
+    scriptorium: { rows: SCRIPTORIUM, role: "arcanist", title: "Scribe", named: () => "the Occult Scriptorium" },
+    alchemist: { rows: ALCHEMIST, role: "herbalist", title: "Alchemist", named: (family) => `${family}'s Apothecary` },
+    masterSwordsmith: { rows: SWORDSMITH, role: "quartermaster", title: "Master Swordsmith", named: () => "the Master Swordsmith's" },
+    masterArmorer: { rows: ARMORER, role: "quartermaster", title: "Master Armorer", named: () => "the Master Armorer's" },
+    emporium: { rows: EMPORIUM, role: "arcanist", title: "Proprietor", named: () => "the Mystic Emporium" },
+});
+
+/** A shop's floor: its one room (SHOP_INSIDES), drawn as its kind's (`look`). */
+export function shopRooms(building) {
+    return [{ suffix: "shop", style: "shop", look: building.kind, name: building.name, rows: SHOP_INSIDES[building.kind].rows, ground: GROUND.planks, sound: "shop" }];
+}
+
+/**
+ * A shop's keeper, worked out from its plan: behind the counter, serving, and now and then at the
+ * shelves or racks along the back wall; selling the shop's wares (core/progress.js SHOPS: its
+ * `shop`, the shop's kind), and talking as its kind of keeper does (core/dialogue.js: `talk`).
+ */
+export function shopFolkOf(building, floor) {
+    const random = createRandom(building.seed * 23 + 11);
+    const { n, s } = FACING;
+    const inside = SHOP_INSIDES[building.kind];
+    const [counter] = floor.pieces.filter(({ kind }) => kind === "counter");
+    const keeps = { square: [counter.x + Math.floor(counter.w / 2), counter.y - 1], facing: s, wait: [8000, 14000] };
+    const back = floor.pieces.filter(({ kind, y }) => y === 0 && (kind === "shelves" || kind === "rack"));
+    const reaches = random.shuffle(back).slice(0, 2).map((piece) => ({ square: [piece.x + Math.floor(piece.w / 2), 1], facing: n, wait: [2500, 4500] }));
+
+    return [{ local: "keeper", title: inside.title, role: inside.role, talk: building.kind, shop: building.kind, sex: random.chance(0.45) ? "f" : "m", map: floor.id, square: keeps.square, facing: s, routine: { order: "cycle", wait: [6000, 10000], stops: [keeps, ...reaches.flatMap((reach) => [reach, keeps])] } }];
+}
+
 // --- The places worth finding gone into (core/places.js; sites.js entranceAt) ---
 
 // An outlaws' cave, 16 by 16 metres: a passage in from its mouth (the door, south) to a chamber,
@@ -1105,6 +1232,8 @@ const KINDS = Object.freeze({
     keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall, under]) => [...keepFolkOf(building, hall), ...(under ? undercroftFolkOf(building, under) : [])] },
     // (A barracks: no folk, its garrison the host's, of whoever holds its town: barracksPosts)
     barracks: { first: "quarters", rooms: barracksRooms, folk: () => [] },
+    // (The specialists' and the masters' shops: each its keeper)
+    ...Object.fromEntries(SHOP_LANDMARKS.map((name) => [name, { first: "shop", rooms: shopRooms, folk: (building, [floor]) => shopFolkOf(building, floor) }])),
     // (The places worth finding: no folk of their own, those who hold them the wild's: host.js)
     cave: { first: "cave", rooms: caveRooms, folk: () => [] },
     lair: { first: "lair", rooms: lairRooms, folk: () => [] },
@@ -1240,7 +1369,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
+const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -1491,11 +1620,13 @@ export class Interiors {
         // Its folk, named from its seed, each with an id of their own in the world
         building.folk = namePeople(kind.folk(building, maps), building.seed, building.people).map((one) => ({ ...one, id: `${key}/${one.local}`, people: building.people, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
 
-        // (A smithy's known by its smith: "Hayward's Forge")
+        // (A smithy's known by its smith: "Hayward's Forge"; a shop by its keeper, or its own name:
+        // "Ashdown's Blades", "the Mystic Emporium")
         const smith = building.kind === "blacksmith" ? building.folk.find(({ local }) => local === "smith") : null;
+        const keeper = SHOP_INSIDES[building.kind] ? building.folk.find(({ local }) => local === "keeper") : null;
 
-        if (smith) {
-            building.name = `${smith.name.split(" ")[1]}'s Forge`;
+        if (smith || keeper) {
+            building.name = smith ? `${smith.name.split(" ")[1]}'s Forge` : SHOP_INSIDES[building.kind].named(keeper.name.split(" ")[1] ?? keeper.name);
 
             for (const map of maps) {
                 map.name = building.name;

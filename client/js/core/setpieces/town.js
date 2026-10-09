@@ -484,15 +484,15 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     const building = (rect) => fits(rect, NEIGHBOUR, [USE.building, USE.thing]) && fits(rect, CLEAR, [USE.street]) && fits(rect, 0, [USE.yard]);
     // (What's gone into, or a people's own place, opens onto dry land or a walk: the squares before
     // the middle of its front, where its door is, never the lagoon's but under a walk)
-    const opens = (rect) =>
-        !water ||
-        [0.6, 1.5].every((out) =>
-            [-0.8, 0, 0.8].every((across) => {
-                const [i, j] = [rect.x + rect.az[0] * (rect.d / 2 + out) + rect.ax[0] * across, rect.y + rect.az[1] * (rect.d / 2 + out) + rect.ax[1] * across].map(Math.floor);
+    const before = (rect, out, across) => {
+        const [i, j] = [rect.x + rect.az[0] * (rect.d / 2 + out) + rect.ax[0] * across, rect.y + rect.az[1] * (rect.d / 2 + out) + rect.ax[1] * across].map(Math.floor);
 
-                return !water[j]?.[i] || onWalk(walks, i + 0.5, j + 0.5);
-            }),
-        );
+        return !water[j]?.[i] || onWalk(walks, i + 0.5, j + 0.5);
+    };
+    const opens = (rect) => !water || [0.6, 1.5].every((out) => [-0.8, 0, 0.8].every((across) => before(rect, out, across)));
+    // (Or, for a shop where no house is left that opens so, its doorstep's middle on land or a
+    // walk, and the walk all across before it a step further out)
+    const steps = (rect) => !water || (before(rect, 0.6, 0) && [-0.8, 0, 0.8].every((across) => before(rect, 1.5, across)));
     const landmark = (rect) => building(rect) && opens(rect);
     const fitsOn = (rect, grow, on) => eachSquare(rect, grow, (i, j) => inside(i, j) && on.includes(use[j * width + i]));
 
@@ -1030,14 +1030,17 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
     // Its shops (docs/WAR.md *Shops*): a town's, a city's or a capital's specialists
     // (pieces.js SPECIALISTS), and the master's shop of its people kept here, if one is (`master`:
-    // the world plan's, worldplan/settle.js: pieces.js MASTER_SHOPS); each the house nearest the market whose door
-    // opens onto a street (on dry land and on the street if one can be), made over as its seat is,
-    // and nothing else moved
+    // the world plan's, worldplan/settle.js: pieces.js MASTER_SHOPS); each the house nearest the
+    // market whose door opens onto a street (on dry land and on the street if one can be; failing
+    // that, over a lagoon with its doorstep on a walk), made over as its seat is, and nothing else
+    // moved
     for (const name of [...(keepsShops(spec) ? SPECIALISTS : []), ...(master ? [master] : [])]) {
-        const opening = pieces.filter(({ kind, x, y, w, h, facing }) => kind === "house" && opens(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const houses = pieces.filter(({ kind }) => kind === "house");
+        const opening = houses.filter(({ x, y, w, h, facing }) => opens(frame(x, y, w * PLOT, h * PLOT, facing)));
         const fronts = opening.filter(({ back }) => !back);
+        const stepping = houses.filter(({ back, x, y, w, h, facing }) => !back && steps(frame(x, y, w * PLOT, h * PLOT, facing)));
         const near = (house) => length(house.x - centre[0], house.y - centre[1]);
-        const shop = [fronts.filter(({ water: wet }) => !wet), fronts, opening].find((each) => each.length)?.reduce((best, house) => (near(house) < near(best) - 1e-9 ? house : best));
+        const shop = [fronts.filter(({ water: wet }) => !wet), fronts, opening, stepping].find((each) => each.length)?.reduce((best, house) => (near(house) < near(best) - 1e-9 ? house : best));
 
         // (No house left to make over: laid out again)
         if (!shop) {

@@ -113,8 +113,8 @@ export const PEOPLE_PLACES = Object.freeze({
     darkElf: Object.freeze({ "spider shrine": [5, 5], "obsidian spire": [6, 6], "shadow gate": [4, 3], castle: [15, 15] }),
 });
 
-/** The special buildings that can be gone into. */
-export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild", "hall", "keep", "barracks"]);
+/** The special buildings that can be gone into (the shops among them). */
+export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild", "hall", "keep", "barracks", ...SHOP_LANDMARKS]);
 
 /** Small things standing in courtyards, squares and gardens, and their sizes. */
 export const PROPS = Object.freeze({

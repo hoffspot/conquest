@@ -618,13 +618,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     jewellery, draughts and cures, a glowcap draught, the Stamina Boost potion and the Scroll of
     Safety (below), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), and
     the tomes that open the elements' schools, and Light's;
-  - the specialists (in the towns and cities: their shops come into the world in the next of the
-    shops' changes), each with a new assortment each day, better made than a blacksmith's, and a
-    daily special (below): a swordsmith's arms (always a sword among them), an armorer's shields
+  - the specialists, in every town, city and capital, by its market (docs/GAME.md *Its shops*,
+    *A shop*), each with a new assortment each day, better made than a blacksmith's, and a daily
+    special (below): a swordsmith's arms (always a sword among them), an armorer's shields
     and armour, an occult scriptorium's tomes, spell scrolls, charms and the arcane (wands,
     grimoires, spellwards, wizards' hats), an alchemist's draughts, elixirs, oils and cures;
-  - the masters (one of each for each people, in a village, town or city of theirs: the same),
-    each with a new assortment each day of the rare, very rare and legendary, at twice the
+  - the masters (one of each for each people, each in a different village, town or city of
+    theirs, chosen with the world: worldplan/settle.js), each with a new assortment each day of the rare, very rare and legendary, at twice the
     price, and a legendary special: the Master Swordsmith's arms, the Master Armorer's armour,
     and the Mystic Emporium's tomes, jewellery, charms and the arcane;
   - down in a people's castle's undercroft (GAME.md *Places worth finding*, *The undercroft*):

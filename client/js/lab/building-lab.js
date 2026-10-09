@@ -24,7 +24,7 @@ import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
 import { RACES } from "../core/worldplan/races.js";
 import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
-import { barracksRooms, guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
+import { barracksRooms, guildRooms, hallRooms, keepRooms, shopRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
 import { fortObject } from "../world/art/kits/forts.js";
 import { SHOP_NAMES } from "../world/art/kits/shopfront.js";
@@ -253,6 +253,8 @@ function insidesOf(seed, people) {
         [hallRooms, {}],
         [keepRooms, {}],
         [barracksRooms, {}],
+        // (The specialists' and the masters' shops, each its own look)
+        ...SHOP_NAMES.map((kind) => [shopRooms, { kind }]),
     ];
     const frames = [];
     let x = 0;
@@ -284,7 +286,7 @@ function insidesOf(seed, people) {
             }
 
             width = Math.max(width, map.width);
-            frames.push({ label: `inside ${floor.style}`, x: x + map.width / 2, z: n * 24 + map.height / 2, w: map.width, d: map.height });
+            frames.push({ label: `inside ${floor.look && floor.style === "shop" ? floor.look : floor.style}`, x: x + map.width / 2, z: n * 24 + map.height / 2, w: map.width, d: map.height });
         }
 
         x += width + 6;

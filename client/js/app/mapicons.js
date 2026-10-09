@@ -89,6 +89,73 @@ const LOOKS = {
             ["M-4.2,-1.5 a4.5,5 0 0 1 3,-3.6", null, "#e6ebf0", 1.1],
         ],
     },
+    // The specialists' and the masters' shops (docs/WAR.md *Shops*)
+    swordsmith: {
+        rim: "#c9d1d9",
+        parts: [
+            // A sword, point up: its blade, cross guard, grip and pommel
+            ["M-1.3,4 v-11 l1.3,-2.8 l1.3,2.8 v11 z", "#dfe4ea", "#1e2328", 1],
+            ["M-5,4 h10 v2 h-10 z", "#c9a13b", "#2a1a0e", 0.9],
+            ["M-0.9,6 h1.8 v4 h-1.8 z", "#6b4520", "#2a1a0e", 0.8],
+            ["M0,10.2 a1.3,1.3 0 1 1 0.01,0 z", "#c9a13b", "#2a1a0e", 0.8],
+        ],
+    },
+    armorer: {
+        rim: "#8fa6bd",
+        parts: [
+            // A breastplate: its shoulders, the ridge down its middle, the fauld below
+            ["M-8,-7 c2,-1.6 4.5,-2 6,-0.8 c1,0.8 3,0.8 4,0 c1.5,-1.2 4,-0.8 6,0.8 l-1.4,5 c-0.6,4 -0.6,7 0.4,9 h-13 c1,-2 1,-5 0.4,-9 z", "#aeb6bf", "#1e2328", 1.1],
+            ["M0,-6.4 v12", null, "#e6ebf0", 1],
+            ["M-6.6,7.2 h13.2 v2.4 h-13.2 z", "#7d868f", "#1e2328", 0.9],
+        ],
+    },
+    scriptorium: {
+        rim: "#b8463c",
+        parts: [
+            // An open book, its pages lined, a quill across it
+            ["M-10,-5 c3,-1.6 7,-1.6 10,0.4 c3,-2 7,-2 10,-0.4 v11 c-3,-1.6 -7,-1.6 -10,0.4 c-3,-2 -7,-2 -10,-0.4 z", "#efe4c4", "#3a2110", 1],
+            ["M0,-4.6 v11", null, "#3a2110", 0.9],
+            ["M-8,-1.5 h6 M-8,1 h6 M-8,3.5 h5 M2,-1.5 h6 M2,1 h6 M2,3.5 h5", null, "#8a6a4a", 0.7],
+            ["M4,7 c1.6,-4 4,-9 6.5,-13 c-1,4.4 -2.6,9 -5.6,13.4 z", "#fbf8f0", "#3a2110", 0.7],
+        ],
+    },
+    alchemist: {
+        rim: "#4caf6a",
+        parts: [
+            // A round flask, stoppered, a green draught in it
+            ["M-1.6,-9 v4.4 c-5,2 -6.4,6 -6.4,8.6 a8,8 0 0 0 16,0 c0,-2.6 -1.4,-6.6 -6.4,-8.6 v-4.4 z", "#d8ecef", "#1e2a2a", 1],
+            ["M-7.4,2 c3,-1.2 11.8,-1.2 14.8,0 a7.4,7.4 0 0 1 -14.8,0 z", "#4caf6a", null, 0],
+            ["M-2.2,-10.5 h4.4 v2.2 h-4.4 z", "#7a5230", "#2a1a0e", 0.8],
+        ],
+    },
+    masterSwordsmith: {
+        rim: "#e2b54a",
+        parts: [
+            // Two swords crossed under a crown
+            ["M-8,9 L6,-5 M8,9 L-6,-5", null, "#1c1c22", 3.2],
+            ["M-8,9 L6,-5 M8,9 L-6,-5", null, "#dfe4ea", 1.6],
+            ["M-5.5,-6 L-5.5,-10 L-2.7,-8 L0,-11 L2.7,-8 L5.5,-10 L5.5,-6 z", "#e2b54a", "#2a1a0e", 0.9],
+        ],
+    },
+    masterArmorer: {
+        rim: "#e2b54a",
+        parts: [
+            // A breastplate under a crown
+            ["M-7,-3 c1.8,-1.4 4,-1.8 5.4,-0.7 c0.9,0.7 2.7,0.7 3.6,0 c1.4,-1.1 3.6,-0.7 5.4,0.7 l-1.2,4.4 c-0.5,3.4 -0.5,5.6 0.4,7.6 h-11.4 c0.9,-2 0.9,-4.2 0.4,-7.6 z", "#aeb6bf", "#1e2328", 1],
+            ["M0,-2.6 v10", null, "#e6ebf0", 0.9],
+            ["M-5.5,-5 L-5.5,-9 L-2.7,-7 L0,-10 L2.7,-7 L5.5,-9 L5.5,-5 z", "#e2b54a", "#2a1a0e", 0.9],
+        ],
+    },
+    emporium: {
+        rim: "#9a6ae8",
+        parts: [
+            // A crystal orb glowing on its stand, a star by it
+            ["M-5,9.5 l1.6,-4 h6.8 l1.6,4 z", "#6a4a2a", "#2a1a0e", 0.9],
+            ["M0,-7.5 a6.4,6.4 0 1 1 -0.01,0 z", "#b48cff", "#2a1440", 1.1],
+            ["M-2.4,-3.6 a2.2,2.2 0 1 1 -0.01,0 z", "#f4eaff", null, 0],
+            ["M7.6,-9 l0.8,2 l2,0.8 l-2,0.8 l-0.8,2 l-0.8,-2 l-2,-0.8 l2,-0.8 z", "#f4e6a8", null, 0],
+        ],
+    },
     // The places worth finding
     castle: {
         rim: "#c9a24a",

@@ -752,8 +752,9 @@ export async function shop(piece) {
         budLamp(solid, at(door.length / 2 + side * m(1.5), m(2.6), m(0.1)), [door.out[0], door.out[2]], { reach: m(0.5) });
     }
 
-    // (Its sign by the door, and what it sells on the left: the board's on the right)
-    standingSign(solid, piece.name, cx - m(1.4), doorFace + m(0.25));
+    // (Its sign by the door, out past the lamp beside it, and what it sells on the left: the
+    // board's on the right)
+    standingSign(solid, piece.name, cx - m(1.4), doorFace + m(0.6));
     dressShop(solid, piece.name, { x0: cx, z: doorFace + m(0.3), room: cx / m(1), seed: random.int(1, 1 << 30), sides: [-1], aside: 3 });
 
     return solid.toObject();

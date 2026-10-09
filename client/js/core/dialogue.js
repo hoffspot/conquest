@@ -36,6 +36,32 @@ export const PLACE = "Wenches and Ale";
 const FAREWELL = { say: "Farewell.", next: null };
 
 /**
+ * A specialist's or a master's shopkeeper's talk (docs/WAR.md *Shops*): greeted (`first`, the first
+ * time; `again`, after), their wares to buy (`shop`: their shop's kind), today's special asked
+ * after ({special} and {specialPrice}, or that it's gone: `{ special }` in a condition), and one
+ * thing to ask them about (`ask`, and what they say: `answer`).
+ */
+function keeperTree({ shop, first, again, ask, answer, special, gone }) {
+    const buy = { say: "Show me what you have for sale.", next: null, do: [{ shop }] };
+
+    return {
+        start: "greet",
+        nodes: {
+            greet: { say: [{ if: { met: false }, lines: first }, { lines: again }], choices: "more" },
+            more: {
+                say: ["What else?", "Anything more?", "Ask away."],
+                choices: [buy, { say: "What's today's special?", next: "special" }, { say: ask, next: "ask" }, FAREWELL],
+            },
+            special: {
+                say: [{ if: { special: true }, lines: special }, { lines: gone }],
+                choices: [{ if: { special: true }, say: "Let me see it.", next: null, do: [{ shop }] }, { say: "Something else.", next: "more" }, FAREWELL],
+            },
+            ask: { say: answer, choices: [{ say: "I see.", next: "more" }, FAREWELL] },
+        },
+    };
+}
+
+/**
  * Whether what's upstairs in a tavern (`upstairs`: "bordello", "mixed", "inn", or null for no
  * floor above) is as a condition wants (`want`: true for anything, false for nothing, or which).
  */
@@ -574,6 +600,76 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // The specialists' shopkeepers (docs/WAR.md *Shops*): a swordsmith, proud of their steel
+    swordsmith: keeperTree({
+        shop: "swordsmith",
+        first: ["Mind your elbows: everything in here's sharp. {name}. I make blades, and only blades.", "Looking for steel? {name}'s the name, and blades are the trade. Have a look along the racks."],
+        again: ["{player}. That edge of yours still keen?", "Back for steel, {player}? There's new on the racks today."],
+        ask: "What makes a good blade?",
+        answer: ["Folding, quenching, and a smith who won't sell what isn't ready. The blacksmith down the street makes horseshoes too. I don't.", "Balance first, edge second, looks last. Pick one up: if it wants to move, it's good."],
+        special: ["Today's the one on the wall behind me: {special}. {specialPrice} gold, and it won't be there tomorrow.", "{special}. Took me a month. {specialPrice} gold, and I'd ask more if I didn't want it gone to a fighter."],
+        gone: ["Sold this morning, to someone with a heavier purse than yours, I'd wager. Come back tomorrow.", "Gone already. There'll be another tomorrow: there always is."],
+    }),
+    // An armorer: practical, measuring everyone who comes in by eye
+    armorer: keeperTree({
+        shop: "armorer",
+        first: ["Stand still a moment. Hm. Broad in the shoulder, short in the arm. {name}, armorer. What are you after?", "Mail, plate, a good shield: {name} has it. Let's see what fits."],
+        again: ["{player}. Took a knock or two since, by the look of you.", "Back again, {player}? Let's see what needs mending."],
+        ask: "Mail or plate?",
+        answer: ["Mail if you'd rather run, plate if you'd rather not have to. Either beats a shirt.", "Depends what's hitting you. Arrows, plate. Claws, mail. Spells, neither: try the scriptorium."],
+        special: ["The one on the stand by the counter: {special}. {specialPrice} gold. Fits like it was made for you, near enough.", "Today it's {special}: {specialPrice} gold, and I'll fit it myself."],
+        gone: ["Gone already. A knight came in with a full purse and an empty back. Tomorrow.", "Sold. I'll have something finer on the stand by tomorrow."],
+    }),
+    // An occult scriptorium's scribe: soft-spoken, ink to the elbows, a little uncanny
+    scriptorium: keeperTree({
+        shop: "scriptorium",
+        first: ["Quietly, please: some of the books are sleeping. I'm {name}. Tomes, scrolls, a charm or two. What do you seek?", "Ah. Someone who reads. Or wishes to. {name}, scribe of this house. Welcome."],
+        again: ["{player}. The ink's still wet on today's scrolls.", "You've come back, {player}. They always do."],
+        ask: "What's a spell scroll?",
+        answer: ["A spell written out by someone who knows it, folded up and waiting. Read it, and it's cast, once. You needn't know it yourself.", "Every word of a spell, in order, inked by a careful hand. Read it aloud and it does the rest. Then it's only paper."],
+        special: ["Today: {special}. {specialPrice} gold. It came to us, as such things do; it won't stay long.", "Behind the counter, under the cloth: {special}. {specialPrice} gold, for whoever it chooses."],
+        gone: ["It's found its reader already. Tomorrow there'll be another.", "Gone, I'm afraid. Come back tomorrow; I'll have copied something worth your while."],
+    }),
+    // An alchemist: brisk, a little singed, forever mid-experiment
+    alchemist: keeperTree({
+        shop: "alchemist",
+        first: ["Don't touch the green ones. Or the blue. Actually, don't touch anything. {name}, alchemist. What ails you?", "Ah, a customer! {name}. Draughts, elixirs, oils for your blade: if it's in a bottle, I made it."],
+        again: ["{player}! Still alive, I see. My draughts work, then.", "Back for more, {player}? I've a new batch cooling."],
+        ask: "What's an oil for?",
+        answer: ["Rub it on your blade, or your arrowheads. For a while after, what you hit might burn, or freeze, or sicken. One at a time, mind.", "It clings to steel and bites whatever it's put into. Fire oil burns, frost oil slows, venom oil poisons. Don't lick your sword."],
+        special: ["Today's special, cooling on the back shelf: {special}. {specialPrice} gold. I'll not make another for a while.", "{special}. Took me three tries and an eyebrow. {specialPrice} gold."],
+        gone: ["Sold already. Someone wanted it more than you. Tomorrow I'll brew something else.", "Gone! Come back tomorrow. Bring gold."],
+    }),
+    // The masters (one of each in each people's lands): a Master Swordsmith, grave and exacting
+    masterSwordsmith: keeperTree({
+        shop: "masterSwordsmith",
+        first: ["You stand in the house of {name}, Master Swordsmith. Kings have waited at that door. What is your need?", "{name}. Every blade here has a name, and some have histories. Look, but carefully."],
+        again: ["{player}. You return. Good: a blade should find its hand.", "Welcome back, {player}. The forge has been busy."],
+        ask: "Why are your blades so dear?",
+        answer: ["Because they're the last blade you'll buy. Rare steel, folded a hundred times, and a year of my life in each.", "Anyone can make a sword. I make the swords that are spoken of after."],
+        special: ["Today, on the stand of honour: {special}. {specialPrice} gold. I'll make no other like it.", "{special}. {specialPrice} gold. It will outlive us both."],
+        gone: ["It has found its bearer. Return tomorrow, and I'll show you another.", "Gone, to a worthy hand, I hope. Tomorrow, another."],
+    }),
+    // A Master Armorer: proud, deliberate, a craftsman of legend
+    masterArmorer: keeperTree({
+        shop: "masterArmorer",
+        first: ["Welcome to the house of {name}, Master Armorer. What's made here has turned dragonfire. What do you need?", "{name}. My harness has stood in every war of this age. Few can afford it. Fewer deserve it."],
+        again: ["{player}. Still in one piece; my armour, I hope?", "Welcome back, {player}. The anvils have been singing."],
+        ask: "What sets your armour apart?",
+        answer: ["Every plate shaped to its wearer, every ring riveted by hand. It'll stop what would have killed you, and look well doing it.", "Rare steel, old secrets, and patience. Mostly patience."],
+        special: ["Today: {special}. {specialPrice} gold. There's none finer in these lands.", "On the great stand: {special}, {specialPrice} gold. Try it on, if you can afford to."],
+        gone: ["It's spoken for, already gone. Tomorrow I'll set out another.", "Sold. Come back tomorrow."],
+    }),
+    // The Mystic Emporium's proprietor: smooth, knowing, never quite saying where things came from
+    emporium: keeperTree({
+        shop: "emporium",
+        first: ["Welcome, welcome, to the Mystic Emporium. I am {name}. Wonders, curios, things that shouldn't exist: all for sale, for the right price.", "Ah, a seeker. {name}, at your service. Tomes, jewels, charms that hum in the dark. Look, but don't touch the mirror."],
+        again: ["{player}! I'd hoped you'd return. I've new wonders today.", "Back again, {player}? The orb said you'd come."],
+        ask: "Where do your wares come from?",
+        answer: ["Here and there. Tombs, mostly. Don't ask whose.", "Collectors die, and their heirs need gold. I'm happy to help. Everyone's happy."],
+        special: ["Today's marvel: {special}. {specialPrice} gold, and cheap at that.", "Under the glass, there: {special}. {specialPrice} gold. One of a kind, I assure you."],
+        gone: ["Gone already, I'm afraid. Wonders go quickly. Tomorrow, another.", "Sold, to a discerning buyer. Come back tomorrow: there's always another marvel."],
+    }),
     // A temple's priest: kindly and unhurried, glad to tell of the Six to anyone who asks
     priest: {
         start: "greet",

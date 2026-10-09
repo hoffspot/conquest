@@ -293,6 +293,14 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   (`core/lore/gods.js`: below), and its grade and build (`churchOf`: a village's parish church,
   a town's church, Romanesque or Gothic by its seed, a city's minster; taking nothing from the
   layout's random, so the layout's the same).
+- **Its shops** (docs/WAR.md *Shops*): in a town, a city or a capital (those with a church, an
+  adventurers' guild, a blacksmith and a seat: `keepsShops`), a swordsmith's, an armorer's, an
+  occult scriptorium and an alchemist's (`SPECIALISTS`); and in each of three villages, towns or
+  cities of each people, chosen with the world (worldplan/settle.js, the place's `master`), the
+  Master Swordsmith's, the Master Armorer's or the Mystic Emporium (`MASTER_SHOPS`). Each is made
+  over in the same way, last, from the house nearest the market whose door opens onto a street
+  (on dry land if one can be; failing that, over a lagoon with its doorstep on a walk), so
+  nothing else moves for them. They can be entered.
 - **Trees** dotted about the open ground left.
 
 **Each people's own** (`layoutTown({ ..., people })`, `PEOPLE_TOWNS`): the same builder, laid
@@ -432,7 +440,7 @@ of each map on the way: a list of them by map, made again when links are added).
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns, smithies, temples, adventurers' guilds, town halls, keeps and barracks), in the start town and in
+into (`ENTERABLE`: taverns, smithies, temples, adventurers' guilds, town halls, keeps, barracks and the shops), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -548,6 +556,32 @@ are kept.
   bunks two high along the walls, the hearth, the mess table and its benches, and strongboxes by
   the door. No folk: its garrison is the host's, of whoever holds the town (`barracksPosts`: its
   captain behind the desk, its guardsmen at their posts; docs/WAR.md M16).
+- **A shop** (`shopRooms`, `SHOP_INSIDES`: a specialist's or a master's) is one room 18 by 12
+  metres, floorboarded, its door in the middle of the south wall between two windows, the counter
+  across it under its cloth with its keeper behind it, a rug up from the door (all but the
+  alchemist's), and the rest as its trade has it (`interiors3d.js` `shop`, by its `look`):
+  - a swordsmith's: racks of blades along the back wall and down the sides, shelves of sheathed
+    blades between them, two tables of blades laid out on leather, a whetting bench and a
+    grindstone;
+  - an armorer's: a wall of painted shields behind the counter, shelves of helms and gauntlets,
+    harness on its stands in two rows down the room, fitting benches;
+  - an occult scriptorium: shelves of books and scrolls all round, two copying desks (an open
+    book, a candle, an inkpot), candle stands and lecterns;
+  - an alchemist's: shelves of phials and jars of every colour all round, two worktables with
+    their stills, casks along the walls;
+  - the Mystic Emporium: shelves of curios, phials, books and skulls; robes of the arcane on
+    stands; two tables with a glowing orb and jewels on velvet; candle stands;
+  - the Master Swordsmith's and the Master Armorer's as a swordsmith's and an armorer's, under
+    velvet and gold: banners either side of the counter.
+
+  Its keeper (`shopFolkOf`) serves from behind the counter and goes to the shelves or racks on the
+  back wall now and then; dressed as a smith (the swordsmith and the armorer), an arcanist (the
+  scribe, the Emporium's proprietor), an herbalist (the alchemist) or a quartermaster (the
+  masters). The shop's known by its keeper's family name ("Ashdown's Blades", "Ashdown's
+  Harness", "Rowe's Apothecary") or its own ("the Occult Scriptorium", "the Master Swordsmith's",
+  "the Mystic Emporium"). They sell what their shop sells (core/progress.js SHOPS, docs/WAR.md
+  *Shops*), and talk (core/dialogue.js): of their trade, and of today's special by name and price
+  (`{special}`, `{specialPrice}`), or that it's gone.
 - **A town hall** (`hallRooms`) is a chamber 18 by 14 metres: shelves of the town's rolls along
   the north wall and the reeve's long desk before them, the council table with its benches, the
   notices on the west wall, a hearth on the east, strongboxes, and petitioners' benches by the
@@ -2590,6 +2624,22 @@ facing south; each is turned about its middle to face the way the layout says:
   - **The town hall**: the house it was, in its street's look (a cottage's made timber, for a
     storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
     dark red board over it, the sign of the town's keys by the door, and a lantern either side.
+  - **The shops** (art/kits/shopfront.js; the specialists' and the masters'): the house it was, in
+    its street's look (a cottage's made timber, its eaves clear of the name), its door in the
+    middle of its front up a step, its name on a board over it
+    or along the floor above ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master
+    Swordsmith", "Master Armorer", "Mystic Emporium") and its sign by the door: a sword, a great
+    helm, an open book and quill, a flask, crossed blades under a crown, a helm, and a glowing
+    orb (new emblems: emblems.js). A striped awning over each window (a master's has banners in
+    velvet and gold instead), and what it sells set out either side of the door (`dressShop`): a
+    rack of blades and a whetstone; a harness on its stand and a board of shields; a lectern with
+    a book open on it and tomes stacked by a skull; a shelf of bottles and herbs hung to dry; the
+    Emporium's orb glowing on a marble pillar between lanterns of violet and green glass. Each
+    people builds its own (`shop` in each kit), as its barracks: the elves a round hall of marble
+    under one petal roof, its name on a board standing by the way in; the dark elves a thorn
+    house; the cat folk a mud-brick town house; the lizard folk a plastered house on its platform
+    under a band of glyphs; the orcs a longhouse, its name hung under its porch and its sign
+    nailed to the porch's post. The others' signs hang from a post by the door (`standingSign`).
   - **The barracks** (a village's guardhouse): the house it was, in its street's look (a
     cottage's made stone), its door in the middle of its front up a step, "Barracks" (or
     "Guardhouse") on a board over it or along the floor above, the sign of a shield by it, a
@@ -3117,8 +3167,10 @@ the player has been inside (a house that can't be entered never has one): a roun
 rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
 anvil throwing a spark for a smithy (steel), a temple's columns under its pediment for a temple
 (white and gold), crossed swords behind a blue shield for an adventurers' guild (gold), crossed
-gold keys for a town hall (red), a jewelled crown for a keep (violet), and a crested helm for a
-barracks (steel blue). They're
+gold keys for a town hall (red), a jewelled crown for a keep (violet), a crested helm for a
+barracks (steel blue), and for the shops a sword (steel), a breastplate (blue steel), an open book
+and quill (red), a flask of green (green), crossed swords and a breastplate under a crown (gold:
+the masters'), and a violet orb (violet: the Emporium). They're
 drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
 map (24) and its key.
 
@@ -3637,7 +3689,7 @@ played at its own volume:
     treads creaking under them (`stairs`, played 1.4 times as quick).
 - **A door**, recorded, when anyone goes through one on the player's side of it (so the orc
   following them in is heard): each building's own (`ambience.js` `doorOf`). An old wooden door's
-  creak and shutting into a house, a tavern, a smithy or a guild; a heavy one into a keep, a
+  creak and shutting into a house, a tavern, a smithy, a guild or a shop; a heavy one into a keep, a
   temple, a town hall or a watchtower; an iron gate into a ruined keep; a trapdoor down into a
   crypt; none into a cave or the lair, open to the air.
 - **Cues** and the interface, and the player's things in their hands: see below.
@@ -3705,7 +3757,7 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   - a camp fire's crackle within 16 m, a lit brazier's roar within 10 m.
 - **Beds indoors** (`INDOORS`): a taproom's crowd and its hearth (louder nearer), the crowd
   quieter upstairs and in an adventurers' guild; a smithy's forge; a temple's hush, quieter in a
-  town hall; a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
+  town hall and quieter still in a shop (papers rustling in both); a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
   undercroft); a cave's drips; the dragon's lair's belching spring; wind through a ruined keep and
   a watchtower.
 - **Calls** (`CALLS`), each from somewhere round the player (or a tree near, or its smithy):

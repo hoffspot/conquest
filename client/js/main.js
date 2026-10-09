@@ -1001,7 +1001,7 @@ async function keyOf() {
 
     list.replaceChildren();
 
-    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"], ["hall", "Town hall"], ["keep", "Keep"], ["barracks", "Barracks"]]) {
+    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"], ["hall", "Town hall"], ["keep", "Keep"], ["barracks", "Barracks"], ["swordsmith", "Swordsmith"], ["armorer", "Armorer"], ["scriptorium", "Occult scriptorium"], ["alchemist", "Alchemist"], ["masterSwordsmith", "Master Swordsmith"], ["masterArmorer", "Master Armorer"], ["emporium", "Mystic Emporium"]]) {
         const item = document.createElement("li");
         const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
 
