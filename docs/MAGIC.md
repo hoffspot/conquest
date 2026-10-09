@@ -171,9 +171,9 @@ above, are the guild's to sell, never found or given.)
 
 | Spell | Rarity | On | Casts in | Cooldown | Does |
 | --- | --- | --- | --- | --- | --- |
-| Resist Fire, Water, Air, Earth | common | oneself or a friend | 700 ms | 15 s | five minutes: 30% less from that element's spells and creatures' blows, and what it sets on them ends sooner |
-| Resist Magic | common | oneself or a friend | 700 ms | 15 s | 30% less from every spell, curses and wisps' bolts; hexes hold less long |
-| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | poison (or disease) hurts 30% less and ends sooner |
+| Resist Fire, Water, Air, Earth | common | oneself or a friend | 700 ms | 15 s | an hour (`WARDING`; five minutes till the user had it an hour: `NET_VERSION` 86): 30% less from that element's spells and creatures' blows, and what it sets on them ends sooner |
+| Resist Magic | common | oneself or a friend | 700 ms | 15 s | an hour: 30% less from every spell, curses and wisps' bolts; hexes hold less long |
+| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | an hour: poison (or disease) hurts 30% less and ends sooner |
 | Cure Poison, Cure Disease, Lift Curse, Quench, Staunch, Unbind | common | anyone | 500 ms | 6 s | ends poisoning, disease, withering, burning, bleeding, being slowed |
 | Embolden | common | anyone | 500 ms | 6 s | ends Fear |
 | Zombify | uncommon | one fallen | 1200 ms | 30 s | an enemy fallen in the last half minute rises to follow and fight for you, five minutes (a grimoire) |
@@ -297,8 +297,12 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   wreath of fire; Engulf's earth rises round them in spikes; Lightning falls from the sky and
   leaps on to the others it struck; Tornado is a whirlwind of dust and debris; Iceblade shatters
   in ice and frost. The heals rise in green light (and the heal's look: a swirl, a fountain...),
-  the cures draw what they cure up out of them turning to gold, the wards close a dome of their
-  colour over them.
+  the cures draw what they cure up out of them turning to gold. A ward closes a shell of its
+  colour round the whole of whoever it's on (`wardShell`), from under their feet to over their
+  head: it rises up round them from a circle of runes turning under their feet, its rising edge
+  brightest, three rings of light sweeping up it as it goes, and seals over their head with a
+  flare; a lattice of light turns on it and bands run up it until it fades, two and a half
+  seconds after, motes of its colour spiralling up round them.
 - **The seventh tier fills the screen.** Hellfire darkens the sky and rains sixteen meteors out
   of a circle of runes turning in it over 10 metres round them, then the ground erupts in a
   column of fire 6 metres across reaching out of sight, shockwaves spreading 24 metres, fire and smoke everywhere,

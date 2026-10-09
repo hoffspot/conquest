@@ -59,6 +59,52 @@ const CAST_CIRCLE = [0.9, 1.1, 1.35, 1.7, 2.0, 2.6, 4.2];
 // The brightest a flash's light is (so those near it aren't burnt white)
 const BRIGHTEST = 28;
 
+// A ward's shell (SpellFx wardShell): a ball stretched round someone, drawn only as far up as it's
+// risen (`reveal`, a share of its height), its rim brightest where it's seen edge on, bands of light
+// running up it, and the edge it's rising at brightest of all; flaring (`flare`) as it seals, and
+// fading (`fade`)
+const WARD_VERTEX = /* glsl */ `
+varying vec3 vLocal;
+varying vec3 vNormal;
+varying vec3 vView;
+
+void main() {
+    vLocal = position;
+    vec4 seen = modelViewMatrix * vec4(position, 1.0);
+    vView = -seen.xyz;
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * seen;
+}
+`;
+
+const WARD_FRAGMENT = /* glsl */ `
+uniform vec3 colour;
+uniform float reveal;
+uniform float flare;
+uniform float fade;
+uniform float time;
+varying vec3 vLocal;
+varying vec3 vNormal;
+varying vec3 vView;
+
+void main() {
+    float up = vLocal.y * 0.5 + 0.5;
+
+    if (up > reveal) {
+        discard;
+    }
+
+    float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 2.4);
+    float around = atan(vLocal.z, vLocal.x);
+    float bands = pow(max(0.0, sin(up * 26.0 - time * 5.0)), 6.0);
+    float lines = pow(max(0.0, sin(around * 12.0 + up * 5.0 + time * 1.5)), 24.0);
+    float rising = smoothstep(0.1, 0.0, reveal - up) * step(reveal, 1.0);
+    vec3 light = colour * (0.12 + rim * 1.5 + bands * 0.4 + lines * 0.5) + vec3(1.0) * (rising * 1.4 + flare * (0.35 + rim));
+
+    gl_FragColor = vec4(light * fade, 1.0);
+}
+`;
+
 // --- Textures, drawn once on a canvas (only in a page) ---
 
 function canvasTexture(size, draw) {
@@ -513,6 +559,7 @@ export class SpellFx {
             ball: new THREE.SphereGeometry(1, 16, 12),
             dome: new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
             hex: new THREE.IcosahedronGeometry(1, 1),
+            geodesic: new THREE.IcosahedronGeometry(1, 2),
             rock: new THREE.IcosahedronGeometry(1, 0),
             shard: new THREE.TetrahedronGeometry(1, 0),
             spike: new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0),
@@ -1142,6 +1189,68 @@ export class SpellFx {
         });
     }
 
+    /**
+     * A ward closing round someone (`feet`: a function giving where they stand, followed as they
+     * go), `height` metres tall: a shell of its colour round the whole of them, from under their
+     * feet to over their head, rising up round them from the ground in its first `rise` of its
+     * `life` (seconds), its rising edge brightest, rings of light sweeping up it as it goes; sealed
+     * over their head with a flare; a lattice of light turning on it and bands running up it, until
+     * it fades.
+     */
+    wardShell(feet, { colour, height = 1.8, life = 2.4, rise = 0.32, opacity = 1 }) {
+        const width = Math.max(0.72, height * 0.4);
+        const tall = height * 0.64;
+        const uniforms = { colour: { value: new THREE.Color(colour) }, reveal: { value: 0 }, flare: { value: 0 }, fade: { value: 0 }, time: { value: 0 } };
+        const shell = new THREE.Mesh(this.geometries.ball, new THREE.ShaderMaterial({ name: "wardShell", uniforms, vertexShader: WARD_VERTEX, fragmentShader: WARD_FRAGMENT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
+        const lattice = new THREE.Mesh(this.geometries.geodesic, new THREE.MeshBasicMaterial({ color: colour, wireframe: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        const rings = [0, 0.12, 0.24].map(() => new THREE.Mesh(this.geometries.ring, this.#additive(colour, { opacity: 0 })));
+        const group = new THREE.Group();
+        let sealed = false;
+
+        shell.position.y = height * 0.5;
+        shell.scale.set(width, tall, width);
+        lattice.position.y = height * 0.5;
+        lattice.scale.set(width * 0.995, tall * 0.995, width * 0.995);
+        group.add(shell, lattice, ...rings);
+
+        this.#show(group, life, (t, dt) => {
+            const at = feet();
+
+            if (at) {
+                group.position.set(at.x, at.y ?? this.groundAt(at.x, at.z), at.z);
+            }
+
+            // (Rising round them from the ground, eased in; then sealed over their head)
+            const risen = Math.min(1, t / rise);
+            const reveal = 1 - (1 - risen) ** 2;
+            const fade = Math.min(1, t * 10) * (t > 0.65 ? (1 - t) / 0.35 : 1);
+
+            if (risen >= 1 && !sealed) {
+                sealed = true;
+                this.flash(new THREE.Vector3(group.position.x, group.position.y + height * 1.05, group.position.z), { colour, intensity: 14, distance: 7, life: 0.5, size: 1.8 });
+            }
+
+            uniforms.reveal.value = risen >= 1 ? 1.01 : reveal;
+            uniforms.flare.value = sealed ? Math.max(0, 1 - (t - rise) * 6) : 0;
+            uniforms.fade.value = opacity * fade;
+            uniforms.time.value += dt;
+            lattice.rotation.y += dt * 0.9;
+            lattice.material.opacity = 0.28 * fade * Math.min(1, Math.max(0, (t - rise * 0.6) * 4));
+
+            // (Each ring sweeping up it, at the shell's edge as it goes, a little after the last)
+            for (const [k, ring] of rings.entries()) {
+                const along = Math.min(1, Math.max(0, (t - k * 0.04) / (rise * 1.15)));
+                const y = height * (-0.1 + along * 1.2);
+                const off = (y - height * 0.5) / tall;
+                const across = width * Math.sqrt(Math.max(0.02, 1 - off * off));
+
+                ring.position.y = y;
+                ring.scale.set(across, 1, across);
+                ring.material.opacity = along > 0 && along < 1 ? 0.85 * Math.sin(along * Math.PI) : 0;
+            }
+        });
+    }
+
     /** A dome (a ward, a barrier) over someone (a function giving where they stand), shimmering a while. */
     dome(centre, { colour, radius = 0.95, life = 1.2, wire = true, height = 1.25, opacity = 0.22 }) {
         const shell = new THREE.Mesh(this.geometries.dome, this.#additive(colour, { opacity }));
@@ -1380,8 +1489,9 @@ export class SpellFx {
         const dark = new THREE.Mesh(this.geometries.disc, new THREE.MeshBasicMaterial({ map: this.#texture("scorch"), transparent: true, depthWrite: false, toneMapped: false }));
         const lattice = new THREE.Mesh(this.geometries.hex, new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
         const shard = new THREE.Mesh(this.geometries.shard, new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, transparent: true }));
+        const ward = new THREE.Mesh(this.geometries.ball, new THREE.ShaderMaterial({ name: "wardShell", uniforms: { colour: { value: new THREE.Color() }, reveal: { value: 1 }, flare: { value: 0 }, fade: { value: 0 }, time: { value: 0 } }, vertexShader: WARD_VERTEX, fragmentShader: WARD_FRAGMENT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
 
-        for (const object of [...warming, dark, lattice, shard]) {
+        for (const object of [...warming, dark, lattice, shard, ward]) {
             object.position.copy(at);
             this.#show(object, 1e-3, () => {});
         }
@@ -1658,13 +1768,26 @@ const GROUNDS = {
 
 // --- Each spell: how it's thrown (`missile`), what gathers as it's cast, and what it does where it lands ---
 
-// Wards: a dome of their colour over whoever it's on, motes of it rising
+// Wards: a shell of their colour closing round the whole of whoever it's on, rising from a circle
+// of runes turning under their feet, rings of light sweeping up it, sealed over their head with a
+// flare; motes of it spiralling up round them, and more as it seals
 const ward = (colour) => ({
     palette: { glow: [0xffffff, colour], deep: colour, bright: 0xffffff },
     land: (fx, { target, at }) => {
-        fx.dome(target.feet, { colour, radius: 0.95, life: 1.3 });
-        fx.spray(p([0xffffff, colour], { count: 30, size: [0.05, 0.1], speed: [0.4, 1.2], life: [0.8, 1.3], gravity: -1.6, spread: 2.2, swirl: 3 }), above(at, 0.8));
-        fx.ring(at, { colour, from: 0.4, to: 1.4, life: 0.6 });
+        const height = target.height ?? 1.8;
+        const motes = (count) => p([0xffffff, colour], { count, size: [0.04, 0.1], speed: [0.5, 1.4], life: [0.9, 1.5], gravity: -1.8, spread: 2.4, swirl: 5 });
+
+        fx.wardShell(target.feet, { colour, height });
+        fx.decal(at, { texture: "runes", colour, radius: Math.max(1.1, height * 0.68), life: 2.4, spin: 1.4, grow: 0.15, opacity: 0.85 });
+        fx.ring(at, { colour, from: 0.5, to: 1.8, life: 0.7 });
+        fx.spray(motes(36), above(at, height * 0.15));
+        fx.after(0.75, () => {
+            const now = target.feet();
+
+            if (now) {
+                fx.spray(motes(28), above(now, height * 0.7));
+            }
+        });
     },
 });
 

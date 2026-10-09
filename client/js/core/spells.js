@@ -48,6 +48,9 @@ const attack = (school, tier, label, settings) => ({ label, school, tier, target
 /** How long a spell that lasts lasts, unless it's said otherwise (ms): five minutes. */
 export const LASTING = 300000;
 
+/** How long a ward lasts (ms): an hour (it was five minutes, as LASTING). */
+export const WARDING = 3600000;
+
 /** What's left of what a ward's against (a share): 30% less. */
 export const WARD = 0.7;
 
@@ -65,10 +68,10 @@ export const TOME_RARITY = Object.freeze({
 // `rarity` is to find
 const tome = (label, rarity, settings) => ({ label, tome: rarity, reach: SPELL_REACH.reach, castTime: 700, ...settings });
 
-// A ward (a tome's): on oneself or anyone not an enemy, 30% less from what it's against for five
-// minutes (as `ward` says: attack spells of those schools, `hits` of those natural attacks'
+// A ward (a tome's): on oneself or anyone not an enemy, 30% less from what it's against for an
+// hour (WARDING; as `ward` says: attack spells of those schools, `hits` of those natural attacks'
 // elements, and those afflictions, both how much they hurt and how long they last)
-const ward = (label, about, against) => tome(label, "common", { about, target: "friend", cooldown: 15000, lasts: LASTING, ward: { schools: [], elements: [], afflictions: [], looks: [], ...against } });
+const ward = (label, about, against) => tome(label, "common", { about, target: "friend", cooldown: 15000, lasts: WARDING, ward: { schools: [], elements: [], afflictions: [], looks: [], ...against } });
 
 // A cure (a tome's): on anyone, friend or foe (never taken as an attack), ending an affliction
 const cure = (label, about, kind) => tome(label, "common", { about, target: "any", castTime: 500, cooldown: 6000, cures: [kind] });
@@ -148,13 +151,13 @@ export const SPELLS = Object.freeze({
 
     // --- Learnt from tomes (each once found or given: progress.js TOMES) ---
     // Wards: on oneself or a friend, five minutes
-    resistFire: ward("Resist Fire", "Wards against fire: 30% less from fire spells and flames, and burning ends sooner and hurts less.", { schools: ["fire"], elements: ["fire"], afflictions: ["burn"] }),
-    resistWater: ward("Resist Water", "Wards against water and ice: 30% less from water spells, scalding and frost, and chills end sooner.", { schools: ["water"], elements: ["water"], looks: ["frost", "scald"] }),
-    resistAir: ward("Resist Air", "Wards against wind and lightning: 30% less from air spells, and stuns from them end sooner.", { schools: ["air"], elements: ["air"] }),
-    resistEarth: ward("Resist Earth", "Wards against stone and soil: 30% less from earth spells, and roots and rubble hold them less long.", { schools: ["earth"], elements: ["earth"], looks: ["roots", "rubble", "earth", "acid"] }),
-    resistMagic: ward("Resist Magic", "Wards against all magic: 30% less from every spell, curses and wisps' bolts, and hexes hold less long.", { schools: ["fire", "water", "air", "earth", "magic"], elements: ["magic"], afflictions: ["wither"] }),
-    resistPoison: ward("Resist Poison", "Wards against venom: poison hurts 30% less, and ends sooner.", { afflictions: ["poison"] }),
-    resistDisease: ward("Resist Disease", "Wards against sickness: disease hurts 30% less, and ends sooner.", { afflictions: ["disease"] }),
+    resistFire: ward("Resist Fire", "Wards against fire, an hour: 30% less from fire spells and flames, and burning ends sooner and hurts less.", { schools: ["fire"], elements: ["fire"], afflictions: ["burn"] }),
+    resistWater: ward("Resist Water", "Wards against water and ice, an hour: 30% less from water spells, scalding and frost, and chills end sooner.", { schools: ["water"], elements: ["water"], looks: ["frost", "scald"] }),
+    resistAir: ward("Resist Air", "Wards against wind and lightning, an hour: 30% less from air spells, and stuns from them end sooner.", { schools: ["air"], elements: ["air"] }),
+    resistEarth: ward("Resist Earth", "Wards against stone and soil, an hour: 30% less from earth spells, and roots and rubble hold them less long.", { schools: ["earth"], elements: ["earth"], looks: ["roots", "rubble", "earth", "acid"] }),
+    resistMagic: ward("Resist Magic", "Wards against all magic, an hour: 30% less from every spell, curses and wisps' bolts, and hexes hold less long.", { schools: ["fire", "water", "air", "earth", "magic"], elements: ["magic"], afflictions: ["wither"] }),
+    resistPoison: ward("Resist Poison", "Wards against venom, an hour: poison hurts 30% less, and ends sooner.", { afflictions: ["poison"] }),
+    resistDisease: ward("Resist Disease", "Wards against sickness, an hour: disease hurts 30% less, and ends sooner.", { afflictions: ["disease"] }),
 
     // Cures: on anyone
     curePoison: cure("Cure Poison", "Draws the venom out: ends poisoning, on anyone.", "poison"),
