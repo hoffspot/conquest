@@ -5338,8 +5338,10 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.icons).toEqual(["tavern"]);
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
-    // (Its key: each kind of building gone into, a barracks' among them; the fog; and the pin)
-    await expect(page.locator("#worldmapkey li")).toHaveCount(9);
+    // (Its key: each kind of building gone into, a barracks' and the seven shops among them; the
+    // fog; and the pin)
+    await expect(page.locator("#worldmapkey li")).toHaveCount(16);
+    await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toHaveCount(1);
 
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
