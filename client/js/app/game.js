@@ -6277,7 +6277,8 @@ export class Game {
                 break;
             case "army":
                 // (An army, a reserve or reinforcements met in the field near the player, in its
-                // line: drawn, and the player told; or more of it stood up, joined it)
+                // line: drawn, and the player told; or more of it stood up, joined it. Not of their
+                // own people's reinforcements: they're out of their towns every turn)
                 this.enlisting.push(...event.ids);
 
                 if (event.met) {
@@ -6285,7 +6286,11 @@ export class Game {
                     const Adjective = `${adjective[0].toUpperCase()}${adjective.slice(1)}`;
                     const ours = event.people === this.self?.realm;
 
-                    this.hud.message(event.kind === "reinforcement" ? `${ours ? "Our" : Adjective} reinforcements are on their way near you, ${event.ids.length} strong.` : `${ours ? `Our ${event.kind}` : `The ${Adjective} ${event.kind}`} is in the field near you, ${event.ids.length} strong.`, 3);
+                    if (event.kind === "reinforcement" && !ours) {
+                        this.hud.message(`${Adjective} reinforcements are on their way near you, ${event.ids.length} strong.`, 3);
+                    } else if (event.kind !== "reinforcement") {
+                        this.hud.message(`${ours ? `Our ${event.kind}` : `The ${Adjective} ${event.kind}`} is in the field near you, ${event.ids.length} strong.`, 3);
+                    }
                 }
 
                 break;

@@ -1546,8 +1546,9 @@ and struck once every player's further than 300 m, or it's gone:
 
 **Met** as an army is: once a player's within 300 m of them, or they're within 140 m of an
 enemy's met; let go once every player's further than 450 m, or they're gone. Stood up in their
-line, as an army is, mixed as their people's are. The player's told: "Orcish reinforcements are on
-their way near you, 5 strong", or "Our reinforcements…".
+line, as an army is, mixed as their people's are. The player's told of another people's: "Orcish
+reinforcements are on their way near you, 5 strong". Not of their own people's: they're out of
+their towns every turn.
 
 **On their way** they march for their army's (or reserve's) line, if it's met, else for where it is
 in the war, at 1.4 m a second, the war told where they've got to (`war.move`):

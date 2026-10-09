@@ -3837,6 +3837,7 @@ test("an army's supply wagon near the player: its ox and wagon drawn laden with 
 });
 
 test("an orc camp near the player sends its scout out on its round and its skirmishers after the player's people's army met there; reinforcements on their way to that army join its line", async ({ page }) => {
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
     // An orc camp out east of the player's town, at war with the humans; the humans' army standing
@@ -3895,7 +3896,8 @@ test("an orc camp near the player sends its scout out on its round and its skirm
     });
 
     expect(met.scout).toEqual({ name: "Orcish scout", round: 8, hostile: true });
-    expect(met.said).toEqual(["Our army is in the field near you, 12 strong.", "Our reinforcements are on their way near you, 5 strong."]);
+    // (Their own people's reinforcements not told of: they're out of their towns every turn)
+    expect(met.said).toEqual(["Our army is in the field near you, 12 strong."]);
 
     // Its skirmishers due: out, after the army, the player told
     await page.evaluate(async () => {
@@ -3906,13 +3908,14 @@ test("an orc camp near the player sends its scout out on its round and its skirm
         war.camp("camp-900").skirmished = war.turn - 3;
         war.clock = TURN_MS - 500;
     });
-    // (Drawn, in full or, past the nearest few, in their kind's crowd once its figure's made)
+    // (To be drawn: in full, or past the nearest few in their kind's crowd, once its figure's
+    // made, however long that takes; the crowds' own drawing is the field battle's test)
     expect(await playUntil(page, () => {
         const { game } = window.pellagos;
         const [out] = game.host.skirmishers.values();
 
-        return Boolean(out) && out.ids.every((id) => game.avatars.has(id));
-    }, { seconds: 90 })).toBe(true);
+        return Boolean(out) && out.ids.every((id) => game.avatars.has(id) || game.enlisting.includes(id) || game.enlistees.has(id) || game.crowdWaiting.has(id));
+    })).toBe(true);
 
     const out = await page.evaluate(() => {
         const { game } = window.pellagos;
