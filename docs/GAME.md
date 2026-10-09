@@ -559,20 +559,32 @@ are kept.
 - **A shop** (`shopRooms`, `SHOP_INSIDES`: a specialist's or a master's) is one room 18 by 12
   metres, floorboarded, its door in the middle of the south wall between two windows, the counter
   across it under its cloth with its keeper behind it, a rug up from the door (all but the
-  alchemist's), and the rest as its trade has it (`interiors3d.js` `shop`, by its `look`):
-  - a swordsmith's: racks of blades along the back wall and down the sides, shelves of sheathed
-    blades between them, two tables of blades laid out on leather, a whetting bench and a
-    grindstone;
+  alchemist's), and the rest as its trade has it (`interiors3d.js` `shop`, by its `look`). What
+  it sells is set out as makers' models and museums' scans (`shopWares`: `scripts/build-props.js`,
+  furnished as a dungeon's are, and only on its counter, tables, benches, lecterns, racks and
+  stands, never on the floor in anyone's way):
+  - a swordsmith's: racks of blades along the back wall, and down the sides two long sword racks
+    each, four blades standing hilt up in each; shelves of sheathed blades; two tables of blades
+    laid out on leather (an arming sword, a long sword and a dagger in its sheath; a claymore, a
+    sabre and a mace), a sword on the counter; a whetting bench with a dagger and a hammer on it,
+    and a grindstone;
   - an armorer's: a wall of painted shields behind the counter, shelves of helms and gauntlets,
-    harness on its stands in two rows down the room, fitting benches;
-  - an occult scriptorium: shelves of books and scrolls all round, two copying desks (an open
-    book, a candle, an inkpot), candle stands and lecterns;
-  - an alchemist's: shelves of phials and jars of every colour all round, two worktables with
-    their stills, casks along the walls;
+    harness on its stands in two rows down the room, a heater or a kite shield leant at the foot
+    of each along the walls; fitting benches with a barbute and a mail shirt or a shield on them;
+    a great helm and a barbute on the counter;
+  - an occult scriptorium: shelves of books and scrolls all round; two copying desks, each an open
+    book, a quill, a scroll and a stack of books by a candle and an inkpot; a great book open on
+    each lectern; books and an hourglass on the counter; candle stands;
+  - an alchemist's: shelves of phials and jars of every colour all round; two worktables, each an
+    alembic, a bronze mortar, stoppered flasks and apothecary's jars; casks along the walls; a
+    mortar, a jar and a flask on the counter;
   - the Mystic Emporium: shelves of curios, phials, books and skulls; robes of the arcane on
-    stands; two tables with a glowing orb and jewels on velvet; candle stands;
+    stands; two tables, a crystal ball on one and a celestial globe on the other, by jewels on
+    velvet, an open book, a skull or a candleholder and a flask; an hourglass, books and a flask
+    on the counter; candle stands;
   - the Master Swordsmith's and the Master Armorer's as a swordsmith's and an armorer's, under
-    velvet and gold: banners either side of the counter.
+    velvet and gold: banners either side of the counter; the great swords on a master's tables and
+    in its racks (a zweihänder, a knight's sword, claymores), a visored barbute on its counter.
 
   Its keeper (`shopFolkOf`) serves from behind the counter and goes to the shelves or racks on the
   back wall now and then; dressed as a smith (the swordsmith and the armorer), an arcanist (the

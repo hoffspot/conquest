@@ -824,6 +824,19 @@ asset out of this public repository.
   - bones without pictures, CC BY 4.0, coloured as bone: "Rib Cage_Human Skeleton" (3DPX-016836) by
     My Segmenter on NIH 3D (<https://3d.nih.gov>), and the Human Reference Atlas's male pelvis
     (<https://humanatlas.io>).
+- The shops' wares and fittings (docs/GAME.md *A shop*), made simpler and smaller by
+  `scripts/build-props.js` as the dungeons' are:
+  - from Sketchfab's makers through Objaverse (<https://huggingface.co/datasets/allenai/objaverse>),
+    CC BY 4.0 (<https://creativecommons.org/licenses/by/4.0/>): "Arming Sword", "Long Sword",
+    "Claymore", "Zweihänder", "Heater Shield", "Quill", "Scroll", "Hour Glass" and "Alembic" by
+    FlukierJupiter; "Long Sword Rack", "Barbuta Helmet", "Visored Barbuta Helmet", "Magic Bottle
+    01" and "Magic Bottle 02" by Multipainkiller Studio; "Chevalier Sword" by rubenve; "Asset03
+    Medieval Grindstone" by Margot D.; "Great Helm" by Ole Gunnar Isager; "Hauberk" by askei;
+    "Medieval Open Book 1" by J0Y; "Medieval Book Stack" by GetDeadEntertainment; and "Magic
+    crystal ball" by terpsichore;
+  - museums' scans, CC0, through Zenodo's mirror: the Virtual Museums of Małopolska's celestial
+    globe, pharmaceutical mortar (Wawel Royal Castle) and apothecary albarello (the Museum of
+    Pharmacy, Kraków).
 - The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
   (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
   (`client/models/jmi/LICENSE`).
