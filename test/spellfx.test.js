@@ -69,6 +69,51 @@ describe("how spells look (spellfx.js)", () => {
         }
     });
 
+    it("closes a ward round the whole of whoever it's on (the user: 'Have them at least encapsulate the whole player character'): from under their feet to over their head, the taller the taller they are; rising round them first, then sealed with a flare", () => {
+        const shellOn = (height) => {
+            const fx = new SpellFx({ glow: { emit: () => {} }, dust: { emit: () => {} } }, new THREE.Scene());
+            const feet = () => new THREE.Vector3(3, 0.5, -2);
+            const one = { feet, point: () => new THREE.Vector3(3, 0.5 + height * 0.6, -2), hand: feet, height };
+
+            fx.land("caster", "resistFire", { caster: one, target: one });
+
+            const shell = fx.group.getObjectsByProperty("type", "Mesh").find(({ material }) => material.name === "wardShell");
+            const span = () => {
+                fx.group.updateMatrixWorld(true);
+
+                return new THREE.Box3().setFromObject(shell);
+            };
+            const steps = (seconds) => {
+                for (let time = 0; time < seconds; time += 1 / 30) {
+                    fx.update(1 / 30);
+                }
+            };
+
+            steps(0.3);
+
+            const rising = shell.material.uniforms.reveal.value;
+
+            steps(0.6);
+
+            const sealed = { reveal: shell.material.uniforms.reveal.value, flare: shell.material.uniforms.flare.value, box: span() };
+
+            steps(3);
+
+            return { rising, ...sealed, gone: !fx.group.children.includes(shell.parent) };
+        };
+
+        for (const height of [1.7, 2.2]) {
+            const { rising, reveal, flare, box, gone } = shellOn(height);
+
+            assert.ok(rising > 0 && rising < 1, `rising round them: ${rising}`);
+            assert.ok(reveal >= 1 && flare > 0, "sealed over their head, with a flare");
+            assert.ok(box.min.y <= 0.5 && box.max.y >= 0.5 + height * 1.05, `from under their feet to over their head: ${box.min.y} to ${box.max.y}`);
+            assert.ok(box.max.x - box.min.x >= 1.4 && box.max.z - box.min.z >= 1.4, "round all of them");
+            assert.ok(Math.abs((box.min.x + box.max.x) / 2 - 3) < 0.01 && Math.abs((box.min.z + box.max.z) / 2 + 2) < 0.01, "on them");
+            assert.ok(gone, "and gone after");
+        }
+    });
+
     it("makes each element's spells grander the higher their tier, the seventh filling the screen", () => {
         for (const school of ["fire", "earth", "air", "water"]) {
             const spells = Object.entries(SPELLS)

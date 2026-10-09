@@ -6853,7 +6853,7 @@ export class Game {
 
         this.sound?.landed(event.spell, target.object.position);
 
-        const where = (one) => ({ feet: () => one.object.position, point: () => one.point(0.6), hand: () => one.hand("Left") });
+        const where = (one) => ({ feet: () => one.object.position, point: () => one.point(0.6), hand: () => one.hand("Left"), height: one.character?.height ?? 1.8 });
         const others = struck.filter((id) => id !== event.target && this.avatars.has(id)).map((id) => where(this.avatars.get(id)));
 
         this.spellFx.land(event.id, event.spell, { caster: where(avatar), target: where(target), struck: others });
