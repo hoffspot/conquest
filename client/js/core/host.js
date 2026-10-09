@@ -93,6 +93,9 @@ export const WORKS_OUT = Object.freeze({ near: 120, far: 250, posted: 4, most: 8
  */
 export const CAMP_NEAR = Object.freeze({ near: 150, far: 300 });
 
+// How far either side of a supply depot's fire its stores are stacked (metres)
+const DEPOT_STORES = 2.6;
+
 /**
  * An envoy on the road near a player (docs/WAR.md M7): met once a player's this near (metres),
  * let go once every player's this far; how many ride with them as their escort; how far ahead
@@ -110,6 +113,14 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
  * of each of its goods); its wagons stand where they were left.
  */
 export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
+
+/**
+ * An army's supply wagon on its way near a player (docs/WAR.md *Supply*): met once a player's this
+ * near (metres), let go once every player's this far (or it's there). Its ox and wagon go at a
+ * convoy's pace (CONVOY_NEAR.pace), making for its army (or depot) where it is now, `ahead` metres
+ * at a time, its guards beside it; taken once they're all down, `worth` gold for each player there.
+ */
+export const WAGON_NEAR = Object.freeze({ near: 150, far: 300, ahead: 16, worth: 8 });
 
 /**
  * A people's army or reserve out in the field near a player (docs/WAR.md *The armies near a
@@ -356,7 +367,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 17;
+export const SNAPSHOT_VERSION = 18;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -568,6 +579,14 @@ export class Host {
          * (its sentries'), share (how many of its guard each stands for), fire, tents }.
          */
         this.camps = new Map();
+
+        /**
+         * The supply wagons met on their way near a player (by the wagon's id in the war:
+         * WAGON_NEAR): { people, mission ("army" or "depot"), to (its army's or depot's id), wagon
+         * (its ox and wagon's id in the battle: in `wagons` too), ids (its guards'), at (where it was
+         * last), over (null; or "taken", once its guards are all down) }.
+         */
+        this.supplies = new Map();
 
         /**
          * The armies and reserves met in the field near a player (by the force's id: ARMY_NEAR):
@@ -1349,6 +1368,8 @@ export class Host {
                 } else if (soldier.force) {
                     // (One of an army or reserve met in the field: one of it fewer in the war)
                     this.war?.loss(soldier.force, 1, { by: this.#realmOf(event.by) });
+                } else if (soldier.supply) {
+                    this.#wagonFell(soldier.supply, event.by);
                 } else if (soldier.works) {
                     this.war?.loss(soldier.works, this.worksOut.get(soldier.works)?.share ?? 1);
                     this.#worksFell(soldier.works, event.by);
@@ -1551,6 +1572,7 @@ export class Host {
             townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
+            supplies: [...this.supplies.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
@@ -1667,6 +1689,7 @@ export class Host {
         );
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.armies = new Map(structuredClone(snapshot.armies ?? []));
+        host.supplies = new Map(structuredClone(snapshot.supplies ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
@@ -2802,18 +2825,19 @@ export class Host {
             }
         }
 
-        // The armies' camps near a player pitched, and those far from every player (or gone) struck
+        // The armies' camps and supply depots near a player pitched, and those far from every player
+        // (or gone) struck
         const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
 
         for (const id of [...this.camps.keys()]) {
-            const camp = war.camp(id);
+            const camp = war.camp(id) ?? war.depot(id);
 
             if (!camp || !near(camp, CAMP_NEAR.far)) {
                 this.#strike(id);
             }
         }
 
-        for (const camp of war.camps) {
+        for (const camp of [...war.camps, ...war.depots]) {
             if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp, CAMP_NEAR.near)) {
                 this.#pitch(camp);
             }
@@ -2878,6 +2902,21 @@ export class Host {
 
         this.#watchConvoys();
 
+        // The supply wagons near a player met on their way, and let go once they're far (or gone)
+        for (const [id, met] of [...this.supplies]) {
+            if (!near({ at: met.at }, WAGON_NEAR.far) || (!met.over && war.force(id)?.kind !== "supply")) {
+                this.#letWagonGo(id);
+            }
+        }
+
+        for (const wagon of war.forces) {
+            if (wagon.kind === "supply" && !this.supplies.has(wagon.id) && near(wagon, WAGON_NEAR.near)) {
+                this.#meetWagon(wagon);
+            }
+        }
+
+        this.#watchWagons();
+
         // The fortifications near a player stood up, and let go once they're far, or gone
         for (const [id] of [...this.fortsOut]) {
             const fort = war.fort(id);
@@ -2896,9 +2935,10 @@ export class Host {
         this.#tendSquads();
         this.#tendBarracks();
 
-        // (What a camp does against a town with its soldiers out is played out here, and the
-        // envoys met go at their own pace)
-        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys].filter(([, met]) => !met.over).map(([id]) => id)]);
+        // (What a camp does against a town with its soldiers out is played out here, as is a fight
+        // at a supply depot pitched; and the envoys, convoys and supply wagons met go at their own
+        // pace)
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...[...this.camps.keys()].filter((id) => war.depot(id)), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -3287,6 +3327,140 @@ export class Host {
 
         this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
         this.#event("parted", { army: id, ids });
+    }
+
+    // --- Supply wagons near a player (docs/WAR.md *Supply*) ---
+
+    // A supply wagon on its way near a player met: its ox and wagon where the war has it, laden
+    // with its supplies, and its guards either side of it
+    #meetWagon(force) {
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[force.realm] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+        const id = `${force.id}/wagon`;
+        const met = { people: force.realm, mission: force.mission, to: force.target, wagon: id, ids: [], at: [...force.at], over: null };
+
+        try {
+            const square = free(force.at);
+
+            this.wagons.set(id, { supply: force.id, people: force.realm, load: "supplies", seed: [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0 });
+            this.battle.add({ id, kind: "wagon", name: "Supply wagon", team: force.realm, square, ai: "patrol", neutral: true, patrol: [square], speed: CONVOY_NEAR.pace });
+
+            for (let k = 0; k < force.size; k++) {
+                const guard = `${force.id}/guard-${k}`;
+                const at = free([force.at[0] + (k % 2 ? 1 : -1) * CONVOY_NEAR.beside, force.at[1] + Math.floor(k / 2)]);
+
+                this.#enlist(guard, { people: force.realm, weapon: k % 2 ? patrolArms : guardArms, square: at, name: "wagon guard", record: { supply: force.id }, patrol: [at], speed: CONVOY_NEAR.pace });
+                met.ids.push(guard);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        this.supplies.set(force.id, met);
+        this.#event("supply", { wagon: force.id, people: force.realm, over: "met", ids: met.ids, wagons: this.battle.actor(id) ? [id] : [] });
+    }
+
+    // The supply wagons met, on their way: the war told where they've got to (war.move), and at
+    // their army or depot, their load theirs and they're gone; else making for it where it is now
+    // (an army met, where its line is), a little way on at a time, their guards beside them
+    #watchWagons() {
+        for (const [id, met] of [...this.supplies]) {
+            const force = this.war.force(id);
+            const wagon = this.battle.actor(met.wagon);
+
+            if (met.over || force?.kind !== "supply" || !wagon) {
+                continue;
+            }
+
+            met.at = [wagon.x, wagon.y];
+
+            if (this.war.move(id, met.at, 0)) {
+                this.#letWagonGo(id);
+                continue;
+            }
+
+            const to = met.mission === "depot" ? this.war.depot(met.to) : this.war.force(met.to);
+            const line = this.armies.has(met.to) ? this.battle.formations[this.armies.get(met.to).formation]?.anchor : null;
+            const goal = line ?? to?.at;
+            const [mark] = wagon.patrol ?? [];
+
+            if (!goal || (mark && wagon.path.length && hypot(mark[0] + 0.5 - wagon.x, mark[1] + 0.5 - wagon.y) > 3)) {
+                continue;
+            }
+
+            const [dx, dy] = [goal[0] - wagon.x, goal[1] - wagon.y];
+            const distance = Math.max(hypot(dx, dy), 1e-6);
+            const ahead = Math.min(distance, WAGON_NEAR.ahead);
+            const [ux, uy] = [dx / distance, dy / distance];
+
+            try {
+                const free = this.#spots();
+
+                Object.assign(wagon, { patrol: [free([wagon.x + ux * ahead, wagon.y + uy * ahead])], patrolIndex: 0 });
+
+                for (const [k, each] of met.ids.entries()) {
+                    const actor = this.battle.actor(each);
+                    const side = k % 2 ? 1 : -1;
+
+                    // (Not one fighting: back beside it once they're done)
+                    if (actor && !actor.dead && actor.target === null) {
+                        Object.assign(actor, { patrol: [free([wagon.x + ux * ahead - uy * side * CONVOY_NEAR.beside, wagon.y + uy * ahead + ux * side * CONVOY_NEAR.beside])], patrolIndex: 0 });
+                    }
+                }
+            } catch {
+                // (Nowhere free ahead just now: tried again next time)
+            }
+        }
+    }
+
+    // One of a supply wagon's guards fallen: once every one of them is, it's taken (war.wagonTaken:
+    // for its army, a load that didn't get through), a little gold for each player there; its ox and
+    // wagon left standing where they are
+    #wagonFell(id, byId) {
+        const met = this.supplies.get(id);
+
+        if (!met || met.over || met.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        const realm = this.#realmOf(byId);
+        const wagon = this.battle.actor(met.wagon);
+
+        this.war?.wagonTaken(id, realm);
+        met.over = "taken";
+        Object.assign(wagon ?? {}, { ai: null, patrol: null, path: [], to: null });
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!wagon || !actor || actor.dead || actor.map !== "town" || hypot(actor.x - wagon.x, actor.y - wagon.y) > WAGON_NEAR.near) {
+                continue;
+            }
+
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle: { gold: WAGON_NEAR.worth, items: [] }, for: player.id, from: "supply", map: "town", square: this.#freeNear([Math.floor(wagon.x) + 1, Math.floor(wagon.y)]), until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "supply" });
+        }
+
+        this.#event("supply", { wagon: id, people: met.people, over: "taken", by: realm });
+    }
+
+    // A supply wagon let go: its ox, wagon and guards gone from the world (with it, in the war; or
+    // there, its load its army's or depot's)
+    #letWagonGo(id) {
+        const { ids, wagon } = this.supplies.get(id);
+
+        this.supplies.delete(id);
+
+        for (const each of [...ids, wagon]) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+            this.wagons.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("parted", { supply: id, ids: [...ids, wagon] });
     }
 
     // --- Convoys (docs/WAR.md *Convoys*) ---
@@ -4018,6 +4192,8 @@ export class Host {
     #pitch(camp) {
         const count = Math.min(CAMP.sentries, Math.max(1, camp.guard));
         const { fire, tents, posts } = campOf(camp, { sentries: count });
+        // (A supply depot's stores, stacked either side of its fire)
+        const stores = this.war.depot(camp.id) ? [-1, 1].map((side) => ({ at: [fire[0] + side * DEPOT_STORES, fire[1] + 0.5], facing: side > 0 ? Math.PI / 2 : -Math.PI / 2 })) : [];
         const [guardArms, patrolArms] = SOLDIERS_ARMS[camp.realm] ?? SOLDIERS_ARMS.human;
         const free = this.#spots();
         const ids = [];
@@ -4035,8 +4211,8 @@ export class Host {
             // (No free ground there: those found are out, and no more)
         }
 
-        this.camps.set(camp.id, { people: camp.realm, ids, share, fire, tents });
-        this.#event("camp", { camp: camp.id, people: camp.realm, town: this.war.town(camp.toward) ? camp.toward : null, ids, fire, tents });
+        this.camps.set(camp.id, { people: camp.realm, ids, share, fire, tents, stores });
+        this.#event("camp", { camp: camp.id, people: camp.realm, town: this.war.town(camp.toward) ? camp.toward : null, ids, fire, tents, stores });
     }
 
     // A camp struck: its sentries gone from the world (still with it, in the war), its tents down

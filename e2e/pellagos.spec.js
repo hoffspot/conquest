@@ -3736,6 +3736,97 @@ test("an army in the field near the player, in its line of battle: the player to
     expect(now[1]).toBeLessThan(met.from[1] - 3);
 });
 
+test("an army's supply wagon near the player: its ox and wagon drawn laden with supplies, its guards of its people beside it, making for its army; a supply depot by them pitched with its stores", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // An orc army standing far out east of the player's town, at war with the humans, a supply
+    // wagon on its way to it from just outside the town; an orc depot there too; the player by them
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const seat = war.realm("orc").seat;
+        const at = [mx + 520, my + 30];
+        const from = [mx + 130, my + 30];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        war.forces.push(
+            { id: "force-900", realm: "orc", kind: "army", size: 20, at: [...at], path: [[...at]], leg: 0, target: null, home: seat, mission: "regroup", about: null, camp: null, orders: null, went: 20, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 },
+            { id: "force-901", realm: "orc", kind: "supply", size: 2, at: [...from], path: [[...from], [...at]], leg: 0, target: "force-900", home: seat, mission: "army", about: null, since: 0 },
+        );
+        war.depots.push({ id: "depot-900", realm: "orc", at: [mx + 140, my - 40], guard: 6, built: 0, done: 0, level: 2, toward: null, used: 1e6, by: null });
+        Object.assign(player, { square: [Math.floor(mx + 110), Math.floor(my + 15)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        game.advance(0.1);
+    });
+
+    // (Drawn over a few seconds, a step at a time: the wagon, its guards, and the depot's sentries)
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const met = game.host.supplies.get("force-901");
+        const ids = [...(met?.ids ?? []), ...(met ? [met.wagon] : []), ...(game.host.camps.get("depot-900")?.ids ?? [])];
+
+        return ids.length === 9 && ids.every((id) => game.avatars.has(id));
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 60 })).toBe(true);
+
+    const met = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const supply = game.host.supplies.get("force-901");
+        const avatar = game.avatars.get(supply.wagon);
+        const meshes = () => {
+            let count = 0;
+
+            avatar.wagon.object.traverse((node) => (count += node.isMesh ? 1 : 0));
+
+            return count;
+        };
+        const laden = meshes();
+
+        // (What it's laden with, against it empty)
+        avatar.wagon.setLoad(null);
+
+        const empty = meshes();
+
+        avatar.wagon.setLoad("supplies");
+
+        const depot = game.camps.camps.get("depot-900")?.object;
+
+        return {
+            load: game.host.wagons.get(supply.wagon).load,
+            ox: avatar.id,
+            wheels: avatar.wagon.wheels.length,
+            laden,
+            empty,
+            guards: supply.ids.map((id) => ({ name: game.battle.actor(id).name, hostile: game.battle.hostile(game.battle.actor(id), player) })),
+            stores: depot?.children.filter(({ name }) => name === "stores").length ?? 0,
+            banner: game.banners.group.children.some(({ name }) => name === "banner:camp:depot-900"),
+            sentries: game.host.camps.get("depot-900").ids.map((id) => game.battle.actor(id).name),
+            from: game.battle.actor(supply.wagon).x,
+        };
+    });
+
+    expect([met.load, met.ox, met.wheels]).toEqual(["supplies", "ox", 4]);
+    expect(met.laden).toBeGreaterThan(met.empty);
+    expect(met.guards).toEqual([
+        { name: "Orcish wagon guard", hostile: true },
+        { name: "Orcish wagon guard", hostile: true },
+    ]);
+    expect(met.stores).toBe(2);
+    expect(met.banner).toBe(true);
+    expect(met.sentries).toEqual(Array(6).fill("Orcish sentry"));
+
+    // (Making east, for its army)
+    await playUntil(page, () => false, { seconds: 5 });
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("force-901/wagon").x)).toBeGreaterThan(met.from + 2);
+});
+
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 

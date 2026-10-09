@@ -217,7 +217,7 @@ The engine is built for this from the start. These are its rules:
 | **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
-| **M20** | Built in part | The armies in the world near a player: armies and reserves met in their lines, drawn in their crowds, marching and fighting it out there (built); reinforcements, scouts, skirmishers, supply wagons and depots there, and a seat's ruler and captain of its guard fought before it's taken (to come). |
+| **M20** | Built in part | The armies in the world near a player: armies and reserves met in their lines, drawn in their crowds, marching and fighting it out there; supply wagons on their way and depots pitched there, to be fought (built); reinforcements, scouts, skirmishers there, and a seat's ruler and captain of its guard fought before it's taken (to come). |
 | **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
 
 ## What's built
@@ -1462,6 +1462,9 @@ taken (14 to 41 without supply).
 Rulers rebuilt a razed depot at once until they were made to wait 10 turns between them. Before
 that, twice as many went up as now, most of them razed again.
 
+**Near a player** (M20, *Supply wagons and depots near a player*), the wagons go in the world with
+their guards, to be fought there, and the depots are pitched with their stores.
+
 **Kept.** The depots, the supply wagons and each army's supply (`supply`: `{ due, missed }`) are in
 the war's snapshot (`WAR_VERSION` 6). A war kept before them is carried on: no depots, each army's
 next wagon due 5 turns on, none missed. What two games share changed (`NET_VERSION` 77).
@@ -1469,9 +1472,10 @@ next wagon due 5 turns on, none missed. What two games share changed (`NET_VERSI
 ### The armies near a player (M20)
 
 The fourth of the standing armies' parts, begun: the armies and reserves in the world near a
-player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`). Their reinforcements, the camps'
-scouts and skirmishers, the supply wagons and depots there, and a seat's ruler and captain of its
-guard fought before it's taken, come after.
+player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`), and their supply wagons and depots
+there (`WAGON_NEAR`, `#meetWagon`, `#watchWagons`; *Supply wagons and depots near a player*,
+below). Their reinforcements, the camps' scouts and skirmishers, and a seat's ruler and captain of
+its guard fought before it's taken, come after.
 
 **Met** once a player's within 300 m of an army or reserve out in the field, or once it's within
 140 m of an enemy's that's met. Not an army mustering at its seat, nor a reserve at home: they're
@@ -1505,13 +1509,41 @@ The player's told: "The Orcish army is in the field near you, 56 strong", or "Ou
 
 **A player** can fight its soldiers; each brought down is one fewer of it.
 
-**Kept.** The armies met are in the host's snapshot (`armies`: `{ people, kind, formation, ids, at
-}`; `SNAPSHOT_VERSION` 17), their lines in the battle's. What two games share changed
-(`NET_VERSION` 78).
-
 **Tried.** A 40-a-side fight between two armies met near a player plays out over about a minute,
 the two lines meeting and grinding down, every fall counted in the war; a step of it costs 1 to 3
 ms. How many each draws on a phone (80 at most, as now) is to be found by playing.
+
+#### Supply wagons and depots near a player
+
+**A supply wagon** (M19) on its way is met once a player's within 150 m of it, and let go once
+every player's further than 300 m, or it's there.
+- **Stood up as** its ox and wagon, laden with its supplies (barrels, a crate and sacks of grain:
+  `art/kits/wagon.js`), and its 2 guards of its people beside it.
+- **On its way** (`#watchWagons`): it makes for its army where it is now (where its line is, if
+  it's met), or for its depot, 16 m at a time at a convoy's pace (1.1 m a second). The war's told
+  where it's got to (`war.move`) and doesn't move it on itself meanwhile. Within 60 m of its army
+  or depot, its load is theirs and it's gone; with them gone, it's gone too.
+- **Taken** (`#wagonFell`, `war.wagonTaken`): its guards all put down, by a player or by anyone
+  else, its load's lost. For its army, that's a load that didn't get through (M19, *Wagons that
+  don't get through*), and a grudge for whoever took it. Each player there gets 8 gold, and its
+  ox and wagon are left standing. The player's told: "We've taken the Orcish supply wagon: their
+  army goes short", or "Our supply wagon has been taken!", with the news bell.
+- **Not reckoned twice:** the war doesn't fall on a wagon met itself; an enemy met in the world
+  has to bring its guards down.
+
+**A supply depot** is pitched once a player's within 150 m of it, as a camp is (M6, `CAMP_NEAR`),
+and struck once every player's further than 300 m, or it's gone:
+- its tents and fire, its banner, its guard as sentries (up to 6), and its **stores** stacked
+  either side of its fire, crates, barrels and sacks of grain (`world/camps3d.js`);
+- **razed** once its sentries are all put down (`war.loss`), by a player or an enemy's army met
+  there;
+- **not reckoned twice:** while it's pitched, the war doesn't raze it itself. An army come to
+  attack it has 3 turns to fight it out there, as with what else it attacks.
+
+**Kept.** The armies met are in the host's snapshot (`armies`: `{ people, kind, formation, ids, at
+}`), and the supply wagons met (`supplies`: `{ people, mission, to, wagon, ids, at, over }`;
+`SNAPSHOT_VERSION` 18), their lines in the battle's. What two games share changed (`NET_VERSION`
+79).
 
 ### Playing together (M11)
 

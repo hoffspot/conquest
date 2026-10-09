@@ -489,7 +489,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1498,9 +1498,10 @@ export class Game {
         return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
     }
 
-    // One of a convoy's wagons (core/host.js #meetConvoy): an ox in its shafts (beasts/looks.js
-    // ox), the wagon behind it in its people's timber, laden with what its works yields
-    // (art/kits/wagon.js), a step at a time (the ox's body sculpted in steps the first time)
+    // One of a convoy's wagons (core/host.js #meetConvoy), or an army's supply wagon (#meetWagon):
+    // an ox in its shafts (beasts/looks.js ox), the wagon behind it in its people's timber, laden
+    // with what its works yields or with supplies (art/kits/wagon.js), a step at a time (the ox's
+    // body sculpted in steps the first time)
     *#addingWagon(actor) {
         const { load = null, people = "human", seed = 1 } = this.host.wagons.get(actor.id) ?? {};
         const avatar = yield* dressingCreature(this.kit, "ox", { seed });
@@ -5404,13 +5405,14 @@ export class Game {
         );
     }
 
-    // A camp near the player pitched: its tents and fire, its banner by the fire, and its sentries
-    // to be drawn
-    #pitch({ camp, people, ids, fire, tents }) {
+    // A camp (or a supply depot) near the player pitched: its tents and fire (a depot's stores by
+    // it), its banner by the fire, and its sentries to be drawn
+    #pitch({ camp, people, ids, fire, tents, stores = [] }) {
         const [ox, oz] = this.originOf("town");
         const [fx, fy] = fire;
+        const placed = (list) => list.map(({ at: [x, y], facing }) => ({ at: [ox + x, oz + y], facing }));
 
-        this.camps?.pitch(camp, people, { fire: [ox + fx, oz + fy], tents: tents.map(({ at: [x, y], facing }) => ({ at: [ox + x, oz + y], facing })) });
+        this.camps?.pitch(camp, people, { fire: [ox + fx, oz + fy], tents: placed(tents), stores: placed(stores) });
         this.banners?.raise(`camp:${camp}`, people, [{ x: ox + fx + 2.2, z: oz + fy + 2.2, facing: 0 }]);
         this.enlisting.push(...ids);
     }
@@ -6260,6 +6262,18 @@ export class Game {
                 break;
             case "convoyed":
                 this.#convoyed(event);
+                break;
+            case "supply":
+                // (A supply wagon met near the player: its ox, wagon and guards drawn; or taken)
+                if (event.over === "met") {
+                    this.enlisting.push(...event.ids, ...event.wagons);
+                } else if (event.over === "taken" && (event.by === this.self?.realm || event.people === this.self?.realm)) {
+                    const adjective = ADJECTIVES[event.people] ?? event.people;
+
+                    this.hud.message(event.by === this.self?.realm ? `We've taken the ${adjective} supply wagon: their army goes short.` : "Our supply wagon has been taken!", 4);
+                    this.sound?.play("newsHeard");
+                }
+
                 break;
             case "army":
                 // (An army or reserve met in the field near the player, in its line: drawn, and the

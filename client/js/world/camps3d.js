@@ -3,13 +3,16 @@
 // them, embers rising and smoke over it (world/fire.js, lights.js), lighting the camp round it
 // (the humans' ridge tents of canvas in their colour; the other peoples' their own: art/peoples/
 // camp.js). Their banner is the banners' (banners3d.js), and their sentries are soldiers like any
-// others.
+// others. A supply depot (docs/WAR.md *Supply*) is pitched as a camp is, with its stores stacked
+// by its fire: crates, barrels and sacks of grain (art/kits/props.js).
 //
-// The tents' shapes, the stones' and the logs' are made once and shared by every camp; each
-// people's canvas is one material.
+// The tents' shapes, the stones', the logs' and the stores' are made once and shared by every
+// camp; each people's canvas is one material.
 
 import * as THREE from "three";
 import { COLOURS } from "../core/war/peoples.js";
+import { Solid } from "./art/engine/solid.js";
+import { barrel, crate, sack } from "./art/kits/props.js";
 import { campTent } from "./art/peoples/camp.js";
 import { M } from "./art/peoples/kit.js";
 import { lightsMesh } from "./lights.js";
@@ -108,9 +111,10 @@ export class Camps {
 
     /**
      * Pitch a camp: `people` (whose it is), its fire ([x, z] world metres) and tents ([{ at: [x,
-     * z], facing }]: each facing the fire, as the battle has facings). Any it had come down first.
+     * z], facing }]: each facing the fire, as the battle has facings); a supply depot's `stores`
+     * too ([{ at: [x, z], facing }]: a stack of them at each). Any it had come down first.
      */
-    pitch(id, people, { fire, tents }) {
+    pitch(id, people, { fire, tents, stores = [] }) {
         this.strike(id);
 
         const object = new THREE.Group();
@@ -146,6 +150,16 @@ export class Camps {
             tent.position.set(x, this.groundAt(x, z) - 0.03, z);
             tent.rotation.y = facing;
             object.add(tent);
+        }
+
+        // A depot's stores, stacked
+        for (const { at: [x, z], facing } of stores) {
+            const stack = this.#stores().clone();
+
+            stack.name = "stores";
+            stack.position.set(x, this.groundAt(x, z), z);
+            stack.rotation.y = facing;
+            object.add(stack);
         }
 
         // The fire: a ring of stones, ashes, logs crossed, and flames
@@ -189,6 +203,31 @@ export class Camps {
 
         this.group.add(object);
         this.camps.set(id, { object, light: { x: fx, y: hearth.position.y + FIRE.foot, z: fz, kind: "fire" } });
+    }
+
+    // A stack of a depot's stores (shared by every depot; metres): two crates, one on the other,
+    // two barrels beside them, and sacks of grain slumped in front
+    #stores() {
+        if (!this.storesObject) {
+            const solid = new Solid();
+            const top = new Solid();
+            const px = (metres) => metres * 5;
+
+            crate(solid, 0, 0, px(0.8), 0.08);
+            crate(top, 0, 0, px(0.6), -0.2);
+            solid.add(top, px(0.05), px(0.8), px(-0.02));
+            barrel(solid, px(0.85), px(-0.1), px(0.9), px(0.28));
+            barrel(solid, px(0.8), px(0.55), px(0.9), px(0.28));
+
+            for (const [x, z, h] of [[-0.25, 0.75, 0.55], [0.2, 0.85, 0.5], [-0.75, 0.3, 0.52]]) {
+                sack(solid, px(x), px(z), px(h), px(0.03));
+            }
+
+            this.storesObject = solid.toObject();
+            this.storesObject.scale.setScalar(1 / 5);
+        }
+
+        return this.storesObject;
     }
 
     /** The camps' fires as lights (lights.js: world metres), lighting what's round them at night. */

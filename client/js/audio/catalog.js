@@ -362,7 +362,7 @@ export const CATALOG = Object.freeze({
     wake: { group: "Cues", label: "Waking", about: "Two hand chimes rising a fifth.", plays: "Waking again after falling; a spell learnt from a tome; a place cleared; a barracks put down, its town taken or not; asked to trade, or summoned, by another player." },
     levelUp: { group: "Cues", label: "Rising a rank", about: "A quick run up the folk harp, a hand chime on its top note.", plays: "A new rank in a skill, among the player's people or in the guilds; a school of magic come to its next tier; a spell grown stronger." },
     questDone: { group: "Cues", label: "A quest done", about: "A folk harp's run from D, then two hand chimes ringing.", plays: "A request handed in and done." },
-    newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a fortification razed or fallen, an envoy arrived or struck down, a convoy fallen on; and, from a Knight up, their people's army's supplies not getting through." },
+    newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a fortification razed or fallen, an envoy arrived or struck down, a convoy fallen on, a supply wagon taken; and, from a Knight up, their people's army's supplies not getting through." },
     pinSet: { group: "Cues", label: "A pin set", about: "One soft glockenspiel note.", plays: "A pin put on the world map." },
     breath: { group: "Cues", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
 });
