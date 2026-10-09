@@ -158,8 +158,11 @@ a grimoire.
 The spells that aren't a school's are learnt from tomes (a tome is a thing in the pack: used, its
 spell's learnt, and it's gone; a tome of a spell already known can be sold). Each is as rare as
 its spell is (`TOME_RARITY`): common ones found ten times as often as the rare, and worth 60,
-120 or 300 gold at the adventurers' guild, which buys them. (The elements' first spells' tomes,
-above, are the guild's to sell, never found or given.)
+120 or 300 gold to the adventurers' guild, an occult scriptorium and the Mystic Emporium, which
+buy them (docs/WAR.md *Shops*), and shown in the colour of a make as rare (progress.js
+`TOME_GRADE`: a common tome's fine, an uncommon one's masterwork, a rare one's rare). An occult
+scriptorium sells them among its scrolls, as does the Mystic Emporium the rare. (The elements'
+first spells' tomes, above, are the guild's to sell, never found or given.)
 
 - **Found**: on those with hands (bandits, goblins, skeletons, cultists, trolls, ogres, boggarts,
   the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:

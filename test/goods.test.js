@@ -90,8 +90,8 @@ describe("the six makes (progress.js QUALITIES)", () => {
 });
 
 describe("the alchemist's brews (goods.js BREWS)", () => {
-    it("brews twenty draughts, elixirs and oils, each with what it does, a price, a make and a colour, carried and sold as supplies", () => {
-        assert.equal(Object.keys(BREWS).length, 20);
+    it("brews twenty-two draughts, elixirs and oils, each with what it does, a price, a make and a colour, carried and sold as supplies", () => {
+        assert.equal(Object.keys(BREWS).length, 22);
 
         for (const [id, brew] of Object.entries(BREWS)) {
             assert.equal(ITEMS[id], brew, id);

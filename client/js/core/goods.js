@@ -19,8 +19,9 @@ const MINUTES = 60000;
  * The alchemist's brews: healing draughts stronger than the guild's, a draught of endurance, the
  * elixirs (a boon to blows, shots, spells, armour or healing a while), the warding elixirs (a
  * ward's spell in a bottle, half an hour: spells.js resistFire...), a phial of shadows
- * (Invisibility, a minute), a glowcap draught (Light, a quarter of an hour), and oils for a blade
- * (or arrows): each blow or shot a while likely to leave burning, frost or venom on what it hits.
+ * (Invisibility, a minute), a glowcap draught (Light, a quarter of an hour), oils for a blade
+ * (or arrows): each blow or shot a while likely to leave burning, frost or venom on what it hits;
+ * and the rarest, an alchemist's daily special: an Elixir of Heroes, a phoenix draught.
  */
 export const BREWS = Object.freeze({
     greaterPotion: { label: "Greater healing draught", about: "Heals 60.", use: { heal: 60 }, price: 45, rarity: "fine", colour: "#d8203a" },
@@ -43,6 +44,9 @@ export const BREWS = Object.freeze({
     fireOil: { label: "Fire oil", about: "Rubbed on your weapon: a blow or shot in four may set them burning, five minutes. One oil at a time.", use: boon("fireOil", "Fire oil", 5 * MINUTES, { oil: { kind: "burn", chance: 0.25 } }), price: 40, rarity: "fine", colour: "#ff8a2a", oil: true },
     frostOil: { label: "Frost oil", about: "Rubbed on your weapon: a blow or shot in four may chill them, slowing them, five minutes. One oil at a time.", use: boon("frostOil", "Frost oil", 5 * MINUTES, { oil: { kind: "slow", look: "frost", chance: 0.25 } }), price: 40, rarity: "fine", colour: "#9ad8ff", oil: true },
     venomOil: { label: "Venom oil", about: "Rubbed on your weapon: a blow or shot in four may poison them, five minutes. One oil at a time.", use: boon("venomOil", "Venom oil", 5 * MINUTES, { oil: { kind: "poison", chance: 0.25 } }), price: 40, rarity: "fine", colour: "#7ac030", oil: true },
+    // (The rarest: an alchemist's daily special)
+    elixirOfHeroes: { label: "Elixir of Heroes", about: "Your blows, shots, spells and healing 20% stronger, a quarter of an hour.", use: boon("heroes", "Heroic", 15 * MINUTES, { melee: 0.2, ranged: 0.2, spell: 0.2, heal: 0.2 }), price: 380, rarity: "veryRare", colour: "#ffd040" },
+    phoenixDraught: { label: "Phoenix draught", about: "All your hurts healed and your breath back, at once.", use: { heal: 1000, stamina: 1000 }, price: 650, rarity: "legendary", colour: "#ff7a1a" },
 });
 
 /**
@@ -112,6 +116,9 @@ export const SCROLL_SPELLS = Object.freeze([
 
 /** A spell's scroll's item id ("scrollFireball"). */
 export const scrollOf = (spell) => `scroll${spell.charAt(0).toUpperCase()}${spell.slice(1)}`;
+
+/** The scrolls a new adventurer might want (the adventurers' guild's): each school's first spell's, and Stun's. */
+export const STARTING_SCROLLS = Object.freeze([...Object.values(SCHOOLS).map(({ tiers }) => tiers[0]), "stun"].map(scrollOf));
 
 /**
  * Each spell scroll: read, it casts its spell (spells.js) as its reader would, though they've
