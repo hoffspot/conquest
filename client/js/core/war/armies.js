@@ -12,10 +12,12 @@ import { DOCTRINES, MIX } from "../formation.js";
  * A people's army and its reserve, each as strong as `size` at the height of the war (the stage's
  * `army` share of it before then: war.js STAGES); a vassal's `vassal` of that. An army marches out
  * once it's `ready` of its full strength, and, beaten back below `regroup` of what it went in with,
- * falls back to its camp to be made up. Beaten in the field, either gets `flee` turns to get away
- * before it can be fallen on again. Each goes `speed` metres a turn.
+ * falls back to its camp to be made up. In a fight, a side breaks once it's down to `rout` of what
+ * it went in with and outnumbered (in the field either side; elsewhere the attackers). Beaten in the
+ * field, either gets `flee` turns to get away before it can be fallen on again. Each goes `speed`
+ * metres a turn.
  */
-export const ARMY = Object.freeze({ size: 80, vassal: 0.5, ready: 0.7, regroup: 0.5, flee: 2, speed: { army: 250, reserve: 300 } });
+export const ARMY = Object.freeze({ size: 80, vassal: 0.5, ready: 0.7, regroup: 0.5, rout: 0.35, flee: 3, speed: { army: 250, reserve: 300 } });
 
 /**
  * A forward camp an army's staged from (built ahead, as a fortification is): it attacks only what's
@@ -27,6 +29,16 @@ export const ARMY = Object.freeze({ size: 80, vassal: 0.5, ready: 0.7, regroup: 
  * `idle` turns is struck too.
  */
 export const CAMP = Object.freeze({ reach: 300, build: 2, cost: 20, guard: 6, scout: 300, every: 3, pair: 2, skirmish: 600, hits: 0.5, lost: 0.25, most: 3, idle: 40 });
+
+/**
+ * A camp's palisade: its guard, and its army while it's at it (within `within` metres), fight
+ * behind it, as a town's garrison does behind its walls (`walls`), less `breach` for each breach in
+ * it, as far as open ground (`most` breaches). An assault beaten off leaves a breach for each
+ * `press` of those holding it it brought down. Once no enemy's been within the camp's reach for
+ * `quiet` turns, its guard mends `mend` a turn (`army` with its army there), each for `stakes` from
+ * its people's stores.
+ */
+export const PALISADE = Object.freeze({ within: 120, walls: 1.2, breach: 0.05, most: 4, press: 0.15, quiet: 2, mend: 1, army: 2, stakes: Object.freeze({ wood: 4 }) });
 
 /**
  * How far each sees (metres, for the war table's map: docs/WAR.md *The war table*; war.js sight): a

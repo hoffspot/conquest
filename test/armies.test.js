@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ARMY, CAMP, CLOSE, fullOf, LEADERS, REINFORCE, WATCH_TURNS } from "../client/js/core/war/armies.js";
 import { tell } from "../client/js/core/war/news.js";
-import { HOLDINGS, RISING, STAGES, TURN_MS, War } from "../client/js/core/war/war.js";
+import { DEFEND, HOLDINGS, RISING, STAGES, TURN_MS, War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 
 const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
@@ -49,6 +49,15 @@ const play = (war, turns) => {
     return events;
 };
 
+// The wild's brigands' camps all scattered for good: no reserve goes out against them
+const calm = (war) => {
+    for (const camp of plan.camps) {
+        war.scattered[camp.id] = Infinity;
+    }
+
+    return war;
+};
+
 const coming = (war, force) => war.forces.filter(({ kind, target }) => kind === "reinforcement" && target === force.id).reduce((sum, { size }) => sum + size, 0);
 const edgeOf = (id) => plan.places.find((place) => place.id === id).radius ?? 0;
 
@@ -70,7 +79,7 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
     });
 
     it("has a reserve at each people's seat from the start, made up from its towns; no army till one's raised", () => {
-        const war = new War(plan);
+        const war = calm(new War(plan));
 
         for (const realm of war.realms) {
             const reserve = war.reserveOf(realm.id);
@@ -86,7 +95,7 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
     });
 
     it("makes them up in order: its garrisons to half, then its reserve, then its army, then its garrisons to the full", () => {
-        const war = warOf();
+        const war = calm(warOf());
         const towns = war.towns.filter(({ owner }) => owner === "human");
 
         for (const town of towns) {
@@ -181,7 +190,7 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
     });
 
     it("sends its reserve against an enemy army in its own lands, the one attacking a town first; never beyond them", () => {
-        const war = warOf();
+        const war = calm(warOf());
         const reserve = war.reserveOf("human");
         const town = war.towns.find(({ owner, kind }) => owner === "human" && kind === "town");
         const theirs = war.town(war.realm("orc").seat);
@@ -189,18 +198,30 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         reserve.size = 60;
 
         // (An orc army in the field, deep in its own lands: the reserve stays home)
-        const army = { id: "force-orc", realm: "orc", kind: "army", size: 40, at: [...theirs.at], path: [[...theirs.at]], leg: 0, target: null, home: theirs.id, mission: "regroup", about: null, camp: null, orders: null, went: 40, arrived: null, since: 0 };
+        const army = { id: "force-orc", realm: "orc", kind: "army", size: 40, at: [...theirs.at], path: [[...theirs.at]], leg: 0, target: null, home: theirs.id, mission: "attack", about: null, camp: null, orders: null, went: 40, arrived: null, since: 0 };
 
         war.forces.push(army);
         play(war, 2);
         assert.ok(war.towns.filter(({ owner }) => owner === "human").every((each) => apart(each.at, army.at) > CLOSE.threat));
         assert.notEqual(reserve.mission, "defend");
 
-        // (Before one of their towns, but beaten back, falling back to its camp to be made up: not
-        // hunted down)
-        Object.assign(army, { at: [town.at[0] + 200, town.at[1]], path: [[town.at[0] + 200, town.at[1]]], leg: 0 });
-        play(war, 2);
-        assert.notEqual(reserve.mission, "defend", "not hunted down");
+        // (Before one of their towns, but beaten back, falling back to its camp to be made up:
+        // followed only by a reserve strong enough to finish it, DEFEND.pursue times as strong;
+        // nothing raised meanwhile)
+        war.realm("human").treasury = 0;
+        reserve.size = Math.floor(army.size * DEFEND.pursue) - 1;
+        Object.assign(army, { at: [town.at[0] + 200, town.at[1]], path: [[town.at[0] + 200, town.at[1]]], leg: 0, mission: "regroup" });
+        play(war, 1);
+        assert.notEqual(reserve.target, army.id, "not followed by too few");
+        reserve.size = Math.ceil(army.size * DEFEND.pursue);
+        play(war, 1);
+        assert.equal(reserve.target, army.id, "followed by enough");
+
+        // (Beaten from its camp, on its way home: let go)
+        army.mission = "home";
+        play(war, 1);
+        assert.notEqual(reserve.target, army.id, "let go home");
+        reserve.size = 60;
 
         // (Marching there: out against it, and fought)
         army.mission = "camp";
@@ -285,11 +306,13 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         const marched = later.find(({ type, realm }) => type === "marched" && realm === "human");
         const camped = later.find(({ type, realm }) => type === "camped" && realm === "human");
         const assault = later.find(({ type, realm }) => type === "assault" && realm === "human");
+        // (The camp it went at it from: its first may have been stormed, the army sent home)
+        const from = later.filter(({ type, realm, turn }) => type === "camped" && realm === "human" && turn <= assault?.turn).at(-1);
 
         assert.ok(marched && marched.size >= Math.floor(war.fullOf("human") * ARMY.ready), `marched ${marched?.size} strong`);
         assert.ok(camped && camped.turn >= marched.turn + CAMP.build, "a camp built, taking its time");
         assert.ok(assault && assault.turn >= camped.turn);
-        assert.ok(apart(camped.at, war.town(assault.town).at) - edgeOf(assault.town) <= CAMP.reach, "from a camp in reach of it");
+        assert.ok(apart(from.at, war.town(assault.town).at) - edgeOf(assault.town) <= CAMP.reach, "from a camp in reach of it");
         assert.match(tell(marched, war), /^The Humans' army marches on .+, \d+ strong\.$/);
         assert.match(tell(camped, war), /^The Humans have made camp within a march of .+\.$/);
     });
@@ -504,8 +527,8 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         assert.equal(war.camp("camp-s"), null);
     });
 
-    it("sends its reserve against an enemy's camp in its own lands that no army of theirs holds, and razes it; not one their army's at", () => {
-        const war = warOf();
+    it("sends its reserve against an enemy's camp in its own lands that no army of theirs holds, and razes it; not one their army's at, too strong for it there", () => {
+        const war = calm(warOf());
         const town = war.towns.find(({ owner, kind }) => owner === "orc" && kind === "town");
         const at = [town.at[0] + edgeOf(town.id) + 200, town.at[1]];
         const reserve = war.reserveOf("orc");
@@ -515,8 +538,9 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         war.realm("human").treasury = 0;
         war.camps.push({ id: "camp-r", realm: "human", at, guard: CAMP.guard, built: 0, done: 0, toward: town.id, used: 1e6, skirmished: 1e6 });
 
-        // (Their army at it, beaten back and being made up there: the camp left be, and the army)
-        const army = { id: "force-human", realm: "human", kind: "army", size: 10, at: [...at], path: [[...at]], leg: 0, target: null, home: war.realm("human").seat, mission: "regroup", about: [...at], camp: "camp-r", orders: null, went: 60, arrived: null, since: 0 };
+        // (Their army at it, beaten back and being made up there, too strong behind its palisade
+        // for the reserve to follow it there (DEFEND.pursue): the camp left be, and the army)
+        const army = { id: "force-human", realm: "human", kind: "army", size: 40, at: [...at], path: [[...at]], leg: 0, target: null, home: war.realm("human").seat, mission: "regroup", about: [...at], camp: "camp-r", orders: null, went: 60, arrived: null, since: 0 };
 
         war.forces = war.forces.filter((force) => !(force.kind === "army" && force.realm === "human"));
         war.forces.push(army);
