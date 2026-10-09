@@ -1255,6 +1255,28 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     height: 10px;
 }
 
+/* One of the wild's elites' (core/creatures.js ELITES): broader, edged and named in gold, its bar
+   heavier, seen from afar */
+.floater.elite {
+    min-width: 140px;
+    border-color: #e0b44a;
+    box-shadow: 0 0 10px rgba(240, 190, 70, 0.45);
+}
+
+.floater.elite .name {
+    color: #ffd76a;
+    font-weight: 700;
+    text-shadow: 0 0 6px rgba(255, 200, 80, 0.55);
+}
+
+.floater.elite .level {
+    color: #f0cf7a;
+}
+
+.floater.elite .bar {
+    height: 12px;
+}
+
 /* A fortification's (a guard tower's, a forward garrison's): broader, its bar heavier, edged in
    stone */
 .floater.fort {

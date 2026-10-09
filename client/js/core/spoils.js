@@ -131,6 +131,16 @@ export const SPOILS = Object.freeze({
  */
 export const TOME_DROP = Object.freeze({ tier: 4, chance: 0.03, perTier: 0.005, perilous: 0.2 });
 
+/**
+ * What an elite (creatures.js ELITES; docs/WILDS.md *Elites*) leaves each player near it when it
+ * falls, beyond what one of its kind would: its kind's gold `gold` times over (and a `purse`
+ * [least, most] as much, for a kind that carries none); its kind's things likelier, as if found
+ * `better` tiers above its least; its tome, on one with hands, `tome` times as likely, from any
+ * tier. And always a prize: a piece of gear, or (`charm` of the time) a charm, made as a cache's
+ * gear `up` tiers further out would be (caches.js elitePrize).
+ */
+export const ELITE_SPOILS = Object.freeze({ gold: 3, purse: [3, 8], better: 8, tome: 4, charm: 0.3, up: 2 });
+
 /** How much likelier a thing is to be found for each tier a creature's above its least (up to MOST_CHANCE). */
 export const CHANCE_PER_TIER = 0.04;
 const MOST_CHANCE = 0.95;
@@ -138,17 +148,19 @@ const MOST_CHANCE = 0.95;
 /**
  * What one player finds on a creature they were near when it fell (random.js random): { gold,
  * items: [{ id, quality, count }] }, for its tier: its gold that much more (as its strength is:
- * creatures.js tierPower), each thing a little likelier. Often nothing at all.
+ * creatures.js tierPower), each thing a little likelier. Often nothing at all. More, on an
+ * `elite` (ELITE_SPOILS; its prize apart: caches.js elitePrize).
  */
-export function rollSpoils(creature, tier, random, least = tier) {
+export function rollSpoils(creature, tier, random, least = tier, { elite = false } = {}) {
     const table = SPOILS[creature];
 
     if (!table) {
         return { gold: 0, items: [] };
     }
 
-    const above = Math.max(0, tier - least);
-    const gold = table.gold ? Math.round(random.int(...table.gold) * tierPower(tier)) : 0;
+    const above = Math.max(0, tier - least) + (elite ? ELITE_SPOILS.better : 0);
+    const purse = table.gold ?? (elite ? ELITE_SPOILS.purse : null);
+    const gold = purse ? Math.round(random.int(...purse) * tierPower(tier) * (elite ? ELITE_SPOILS.gold : 1)) : 0;
     const items = [];
 
     for (const { id, chance, count = [1, 1] } of table.items) {
@@ -157,10 +169,11 @@ export function rollSpoils(creature, tier, random, least = tier) {
         }
     }
 
-    // (Now and then, carried by one with hands, from the middle tiers on: a tome)
+    // (Now and then, carried by one with hands, from the middle tiers on: a tome; likelier, and
+    // at any tier, on an elite)
     const { hands, perilous } = CREATURES[creature] ?? {};
 
-    if (hands && tier >= TOME_DROP.tier && random.chance(perilous ? TOME_DROP.perilous : TOME_DROP.chance + (tier - TOME_DROP.tier) * TOME_DROP.perTier)) {
+    if (hands && (tier >= TOME_DROP.tier || elite) && random.chance(perilous ? TOME_DROP.perilous : (TOME_DROP.chance + Math.max(0, tier - TOME_DROP.tier) * TOME_DROP.perTier) * (elite ? ELITE_SPOILS.tome : 1))) {
         items.push({ id: tomeOf(rollTome(random)), quality: "common", count: 1 });
     }
 

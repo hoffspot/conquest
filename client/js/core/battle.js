@@ -2380,9 +2380,12 @@ export class Battle {
         return best;
     }
 
-    // The nearest enemy it can see that passes `test` (none further than it can see)
+    // The nearest enemy it can see that passes `test` (none further than it can see: SIGHT, or
+    // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES)
     #nearestSeen(actor, test = () => true) {
-        return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && test(enemy), SIGHT);
+        const sight = actor.wild?.sight ?? SIGHT;
+
+        return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy, sight) && test(enemy), sight);
     }
 
     // The enemy the nearest of its own it can see (on its rounds or at its post, too) is fighting,

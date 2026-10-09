@@ -16,7 +16,7 @@
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
-import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, openAround, rollCache, roundOf, startsOf } from "./caches.js";
+import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -30,7 +30,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -390,7 +390,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 22;
+export const SNAPSHOT_VERSION = 23;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -717,6 +717,8 @@ export class Host {
 
         /** Where the wild's creatures have been cleared lately: [{ at: [x, y], until }] (battle ms; WILDS.cleared). */
         this.cleared = [];
+        /** Until when (battle ms, by player id) no elite's put out near a player, one put out near them lately (ELITES.rest). */
+        this.eliteRest = new Map();
         // The places worth finding held by outlaws or the dead whose band is out (core/places.js):
         // by the place's id, { ids (the band, its leader first), leader, at, tier, holder, chest
         // (its square), race (the place's people, or null), cleared }
@@ -1706,6 +1708,7 @@ export class Host {
             hired: [...this.hired],
             wild: [...this.wild.entries()],
             cleared: structuredClone(this.cleared),
+            eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
             lairs: [...this.lairs.entries()],
@@ -1826,6 +1829,7 @@ export class Host {
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
         host.cleared = structuredClone(snapshot.cleared ?? []);
+        host.eliteRest = new Map(snapshot.eliteRest ?? []);
         host.nextWild = snapshot.nextWild ?? 1;
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
@@ -2638,7 +2642,8 @@ export class Host {
     }
 
     // What each player near a creature when it fell finds on it (spoils.js): their own bundle,
-    // rolled for them alone and seen by them alone (the ground's `for`), there to pick up a while
+    // rolled for them alone and seen by them alone (the ground's `for`), there to pick up a while;
+    // on an elite, more, and its prize (spoils.js ELITE_SPOILS, caches.js elitePrize)
     #spoils(id, beast) {
         const fallen = this.battle.actor(id);
 
@@ -2647,6 +2652,7 @@ export class Host {
         }
 
         const least = CREATURES[beast.creature]?.tiers[0] ?? beast.tier;
+        const elite = beast.elite === "lead";
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
@@ -2655,7 +2661,11 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least);
+            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite });
+
+            if (elite) {
+                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human" }));
+            }
 
             if (!bundle.gold && !bundle.items.length) {
                 continue;
@@ -4754,8 +4764,15 @@ export class Host {
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
-        // (The ground cleared long enough ago filled again)
+        // (The ground cleared long enough ago filled again; the players rested from elites long
+        // enough, ready for another)
         this.cleared = this.cleared.filter(({ until }) => until > this.battle.time);
+
+        for (const [id, until] of [...this.eliteRest]) {
+            if (until <= this.battle.time) {
+                this.eliteRest.delete(id);
+            }
+        }
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
@@ -4763,7 +4780,7 @@ export class Host {
 
             if (!actor) {
                 this.#unwild(id);
-            } else if (roaming && (distanceTo(actor) > WILDS.far || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
+            } else if (roaming && (distanceTo(actor) > (one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
                 this.#release(id);
             }
         }
@@ -4791,10 +4808,58 @@ export class Host {
             const cleared = this.cleared.filter(({ at: [x, y] }) => hypot(x - actor.x, y - actor.y) < WILDS.about).length;
             const room = WILDS.count + (dark ? WILDS.night : 0) - about - cleared;
 
-            if (room > 0) {
+            // (Now and then, where the land's wild enough, an elite and its kind instead, further
+            // off: ELITES)
+            if (room > 0 && !(this.#eliteDue(player, actor) && this.random.next() < ELITES.chance && this.#putOutElite(player, [actor.x, actor.y], dark))) {
                 this.#putOut([actor.x, actor.y], this.#homeOf(player), room, dark);
             }
         }
+    }
+
+    // Could an elite be put out near a player (ELITES): out in land of tier `least` or more (from
+    // their home), none put out near them lately, and none about already
+    #eliteDue(player, actor) {
+        if (this.eliteRest.has(player.id) || tierAt([actor.x, actor.y], [this.#homeOf(player)]) < ELITES.least) {
+            return false;
+        }
+
+        return !this.#elites().some((elite) => hypot(elite.x - actor.x, elite.y - actor.y) < ELITES.apart);
+    }
+
+    // The elites out in the world (their actors)
+    #elites() {
+        return [...this.wild].filter(([, one]) => one.elite === "lead").map(([id]) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+    }
+
+    // An elite and its kind put out near a player (ELITES): further off than the wild's others,
+    // clear of the settlements, the roads and the ground cleared lately, the round it walks on dry
+    // land, far from any other elite; a kind that lives there (none of the perilous), led by one a
+    // tier up on the land's, as many as a pack of theirs there. That player has no other for a
+    // while. Whether one was put out
+    #putOutElite(player, [x, y], dark = false) {
+        const plan = this.world.plan;
+        const home = this.#homeOf(player);
+        const elites = this.#elites();
+
+        for (let tries = 0; tries < 6; tries++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const reach = ELITES.from + this.random.next() * (ELITES.to - ELITES.from);
+            const at = [x + cos(angle) * reach, y + sin(angle) * reach];
+
+            if (!clearOfSettlements(plan, at, WILDS.clear) || [at, ...eliteRound(at)].some((each) => landAt(plan, ...each).water) || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about) || elites.some((elite) => hypot(elite.x - at[0], elite.y - at[1]) < ELITES.apart)) {
+                continue;
+            }
+
+            const encounter = encounterAt(plan, at, [home], this.random, dark);
+
+            if (encounter && !CREATURES[encounter.creature].perilous && this.#pack(encounter, at, { elite: true }).length) {
+                this.eliteRest.set(player.id, this.battle.time + ELITES.rest);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Is it dark out (core/light.js torchesLit: from half through the dusk to half through the
@@ -4837,10 +4902,10 @@ export class Host {
     }
 
     // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
-    // on a building's `map`), the first its leader; what they're of (`camp`, `lair`, `place`,
-    // `cache`) and how they keep (`roam`, `temper`, `guard`, the `round` they walk; one `pack` with
-    // others, if it's given): their ids
-    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", ...more } = {}) {
+    // on a building's `map`), the first its leader (an `elite` pack's, an elite: ELITES); what
+    // they're of (`camp`, `lair`, `place`, `cache`) and how they keep (`roam`, `temper`, `guard`,
+    // the `round` they walk; one `pack` with others, if it's given): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", elite = false, ...more } = {}) {
         const free = this.#spots(map);
         const pack = `pack-${this.nextWild}`;
         const ids = [];
@@ -4852,7 +4917,7 @@ export class Host {
                 // (One alone at its post: right there; a pack round it, three abreast)
                 const at = count === 1 ? [x, y] : [x + (k % 3) - 1, y + Math.floor(k / 3)];
 
-                this.#rouse(id, creature, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more });
+                this.#rouse(id, creature, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
                 ids.push(id);
             }
         } catch {
@@ -4866,32 +4931,39 @@ export class Host {
         return ids;
     }
 
-    // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null }) {
+    // One of the wild's creatures into the world: as strong as its tier has it (creatures.js); an
+    // elite (`elite` "lead") a tier up, stronger still, walking its round about where it's put
+    // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null }) {
         const spec = CREATURES[creature];
-        // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title)
-        const stands = CHAMPIONS[champion] ?? { hp: 1, power: 1 };
-        const power = tierPower(tier) * stands.power;
+        const lead = elite === "lead";
+        // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
+        // ELITES)
+        const stands = lead ? ELITES : (CHAMPIONS[champion] ?? { hp: 1, power: 1 });
+        const at = lead ? Math.min(TIERS, tier + ELITES.up) : tier;
+        const power = tierPower(at) * stands.power;
+        const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}) });
         this.battle.add({
             id,
             kind: "beast",
-            name: title ?? spec.name,
+            name: title ?? (lead ? eliteName(creature) : spec.name),
             weapon: spec.weapon,
             team: WILD,
             square,
             map,
             ai: "wild",
-            hp: Math.round(spec.hp * tierPower(tier) * stands.hp),
+            hp: Math.round(spec.hp * tierPower(at) * stands.hp),
             speed: spec.speed,
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
             // (One holding a place gone into, `wary`: a moment's pause on first seeing someone come
             // in, battle.js WARY_MS; a dungeon's boss or mini-boss, its rank and its id in its theme,
-            // `champion` and `regalia`: how it's drawn, beasts/champions.js)
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(round ? { round: round.stops, stop: round.at } : {}), ...(champion ? { champion, regalia } : {}) },
+            // `champion` and `regalia`: how it's drawn, beasts/champions.js; an elite, `elite`, seeing
+            // further, `sight`, and drawn as a champion "elite")
+            wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
         });
     }
 
