@@ -14,6 +14,7 @@
 
 import * as THREE from "three";
 import { faceFrame } from "./face.js";
+import { measureHead } from "./headwear.js";
 import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
 import { powerGrip } from "./grip.js";
@@ -158,7 +159,9 @@ const SLUNG_SHIELDS = new Set(["human", "elf", "orc", "lizard"]);
  * grip, from and to: a quarterstaff's hands about shoulder width apart, a war hammer's rear hand
  * at the end of the handle). What a hand closes round is as thick as it is (`round`, and the
  * other hand's `haftRound`: metres, its radius: grip.js), and a hilt's hand goes between its
- * pommel and its guard (`hilt`: metres along its y from the grip).
+ * pommel and its guard (`hilt`: metres along its y from the grip). What is worn on the head
+ * names the line its edge follows round it (`rim`: headwear.js's RIMS), which the hair is cut
+ * along under it.
  */
 export const ITEMS = Object.freeze({
     sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, round: 0.014, hilt: [-0.045, 0.053], hold: HOLDS.sword, sheath: SHEATHS.sword },
@@ -190,14 +193,14 @@ export const ITEMS = Object.freeze({
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: true },
     towerShield: { label: "Tower shield", slot: "offHand", model: "towerShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: false },
     spellward: { label: "Spellward", slot: "offHand", model: "spellward", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
-    nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
-    orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
-    wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"] },
+    nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"], rim: "helm" },
+    orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"], rim: "helm" },
+    wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"], rim: "hat" },
     crown: { label: "Crown", slot: "head", model: "crown", socket: "head" },
-    leatherCap: { label: "Leather cap", slot: "head", model: "leatherCap", socket: "head", hides: ["hair"] },
+    leatherCap: { label: "Leather cap", slot: "head", model: "leatherCap", socket: "head", hides: ["hair"], rim: "cap" },
     // Each people's helm and shield, in their colours (liveries.js: their soldiers' uniform)
     ...Object.fromEntries(Object.keys(LIVERIES).flatMap((people) => [
-        [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"] }],
+        [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"], rim: "helm" }],
         [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: ROUND_SHIELDS.has(people) ? "leftFist" : "leftForearm", hold: HOLDS.shield, grips: true, sling: SLUNG_SHIELDS.has(people) }],
     ])),
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
@@ -237,14 +240,14 @@ export const ITEMS = Object.freeze({
     catBasket: { label: "Banded basket", slot: "mainHand", model: "catBasket", socket: "rightHand", grips: true, round: 0.011, hold: HOLDS.basket },
     lizardBasket: { label: "Reed basket", slot: "mainHand", model: "lizardBasket", socket: "rightHand", grips: true, round: 0.008, hold: HOLDS.basket },
     orcBasket: { label: "Stick basket", slot: "mainHand", model: "orcBasket", socket: "rightHand", grips: true, round: 0.013, hold: HOLDS.basket },
-    strawHat: { label: "Straw hat", slot: "head", model: "strawHat", socket: "head", hides: ["hair"] },
-    coif: { label: "Linen coif", slot: "head", model: "coif", socket: "head", hides: ["hair"] },
-    hood: { label: "Wool hood", slot: "head", model: "hood", socket: "head", hides: ["hair"] },
+    strawHat: { label: "Straw hat", slot: "head", model: "strawHat", socket: "head", hides: ["hair"], rim: "hat" },
+    coif: { label: "Linen coif", slot: "head", model: "coif", socket: "head", hides: ["hair"], rim: "coif" },
+    hood: { label: "Wool hood", slot: "head", model: "hood", socket: "head", hides: ["hair"], rim: "hood" },
     // (And each people's own on their heads, dress.js: the elves' silver circlet, the dark elves'
     // black one and their black hood, the lizard folk's feathered band)
     circletElf: { label: "Silver circlet", slot: "head", model: "circletElf", socket: "head" },
     circletDark: { label: "Black circlet", slot: "head", model: "circletDark", socket: "head" },
-    darkHood: { label: "Black hood", slot: "head", model: "darkHood", socket: "head", hides: ["hair"] },
+    darkHood: { label: "Black hood", slot: "head", model: "darkHood", socket: "head", hides: ["hair"], rim: "hood" },
     featherBand: { label: "Feathered band", slot: "head", model: "featherBand", socket: "head" },
 });
 
@@ -439,7 +442,8 @@ export function socketOn(character, socket, { round = null, haft = null } = {}) 
             const middle = new THREE.Vector3(...face.fromFace(0, 0.035, -0.068));
             const skull = skullOf(character, middle, fit.headRadius);
 
-            return { bone: "Head", position: middle.sub(head("Head")), quaternion: new THREE.Quaternion(), fit: { ...fit, skull } };
+            // (And measured all round, for head-wear fitted over it: items.js, headwear.js)
+            return { bone: "Head", position: middle.clone().sub(head("Head")), quaternion: new THREE.Quaternion(), fit: { ...fit, skull, head: measureHead(character, middle, face) } };
         }
         case "mouth": {
             // Just inside the lower lip, wherever the jaw has moved it: the most forward point of

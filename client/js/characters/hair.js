@@ -18,7 +18,8 @@
 
 import * as THREE from "three";
 import { aboveHairline, beardAmount, EAR, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
-import { random, smoothstep, valueNoise } from "./noise.js";
+import { hairCut, underCut } from "./headwear.js";
+import { lerpTable, random, smoothstep, valueNoise } from "./noise.js";
 import { allAtOnce } from "../core/steps.js";
 
 /**
@@ -471,12 +472,18 @@ function thinned(style, detail, far = false) {
 /**
  * Build a character's hair and beard as one geometry, to skin to its rig (or null for none).
  * `character` is a Character; `style` and `beard` are keys of HAIRSTYLES and BEARDS. Under a
- * hat or helmet, `below` keeps only the hair growing below that height (face coordinates).
+ * hat or helmet, `under` (its rim: headwear.js RIMS) keeps only the hair growing below its rim.
  * `detail` (0 to 1) thins the hair out for characters seen from afar (and `far`, further: thinned).
  */
 export function buildHair(character, style, beard, options) {
     return allAtOnce(growingHair(character, style, beard, options));
 }
+
+// How low behind the head a rim comes (face coordinates, metres) for tails to be tucked in under
+// it: a coif's and a hood's, at the nape
+const TUCKED = -0.06;
+// How far below the cut under head-wear a tail's tie is (metres)
+const TIE_UNDER = 0.028;
 
 // How many strands growingHair grows a step
 const STRANDS_A_STEP = 24;
@@ -548,8 +555,14 @@ export function hairSetting(character) {
  * the head's and body's shapes, some tens of milliseconds to work out), for growing it again
  * (the far hair) without working that out twice.
  */
-export function* growingHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1, far = false, shared = null } = {}) {
-    const hair = thinned(HAIRSTYLES[style] ?? HAIRSTYLES.short, detail, far);
+export function* growingHair(character, style = "short", beard = "none", { seed = 1, under = null, detail = 1, far = false, shared = null } = {}) {
+    // Under head-wear, only the hair rooted below its rim (`cut`): a ponytail's and twin tails'
+    // ties low enough to come out under it (tucked in under a coif or hood, which come down to
+    // the nape), a topknot's hair combed down instead, a mohawk's none
+    const cut = under ? hairCut(under) : null;
+    const tucked = cut && lerpTable(cut, 180) < TUCKED;
+    const own = HAIRSTYLES[style] ?? HAIRSTYLES.short;
+    const hair = thinned(cut && own.knot ? { ...own, flow: "back", knot: false, length: 0.06, gravity: 30, raise: 0 } : cut && (own.strip || (tucked && (own.tail || own.tails))) ? { ...own, strands: 0 } : own, detail, far);
     const whiskers = thinned(BEARDS[beard] ?? BEARDS.none, detail, far);
 
     if (!hair.strands && !whiskers.strands) {
@@ -563,13 +576,20 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
         shared.setting = setting;
     }
 
-    const { positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, tie, ties } = setting;
+    const { positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot } = setting;
     const builder = new CardBuilder(rig, next);
+    // (A point on the head nearest one in face coordinates, a little off it)
+    const onHead = (x, y, z) => {
+        const out = at(x, y, z).sub(head.centre).normalize();
 
-    // A ponytail, twin tails or a topknot can't come out of a helmet
-    const gathered = below < Infinity && (hair.tail || hair.tails || hair.knot);
+        return head.centre.clone().addScaledVector(out, head.radius(out) + 0.006);
+    };
+    // (Ties under head-wear far enough below its rim that their tails, full a little below them,
+    // come out from under it)
+    const tie = cut ? onHead(0, lerpTable(cut, 180) - TIE_UNDER, -0.16) : setting.tie;
+    const ties = cut ? { [-1]: onHead(-0.07, lerpTable(cut, 140) - TIE_UNDER, -0.135), 1: onHead(0.07, lerpTable(cut, 140) - TIE_UNDER, -0.135) } : setting.ties;
 
-    if (hair.strands && !gathered) {
+    if (hair.strands) {
         const candidates = sampleSurface(positions, headTriangles, hair.strands * 8, next).filter(({ point, normal }) => {
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
             const outward = point.clone().sub(head.centre);
@@ -583,7 +603,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
                 return false;
             }
 
-            return y < below && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && nearEar(x, y, z) < 0.5;
+            return !(cut && underCut(cut, x, y, z)) && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && nearEar(x, y, z) < 0.5;
         });
         const roots = candidates.slice(0, hair.strands);
 
@@ -598,7 +618,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
                 const point = head.centre.clone().addScaledVector(out, head.radius(out));
                 const [x, y, fz] = face.toFace(point.x, point.y, point.z);
 
-                if (aboveHairline(x, y, fz) > 0.002) {
+                if (aboveHairline(x, y, fz) > 0.002 && !(cut && underCut(cut, x, y, fz))) {
                     roots.push({ point, normal: out });
                 }
             }

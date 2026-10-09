@@ -8,7 +8,9 @@
 import * as THREE from "three";
 import { fireLit } from "../world/firelight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { HeadMap, headPlate, rimLine } from "./headwear.js";
 import { LIVERIES } from "./liveries.js";
+import { smoothstep } from "./noise.js";
 
 const materials = new Map();
 
@@ -1717,6 +1719,325 @@ function fitted(group, skull, { across = null, up = null, back, rim = 0, band = 
 // as a people's is
 const helmShell = (radius, tall = 1) => ({ across: radius * 1.08 * 0.86, up: radius * 1.08 * 0.98 * tall, back: radius * 1.08 * 1.02, rim: radius * 0.17 });
 
+// --- Head-wear fitted to the head it's on (headwear.js: the head measured all round, the lines
+// rims follow round it, plates grown over it) ---
+
+// How thick a helm's plates are (metres)
+const PLATE = 0.0025;
+
+// A shape built up +y from its foot (a spike, a feather), stood on `base`, pointing along `direction`
+function standing(geometry, base, direction) {
+    geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize()));
+
+    return geometry.translate(base.x, base.y, base.z);
+}
+
+// A surface through rings of points (each round the head, the same number, the first lowest),
+// facing out (`inward`: in)
+function loft(rings, inward = false) {
+    const count = rings[0].length;
+    const indices = [];
+
+    for (let j = 0; j < rings.length - 1; j++) {
+        for (let i = 0; i < count; i++) {
+            const [a, b, c, d] = [j * count + i, j * count + ((i + 1) % count), (j + 1) * count + ((i + 1) % count), (j + 1) * count + i];
+
+            indices.push(...(inward ? [a, c, b, a, d, c] : [a, b, c, a, c, d]));
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(rings.flatMap((ring) => ring.flatMap((p) => [p.x, p.y, p.z])), 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
+}
+
+// A nasal: a bar down from the brow (`top`) over the nose, leaning out as far as the nose needs
+// to clear it (by half a lining: nothing's under it but the skin)
+function nasal(head, top, length = 0.05) {
+    let lean = 0;
+
+    for (let k = 1; k <= 10; k++) {
+        const y = top.y - (length * k) / 10;
+        const face = head.point(0, head.upAt(0, y), LINING * 0.5);
+
+        lean = Math.max(lean, Math.atan2(face.z - top.z, top.y - y));
+    }
+
+    return new THREE.BoxGeometry(0.011, length, 0.004).translate(0, -length / 2, 0.002).rotateX(-lean).translate(top.x, top.y, top.z);
+}
+
+// A line of points over the top of the head from front to back, down to `from` and `to` (radians
+// up, at the front and the back), `out` metres off it
+function overTheTop(head, from, to, out, count = 12) {
+    return Array.from({ length: count + 1 }, (_, k) => {
+        const along = from + ((Math.PI - to - from) * k) / count;
+
+        return (along <= Math.PI / 2 ? head.point(0, along, out(0, along)) : head.point(Math.PI, Math.PI - along, out(Math.PI, Math.PI - along))).toArray();
+    });
+}
+
+// An orc's horn of bone, from its root at the origin, curving out and up (`side`: 1 the left)
+function orcHorn(r, side) {
+    const horn = new THREE.ConeGeometry(r * 0.22, r * 1.5, 12, 8).translate(0, r * 0.75, 0);
+    const position = horn.attributes.position;
+
+    for (let i = 0; i < position.count; i++) {
+        position.setX(i, position.getX(i) + side * position.getY(i) ** 2 * 1.2);
+    }
+
+    horn.computeVertexNormals();
+
+    return horn.rotateZ(-side * 1.15);
+}
+
+/**
+ * A helm fitted to the head (`fit.head`: headwear.js measureHead): a people's (`people`) or a
+ * plain one (`style`: "nasal", "orc"). Its dome is grown over the head a lining's room off it, down
+ * to a helm's rim (just above the brows, arched over the ears, down past the back of the skull)
+ * and banded; its people's nasal, plume, leaf, spikes, feathers or horns stood on it; cheek guards
+ * hung over the elves', dark elves' and cat folk's cheeks, clear of their eyes, and a dark elf's
+ * flared over the nape. `open`: round a cat's ears, a band and a ridge from front to back, not a
+ * dome.
+ */
+function fittedHelm(fit, { people = "human", style = null, open = false }) {
+    const head = new HeadMap(fit.head);
+    const livery = LIVERIES[people] ?? LIVERIES.human;
+    const metal = style === "nasal" ? "steel" : style === "orc" ? "iron" : metalOf(livery);
+    const line = rimLine(head, "helm");
+    const rim = (around) => head.upAt(around, line(around));
+    const above = (rise) => (around) => head.upAt(around, line(around) + rise);
+    // (A lining's room off the head, more towards a tall crown: the elves'; half of it on the bare
+    // forehead above the brows, where there's no hair under it)
+    const tall = style ? 0 : Math.max(0, (HELM_TALL[people] ?? 1) - 1) * head.radius(0, Math.PI / 2);
+    const brow = (around, up) => smoothstep(0.9, 0.3, Math.abs(around)) * (1 - smoothstep(rim(around), rim(around) + 0.35, up));
+    const dome = (around, up) => LINING * (1 - 0.5 * brow(around, up)) + tall * Math.max(0, Math.sin(up)) ** 6;
+    const on = (around, up, more = 0) => head.point(around, up, dome(around, up) + PLATE + more);
+    const parts = [];
+
+    if (!open) {
+        parts.push([headPlate(head, { bottom: rim, top: () => Math.PI / 2, out: dome, steps: [48, 14] }), metal]);
+    }
+
+    // Its band round the rim (a cat's taller, the helm's metal)
+    const banding = open ? metal : style === "nasal" ? "brass" : style === "orc" ? "darkSteel" : people === "human" ? metalOf({ metal: livery.trim }) : clothOf(livery.main);
+
+    parts.push([headPlate(head, { bottom: above(-0.002), top: above(open ? 0.026 : 0.011), out: (around, up) => dome(around, up) + PLATE, thickness: 0.003, steps: [48, 2] }), banding]);
+
+    if (open) {
+        // A ridge over the top from the band in front to the band behind, a crest of horsehair along it
+        const ridge = overTheTop(head, rim(0) + 0.25, rim(Math.PI) + 0.25, () => LINING + 0.004);
+        const [tube] = taperedTube(ridge, 0.007, 0.007, { segments: 24, sides: 6 });
+        const [crest, end] = taperedTube(overTheTop(head, rim(0) + 0.35, rim(Math.PI) + 0.45, () => LINING + 0.013), 0.011, 0.005, { segments: 16, sides: 6 });
+
+        parts.push([tube, metal], [crest.scale(0.45, 1, 1), clothOf(people === "cat" ? livery.trim : livery.main)], [end, clothOf(people === "cat" ? livery.trim : livery.main)]);
+    }
+
+    if (people === "human" || style === "nasal" || open) {
+        parts.push([nasal(head, head.point(0, rim(0), dome(0, rim(0)) + PLATE), open ? 0.016 : 0.05), metal]);
+    }
+
+    // Cheek guards: from in front of the ears to behind the eyes, longest at the front
+    if (people === "elf" || people === "darkElf" || open) {
+        const [front, back] = [0.82, Math.min(1.3, (head.ears?.from ?? 1.45) - 0.1)];
+
+        for (const side of [-1, 1]) {
+            const drop = (around) => {
+                const t = (Math.abs(around) - front) / (back - front);
+
+                return people === "darkElf" ? 0.06 - 0.032 * t : 0.05 - 0.02 * t * t;
+            };
+
+            parts.push([headPlate(head, { from: side > 0 ? front : -back, to: side > 0 ? back : -front, bottom: (around) => head.upAt(around, line(around) - drop(around)), top: above(0.008), out: () => LINING + PLATE * 0.5, steps: [6, 10] }), metal]);
+        }
+    }
+
+    switch (style ? (style === "orc" ? "orc" : null) : people) {
+        case "human": {
+            // A plume sweeping back over the crown
+            const [tube, end] = taperedTube([on(0, 1.15, 0.004), on(0, Math.PI / 2, 0.03).add(new THREE.Vector3(0, 0, -0.015)), on(Math.PI, 1.0, 0.035), on(Math.PI, 0.5, 0.012)].map((p) => p.toArray()), 0.015, 0.005, { segments: 14, sides: 8 });
+
+            parts.push([tube, clothOf(livery.main)], [end, clothOf(livery.main)]);
+            break;
+        }
+        case "elf": {
+            // A leaf of silver standing along the crown, its root at the front
+            const leaf = new THREE.Shape();
+
+            leaf.moveTo(0, 0);
+            leaf.bezierCurveTo(0.03, 0.02, 0.06, 0.045, 0.1, 0.06);
+            leaf.bezierCurveTo(0.065, 0.02, 0.03, 0.004, 0, 0);
+
+            const root = on(0, 1.15, -0.002);
+
+            parts.push([new THREE.ExtrudeGeometry(leaf, { depth: 0.004, bevelEnabled: false, curveSegments: 10 }).translate(0, 0, -0.002).rotateY(Math.PI / 2).translate(root.x, root.y, root.z), metal]);
+            break;
+        }
+        case "darkElf": {
+            // A crest of spikes from the brow over the crown, two more swept back from behind, a
+            // point down between the brows, and a guard flared over the nape
+            for (let k = 0; k < 5; k++) {
+                const along = 0.95 + k * 0.42;
+                const base = along <= Math.PI / 2 ? on(0, along, -0.001) : on(Math.PI, Math.PI - along, -0.001);
+                const length = 0.042 - Math.abs(k - 2) * 0.008;
+
+                parts.push([standing(new THREE.ConeGeometry(0.0065, length, 6).translate(0, length / 2, 0), base, base.clone().normalize()), metal]);
+            }
+
+            for (const side of [-1, 1]) {
+                const base = on(side * 2.2, 0.45, -0.001);
+
+                parts.push([standing(new THREE.ConeGeometry(0.008, 0.06, 6).translate(0, 0.03, 0), base, base.clone().normalize().add(new THREE.Vector3(0, 0.35, -0.9))), metal]);
+            }
+
+            parts.push([headPlate(head, { from: -0.16, to: 0.16, bottom: (around) => head.upAt(around, line(around) - 0.016 * (1 - Math.abs(around) / 0.16)), top: above(0.006), out: (around, up) => dome(around, up) + PLATE, steps: [8, 4] }), metal]);
+
+            const nape = (around) => [head.upAt(around, line(around) - 0.036), head.upAt(around, line(around) + 0.004)];
+
+            parts.push([
+                headPlate(head, {
+                    from: 2.0,
+                    to: 2 * Math.PI - 2.0,
+                    bottom: (around) => nape(around)[0],
+                    top: (around) => nape(around)[1],
+                    out: (around, up) => {
+                        const [low, high] = nape(around);
+
+                        return LINING + PLATE + 0.016 * ((high - up) / (high - low)) ** 1.5;
+                    },
+                    steps: [16, 6],
+                }),
+                metal,
+            ]);
+            break;
+        }
+        case "lizard": {
+            // A fan of feathers from the back of the crown, crimson and turquoise; a stone in front
+            for (let k = 0; k < 7; k++) {
+                const angle = -0.9 + (k * 1.8) / 6;
+
+                parts.push([standing(new THREE.BoxGeometry(0.013, 0.1, 0.001).translate(0, 0.05, 0), on(Math.PI + angle * 0.3, 0.95, -0.002), new THREE.Vector3(Math.sin(angle) * 0.6, 1, -0.8)), clothOf(k % 2 ? livery.trim : livery.main)]);
+            }
+
+            const stone = on(0, rim(0) + 0.25, 0.004);
+
+            parts.push([new THREE.SphereGeometry(0.013, 12, 8).translate(stone.x, stone.y, stone.z), paintOf(livery.trim)]);
+            break;
+        }
+        case "orc": {
+            // Horns of bone from its sides, curving out and up, and a spike behind the crown
+            const r = (fit.headRadius ?? 0.1) * 1.08;
+
+            // (Their roots sunk in the dome, as far out from the head's middle as they always were)
+            for (const side of [-1, 1]) {
+                const root = new THREE.Vector3(side * r * 0.95, r * 0.55, 0).sub(new THREE.Vector3(side * Math.sin(1.15), Math.cos(1.15), 0).multiplyScalar(r * 0.75));
+
+                parts.push([orcHorn(r, side).translate(root.x, root.y, root.z), "bone"]);
+            }
+
+            parts.push([standing(new THREE.BoxGeometry(r * 0.08, r * 0.5, r * 0.08).translate(0, r * 0.25, 0), on(Math.PI, 1.2, -0.002), new THREE.Vector3(0, 1, -0.7)), style === "orc" ? "darkSteel" : metal]);
+            break;
+        }
+    }
+
+    const group = assemble(parts, "helmet");
+
+    // (What's within its dome, kept with it: the roots of its crests and horns are out of sight)
+    group.userData.shell = open ? null : { head: fit.head, rim: "helm", out: LINING + PLATE, tall };
+
+    return group;
+}
+
+// A leather cap fitted to the head: over the crown, down to a cap's rim (above the ears, the nape
+// bare), its edge rolled; `open`, round a cat's ears, a band and a strap over the top
+function fittedCap(fit, open = false) {
+    const head = new HeadMap(fit.head);
+    const line = rimLine(head, "cap");
+    const rim = (around) => head.upAt(around, line(around));
+    const parts = [[headPlate(head, { bottom: (around) => head.upAt(around, line(around) - 0.002), top: (around) => head.upAt(around, line(around) + 0.012), out: () => LINING + 0.003, thickness: 0.003, steps: [40, 2] }), "darkLeather"]];
+
+    if (open) {
+        parts.push([taperedTube(overTheTop(head, rim(0) + 0.2, rim(Math.PI) + 0.2, () => LINING + 0.003), 0.008, 0.008, { segments: 20, sides: 6 })[0], "leather"]);
+    } else {
+        parts.push([headPlate(head, { bottom: rim, top: () => Math.PI / 2, out: () => LINING, thickness: 0.003, steps: [40, 10] }), "leather"]);
+    }
+
+    const group = assemble(parts, "helmet");
+
+    group.userData.shell = open ? null : { head: fit.head, rim: "cap", out: LINING + 0.003, tall: 0 };
+
+    return group;
+}
+
+// A coif or hood fitted to the head: cloth over the crown and the ears (ears too long to go under
+// it through it, as a helm's), down to the jaw beside the face and the nape behind (a hood's down
+// the neck, looser, peaked a little behind the crown), its edge hemmed
+function fittedCoif(fit, { hood = false, material = "linen" } = {}) {
+    const measured = new HeadMap(fit.head);
+    const overEars = !measured.ears || measured.ears.top < measured.local(0.045);
+    const head = new HeadMap(fit.head, { overEars });
+    const kind = hood ? "hood" : "coif";
+    const line = rimLine(head, kind, { overEars });
+    const rim = (around) => head.upAt(around, line(around));
+    const loose = hood ? 0.012 : 0.002;
+    const out = (around, up) => LINING + loose + (hood ? 0.012 * Math.max(0, -Math.cos(around)) * Math.max(0, Math.sin(up)) ** 2 : 0);
+    const parts = [
+        [headPlate(head, { bottom: rim, top: () => Math.PI / 2, out, thickness: 0.002, steps: [48, 16] }), material],
+        [headPlate(head, { bottom: (around) => head.upAt(around, line(around) - 0.001), top: (around) => head.upAt(around, line(around) + 0.008), out: (around, up) => out(around, up) + 0.002, thickness: 0.002, steps: [48, 2] }), material],
+    ];
+    const group = assemble(parts, "helmet");
+
+    group.userData.shell = { head: fit.head, rim: kind, out: LINING + loose, tall: 0, overEars };
+
+    return group;
+}
+
+// A hat sat on the head where it's widest (a hat's rim, tipped back a little): its band round the
+// head there, its crown rising from the band (`kind`: a straw hat's, straight-sided and flat
+// topped; a wizard's, a tall cone bent back) and its brim out from the band's foot
+function fittedHat(fit, kind) {
+    const head = new HeadMap(fit.head);
+    const line = rimLine(head, "hat");
+    const STEPS = 40;
+    const ring = (rise, out) => Array.from({ length: STEPS }, (_, i) => {
+        const around = (i / STEPS) * 2 * Math.PI;
+
+        return head.point(around, head.upAt(around, line(around) + rise), out);
+    });
+    const BAND = 0.014;
+    const base = ring(BAND, LINING + 0.002);
+    const middle = base.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(STEPS);
+    const top = Math.max(...base.map((p) => p.y));
+    // (The ring `scale` of the way out from the middle, `rise` above the band's highest point, bent back `back`)
+    const around = (scale, rise, back = 0) => base.map((p) => new THREE.Vector3(middle.x + (p.x - middle.x) * scale, top + rise, middle.z + (p.z - middle.z) * scale - back));
+    const straw = kind === "strawHat";
+    const crown = straw
+        ? [base, around(0.97, 0.03), around(0.9, 0.1), around(0.86, 0.12), around(0.4, 0.125), around(0.02, 0.126)]
+        : [base, ...[0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1].map((t) => around(Math.max(0.02, 1 - t), 0.3 * t, (t ** 2.5) * 0.13))];
+    // Its brim out from the foot of the crown, drooping towards its edge (a wizard's, more), as
+    // thick as its stuff
+    const foot = ring(-0.001, LINING + 0.004);
+    const [brim, droop, thick] = straw ? [2.15, 0.016, 0.004] : [1.9, 0.014, 0.003];
+    const brimRing = (t) => foot.map((p) => new THREE.Vector3(middle.x + (p.x - middle.x) * (1 + (brim - 1) * t), p.y - droop * t ** 2, middle.z + (p.z - middle.z) * (1 + (brim - 1) * t)));
+    const brimRings = [0, 0.35, 0.7, 1].map(brimRing);
+    const below = (points) => points.map((p) => p.clone().add(new THREE.Vector3(0, -thick, 0)));
+    const edge = brimRings.at(-1);
+    const stuff = straw ? "straw" : "cloth";
+    const parts = [
+        [headPlate(head, { bottom: (a) => head.upAt(a, line(a)), top: (a) => head.upAt(a, line(a) + BAND), out: () => LINING + 0.001, thickness: 0.002, steps: [STEPS, 2] }), straw ? "darkLeather" : "brass"],
+        [loft(crown), stuff],
+        [loft(crown, true), stuff],
+        [loft(brimRings), stuff],
+        [loft(brimRings.map(below), true), stuff],
+        [loft([below(edge), edge]), stuff],
+    ];
+
+    return assemble(parts, "hat");
+}
+
 /** Build an item's model. `fit` says how big the body is: { headRadius, scale, ears (a cat's: a helm opens round them), skull (under head-wear) }. */
 export function buildItem(model, fit = {}) {
     const headRadius = fit.headRadius ?? 0.1;
@@ -1726,6 +2047,10 @@ export function buildItem(model, fit = {}) {
 
     if (people && kind === "helm") {
         const open = Boolean(fit.ears) || people === "cat";
+
+        if (fit.head) {
+            return fittedHelm(fit, { people, open });
+        }
 
         return fitted(peopleHelm(people, headRadius, Boolean(fit.ears)), fit.skull, open ? { across: headRadius * 1.08 * 0.86, band: [-headRadius * 0.16, headRadius * 0.12], back: headRadius * 1.08 * 1.03 } : helmShell(headRadius, HELM_TALL[people] ?? 1));
     }
@@ -1783,11 +2108,23 @@ export function buildItem(model, fit = {}) {
         case "orcHelm": {
             const style = model === "orcHelm" ? "orc" : "nasal";
 
+            if (fit.head) {
+                return fittedHelm(fit, { people: style === "orc" ? "orc" : "human", style, open: Boolean(fit.ears) });
+            }
+
             return fit.ears ? fitted(peopleHelm(style === "orc" ? "orc" : "human", headRadius, true), fit.skull, { across: headRadius * 1.08 * 0.86, band: [-headRadius * 0.16, headRadius * 0.12], back: headRadius * 1.08 * 1.03 }) : fitted(helmet(headRadius, style), fit.skull, helmShell(headRadius));
         }
         case "leatherCap":
+            if (fit.head) {
+                return fittedCap(fit, Boolean(fit.ears));
+            }
+
             return fitted(leatherCap(headRadius, Boolean(fit.ears)), fit.skull, fit.ears ? { band: [-headRadius * 0.1, headRadius * 0.9], back: headRadius * 1.05 * 1.04 } : { across: headRadius * 1.05 * 0.88, up: headRadius * 1.05 * 0.95, back: headRadius * 1.05 * 1.03, rim: headRadius * 0.12 });
         case "wizardHat":
+            if (fit.head) {
+                return fittedHat(fit, model);
+            }
+
             // (Its band, from the brim up: the brim's middle within the head)
             return fitted(wizardHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.28 - 0.02, headRadius * 0.5], back: headRadius * 1.08 * 0.97 });
         case "crown":
@@ -1837,11 +2174,23 @@ export function buildItem(model, fit = {}) {
         case "ledger":
             return ledger();
         case "strawHat":
+            if (fit.head) {
+                return fittedHat(fit, model);
+            }
+
             return fitted(strawHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.27 - 0.01, headRadius * 1.08 * 1.6], back: headRadius * 1.08 * 0.97 });
         case "coif":
+            if (fit.head) {
+                return fittedCoif(fit);
+            }
+
             return fitted(coif(headRadius), fit.skull, { across: headRadius * 1.04 * 0.9, up: headRadius * 1.04 * 0.95, back: headRadius * 1.04 * 1.04, rim: headRadius * 0.16 });
         case "hood":
         case "darkHood":
+            if (fit.head) {
+                return fittedCoif(fit, { hood: true, material: model === "darkHood" ? "cloth:#1d1724" : "wool" });
+            }
+
             return fitted(hood(headRadius, model === "darkHood" ? "cloth:#1d1724" : "wool"), fit.skull, { across: headRadius * 1.1 * 0.9, up: headRadius * 1.1 * 0.97, back: headRadius * 1.1 * 1.05, rim: headRadius * 0.27 });
         case "circletElf":
         case "circletDark":
