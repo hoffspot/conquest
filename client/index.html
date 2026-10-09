@@ -168,8 +168,16 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
                 </button>
             </header>
-            <ul class="worldmap-key" id="worldmapkey" aria-label="Key"></ul>
-            <ul class="worldmap-key" id="warmapkey" aria-label="Key to the war table" hidden></ul>
+            <!-- The map's key: folded away till "Key" is tapped, and away again with another tap -->
+            <div class="worldmap-legend" id="worldmaplegend">
+                <ul class="worldmap-key" id="worldmapkey" aria-label="Key"></ul>
+                <ul class="worldmap-key" id="warmapkey" aria-label="Key to the war table" hidden></ul>
+                <button type="button" id="worldmaplegendtoggle" class="worldmap-legend-toggle" aria-expanded="false" aria-controls="worldmapkey warmapkey" title="Show the key">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h2M10 6h10M4 12h2M10 12h10M4 18h2M10 18h10"/></svg>
+                    <span>Key</span>
+                    <svg class="worldmap-legend-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg>
+                </button>
+            </div>
             <div class="worldmap-pick" id="worldmappick" hidden>
                 <p id="worldmappicktext">Wizard's Walk: tap somewhere you've been</p>
                 <button type="button" class="button" id="worldmapcancel">Cancel</button>

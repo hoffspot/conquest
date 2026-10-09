@@ -3526,15 +3526,70 @@ dialog#worldmap::backdrop {
     gap: 8px;
 }
 
-.worldmap-key {
+/* The key, in the bottom left: folded away to its "Key" button at first, opened above it with a
+   tap (main.js toggleLegend), and folded away again with another; no taller than the screen has
+   room for, scrolled if it's more */
+.worldmap-legend {
     position: absolute;
     left: calc(var(--safe-left) + 12px);
     bottom: calc(var(--safe-bottom) + 12px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    max-height: calc(100% - var(--safe-top) - var(--safe-bottom) - 84px);
+    max-width: calc(100% - var(--safe-left) - var(--safe-right) - 82px);
+    pointer-events: none;
+}
+
+.worldmap-legend > * {
+    pointer-events: auto;
+}
+
+.worldmap-legend:not(.open) .worldmap-key {
+    display: none;
+}
+
+.worldmap-legend-toggle {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 46px;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.worldmap-legend-toggle svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* (Its arrow up while it's folded away, down while it's open) */
+.worldmap-legend.open .worldmap-legend-chevron {
+    transform: rotate(180deg);
+}
+
+.worldmap-key {
     margin: 0;
     padding: 8px 12px;
     list-style: none;
     display: grid;
     gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
     border-radius: 12px;
     border: 1px solid var(--panel-border);
     background: var(--panel);
@@ -3620,12 +3675,18 @@ dialog#worldmap::backdrop {
     display: none;
 }
 
-/* On a short screen (a phone on its side), the key keeps to one line */
+/* On a short screen (a phone on its side), the key keeps to one line, scrolled across if it's
+   more than there's room for */
 @media (max-height: 460px) {
     .worldmap-key {
         grid-auto-flow: column;
         gap: 12px;
-        right: calc(var(--safe-right) + 12px + 46px + 12px);
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .worldmap-key li {
+        white-space: nowrap;
     }
 }
 
