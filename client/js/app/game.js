@@ -489,7 +489,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "skirmishers", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -3022,6 +3022,7 @@ export class Game {
         const said = {
             taken: `${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`,
             garrison: `${town.name}'s barracks is cleared. The town's the ${peopleOf(by)}' once the rest of its garrison is put down too.`,
+            leaders: `${town.name}'s barracks is cleared, and the last of its garrison with it. Now its ruler and the captain of its guard, at its keep.`,
             peace: `${town.name}'s barracks is cleared, but the ${peopleOf(by)} aren't at war with the ${peopleOf(people)}: it isn't theirs to take.`,
             age: `${town.name}'s barracks is cleared, but no ${town.kind} is taken in ${stage.name.replace(/^An? /, "the ").toLowerCase()}. Its garrison will be back.`,
         }[how];
@@ -3032,9 +3033,26 @@ export class Game {
         }
     }
 
+    // A seat's ruler and the captain of its guard out at its keep, its garrison put down: drawn; the
+    // player told, if it's their people's seat, or their people's who put its garrison down (not in
+    // its barracks: that's said there)
+    #lastStand({ town: id, people, by, ruler, title, ids }) {
+        const town = this.host?.war?.town(id);
+        const me = this.battle.actor(this.me);
+
+        this.enlisting.push(...ids);
+
+        if (!town || ![people, by].includes(this.self?.realm) || this.host?.quartered.get(id)?.map === me?.map) {
+            return;
+        }
+
+        this.hud.message(people === this.self?.realm ? `${town.name}'s garrison is down! ${title} ${ruler} and the captain of the guard make their last stand at the keep.` : `${town.name}'s garrison is down. ${title} ${ruler} and the captain of the guard make their last stand at its keep: put them down, and it's ours.`, 5);
+        this.sound?.play("newsHeard");
+    }
+
     // A town taken by the player's people, the last of its garrison put down near them (not in its
     // barracks: that's said there): the player told
-    #townTaken({ town: id, by }) {
+    #townTaken({ town: id, by, people }) {
         const town = this.host?.war?.town(id);
         const me = this.battle.actor(this.me);
 
@@ -3042,7 +3060,10 @@ export class Game {
             return;
         }
 
-        this.hud.message(`${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`, 5);
+        // (A seat: given back to its people, to rule from under their conquerors)
+        const seat = town.owner === people && this.host.war.realm(people)?.seat === id;
+
+        this.hud.message(seat ? `${town.name} has fallen! Its ruler and the captain of its guard put to the sword, the ${peopleOf(people)} serve the ${peopleOf(by)} now.` : `${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`, 5);
         this.sound?.play("wake");
     }
 
@@ -6293,6 +6314,9 @@ export class Game {
                     }
                 }
 
+                break;
+            case "leaders":
+                this.#lastStand(event);
                 break;
             case "skirmishers": {
                 // (A camp's skirmishers out near the player: drawn; the player told if they're after

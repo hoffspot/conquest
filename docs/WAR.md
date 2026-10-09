@@ -217,7 +217,7 @@ The engine is built for this from the start. These are its rules:
 | **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
-| **M20** | Built in part | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after (built); a seat's ruler and captain of its guard fought before it's taken (to come). |
+| **M20** | Built | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after; a seat's ruler and the captain of its guard making their last stand at its keep before it's taken. |
 | **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
 
 ## What's built
@@ -1472,12 +1472,12 @@ next wagon due 5 turns on, none missed. What two games share changed (`NET_VERSI
 
 ### The armies near a player (M20)
 
-The fourth of the standing armies' parts, begun: the armies, reserves and reinforcements in the
-world near a player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`), their supply wagons and
-depots there (`WAGON_NEAR`, `#meetWagon`, `#watchWagons`; *Supply wagons and depots near a
-player*, below), and the camps' scouts and skirmishers (`CAMP_NEAR`, `SKIRMISH_NEAR`; *A camp's
-scout and skirmishers near a player*, below). A seat's ruler and captain of its guard fought
-before it's taken come after.
+The fourth of the standing armies' parts: the armies, reserves and reinforcements in the world
+near a player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`), their supply wagons and depots
+there (`WAGON_NEAR`, `#meetWagon`, `#watchWagons`; *Supply wagons and depots near a player*,
+below), the camps' scouts and skirmishers (`CAMP_NEAR`, `SKIRMISH_NEAR`; *A camp's scout and
+skirmishers near a player*, below), and a seat's ruler and the captain of its guard, fought before
+it's taken (`LEADERS_NEAR`; *A seat's last stand*, below).
 
 **Met** once a player's within 300 m of an army or reserve out in the field, or once it's within
 140 m of an enemy's that's met. Not an army mustering at its seat, nor a reserve at home: they're
@@ -1590,11 +1590,34 @@ war hands them to the world ("skirmishers") instead of reckoning their falling o
 An army that comes to attack it has 3 turns to fight it out in the world, as with what else it
 attacks.
 
+#### A seat's last stand
+
+A people's seat is taken only once its garrison is put to the sword, and its ruler and the captain
+of its guard with them (M18, `LEADERS`). In the world:
+- **Its garrison put down** there, the last of it by a people at war with its holders, in an age
+  that lets a capital be taken, it isn't theirs yet (`war.loss` says "leaders").
+- **Its ruler and the captain of its guard** come out to make their last stand at its keep's door
+  (`#leadersOut`), 3 m apart: the ruler by name, as the war has them ("Warchief Thrakzug"), and
+  the captain of the guard, each three soldiers strong (120). The player's told, if it's their
+  people's seat or their people put its garrison down: "Gorzak's garrison is down. Warchief
+  Thrakzug and the captain of the guard make their last stand at its keep: put them down, and it's
+  ours", with the news bell. A barracks cleared there says so too.
+- **Its garrison isn't made up** by the war while they're out (`#muster`).
+- **Both put down** by a people who may take it, it's theirs (`war.leadersFell`): its people are
+  their vassals, ruling from it under them. "Gorzak has fallen! Its ruler and the captain of its
+  guard put to the sword, the Orcs serve the Humans now."
+- **Let go** back into their keep once every player's further than 300 m from them, or its garrison
+  has been made up again; the war makes it up at its next turn then.
+
+Away from any player, the war reckons the ruler and the captain as two more of its defenders,
+fought last (M18).
+
 **Kept.** The armies, reserves and reinforcements met are in the host's snapshot (`armies`: `{
 people, kind, formation, ids, at }`), with the supply wagons met (`supplies`: `{ people, mission,
-to, wagon, ids, at, over }`) and the skirmishers out (`skirmishers`: `{ camp, people, target, kind,
-ids, since, fought, back }`; `SNAPSHOT_VERSION` 19), their lines in the battle's. What two games
-share changed (`NET_VERSION` 80).
+to, wagon, ids, at, over }`), the skirmishers out (`skirmishers`: `{ camp, people, target, kind,
+ids, since, fought, back }`) and the seats' leaders out (`leaders`: `{ people, ids, at }`;
+`SNAPSHOT_VERSION` 20), their lines in the battle's. What two games share changed (`NET_VERSION`
+81).
 
 ### Playing together (M11)
 
