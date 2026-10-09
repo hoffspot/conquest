@@ -3247,7 +3247,7 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **They guard it:** each goes for anyone who comes within 10 metres of them (`guard`), and none
   wanders off; they don't count among the wild's creatures about a player.
 - **The chest** stands by the leader on open ground (drops3d.js: the JMI 3D Toolkit's iron-bound
-  wooden chest, client/models/jmi, MIT; a chest made in code till it's read, or if it can't be),
+  wooden chest, MIT, read from the catalog; a chest made in code till it's read, or if it can't be),
   locked while they hold the place (tapped: "It's locked fast, and its guardians still hold the
   place."). Once the last of them falls (the leader with them), the place is cleared (the war
   keeps it, and its rim on the maps goes grey), "The dead of … are laid to rest, for now" or

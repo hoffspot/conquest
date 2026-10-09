@@ -39,6 +39,7 @@ import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
+import { STOCKADE } from "./war/stockade.js";
 import { CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
@@ -588,7 +589,9 @@ export class Host {
 
         /** The war between the peoples (war/war.js), in a world laid out from a plan. */
         this.war = world.plan ? Host.#war(world.plan, war) : null;
+        this.stockaded = null;
         this.#fortsChanged();
+        this.#stockadesChanged({ tell: false });
         this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
         this.#wire();
 
@@ -1618,7 +1621,9 @@ export class Host {
             }
         }
 
-        for (const event of this.war.advance(ms)) {
+        const events = this.war.advance(ms);
+
+        for (const event of events) {
             this.#event("war", { event });
             this.#fate(event);
 
@@ -1636,6 +1641,11 @@ export class Host {
                 this.#sendSkirmishers(event);
             }
 
+        }
+
+        // (A camp's stockade gone up or come down, breached or mended: the world told)
+        if (events.length || this.war.turn !== turn) {
+            this.#stockadesChanged();
         }
 
         if (this.war.turn !== turn) {
@@ -3059,8 +3069,11 @@ export class Host {
             }
         }
 
-        // The armies' camps and supply depots near a player pitched, and those far from every player
-        // (or gone) struck
+        // The camps' stockades as they stand (changed between the war's turns too: a camp razed in
+        // the world), then the armies' camps and supply depots near a player pitched, and those
+        // far from every player (or gone) struck
+        this.#stockadesChanged();
+
         const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
 
         for (const id of [...this.camps.keys()]) {
@@ -3410,20 +3423,23 @@ export class Host {
         const drawn = Math.min(force.size, ARMY_NEAR.most);
         const roles = rolesOf(drawn, DOCTRINES[force.realm]);
         const places = linePlaces(roles);
-        const to = force.path[Math.min(force.leg + 1, force.path.length - 1)] ?? force.at;
-        const facing = hypot(to[0] - force.at[0], to[1] - force.at[1]) > 1 ? atan2(to[0] - force.at[0], to[1] - force.at[1]) : 0;
+        // (At its camp, on its parade ground facing out of its front gate)
+        const parade = this.#paradeOf(force, force.at);
+        const anchor = parade?.at ?? force.at;
+        const to = this.#standFor(force, force.path[Math.min(force.leg + 1, force.path.length - 1)] ?? force.at);
+        const facing = hypot(to[0] - anchor[0], to[1] - anchor[1]) > 1 ? atan2(to[0] - anchor[0], to[1] - anchor[1]) : (parade?.facing ?? 0);
         const formation = `army-${force.id}`;
         const free = this.#spots();
         const counts = {};
         const ids = [];
 
-        this.battle.formation(formation, { anchor: force.at, facing, to: [...to], speed: ARMY_NEAR.pace, advance: true });
+        this.battle.formation(formation, { anchor, facing, to: [...to], speed: ARMY_NEAR.pace, advance: true });
 
         roles.forEach((role, k) => {
             let square;
 
             try {
-                square = free(placeAt({ anchor: force.at, facing }, places[k]));
+                square = free(placeAt({ anchor, facing }, places[k]));
             } catch {
                 return;
             }
@@ -3435,7 +3451,7 @@ export class Host {
             ids.push(id);
         });
 
-        this.armies.set(force.id, { people: force.realm, kind: force.kind, formation, ids, at: [...force.at] });
+        this.armies.set(force.id, { people: force.realm, kind: force.kind, formation, ids, at: [...anchor] });
         this.#event("army", { force: force.id, people: force.realm, kind: force.kind, ids, met: true });
     }
 
@@ -3478,7 +3494,7 @@ export class Host {
                 .map((at) => ({ at, distance: hypot(at[0] - met.at[0], at[1] - met.at[1]) }))
                 .filter(({ distance }) => distance <= ARMY_NEAR.fight)
                 .sort((a, b) => a.distance - b.distance)[0];
-            const way = force.kind === "reinforcement" ? this.#joining(force) : force.leg < force.path.length - 1 ? force.path[force.leg + 1] : null;
+            const way = force.kind === "reinforcement" ? this.#joining(force) : force.leg < force.path.length - 1 ? this.#standFor(force, force.path[force.leg + 1]) : null;
             const to = foe ? (foe.distance <= ARMY_NEAR.close ? null : foe.at) : way;
 
             if (String(to) !== String(formation.to)) {
@@ -3492,6 +3508,24 @@ export class Host {
 
             this.#keepUpArmy(force, met);
         }
+    }
+
+    // An army's own camp's parade ground ({ at, facing }: stockade.js), if `point` is its camp's
+    // (within a few metres of its middle or its parade ground) and its stockade's up; else null
+    #paradeOf(force, point) {
+        const camp = force.kind === "army" && force.camp ? this.war.camp(force.camp) : null;
+
+        if (!camp || camp.built === null || !point || hypot(point[0] - camp.at[0], point[1] - camp.at[1]) > STOCKADE.parade + ARMY_NEAR.past) {
+            return null;
+        }
+
+        return this.war.stockade(camp.id).parade;
+    }
+
+    // Where an army's line makes for, for a point on its way: its camp's parade ground for its
+    // camp's middle (#paradeOf), not its fire among the tents; else the point
+    #standFor(force, point) {
+        return this.#paradeOf(force, point)?.at ?? point;
     }
 
     // As many of an army or reserve met stood up as the war has of it now: the rearmost let go if
@@ -4182,6 +4216,33 @@ export class Host {
         }
     }
 
+    // The armies' camps' stockades standing told to the world (overworld.js setStockades; docs/
+    // WAR.md M22, *The stockade*): each camp's once it's built, with its breaches. The squares
+    // under any gone up, come down, breached or mended made again, the navigation mesh's tiles
+    // there with them, and what's drawn there told ("stockades": the boxes of squares; not as the
+    // world's made, or carried on, when it's all drawn new)
+    #stockadesChanged({ tell = true } = {}) {
+        const town = this.world.maps?.town;
+        const built = (this.war?.camps ?? []).filter((camp) => camp.built !== null);
+        const key = built.map(({ id, breaches = 0 }) => `${id}:${breaches}`).join(" ");
+
+        if (!town?.setStockades || key === this.stockaded) {
+            return;
+        }
+
+        this.stockaded = key;
+
+        const boxes = town.setStockades(built.map((camp) => ({ stockade: this.war.stockade(camp.id), breaches: camp.breaches ?? 0 })));
+
+        for (const box of boxes) {
+            dropTiles(town, box);
+        }
+
+        if (tell && boxes.length) {
+            this.#event("stockades", { boxes });
+        }
+    }
+
     // A fortification near a player stood up in the battle: over its squares, shooting at its
     // people's enemies from its loops, as strong as it stands in the war
     #raiseFort(fort) {
@@ -4700,7 +4761,9 @@ export class Host {
         // (A camp's scout, one of its guard if it can spare one, out on its round: CAMP_NEAR)
         const scout = !depot && camp.guard >= 2 ? 1 : 0;
         const count = Math.min(CAMP.sentries, Math.max(1, camp.guard - scout));
-        const { fire, tents, posts } = campOf(camp, { sentries: count });
+        // (An army's camp laid out within its stockade, a depot round its fire)
+        const stockade = depot ? null : this.war.stockade(camp.id);
+        const { fire, tents, posts } = stockade ? { fire: stockade.fire, tents: stockade.tents, posts: stockade.posts.slice(0, count) } : campOf(camp, { sentries: count });
         // (A supply depot's stores, stacked either side of its fire)
         const stores = depot ? [-1, 1].map((side) => ({ at: [fire[0] + side * DEPOT_STORES, fire[1] + 0.5], facing: side > 0 ? Math.PI / 2 : -Math.PI / 2 })) : [];
         const [guardArms, patrolArms] = SOLDIERS_ARMS[camp.realm] ?? SOLDIERS_ARMS.human;

@@ -1828,6 +1828,17 @@ export const ASSETS = Object.freeze({
                     "bytes": 78776
                 }
             ]
+        },
+        "chest": {
+            "tier": "near",
+            "label": "A treasure chest, thrown open on a place's spoils (the JMI 3D Toolkit's, MIT)",
+            "files": [
+                {
+                    "path": "models/jmi/chest.glb",
+                    "hash": "7bdf812b68",
+                    "bytes": 178404
+                }
+            ]
         }
     },
 });

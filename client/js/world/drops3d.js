@@ -3,16 +3,18 @@
 // it's lain there too long. Anyone near can tap it to pick it up (app/game.js). A creature's
 // spoils (host.js: a bundle for one player) are a leather sack, and only that player sees theirs.
 // A place's chest (host.js #places: held by outlaws or the dead, by their leader) is an iron-bound
-// wooden chest (the JMI 3D Toolkit's, client/models/jmi; drawn here till it's read, or if it
-// can't be), shut while its guardians hold the place; once it's cleared, each player near has
-// their share in it, its lid thrown open (the model's own "Open") on a heap of gold coins
-// (gold3d.js).
+// wooden chest (the JMI 3D Toolkit's, client/models/jmi, read from the catalog once the game's
+// started; drawn here till it's read, or if it can't be), shut while its guardians hold the place;
+// once it's cleared, each player near has their share in it, its lid thrown open (the model's own
+// "Open") on a heap of gold coins (gold3d.js).
 //
 // The icons are painted by whoever makes this (`picture`: an item id to a texture), so the world
 // needn't know how they're drawn.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { ASSETS } from "../app/assets.js";
+import { hashed } from "../app/catalog.js";
 import { loadGltf } from "./art/engine/models.js";
 import { drawGold, GOLD, goldParts } from "./gold3d.js";
 
@@ -24,9 +26,10 @@ const ICON = Object.freeze({ size: 0.46, above: 0.62, bob: 0.06 });
 // bands' width, and how far back its lid's thrown once it's open (radians)
 const CHEST = Object.freeze({ width: 0.8, depth: 0.46, height: 0.4, rise: 0.6, band: 0.05, open: 1.95 });
 
-// The chest's model: where it's read from, how big it's drawn (its units to metres: 0.85 m
-// across), and the clip that opens it (the gold heaped in it in its units: gold3d.js GOLD)
-const CHEST_MODEL = Object.freeze({ url: "models/jmi/chest.glb", scale: 1.3, clip: "Open", lid: "Chest_Lid" });
+// The chest's model: its name in the catalog (client/models/assets.json), how big it's drawn (its
+// units to metres: 0.85 m across), and the clip that opens it (the gold heaped in it in its units:
+// gold3d.js GOLD)
+const CHEST_MODEL = Object.freeze({ asset: "chest", scale: 1.3, clip: "Open", lid: "Chest_Lid" });
 
 const _box = new THREE.Box3();
 const _middle = new THREE.Vector3();
@@ -81,12 +84,17 @@ export class Drops {
         /** The chest's model once it's read ({ scene, clip }), or null (drawn as made here). */
         this.model = null;
         this.time = null;
-        loadGltf(CHEST_MODEL.url).then(
-            (gltf) => this.#modelRead(gltf),
-            () => {
-                // (Not to be had: the chest as made here)
-            },
-        );
+
+        // (Not in the catalog, or no page to read it from, or not to be had: the chest as made here)
+        const file = ASSETS.models[CHEST_MODEL.asset]?.files[0];
+        const page = globalThis.document?.baseURI ?? globalThis.location?.href;
+
+        if (file && page) {
+            loadGltf(new URL(hashed(file.path, file.hash), page).href).then(
+                (gltf) => this.#modelRead(gltf),
+                () => {},
+            );
+        }
     }
 
     /** Lay what's dropped on this ground (its height at a point, (x, z) => metres; null: flat at 0). */

@@ -51,7 +51,7 @@ changed, deletes what was removed, and downloads nothing twice.
 | What | Today | What it means here |
 | --- | --- | --- |
 | First download | `app/loader.js` fetches the whole manifest (`app/manifest.js`, about 9.7 MB) before the title, 16 files at once. Body, skin and models are kept as blobs, and models are read through their blob URLs (`readModelsFrom`) | Fine for what's there now. Every heavy model added to it would make everyone wait for it |
-| Models | `loadGltf`/`loadModel` (`world/art/engine/models.js`), with meshoptimizer's decoder since #191. The only model in the manifest is the chest (178 KB) | The loader is ready for the pipeline's models; nothing decides when to fetch them |
+| Models | `loadGltf`/`loadModel` (`world/art/engine/models.js`), with meshoptimizer's decoder since #191. The only model in the manifest is the chest (178 KB; in the catalog since #459) | The loader is ready for the pipeline's models; nothing decides when to fetch them |
 | Service worker | One cache, `pellagos-v1` (`client/sw.js`). Code and pages are network-first. Images, models and music are cache-first by URL and never checked again | A model changed in a release stays stale until `CACHE_NAME` is bumped, and bumping it throws away everything, music included |
 | Playing together | Relay on the game's server (`server/relay.js`, WebSocket over TCP). About 1.7 KB/s to each joined player (docs/WAR.md). Joined games keep 2–6 steps in hand; one message late by 1 s counts as a dropped link (`PLAYOUT.late`) | Bandwidth is tiny; delay is what matters. A download filling the queue at the player's bottleneck (bufferbloat) adds its whole queue to every game message behind it |
 | Hosting | GitHub Pages: static, `max-age=600`, ETag, no custom headers. `npm start` (`server/static.js`): `no-cache`, Last-Modified, **no byte ranges** | Pacing can't count on range requests everywhere (§3.2), and caching can't count on headers (§5) |
@@ -97,8 +97,8 @@ checks each model has a tier and files, and that each file is there.
 - **Sizes** let the downloader plan, and show players how much an optional download is.
 - **`when`** is how the near tier is predicted (§4): sites in the world plan, the lands a creature
   lives in, or `start` for something wanted soon after any start.
-- **The manifest's data has hashes too:** the body, its skin and the chest (the groups the loader
-  keeps). The loader fetches them by `?h=` and hands them out by their names, so nothing that
+- **The manifest's data has hashes too:** the body and its skin (the groups the loader keeps; the
+  chest too, till it moved to the catalog). The loader fetches them by `?h=` and hands them out by their names, so nothing that
   reads them changes. Code and fonts are asked for by name (the page imports them, and the CSS
   names the fonts), so they have none.
 - **The boot budget.** The manifest's test asserts the boot download stays within
@@ -252,7 +252,7 @@ kept file was last used. That avoids a second store, and an IndexedDB dependency
 | Cache | What | How it's served |
 | --- | --- | --- |
 | `pellagos-shell-v2` | Pages, code and files without a hash | Code and pages network-first, as before. Images and models without a hash from the copy, then checked in the background at most once a minute; the music's recordings (named by their content) never checked |
-| `pellagos-boot-v2` | The manifest's data by `?h=`: the body, its skin, the chest | Cache-first, never checked; collected (§5.4) but never to make room |
+| `pellagos-boot-v2` | The manifest's data by `?h=`: the body and its skin | Cache-first, never checked; collected (§5.4) but never to make room |
 | `pellagos-assets-v2` | The catalog's files by `?h=` | Cache-first, never checked; collected, and let go of to make room |
 | `pellagos-state-v2` | What the worker knows (`sw-state.json`) | Not served |
 
@@ -338,7 +338,7 @@ already copied serves a player offline straight after the update.
 
 - It stays under the budget the test enforces (§2). Heavy models go in the catalog, never the
   manifest.
-- The manifest's data has hashes too, so the body, its skin and the chest are kept by `?h=` in
+- The manifest's data has hashes too, so the body and its skin are kept by `?h=` in
   `pellagos-boot-v2`. Images (named by the page and its CSS) and the music's recordings aren't
   in the manifest: images are checked in the background, and the recordings are named by their
   content already (§5.1). So no cache's version needs changing for an asset again, and the comment
@@ -678,3 +678,7 @@ joined one, and `Joining.onPong` wrapped to log each round trip. There it could 
   A3 builds on, the code's own hook points for the model body, prediction, the swap, the settings
   and quality variants, the pipeline dragon's numbers (its lower-detail copy is hardly smaller,
   the clips being most of the file), and the measurements still owed on real devices.
+- **2026-10-09.** The chest, the manifest's only model, moved to the catalog (`chest`, near):
+  `world/drops3d.js` reads it by `?h=` once the game's started, the chest made in code standing in
+  till then, as it always has if the model can't be read. That's 174 KB off the boot download (12.0
+  MB to 11.85 MB), which had come within 18 KB of its budget with the code alone growing.

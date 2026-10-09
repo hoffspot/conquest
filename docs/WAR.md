@@ -894,14 +894,16 @@ camps, and the raids, sorties, sallies and relief are no more: *Standing armies*
 
 **Camps.** An army's camp (the war's `camps`) is **pitched** once a player's within 150 metres of
 it (`CAMP_NEAR`), and struck once every player's more than 300 off, or it's gone from the war
-(razed, or struck by its own). Pitched (`war/muster.js` `campOf`, the same every time for a camp):
-- **five tents** round its fire, their doors to it: ridge tents of undyed canvas with a little of
-  their people's colour (`world/camps3d.js`);
+(razed, or struck by its own). Pitched within its stockade (M22, *The stockade*), the same every
+time for a camp (a supply depot round its fire, as before: `war/muster.js` `campOf`):
+- **twelve tents** in rows either side of its street behind its fire, their doors to the street:
+  ridge tents of undyed canvas with a little of their people's colour (`world/camps3d.js`), or its
+  people's own;
 - **a fire** in a ring of stones, logs crossed in it, flames flickering; **its banner** beside it;
-- **its guard** as its sentries, round the tents facing out (up to six), each going after an enemy
-  within 18 metres of their post. Each stands for a share of the guard: one who falls takes that
-  share off it in the war (`war.loss`, by whose people did it). Its guard all put down, the camp's
-  **razed**.
+- **its guard** as its sentries, by its gates and on its lane facing out (up to six), each going
+  after an enemy within 18 metres of their post. Each stands for a share of the guard: one who
+  falls takes that share off it in the war (`war.loss`, by whose people did it). Its guard all put
+  down, the camp's **razed**.
 
 **Break the camp.** From a Retainer up, a reeve (or the keep) may ask the player to break up an
 enemy camp within a march (1 km) of one of their towns; the guild asks the same, of a camp near
@@ -1954,8 +1956,8 @@ richest end with 21,000 gold, as they did with 15,000 before.
 ### Pressing the advantage (M22)
 
 The first of the palisades' parts: the war's own rules for them, as numbers (`war.js`
-`PALISADE`, `DEFEND`, `DUTY`; `armies.js` `ARMY`). The stockade drawn in the world near a player,
-its gates, walkway and breaches, and the fighting at it, come after.
+`PALISADE`, `DEFEND`, `DUTY`; `armies.js` `ARMY`). The second, the stockade in the world, its gates,
+walkway and breaches, is below (*The stockade*); the fighting at it comes after.
 
 **What was out** (the war study: each way of playing it in 72 worlds, as below):
 - **A reserve never followed a beaten army.** It had once, all the way to its camp, and ground
@@ -2047,6 +2049,54 @@ those are made up behind their palisades.
 brigands' camps scattered and till when (`scattered`), are in the war's snapshot (`WAR_VERSION`
 7). A war kept before them is carried on: its camps unbreached, no brigands scattered. What two
 games share changed (`NET_VERSION` 91): the war's reckoning.
+
+#### The stockade
+
+The second of the palisades' parts: an army's camp as it stands in the world (`war/stockade.js`
+`stockadeOf`, `STOCKADE`; `world/stockades3d.js`), its wall blocking the way and the sight there
+(`core/overworld.js` `setStockades`).
+
+**Laid out** square to the world, the same every time for a camp:
+- **its wall:** 45 squares a side (44 m from stake to stake), of sharpened stakes three to a metre,
+  about 3 m high, sunk into the ground and following it, a stout post at each corner;
+- **its gates,** each 3 m wide, in the middle of its front wall (the side towards what it's pitched
+  against: `camp.front`) and of its back wall: between tall posts under a lintel, their leaves
+  swung open inside;
+- **its walkway** along the inside of its wall, 1.45 m up on posts, and a ladder up to it either
+  side of each gate; **its lane** inside that, 3 m wide, kept clear;
+- **the camp within:** its fire in the middle; its tents in rows either side of the street from
+  gate to gate behind it; its parade ground before it; its sentries by its gates and on its lane.
+  The street and the parade ground are trodden bare, and the ground within and 6 m round it
+  cleared of crops and trees;
+- **in its people's wood:** pale oak for the humans, silvered for the elves, charred black for the
+  dark elves, ochre for the cat folk, cane for the lizard folk, rough and dark for the orcs.
+
+**Sited where it stands** (`standsAt`): a camp before something goes where its stockade's middle,
+its corners and the middles of its sides are on dry land off the roads, clear of the
+settlements; failing that, where it can. The war's as it was for it, in 72 worlds played out
+alone (medians, with no player's might, before and after): 90 and 84 towns taken in 18 hours (94
+and 96 at full might), 108 and 106 camps stormed, the army holding 37% and 35% of them, 5 armies
+destroyed.
+
+**In the world,** once its camp's built, wherever it is (its tents and sentries only near a
+player, as before):
+- its wall's squares are blocked, solid and not seen through, its walkway's blocked and solid, its
+  gates and breaches open; the navigation mesh round it is made again (`dropTiles`), so the way in
+  is by its gates or its breaches;
+- it's drawn within 220 m of a player (`STOCKADES_VIEW`);
+- **its army at its camp** stands on its parade ground, facing its front gate, not among its tents.
+
+**Breached and mended:**
+- its wall's in 42 sections of 4 squares (one of 3 in the middle of each side with no gate). Each
+  breach (`breaches`, M18 *Camps*) breaks one open, in an order its own (shuffled by its id), its
+  walkway behind with it: stumps, and stakes fallen in. While its people have the wood to mend it,
+  a pile of fresh-cut stakes lies ready inside each;
+- mended, a section's fresh wood, its stakes rising out of the ground as they're set (1.4 seconds),
+  and stays pale while it's in sight.
+
+**Kept.** Which way each camp faces (`front`) is in the war's snapshot (`WAR_VERSION` 8; a war kept
+before has each camp face what it was pitched against). The stockades are made again from the
+war's camps. What two games share changed (`NET_VERSION` 93): the world's squares.
 
 ### Playing together (M11)
 

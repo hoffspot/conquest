@@ -90,9 +90,13 @@ describe("the armies' camps come to life (host.js, war.js, muster.js)", () => {
         assert.equal(pitched.camp, camp.id);
         assert.equal(pitched.people, "orc");
         assert.equal(pitched.town, camp.toward);
-        assert.equal(pitched.tents.length, CAMP.tents);
 
-        // (Its guard round its fire as sentries, but one: its scout, out on its round)
+        // (Laid out within its stockade: its tents in rows, its sentries by its gates and on its lane)
+        const { tents, posts } = host.war.stockade(camp.id);
+
+        assert.deepEqual(pitched.tents, tents);
+
+        // (Its guard as sentries, but one: its scout, out on its round)
         const sentries = pitched.ids.filter((id) => id !== `${camp.id}/scout`);
         const scout = host.battle.actor(`${camp.id}/scout`);
 
@@ -107,7 +111,7 @@ describe("the armies' camps come to life (host.js, war.js, muster.js)", () => {
             assert.equal(sentry.kind, "soldier");
             assert.equal(sentry.team, "orc");
             assert.match(sentry.name, /^Orcish sentry$/);
-            assert.ok(Math.hypot(sentry.x - camp.at[0], sentry.y - camp.at[1]) < CAMP.ring + 4);
+            assert.ok(posts.some(({ at }) => Math.hypot(sentry.x - at[0], sentry.y - at[1]) < 3), "(at its post)");
             assert.ok(host.battle.hostile(sentry, player), "(at war with the player's people)");
             assert.equal(host.soldiers.get(id).camp, camp.id);
         }
