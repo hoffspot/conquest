@@ -1,0 +1,147 @@
+# The models in this folder, and their licences
+
+Made simpler and smaller by `scripts/build-props.js` from these, each free to use, change and share:
+CC0 (<https://creativecommons.org/publicdomain/zero/1.0/>) or, where it says so, CC BY 4.0
+(<https://creativecommons.org/licenses/by/4.0/>), its maker credited as below and in the README's
+*Credits and license*. Written by `npm run build:props`.
+
+- `table.glb`: a rough table, Poly Haven's wooden_table_02, CC0; from <https://polyhaven.com/a/wooden_table_02>
+- `table-plank.glb`: a plank table, Poly Haven's WoodenTable_01, CC0; from <https://polyhaven.com/a/WoodenTable_01>
+- `table-low.glb`: a low table, Poly Haven's small_wooden_table_01, CC0; from <https://polyhaven.com/a/small_wooden_table_01>
+- `stool.glb`: a stool, Poly Haven's wooden_stool_01, CC0; from <https://polyhaven.com/a/wooden_stool_01>
+- `stool-low.glb`: a low stool, Poly Haven's wooden_stool_02, CC0; from <https://polyhaven.com/a/wooden_stool_02>
+- `stool-folding.glb`: a folding stool, Poly Haven's folding_wooden_stool, CC0; from <https://polyhaven.com/a/folding_wooden_stool>
+- `bench.glb`: a settle, Poly Haven's painted_wooden_bench, CC0; from <https://polyhaven.com/a/painted_wooden_bench>
+- `chair-gothic.glb`: a tall carved chair, Poly Haven's WoodenChair_01, CC0; from <https://polyhaven.com/a/WoodenChair_01>
+- `bookshelf.glb`: shelves, Poly Haven's wooden_bookshelf_worn, CC0; from <https://polyhaven.com/a/wooden_bookshelf_worn>
+- `shelf.glb`: a narrow shelf, Poly Haven's Shelf_01, CC0; from <https://polyhaven.com/a/Shelf_01>
+- `cabinet-gothic.glb`: a carved cabinet, Poly Haven's GothicCabinet_01, CC0; from <https://polyhaven.com/a/GothicCabinet_01>
+- `ladder.glb`: a step ladder, Poly Haven's wooden_ladder_02, CC0; from <https://polyhaven.com/a/wooden_ladder_02>
+- `barrel.glb`: a barrel, Poly Haven's wine_barrel_01, CC0; from <https://polyhaven.com/a/wine_barrel_01>
+- `barrels.glb`: old barrels and a broken one's staves, Poly Haven's wooden_barrels_01, CC0; from <https://polyhaven.com/a/wooden_barrels_01>
+- `crate.glb`: a crate, Poly Haven's wooden_crate_02, CC0; from <https://polyhaven.com/a/wooden_crate_02>
+- `crate-long.glb`: a long crate with rope handles, Poly Haven's wooden_crate_01, CC0; from <https://polyhaven.com/a/wooden_crate_01>
+- `crate-big.glb`: an iron-bound chest, Poly Haven's wooden_military_crate, CC0; from <https://polyhaven.com/a/wooden_military_crate>
+- `bucket.glb`: a bucket, Poly Haven's wooden_bucket_01, CC0; from <https://polyhaven.com/a/wooden_bucket_01>
+- `bucket-wide.glb`: a tub, Poly Haven's wooden_bucket_02, CC0; from <https://polyhaven.com/a/wooden_bucket_02>
+- `basket.glb`: a flat basket, Poly Haven's wicker_basket_01, CC0; from <https://polyhaven.com/a/wicker_basket_01>
+- `basket-lidded.glb`: a lidded basket, Poly Haven's wicker_basket_02, CC0; from <https://polyhaven.com/a/wicker_basket_02>
+- `goblets.glb`: brass goblets, Poly Haven's brass_goblets, CC0; from <https://polyhaven.com/a/brass_goblets>
+- `bowl.glb`: a carved bowl, Poly Haven's wooden_bowl_01, CC0; from <https://polyhaven.com/a/wooden_bowl_01>
+- `bowl-small.glb`: a small bowl, Poly Haven's wooden_bowl_02, CC0; from <https://polyhaven.com/a/wooden_bowl_02>
+- `spoon.glb`: a spoon, Poly Haven's wooden_spoon, CC0; from <https://polyhaven.com/a/wooden_spoon>
+- `plate.glb`: a wooden plate, Poly Haven's carved_wooden_plate, CC0; from <https://polyhaven.com/a/carved_wooden_plate>
+- `board.glb`: a board, Poly Haven's wooden_cutting_board, CC0; from <https://polyhaven.com/a/wooden_cutting_board>
+- `pot.glb`: a lidded pot, Poly Haven's ceramic_pot, CC0; from <https://polyhaven.com/a/ceramic_pot>
+- `pot-brass.glb`: a cooking pot, Poly Haven's brass_pot_01, CC0; from <https://polyhaven.com/a/brass_pot_01>
+- `pot-flat.glb`: a shallow pot, Poly Haven's brass_pot_02, CC0; from <https://polyhaven.com/a/brass_pot_02>
+- `pot-clay.glb`: a clay pot, Poly Haven's planter_pot_clay, CC0; from <https://polyhaven.com/a/planter_pot_clay>
+- `apple.glb`: an apple, Poly Haven's food_apple_01, CC0; from <https://polyhaven.com/a/food_apple_01>
+- `onion.glb`: an onion, Poly Haven's yellow_onion, CC0; from <https://polyhaven.com/a/yellow_onion>
+- `sweet-potato.glb`: a root, Poly Haven's sweet_potato, CC0; from <https://polyhaven.com/a/sweet_potato>
+- `pomegranate.glb`: a pomegranate, Poly Haven's food_pomegranate_01, CC0; from <https://polyhaven.com/a/food_pomegranate_01>
+- `vase.glb`: a brass vase, an altar's, Poly Haven's brass_vase_04, CC0; from <https://polyhaven.com/a/brass_vase_04>
+- `vase-antique.glb`: a painted vase, Poly Haven's antique_ceramic_vase_01, CC0; from <https://polyhaven.com/a/antique_ceramic_vase_01>
+- `vase-tall.glb`: a tall vase, Poly Haven's brass_vase_01, CC0; from <https://polyhaven.com/a/brass_vase_01>
+- `vase-brass.glb`: a brass ewer, Poly Haven's brass_vase_02, CC0; from <https://polyhaven.com/a/brass_vase_02>
+- `vase-small.glb`: a small vase, Poly Haven's brass_vase_03, CC0; from <https://polyhaven.com/a/brass_vase_03>
+- `candlestick.glb`: a candlestick, Poly Haven's wooden_candlestick, CC0; from <https://polyhaven.com/a/wooden_candlestick>
+- `candleholders.glb`: brass candleholders, Poly Haven's brass_candleholders, CC0; from <https://polyhaven.com/a/brass_candleholders>
+- `lantern.glb`: a wooden lantern, Poly Haven's wooden_lantern_01, CC0; from <https://polyhaven.com/a/wooden_lantern_01>
+- `axe.glb`: a woodsman's axe, Poly Haven's wooden_axe, CC0; from <https://polyhaven.com/a/wooden_axe>
+- `axe-long.glb`: a long axe, Poly Haven's wooden_axe_02, CC0; from <https://polyhaven.com/a/wooden_axe_02>
+- `axe-old.glb`: an old axe, Poly Haven's wooden_axe_03, CC0; from <https://polyhaven.com/a/wooden_axe_03>
+- `hatchet.glb`: a hatchet, Poly Haven's hatchet, CC0; from <https://polyhaven.com/a/hatchet>
+- `pickaxe.glb`: a pickaxe, Poly Haven's picke_dirty_01, CC0; from <https://polyhaven.com/a/picke_dirty_01>
+- `spade.glb`: a spade, Poly Haven's rusted_spade_01, CC0; from <https://polyhaven.com/a/rusted_spade_01>
+- `hammer.glb`: a hammer, Poly Haven's cross_pein_hammer, CC0; from <https://polyhaven.com/a/cross_pein_hammer>
+- `mallet.glb`: a mallet, Poly Haven's wooden_hammer_01, CC0; from <https://polyhaven.com/a/wooden_hammer_01>
+- `saw.glb`: a saw, Poly Haven's handsaw_wood, CC0; from <https://polyhaven.com/a/handsaw_wood>
+- `estoc.glb`: a long sword, Poly Haven's antique_estoc, CC0; from <https://polyhaven.com/a/antique_estoc>
+- `dagger.glb`: a dagger and its sheath, Poly Haven's ornate_medieval_dagger, CC0; from <https://polyhaven.com/a/ornate_medieval_dagger>
+- `mace.glb`: a mace, Poly Haven's ornate_medieval_mace, CC0; from <https://polyhaven.com/a/ornate_medieval_mace>
+- `war-hammer.glb`: a war hammer, Poly Haven's ornate_war_hammer, CC0; from <https://polyhaven.com/a/ornate_war_hammer>
+- `saber.glb`: a sabre, Poly Haven's wooden_handle_saber, CC0; from <https://polyhaven.com/a/wooden_handle_saber>
+- `shield-kite.glb`: a kite shield, Poly Haven's kite_shield, CC0; from <https://polyhaven.com/a/kite_shield>
+- `bust.glb`: a marble bust on its plinth, Poly Haven's marble_bust_01, CC0; from <https://polyhaven.com/a/marble_bust_01>
+- `statue-gothic.glb`: a crowned king's statue, Poly Haven's gothic_statue, CC0; from <https://polyhaven.com/a/gothic_statue>
+- `lion-head.glb`: a bronze lion's head, Poly Haven's lion_head, CC0; from <https://polyhaven.com/a/lion_head>
+- `bull-head.glb`: a bronze bull's head, Poly Haven's bull_head, CC0; from <https://polyhaven.com/a/bull_head>
+- `horse-head.glb`: a bronze horse's head, Poly Haven's horse_head, CC0; from <https://polyhaven.com/a/horse_head>
+- `cat-statue.glb`: a stone cat, Poly Haven's concrete_cat_statue, CC0; from <https://polyhaven.com/a/concrete_cat_statue>
+- `fire-pit.glb`: a fire pit ringed with stones, Poly Haven's stone_fire_pit, CC0; from <https://polyhaven.com/a/stone_fire_pit>
+- `boulder.glb`: a fallen rock, Poly Haven's moon_rock_02, CC0; from <https://polyhaven.com/a/moon_rock_02>
+- `boulder-02.glb`: a heap of broken rock, Poly Haven's namaqualand_boulder_02, CC0; from <https://polyhaven.com/a/namaqualand_boulder_02>
+- `boulder-03.glb`: a squared boulder, Poly Haven's namaqualand_boulder_03, CC0; from <https://polyhaven.com/a/namaqualand_boulder_03>
+- `boulder-04.glb`: a lichened boulder, Poly Haven's namaqualand_boulder_04, CC0; from <https://polyhaven.com/a/namaqualand_boulder_04>
+- `boulder-06.glb`: a rounded boulder, Poly Haven's namaqualand_boulder_06, CC0; from <https://polyhaven.com/a/namaqualand_boulder_06>
+- `mossy-rocks.glb`: mossy rocks, Poly Haven's rock_moss_set_01, CC0; from <https://polyhaven.com/a/rock_moss_set_01>
+- `mossy-rocks-2.glb`: mossy rocks, Poly Haven's rock_moss_set_02, CC0; from <https://polyhaven.com/a/rock_moss_set_02>
+- `rock-a.glb`: a rock, Poly Haven's moon_rock_01, CC0; from <https://polyhaven.com/a/moon_rock_01>
+- `rock-b.glb`: a rock, Poly Haven's moon_rock_03, CC0; from <https://polyhaven.com/a/moon_rock_03>
+- `rock-c.glb`: a rock, Poly Haven's moon_rock_04, CC0; from <https://polyhaven.com/a/moon_rock_04>
+- `rock-d.glb`: a rock, Poly Haven's moon_rock_05, CC0; from <https://polyhaven.com/a/moon_rock_05>
+- `rock-e.glb`: a rock, Poly Haven's moon_rock_06, CC0; from <https://polyhaven.com/a/moon_rock_06>
+- `rock-f.glb`: a rock, Poly Haven's moon_rock_07, CC0; from <https://polyhaven.com/a/moon_rock_07>
+- `rock-flat.glb`: a flat rock, Poly Haven's rock_07, CC0; from <https://polyhaven.com/a/rock_07>
+- `rock-shard.glb`: a shard of rock, Poly Haven's rock_09, CC0; from <https://polyhaven.com/a/rock_09>
+- `stone.glb`: a stone, Poly Haven's stone_01, CC0; from <https://polyhaven.com/a/stone_01>
+- `pebbles.glb`: pebbles, Poly Haven's namaqualand_stones_01, CC0; from <https://polyhaven.com/a/namaqualand_stones_01>
+- `stones.glb`: stones, Poly Haven's namaqualand_rocks_01, CC0; from <https://polyhaven.com/a/namaqualand_rocks_01>
+- `log.glb`: a dead log, Poly Haven's dead_tree_trunk, CC0; from <https://polyhaven.com/a/dead_tree_trunk>
+- `log-big.glb`: a fallen trunk, Poly Haven's dead_tree_trunk_02, CC0; from <https://polyhaven.com/a/dead_tree_trunk_02>
+- `root-single.glb`: an old root, Poly Haven's single_root, CC0; from <https://polyhaven.com/a/single_root>
+- `stump.glb`: a stump, Poly Haven's tree_stump_01, CC0; from <https://polyhaven.com/a/tree_stump_01>
+- `stump-2.glb`: a stump, Poly Haven's tree_stump_02, CC0; from <https://polyhaven.com/a/tree_stump_02>
+- `branches.glb`: dry branches, Poly Haven's dry_branches_medium_01, CC0; from <https://polyhaven.com/a/dry_branches_medium_01>
+- `bark.glb`: bark, Poly Haven's bark_debris_01, CC0; from <https://polyhaven.com/a/bark_debris_01>
+- `skull.glb`: a skull, CDmir on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/skull-obj.zip>
+- `bones.glb`: skulls and bones, Paul_Wortmann on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/dungeon_debris_-_skull_and_bones_1_0.zip>
+- `cart.glb`: a handcart, "Wooden Cart" by filip.hans.nyberg on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10293610/files/eb41c6490a5546269055916029e623ee.glb/content>
+- `wheelbarrow.glb`: a wheelbarrow, "Mining cart medieval" by tijerin_art on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10237410/files/1033237cf4e24b27b618e1f3e7c45aa8.glb/content>
+- `cauldron.glb`: a bronze cauldron, the Hunt Museum's Ballyscullion Bronze Cauldron, CC0; from <https://zenodo.org/api/records/21378444/files/efe46979bbb647f2941a533d4df7e04a_normalized-0.100.glb/content>
+- `chest-old.glb`: an old chest, "Old wooden chest" by Tim0 on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10272532/files/45f93c78e5174036801bfb535c139ac7.glb/content>
+- `weapon-rack.glb`: a weapon rack, "Medieval weapon rack" by JosueBorghi on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10233395/files/8c55c5d985bf4d409766687007a4f734.glb/content>
+- `sword.glb`: a sword, "Sæbø / Thurmuth sword" by JohnyNawalony on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10282926/files/c0eb5ba641964a25abbedf3b370307b9.glb/content>
+- `pelt.glb`: a sheepskin, the Hunt Museum's Sheep Skin, CC0; from <https://zenodo.org/api/records/21528084/files/ff4431c4a6a0418aa78a548c69f8fc6d_normalized-0.100.glb/content>
+- `sarcophagus-stone.glb`: a stone sarcophagus, Minneapolis Institute of Art's Sarcophagus of Prince Yuan Mi, CC0; from <https://zenodo.org/api/records/10302681/files/692ed495e6b64e83aff95bf65acc7650.glb/content>
+- `sarcophagus-painted.glb`: a painted coffin, "Sarcophagus of Hunefer" by The Fitzwilliam Museum on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/21378183/files/21642b701f9c45d6a472214fea274f75_normalized_optimized-0.100.glb/content>
+- `guardian.glb`: a winged guardian, the Smithsonian's Kneeling Winged Monster, CC0; from <https://zenodo.org/api/records/21567660/files/2f47456dee4f4ad7a0f1468e7ee2d24e_normalized-0.100.glb/content>
+- `urn-face.glb`: an urn, the Archaeological Museum in Kraków's Face urn (Virtual Małopolska), CC0; from <https://zenodo.org/api/records/21379266/files/dffe3b1e1dbc4d16a3663f76ff9aa4f2_normalized-0.100.glb/content>
+- `urn-carved.glb`: a carved urn, "Urn (cinerarium)" by The Fitzwilliam Museum on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/21492118/files/36841f1bab36479fb02183a6d35c2fc5_normalized-0.100.glb/content>
+- `bronze-vessel.glb`: a bronze vessel, the Smithsonian's Square lidded ritual wine container (fangyi), CC0; from <https://3d-api.si.edu/content/document/3d_package:d8c62f94-4ebc-11ea-b77f-2e728ce88125/f1930_54-part_01-smartscan-fixed-textured-20k-512-thumb.glb>
+- `basin.glb`: a clay basin, "Etruscan brazier" by GlobalDigitalHeritage on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/21490838/files/7d5b55c2c5204759b22e979327662421_normalized-0.100.glb/content>
+- `mushrooms.glb`: mushrooms, "Leponogi Goban Boletus calopus" by Prirodoslovni_muzej_Slovenije on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/10229058/files/f6adebbb4ed24f3591fa5b4dac4af4eb.glb/content>
+- `fungus.glb`: bracket fungus on a branch, "Some kind of Fungus" by nebulousflynn on Sketchfab, CC BY 4.0; from <https://zenodo.org/api/records/21353381/files/0715b186cb2642c38ca17a97aa73c8b0_normalized-0.100.glb/content>
+- `wolf-skull.glb`: a wolf's skull, the Virtual Museums of Małopolska's wolf skull, CC0; from <https://zenodo.org/api/records/21492563/files/f9430188e21f4e40a46d9e97875d6b2a_normalized_optimized-0.100.glb/content>
+- `bear-skull.glb`: a cave bear's skull, "Vertebrate: Ursus spelaeus (PRI 50009)" by Digital Atlas of Ancient Life on Sketchfab, CC0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-091/3fb00c98c70845a9bb2d989d0656a8ab.glb>
+- `cow-skull.glb`: a cow's skull, "Cow Skull" by IsraelK on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-073/4de92a49cb8b4ffaacb515c64a5fbb37.glb>
+- `stag-skull.glb`: a stag's skull, "Deer Skull - Photoscan" by Dmitry Schnein on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-061/ebd6e5b589cf41929f4748cdd27c5129.glb>
+- `sheep-skull.glb`: a ram's skull, "sheep skull 3D scan" by Model Thomas (daaanin) on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-116/2803d96915c4418b83618c17f45d50a6.glb>
+- `ribcage.glb`: a ribcage, "Rib Cage_Human Skeleton" (3DPX-016836) by My Segmenter on NIH 3D, CC BY 4.0; from <https://3d.nih.gov/api/download?submissionId=22678&fileIds=498606>
+- `pelvis.glb`: a pelvis, the Human Reference Atlas's male pelvis (v1.3), CC BY 4.0; from <https://cdn.humanatlas.io/digital-objects/ref-organ/pelvis-male/v1.3/assets/3d-vh-m-pelvis.glb>
+- `sword-arming.glb`: an arming sword, "Arming Sword" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-156/9cb2f6bc2f544997bf15d30f55a6b289.glb>
+- `sword-long.glb`: a long sword, "Long Sword" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-123/43ef6dfb74f74fcca79b203c829d8033.glb>
+- `claymore.glb`: a claymore, "Claymore" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-003/637ab40144a641f5ba66be540c68a48b.glb>
+- `zweihander.glb`: a two-handed sword, "Zweihänder" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-136/95d0f219d52b40d19006c6c941ae9644.glb>
+- `sword-chevalier.glb`: a knight's sword, "Chevalier Sword" by rubenve on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-005/b2662f2666a844e8a1bd0e7c4a7672d8.glb>
+- `sword-rack.glb`: a rack of long swords, "Long Sword Rack" by Multipainkiller Studio on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-078/24473982824d456bb38d7bfe29a4cc8a.glb>
+- `grindstone.glb`: a grindstone, "Asset03 Medieval Grindstone" by Margot D. on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-050/376eb8506e1f419d8d2933454cd332ff.glb>
+- `hauberk.glb`: a mail shirt, "Hauberk" by askei on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-036/8881e32f0595469fa12b18e28155cc78.glb>
+- `barbuta.glb`: a barbute, "Barbuta Helmet" by Multipainkiller Studio on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-042/69c05f5b114f4ec1a92eea3d36e1b078.glb>
+- `barbuta-visored.glb`: a visored barbute, "Visored Barbuta Helmet" by Multipainkiller Studio on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-134/8ce8003e097a4e30a5b96f612200f986.glb>
+- `great-helm.glb`: a great helm, "Great Helm" by Ole Gunnar Isager on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-141/620ca8f54ce64561829809a8b782e78c.glb>
+- `shield-heater.glb`: a heater shield, "Heater Shield" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-078/9b1161c5e56e43218d42c639e3511fe5.glb>
+- `book-open.glb`: an open book, "Medieval Open Book 1" by J0Y on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-030/b30b6a9018f842e7b12622387979b0fa.glb>
+- `books.glb`: a stack of books, "Medieval Book Stack" by GetDeadEntertainment on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-058/0ea43f7fdcb7411cb1123b987f297d41.glb>
+- `quill.glb`: a quill and inkpot, "Quill" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-023/67771bc3f8024e6faea9af9f6f7d6bfb.glb>
+- `scroll.glb`: a scroll, "Scroll" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-054/7450e494eb654e9b937bb52724220e77.glb>
+- `hourglass.glb`: an hourglass, "Hour Glass" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-088/baafc6537f2c4b6696ff0829cc32f772.glb>
+- `crystal-ball.glb`: a crystal ball on its stand, "Magic crystal ball" by terpsichore on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-102/0d241e81ec6c446aafeb941492915909.glb>
+- `globe-celestial.glb`: a celestial globe, the Virtual Museums of Małopolska's celestial globe, CC0; from <https://zenodo.org/api/records/21376883/files/341fa8a777e94883841409438756f747_normalized-0.100.glb/content>
+- `alembic.glb`: an alembic, "Alembic" by FlukierJupiter on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-112/811618ea79ba4aac95d7f7312a2128ec.glb>
+- `bottle-magic.glb`: a stoppered flask, "Magic Bottle 01" by Multipainkiller Studio on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-137/a52a07fd29974fccb69fe0983c36e52d.glb>
+- `bottle-magic-2.glb`: a round flask, "Magic Bottle 02" by Multipainkiller Studio on Sketchfab, CC BY 4.0; from <https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-008/51ebe9ddfa654ee7ab8eb38671fcddcc.glb>
+- `mortar.glb`: a bronze mortar, the Virtual Museums of Małopolska's pharmaceutical mortar (Wawel Royal Castle), CC0; from <https://zenodo.org/api/records/21291002/files/331027dcfc934eec955d30abf8cf9916_normalized-0.100.glb/content>
+- `albarello.glb`: an apothecary's jar, the Virtual Museums of Małopolska's apothecary albarello (the Museum of Pharmacy, Kraków), CC0; from <https://zenodo.org/api/records/21355431/files/7f50157193de45798d464696dae7acf2_normalized-0.100.glb/content>
+- `rat.glb`: a rat, Poly Haven's street_rat, CC0; from <https://polyhaven.com/a/street_rat>

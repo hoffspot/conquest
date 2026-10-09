@@ -4499,8 +4499,8 @@ function shieldRack(solid, rack) {
     }
 }
 
-// A display table: a cloth over it, and on it what the shop sells laid out (blades, gauntlets and
-// a helm; a book open by a candle; jewels and an orb)
+// A display table: a cloth over it, and on it what the shop sells laid out (gauntlets and a helm;
+// a candle and an inkpot; jewels on velvet), its blades, books and orbs models (shopWares)
 function displayTable(solid, piece, look, kind) {
     const [x0, z0, x1, z1] = [m(piece.x + 0.1), m(piece.y + 0.1), m(piece.x + piece.w - 0.1), m(piece.y + piece.h - 0.1)];
     const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
@@ -4509,31 +4509,19 @@ function displayTable(solid, piece, look, kind) {
     table(solid, x0, z0, x1, z1);
     solid.box(x0 + m(0.1), top - m(0.06), z0 + m(0.1), x1 - m(0.1), top - m(0.04), z1 - m(0.1), material(look.cloth));
 
-    if (kind === "swordsmith" || kind === "masterSwordsmith") {
-        for (let k = 0; k < 3; k++) {
-            const z = z0 + m(0.4) + k * m(0.45);
-
-            solid.box(x0 + m(0.25), top - m(0.04), z - m(0.03), x1 - m(0.45), top - m(0.01), z + m(0.03), material("iron"));
-            solid.box(x1 - m(0.45), top - m(0.04), z - m(0.09), x1 - m(0.4), top, z + m(0.09), material(k % 2 ? "brass" : "gold"));
-            solid.box(x1 - m(0.4), top - m(0.03), z - m(0.02), x1 - m(0.22), top - m(0.01), z + m(0.02), material("leather"));
-        }
-    } else if (kind === "armorer" || kind === "masterArmorer") {
+    // (A swordsmith's blades are laid on it as models: shopWares)
+    if (kind === "armorer" || kind === "masterArmorer") {
         solid.lathe(cx - m(0.35), cz, [[m(0.16), top - m(0.04)], [m(0.17), top + m(0.1)], [m(0.12), top + m(0.26)], [0, top + m(0.3)]], material("iron"), { segments: 10 });
 
         for (const dz of [-0.25, 0.25]) {
             solid.box(cx + m(0.15), top - m(0.04), cz + m(dz) - m(0.07), cx + m(0.55), top + m(0.04), cz + m(dz) + m(0.07), material("pewter"));
         }
     } else if (kind === "scriptorium") {
-        for (const side of [-1, 1]) {
-            solid.box(cx + side * m(0.02), top - m(0.03), cz - m(0.22), cx + side * m(0.35), top - m(0.01), cz + m(0.22), material("parchment"));
-        }
-
+        // (Its book, quill and scroll are models: shopWares)
         candle(solid, x0 + m(0.3), z0 + m(0.3), top - m(0.04));
         solid.cylinder(x1 - m(0.3), z0 + m(0.3), top - m(0.04), top + m(0.04), m(0.05), m(0.04), material("iron-black"), { segments: 8 });
-    } else {
-        // (The Emporium's: an orb on its stand, glowing, and jewels on a velvet cushion)
-        solid.cylinder(cx - m(0.3), cz, top - m(0.04), top + m(0.06), m(0.12), m(0.08), material("brass"), { segments: 8 });
-        solid.lathe(cx - m(0.3), cz, Array.from({ length: 7 }, (_, k) => [Math.sin((k / 6) * Math.PI) * m(0.16), top + m(0.06) + m(0.16) - Math.cos((k / 6) * Math.PI) * m(0.16)]), material("glow-violet"), { segments: 12 });
+    } else if (kind === "emporium") {
+        // (The Emporium's: jewels on a velvet cushion, its crystal ball or globe beside it a model)
         solid.box(cx + m(0.1), top - m(0.04), cz - m(0.25), cx + m(0.6), top + m(0.04), cz + m(0.25), material("velvet"));
 
         for (const [dx, dz, gem] of [[0.22, -0.12, "gold"], [0.4, 0.1, "silver"], [0.5, -0.15, "jade"]]) {
@@ -4542,16 +4530,12 @@ function displayTable(solid, piece, look, kind) {
     }
 }
 
-// A lectern by the wall, a great book open on it
+// A lectern by the wall (its great book open on it a model: shopWares)
 function lectern(solid, piece) {
     const [cx, cz] = [m(piece.x + 0.5), m(piece.y + 0.5)];
 
     solid.box(cx - m(0.05), 0, cz - m(0.05), cx + m(0.05), m(1.05), cz + m(0.05), material("planks-dark"));
     solid.box(cx - m(0.3), m(1.0), cz - m(0.22), cx + m(0.3), m(1.06), cz + m(0.22), material("planks-dark"));
-
-    for (const side of [-1, 1]) {
-        solid.box(cx + side * m(0.02), m(1.06), cz - m(0.18), cx + side * m(0.26), m(1.08), cz + m(0.18), material("parchment"));
-    }
 }
 
 // A whetting bench (or a fitting bench) against the wall: a table, tools on it, a vice
@@ -4567,17 +4551,6 @@ function benchOfTools(solid, piece) {
     }
 
     solid.box(x1 - m(0.35), m(0.78), (z0 + z1) / 2 - m(0.1), x1 - m(0.1), m(0.98), (z0 + z1) / 2 + m(0.1), material("iron-black"));
-}
-
-// A grindstone on its frame, its crank
-function grindwheel(solid, piece) {
-    const [cx, cz] = [m(piece.x + 0.5), m(piece.y + 0.5)];
-
-    for (const side of [-1, 1]) {
-        solid.box(cx + side * m(0.3) - m(0.04), 0, cz - m(0.3), cx + side * m(0.3) + m(0.04), m(0.75), cz + m(0.3), material("timber"));
-    }
-
-    solid.lathe(cx, cz, [[0, m(0.45)], [m(0.35), m(0.45)], [m(0.35), m(0.55)], [0, m(0.55)]], material("stone"), { segments: 14 });
 }
 
 /**
@@ -4611,7 +4584,10 @@ function shop(map) {
         wallShelves(solid, shelf, map, look.shelves);
     }
 
-    for (const rack of at("rack")) {
+    const props = shopWares(map, kind);
+    const modelled = new Set(props.map(({ piece }) => piece).filter(Boolean));
+
+    for (const rack of at("rack").filter((each) => !modelled.has(each))) {
         if (kind === "armorer" || kind === "masterArmorer") {
             shieldRack(solid, rack);
         } else {
@@ -4619,14 +4595,15 @@ function shop(map) {
         }
     }
 
-    for (const stand of at("stand")) {
+    for (const stand of at("stand").filter((each) => !modelled.has(each))) {
         armourStand(solid, m(stand.x + 0.5), m(stand.y + 0.5), roughOf(stand.x, stand.y));
     }
 
-    // (An alchemist's tables its stills; any other's its wares set out)
+    // (An alchemist's tables bare, its stills and jars models; any other's a cloth over it, its
+    // wares set out)
     for (const piece of at("table")) {
         if (kind === "alchemist") {
-            worktable(solid, piece);
+            table(solid, m(piece.x + 0.05), m(piece.y + 0.1), m(piece.x + piece.w - 0.05), m(piece.y + piece.h - 0.1));
         } else {
             displayTable(solid, piece, look, kind);
         }
@@ -4638,10 +4615,6 @@ function shop(map) {
 
     for (const piece of at("workbench")) {
         benchOfTools(solid, piece);
-    }
-
-    for (const piece of at("grindstone")) {
-        grindwheel(solid, piece);
     }
 
     for (const barrels of at("barrels")) {
@@ -4671,12 +4644,153 @@ function shop(map) {
     const stands = at("votive").map((stand) => candleStand(solid, stand));
     const torches = [[0.3, map.height / 2], [map.width - 0.3, map.height / 2], [map.width / 2, map.height - 0.3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
 
+    // (The models wanted, read from now on: buildingInterior furnishes the room with them)
+    for (const name of new Set(props.map(({ model }) => model))) {
+        loadProp(name);
+    }
+
     return {
         solid,
         moving: [],
         flames: torches.map(({ fire }) => fire),
         lights: [...torches.map(({ light }) => light), ...stands],
+        props: props.map(({ piece: _piece, ...placement }) => placement),
     };
+}
+
+// How high a shop's things are topped (metres): its counter's cloth, a display table's, a bare
+// table's, a bench's, a lectern's
+const SHOP_TOPS = Object.freeze({ counter: 1.09, display: 0.81, table: 0.78, bench: 0.78, lectern: 1.06 });
+
+/**
+ * What a shop sets out (by its kind: core/insides.js SHOP_INSIDES) as makers' models and museums'
+ * scans (scripts/build-props.js, furnished by dungeons3d.js furnish): each placement (metres)
+ * on its counter, its tables, benches and lecterns, or standing in for a rack, a stand or the
+ * grindstone of its plan (`piece`: drawn as the model, not as its own art). Blades laid out on
+ * a swordsmith's tables (a master's the great swords), sword racks and a weapon rack down its
+ * walls, its grindstone; an armorer's shields leant by its harness, helms, and a mail shirt and
+ * a shield on its benches; a scribe's open books, quills and scrolls; an alchemist's alembics, mortars, flasks and
+ * apothecary's jars; the Emporium's crystal ball and celestial globe.
+ */
+export function shopWares(map, kind) {
+    const placed = [];
+    const at = (name) => map.pieces.filter((each) => each.kind === name);
+    const put = (model, x, z, more = {}) => placed.push({ model, x, z, ...more });
+    const [counter] = at("counter");
+    const [cx, cz] = [counter.x + counter.w / 2, counter.y + 0.45];
+    const tables = at("table");
+    const middle = (piece) => [piece.x + piece.w / 2, piece.y + piece.h / 2];
+    // (Lying down: what's made standing up laid along x; a flat thing stood up laid on its back)
+    const [laid, onBack] = [{ roll: Math.PI / 2 }, { pitch: -Math.PI / 2 }];
+    const master = kind === "masterSwordsmith" || kind === "masterArmorer";
+
+    if (kind === "swordsmith" || kind === "masterSwordsmith") {
+        const blades = master
+            ? [["zweihander", "sword-chevalier", "claymore"], ["sword-long", "estoc", "sword-arming"]]
+            : [["sword-arming", "sword-long", "dagger"], ["claymore", "saber", "mace"]];
+
+        tables.forEach((table, k) => {
+            const [x] = middle(table);
+
+            blades[k % 2].forEach((model, n) => {
+                const turned = { "sword-chevalier": { turn: Math.PI / 2 }, dagger: { ...onBack, turn: Math.PI / 2 }, saber: laid, mace: laid, estoc: laid }[model] ?? {};
+
+                put(model, x, table.y + 0.55 + n * 0.45, { y: SHOP_TOPS.display, ...turned });
+            });
+        });
+
+        put("sword-arming", cx, cz, { y: SHOP_TOPS.counter, turn: 0.12 });
+
+        // (The racks down the walls: two long ones each side, four blades standing in each, hilts
+        // up (the blades' hilts are their -x ends), their flats along the rack; the rest as
+        // they're drawn)
+        const racked = master ? ["zweihander", "claymore", "sword-long", "claymore"] : ["sword-long", "sword-arming", "claymore", "sword-arming"];
+
+        for (const rack of at("rack").filter(({ x, h }) => h >= 4 && (x === 0 || x === map.width - 1))) {
+            const west = rack.x === 0;
+            const [x, turn] = [west ? 0.3 : map.width - 0.3, west ? Math.PI / 2 : -Math.PI / 2];
+
+            for (const [n, z] of [rack.y + 1, rack.y + 3].entries()) {
+                put("sword-rack", x, z, { turn, ...(n ? {} : { piece: rack }) });
+
+                racked.forEach((model, k) => put(model, x, z + (k - 1.5) * 0.36, { y: 0.06, roll: -Math.PI / 2 }));
+            }
+        }
+
+        for (const stone of at("grindstone")) {
+            put("grindstone", stone.x + 0.5, stone.y + 0.5, { size: 1, turn: Math.PI / 2, piece: stone });
+        }
+
+        for (const bench of at("workbench")) {
+            put("dagger", bench.x + 0.5, bench.y + bench.h - 0.6, { y: SHOP_TOPS.bench, ...onBack });
+            put("hammer", bench.x + 0.45, bench.y + 0.55, { y: SHOP_TOPS.bench });
+        }
+    } else if (kind === "armorer" || kind === "masterArmorer") {
+        // (A shield leant at the foot of each harness along the walls, facing the room, a heater and
+        // a kite in turn)
+        at("stand")
+            .filter(({ x }) => x === 0 || x === map.width - 1)
+            .forEach((stand, k) => {
+                const west = stand.x === 0;
+
+                put(k % 2 ? "shield-kite" : "shield-heater", stand.x + (west ? 0.75 : 0.25), stand.y + 0.5, { size: k % 2 ? 1.1 : 0.8, pitch: -0.25, turn: west ? Math.PI / 2 : -Math.PI / 2 });
+            });
+
+        // (Its fitting benches: a helm on each, and a mail shirt or a shield laid by it)
+        at("workbench").forEach((bench, k) => {
+            put(k % 2 ? "barbuta-visored" : "barbuta", bench.x + 0.5, bench.y + 0.4, { y: SHOP_TOPS.bench, turn: k % 2 ? -1.2 : 1.2 });
+            put(k % 2 ? "shield-heater" : "hauberk", bench.x + 0.5, bench.y + 1.2, { y: SHOP_TOPS.bench, ...onBack, turn: Math.PI / 2 });
+        });
+
+        put("great-helm", cx - 0.5, cz, { y: SHOP_TOPS.counter, turn: 0.3 });
+        put(master ? "barbuta-visored" : "barbuta", cx + 0.4, cz, { y: SHOP_TOPS.counter, turn: -0.3 });
+    } else if (kind === "scriptorium") {
+        tables.forEach((table, k) => {
+            const [x] = middle(table);
+
+            put("book-open", x - 0.15, table.y + 0.95, { y: SHOP_TOPS.display, ...onBack, turn: k % 2 ? 0.1 : -0.1 });
+            put("quill", x + 0.45, table.y + 0.85, { y: SHOP_TOPS.display, turn: 0.5 });
+            put("scroll", x + 0.3, table.y + 1.5, { y: SHOP_TOPS.display, turn: k % 2 ? 0.2 : -0.2 });
+            put("books", x - 0.5, table.y + 1.45, { y: SHOP_TOPS.display, turn: 0.4 });
+        });
+
+        for (const lectern of at("side-table")) {
+            put("book-open", lectern.x + 0.5, lectern.y + 0.5, { y: SHOP_TOPS.lectern, ...onBack });
+        }
+
+        put("books", cx - 0.6, cz, { y: SHOP_TOPS.counter, turn: -0.3 });
+        put("hourglass", cx + 0.3, cz, { y: SHOP_TOPS.counter });
+    } else if (kind === "alchemist") {
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put("alembic", x - 0.35, z - 0.3, { y: SHOP_TOPS.table, turn: k % 2 ? Math.PI : 0 });
+            put("mortar", x + 0.5, z - 0.5, { y: SHOP_TOPS.table });
+            put("bottle-magic", x + 0.45, z + 0.25, { y: SHOP_TOPS.table, turn: 0.6 });
+            put("bottle-magic-2", x + 0.65, z + 0.55, { y: SHOP_TOPS.table });
+            put("albarello", x - 0.45, z + 0.5, { y: SHOP_TOPS.table });
+            put("albarello", x - 0.15, z + 0.6, { y: SHOP_TOPS.table, turn: 1.3 });
+        });
+
+        put("mortar", cx - 0.6, cz, { y: SHOP_TOPS.counter });
+        put("albarello", cx, cz, { y: SHOP_TOPS.counter });
+        put("bottle-magic", cx + 0.5, cz, { y: SHOP_TOPS.counter, turn: -0.5 });
+    } else if (kind === "emporium") {
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put(k % 2 ? "globe-celestial" : "crystal-ball", x - 0.35, z, { y: SHOP_TOPS.display, turn: 0.4 });
+            put(k % 2 ? "candleholder-a" : "skull", x - 0.6, z + 0.6, { y: SHOP_TOPS.display, turn: -0.5 });
+            put("book-open", x + 0.35, z + 0.6, { y: SHOP_TOPS.display, ...onBack, turn: k % 2 ? -0.3 : 0.3 });
+            put(k % 2 ? "bottle-magic" : "bottle-magic-2", x - 0.65, z - 0.55, { y: SHOP_TOPS.display });
+        });
+
+        put("hourglass", cx - 0.5, cz, { y: SHOP_TOPS.counter });
+        put("books", cx + 0.3, cz, { y: SHOP_TOPS.counter, turn: 0.3 });
+        put("bottle-magic", cx + 0.85, cz, { y: SHOP_TOPS.counter, turn: 0.8 });
+    }
+
+    return placed;
 }
 
 // (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
