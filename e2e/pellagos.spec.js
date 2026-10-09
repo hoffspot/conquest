@@ -3474,9 +3474,17 @@ test.describe("drawn at the screen's own pixels", () => {
             const shown = game.battle.actors.filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible).map((one) => game.avatars.get(one.id));
             const unseen = shown.filter(({ object, character }) => session.view.heightOnScreen(object.position, character.height) === 0);
 
+            // (Posed in a frame with the view as it is now. Any not posed in it, gone or past where
+            // the player's drawn by then, kept how often they were posed before: left out)
+            for (const avatar of unseen) {
+                avatar.every = null;
+            }
+
             game.advance(1 / 60, { render: false });
 
-            return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: unseen.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
+            const posed = unseen.filter(({ every }) => every !== null);
+
+            return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: posed.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
         }, guard.id);
 
         expect(posing.player).toBe(1);
@@ -3582,7 +3590,7 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
-test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
+test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries and its scout; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     // An orc army's camp just outside the town, at war with the humans; the player by it
@@ -3627,8 +3635,9 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     expect(camp.drawn).toBe(1);
     expect(camp.tents).toBeGreaterThan(5);
     expect(camp.banner).toBe(true);
-    expect(camp.sentries.length).toBe(6);
-    expect(camp.sentries.every(({ name, hostile }) => name === "Orcish sentry" && hostile)).toBe(true);
+    // (Its guard of 6: five sentries round its fire, and its scout out on its round)
+    expect(camp.sentries.map(({ name }) => name)).toEqual([...Array(5).fill("Orcish sentry"), "Orcish scout"]);
+    expect(camp.sentries.every(({ hostile }) => hostile)).toBe(true);
     expect(camp.sentries.some(({ drawn }) => drawn)).toBe(true);
 
     // Far off: the camp struck, its tents down
@@ -3825,6 +3834,112 @@ test("an army's supply wagon near the player: its ox and wagon drawn laden with 
     // (Making east, for its army)
     await playUntil(page, () => false, { seconds: 5 });
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("force-901/wagon").x)).toBeGreaterThan(met.from + 2);
+});
+
+test("an orc camp near the player sends its scout out on its round and its skirmishers after the player's people's army met there; reinforcements on their way to that army join its line", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // An orc camp out east of the player's town, at war with the humans; the humans' army standing
+    // north of it, and reinforcements on their way to it; the player between them
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const seat = war.realm("human").seat;
+        const at = [mx + 230, my - 60];
+        const from = [mx + 150, my - 100];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        war.camps.push({ id: "camp-900", realm: "orc", at: [mx + 220, my + 60], guard: 6, built: 0, done: 0, toward: null, used: 1e6, skirmished: war.turn });
+        war.forces.push(
+            { id: "force-900", realm: "human", kind: "army", size: 12, at: [...at], path: [[...at]], leg: 0, target: null, home: seat, mission: "regroup", about: null, camp: null, orders: null, went: 12, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 },
+            { id: "force-901", realm: "human", kind: "reinforcement", size: 5, at: [...from], path: [[...from], [...at]], leg: 0, target: "force-900", home: seat, mission: null, about: null, since: 0 },
+        );
+        Object.assign(player, { square: [Math.floor(mx + 170), Math.floor(my)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        game.advance(0.1);
+    });
+
+    // (The camp's sentries and scout, the army and the reinforcements, drawn over a few seconds)
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const ids = [...(game.host.camps.get("camp-900")?.ids ?? []), ...["force-900", "force-901"].flatMap((id) => game.host.armies.get(id)?.ids ?? [])];
+
+        return ids.length === 23 && ids.every((id) => game.avatars.has(id));
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 60 })).toBe(true);
+
+    const met = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const scout = game.battle.actor("camp-900/scout");
+
+        return {
+            scout: { name: scout.name, round: scout.patrol.length, hostile: game.battle.hostile(scout, game.battle.actor("player")) },
+            said: window.said.filter((text) => /near you/.test(text)).sort(),
+        };
+    });
+
+    expect(met.scout).toEqual({ name: "Orcish scout", round: 8, hostile: true });
+    expect(met.said).toEqual(["Our army is in the field near you, 12 strong.", "Our reinforcements are on their way near you, 5 strong."]);
+
+    // Its skirmishers due: out, after the army, the player told
+    await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { TURN_MS } = await import("/js/core/war/war.js");
+        const war = game.host.war;
+
+        war.camp("camp-900").skirmished = war.turn - 3;
+        war.clock = TURN_MS - 500;
+    });
+    // (Drawn, in full or, past the nearest few, in their kind's crowd once its figure's made)
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const [out] = game.host.skirmishers.values();
+
+        return Boolean(out) && out.ids.every((id) => game.avatars.has(id));
+    }, { seconds: 90 })).toBe(true);
+
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [skirmish] = game.host.skirmishers.values();
+
+        return { target: skirmish.target, names: skirmish.ids.map((id) => game.battle.actor(id).name), said: window.said.includes("Orcish skirmishers are out after our army!") };
+    });
+
+    expect(out).toEqual({ target: "force-900", names: ["Orcish skirmisher", "Orcish skirmisher"], said: true });
+
+    // The reinforcements up with their army: each of them still standing in its line
+    expect(await playUntil(page, () => !window.pellagos.game.host.war.force("force-901"), { seconds: 90 })).toBe(true);
+
+    const joined = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const army = game.host.armies.get("force-900");
+
+        return {
+            size: game.host.war.force("force-900").size,
+            lined: army.ids.filter((id) => game.battle.actor(id) && !game.battle.actor(id).dead).length,
+            column: game.host.armies.has("force-901"),
+        };
+    });
+
+    expect(joined.column).toBe(false);
+    expect(joined.lined).toBe(joined.size);
+    expect(joined.size).toBeGreaterThan(12);
 });
 
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {

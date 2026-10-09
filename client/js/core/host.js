@@ -37,6 +37,7 @@ import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
+import { CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
@@ -89,9 +90,20 @@ export const WORKS_OUT = Object.freeze({ near: 120, far: 250, posted: 4, most: 8
 
 /**
  * When a camp comes to life (docs/WAR.md M6): once a player's this near it (metres, out in the
- * world); struck once every player's this far.
+ * world); struck once every player's this far. Its scout walks a round `scout` metres out from its
+ * fire, by `rounds` points (docs/WAR.md *The armies near a player*).
  */
-export const CAMP_NEAR = Object.freeze({ near: 150, far: 300 });
+export const CAMP_NEAR = Object.freeze({ near: 150, far: 300, scout: 40, rounds: 8 });
+
+/**
+ * A pair of a camp's skirmishers out in the world near a player (docs/WAR.md *The armies near a
+ * player*), after what the war's sent them against: out of their camp's if it's pitched, else
+ * setting off `from` metres from what they're after, on their camp's side; making for it at a run
+ * (`pace` metres a second), `ahead` metres at a time; fighting it once they're `close` to any of
+ * it, for `fight` ms; back to their camp then, or once it's gone, or after `most` ms; let go once
+ * they're back (within `home` metres of its fire) or every player's `far` from them.
+ */
+export const SKIRMISH_NEAR = Object.freeze({ from: 120, pace: 2.3, ahead: 16, close: 25, fight: 30000, most: 240000, home: 6, far: 300 });
 
 // How far either side of a supply depot's fire its stores are stacked (metres)
 const DEPOT_STORES = 2.6;
@@ -367,7 +379,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 18;
+export const SNAPSHOT_VERSION = 19;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -587,6 +599,14 @@ export class Host {
          * last), over (null; or "taken", once its guards are all down) }.
          */
         this.supplies = new Map();
+
+        /**
+         * The camps' skirmishers out in the world near a player (by the camp's id and the turn they
+         * went out: SKIRMISH_NEAR): { camp, people, target, kind (what it is: war.js #skirmishable),
+         * ids, since (when they went out: battle time), fought (when they first came to it, or
+         * null), back (on their way back) }.
+         */
+        this.skirmishers = new Map();
 
         /**
          * The armies and reserves met in the field near a player (by the force's id: ARMY_NEAR):
@@ -1545,6 +1565,11 @@ export class Host {
                 }
             }
 
+            // (A camp's skirmishers sent out where a player's near: out in the world)
+            if (event.type === "skirmishers") {
+                this.#sendSkirmishers(event);
+            }
+
         }
 
         if (this.war.turn !== turn) {
@@ -1573,6 +1598,7 @@ export class Host {
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
             supplies: [...this.supplies.entries()],
+            skirmishers: [...this.skirmishers.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
@@ -1690,6 +1716,7 @@ export class Host {
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.armies = new Map(structuredClone(snapshot.armies ?? []));
         host.supplies = new Map(structuredClone(snapshot.supplies ?? []));
+        host.skirmishers = new Map(structuredClone(snapshot.skirmishers ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
@@ -2843,9 +2870,9 @@ export class Host {
             }
         }
 
-        // The armies and reserves near a player met in the field, in their lines of battle, and an
-        // enemy's near enough to one met to fight it; let go once every player's far, or they're
-        // gone (or home within their walls)
+        // The armies, reserves and reinforcements near a player met in the field, in their lines of
+        // battle, and an enemy's near enough to one met to fight it; let go once every player's
+        // far, or they're gone (or home within their walls)
         for (const [id, met] of [...this.armies]) {
             const force = war.force(id);
 
@@ -2854,7 +2881,7 @@ export class Host {
             }
         }
 
-        const afield = war.forces.filter((force) => (force.kind === "army" || force.kind === "reserve") && force.size > 0 && this.#afield(force));
+        const afield = war.forces.filter((force) => ["army", "reserve", "reinforcement"].includes(force.kind) && force.size > 0 && this.#afield(force));
 
         for (const force of afield) {
             if (!this.armies.has(force.id) && near(force, ARMY_NEAR.near)) {
@@ -2916,6 +2943,7 @@ export class Host {
         }
 
         this.#watchWagons();
+        this.#watchSkirmishers();
 
         // The fortifications near a player stood up, and let go once they're far, or gone
         for (const [id] of [...this.fortsOut]) {
@@ -2936,9 +2964,9 @@ export class Host {
         this.#tendBarracks();
 
         // (What a camp does against a town with its soldiers out is played out here, as is a fight
-        // at a supply depot pitched; and the envoys, convoys and supply wagons met go at their own
-        // pace)
-        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...[...this.camps.keys()].filter((id) => war.depot(id)), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
+        // at a camp or a supply depot pitched, and a camp's skirmishers; and the envoys, convoys,
+        // supply wagons and reinforcements met go at their own pace)
+        war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.camps.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -3203,19 +3231,21 @@ export class Host {
         this.#event("army", { force: force.id, people: force.realm, kind: force.kind, ids, met: true });
     }
 
-    // The armies and reserves met, each on its way: its line marching for the next point on it as
-    // the war has it, the war told where it's got to (war.move); turned on an enemy's met within
-    // ARMY_NEAR.fight (marching on it, and once their fronts are ARMY_NEAR.close, closing with it as
-    // a line does: battle.js ADVANCE), and on its way again once there's none; as many of it stood up as the war has of it (those it's lost elsewhere, or
+    // The armies, reserves and reinforcements met, each on its way: its line marching for the next
+    // point on it as the war has it (reinforcements, for theirs where it is now: #joining), the war
+    // told where it's got to (war.move); reinforcements there, joining it (#joined); turned on an
+    // enemy's met within ARMY_NEAR.fight (marching on it, and once their fronts are
+    // ARMY_NEAR.close, closing with it as a line does: battle.js ADVANCE), and on its way again once
+    // there's none; as many of it stood up as the war has of it (those it's lost elsewhere, or
     // deserted, let go from the back; those joined it stood up at the back)
     #watchArmies() {
         const war = this.war;
 
-        for (const [id, met] of this.armies) {
+        for (const [id, met] of [...this.armies]) {
             const force = war.force(id);
             const formation = this.battle.formations[met.formation];
 
-            if (!force || !formation) {
+            if (!force || !formation || !this.armies.has(id)) {
                 continue;
             }
 
@@ -3227,7 +3257,10 @@ export class Host {
                 leg++;
             }
 
-            war.move(id, met.at, leg);
+            if (war.move(id, met.at, leg)) {
+                this.#joined(id, force);
+                continue;
+            }
 
             // (An enemy's met within reach: on it; within sight of it, closing with it)
             const foe = [...this.armies]
@@ -3237,7 +3270,8 @@ export class Host {
                 .map((at) => ({ at, distance: hypot(at[0] - met.at[0], at[1] - met.at[1]) }))
                 .filter(({ distance }) => distance <= ARMY_NEAR.fight)
                 .sort((a, b) => a.distance - b.distance)[0];
-            const to = foe ? (foe.distance <= ARMY_NEAR.close ? null : foe.at) : force.leg < force.path.length - 1 ? force.path[force.leg + 1] : null;
+            const way = force.kind === "reinforcement" ? this.#joining(force) : force.leg < force.path.length - 1 ? force.path[force.leg + 1] : null;
+            const to = foe ? (foe.distance <= ARMY_NEAR.close ? null : foe.at) : way;
 
             if (String(to) !== String(formation.to)) {
                 this.battle.formation(met.formation, { to: to ? [...to] : null });
@@ -3310,6 +3344,38 @@ export class Host {
                 this.#event("army", { force: force.id, people: force.realm, kind: force.kind, ids });
             }
         }
+    }
+
+    // Where reinforcements met make for: their army's or reserve's line, if it's met; else where it
+    // is in the war
+    #joining(column) {
+        const theirs = this.armies.get(column.target);
+
+        return (theirs && this.battle.formations[theirs.formation]?.anchor) ?? this.war.force(column.target)?.at ?? null;
+    }
+
+    // Reinforcements met at the end of their way (war.move): with theirs met, each of them still
+    // standing takes a place at the back of its line, one of it now, as in the war; else (or, theirs
+    // gone, gone home) they're let go
+    #joined(id, column) {
+        const met = this.armies.get(id);
+        const theirs = this.war.force(column.target) ? this.armies.get(column.target) : null;
+
+        if (theirs && this.battle.formations[theirs.formation]) {
+            const standing = (ids) => ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+            const behind = Math.max(0, ...standing(theirs.ids).map((actor) => actor.formation?.slot[1] ?? 0)) + 2;
+            const joining = standing(met.ids);
+
+            for (const actor of joining) {
+                actor.formation = { id: theirs.formation, slot: [0, behind], role: actor.formation?.role ?? "front" };
+                this.soldiers.get(actor.id).force = column.target;
+                theirs.ids.push(actor.id);
+            }
+
+            met.ids = met.ids.filter((each) => !joining.some((actor) => actor.id === each));
+        }
+
+        this.#letArmyGo(id);
     }
 
     // An army or reserve met let go: its soldiers gone from the world (with it, in the war), its line
@@ -3461,6 +3527,154 @@ export class Host {
 
         this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
         this.#event("parted", { supply: id, ids: [...ids, wagon] });
+    }
+
+    // --- A camp's skirmishers near a player (docs/WAR.md *The armies near a player*) ---
+
+    // A pair of a camp's skirmishers sent out where a player's near (the war's "skirmishers"): out
+    // of their camp, if it's pitched; else setting off on its side of what they're after, a little
+    // way off it (SKIRMISH_NEAR.from). Two of its guard; each brought down, one of it fewer in the
+    // war
+    #sendSkirmishers({ camp: campId, realm, against, target, kind, at }) {
+        const camp = this.war.camp(campId);
+
+        if (!camp) {
+            return;
+        }
+
+        const key = `${campId}/skirmish-${this.war.turn}`;
+        const pitched = this.camps.get(campId);
+        const [dx, dy] = [camp.at[0] - at[0], camp.at[1] - at[1]];
+        const off = Math.max(hypot(dx, dy), 1e-6);
+        const from = pitched ? pitched.fire : [at[0] + (dx / off) * Math.min(off, SKIRMISH_NEAR.from), at[1] + (dy / off) * Math.min(off, SKIRMISH_NEAR.from)];
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[realm] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+        const ids = [];
+
+        try {
+            for (let k = 0; k < ARMY_CAMP.pair; k++) {
+                const id = `${key}-${k}`;
+                const square = free([from[0] + (k ? 1.5 : -1.5), from[1]]);
+
+                this.#enlist(id, { people: realm, weapon: k % 2 ? guardArms : patrolArms, square, name: "skirmisher", record: { camp: campId, share: 1, skirmish: key }, patrol: [square], leash: LEASH, speed: SKIRMISH_NEAR.pace });
+                ids.push(id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        this.skirmishers.set(key, { camp: campId, people: realm, target, kind, ids, since: this.battle.time, fought: null, back: false });
+        this.#event("skirmishers", { skirmish: key, camp: campId, people: realm, against, kind, ids });
+    }
+
+    // The skirmishers out, each pair: making for what they're after (the nearest of it stood up in
+    // the world, else where it is in the war), a little way on at a time; fighting it once they're
+    // up to it, a while; then back to their camp, as they are once it's gone, or they've been out
+    // too long. Let go once they're back, or every player's far from them: if they never came up to
+    // what they were after, the war reckons their falling on it there (war.skirmish)
+    #watchSkirmishers() {
+        const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town");
+
+        for (const [key, out] of [...this.skirmishers]) {
+            const standing = out.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+
+            if (!standing.length || standing.every((actor) => players.every((player) => hypot(player.x - actor.x, player.y - actor.y) > SKIRMISH_NEAR.far))) {
+                if (standing.length && out.fought === null && !out.back) {
+                    this.war.skirmish(out.camp, out.target, standing.length);
+                }
+
+                this.#letSkirmishersGo(key);
+                continue;
+            }
+
+            const [lead] = standing;
+            const camp = this.war.camp(out.camp);
+            const home = this.camps.get(out.camp)?.fire ?? camp?.at ?? null;
+            const theirs = this.#standingOf(out.kind, out.target)
+                .map((actor) => ({ actor, distance: hypot(actor.x - lead.x, actor.y - lead.y) }))
+                .sort((a, b) => a.distance - b.distance);
+
+            if (theirs.length && theirs[0].distance <= SKIRMISH_NEAR.close) {
+                out.fought ??= this.battle.time;
+            }
+
+            const where = this.#thingAt(out.kind, out.target);
+            const done = out.fought !== null ? this.battle.time - out.fought > SKIRMISH_NEAR.fight || !theirs.length : !where || this.battle.time - out.since > SKIRMISH_NEAR.most;
+
+            // (Come up to where it was, and none of it there to fight: the war reckons it there)
+            if (!out.back && out.fought === null && where && !theirs.length && hypot(where[0] - lead.x, where[1] - lead.y) <= SKIRMISH_NEAR.close) {
+                this.war.skirmish(out.camp, out.target, standing.length);
+                out.back = true;
+            }
+
+            if (done && !out.back) {
+                out.back = true;
+
+                for (const actor of standing) {
+                    Object.assign(actor, { target: null, path: [] });
+                }
+            }
+
+            if (out.back && (!home || hypot(home[0] - lead.x, home[1] - lead.y) <= SKIRMISH_NEAR.home)) {
+                this.#letSkirmishersGo(key);
+                continue;
+            }
+
+            const goal = out.back ? home : theirs.length ? [theirs[0].actor.x, theirs[0].actor.y] : where;
+
+            // (Fighting: let be till they're done)
+            if (!goal || (!out.back && standing.some((actor) => actor.target !== null))) {
+                continue;
+            }
+
+            const [dx, dy] = [goal[0] - lead.x, goal[1] - lead.y];
+            const distance = Math.max(hypot(dx, dy), 1e-6);
+            const ahead = Math.min(distance, SKIRMISH_NEAR.ahead);
+
+            try {
+                const free = this.#spots();
+
+                for (const [k, actor] of standing.entries()) {
+                    const side = k ? 1.5 : -1.5;
+
+                    Object.assign(actor, { patrol: [free([lead.x + (dx / distance) * ahead - (dy / distance) * side, lead.y + (dy / distance) * ahead + (dx / distance) * side])], patrolIndex: 0 });
+                }
+            } catch {
+                // (Nowhere free ahead just now: tried again next time)
+            }
+        }
+    }
+
+    // Who of a thing of the war (of a kind: war.js #skirmishable) is stood up in the world near a
+    // player, still standing: an army's, a reserve's or reinforcements' soldiers, a supply wagon's
+    // guards, a convoy's, a camp's or a depot's sentries, a town's soldiers mustered, a works' guard
+    #standingOf(kind, id) {
+        const met = { army: this.armies, reserve: this.armies, reinforcement: this.armies, supply: this.supplies, convoy: this.convoys, camp: this.camps, depot: this.camps, town: this.mustered, works: this.worksOut }[kind]?.get(id);
+
+        return (met?.ids ?? []).map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+    }
+
+    // Where a thing of the war is (of a kind: war.js #skirmishable), or null once it's gone
+    #thingAt(kind, id) {
+        const war = this.war;
+        const thing = { town: () => war.town(id), works: () => war.workAt(id), camp: () => war.camp(id), depot: () => war.depot(id) }[kind]?.() ?? war.force(id);
+
+        return thing?.at ?? null;
+    }
+
+    // A camp's skirmishers let go: gone from the world (back in their camp, or with it in the war)
+    #letSkirmishersGo(key) {
+        const { ids } = this.skirmishers.get(key);
+
+        this.skirmishers.delete(key);
+
+        for (const each of ids) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("parted", { skirmish: key, ids });
     }
 
     // --- Convoys (docs/WAR.md *Convoys*) ---
@@ -4190,14 +4404,17 @@ export class Host {
     // fire, and its guard round them as sentries, facing out (up to CAMP.sentries of them, each
     // standing for a share of it)
     #pitch(camp) {
-        const count = Math.min(CAMP.sentries, Math.max(1, camp.guard));
+        const depot = Boolean(this.war.depot(camp.id));
+        // (A camp's scout, one of its guard if it can spare one, out on its round: CAMP_NEAR)
+        const scout = !depot && camp.guard >= 2 ? 1 : 0;
+        const count = Math.min(CAMP.sentries, Math.max(1, camp.guard - scout));
         const { fire, tents, posts } = campOf(camp, { sentries: count });
         // (A supply depot's stores, stacked either side of its fire)
-        const stores = this.war.depot(camp.id) ? [-1, 1].map((side) => ({ at: [fire[0] + side * DEPOT_STORES, fire[1] + 0.5], facing: side > 0 ? Math.PI / 2 : -Math.PI / 2 })) : [];
+        const stores = depot ? [-1, 1].map((side) => ({ at: [fire[0] + side * DEPOT_STORES, fire[1] + 0.5], facing: side > 0 ? Math.PI / 2 : -Math.PI / 2 })) : [];
         const [guardArms, patrolArms] = SOLDIERS_ARMS[camp.realm] ?? SOLDIERS_ARMS.human;
         const free = this.#spots();
         const ids = [];
-        const share = camp.guard / count;
+        const share = camp.guard / (count + scout);
 
         try {
             for (const [k, post] of posts.entries()) {
@@ -4206,6 +4423,13 @@ export class Host {
 
                 this.#enlist(id, { people: camp.realm, weapon: k % 2 ? patrolArms : guardArms, square, name: "sentry", record: { camp: camp.id, share }, patrol: [square], leash: LEASH + 4, facing: post.facing });
                 ids.push(id);
+            }
+
+            if (scout) {
+                const round = Array.from({ length: CAMP_NEAR.rounds }, (_, k) => free([fire[0] + CAMP_NEAR.scout * sin((2 * Math.PI * k) / CAMP_NEAR.rounds), fire[1] + CAMP_NEAR.scout * cos((2 * Math.PI * k) / CAMP_NEAR.rounds)]));
+
+                this.#enlist(`${camp.id}/scout`, { people: camp.realm, weapon: patrolArms, square: round[0], name: "scout", record: { camp: camp.id, share }, patrol: round, leash: LEASH + 4 });
+                ids.push(`${camp.id}/scout`);
             }
         } catch {
             // (No free ground there: those found are out, and no more)

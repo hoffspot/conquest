@@ -89,11 +89,19 @@ describe("the armies' camps come to life (host.js, war.js, muster.js)", () => {
         assert.ok(pitched, "(pitched)");
         assert.equal(pitched.camp, camp.id);
         assert.equal(pitched.people, "orc");
-        assert.equal(pitched.ids.length, Math.min(CAMP.sentries, camp.guard));
         assert.equal(pitched.town, camp.toward);
         assert.equal(pitched.tents.length, CAMP.tents);
 
-        for (const id of pitched.ids) {
+        // (Its guard round its fire as sentries, but one: its scout, out on its round)
+        const sentries = pitched.ids.filter((id) => id !== `${camp.id}/scout`);
+        const scout = host.battle.actor(`${camp.id}/scout`);
+
+        assert.equal(sentries.length, Math.min(CAMP.sentries, camp.guard - 1));
+        assert.deepEqual(pitched.ids, [...sentries, scout.id]);
+        assert.equal(scout.name, "Orcish scout");
+        assert.ok(Math.hypot(scout.x - camp.at[0], scout.y - camp.at[1]) < CAMP_NEAR.scout + CAMP.ring);
+
+        for (const id of sentries) {
             const sentry = host.battle.actor(id);
 
             assert.equal(sentry.kind, "soldier");
@@ -108,11 +116,16 @@ describe("the armies' camps come to life (host.js, war.js, muster.js)", () => {
         const before = camp.guard;
         const sentry = host.battle.actor(pitched.ids[0]);
 
-        Object.assign(player, { hp: 5000, maxHp: 5000 });
+        const fight = [];
+
         put(player, [sentry.square[0] + 1, sentry.square[1]]);
         host.command(HOST_PLAYER, { type: "engage", target: sentry.id });
 
-        const fight = run(host, 20000);
+        // (Till one falls, the player kept from falling first)
+        for (let k = 0; k < 40 && !fight.some(({ type, id }) => type === "death" && pitched.ids.includes(id)); k++) {
+            Object.assign(player, { hp: 5000, maxHp: 5000 });
+            fight.push(...run(host, 500));
+        }
 
         assert.ok(fight.some(({ type, id }) => type === "death" && pitched.ids.includes(id)), "(one of them fell)");
         assert.ok(camp.guard < before);

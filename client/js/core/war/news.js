@@ -97,6 +97,8 @@ export function tell(event, war) {
             return event.mission === "retake" ? `${People(event.realm)} march to win back ${works(event.target)} from the brigands holding it, ${event.size} strong.` : `The ${own(event.realm)} army marches on ${thing(event.target)}, ${event.size} strong.`;
         case "camped":
             return event.target ? `${People(event.realm)} have made camp within a march of ${thing(event.target)}.` : `${People(event.realm)} have made camp in the field.`;
+        case "skirmishers":
+            return `Skirmishers went out of the ${own(event.realm)} camp after ${fallenOn(event)}.`;
         case "skirmish":
             return `Skirmishers out of the ${own(event.realm)} camp fell on ${fallenOn(event)}${event.killed ? `, and brought ${event.killed === 1 ? "one" : event.killed} of ${people(event.against)} down` : ""}.`;
         case "assault":
@@ -215,7 +217,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmish", "intercepted", "supplied", "provisioned"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):

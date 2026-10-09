@@ -3,7 +3,8 @@
 // its line of battle, marching its war path at its pace, the war told where it's got to and holding
 // it meanwhile; none mustering at its seat; two peoples' met fighting it out there, each fallen one
 // fewer in the war, which doesn't reckon their fight itself; as many of it stood up as the war has;
-// let go once every player's far; kept with the world
+// let go once every player's far; kept with the world. Reinforcements met too, making for their
+// army's line and taking their places in it; fallen on there, fought out there
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -53,6 +54,15 @@ function afield(war, realm, at, to, size, id) {
     war.forces.push(army);
 
     return army;
+}
+
+// Reinforcements of `realm`'s at `at`, on their way to `army`
+function column(war, realm, at, army, size, id) {
+    const force = { id, realm, kind: "reinforcement", size, at: [...at], path: [[...at], [...army.at]], leg: 0, target: army.id, home: war.realm(realm).seat, mission: null, about: null, since: 0 };
+
+    war.forces.push(force);
+
+    return force;
 }
 
 const alive = (host, id) => (host.armies.get(id)?.ids ?? []).filter((each) => host.battle.actor(each) && !host.battle.actor(each).dead);
@@ -172,5 +182,58 @@ describe("the armies in the world near a player (host.js ARMY_NEAR, war.js)", ()
         assert.ok(!host.armies.has(army.id));
         assert.ok(ids.every((id) => !host.battle.actor(id)));
         assert.equal(war.force(army.id).size, 20, "still in the war");
+    });
+
+    it("meets reinforcements near a player in their line, making for their army's line; there, each of them takes a place at the back of it, one of it in the war too", () => {
+        const { host, war, middle: [mx, my] } = hosted();
+        const army = afield(war, "human", [mx + 230, my - 60], [mx + 230, my - 60], 12, "force-900");
+        const joining = column(war, "human", [mx + 120, my - 100], army, 5, "force-901");
+
+        Object.assign(army, { mission: "regroup", about: null });
+
+        const events = run(host, 1000);
+        const told = events.find(({ type, force }) => type === "army" && force === joining.id);
+
+        assert.deepEqual([told?.kind, told?.met, told?.ids.length], ["reinforcement", true, 5]);
+        assert.ok(host.armies.has(army.id), "their army met");
+
+        // (On their way, and there)
+        const later = [];
+
+        for (let k = 0; k < 120 && war.force(joining.id); k++) {
+            later.push(...run(host, 1000));
+        }
+
+        const met = host.armies.get(army.id);
+
+        assert.ok(!war.force(joining.id) && !host.armies.has(joining.id), "joined it");
+        assert.equal(army.size, 17);
+        assert.ok(told.ids.every((id) => met.ids.includes(id) && host.battle.actor(id).formation.id === met.formation && host.soldiers.get(id).force === army.id), "each of them one of its line");
+        assert.equal(alive(host, army.id).length, 17);
+        assert.ok(!later.some(({ type, force, met: first }) => type === "army" && force === army.id && !first), "none stood up anew for them");
+    });
+
+    it("has an enemy army met fall on reinforcements met, fought out in the world, the war not reckoning it itself; put down to the last, they're gone", () => {
+        const { host, war, middle: [mx, my] } = hosted();
+        const theirs = afield(war, "human", [mx - 600, my], [mx - 600, my], 12, "force-900");
+        const joining = column(war, "human", [mx + 230, my + 40], theirs, 6, "force-901");
+        const orcs = afield(war, "orc", [mx + 230, my - 40], [mx + 230, my - 40], 20, "force-902");
+
+        Object.assign(theirs, { mission: "regroup", about: null });
+        Object.assign(orcs, { mission: "regroup", about: null });
+
+        const events = [];
+
+        for (let k = 0; k < 180 && war.force(joining.id); k++) {
+            events.push(...run(host, 1000, () => (war.relations["human|orc"] = { state: "hostile", since: 0 })));
+        }
+
+        assert.equal(war.force(joining.id), null, "put down");
+        assert.ok(events.some(({ type, event }) => type === "war" && event.type === "intercepted" && event.by === "orc" && event.lost === 0), "by the orcs, in the world");
+        assert.equal(orcs.size, alive(host, orcs.id).length, "the orcs' every fall counted");
+
+        // (Let go, with them gone in the war)
+        run(host, 500);
+        assert.ok(!host.armies.has(joining.id));
     });
 });
