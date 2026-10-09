@@ -5325,7 +5325,9 @@ export class Game {
     // Something put on an action wheel (an ACTIONS key, or "item:" and a thing to use): the
     // player's own (`wheel`: "self"), or an enemy's; at the first empty slice
     #putOnWheel(key, wheel = "self") {
-        const label = key.startsWith("item:") ? itemLabel({ id: key.slice(5) }) : actionOf(key)?.label;
+        // (A spell's scroll by its own name, not its spell's: "Scroll of Fireball")
+        const action = actionOf(key);
+        const label = ITEMS[action?.item]?.use?.cast ? itemLabel({ id: action.item }) : (action?.label ?? itemLabel({ id: key.slice(5) }));
         const whose = wheel === "self" ? "your own wheel" : "an enemy's wheel";
         const where = (side, place) => `${whose} ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
         const sides = this.wheels[wheel];
