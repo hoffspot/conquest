@@ -48,7 +48,8 @@ import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../au
 import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
-import { CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
+import { PALISADE } from "../core/war/armies.js";
+import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -79,6 +80,7 @@ import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { FortAvatar, Forts } from "../world/forts3d.js";
+import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
@@ -492,7 +494,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1141,6 +1143,8 @@ export class Game {
         // (And the fortifications standing near the player: world/forts3d.js, #syncForts)
         this.forts3d = new Forts(view.scene, view.far.scene);
         this.fortsClock = 0;
+        // (And the armies' camps' stockades: world/stockades3d.js, #syncStockades)
+        this.stockades = new Stockades(view.scene);
         this.carried = new CarriedTorches(view.scene);
         this.globes = new LightGlobes(view.scene);
         this.pinMarks = new PinMarks(view.scene, view.far.scene);
@@ -1156,6 +1160,7 @@ export class Game {
         this.banners.setGround(this.groundOf("town"));
         this.camps.setGround(this.groundOf("town"));
         this.forts3d.setGround(this.groundOf("town"));
+        this.stockades.setGround(this.groundOf("town"));
 
         // What flies over the world outside: birds of each land, and the wyverns and the dragon
         // near their lairs (flyers3d.js)
@@ -1730,6 +1735,7 @@ export class Game {
         this.banners?.dispose();
         this.camps?.dispose();
         this.forts3d?.dispose();
+        this.stockades?.dispose();
         this.carried?.dispose();
         this.globes?.dispose();
         this.pinMarks?.dispose();
@@ -2144,11 +2150,15 @@ export class Game {
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
 
-        // (The fortifications standing near the player drawn, a couple of times a second)
+        // (The fortifications and the camps' stockades standing near the player drawn, a couple of
+        // times a second; a stockade's mended stakes rising every frame)
         if ((this.fortsClock -= dt) <= 0) {
             this.fortsClock = 0.5;
             this.#syncForts();
+            this.#syncStockades();
         }
+
+        this.stockades?.update(dt);
         this.contacts?.begin();
         this.#marshal(dt);
         this.#crowding();
@@ -5553,6 +5563,28 @@ export class Game {
         }
     }
 
+    // The armies' camps' stockades standing near the player drawn (world/stockades3d.js): each
+    // camp's once it's built, broken open where it's breached, with fresh stakes ready by a breach
+    // while its people have the wood to mend it (war.js PALISADE)
+    #syncStockades() {
+        const war = this.host?.war;
+        const me = this.battle.actor(this.me);
+
+        if (!war?.camps || !me || !this.stockades) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf("town");
+        const stockades =
+            me.map === "town"
+                ? war.camps
+                      .filter((camp) => camp.built !== null)
+                      .map((camp) => ({ id: camp.id, people: camp.realm, stockade: war.stockade(camp.id), breaches: camp.breaches ?? 0, mendable: affords(war.realm(camp.realm)?.stores, PALISADE.stakes) }))
+                : [];
+
+        this.stockades.sync(stockades, [ox + me.x, oz + me.y], [ox, oz]);
+    }
+
     // A fortification near the player let go from the battle: far off now, or razed (said, and its
     // stone taken down: #syncForts)
     #fortDown({ fort: id, razed = false, kind, people, by = null }) {
@@ -6378,6 +6410,15 @@ export class Game {
 
                 break;
             }
+            case "stockades":
+                // (A camp's stockade gone up or come down, breached or mended: the ground under it
+                // and round it drawn again, as the world's squares were made again: core/
+                // overworld.js setStockades)
+                for (const box of event.boxes) {
+                    this.chunks?.redraw(box);
+                }
+
+                break;
             case "war":
                 // (A fortification gone up or come down: the ground under it, and round it, drawn
                 // again: core/overworld.js setForts. Not a camp: nothing's built under it)

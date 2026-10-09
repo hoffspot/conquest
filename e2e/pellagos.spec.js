@@ -3590,7 +3590,7 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
-test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries and its scout; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
+test("an enemy army's camp near the player is pitched within its stockade, tents, fire, banner and its guard as sentries and its scout; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     // An orc army's camp just outside the town, at war with the humans; the player by it
@@ -3624,8 +3624,15 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
         const player = game.battle.actor("player");
         const sentries = game.host.camps.get("camp-900")?.ids ?? [];
 
+        // (Its stockade round it, its wall over the world's squares)
+        const stockade = game.host.war.stockade("camp-900");
+        const [wx, wy] = stockade.sections[0].wall[0];
+        const chunk = game.world.maps.town.chunkAt(wx, wy);
+
         return {
             drawn: game.camps.size,
+            stockade: game.stockades.size,
+            wall: chunk.solid[(wy - chunk.y0) * 64 + (wx - chunk.x0)],
             tents: game.camps.camps.get("camp-900")?.object.children.length ?? 0,
             banner: game.banners.group.children.some(({ name }) => name === "banner:camp:camp-900"),
             sentries: sentries.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id), hostile: game.battle.hostile(game.battle.actor(id), player) })),
@@ -3633,6 +3640,8 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     });
 
     expect(camp.drawn).toBe(1);
+    expect(camp.stockade).toBe(1);
+    expect(camp.wall).toBe(1);
     expect(camp.tents).toBeGreaterThan(5);
     expect(camp.banner).toBe(true);
     // (Its guard of 6: five sentries round its fire, and its scout out on its round)

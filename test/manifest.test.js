@@ -35,15 +35,15 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         }
     });
 
-    test("has the engine, the navigation meshes' Recast, the code, the body, its skin, the fonts and the models, and nothing main.js has already loaded", () => {
-        assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "navigation", "code", "body", "skin", "fonts", "models"]);
+    test("has the engine, the navigation meshes' Recast, the code, the body, its skin and the fonts, and nothing main.js has already loaded", () => {
+        assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "navigation", "code", "body", "skin", "fonts"]);
 
         const paths = MANIFEST.flatMap(({ files }) => files.map(([path]) => path));
         // (The game's body and every mask, picture and skin picture it names: body.js GAME_BODY)
         const { masks, pictures = {}, skin = {} } = readHumanFiles().manifest;
         const body = [`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`, ...[...masks, ...Object.values(pictures), ...Object.values(skin)].map((file) => `characters/${file}`)];
 
-        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2", "models/jmi/chest.glb"]) {
+        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2"]) {
             assert.ok(paths.includes(needed), needed);
         }
 
@@ -52,10 +52,10 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         }
     });
 
-    test("gives the data (the body, its skin, the models) the hash of its bytes, and the code and fonts, asked for by name, none", async () => {
+    test("gives the data (the body and its skin) the hash of its bytes, and the code and fonts, asked for by name, none", async () => {
         for (const { id, files } of MANIFEST) {
             for (const [path, , hash] of files) {
-                if (["body", "skin", "models"].includes(id)) {
+                if (["body", "skin"].includes(id)) {
                     assert.equal(hash, await hashOf(path), path);
                 } else {
                     assert.equal(hash, undefined, path);

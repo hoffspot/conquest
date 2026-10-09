@@ -22,6 +22,7 @@ import { ARMY, CAMP, campSite, CLOSE, EDGES, fullOf, HELD, LEADERS, PALISADE, RE
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { ACROSS_COUNTRY, Roads } from "./roads.js";
+import { frontOf, standsAt, stockadeOf } from "./stockade.js";
 import { DEPOT, HUNGER, SUPPLY } from "./supply.js";
 import { atan2, cos, hypot, sin } from "../exact.js";
 import { landAt } from "../worldplan/plan.js";
@@ -202,7 +203,7 @@ export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols
 export const TAKEN = 0.25;
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 7;
+export const WAR_VERSION = 8;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -333,7 +334,9 @@ export class War {
          * The forward camps the armies are staged from (armies.js CAMP): { id, realm, at, guard
          * (those holding it), built (the turn it was finished: null while it's going up), done
          * (when it will be), toward (the town or works it was built before), used (the turn an
-         * army was last near it), skirmished (the turn its skirmishers last went out) }.
+         * army was last near it), skirmished (the turn its skirmishers last went out), breaches
+         * (its palisade's: PALISADE), troubled (the turn an enemy was last near it), front (the
+         * side its stockade's front gate is on: stockade.js SIDES) }.
          */
         this.camps = [];
         this.nextCamp = 1;
@@ -414,6 +417,16 @@ export class War {
     /** A camp (by its id), or null. */
     camp(id) {
         return this.camps.find((camp) => camp.id === id) ?? null;
+    }
+
+    /**
+     * A camp's stockade as it stands in the world (stockade.js stockadeOf), by the camp's id: its
+     * front gate towards what it was pitched against. Null if there's no such camp.
+     */
+    stockade(id) {
+        const camp = this.camp(id);
+
+        return camp && stockadeOf({ id: camp.id, at: camp.at, front: camp.front ?? frontOf(camp.id, camp.at, this.#targetOf(camp.toward)?.at) });
     }
 
     /** A supply depot (supply.js), by its id, or null. */
@@ -1292,7 +1305,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5, 6].includes(snapshot.version)) {
+        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5, 6, 7].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -1326,9 +1339,15 @@ export class War {
         // (version 3), each forward garrison's are whole)
         war.forts = (kept.forts ?? []).map((fort) => ({ ...fort, struck: fort.struck ?? null, ...(fort.kind === "garrison" && !fort.squads ? fullSquads(kept.turn) : {}) }));
         war.nextFort = kept.nextFort ?? 1;
-        // (A camp kept before their palisades (version 6 or before) has none breached: none kept)
+        // (A camp kept before their palisades (version 6 or before) has none breached: none kept;
+        // before their stockades in the world (version 7), it faces what it's pitched against)
         war.camps = kept.camps ?? [];
         war.nextCamp = kept.nextCamp ?? 1;
+
+        for (const camp of kept.version < 8 ? war.camps : []) {
+            camp.front ??= frontOf(camp.id, camp.at, war.#targetOf(camp.toward)?.at);
+        }
+
         war.depots = kept.depots ?? [];
         war.nextDepot = kept.nextDepot ?? 1;
 
@@ -2449,14 +2468,15 @@ export class War {
             return false;
         }
 
-        this.#toCamp(army, this.#siteFor(army.at, target.at, target.edge + CAMP.reach * 0.6), id);
+        this.#toCamp(army, this.#siteFor(army.at, target.at, target.edge + CAMP.reach * 0.6, { stockade: true }), id);
 
         return true;
     }
 
     // Where a camp before something may go: `out` metres from it on the way from `from`, or turned
-    // a little either way, on dry land off the roads; or there anyway, failing that
-    #siteFor(from, to, out) {
+    // a little either way, on dry land off the roads (and a camp's, with room for its stockade:
+    // stockade.js standsAt); or there anyway, failing that
+    #siteFor(from, to, out, { stockade = false } = {}) {
         const [dx, dy] = [from[0] - to[0], from[1] - to[1]];
         const heading = atan2(dx, dy);
 
@@ -2464,7 +2484,7 @@ export class War {
             const at = campSite([to[0] + sin(heading + turn) * (out + 1), to[1] + cos(heading + turn) * (out + 1)], to, out);
             const land = landAt(this.plan, at[0], at[1]);
 
-            if (land.water === WATER.none && !land.road && land.biome !== "sea") {
+            if (land.water === WATER.none && !land.road && land.biome !== "sea" && (!stockade || standsAt(this.plan, at))) {
                 return at;
             }
         }
@@ -2647,7 +2667,7 @@ export class War {
         const { at, edge } = this.#targetOf(aim.id);
 
         if (!this.#toAttack(army, aim.id)) {
-            this.#toCamp(army, this.#siteFor(army.at, at, edge + CAMP.reach * 0.6), aim.id);
+            this.#toCamp(army, this.#siteFor(army.at, at, edge + CAMP.reach * 0.6, { stockade: true }), aim.id);
         }
 
         this.#emit("marched", { realm: army.realm, army: army.id, target: aim.id, size: army.size });
@@ -2717,7 +2737,10 @@ export class War {
         }
 
         const guard = Math.min(CAMP.guard, Math.max(0, army.size - 1));
-        const camp = { id: `camp-${this.nextCamp++}`, realm: army.realm, at: [...(army.about ?? army.at)], guard, built: null, done: this.turn + CAMP.build, toward: army.target, used: this.turn, skirmished: this.turn, breaches: 0, troubled: null };
+        const [id, at] = [`camp-${this.nextCamp++}`, [...(army.about ?? army.at)]];
+        // (Its stockade's front gate towards what it's pitched against: stockade.js)
+        const front = frontOf(id, at, this.#targetOf(army.target)?.at);
+        const camp = { id, realm: army.realm, at, guard, built: null, done: this.turn + CAMP.build, toward: army.target, used: this.turn, skirmished: this.turn, breaches: 0, troubled: null, front };
 
         realm.treasury -= CAMP.cost;
         army.size -= guard;
@@ -3649,7 +3672,7 @@ export class War {
 
             if (cover) {
                 if (!this.#toAttack(army, cover.id)) {
-                    this.#toCamp(army, this.#siteFor(army.at, cover.at, CAMP.reach * 0.6), cover.id);
+                    this.#toCamp(army, this.#siteFor(army.at, cover.at, CAMP.reach * 0.6, { stockade: true }), cover.id);
                 }
 
                 return;
