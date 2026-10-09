@@ -2118,7 +2118,7 @@ export class Overworld {
  */
 export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } = {}) {
     const start = startFor(plan, race);
-    const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race });
+    const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race, master: start.master ?? null });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
 
     const walks = town.town.walks.map(({ a, b, ...walk }) => ({ ...walk, a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]] }));

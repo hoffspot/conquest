@@ -9,7 +9,7 @@ import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "..
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
 import { siteSize, Sites } from "../client/js/core/sites.js";
-import { ENTERED, GROUND, HOME_TREES, PLOT, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { ENTERED, GROUND, HOME_TREES, PLOT, SHOP_LANDMARKS, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
 import { layoutTown, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
 
@@ -531,14 +531,15 @@ describe("the settlements out in the world (settlements.js)", () => {
         assert.ok(far.length > overworld.settlements.places.length / 2);
     });
 
-    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern (a town hall only in a town or city, a keep in a capital)", () => {
+    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern (a town hall only in a town or city, a keep in a capital, the specialists' shops only in a town or more, a master's where it's kept)", () => {
         const names = settlement.town.pieces.filter(({ kind }) => kind === "landmark").map(({ name }) => name);
 
-        for (const name of ENTERED.filter((each) => each !== "hall" && each !== "keep")) {
+        for (const name of ENTERED.filter((each) => each !== "hall" && each !== "keep" && !SHOP_LANDMARKS.includes(each))) {
             assert.ok(names.includes(name), name);
         }
 
         assert.ok(!names.includes("hall") && !names.includes("keep"));
+        assert.deepEqual(names.filter((name) => SHOP_LANDMARKS.includes(name)), village.master ? [village.master] : []);
     });
 
     it("are set into the world as they were laid out, their pieces each in one chunk", () => {

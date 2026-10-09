@@ -141,7 +141,7 @@ export class Settlements {
 
     /** What laying a place out takes (layoutTown's options), for laying it out elsewhere. */
     specOf(place) {
-        return { seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place), people: place.race ?? "human" };
+        return { seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place), people: place.race ?? "human", master: place.master ?? null };
     }
 
     /**

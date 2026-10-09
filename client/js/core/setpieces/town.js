@@ -24,7 +24,7 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "../exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { churchOf, ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { churchOf, ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, SPECIALISTS, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -64,6 +64,13 @@ export const PEOPLE_TOWNS = Object.freeze({
     elf: { bend: 0.9, lots: { width: [11, 14], depth: [11, 14] }, gap: [2.5, 5], trees: 45, windmill: false, wall: 48 },
     darkElf: { ways: "web", spokes: 7, bend: 0.1, rings: [0.38, 0.68, 0.96], lots: { width: [8, 11], depth: [9, 11] }, gap: [0, 0.6], windmill: false, wall: 30, market: 1.35 },
 });
+
+/**
+ * Whether a kind of settlement (SETTLEMENT_KINDS) keeps the specialists' shops (pieces.js
+ * SPECIALISTS): one with a church, an adventurers' guild, a blacksmith and a seat (a town hall,
+ * or greater: a town, a city or a capital).
+ */
+export const keepsShops = (spec) => Boolean(spec?.seat) && ["church", "guild", "blacksmith"].every((name) => spec.landmarks.includes(name));
 
 // How far out a settlement's barracks stands (shares of its radius: from, to), where it can
 const BARRACKS_OUT = Object.freeze([0.35, 0.8]);
@@ -163,7 +170,7 @@ const ATTEMPTS = 20;
  * is drawn over which where they overlap: WALK_LAYERS, the last a square of deck across a bend,
  * filling its outside) }]) }.
  */
-export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
+export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human", master = null } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
 
     if (!spec) {
@@ -174,7 +181,7 @@ export function layoutTown({ seed = 1, kind = "town", exits = null, people = "hu
     const look = PEOPLE_TOWNS[people] ?? PEOPLE_TOWNS.human;
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919, look, people);
+        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919, look, people, master);
 
         if (town) {
             return { kind, seed, people, ...town };
@@ -283,7 +290,7 @@ const facingOf = (vx, vy) => atan2(vx, vy);
 
 // --- Laying it out ---
 
-function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people = "human") {
+function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people = "human", master = null) {
     const other = people !== "human";
     const size = 2 * Math.round(spec.radius + spec.fields);
     const [width, height] = [size, size];
@@ -477,15 +484,15 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     const building = (rect) => fits(rect, NEIGHBOUR, [USE.building, USE.thing]) && fits(rect, CLEAR, [USE.street]) && fits(rect, 0, [USE.yard]);
     // (What's gone into, or a people's own place, opens onto dry land or a walk: the squares before
     // the middle of its front, where its door is, never the lagoon's but under a walk)
-    const opens = (rect) =>
-        !water ||
-        [0.6, 1.5].every((out) =>
-            [-0.8, 0, 0.8].every((across) => {
-                const [i, j] = [rect.x + rect.az[0] * (rect.d / 2 + out) + rect.ax[0] * across, rect.y + rect.az[1] * (rect.d / 2 + out) + rect.ax[1] * across].map(Math.floor);
+    const before = (rect, out, across) => {
+        const [i, j] = [rect.x + rect.az[0] * (rect.d / 2 + out) + rect.ax[0] * across, rect.y + rect.az[1] * (rect.d / 2 + out) + rect.ax[1] * across].map(Math.floor);
 
-                return !water[j]?.[i] || onWalk(walks, i + 0.5, j + 0.5);
-            }),
-        );
+        return !water[j]?.[i] || onWalk(walks, i + 0.5, j + 0.5);
+    };
+    const opens = (rect) => !water || [0.6, 1.5].every((out) => [-0.8, 0, 0.8].every((across) => before(rect, out, across)));
+    // (Or, for a shop where no house is left that opens so, its doorstep's middle on land or a
+    // walk, and the walk all across before it a step further out)
+    const steps = (rect) => !water || (before(rect, 0.6, 0) && [-0.8, 0, 0.8].every((across) => before(rect, 1.5, across)));
     const landmark = (rect) => building(rect) && opens(rect);
     const fitsOn = (rect, grow, on) => eachSquare(rect, grow, (i, j) => inside(i, j) && on.includes(use[j * width + i]));
 
@@ -1019,6 +1026,36 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
             Object.assign(quarters, { key: landmarkKey("barracks"), kind: "landmark", name: "barracks", ...identity("barracks"), grade: spec.barracks, style, storeys: Math.max(1, storeys ?? 1) });
         }
+    }
+
+    // Its shops (docs/WAR.md *Shops*): a town's, a city's or a capital's specialists
+    // (pieces.js SPECIALISTS), and the master's shop of its people kept here, if one is (`master`:
+    // the world plan's, worldplan/settle.js: pieces.js MASTER_SHOPS); each the house nearest the
+    // market whose door opens onto a street (on dry land and on the street if one can be; failing
+    // that, over a lagoon with its doorstep on a walk), made over as its seat is, and nothing else
+    // moved
+    for (const name of [...(keepsShops(spec) ? SPECIALISTS : []), ...(master ? [master] : [])]) {
+        const houses = pieces.filter(({ kind }) => kind === "house");
+        const opening = houses.filter(({ x, y, w, h, facing }) => opens(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const fronts = opening.filter(({ back }) => !back);
+        const stepping = houses.filter(({ back, x, y, w, h, facing }) => !back && steps(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const near = (house) => length(house.x - centre[0], house.y - centre[1]);
+        const shop = [fronts.filter(({ water: wet }) => !wet), fronts, opening, stepping].find((each) => each.length)?.reduce((best, house) => (near(house) < near(best) - 1e-9 ? house : best));
+
+        // (No house left to make over: laid out again)
+        if (!shop) {
+            return null;
+        }
+
+        const { style, storeys } = shop;
+
+        for (const key of Object.keys(shop)) {
+            if (!["x", "y", "w", "h", "facing", "people", "water"].includes(key)) {
+                delete shop[key];
+            }
+        }
+
+        Object.assign(shop, { key: landmarkKey(name), kind: "landmark", name, ...identity(name), style, storeys: Math.max(1, storeys ?? 1) });
     }
 
     // The yards as they're drawn; their fences stand on the squares along their sides

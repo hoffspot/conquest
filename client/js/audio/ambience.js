@@ -43,6 +43,7 @@ export const INDOORS = Object.freeze({
     temple: { beds: { templeLoop: 1 } },
     guild: { beds: { tavernLoop: 0.35 }, wants: ["rustle"] },
     hall: { beds: { templeLoop: 0.4 }, wants: ["rustle"] },
+    shop: { beds: { templeLoop: 0.25 }, wants: ["rustle"] },
     keep: { beds: { cryptLoop: 0.5 } },
     undercroft: { beds: { cryptLoop: 0.8, brazierLoop: 0.35 } },
     cave: { beds: { caveDrips: 1 } },

@@ -165,7 +165,7 @@ export const CATALOG = Object.freeze({
     fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
     fallArmoured: { group: "Bodies and doors", label: "An armoured body falling", about: "A body falling, with mail rattling down after it.", plays: "Anyone in mail or plate falling, as they hit the ground." },
     dropWeapon: { group: "Bodies and doors", label: "A weapon dropped", about: "Iron clattering onto a hard floor.", plays: "Anyone armed falling dead: what they fought with, just after they hit the ground." },
-    door: { group: "Bodies and doors", label: "A door", about: "An old wooden door: a creak or the latch, then it shutting. kyles's rattly old door, on Freesound.", plays: "Anyone going through a house's, a tavern's, a smithy's or a guild's door on the player's side of it." },
+    door: { group: "Bodies and doors", label: "A door", about: "An old wooden door: a creak or the latch, then it shutting. kyles's rattly old door, on Freesound.", plays: "Anyone going through a house's, a tavern's, a smithy's, a guild's or a shop's door on the player's side of it." },
     deathThudSmall: { group: "Bodies and doors", label: "A small body falling", about: "A small body dropping onto leaves.", plays: "A small creature (a rat, a porcupine, an adder, a spider, a scorpion, a frog) falling dead, as it hits the ground." },
     deathThudMid: { group: "Bodies and doors", label: "A beast falling", about: "A body falling to the ground, on leaves or a carpet.", plays: "A wolf, a dire wolf, a black shuck, a hyena, a boar, a puma or a shadow stalker falling dead, as it hits the ground." },
     deathThudBig: { group: "Bodies and doors", label: "A great beast falling", about: "A heavy body falling on dirt, slowed.", plays: "A bear, a crocodile, a rock tusker, a wyvern or a dragon falling dead, as it hits the ground." },
@@ -269,7 +269,7 @@ export const CATALOG = Object.freeze({
     hiss: { group: "Folk at work", label: "Quenching", about: "Hot iron plunged in water, hissing as the steam dies away: rabban625's hot shovel quenched, and TRP's water on hot sauna stones.", plays: "The smith quenching the work." },
     bellows: { group: "Folk at work", label: "Bellows", about: "A great leather bellows' breath, its flaps fluttering: noisymichael's, in an old mill.", plays: "The smith's assistant pumping the bellows; the forge's fire stirred." },
     grind: { group: "Folk at work", label: "Grindstone", about: "A knife drawn over a turning grindstone, three or four strokes: florianreichelt's.", plays: "The smith's assistant cranking the grindstone." },
-    rustle: { group: "Folk at work", label: "Papers", about: "A few dry crinkles of paper: keweldog's.", plays: "The guild's receptionist filing, and the folk reading." },
+    rustle: { group: "Folk at work", label: "Papers", about: "A few dry crinkles of paper: keweldog's.", plays: "The guild's receptionist filing, the folk reading, and in a town hall or a shop." },
     distantHammer: { group: "Folk at work", label: "The smith at work, off", about: "A blacksmith hand-hammering at the smithy, recorded there by ldezem; heard from the street, through a low-pass filter.", plays: "By day, near a town's smithy: three or four blows every 5 to 12 seconds, from the smithy." },
 
     // The world (the environment's bus: ambience.js's beds, each looped round and round, and the
@@ -314,7 +314,7 @@ export const CATALOG = Object.freeze({
     // Indoors (ambience.js INDOORS)
     tavernLoop: { group: "Indoors", label: "A tavern", about: "A lively pub's crowd: ondondvo's, in Czechia. A 29-second loop.", plays: "In a tavern's taproom; quieter upstairs and in an adventurers' guild." },
     hearthLoop: { group: "Indoors", label: "A hearth", about: "A fire crackling gently: florianreichelt's. A 26-second loop.", plays: "In a tavern's taproom, louder nearer the hearth." },
-    templeLoop: { group: "Indoors", label: "A temple", about: "The hush of an old church: its air and a low rumble (composingatnight's). A 21.5-second loop.", plays: "In a temple or an abbey; quieter in a town hall." },
+    templeLoop: { group: "Indoors", label: "A temple", about: "The hush of an old church: its air and a low rumble (composingatnight's). A 21.5-second loop.", plays: "In a temple or an abbey; quieter in a town hall, and quieter still in a shop." },
     cryptLoop: { group: "Indoors", label: "A crypt", about: "A cellar's still air: kyles's. A 27-second loop.", plays: "In a crypt and a castle's undercroft; quieter in a keep." },
     caveDrips: { group: "Indoors", label: "Drips in a cave", about: "Water dripping in a small cave: Selector's. A 32-second loop.", plays: "In a cave; quieter in a crypt and a ruined keep." },
     lairLoop: { group: "Indoors", label: "The dragon's lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the dragon's lair." },
@@ -381,6 +381,7 @@ export const MUSIC = Object.freeze({
     temple: { label: "In a temple", about: "The town's music hushed, far off through thick walls.", plays: "In a temple." },
     guild: { label: "In an adventurers' guild", about: "The tavern's jig, a little quieter: the guild's as lively.", plays: "In an adventurers' guild." },
     hall: { label: "In a town hall", about: "The town's music through the hall's windows.", plays: "In a town hall." },
+    shop: { label: "In a shop", about: "The town's music through the shop's windows, a little nearer than a hall's.", plays: "In a swordsmith's, an armorer's, an occult scriptorium, an alchemist's, and the masters' shops." },
     keep: { label: "In a keep", about: "The town's music far off through stone.", plays: "In a keep, a castle's or a citadel's." },
     undercroft: { label: "In an undercroft", about: "The town's music further off yet, under the keep's great hall.", plays: "In a castle keep's undercroft, with its smith, quartermaster and arcanist." },
     cave: { label: "In a cave", about: "The world outside barely heard.", plays: "In a cave." },

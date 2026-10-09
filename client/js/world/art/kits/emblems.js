@@ -567,6 +567,163 @@ const PAINTERS = {
         }, { outline: 0.03 });
     },
 
+    // The specialists' and the masters' shops (docs/WAR.md *Shops*): an alchemist's flask, an
+    // occult scriptorium's open book and quill, an armorer's helm, a master swordsmith's crossed
+    // blades under a crown, and the Mystic Emporium's crystal orb
+    flask(c, colour) {
+        // A round-bellied flask, its neck stoppered, a draught of the colour in it, bubbles rising
+        solid(c, "#cfe6ea", (p) => {
+            p.moveTo(-0.16, -0.75);
+            p.lineTo(-0.16, -0.32);
+            p.bezierCurveTo(-0.75, -0.12, -0.78, 0.82, 0, 0.85);
+            p.bezierCurveTo(0.78, 0.82, 0.75, -0.12, 0.16, -0.32);
+            p.lineTo(0.16, -0.75);
+            p.closePath();
+        });
+        solid(c, colour, (p) => {
+            p.moveTo(-0.62, 0.12);
+            p.bezierCurveTo(-0.3, 0.02, 0.3, 0.22, 0.62, 0.12);
+            p.bezierCurveTo(0.62, 0.62, 0.35, 0.8, 0, 0.8);
+            p.bezierCurveTo(-0.35, 0.8, -0.62, 0.62, -0.62, 0.12);
+        }, { outline: 0.03 });
+        solid(c, "#7a5230", (p) => p.rect(-0.2, -0.95, 0.4, 0.24));
+
+        for (const [x, y, r] of [[-0.18, 0.45, 0.07], [0.12, 0.3, 0.05], [0.02, 0.58, 0.04]]) {
+            solid(c, "#f2f8f8", (p) => p.arc(x, y, r, 0, TAU), { outline: 0.02, light: false });
+        }
+    },
+
+    book(c, colour) {
+        // An open book, its pages lined, a quill across it
+        solid(c, colour, (p) => {
+            p.moveTo(-0.95, -0.45);
+            p.quadraticCurveTo(-0.45, -0.62, 0, -0.42);
+            p.quadraticCurveTo(0.45, -0.62, 0.95, -0.45);
+            p.lineTo(0.95, 0.55);
+            p.quadraticCurveTo(0.45, 0.4, 0, 0.6);
+            p.quadraticCurveTo(-0.45, 0.4, -0.95, 0.55);
+            p.closePath();
+        });
+
+        for (const side of [-1, 1]) {
+            solid(c, "#efe4c4", (p) => {
+                p.moveTo(side * 0.06, -0.36);
+                p.quadraticCurveTo(side * 0.45, -0.52, side * 0.86, -0.38);
+                p.lineTo(side * 0.86, 0.45);
+                p.quadraticCurveTo(side * 0.45, 0.32, side * 0.06, 0.5);
+                p.closePath();
+            }, { outline: 0.03 });
+
+            for (let k = 0; k < 5; k++) {
+                const y = -0.22 + k * 0.15;
+
+                line(c, "rgba(60, 40, 20, 0.6)", 0.03, [[side * 0.18, y], [side * 0.74, y - 0.03]]);
+            }
+        }
+
+        solid(c, "#f6f2ea", (p) => {
+            p.moveTo(0.35, 0.35);
+            p.bezierCurveTo(0.55, -0.1, 0.8, -0.6, 0.95, -0.92);
+            p.bezierCurveTo(0.7, -0.6, 0.55, -0.2, 0.42, 0.33);
+            p.closePath();
+        }, { outline: 0.025 });
+    },
+
+    helm(c, colour) {
+        // A great helm, face on: its eye slit, breaths pierced below, a crest of the colour
+        solid(c, colour, (p) => {
+            p.moveTo(-0.12, -0.62);
+            p.quadraticCurveTo(0, -1, 0.12, -0.62);
+            p.closePath();
+        });
+        solid(c, "#c8cfd6", (p) => {
+            p.moveTo(-0.58, 0.82);
+            p.lineTo(-0.62, -0.3);
+            p.quadraticCurveTo(-0.6, -0.72, 0, -0.74);
+            p.quadraticCurveTo(0.6, -0.72, 0.62, -0.3);
+            p.lineTo(0.58, 0.82);
+            p.closePath();
+        });
+        solid(c, "#1a1612", (p) => p.rect(-0.5, -0.18, 1, 0.1), { outline: 0.02, light: false });
+        solid(c, colour, (p) => p.rect(-0.05, -0.08, 0.1, 0.86), { outline: 0.02 });
+
+        for (const y of [0.2, 0.36, 0.52]) {
+            for (const x of [-0.32, -0.2, 0.2, 0.32]) {
+                solid(c, "#1a1612", (p) => p.arc(x, y, 0.03, 0, TAU), { outline: 0, light: false });
+            }
+        }
+    },
+
+    blades(c, colour) {
+        // Two swords crossed, points up, under a crown
+        for (const side of [-1, 1]) {
+            c.save();
+            c.translate(0, 0.2);
+            c.rotate(side * 0.6);
+            solid(c, "#dfe4ea", (p) => {
+                p.moveTo(-0.07, 0.4);
+                p.lineTo(-0.07, -0.78);
+                p.lineTo(0, -0.95);
+                p.lineTo(0.07, -0.78);
+                p.lineTo(0.07, 0.4);
+                p.closePath();
+            });
+            solid(c, colour, (p) => p.rect(-0.3, 0.38, 0.6, 0.09));
+            solid(c, "#5a3a22", (p) => p.rect(-0.05, 0.47, 0.1, 0.32));
+            solid(c, colour, (p) => p.arc(0, 0.84, 0.08, 0, TAU));
+            c.restore();
+        }
+
+        solid(c, colour, (p) => {
+            p.moveTo(-0.42, -0.5);
+            p.lineTo(-0.42, -0.82);
+            p.lineTo(-0.22, -0.66);
+            p.lineTo(0, -0.95);
+            p.lineTo(0.22, -0.66);
+            p.lineTo(0.42, -0.82);
+            p.lineTo(0.42, -0.5);
+            p.closePath();
+        });
+    },
+
+    orb(c, colour) {
+        // A crystal orb on a carved stand, a light in it, stars of the colour about it
+        solid(c, "#6a4a2a", (p) => {
+            p.moveTo(-0.45, 0.92);
+            p.lineTo(-0.3, 0.55);
+            p.lineTo(0.3, 0.55);
+            p.lineTo(0.45, 0.92);
+            p.closePath();
+        });
+
+        // (Its light the arcane's violet, whatever the sign's gilt)
+        const glow = c.createRadialGradient(-0.12, -0.18, 0.05, 0, 0, 0.62);
+
+        glow.addColorStop(0, "#ffffff");
+        glow.addColorStop(0.35, "#b48cff");
+        glow.addColorStop(1, shade("#5a2aa8", 0.6));
+        c.beginPath();
+        c.arc(0, -0.02, 0.6, 0, TAU);
+        c.fillStyle = glow;
+        c.fill();
+        c.lineWidth = 0.07;
+        c.strokeStyle = "rgba(20, 12, 6, 0.9)";
+        c.stroke();
+
+        for (const [x, y, r] of [[-0.82, -0.7, 0.12], [0.8, -0.55, 0.09], [0.72, 0.5, 0.07], [-0.78, 0.3, 0.08]]) {
+            solid(c, colour, (p) => {
+                for (let k = 0; k < 4; k++) {
+                    const a = (k / 4) * TAU;
+
+                    p.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+                    p.lineTo(x + Math.cos(a + TAU / 8) * r * 0.35, y + Math.sin(a + TAU / 8) * r * 0.35);
+                }
+
+                p.closePath();
+            }, { outline: 0.02 });
+        }
+    },
+
     sunburst(c, colour) {
         // The Six's mark: a sun of six rays, a flame at its heart
         solid(c, colour, (p) => {

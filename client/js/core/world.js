@@ -71,9 +71,9 @@ export const SEE_OVER = /^prop-/;
  * facing }, ...] }]: the tavern's door and stairs), folk (the tavern's: interiors.js tavernFolk,
  * each named: names.js; none without a tavern) }.
  */
-export function generateWorld({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
+export function generateWorld({ seed = 1, kind = "town", exits = null, people = "human", master = null } = {}) {
     const random = createRandom(seed);
-    const laid = layoutTown({ seed: random.seed(), kind, exits, people });
+    const laid = layoutTown({ seed: random.seed(), kind, exits, people, master });
 
     // (The town's first tavern is Wenches and Ale, whatever else the layout would call it)
     const first = laid.pieces.find(({ key }) => key === landmarkKey("tavern"));

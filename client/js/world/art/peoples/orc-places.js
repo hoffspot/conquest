@@ -22,6 +22,7 @@ import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from 
 import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, lamp, m, pole, post, randomFor, southSide, spike, stake, steps, wallPoint } from "./kit.js";
 import { blockHouse, longhouse, rack, roundHut, skull, standard, tent, toned, tusk, warBanner } from "./orc.js";
+import { dressShop, SHOP_NAMES, SHOPFRONTS } from "../kits/shopfront.js";
 
 // A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round, in
 // front of its upright frame from top to bottom however far the wall leans back
@@ -486,7 +487,44 @@ export function windmill(piece) {
     return lookout(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
+/**
+ * A specialist's or a master's shop (kits/shopfront.js SHOPFRONTS), built as the war band's lodge is, a longhouse: its name on
+ * a board hung under the front of its porch, its sign on the porch's post, and what it sells set out before it.
+ */
+export async function shop(piece) {
+    await loadSignFont();
+
+    const front = SHOPFRONTS[piece.name];
+    const random = randomFor(piece, 29);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const doorFace = D - m(ENTRY) + m(0.25);
+    const middle = Math.min(m(7.5), (doorFace - m(0.8)) * 0.85);
+    const cz = doorFace - middle / 2 - m(0.05);
+    const porch = doorFace - m(0.05) + m(2.75);
+    const wide = front.name.length > 12 ? m(2.8) : m(2);
+    const low = m(2.55) + wide * (9 / 56) > m(3.2) ? m(3.2) - wide * (9 / 56) : m(2.55);
+
+    toned(solid, random, [m(3.6)]);
+    longhouse(solid, m(1.3), W - m(1.3), cz, { middle, random, wealth: 0.7, doorway: { width: m(1.6), height: m(2.3) }, plinth: m(0.3), ridge: m(7) });
+    board(solid, (u, v, w = 0) => [W / 2 - wide / 2 + u, v, porch + w], [0, 0, 1], [0, wide, low, low + wide * (9 / 56)], nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark }), `board ${piece.name}`, m(0.06));
+
+    for (const side of [-1, 1]) {
+        pole(solid, [W / 2 + side * (wide / 2 - m(0.2)), m(3.25), porch], [W / 2 + side * (wide / 2 - m(0.2)), low + wide * (9 / 56), porch], m(0.015), "rope", { sides: 3 });
+    }
+
+    // Its sign nailed to the front of the porch's left post, facing the street (the door's wall is
+    // 5 cm behind doorFace, the porch's posts 2.4 m out from it, 1.4 m either side of the door:
+    // orc.js longhouse)
+    const sign = [W / 2 - m(1.4), doorFace - m(0.05) + m(2.4) + m(0.13)];
+
+    board(solid, (u, v, w = 0) => [sign[0] - m(0.45) + u, v, sign[1] + w], [0, 0, 1], [0, m(0.9), m(1.2), m(2.1)], emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, m(0.15));
+    dressShop(solid, piece.name, { x0: W / 2, z: doorFace + m(0.4), room: W / m(1) / 2, seed: random.int(1, 1 << 30), aside: 3 });
+
+    return solid.toObject();
+}
+
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);
