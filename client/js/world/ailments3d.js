@@ -3,7 +3,9 @@
 // coiled round their feet, ice crusting their feet, a curse's dark motes circling them. Each
 // grows on over a moment when it takes hold, and shrinks away when it's over (cured, or worn
 // off). The rest (venom's bubbles, a sickness's flies, flames, blood) is particles, from the game
-// (app/game.js), and a tint on their skin.
+// (app/game.js), and a tint on their skin. And one of the wild's elites' radiance (core/
+// creatures.js ELITES), drawn the same way from when it's seen till it falls: a glow of gold on the
+// ground round it, and sparks of gold rising about it.
 
 import * as THREE from "three";
 
@@ -29,6 +31,10 @@ function made() {
         shade: new THREE.MeshBasicMaterial({ color: 0x1c0a2a, transparent: true, opacity: 0.55, depthWrite: false }),
         shard: new THREE.ConeGeometry(0.035, 0.22, 5),
         orb: new THREE.OctahedronGeometry(0.035),
+        spark: new THREE.MeshBasicMaterial({ color: 0xffd86a, transparent: true, opacity: 0.95, toneMapped: false }),
+        ember: new THREE.OctahedronGeometry(0.07),
+        glow: new THREE.MeshBasicMaterial({ color: 0xffb830, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+        rim: new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
     };
 
     return parts;
@@ -198,7 +204,39 @@ function curse(height, random) {
     return group;
 }
 
-const MAKERS = { web, roots, frost, curse };
+// An elite's radiance: a glow of gold on the ground round it (a pool, and a ring at its edge, as
+// broad as it's tall has it), and sparks of gold rising about it, as high as it stands and over
+function elite(height, random) {
+    const group = new THREE.Group();
+    const { ember, spark, glow, rim } = made();
+    const reach = Math.max(0.55, height * 0.45);
+
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(reach, 32).rotateX(-Math.PI / 2), glow);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(reach * 0.9, reach, 48).rotateX(-Math.PI / 2), rim);
+
+    pool.position.y = 0.025;
+    ring.position.y = 0.03;
+    pool.userData.pool = true;
+    ring.userData.pool = true;
+    pool.renderOrder = 1;
+    ring.renderOrder = 1;
+    group.add(pool, ring);
+
+    for (let k = 0; k < 10; k++) {
+        const one = new THREE.Mesh(ember, spark);
+
+        one.userData.phase = k / 10 + random(-0.04, 0.04);
+        one.userData.angle = random(0, Math.PI * 2);
+        one.userData.out = reach * random(0.55, 0.95);
+        group.add(one);
+    }
+
+    group.userData.rising = height;
+
+    return group;
+}
+
+const MAKERS = { web, roots, frost, curse, elite };
 
 /** What lingers on someone, drawn on them: made, grown on, turned, and let go of. */
 export class Ailments3D {
@@ -212,7 +250,7 @@ export class Ailments3D {
 
     /**
      * Something lingering takes hold on a character (its `object`, `height` tall): a look (web,
-     * roots, frost, curse). Again while it's on them, it stays.
+     * roots, frost, curse; an elite's radiance, elite). Again while it's on them, it stays.
      */
     add(id, look, object, height) {
         const make = MAKERS[look];
@@ -293,6 +331,25 @@ export class Ailments3D {
                     one.group.scale.set(1, Math.max(0.001, easeOut(grown) * left), 1);
                 } else {
                     one.group.scale.setScalar(Math.max(0.001, easeOut(grown) * left));
+                }
+
+                // (An elite's glow breathes, and its sparks rise about it, slowly turning, smaller
+                // as they go, and again from the ground)
+                if (look === "elite") {
+                    const height = one.group.userData.rising;
+
+                    for (const child of one.group.children) {
+                        if (child.userData.pool) {
+                            child.scale.setScalar(0.92 + 0.08 * Math.sin(one.age * 1.8));
+                        } else {
+                            const t = (child.userData.phase + one.age * 0.45) % 1;
+                            const angle = child.userData.angle + one.age * 0.9 + t * 2;
+
+                            child.position.set(Math.cos(angle) * child.userData.out, t * height * 1.15, Math.sin(angle) * child.userData.out);
+                            child.scale.setScalar(Math.max(0.001, 1.3 * (1 - t)));
+                            child.rotation.y = one.age * 3;
+                        }
+                    }
                 }
 
                 // (A curse's motes circle, bobbing; its shadow breathes)

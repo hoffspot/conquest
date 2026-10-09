@@ -1,6 +1,7 @@
 // How a dungeon's bosses and mini-bosses look (client/js/beasts/champions.js): every theme's own
 // each with a look, what's worn in place of what was in its slot, and a sculpted one bigger, its
-// body tinted and what glows on it brighter than others of its kind
+// body tinted and what glows on it brighter than others of its kind; and the wild's elites, gilded,
+// bigger and radiant (world/ailments3d.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -21,7 +22,9 @@ const context = () =>
 
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
+const THREE = await import("three");
 const { BeastAvatar } = await import("../client/js/beasts/beast.js");
+const { Ailments3D } = await import("../client/js/world/ailments3d.js");
 const { CHAMPION_HEIGHT, CHAMPION_LOOKS, championLook, championScale, REGALIA, wearing } = await import("../client/js/beasts/champions.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
@@ -91,5 +94,49 @@ describe("a dungeon's bosses and mini-bosses drawn their own way (beasts/champio
 
         plain.dispose();
         mother.dispose();
+    });
+
+    it("draws one of the wild's elites gilded and bigger than its kind, and radiant till it falls", () => {
+        const look = championLook("elite");
+
+        assert.deepEqual(look, { ...CHAMPION_LOOKS.elite, wear: [] });
+        assert.ok(look.scale > CHAMPION_LOOKS.mini.scale && look.glow > 1 && look.tint !== null);
+
+        const [plain, elite] = [new BeastAvatar("wolf", { seed: 5 }), new BeastAvatar("wolf", { seed: 5, champion: look })];
+        const [a, b] = [plain.plan.materials.body.color, elite.plan.materials.body.color];
+
+        assert.ok(Math.abs(elite.scale / plain.scale - look.scale) < 1e-9);
+        // (Gilded: its coat warmer, redder than blue)
+        assert.ok(b.r / a.r > b.b / a.b);
+
+        // Radiant: a glow of gold on the ground round it and sparks rising, from when it's seen;
+        // gone a moment after it falls
+        const parent = new THREE.Group();
+        const ailments = new Ailments3D(parent);
+
+        elite.object.position.set(3, 0, 4);
+        ailments.add("wild-1", "elite", elite.object, elite.character.height);
+        assert.deepEqual(ailments.shown(), { "wild-1": ["elite"] });
+
+        ailments.update(0.5);
+
+        const [radiance] = parent.children;
+        const sparks = radiance.children.filter((child) => !child.userData.pool);
+
+        assert.deepEqual([radiance.position.x, radiance.position.z], [3, 4]);
+        assert.ok(sparks.length >= 6 && sparks.every((spark) => spark.position.y >= 0 && spark.position.y <= elite.character.height * 1.2));
+
+        const heights = sparks.map((spark) => spark.position.y);
+
+        ailments.update(0.5);
+        assert.ok(sparks.some((spark, k) => spark.position.y !== heights[k]), "rising");
+
+        ailments.remove("wild-1", "elite");
+        ailments.update(1);
+        assert.deepEqual(ailments.shown(), {});
+        assert.equal(parent.children.length, 0);
+
+        plain.dispose();
+        elite.dispose();
     });
 });

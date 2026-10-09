@@ -35,7 +35,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { CREATURES } from "../core/creatures.js";
+import { CREATURES, ELITES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
@@ -704,6 +704,9 @@ export class Game {
         // Those with something lingering on them (their ids), and when each's next shows it (by
         // id and kind: s); those whose skin's tinged by it
         this.ailed = new Set();
+
+        // The wild's elites drawn radiant (their ids: #radiant)
+        this.radiant = new Set();
 
         /** Whether another player's Summon is said no to at once, not asked (Game options). */
         this.resistSummons = false;
@@ -1432,6 +1435,8 @@ export class Game {
         avatar?.character.dispose();
         this.wounds.get(id)?.dispose();
         this.hud.untrack(id);
+        this.ailments?.clear(id);
+        this.radiant.delete(id);
 
         for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.landing, this.wounds, this.pools]) {
             each.delete(id);
@@ -1505,7 +1510,28 @@ export class Game {
         // (Its voice downloaded now it's near: audio/sound.js want)
         this.sound?.want(creatureSounds(actor.wild.creature));
 
-        return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
+        const registered = this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
+
+        // (One of the elites, radiant: #radiant)
+        if (actor.wild.elite && !actor.dead) {
+            this.ailments.add(actor.id, "elite", avatar.object, avatar.character.height);
+            this.radiant.add(actor.id);
+        }
+
+        return registered;
+    }
+
+    // The wild's elites (core/creatures.js ELITES) drawn radiant (world/ailments3d.js "elite"), from
+    // when they're drawn till they fall
+    #radiant() {
+        for (const id of this.radiant) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || actor.dead) {
+                this.ailments.remove(id, "elite");
+                this.radiant.delete(id);
+            }
+        }
     }
 
     // One of a convoy's wagons (core/host.js #meetConvoy), or an army's supply wagon (#meetWagon):
@@ -2288,6 +2314,7 @@ export class Game {
         this.#quickActions(target);
         this.#bleed(dt);
         this.#ailing();
+        this.#radiant();
         this.#grounds();
         this.ailments?.update(dt);
         this.#keepTalking();
@@ -2932,11 +2959,14 @@ export class Game {
 
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId && this.avatars.has(other.id)).map((other) => {
+            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target };
             }),
+            // (The wild's elites, marked their own way as soon as they're near enough: core/
+            // creatures.js ELITES `marker`, drawn or not)
+            elites: battle.actors.filter((other) => other.wild?.elite && !other.dead && other.map === this.mapId && Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker).map((other) => ({ x: other.x, z: other.y, targeted: other === target })),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
             icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],

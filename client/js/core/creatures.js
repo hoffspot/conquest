@@ -28,7 +28,7 @@
 // and arithmetic, no DOM.
 
 import { landAt, SETTLEMENTS } from "./worldplan/plan.js";
-import { hypot, pow } from "./exact.js";
+import { cos, hypot, pow, sin } from "./exact.js";
 
 /** The team the wild's creatures are all on. */
 export const WILD = "beasts";
@@ -209,6 +209,32 @@ export function encounterAt(plan, [x, y], homes, random, dark = false) {
     const { id } = random.pickWeighted(candidates, ({ weight }) => weight);
 
     return { creature: id, tier, count: packOf(id, tier) };
+}
+
+/**
+ * The wild's elites (docs/WILDS.md *Elites*): now and then (`chance` of the packs put out about a
+ * player, in land of tier `least` or more), an elite of a kind that lives there leads its kind
+ * ("Elite Wolf"): `hp` times the hit points and `power` times the blows of one of them, and `up`
+ * tiers on the land's. Put out `from` to `to` metres from the player (further than the wild's
+ * others, to be seen coming) on dry ground clear of the settlements and roads; it walks a round
+ * of `stops` about where it was put out, `loop` metres off; it sees `sight` squares (further than
+ * the others) but goes no further than `leash` metres beyond its round after anyone, so a wide
+ * berth passes it by; let go once every player's `far` away. Never two within `apart` metres of
+ * each other; a player one's been put out near has no other for `rest` ms. Seen on the minimap
+ * from `marker` metres. None of the perilous kinds.
+ */
+export const ELITES = Object.freeze({ chance: 1 / 12, least: 2, hp: 3, power: 1.25, up: 1, from: 80, to: 100, loop: 10, stops: 6, sight: 18, leash: 12, far: 160, apart: 400, rest: 600000, marker: 80 });
+
+/** What an elite of a kind's called: "Elite Wolf". */
+export const eliteName = (creature) => `Elite ${CREATURES[creature].name}`;
+
+/** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */
+export function eliteRound([x, y]) {
+    return Array.from({ length: ELITES.stops }, (each, k) => {
+        const angle = (k / ELITES.stops) * Math.PI * 2;
+
+        return [x + cos(angle) * ELITES.loop, y + sin(angle) * ELITES.loop];
+    });
 }
 
 /** What a wild camp's folk are at its tier (CAMP_FOLK). */

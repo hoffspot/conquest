@@ -15,8 +15,10 @@
 import { clearOfSettlements, TIERS } from "./creatures.js";
 import { cos, hypot, sin } from "./exact.js";
 import { GEAR, rollGear } from "./gear.js";
+import { CHARMS } from "./goods.js";
 import { CHEST_GOLD, placesOf } from "./places.js";
 import { ITEMS, rollBoost } from "./progress.js";
+import { ELITE_SPOILS } from "./spoils.js";
 import { landAt } from "./worldplan/plan.js";
 
 /**
@@ -174,6 +176,26 @@ export function cacheMake(tier, random) {
     let pick = random.next();
 
     return Object.keys(makes).find((quality) => (pick -= makes[quality]) < 0) ?? Object.keys(makes).at(-1);
+}
+
+/**
+ * An elite's prize for a player near it when it fell (spoils.js ELITE_SPOILS), the elite of a
+ * `tier` (random.js random; `people`: the maker of any people's piece): a piece of gear any cache
+ * might hold, or (`charm` of the time) a charm, made as a cache's `up` tiers further out would be.
+ */
+export function elitePrize(tier, random, { people = "human" } = {}) {
+    const quality = cacheMake(Math.min(TIERS, tier + ELITE_SPOILS.up), random);
+
+    if (random.chance(ELITE_SPOILS.charm)) {
+        const charms = Object.keys(CHARMS);
+
+        return { id: charms[Math.floor(random.next() * charms.length) % charms.length], quality };
+    }
+
+    const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
+    const made = rollGear(id, quality, random, { people });
+
+    return ITEMS[id].magic ? { ...made, boost: rollBoost(random) } : made;
 }
 
 /**

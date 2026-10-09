@@ -2096,7 +2096,7 @@ player, as before):
 
 **Kept.** Which way each camp faces (`front`) is in the war's snapshot (`WAR_VERSION` 8; a war kept
 before has each camp face what it was pitched against). The stockades are made again from the
-war's camps. What two games share changed (`NET_VERSION` 92): the world's squares.
+war's camps. What two games share changed (`NET_VERSION` 93): the world's squares.
 
 ### Playing together (M11)
 

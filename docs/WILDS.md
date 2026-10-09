@@ -8,8 +8,8 @@ how strong, how they behave, how they're kept about the players, and how they're
 animated.
 
 The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how they fight),
-`core/host.js` (keeping them about the players), `core/caches.js` (the adventurers' caches and
-the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
+`core/host.js` (keeping them about the players, and the elites), `core/caches.js` (the adventurers'
+caches and the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
 and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
 `client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
 (their fire, venom, webs and roots, and what shows on whoever they hit). The creature lab
@@ -108,6 +108,52 @@ camp's folk come out when a player's 60 m from it and go once everyone's 140 m o
 always something about, and never more than a player can see: the creatures are shared by everyone
 playing (whoever's near sees the same ones and can fight them together), and each is kept, moved
 and fought by the host like anyone else, so it plays out the same on every machine.
+
+## Elites
+
+Now and then, out past the land nearest home, a pack's led by an elite of its kind: an "Elite
+Wolf" at the head of the wolves, an "Elite Brown bear" alone (`creatures.js` `ELITES`, the host's
+`#putOutElite`). (Not the dungeons' packs' stronger members, `docs/DUNGEONS.md`, which are only a
+tier up.)
+
+- **Where, and how often.** Each time a pack's put out about a player in land of the second tier
+  or further (`ELITES.least`), about one time in twelve (`ELITES.chance`) it's an elite's instead.
+  It's put out 80 to 100 m off (further than the rest, to be seen coming), with the same clearances
+  from the settlements, roads and cleared ground, on dry land all round its round. None of the
+  perilous kinds (a frost troll, say) is ever one.
+- **How many.** Never two within 400 m of each other (`ELITES.apart`), so never more than one
+  about a player; and a player one's been put out near has no other for ten minutes
+  (`ELITES.rest`, the host's `eliteRest`, kept in a snapshot). So out in the wilds a player meets
+  one now and then, about one each ten or so minutes' going at the most.
+- **How strong.** Three times the hit points and a quarter harder blows than one of its kind
+  (`ELITES.hp`, `ELITES.power`), and a tier up on the land's on top of that (`ELITES.up`): an
+  Elite Wolf where wolves are of the second tier has the hit points of about four of them, and
+  bites like one of the third and a quarter more.
+- **Its kind with it.** It leads as many of its kind as a pack of theirs there would be, ordinary
+  ones at the land's tier, keeping with it; one of a kind that goes alone (a bear, an adder) is
+  alone.
+- **Its round.** It walks a round of six stops 10 m about where it was put out (`ELITES.loop`,
+  `ELITES.stops`), resting a moment at each, its kind keeping with it.
+- **Avoiding it.** It sees 18 squares (`ELITES.sight`; the rest see 12), so it notices from
+  further off; but it goes no further after anyone than 12 m beyond its round (`ELITES.leash`: 22 m
+  from its middle), and only sets on someone within that. So a player who keeps a wide berth of it
+  (25 m or more from its middle) is left be, and one who runs from it is let go once they're past
+  that. It's let go once every player's 160 m away (`ELITES.far`), not 90 m as the rest are.
+- **Seen from afar.** It's drawn a quarter bigger, its coat gilded and what glows on it brighter
+  (`beasts/champions.js` `CHAMPION_LOOKS.elite`), radiant: a glow of gold on the ground round it
+  and sparks of gold rising about it (`world/ailments3d.js` "elite"). Its name and level are in
+  gold over it, on a broader plate edged in gold (`hud.js`, `.floater.elite`), and it's a star of
+  gold on the minimap from 80 m off (`ELITES.marker`), at the minimap's edge the way it is while
+  it's further than the minimap shows, before it's noticed anyone.
+- **What it leaves** (`spoils.js` `ELITE_SPOILS`, `caches.js` `elitePrize`), for each player
+  within 30 m when it falls, beyond what one of its kind would:
+  - its kind's gold three times over, and a purse for a beast that carries none (never nothing);
+  - its kind's things much likelier, as if found eight tiers above its least (a wolf's pelt about
+    two times in three);
+  - on one with hands, a tome four times as likely, at any tier;
+  - and always a prize: a piece of gear any cache might hold, or (three times in ten) a charm,
+    made as a cache's two tiers further out would be. Never common; mostly fine to rare, now and
+    then very rare or legendary, and better the further out.
 
 ## Adventurers' caches
 

@@ -6711,6 +6711,150 @@ test("an adventurer's cache turns up ahead of a player crossing the wilds, off t
     expect(cache.gone).toBe(true);
 });
 
+test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const elite = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+        const { ELITES } = await import("/js/core/creatures.js");
+        const { GEAR } = await import("/js/core/gear.js");
+        const { CHARMS } = await import("/js/core/goods.js");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const goTo = (x, y) => Object.assign(player, { x, y, path: [], order: null, progress: null, target: null });
+        const leader = () => [...host.wild].find(([, one]) => one.elite === "lead")?.[0] ?? null;
+
+        // Out on the meadows 1,600 m west of the start town (the second tier's land), the packs put
+        // out about them taken away again as soon as they're out, till one's an elite's
+        const [hx, hy] = host.world.start.at;
+
+        goTo(hx - 1600 + 0.5, hy + 0.5);
+        await settle(4);
+
+        let tries = 0;
+
+        for (; tries < 200 && !leader(); tries++) {
+            for (const [id, one] of [...host.wild]) {
+                if (!one.elite && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works) {
+                    game.battle.remove(id);
+                }
+            }
+
+            await settle(2);
+        }
+
+        const id = leader();
+
+        if (!id) {
+            return { tries };
+        }
+
+        const actor = game.battle.actor(id);
+        const { pack, creature } = host.wild.get(id);
+        const escorts = [...host.wild].filter(([each, one]) => one.pack === pack && each !== id).map(([each]) => each);
+        const centre = [actor.spawn[0] + 0.5, actor.spawn[1] + 0.5];
+        const put = Math.hypot(centre[0] - player.x, centre[1] - player.y);
+        // (The way back to where the player was: open meadow)
+        const way = [(player.x - centre[0]) / put, (player.y - centre[1]) / put];
+        const marked = async (off) => {
+            goTo(centre[0] + way[0] * off, centre[1] + way[1] * off);
+            await settle(2, true);
+            game.minimap.drawn = -Infinity;
+            game.advance(0.1);
+
+            return game.minimap.elites.map(({ edge }) => edge);
+        };
+
+        // Further than ELITES.marker: not marked; nearer, a star at the minimap's edge (it shows
+        // 64 m each way); nearer still, where it is (a little beyond the most it goes after anyone
+        // from the middle of its round: ELITES.loop + ELITES.leash)
+        const far = await marked(ELITES.marker + 25);
+        const edge = await marked(ELITES.marker - 8);
+        const near = await marked(ELITES.loop + ELITES.leash + 3);
+
+        // Drawn, all of them (a step at a time, the first of a kind's look a while to sculpt)
+        for (let k = 0; k < 160 && (game.enlisting.length || game.enlistees.size || !game.avatars.has(id)); k++) {
+            game.advance(0.25);
+        }
+
+        await settle(2, true);
+
+        const plate = document.querySelector(`.floater.plate[data-id="${id}"]`);
+        const drawn = {
+            avatar: game.avatars.has(id),
+            radiant: game.ailments.shown()[id] ?? [],
+            plate: plate?.classList.contains("elite") ?? false,
+            name: plate?.querySelector(".name")?.firstChild?.textContent ?? null,
+            gold: plate ? getComputedStyle(plate.querySelector(".name")).color : null,
+            escorts: escorts.map((each) => document.querySelector(`.floater.plate[data-id="${each}"]`)?.classList.contains("elite") ?? null),
+            noticed: actor.target,
+        };
+
+        // Felled with the player near (its round brought near them: SPOILS_REACH): its prize on it
+        // for them, a piece of gear or a charm
+        for (let k = 0; k < 400 && Math.hypot(actor.x - player.x, actor.y - player.y) > 24; k++) {
+            await settle(1);
+        }
+
+        const by = Math.hypot(actor.x - player.x, actor.y - player.y);
+
+        game.battle.afflict(id, "poison", { by: "player", damage: 1e7 });
+        await settle(8);
+
+        const share = [...host.ground.values()].filter((dropped) => dropped.for === "player" && dropped.from === creature);
+        // (Its prize made better than common: an outlaw's own sword is a plain one)
+        const prize = share.flatMap(({ bundle }) => bundle.items).find(({ id: item, quality }) => (GEAR[item] || CHARMS[item]) && quality !== "common") ?? null;
+
+        return {
+            tries,
+            name: actor.name,
+            kind: creature,
+            put,
+            escorts: escorts.length,
+            far,
+            edge,
+            near,
+            drawn,
+            by,
+            dead: actor.dead,
+            gone: !(game.ailments.shown()[id] ?? []).includes("elite"),
+            prize,
+            gold: share.reduce((sum, { bundle }) => sum + bundle.gold, 0),
+        };
+    });
+
+    expect(elite.name, `${elite.tries} tries`).toBeTruthy();
+    expect(elite.name).toBe(`Elite ${elite.drawn.name.slice("Elite ".length)}`);
+    expect(elite.put).toBeGreaterThan(76);
+    expect(elite.put).toBeLessThan(104);
+    expect(elite.far).toEqual([]);
+    expect(elite.edge).toEqual([true]);
+    expect(elite.near).toEqual([false]);
+    expect(elite.drawn).toMatchObject({ avatar: true, radiant: ["elite"], plate: true, name: elite.name, gold: "rgb(255, 215, 106)", noticed: null });
+    expect(elite.drawn.escorts).toEqual(Array(elite.escorts).fill(false));
+    expect(elite.by).toBeLessThanOrEqual(24);
+    expect(elite.dead).toBe(true);
+    expect(elite.gone).toBe(true);
+    expect(elite.prize, elite.kind).not.toBeNull();
+    expect(elite.gold).toBeGreaterThan(0);
+});
+
 test("a cave held by outlaws is gone into by its mouth: within, the rock all round, their fire, their chief by the locked chest; and out again the same way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
