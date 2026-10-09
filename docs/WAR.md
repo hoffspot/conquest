@@ -221,6 +221,7 @@ The engine is built for this from the start. These are its rules:
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
 | **M20** | Built | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after; a seat's ruler and the captain of its guard making their last stand at its keep before it's taken. |
 | **M21** | Built | The war table in the keep: its map of the war as their people's council sees it, live, lit where their scouts, armies and holdings see, the scouts lifting the fog; a Lord's orders from it for their army or a vassal's (raised, sent to camp, against the enemy, home, supplied, disbanded; depots built), and a Knight's counsel on where it marches. |
+| **M22** | Building | Pressing the advantage: palisaded camps, stormed, breached and mended from the stores; the rout; the reserve following a beaten army to its camp, and keeping its lands (towers, works, brigands); the camp's stockade, gates and walkway in the world, and the fighting at it. |
 
 ## What's built
 
@@ -1390,8 +1391,21 @@ ground). So:
 - **Struck:** a people keeps 3 camps at most, the least used struck for a new one; one no army's
   been near for 40 turns is struck too. Its guard goes into the nearest of their towns.
 - **Razed:** an enemy army puts its guard down attacking it; an enemy's army or reserve within
-  120 m of it puts its guard down, if there's no army of its own within its reach (300 m); or, in
-  the world, its sentries all brought down with no army of theirs by it (`war.loss`).
+  120 m of it puts its guard down, if there's no army of its own within its reach (300 m); an
+  enemy's reserve or army storms it with its army at it (*The palisade*, below); or, in the world,
+  its sentries all brought down with no army of theirs by it (`war.loss`).
+- **Its palisade** (`PALISADE`). Its guard fights behind it, and its army too while it's at it
+  (within 120 m): as a town's garrison behind its walls, 1.2 (a town's are 1.15 to 1.6), less 0.05
+  for each breach in it, as far as open ground at 4.
+  - **Stormed:** an army fallen on at its camp, by an enemy's reserve or army, stands there with
+    the camp's guard beside it, the fallen of it and of the guard alike. Carried, the camp's
+    razed, and the army goes home, beaten, its orders done with (and let go: *The reserve*,
+    below); brought to nothing, it's gone. Beaten off, those who fell on it are beaten.
+  - **Breached:** any assault on a camp beaten off (a storm, an army's attack, a reserve or army
+    upon its guard) leaves a breach for each 15% of those holding it it brought down, as far as 4.
+  - **Mended** once no enemy's army, reserve or expedition has been within its reach (300 m) for 2
+    turns: a breach a turn by its guard, two with its army there, each for 4 wood from its
+    people's stores, as far as they go. None while there's none.
 
 **The army's campaign** (`#command`, `#campaign`):
 - **Raised,** it waits at its seat till it's 70% of its full strength (`ARMY.ready`).
@@ -1406,11 +1420,13 @@ ground). So:
 - **Done,** it goes back to its camp to wait for what's next; at peace, home.
 
 **The fighting** (`#engage`, `#battle`, `#attack`), each turn:
-- **In the field:** an army and an enemy's army or reserve within 120 m fight it out. The beaten
-  falls back (an army to its camp, a reserve home) and isn't fallen on again for 2 turns
+- **In the field:** an army and an enemy's army or reserve within 120 m fight it out, either side
+  breaking once it's down to 35% of what it went in with and outnumbered (`ARMY.rout`; elsewhere,
+  against walls or a guard, only the attackers break, and the defenders fight to the last). The
+  beaten falls back (an army to its camp, a reserve home) and isn't fallen on again for 3 turns
   (`ARMY.flee`); an army brought to nothing is gone (`destroyed`), and its people can raise
-  another. Not those a player's near: they fight it out in the world (M20, *The armies near a
-  player*).
+  another. An army fallen on at its camp stands behind its palisade (*Camps*, above). Not those a
+  player's near: they fight it out in the world (M20, *The armies near a player*).
 - **An army mustering at its seat** is within its walls, not in the field: no army fights it there,
   and no reserve goes out against it.
 - **Attacking,** once within 120 m of what it's after:
@@ -1433,14 +1449,32 @@ ground). So:
   | Attacking | ×1 | ×0.984 | ×1.012 | ×1.1 | ×0.964 | ×1.084 |
   | Attacked | ×1 | ×0.992 | ×0.988 | ×0.916 | ×1.064 | ×0.944 |
 
-**The reserve** (`#defend`) goes out against an enemy army within 1 km of one of its people's towns,
-if it's at least 0.4 as strong (`DEFEND`): one attacking one of their towns first, then the nearest.
-Not an army beaten back, falling back to its camp to be made up: a reserve drives an army off, it
-doesn't hunt it down, and meets it again when it comes back. With no army there, it goes against
-an enemy's supply depot or camp in its lands, the nearest, if it's half again as strong as its
-guard; not a camp with its army about it (within 300 m). It goes 300 m a turn, anywhere in its own
-lands and never beyond them, and home to its seat once there's none. Beside a town attacked, it
-fights with its garrison. Two reserves never fight each other.
+**The reserve** (`#defend`, `DEFEND`) goes out against an enemy army within 1 km of one of its
+people's towns, one attacking one of their towns first, then the nearest, if it's strong enough
+beside it where it stands: 0.4 as strong as an army in the open; as strong as one at its camp, its
+guard beside it behind the palisade (`DEFEND.camp`: (army + guard) × the palisade's walls).
+- **Pressing the advantage:** an army beaten back, falling back to its camp to be made up, it
+  follows there, as far as 2.5 km from its people's towns (`DEFEND.leash`), if it's half again as
+  strong as what it would meet there (`DEFEND.pursue`), and storms the camp (*Camps*, above).
+- **Let go:** an army beaten from its camp, on its way home, it lets go.
+- **With no army there,** it goes against an enemy's supply depot or camp in its lands, the
+  nearest, if it's half again as strong as its guard; not a camp with its army about it (within
+  300 m).
+- **With none of those** (`#dutyFor`, `DUTY`), against the nearest of the other troubles in its
+  lands that it's strong enough for:
+  - an enemy's tower or forward garrison there (nearer a town of its people's, or one taken from
+    them, than anyone else's), if it's 10 strong: battered, as an army batters one, and razed;
+  - one of its works held by the wild's band, if it's twice as strong, and no force is on its way
+    there already: the band fought, and the works won back and held by a full guard of it (6);
+  - a brigands' camp of the wild's (the plan's bandits, raiders and goblins) within 1 km of one
+    of its towns, if it's twice their 10: fought, and, put down, scattered for 120 turns, falling
+    on no convoy or supply wagon meanwhile (`war.scattered`).
+  Beaten off any of them, it goes home.
+
+It goes 300 m a turn, and home to its seat once there's nothing. Beside a town attacked, it fights
+with its garrison. Two reserves never fight each other. A reserve a player's near, at the trouble
+it was sent against, waits there a while (3 turns, `WATCH_TURNS`) for it to be played out in the
+world, then it's reckoned here, as an army's attack is.
 
 **A player's orders** (`war.order(realm, orders, { by })`), a Lord's or a Councillor's, from the
 war table in a keep (M21, *The war table*):
@@ -1916,6 +1950,103 @@ as are built. No people wins within 18 hours, before or now. The peoples left al
 richest end with 21,000 gold, as they did with 15,000 before.
 
 **Kept.** Nothing new. What two games share changed (`NET_VERSION` 84): the war's reckoning.
+
+### Pressing the advantage (M22)
+
+The first of the palisades' parts: the war's own rules for them, as numbers (`war.js`
+`PALISADE`, `DEFEND`, `DUTY`; `armies.js` `ARMY`). The stockade drawn in the world near a player,
+its gates, walkway and breaches, and the fighting at it, come after.
+
+**What was out** (the war study: each way of playing it in 72 worlds, as below):
+- **A reserve never followed a beaten army.** It had once, all the way to its camp, and ground
+  armies to nothing (*The balance of the standing armies*, above), so it was made to let them go.
+  But it went wrong for want of three things, not for the chasing: a camp gave the army in it no
+  shelter; the defenders of a fight never broke, so an army caught at its camp died to the last;
+  and nothing let a beaten army go home. An army beaten back spent a third of its life regrouping
+  at its camp by the enemy's towns, and 30% of those beaten by a reserve went on to take a town.
+- **A reserve sat at home three quarters of the time,** while enemy towers, works held by the
+  wild and brigands' camps by its roads were left in its lands.
+
+**What changed** (each in the rules above, M18 *Camps*, *The fighting*, *The reserve*):
+- **The rout:** either side in the field breaks at 35% of what it went in with, outnumbered.
+- **The palisade:** an army at its camp fights behind it with the camp's guard, walls 1.2. Stormed
+  and carried, the camp's razed and the army goes home; the reserve lets it go.
+- **Breached and mended:** an assault beaten off breaches it; quiet, its guard mends it from the
+  stores' wood.
+- **Pressing the advantage:** the reserve follows a beaten army to its camp at 1.5 times what
+  it would meet there, within 2.5 km of its towns; against an army at its camp otherwise, only at
+  odds of 1.
+- **Duties at home:** with nothing else, the reserve batters enemy towers and forward garrisons
+  in its lands, wins back its works from the wild and scatters the brigands by its towns.
+- **A beaten force** has 3 turns to get away, not 2.
+
+**Tried, and left out:** the reserve going against an army at its camp at its old 0.4 (it threw
+itself at palisades: 202 storms a world, the army holding 72% of them); following a beaten army
+at odds of 1 (the war a fifth slower) or 2 (more beaten armies came back to take a town); the
+palisade without the rout (393 armies destroyed in six worlds traced, 369 at their camps; 42 with
+it), or the rout without the palisade (an army with nowhere to go caught again and again); and, on
+their own, attackers counting the enemy's reserve, reinforcements falling back from an enemy
+army, sell-swords for the rich, and a reserve kept at the front: each slower, bloodier, or no
+different. The reserve retaking its people's towns made the fronts swing back and forth (26
+retaken a world) and was left for later.
+
+**Played out alone, no player's might** (10th / median / 90th percentile of 72 worlds, 1,080
+turns; a reserve's fights with an army count the storms):
+
+| | Before | Now |
+| --- | --- | --- |
+| First town taken | turn 198 / 210 / 263 | turn 195 / 206 / 294 |
+| First seat taken | turn 553 / 608 / 791 (in 70 worlds) | turn 558 / 628 / 972 (in 62) |
+| Towns taken by turn 360 | 6 / 15 / 22 | 1 / 12 / 25 |
+| Towns taken by turn 720 | 34 / 54 / 75 | 28 / 56 / 93 |
+| Towns taken by turn 1,080 | 61 / 83 / 118 | 48 / 90 / 182 |
+| Armies raised | 21 / 26 / 34 | 8 / 12 / 15 |
+| Armies destroyed | 9 / 14 / 21 | 1 / 5 / 8 |
+| Armies broken up for want of supply | 3 / 6 / 10 | 0 / 1 / 2 |
+| Soldiers deserted for want of supply | 141 / 240 / 368 | 44 / 108 / 204 |
+| A reserve's fights with an army | 187 / 239 / 298, the army winning 39% | 192 / 242 / 308, the army winning 34% |
+| Camps stormed | none | 79 / 108 / 147, the army holding 37% |
+| Campaigns ended at the camp | none | 50 / 66 / 94 |
+| Breaches opened, mended | none | 47 / 73 / 103, 31 / 52 / 74 |
+| An army's time regrouping | 25% / 32% / 45% | 9% / 13% / 18% |
+| A reserve's time at home | 72% / 76% / 80% | 44% / 51% / 56% |
+| Reinforcements cut down on the road | 596 / 922 / 1,161 | 622 / 816 / 1,249 |
+| Wagons and convoys lost to brigands | 16 / 34 / 61 | 0 / 2 / 8 |
+| Peoples brought under | 3 / 6 / 14 | 0 / 4 / 10 |
+| Towns kept, the luckiest people's over the unluckiest's | 1.38 / 1.69 / 2.11 | 0.54 / 1.46 / 1.79 |
+
+**At a player's full might:**
+
+| | Before | Now |
+| --- | --- | --- |
+| First town taken | turn 36 / 40 / 56 | turn 36 / 40 / 53 |
+| First seat taken | turn 71 / 96 / 257 | turn 90 / 154 / 292 |
+| Towns taken by turn 1,080 | 62 / 85 / 103 | 66 / 94 / 119 |
+| Armies raised | 17 / 22 / 32 | 9 / 12 / 15 |
+| Armies destroyed | 7 / 11 / 19 | 3 / 6 / 8 |
+| Soldiers deserted for want of supply | 94 / 216 / 378 | 26 / 84 / 132 |
+| A reserve's fights with an army | 142 / 202 / 248, the army winning 50% | 144 / 186 / 238, the army winning 43% |
+| Camps stormed | none | 60 / 85 / 114, the army holding 38% |
+| Campaigns ended at the camp | none | 35 / 52 / 71 |
+| An army's time regrouping | 21% / 28% / 39% | 7% / 10% / 12% |
+| A reserve's time at home | 73% / 78% / 84% | 45% / 52% / 58% |
+| Wagons and convoys lost to brigands | 20 / 39 / 77 | 0 / 3 / 7 |
+| Peoples brought under | 7 / 11 / 19 | 5 / 12 / 19 |
+
+**At home,** a reserve scatters a brigands' camp about 210 times a world, and wins back 16 of its
+works from the wild (40 are won back in all, as before; the rest by an expedition from the nearest
+town). In the worst tenth of worlds, the works stay in the wild's hands less than half as long
+(494 turns to 210 with no player's might; 1,108 to 253 at full might).
+
+**What's still out:** a people's seat falls later, and with no player's might in more worlds none
+falls in 18 hours (10, from 2): a campaign ended at its camp starts again from the seat. More of
+the armies beaten by a reserve go on to take a town (44%, from 30%): fewer are beaten, and more of
+those are made up behind their palisades.
+
+**Kept.** Each camp's breaches and when it was last troubled (`breaches`, `troubled`), and the
+brigands' camps scattered and till when (`scattered`), are in the war's snapshot (`WAR_VERSION`
+7). A war kept before them is carried on: its camps unbreached, no brigands scattered. What two
+games share changed (`NET_VERSION` 91): the war's reckoning.
 
 ### Playing together (M11)
 
