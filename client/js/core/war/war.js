@@ -547,8 +547,10 @@ export class War {
      * camp's or a depot's guard or a force (by id) loses `count`, brought down by the people `by`
      * (a realm's id, or null). A town's garrison put down to the last by a people at war with its
      * holders is theirs (docs/WAR.md *Standing armies*: no other way to take one), held by a few of
-     * them (TAKEN), if the age lets towns of its kind be taken; a camp's or a depot's, it's razed;
-     * an army put down to the last is gone. Returns how it went: "taken", "razed", or null.
+     * them (TAKEN), if the age lets towns of its kind be taken; but a seat only once its ruler and
+     * the captain of its guard are put down too (LEADERS: `leadersFell`). A camp's or a depot's,
+     * it's razed; an army put down to the last is gone. Returns how it went: "taken", "leaders" (a
+     * seat's garrison down, its leaders left to fight), "razed", or null.
      */
     loss(id, count, { by = null } = {}) {
         const town = this.town(id);
@@ -560,7 +562,11 @@ export class War {
         if (town) {
             town.garrison = Math.max(0, town.garrison - lost);
 
-            if (town.garrison <= 0 && by && this.realm(by)?.alive && this.hostile(by, town.owner) && STAGES[this.stage].take.includes(town.kind)) {
+            if (town.garrison <= 0 && this.#takeable(town, by)) {
+                if (this.realm(town.owner)?.seat === town.id) {
+                    return "leaders";
+                }
+
                 this.#hold(town, by, Math.ceil(HOLDINGS[town.kind].garrison * TAKEN), { how: "played" });
 
                 return "taken";
@@ -598,6 +604,30 @@ export class War {
         }
 
         return null;
+    }
+
+    /**
+     * A seat's ruler and the captain of its guard put down in the world (docs/WAR.md *The armies
+     * near a player*), its garrison down before them, by the people `by` (a realm's id): it's
+     * theirs, as a town put to the sword to the last is (`loss`), if they may take it. Returns
+     * "taken", or null.
+     */
+    leadersFell(id, by) {
+        const town = this.town(id);
+
+        if (!town || town.garrison > 0 || this.realm(town.owner)?.seat !== town.id || !this.#takeable(town, by)) {
+            return null;
+        }
+
+        this.#hold(town, by, Math.ceil(HOLDINGS[town.kind].garrison * TAKEN), { how: "played" });
+
+        return "taken";
+    }
+
+    // Whether a people (`by`) may take a town, its garrison down: they're at war with its holders,
+    // and the age lets towns of its kind be taken
+    #takeable(town, by) {
+        return Boolean(by) && Boolean(this.realm(by)?.alive) && this.hostile(by, town.owner) && STAGES[this.stage].take.includes(town.kind);
     }
 
     /**
@@ -1352,8 +1382,8 @@ export class War {
     // cost each, keeping some gold back for the war, the more the more warlike), in this order
     // (docs/WAR.md *Standing armies*): their garrisons to half (the seat first, then those
     // threatened, then the emptiest); its reserve made up, then its army, from the towns nearest
-    // them, sent as reinforcements; then its garrisons to the full. Then its works' guards, and
-    // their convoys'
+    // them, sent as reinforcements; then its garrisons to the full (not their seat's in its last
+    // stand). Then its works' guards, and their convoys'
     #muster(realm) {
         const towns = this.towns.filter(({ owner }) => owner === realm.id);
         const upkeep = this.power(realm.id) * COSTS.upkeep * 3;
@@ -1366,10 +1396,13 @@ export class War {
             afford -= count;
         };
         const first = (town) => (town.id === realm.seat ? 2 : this.#threatened(town) ? 1 : 0);
+        // (Not their seat's while its garrison's down with a player near: its ruler and the captain
+        // of its guard making their last stand there)
+        const standing = (town) => town.id === realm.seat && town.garrison <= 0 && this.watched.has(town.id);
         const garrisons = (to) => {
             const order = towns
                 .map((town) => ({ town, want: Math.ceil(HOLDINGS[town.kind].garrison * to) - town.garrison }))
-                .filter(({ want }) => want > 0)
+                .filter(({ town, want }) => want > 0 && !standing(town))
                 .sort((a, b) => first(b.town) - first(a.town) || b.want - a.want || (a.town.id < b.town.id ? -1 : 1));
 
             for (const { town, want } of order) {

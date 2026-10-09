@@ -3945,6 +3945,109 @@ test("an orc camp near the player sends its scout out on its round and its skirm
     expect(joined.size).toBeGreaterThan(12);
 });
 
+test("the orcs' seat, its garrison put down by the player at war with them: its ruler and the captain of its guard make their last stand at its keep, drawn and told of; put down too, it falls, the orcs the humans' vassals", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // The player out in the orcs' seat, at war with them in the age of conquest, made too strong
+    // to fall; the world about them got ready
+    await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const seat = war.town(war.realm("orc").seat);
+        const player = game.battle.actor("player");
+        const [x, y] = [Math.floor(seat.at[0] + 30), Math.floor(seat.at[1] + 30)];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        window.said = [];
+
+        const message = game.hud.message.bind(game.hud);
+
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+
+        Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null, hp: 1e6, maxHp: 1e6 });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+    });
+
+    // (Its soldiers out about the player)
+    expect(await playUntil(page, () => (window.pellagos.game.host.mustered.get(window.pellagos.game.host.war.realm("orc").seat)?.ids.length ?? 0) > 0, { seconds: 30 })).toBe(true);
+
+    // The last of its garrison put down by the player
+    const strike = async (id) => {
+        await page.evaluate((one) => {
+            const { game } = window.pellagos;
+            const actor = game.battle.actor(one);
+            const player = game.battle.actor("player");
+
+            window.striking = one;
+            Object.assign(actor, { hp: 1 });
+            Object.assign(player, { x: actor.square[0] + 1.5, y: actor.square[1] + 0.5, square: [actor.square[0] + 1, actor.square[1]], path: [], order: null, hp: 1e6, maxHp: 1e6 });
+            game.host.command("player", { type: "engage", target: one });
+        }, id);
+
+        return playUntil(page, () => !window.pellagos.game.battle.actor(window.striking) || window.pellagos.game.battle.actor(window.striking).dead, { seconds: 20 });
+    };
+    const last = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const seat = game.host.war.realm("orc").seat;
+
+        game.host.war.town(seat).garrison = 1;
+
+        return game.host.mustered.get(seat).ids.find((id) => !game.battle.actor(id).dead);
+    });
+
+    await strike(last);
+
+    // (Their last stand: drawn, and the player told)
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const out = game.host.leaders.get(game.host.war.realm("orc").seat);
+
+        return Boolean(out) && out.ids.every((id) => game.avatars.has(id));
+    }, { seconds: 60 })).toBe(true);
+
+    const stand = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const realm = game.host.war.realm("orc");
+        const out = game.host.leaders.get(realm.seat);
+
+        return {
+            ids: out.ids,
+            names: out.ids.map((id) => game.battle.actor(id).name),
+            ruler: `${realm.leader.title} ${realm.leader.name}`,
+            said: window.said.some((text) => /make their last stand at its keep: put them down, and it's ours/.test(text)),
+            owner: game.host.war.town(realm.seat).owner,
+            overlord: realm.overlord,
+        };
+    });
+
+    expect(stand.names).toEqual([stand.ruler, "Orcish captain of the guard"]);
+    expect(stand.said).toBe(true);
+    expect([stand.owner, stand.overlord]).toEqual(["orc", null]);
+
+    // Put down too: the seat's fallen, the orcs the humans' vassals
+    for (const id of stand.ids) {
+        await strike(id);
+    }
+
+    expect(await playUntil(page, () => window.pellagos.game.host.war.realm("orc").overlord === "human", { seconds: 10 })).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => /has fallen! Its ruler and the captain of its guard put to the sword, the Orcs serve the Humans now\./.test(text)))).toBe(true);
+});
+
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 

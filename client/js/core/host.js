@@ -105,6 +105,15 @@ export const CAMP_NEAR = Object.freeze({ near: 150, far: 300, scout: 40, rounds:
  */
 export const SKIRMISH_NEAR = Object.freeze({ from: 120, pace: 2.3, ahead: 16, close: 25, fight: 30000, most: 240000, home: 6, far: 300 });
 
+/**
+ * A seat's ruler and the captain of its guard in the world (docs/WAR.md *The armies near a
+ * player*; war.js LEADERS): out at its keep's door once its garrison's put down there, each `hp`
+ * strong (a soldier's are 40), `apart` metres either side of it; let go back in once every
+ * player's `far` from them, or its garrison's made up again (the war doesn't, while they're out:
+ * war.js #muster).
+ */
+export const LEADERS_NEAR = Object.freeze({ hp: 120, apart: 1.5, far: 300 });
+
 // How far either side of a supply depot's fire its stores are stacked (metres)
 const DEPOT_STORES = 2.6;
 
@@ -379,7 +388,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 19;
+export const SNAPSHOT_VERSION = 20;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -607,6 +616,13 @@ export class Host {
          * null), back (on their way back) }.
          */
         this.skirmishers = new Map();
+
+        /**
+         * The seats' rulers and the captains of their guard out at their keeps' doors near a
+         * player, their garrison put down (by the seat's id: LEADERS_NEAR): { people, ids (the
+         * ruler's, then the captain's), at (the door) }.
+         */
+        this.leaders = new Map();
 
         /**
          * The armies and reserves met in the field near a player (by the force's id: ARMY_NEAR):
@@ -1378,7 +1394,9 @@ export class Host {
             const soldier = event.type === "death" ? this.soldiers.get(event.id) : null;
 
             if (soldier) {
-                if (soldier.envoy) {
+                if (soldier.leader) {
+                    this.#leaderFell(soldier.leader, event.by);
+                } else if (soldier.envoy) {
                     if (soldier.part === "envoy") {
                         this.#envoyFell(soldier.envoy, event.by);
                     }
@@ -1402,6 +1420,8 @@ export class Host {
 
                     if (result === "taken") {
                         this.#event("taken", { town: soldier.town, by, people: soldier.people });
+                    } else if (result === "leaders") {
+                        this.#leadersOut(soldier.town, by);
                     }
                 }
 
@@ -1599,6 +1619,7 @@ export class Host {
             armies: [...this.armies.entries()],
             supplies: [...this.supplies.entries()],
             skirmishers: [...this.skirmishers.entries()],
+            leaders: [...this.leaders.entries()],
             envoys: [...this.envoys.entries()],
             convoys: [...this.convoys.entries()],
             fortsOut: [...this.fortsOut.entries()],
@@ -1717,6 +1738,7 @@ export class Host {
         host.armies = new Map(structuredClone(snapshot.armies ?? []));
         host.supplies = new Map(structuredClone(snapshot.supplies ?? []));
         host.skirmishers = new Map(structuredClone(snapshot.skirmishers ?? []));
+        host.leaders = new Map(structuredClone(snapshot.leaders ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.convoys = new Map(structuredClone(snapshot.convoys ?? []));
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
@@ -2944,6 +2966,7 @@ export class Host {
 
         this.#watchWagons();
         this.#watchSkirmishers();
+        this.#watchLeaders();
 
         // The fortifications near a player stood up, and let go once they're far, or gone
         for (const [id] of [...this.fortsOut]) {
@@ -3677,6 +3700,90 @@ export class Host {
         this.#event("parted", { skirmish: key, ids });
     }
 
+    // --- A seat's ruler and the captain of its guard (docs/WAR.md *The armies near a player*) ---
+
+    // A seat's garrison put down near a player by a people who may take it (war.loss "leaders"):
+    // its ruler and the captain of its guard out at its keep's door (or in the middle of the town,
+    // with none found), its last stand. The player's told
+    #leadersOut(id, by) {
+        const town = this.war.town(id);
+        const realm = town && this.war.realm(town.owner);
+
+        if (!realm || this.leaders.has(id)) {
+            return;
+        }
+
+        const keep = [...(this.world.interiors?.buildings.values() ?? [])].find(({ kind, place }) => kind === "keep" && (place === id || (place === "home" && this.world.start?.id === id)));
+        const [x, y] = keep?.door.ends[0].arrive ?? town.at.map(Math.floor);
+        const [guardArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+        const ids = [];
+
+        try {
+            for (const [k, role] of ["ruler", "captain"].entries()) {
+                const square = free([x + (k ? LEADERS_NEAR.apart : -LEADERS_NEAR.apart), y]);
+                const one = `${id}/${role}-0`;
+
+                this.#enlist(one, { people: town.owner, weapon: guardArms, square, name: "captain of the guard", record: { leader: id, role }, patrol: [square], leash: LEASH, hp: LEADERS_NEAR.hp });
+                ids.push(one);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        // (The ruler, by name: as the war has them)
+        Object.assign(this.battle.actor(ids[0]) ?? {}, { name: `${realm.leader.title} ${realm.leader.name}` });
+        this.leaders.set(id, { people: town.owner, ids, at: [x + 0.5, y + 0.5] });
+        this.#event("leaders", { town: id, people: town.owner, by, ruler: realm.leader.name, title: realm.leader.title, ids });
+    }
+
+    // One of a seat's leaders fallen: once both are, by a people who may take it, it's theirs
+    // (war.leadersFell), and told as a town taken is
+    #leaderFell(id, byId) {
+        const out = this.leaders.get(id);
+
+        if (!out || out.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        const by = this.#realmOf(byId);
+
+        this.leaders.delete(id);
+
+        if (this.war.leadersFell(id, by) === "taken") {
+            this.#event("taken", { town: id, by, people: out.people });
+        }
+    }
+
+    // The seats' leaders out: back in their keep (let go) once every player's far from them, or
+    // their garrison's been made up again, or the town's another's
+    #watchLeaders() {
+        const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town");
+
+        for (const [id, out] of [...this.leaders]) {
+            const town = this.war.town(id);
+
+            if (!town || town.owner !== out.people || town.garrison > 0 || players.every((player) => hypot(player.x - out.at[0], player.y - out.at[1]) > LEADERS_NEAR.far)) {
+                this.#letLeadersGo(id);
+            }
+        }
+    }
+
+    // A seat's leaders let go: back in their keep, gone from the world
+    #letLeadersGo(id) {
+        const { ids } = this.leaders.get(id);
+
+        this.leaders.delete(id);
+
+        for (const each of ids) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("parted", { leaders: id, ids });
+    }
+
     // --- Convoys (docs/WAR.md *Convoys*) ---
 
     // A convoy on the road near a player met: its captain ahead, its wagons in a column behind,
@@ -4180,7 +4287,7 @@ export class Host {
 
         const realm = this.#realmOf(by);
         const town = this.war.town(id);
-        const how = !realm || !town ? null : town.owner === realm ? "taken" : !this.war.hostile(realm, town.owner) ? "peace" : !STAGES[this.war.stage].take.includes(town.kind) ? "age" : "garrison";
+        const how = !realm || !town ? null : town.owner === realm ? "taken" : !this.war.hostile(realm, town.owner) ? "peace" : !STAGES[this.war.stage].take.includes(town.kind) ? "age" : this.leaders.has(id) ? "leaders" : "garrison";
 
         Object.assign(out, { cleared: true, relief: this.battle.time + BARRACKS_NEAR.relief });
         this.#event("barracks", { town: id, by: realm, how, people: out.people });

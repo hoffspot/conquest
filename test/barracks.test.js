@@ -228,13 +228,18 @@ describe("a town taken by putting its garrison down to the last (war.js loss)", 
         assert.equal(town.owner, "orc");
     });
 
-    it("takes a people's seat the same way, in the age of conquest, making them their vassal", () => {
+    it("takes a people's seat the same way, in the age of conquest, once its ruler and the captain of its guard are put down too, making them their vassal", () => {
         const { war } = fresh();
         const seat = war.town(war.realm("orc").seat);
 
         atWar(war, "human", "orc");
         war.stage = STAGES.length - 1;
-        assert.equal(war.loss(seat.id, seat.garrison, { by: "human" }), "taken");
+        assert.equal(war.leadersFell(seat.id, "human"), null, "(not with its garrison standing)");
+        assert.equal(war.loss(seat.id, seat.garrison, { by: "human" }), "leaders", "(its leaders still standing)");
+        assert.equal(seat.owner, "orc");
+        assert.equal(war.realm("orc").overlord, null);
+        assert.equal(war.leadersFell(seat.id, "elf"), null, "(not by a people not at war with them)");
+        assert.equal(war.leadersFell(seat.id, "human"), "taken");
         assert.equal(war.realm("orc").overlord, "human");
         assert.equal(seat.owner, "orc", "theirs to rule from, under the humans");
     });
