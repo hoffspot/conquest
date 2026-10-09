@@ -17,14 +17,15 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DAY, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
+import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
+import { offHandFits, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
-import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, wares, weaponOf } from "./progress.js";
+import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
@@ -389,7 +390,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 21;
+export const SNAPSHOT_VERSION = 22;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -458,6 +459,7 @@ export const REFUSALS = Object.freeze({
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
     shop: "They've nothing like that to sell.",
+    soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
     full: "Your pack is full.",
     locked: "It's locked fast, and its guardians still hold the place.",
     guarded: "It's locked fast, and those keeping it are still about.",
@@ -482,7 +484,7 @@ export const REFUSALS = Object.freeze({
     gone: "It isn't there any more.",
     undo: "Too late to take that back.",
     down: "You're down: get up first.",
-    wanted: "They've no use for that: the adventurers' guild buys such things.",
+    wanted: "They don't buy that: the adventurers' guild buys everything.",
     trade: "You're not trading with anyone.",
     trading: "You're trading with someone already.",
     elsewhere: "They're trading with someone else.",
@@ -765,6 +767,13 @@ export class Host {
          */
         this.trades = new Map();
         this.nextTrade = 1;
+
+        /**
+         * What's been sold today from the shops with a daily stock (core/stock.js), by the shop
+         * (stockKey): { day (daytime.js dayOf), sold (how many of each: by wareKey), special
+         * (whether its daily special's gone) }; a day before today's, nothing's been sold yet.
+         */
+        this.stocks = new Map();
 
         /**
          * The creatures at the players' sides by magic (by id): { leader (a player's id), creature,
@@ -1710,6 +1719,7 @@ export class Host {
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
             trades: structuredClone([...this.trades.values()]),
+            stocks: structuredClone([...this.stocks.entries()]),
             nextTrade: this.nextTrade,
             companions: structuredClone([...this.companions.entries()]),
             nextCompanion: this.nextCompanion,
@@ -1830,6 +1840,7 @@ export class Host {
         host.campfires = structuredClone(snapshot.campfires ?? []);
         host.trades = new Map((snapshot.trades ?? []).map((trade) => [trade.id, structuredClone(trade)]));
         host.nextTrade = snapshot.nextTrade ?? 1;
+        host.stocks = new Map(structuredClone(snapshot.stocks ?? []));
         host.companions = new Map(structuredClone(snapshot.companions ?? []));
         host.nextCompanion = snapshot.nextCompanion ?? 1;
         host.summonings = new Map(structuredClone(snapshot.summonings ?? []));
@@ -1895,6 +1906,11 @@ export class Host {
         mix(this.ground.size);
 
         mix(this.trades.size);
+
+        for (const { day, sold, special } of this.stocks.values()) {
+            mix(day);
+            mix(Object.values(sold).reduce((sum, count) => sum + count, special ? 1 : 0));
+        }
 
         for (const player of this.players.values()) {
             mix(player.progress.gold);
@@ -2161,42 +2177,90 @@ export class Host {
 
     // A piece of gear as it's made for a player (bought, given): with what's rolled on it (core/
     // gear.js), and a wand's or grimoire's boost
-    #made({ id, quality = "common", people = null }) {
-        const made = ITEMS[id]?.slot ? rollGear(id, quality, this.random, { people }) : { id, quality };
-
-        return ITEMS[id]?.magic ? { ...made, boost: rollBoost(this.random) } : made;
+    #made(ware) {
+        return madeOf(ware, this.random);
     }
 
-    #buy(player, actor, { item, from }) {
+    /**
+     * What a shop with a daily stock (progress.js SHOPS `daily`) kept by one of the folk (`keeper`:
+     * their id) has in today, as it is now: { key (its stockKey), day, wares: [{ id, quality,
+     * count, left, people? }], special (the thing it is, made), specialLeft (whether it's still
+     * to be had) }; or null, for anyone else.
+     */
+    stockOf(keeper) {
+        const folk = this.folk.get(keeper);
+        const shop = folk?.shop ?? SHOPKEEPERS[folk?.role ?? this.battle.actor(keeper)?.role];
+
+        if (!SHOPS[shop]?.daily) {
+            return null;
+        }
+
+        const key = stockKey(keeper);
+        const day = dayOf(elapsedOf(this.war));
+        const { wares: shelves, special } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const kept = this.stocks.get(key);
+        const today = kept?.day === day ? kept : { sold: {}, special: false };
+
+        return { key, day, shop, wares: shelves.map((ware) => ({ ...ware, left: ware.count - (today.sold[wareKey(ware)] ?? 0) })), special, specialLeft: Boolean(special) && !today.special };
+    }
+
+    // Something sold from a shop's daily stock (or its special), kept as sold for the rest of the day
+    #sold({ key, day }, ware) {
+        const kept = this.stocks.get(key);
+        const today = kept?.day === day ? kept : { day, sold: {}, special: false };
+
+        if (ware) {
+            today.sold[wareKey(ware)] = (today.sold[wareKey(ware)] ?? 0) + 1;
+        } else {
+            today.special = true;
+        }
+
+        this.stocks.set(key, today);
+    }
+
+    // Something bought from a shop: what it has (a blacksmith's as well made as the buyer is
+    // mighty), or in today (a shop with a daily stock: while there's any left, for everyone who
+    // plays together), or its daily special (`special`: the one thing, once), for what it asks
+    #buy(player, actor, { item, from, special = false }) {
         const trading = this.#shopkeeper(actor, from);
 
         if (!trading) {
             return refuse("far");
         }
 
-        const ware = item && wares(trading.shop, trading.people).find(({ id, quality }) => id === item.id && quality === (item.quality ?? "common"));
+        const stock = this.stockOf(trading.keeper.id);
+        const same = (ware) => ware.id === item?.id && ware.quality === (item?.quality ?? "common");
+        const ware = special ? stock?.special : stock ? stock.wares.find(same) : wares(trading.shop, trading.people, { might: player.progress.might() }).find(same);
 
         if (!ware) {
             return refuse("shop");
         }
 
-        const price = priceOf(item, { haggle: player.progress.bonuses().haggle });
+        if (special ? !stock.specialLeft : stock && ware.left < 1) {
+            return refuse("soldOut");
+        }
+
+        const price = shopPrice(special ? ware : { id: ware.id, quality: ware.quality }, trading.shop, { haggle: player.progress.bonuses().haggle, special });
 
         if (price > player.progress.gold) {
             return refuse("gold");
         }
 
-        // (What's rolled on it is rolled as it's bought: a wand's or grimoire's boost, rarely high;
-        // better made gear's bonuses)
-        const bought = this.#made(ware);
+        // (The special as it is, its rolls on it already; anything else's rolled as it's bought: a
+        // wand's or grimoire's boost, rarely high; better made gear's bonuses)
+        const bought = special ? structuredClone(ware) : this.#made(ware);
 
         if (!player.progress.stow(bought)) {
             return refuse("full");
         }
 
+        if (stock) {
+            this.#sold(stock, special ? null : ware);
+        }
+
         player.progress.gold -= price;
         this.#gain(player, "trade", price * XP.trade);
-        this.#event("bought", { id: player.id, item: bought, price, from: trading.keeper.id });
+        this.#event("bought", { id: player.id, item: bought, price, from: trading.keeper.id, ...(special ? { special: true } : {}) });
 
         return OK;
     }

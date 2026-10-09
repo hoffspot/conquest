@@ -1891,6 +1891,23 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--gold);
 }
 
+/* How many of a ware a shop has left today (a shop with a daily stock), and its daily special */
+.pack-left {
+    flex: none;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.pack-left.gone {
+    color: var(--bad, #d06a5a);
+}
+
+.pack-list.special .pack-row {
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
 .pack-empty,
 .journal-empty {
     color: var(--muted);
