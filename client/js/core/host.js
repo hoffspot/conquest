@@ -33,6 +33,7 @@ import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS,
 import { barracksPosts, clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
+import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
@@ -492,6 +493,20 @@ export const REFUSALS = Object.freeze({
     reading: "You're reading one already.",
     known: "You know that spell already.",
     unexplored: "You haven't been there.",
+    // (At the war table: core/wartable.js, #atTable)
+    table: "Stand at the war table to give its orders.",
+    orderRank: "Only a Lord or a Councillor gives the army its orders.",
+    serving: "Your people serve another: their orders come from their masters now.",
+    notOurs: "That army isn't ours to order.",
+    raised: "We've an army raised already.",
+    noArmy: "We have no army raised.",
+    peace: "We aren't at war with them.",
+    water: "Not there: that's water.",
+    mustering: "Our army's mustering at home: it's fed there.",
+    wagon: "A supply wagon's on its way to it already.",
+    supplies: "No supplies can be sent to it from there.",
+    depot: "A depot can be built only in another people's lands, if we can pay for it, two at most.",
+    orders: "Those orders can't be carried out.",
     unsummoned: "No one's calling you.",
     outdoors: "There's nowhere to camp in here.",
     settlement: "No camping in town: find an inn.",
@@ -1206,6 +1221,8 @@ export class Host {
                 return this.#cancel(player, command.with ?? null);
             case "travel":
                 return this.#travel(player, actor, command.to);
+            case "table":
+                return this.#atTable(player, actor, command);
             case "fieldBattle":
                 return playerId === HOST_PLAYER ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             default:
@@ -6091,6 +6108,93 @@ export class Host {
         if (at && this.world.maps?.town) {
             this.#carry(player, "town", [Math.floor(at[0]), Math.floor(at[1])], "walk");
         }
+    }
+
+    // At the war table in a keep (core/wartable.js; docs/WAR.md *The war table*), a player of the
+    // people whose keep it is (or of a people under the same liege), whose people serve no one:
+    // - `counsel` ({ march: an enemy town's id }), from a Knight: where their army marches next
+    //   (war.js counsel), weighing as their rank has it (COUNSEL);
+    // - `orders` (war.js order's), from a Lord: for their people's army, or for one of their
+    //   vassals' (`realm`), carried out before anything its rulers would have it do.
+    #atTable(player, actor, { orders = null, realm = null, counsel = null }) {
+        const table = warTableOn(this.world.maps?.[actor.map]);
+        const building = this.world.interiors?.of(actor.map);
+        const town = building && this.war ? this.war.town(townOf(building, { plan: this.world.plan, war: this.war, start: this.world.start })) : null;
+
+        if (!table || !town || !atWarTable(table, actor.x, actor.y)) {
+            return refuse("table");
+        }
+
+        const rank = player.standing.rank();
+        const read = mayRead(this.war, player.realm, town.owner, rank);
+
+        if (read !== "ok") {
+            return refuse(read);
+        }
+
+        if (this.war.oppressor(player.realm)) {
+            return refuse("serving");
+        }
+
+        if (counsel) {
+            if (!counsel.march || rank < OPENS.march) {
+                return refuse("rank");
+            }
+
+            if (!this.war.counsel(player.realm, { march: counsel.march }, COUNSEL[rank])) {
+                return refuse("counsel");
+            }
+
+            this.#event("counsel", { id: player.id, advice: { march: counsel.march } });
+
+            return OK;
+        }
+
+        if (rank < OPENS.orders) {
+            return refuse("orderRank");
+        }
+
+        const whose = realm ?? player.realm;
+
+        if (whose !== player.realm && this.war.realm(whose)?.overlord !== player.realm) {
+            return refuse("notOurs");
+        }
+
+        // (Why not, where it can be told)
+        const [kind, about] = Object.entries(orders ?? {})[0] ?? [];
+        const army = this.war.armyOf(whose);
+        const target = kind === "attack" ? (this.war.town(about) ?? this.war.workAt(about) ?? this.war.fort(about) ?? this.war.camp(about) ?? this.war.depot(about)) : null;
+        const point = kind === "camp" || kind === "depot" ? about : null;
+
+        if (kind === "raise" && army) {
+            return refuse("raised");
+        }
+
+        if (!army && kind !== "raise" && kind !== "depot") {
+            return refuse("noArmy");
+        }
+
+        if (kind === "attack" && !(target && this.war.hostile(whose, target.owner ?? target.realm))) {
+            return refuse("peace");
+        }
+
+        if (Array.isArray(point) && (landAt(this.world.plan, point[0], point[1]).water || landAt(this.world.plan, point[0], point[1]).biome === "sea")) {
+            return refuse("water");
+        }
+
+        if (kind === "supply" && army.mission === "muster") {
+            return refuse("mustering");
+        }
+
+        if (kind === "supply" && this.war.forces.some((force) => force.kind === "supply" && force.target === army.id)) {
+            return refuse("wagon");
+        }
+
+        if (!this.war.order(whose, orders, { by: player.realm })) {
+            return refuse({ supply: "supplies", depot: "depot" }[kind] ?? "orders");
+        }
+
+        return OK;
     }
 
     // Through a guild's portal (core/portals.js) to another branch they've been into (`to`: its

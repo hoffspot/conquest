@@ -5981,7 +5981,7 @@ test("the war table in the keep: a Retainer's told it isn't theirs to read; a Kn
     });
 
     expect(map.title).toBe("The war table");
-    expect(map.text).toMatch(/^Our army, 30 strong of \d+: at its camp\. Our reserve .* Tap anything on the map for more\.$/);
+    expect(map.text).toMatch(/^Our army, 30 strong of \d+: at its camp\. Our reserve .* Tap anything for more; an enemy town to counsel marching on it\.$/);
     expect(map.key).toBe(true);
     expect(map.warKey).toEqual(["Army", "Reserve", "Reinforcements", "Supply wagon", "Camp", "Supply depot", "Seen now; the rest of theirs unseen"]);
     expect(map.running).toBe(true);
@@ -6031,6 +6031,132 @@ test("the war table in the keep: a Retainer's told it isn't theirs to read; a Kn
 
     expect(uncovered.after).toBe(true);
     expect(uncovered.cancel).toBe("Cancel");
+});
+
+test("orders at the war table: a Lord raises their army at their seat, sends it to make camp, then to march on the orcs' seat, is told why it can't be sent supplies while mustering, and disbands it", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // A Lord at war with the orcs, the orcs' seat uncovered on their map, at the war table in the keep
+    const set = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "keep");
+        const player = game.battle.actor("player");
+        const orcs = war.town(war.realm("orc").seat);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.standing.points = 900;
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.known.push("human|orc");
+        game.explored.visit(orcs.at[0], orcs.at[1]);
+
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const table = game.world.maps[player.map].pieces.find(({ kind }) => kind === "war-table");
+
+        Object.assign(player, { square: [table.x + 2, table.y + 2], x: table.x + 2.5, y: table.y + 2.5, path: [], order: null });
+        game.advance(0.1);
+        game.start();
+
+        return { opened: game.openWarTable().ok, seat: war.realm("human").seat, orcs: orcs.id, army: war.armyOf("human")?.id ?? null };
+    });
+
+    expect(set.opened).toBe(true);
+    expect(set.army).toBeNull();
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.war, null, { timeout: 30000, polling: 100 });
+    await expect(page.locator("#worldmappicktext")).toContainText("We have no army raised.");
+    await expect(page.locator("#worldmappicktext")).toContainText("Tap our army, the enemy's, or the ground, for orders.");
+
+    // Somewhere on the map tapped: brought to the middle of it first
+    const tap = async (x, z) => {
+        const at = await page.evaluate(([x, z]) => {
+            const map = window.pellagos.worldMap;
+            const rect = map.canvas.getBoundingClientRect();
+
+            Object.assign(map.view, { x, z });
+            map.draw();
+
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        }, [x, z]);
+
+        await page.mouse.click(at.x, at.y);
+    };
+    const where = (id) => page.evaluate((id) => [...window.pellagos.worldMap.war.towns, ...window.pellagos.worldMap.war.forces].find((each) => each.id === id), id);
+    const choose = async (label) => {
+        await expect(page.locator("#warorders")).toBeVisible();
+        await page.locator("#warordersmenu button", { hasText: label }).click();
+        await expect(page.locator("#warorders")).toBeHidden();
+    };
+
+    // Their seat tapped: raised there
+    const seat = await where(set.seat);
+
+    await tap(seat.x, seat.z);
+    await expect(page.locator("#warorderstitle")).toHaveText(seat.name);
+    await choose("Raise our army here");
+    await expect(page.locator("#worldmapnote")).toContainText("So be it: an army's raised.");
+
+    const army = await page.evaluate(() => window.pellagos.game.host.war.armyOf("human")?.id);
+
+    expect(army).toBeTruthy();
+
+    // The army tapped (at its seat, mustering): supplies sent for, and told why not
+    await page.waitForFunction((id) => window.pellagos.worldMap.war?.forces.some((force) => force.id === id), army, { timeout: 10000, polling: 100 });
+
+    const force = await where(army);
+
+    await tap(force.x, force.z);
+    await expect(page.locator("#warorderstitle")).toHaveText("Our army");
+    await choose("Send for supplies");
+    await expect(page.locator("#worldmapnote")).toHaveText("Our army's mustering at home: it's fed there.");
+
+    // Dry ground 600 m from the seat tapped: camp made there (once it's made up)
+    const ground = await page.evaluate(async (id) => {
+        const { landAt } = await import("/js/core/worldplan/plan.js");
+        const { game } = window.pellagos;
+        const seat = game.host.war.town(id);
+
+        for (let k = 0; k < 16; k++) {
+            const at = [Math.round(seat.at[0] + Math.cos((k * Math.PI) / 8) * 600), Math.round(seat.at[1] + Math.sin((k * Math.PI) / 8) * 600)];
+            const land = landAt(game.world.plan, at[0], at[1]);
+
+            if (!land.water && land.biome !== "sea" && !game.host.war.towns.some((town) => Math.hypot(town.at[0] - at[0], town.at[1] - at[1]) < 250)) {
+                return at;
+            }
+        }
+
+        return null;
+    }, set.seat);
+
+    expect(ground).not.toBeNull();
+    await tap(ground[0], ground[1]);
+    await expect(page.locator("#warorderstitle")).toHaveText("Here");
+    await choose("Make camp here");
+    await expect(page.locator("#worldmapnote")).toHaveText("So be it: the army marches to make camp there.");
+    expect(await page.evaluate(() => window.pellagos.game.host.war.armyOf("human").orders)).toEqual({ kind: "camp", about: ground, by: "human" });
+
+    // The orcs' seat tapped: marched on (a camp made before it first, out of reach of theirs)
+    const orcs = await where(set.orcs);
+
+    await tap(orcs.x, orcs.z);
+    await expect(page.locator("#warorderstitle")).toHaveText(orcs.name);
+    await expect(page.locator("#warordersmenu button", { hasText: "Counsel marching on it next" })).toBeVisible();
+    await choose("March on it");
+    await expect(page.locator("#worldmapnote")).toHaveText(`So be it: the army marches on ${orcs.name}.`);
+    expect(await page.evaluate(() => window.pellagos.game.host.war.armyOf("human").orders.kind)).toBe("attack");
+
+    // The army tapped again: disbanded, none raised now
+    await tap(force.x, force.z);
+    await choose("Disband it");
+    await expect(page.locator("#worldmapnote")).toHaveText("So be it: the army's disbanded, each of them home to their towns.");
+    expect(await page.evaluate(() => window.pellagos.game.host.war.armyOf("human"))).toBeNull();
+    await expect(page.locator("#worldmappicktext")).toContainText("We have no army raised.", { timeout: 5000 });
 });
 
 test("a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people", async ({ page }) => {

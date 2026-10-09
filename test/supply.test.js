@@ -356,6 +356,27 @@ describe("the armies' supply (war.js, supply.js)", () => {
         assert.ok(war.log.some(({ type, depot }) => type === "ordered" && depot));
     });
 
+    it("sends supplies from the depot asked for, if it can supply the army: up, with a load in it, in reach of it", () => {
+        const war = warOf();
+        const seat = war.town(war.realm("human").seat);
+        const army = field(war, "human", [seat.at[0] + 1400, seat.at[1]]);
+        const near = { id: "depot-901", realm: "human", at: toward(army.at, seat.at, 300), guard: DEPOT.guard, built: 0, done: 0, level: 2, toward: null, used: 0, by: null };
+        const far = { id: "depot-902", realm: "human", at: toward(army.at, seat.at, -(DEPOT.reach + 200)), guard: DEPOT.guard, built: 0, done: 0, level: 2, toward: null, used: 0, by: null };
+        const empty = { ...near, id: "depot-903", level: 0 };
+
+        war.depots.push(near, far, empty);
+
+        assert.equal(war.order("human", { supply: far.id }), false, "out of its reach");
+        assert.equal(war.order("human", { supply: empty.id }), false, "empty");
+        assert.equal(war.order("human", { supply: "depot-999" }), false, "no such depot");
+        assert.equal(war.order("human", { supply: near.id }), true);
+
+        const [wagon] = wagonsTo(war, army.id);
+
+        assert.deepEqual([wagon.home, wagon.at, near.level], [near.id, near.at, 1]);
+        assert.ok(war.log.some(({ type, supply, from }) => type === "ordered" && supply && from === near.id));
+    });
+
     it("keeps its wagons and depots in a snapshot, carrying on the same; a war kept before them carries on, each army's wagon due a while from now", () => {
         const war = warOf();
         const seat = war.town(war.realm("human").seat);

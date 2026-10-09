@@ -47,7 +47,7 @@ import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
 import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
-import { battleMapView } from "./battlemap.js";
+import { battleMapView, heededText } from "./battlemap.js";
 import { CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
@@ -7493,12 +7493,23 @@ export class Game {
             return { ok: false, reason };
         }
 
-        const refresh = () => battleMapView(this.host.war, this.self.realm, { explored: this.explored });
+        const refresh = () => battleMapView(this.host.war, this.self.realm, { explored: this.explored, rank: this.standing.rank() });
         const view = refresh();
 
-        this.onWorldMap({ war: { view, refresh } });
+        this.onWorldMap({ war: { view, refresh, realm: town.owner, act: (action, then) => this.atTable(action, then) } });
 
         return { ok: true, view };
+    }
+
+    /**
+     * Orders given, or counsel, at the war table the player stands at (app/battlemap.js
+     * actionsAt's: core/host.js #atTable). `then` hears what's said of it, and whether it was
+     * heeded: "So be it: the army marches on Grimhold."; or why not.
+     */
+    atTable({ orders = null, realm = null, counsel = null }, then = null) {
+        return this.#command({ type: "table", orders, realm, counsel }, (result) => {
+            then?.(result?.ok ? heededText({ orders, counsel }, this.host.war) : (REFUSALS[result?.reason] ?? REFUSALS.command), Boolean(result?.ok));
+        });
     }
 
     // Walking up to the portal (it was tapped): there and stopped, the travel map opens; told to

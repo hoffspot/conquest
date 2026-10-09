@@ -292,6 +292,9 @@ export class WorldMap {
          */
         this.war = null;
 
+        /** On the war table's map, the realm whose army's to be ordered (ringed in gold), or null. */
+        this.selected = null;
+
         const listen = (type, listener, options) => {
             canvas.addEventListener(type, listener, options);
             this.listeners.push([type, listener]);
@@ -867,6 +870,15 @@ export class WorldMap {
                 context.arc(x, y, MARK_SIZE * 0.8, 0, Math.PI * 2);
                 context.lineWidth = 2;
                 context.strokeStyle = "rgba(255, 246, 220, 0.9)";
+                context.stroke();
+            }
+
+            // (The army to be ordered: ringed in gold)
+            if (force.command && force.command === this.selected) {
+                context.beginPath();
+                context.arc(x, y, MARK_SIZE * 0.95, 0, Math.PI * 2);
+                context.lineWidth = 3;
+                context.strokeStyle = "#f0c96a";
                 context.stroke();
             }
 
