@@ -477,7 +477,7 @@ experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 | Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
 | Evasion | slipping blows (20 a blow), and three tenths of all Blade, Marksman and Endurance grow by | a blow or a shot slipped one time in four (one in twenty from the start) | |
 | Shield | catching blows on a shield (20 a blow), and stunning with a shield bash (15) | a blow or a shot from in front caught on a shield one time in two (one in ten from the start) | Shield bash |
-| Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold | |
+| Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold (all haggling together 35% at most: `HAGGLE_CAP`) | |
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
 
@@ -667,6 +667,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   everything.").
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
+  All a player's haggling together (the Trade skill's, the Fox's, a set's, a rabbit's foot's) goes
+  no further than 35% (`HAGGLE_CAP`), so nothing bought can be sold straight back for more: at
+  35% off, a thing costs 65% of its price and sells back for 54%.
   The shop stays open while the player's within a few steps of the keeper. The keeper stays
   where they were, facing the player, till the trade's done (the pack closed, or the player off
   to talk to someone else), as they do in talk: one whose rounds would take them off, the

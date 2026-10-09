@@ -173,7 +173,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/overworld.js", 101128],
             ["js/core/places.js", 9550],
             ["js/core/portals.js", 5207],
-            ["js/core/progress.js", 57297],
+            ["js/core/progress.js", 57695],
             ["js/core/random.js", 4020],
             ["js/core/roles.js", 16953],
             ["js/core/setpieces/castle.js", 15029],
