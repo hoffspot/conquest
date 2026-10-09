@@ -83,6 +83,7 @@ const INSIDE = {
     pillar: [168, 160, 146],
     tomb: [150, 144, 132],
     throne: [124, 84, 46],
+    "war-table": [150, 112, 64],
     candles: [70, 66, 62],
 };
 

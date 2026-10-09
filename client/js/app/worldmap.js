@@ -21,7 +21,7 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, FORT_ICONS } from "./mapicons.js";
+import { drawBuildingIcon, drawWarMark, FORT_ICONS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -62,6 +62,13 @@ const BRANCH_TOP = 72;
 // The building screen's: how big a plan's icon and a fortification standing's (pixels)
 const PLAN_SIZE = 30;
 const FORT_SIZE = 22;
+
+// The war table's map (docs/WAR.md *The war table*): how big the war's marks are drawn (pixels),
+// a town's dot and the ring round a seat's; the shade over what its people don't see now
+const MARK_SIZE = 20;
+const TOWN_DOT = 6;
+const SEAT_RING = 10;
+const SHROUD = "rgba(8, 6, 4, 0.5)";
 
 // Roads' colours and widths (metres; a pixel at least)
 const ROAD = { colour: "rgb(186, 160, 112)", width: 5 };
@@ -279,6 +286,15 @@ export class WorldMap {
          */
         this.build = null;
 
+        /**
+         * The war table's map (app/battlemap.js battleMapView's: what a people's council sees of
+         * the war), or null for the world map.
+         */
+        this.war = null;
+
+        /** On the war table's map, the realm whose army's to be ordered (ringed in gold), or null. */
+        this.selected = null;
+
         const listen = (type, listener, options) => {
             canvas.addEventListener(type, listener, options);
             this.listeners.push([type, listener]);
@@ -298,15 +314,17 @@ export class WorldMap {
      * finding near where they've been, rimmed in who holds them), marks where their
      * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
      * and the way to it (`way`: [[x, z], ...], or null). Or as the travel map (`travel`: the
-     * branches), or the building screen (`build`: { plans, forts }).
+     * branches), the building screen (`build`: { plans, forts }), or the war table's map (`war`:
+     * app/battlemap.js battleMapView's).
      */
-    open({ player, icons = [], marks = [], pin = null, way = null, travel = null, build = null }) {
-        const only = Boolean(travel || build);
+    open({ player, icons = [], marks = [], pin = null, way = null, travel = null, build = null, war = null }) {
+        const only = Boolean(travel || build || war);
 
         this.land ??= paintLand(this.world.plan);
         this.player = player;
         this.travel = travel;
         this.build = build;
+        this.war = war;
         this.icons = only ? [] : icons;
         this.marks = only ? [] : marks;
         this.pin = only ? null : pin;
@@ -319,8 +337,9 @@ export class WorldMap {
 
         // (The travel map: every branch open to them in view, if they're far apart, a little
         // below the middle, clear of what's said across the top; the building screen: every plan,
-        // and where they are)
-        const shown = travel ?? (build ? [...build.plans, ...(build.plans.length ? [] : build.forts), player] : null);
+        // and where they are; the war table's map: their own forces, camps and depots, and where
+        // they are)
+        const shown = travel ?? (build ? [...build.plans, ...(build.plans.length ? [] : build.forts), player] : war ? [...[...war.forces, ...war.camps, ...war.depots].filter(({ own }) => own), player] : null);
 
         if (shown?.length > 1) {
             const [xs, zs] = [shown.map(({ x }) => x), shown.map(({ z }) => z)];
@@ -342,6 +361,24 @@ export class WorldMap {
     /** The building screen's plan at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
     planAt(point) {
         return this.#nearest(this.build?.plans, point);
+    }
+
+    /**
+     * What's on the war table's map at a point (metres: [x, z]), tapped: the nearest near enough
+     * of the forces, camps, depots and fortifications, or else of the towns; or null.
+     */
+    warAt(point) {
+        if (!this.war) {
+            return null;
+        }
+
+        return this.#nearest([...this.war.forces, ...this.war.camps, ...this.war.depots, ...this.war.forts], point) ?? this.#nearest(this.war.towns, point);
+    }
+
+    /** The war table's map drawn again, as the war's gone on (`war`: battleMapView's). */
+    setWar(war) {
+        this.war = war;
+        this.redraw();
     }
 
     // Of `list` ([{ x, z }]), the nearest a point (metres) within BRANCH_REACH pixels, or null
@@ -511,6 +548,11 @@ export class WorldMap {
 
         this.#drawFog(ox, oy, across, ratio);
 
+        // The war table's map: shaded but for what its people see now
+        if (this.war) {
+            this.#drawShroud(at, width, height, ratio);
+        }
+
         // The fords where the player's been: further out than the chunks are drawn square by
         // square (which have them marked as the minimap has: minimap.js fordMark), as many stones
         // across as there's room for
@@ -527,7 +569,7 @@ export class WorldMap {
             context.textBaseline = "middle";
             context.lineJoin = "round";
 
-            const branches = new Set((this.travel ?? []).map(({ id }) => id));
+            const branches = new Set([...(this.travel ?? []), ...(this.war?.towns ?? [])].map(({ id }) => id));
 
             for (const place of this.world.plan.places) {
                 const [px, pz] = place.at;
@@ -606,6 +648,11 @@ export class WorldMap {
             this.#drawBuild(at, width, height, icons);
         }
 
+        // The war table's map: the towns in their holders' colours, how strongly held where it's
+        // seen; the forces, camps, depots and fortifications of their people and their friends,
+        // and of everyone else where they're seen
+        const war = this.war ? this.#drawWar(at, width, height, names) : null;
+
         // Where the player's requests take them: a gold ring with a star in it, fog or no
         for (const mark of this.marks ?? []) {
             const [x, y] = at(mark.x, mark.z);
@@ -660,7 +707,191 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+    }
+
+    // The war table's map: a shade over all but what its people see now (draw's)
+    #drawShroud(at, width, height, ratio) {
+        const { canvas, context } = this;
+
+        if (!this.shroud || this.shroud.width !== canvas.width || this.shroud.height !== canvas.height) {
+            this.shroud = offscreen(canvas.width, canvas.height);
+        }
+
+        const shade = this.shroud.getContext("2d");
+
+        shade.setTransform(ratio, 0, 0, ratio, 0, 0);
+        shade.globalCompositeOperation = "copy";
+        shade.fillStyle = SHROUD;
+        shade.fillRect(0, 0, width, height);
+        shade.globalCompositeOperation = "destination-out";
+        shade.fillStyle = "#000";
+
+        for (const { x, z, reach } of this.war.sight) {
+            const [sx, sy] = at(x, z);
+            const r = reach / this.view.scale;
+
+            if (sx + r > 0 && sy + r > 0 && sx - r < width && sy - r < height) {
+                shade.beginPath();
+                shade.arc(sx, sy, r, 0, Math.PI * 2);
+                shade.fill();
+            }
+        }
+
+        shade.globalCompositeOperation = "source-over";
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.drawImage(this.shroud, 0, 0);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+        // (Round each camp, as far as its scout sees: a faint ring)
+        context.save();
+        context.setLineDash([4, 6]);
+        context.lineWidth = 1.5;
+        context.strokeStyle = "rgba(246, 234, 208, 0.45)";
+
+        for (const { kind, x, z, reach } of this.war.sight) {
+            if (kind === "scout") {
+                const [sx, sy] = at(x, z);
+
+                context.beginPath();
+                context.arc(sx, sy, reach / this.view.scale, 0, Math.PI * 2);
+                context.stroke();
+            }
+        }
+
+        context.restore();
+    }
+
+    // The war table's map's towns, forces, camps, depots and fortifications (draw's); how many of
+    // each were in view, and of everyone else's how many were seen ({ towns, forces, camps,
+    // depots, forts, seen }). The towns' names go in `names`
+    #drawWar(at, width, height, names) {
+        const { context, view } = this;
+        const inView = (x, y) => x > -60 && y > -40 && x < width + 60 && y < height + 40;
+        const label = (text, x, y, colour, size = 12, align = "center") => {
+            context.font = `600 ${size}px Georgia, "Times New Roman", serif`;
+            context.textAlign = align;
+            context.textBaseline = "middle";
+            context.lineJoin = "round";
+            context.lineWidth = 4;
+            context.strokeStyle = "rgba(20, 14, 8, 0.9)";
+            context.strokeText(text, x, y);
+            context.fillStyle = colour;
+            context.fillText(text, x, y);
+        };
+        const drawn = { towns: 0, forces: 0, camps: 0, depots: 0, forts: 0, seen: 0 };
+        const count = (kind, each) => {
+            drawn[kind]++;
+            drawn.seen += each.ours ? 0 : 1;
+        };
+
+        // (Where their own armies, reserves and reinforcements are going: dashed, in their colour)
+        context.save();
+        context.setLineDash([6, 5]);
+        context.lineWidth = 2;
+
+        for (const force of this.war.forces) {
+            if (force.way?.length > 1) {
+                context.strokeStyle = force.colour;
+                context.beginPath();
+                force.way.forEach(([x, z], k) => (k ? context.lineTo(...at(x, z)) : context.moveTo(...at(x, z))));
+                context.stroke();
+            }
+        }
+
+        context.restore();
+
+        // (The towns: a dot in their holder's colour, a seat's ringed; how many hold it under it,
+        // where that's seen; their names over them, near enough)
+        for (const town of this.war.towns) {
+            const [x, y] = at(town.x, town.z);
+
+            if (!inView(x, y)) {
+                continue;
+            }
+
+            context.beginPath();
+            context.arc(x, y, TOWN_DOT, 0, Math.PI * 2);
+            context.fillStyle = town.colour;
+            context.fill();
+            context.lineWidth = 2;
+            context.strokeStyle = "#140e08";
+            context.stroke();
+
+            if (town.seat) {
+                context.beginPath();
+                context.arc(x, y, SEAT_RING, 0, Math.PI * 2);
+                context.strokeStyle = town.colour;
+                context.stroke();
+            }
+
+            if (view.scale <= NAMES_FROM) {
+                label(town.name, x, y - SEAT_RING - 9, "#f6ead0", view.scale <= 4 ? 15 : 13);
+                names.push(town.name);
+            }
+
+            if (town.garrison !== null) {
+                label(String(town.garrison), x, y + SEAT_RING + 8, town.colour);
+            }
+
+            count("towns", town);
+        }
+
+        for (const fort of this.war.forts) {
+            const [x, y] = at(fort.x, fort.z);
+
+            if (inView(x, y)) {
+                drawBuildingIcon(context, FORT_ICONS[fort.kind], x, y, FORT_SIZE, fort.colour);
+                count("forts", fort);
+            }
+        }
+
+        for (const [kind, list] of [["camp", this.war.camps], ["depot", this.war.depots]]) {
+            for (const each of list) {
+                const [x, y] = at(each.x, each.z);
+
+                if (inView(x, y)) {
+                    drawWarMark(context, kind, x, y, MARK_SIZE, each.colour, { going: !each.up });
+                    count(`${kind}s`, each);
+                }
+            }
+        }
+
+        // (The forces, how strong beside them; their own army and reserve ringed, to be found)
+        for (const force of this.war.forces) {
+            const [x, y] = at(force.x, force.z);
+
+            if (!inView(x, y)) {
+                continue;
+            }
+
+            if (force.own && (force.kind === "army" || force.kind === "reserve")) {
+                context.beginPath();
+                context.arc(x, y, MARK_SIZE * 0.8, 0, Math.PI * 2);
+                context.lineWidth = 2;
+                context.strokeStyle = "rgba(255, 246, 220, 0.9)";
+                context.stroke();
+            }
+
+            // (The army to be ordered: ringed in gold)
+            if (force.command && force.command === this.selected) {
+                context.beginPath();
+                context.arc(x, y, MARK_SIZE * 0.95, 0, Math.PI * 2);
+                context.lineWidth = 3;
+                context.strokeStyle = "#f0c96a";
+                context.stroke();
+            }
+
+            drawWarMark(context, force.kind, x, y, MARK_SIZE, force.colour);
+
+            if (force.kind !== "envoy") {
+                label(String(force.size), x + MARK_SIZE * 0.62, y + MARK_SIZE * 0.3, force.colour, 12, "left");
+            }
+
+            count("forces", force);
+        }
+
+        return drawn;
     }
 
     // The building screen's fortifications and plans (draw's)
@@ -750,6 +981,7 @@ export class WorldMap {
         clearTimeout(this.holding);
         this.frame = 0;
         this.layer = null;
+        this.shroud = null;
 
         for (const key of [...this.details.keys()].slice(0, Math.max(0, this.details.size - DETAIL_RESTING))) {
             this.details.delete(key);
@@ -796,6 +1028,21 @@ export class WorldMap {
         this.clouds.setTransform(new DOMMatrix([1, 0, 0, 1, ox * ratio, oy * ratio]));
         fog.fillStyle = this.clouds;
         fog.fillRect(0, 0, this.layer.width, this.layer.height);
+
+        // (The war table's map: lifted where its people see now, as well as where they've been)
+        if (this.war) {
+            const pixels = (across / WORLD_SIZE) * ratio;
+
+            fog.globalCompositeOperation = "destination-out";
+            fog.fillStyle = "#000";
+
+            for (const { x, z, reach } of this.war.sight) {
+                fog.beginPath();
+                fog.arc(ox * ratio + x * pixels, oy * ratio + z * pixels, reach * pixels, 0, Math.PI * 2);
+                fog.fill();
+            }
+        }
+
         fog.globalCompositeOperation = "source-over";
 
         context.setTransform(1, 0, 0, 1, 0, 0);

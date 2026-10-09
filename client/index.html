@@ -169,6 +169,7 @@
                 </button>
             </header>
             <ul class="worldmap-key" id="worldmapkey" aria-label="Key"></ul>
+            <ul class="worldmap-key" id="warmapkey" aria-label="Key to the war table" hidden></ul>
             <div class="worldmap-pick" id="worldmappick" hidden>
                 <p id="worldmappicktext">Wizard's Walk: tap somewhere you've been</p>
                 <button type="button" class="button" id="worldmapcancel">Cancel</button>
@@ -246,6 +247,15 @@
             <div class="menu">
                 <button type="button" class="button primary" id="buildgo">Counsel it</button>
                 <button type="button" class="button" id="buildback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- At the war table: what's tapped on its map, and the orders or counsel to be given -->
+        <dialog id="warorders" class="together" aria-labelledby="warorderstitle" aria-describedby="warordersnote">
+            <h2 id="warorderstitle">Orders</h2>
+            <p class="note" id="warordersnote"></p>
+            <div class="menu" id="warordersmenu">
+                <button type="button" class="button" id="warordersback">Back</button>
             </div>
         </dialog>
 

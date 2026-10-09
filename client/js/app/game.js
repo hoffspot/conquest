@@ -40,12 +40,14 @@ import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
+import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
 import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
+import { battleMapView, heededText } from "./battlemap.js";
 import { CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
@@ -825,8 +827,10 @@ export class Game {
         this.approaching = null;
         this.talkVariety = new Variety();
 
-        // The map whose guild's portal the player's walking up to (tapped: #keepToPortal), or null
+        // The map whose guild's portal the player's walking up to (tapped: #keepToPortal), or null;
+        // and whose war table (#keepToTable)
         this.toPortal = null;
+        this.toTable = null;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -1613,11 +1617,12 @@ export class Game {
 
     /**
      * Pause (the menu open, or the world map): the world stops if it can (with no one else in it:
-     * core/host.js pausable), else it goes on, and only the player's taps and clicks aren't
-     * listened to, until start() again. Returns whether it stopped.
+     * core/host.js pausable) and `world` isn't false (the war table's map, read as the war goes
+     * on), else it goes on, and only the player's taps and clicks aren't listened to, until start()
+     * again. Returns whether it stopped.
      */
-    pause() {
-        if (this.host.pausable) {
+    pause({ world = true } = {}) {
+        if (world && this.host.pausable) {
             this.stop();
 
             return true;
@@ -2272,6 +2277,7 @@ export class Game {
         this.#keepTalking();
         this.#keepShopping();
         this.#keepToPortal();
+        this.#keepToTable();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
@@ -7379,10 +7385,11 @@ export class Game {
         const enemy = who;
         const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
         const portal = enemy || door ? null : this.#portalAt(clientX, clientY);
-        const ground = enemy || door || portal ? null : this.view.pickGround(clientX, clientY);
+        const table = enemy || door || portal ? null : this.#warTableAt(clientX, clientY);
+        const ground = enemy || door || portal || table ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, door, portal, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, table, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -7414,6 +7421,95 @@ export class Game {
         const box = new THREE.Box3(new THREE.Vector3(ox + portal.x - 1, 0, oz + portal.y), new THREE.Vector3(ox + portal.x + portal.w, 2.9, oz + portal.y + portal.h));
 
         return this.view.rayAt(clientX, clientY).intersectsBox(box) ? portal : null;
+    }
+
+    // The war table of the keep's great hall the player's in (core/wartable.js), if that's what
+    // was tapped: the table, or the map on it
+    #warTableAt(clientX, clientY) {
+        const table = warTableOn(this.world.maps?.[this.mapId]);
+
+        if (!table) {
+            return null;
+        }
+
+        const [ox, oz] = this.originOf(this.mapId);
+        const box = new THREE.Box3(new THREE.Vector3(ox + table.x, 0, oz + table.y), new THREE.Vector3(ox + table.x + table.w, 1.1, oz + table.y + table.h));
+
+        return this.view.rayAt(clientX, clientY).intersectsBox(box) ? table : null;
+    }
+
+    // Walking up to the war table (it was tapped): there and stopped, its map opens; told to do
+    // anything else, gone through a door, or stopped short, it's forgotten
+    #keepToTable() {
+        if (!this.toTable) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const table = warTableOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || me.map !== this.toTable || !table) {
+            this.toTable = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        this.toTable = null;
+
+        if (atWarTable(table, me.x, me.y)) {
+            this.openWarTable();
+        }
+    }
+
+    /**
+     * Read the war table at the keep the player stands at (core/wartable.js; docs/WAR.md *The war
+     * table*): the war as their people's council sees it, on the world map, drawn again as it goes
+     * on (app/battlemap.js), if it's their people's (or a people's under the same liege) and
+     * they're a Knight or above. Returns { ok, view }, or why not ({ ok: false, reason }: not at
+     * a war table, "stranger" or "rank": said).
+     */
+    openWarTable() {
+        const me = this.battle.actor(this.me);
+        const table = warTableOn(this.world.maps?.[this.mapId]);
+        const building = this.world.interiors?.of(this.mapId);
+        const war = this.host.war;
+        const town = building && war ? war.town(this.#townOf(building)) : null;
+
+        if (!me || me.dead || !table || !town || !atWarTable(table, me.x, me.y)) {
+            return { ok: false, reason: "table" };
+        }
+
+        const reason = mayRead(war, this.self.realm, town.owner, this.standing.rank());
+
+        if (reason !== "ok") {
+            const whose = `${peopleOf(town.owner)}${peopleOf(town.owner).endsWith("s") ? "'" : "'s"}`;
+
+            this.hud.message(reason === "stranger" ? `The ${whose} war table: its map isn't for you to read.` : `The war table's for the council and its Knights to read. You're ${/^[AEIOU]/.test(this.standing.title()) ? "an" : "a"} ${this.standing.title()}.`, 3.5);
+
+            return { ok: false, reason };
+        }
+
+        const refresh = () => battleMapView(this.host.war, this.self.realm, { explored: this.explored, rank: this.standing.rank() });
+        const view = refresh();
+
+        this.onWorldMap({ war: { view, refresh, realm: town.owner, act: (action, then) => this.atTable(action, then) } });
+
+        return { ok: true, view };
+    }
+
+    /**
+     * Orders given, or counsel, at the war table the player stands at (app/battlemap.js
+     * actionsAt's: core/host.js #atTable). `then` hears what's said of it, and whether it was
+     * heeded: "So be it: the army marches on Grimhold."; or why not.
+     */
+    atTable({ orders = null, realm = null, counsel = null }, then = null) {
+        return this.#command({ type: "table", orders, realm, counsel }, (result) => {
+            then?.(result?.ok ? heededText({ orders, counsel }, this.host.war) : (REFUSALS[result?.reason] ?? REFUSALS.command), Boolean(result?.ok));
+        });
     }
 
     // Walking up to the portal (it was tapped): there and stopped, the travel map opens; told to
@@ -8032,7 +8128,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, portal = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, table = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -8081,6 +8177,24 @@ export class Game {
 
             this.#command({ type: "move", to: square, run });
             this.toPortal = player.map;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
+
+            return;
+        }
+
+        // The war table: up to it, and its map opens (#keepToTable)
+        if (table) {
+            const [ox, oz] = this.originOf(player.map);
+            const square = beforeWarTable(table);
+
+            if (atWarTable(table, player.x, player.y) && !player.path.length) {
+                this.openWarTable();
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toTable = player.map;
             this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
 
             return;
@@ -8135,12 +8249,13 @@ export class Game {
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         // (Anything the player does themselves ends running somewhere far: not resisting a
-        // summons, done for them; and walking up to the portal)
+        // summons, done for them; and walking up to the portal or the war table)
         if (!this.journeying && !(command.type === "summoned" && !command.come)) {
             this.journey = null;
         }
 
         this.toPortal = null;
+        this.toTable = null;
 
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));
