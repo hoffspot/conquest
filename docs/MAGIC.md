@@ -11,7 +11,7 @@ host does for the wonders, and how each looks.
 The code: `client/js/core/spells.js` (every spell), `core/battle.js` (casting and landing: `cast`,
 `#land`, and what lasts on someone: `buff`), `core/host.js` (the wonders, and the schools' and
 spells' growing), `core/progress.js` (what's known, the tomes as things, wands' and grimoires'
-boost), `core/spoils.js` and `core/standing.js` (tomes found and given), `app/spellbook.js` (the
+boost), `core/spoils.js` and `core/standing.js` (tomes found and given), `core/goods.js` (spell scrolls), `app/spellbook.js` (the
 spellbook), `app/spellicons.js` (each spell's icon), `app/game.js` (a spell cast and landing in
 play) and `world/spellfx.js` (how each looks).
 
@@ -241,6 +241,28 @@ players, always do ("Resisted", "Immune"). Fear frightens a creature for ten sec
 it again within a minute of first frightening it (`FEAR_MEMORY`), half as long, and a third time,
 not at all ("is past fearing you, for now"). A frightened creature runs from the caster, blindly.
 Pacify leaves it no longer hostile to the caster till they strike it (`spared`).
+
+## Spell scrolls
+
+A spell scroll (`core/goods.js` `SCROLLS`, "Scroll of Fireball") casts its spell once, read, as its
+reader would cast it at the first level of it, though they've never learnt it; then it's gone.
+There's one for every school's spell, the Hexes' Stun and Hold, and the tomes' spells cast on an
+enemy, oneself or a friend with nothing in hand (`SCROLL_SPELLS`: 48). The wards and cures aren't
+among them (they come in bottles: docs/WAR.md *The alchemist's brews*), nor a wand's or a
+grimoire's spells, nor those cast on a place, the fallen or a summons, nor Teleport.
+
+- **Read** from the pack, or from an action wheel: a scroll goes on the wheel its spell would (an
+  enemy's for a spell cast on one), shown by its spell's name with the scroll's icon (a rolled
+  sheet with the spell's mark on it and a ribbon of its make). From an enemy's wheel it's cast on
+  that enemy; from the pack, on the foe they're set on, or else the nearest they can see within
+  the spell's reach (host.js `#use`, `#foeNear`). The cast is the spell's own: its casting time,
+  the reader's cooldowns, refused as a cast would be (nothing in reach, still recovering), and
+  the scroll kept if it is.
+- **How rare and how dear** by how great the spell is (shown in the colour of its make, docs/WAR.md
+  *Makes*): a school's first two spells common (15 and 30 gold), then fine (55), masterwork (95),
+  rare (160), very rare (260) and legendary (420) for the seventh; a tome's spell's scroll by its
+  tome's rarity, fine (30), masterwork (75) or rare (180); Stun's fine (40), Hold's masterwork (80).
+- **Shown** under "Tomes and scrolls" in a shop, and read ("Read") from the pack as a tome is.
 
 ## Wonders (host.js)
 

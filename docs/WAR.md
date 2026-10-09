@@ -537,7 +537,7 @@ both hands.
   dark wood, a crystal in a ring of runes, that catches spells as well as blows. How much of a
   blow each one takes when it's caught on it is its own, rolled as it's made (`rollBlock`), from
   half the most its make can to all of it, the higher the rarer: the most is a tower shield's,
-  50% common, 65% fine, 80% masterwork, 100% legendary (`BLOCK_MOST`), and the others as much
+  50% common, 65% fine, 80% masterwork, 87% rare, 93% very rare, 100% legendary (`BLOCK_MOST`), and the others as much
   less as they're less robust (`robust`): a kite shield 0.8 of it, the uniform's 0.7, a round
   shield 0.6, a spellward half. It's in its name ("Kite shield (blocks 32%)"), and it's worth
   more the more of its most it takes. Shields made before they blocked take two thirds of the
@@ -554,7 +554,15 @@ both hands.
 | Common | ×1 | ×1 | +0 | none (jewellery one) |
 | Fine | ×1.15 | ×3 | +0.5 | one |
 | Masterwork | ×1.3 | ×8 | +1 | two, a quarter stronger |
+| Rare | ×1.38 | ×14 | +1.2 | three, 30% stronger |
+| Very rare | ×1.44 | ×21 | +1.35 | three, 40% stronger |
 | Legendary | ×1.5 | ×30 | +1.5 | three, half as strong again, and a name of its own |
+
+  Found, given or bought, most things are common (70%), then fine (22%), masterwork (6%), rare
+  (1.2%), very rare (0.5%) and legendary (0.3%) (`MAKES`, `rollMake`); a cache's makes go by how
+  strong its band was (`CACHE_MAKES`, docs/WILDS.md). A charm (below) comes in every make too. A
+  draught, a scroll or a tome is only ever as it was made (its `rarity`: `gradeOf`), and shown in
+  that make's colour.
 
 - **Rolled bonuses** (`rollGear`, `AFFIXES`) are rolled as a piece is made (bought, found,
   given), each adding to something different that fits the piece: armour (Sturdy), melee
@@ -647,6 +655,32 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   goes at once, they aren't carried, and they fall and get up as anyone does. Only one at a time
   ("You're reading one already."). It's played out by the host, so all who play together see it
   (`player.safety`, kept in snapshots; `NET_VERSION` 45).
+- **The specialists' goods** (`core/goods.js`, `NET_VERSION` 87): what the alchemists, the
+  occult scriptoria and the Mystic Emporia keep. No shop sells them yet: the shops that do
+  come with them in the next of the shops' changes.
+  - **The alchemist's brews** (`BREWS`, 20, each its own colour in the bottle; under "Food, drink
+    and draughts"): stronger healing (a greater draught heals 60, 45 gold; a superior one 150,
+    120 gold); a Draught of Endurance (breath back 60% faster, ten minutes); the elixirs, each a
+    boon for ten minutes, one of each at a time (Strength: blows 15% stronger; the Hawk: shots
+    15%; Sorcery: spells 15%; Ironskin: 5% more armour; Mending: healing 20%); the warding
+    elixirs, each a ward's spell on the drinker for half an hour (Fire, Frost, Storm, Stone,
+    Spell, Venom and Plague Warding: Resist Fire, Water, Air, Earth, Magic, Poison and Disease,
+    docs/MAGIC.md); a Phial of Shadows (Invisibility, a minute); a glowcap draught (Light, a
+    quarter of an hour); and the oils, applied to a weapon ("Apply"), one at a time, five
+    minutes: a blow or a shot in four leaves what the oil's for on what it hits (fire oil
+    burning, frost oil a chill that slows, venom oil poison; battle.js `oil`).
+  - **Spell scrolls** (`SCROLLS`, under "Tomes and scrolls"): each casts its spell once, though
+    it's never been learnt (docs/MAGIC.md *Spell scrolls*).
+  - **Charms** (`CHARMS`, 13, under "Charms"): carried, not worn; each does its good while it's
+    in the pack, the best made of each kind counting, never two alike (`Progress.charms`, counted
+    in `bonuses`; the host counts them again whenever they change, `#charmed`). A charm's made in
+    any make, the better the stronger (`CHARM_GRADE`: ×1, ×1.25, ×1.5, ×1.75, ×2 and ×2.5):
+    a rabbit's foot (+3% haggling), a lucky coin (+8% gold found on the fallen), a wolf-tooth, a
+    hawk-feather and a moonstone charm (+3% to blows, shots and spells), a heart of oak (+8 hit
+    points), a swiftwind charm (running tires 12% less), a saint's token (+5% healing); and the
+    ember stone, rime stone, storm glass and hag stone (fire, water, air and earth's spells and
+    blows hurt 8% less) and the witch's eye (every spell 5% less). What wards off harm adds up,
+    a stone's and the witch's eye's, but never takes more than half off (battle.js `charmed`).
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
 - **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape
@@ -659,7 +693,7 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     haggling, persuasion), each set worn and how many of its pieces, and who they pass for.
   - **What's carried** is a grid of 20 slots at a time, with a tab for each page, each stack
     drawn with its icon (a uniform's piece in its people's colours) and how many, edged by its
-    make (green fine, blue masterwork, orange legendary). "Sort" puts the pack in order: gear
+    make (blue fine, gold masterwork, violet rare, rose very rare, orange legendary). "Sort" puts the pack in order: gear
     first (by where it's worn, the best made first), then things to use, tomes, and creatures'
     parts; things alike put together (`sort`).
   - **Tapped**, a thing says what it is (`app/gearinfo.js`: its name in the colour of its make,
@@ -673,8 +707,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     instead, without the card.
   - **Held**, a piece of gear goes on (from the pack) or comes off (worn), back into the pack;
     double-clicked too. Anything else held (or right-clicked) opens a wheel of what can be done
-    with it round it, like the action wheel: N to drink or eat it; NE to put it on an action
-    wheel (the first empty slice of the player's own); E to split the stack (asked how many); SE
+    with it round it, like the action wheel: N to drink, eat, read or apply it; NE to put it on an action
+    wheel (the first empty slice of the player's own; a spell scroll's, an enemy's for a spell
+    cast on one); E to split the stack (asked how many); SE
     to sell it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how
     many). Held, a flick chooses; right-clicked, a click.
   - **Dragged** onto another slot, a stack moves there: onto a stack alike, the two are put

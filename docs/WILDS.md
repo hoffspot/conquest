@@ -144,8 +144,8 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
   ("It's locked fast, and those keeping it are still about."). Once the last falls it opens, a share
   for each player within 39 m of it, theirs alone to take (`rollCache`): 20 to 45 gold, 35% more for
   each tier above the first; two or three pieces of gear (any but a people's uniform), as well made
-  as the band was strong (`CACHE_MAKES`: mostly common and fine near home, masterwork and
-  legendary for the mightiest), a wand's or grimoire's boost rolled as a shop's is; and a healing
+  as the band was strong (`CACHE_MAKES`: mostly common and fine near home; masterwork, rare, very
+  rare and legendary for the mightiest), a wand's or grimoire's boost rolled as a shop's is; and a healing
   draught, more often than not.
 - **On the maps.** Once a player's within 60 m of it, it's said ("An adventurer's cache, and
   outlaws keeping it.") and marked on their minimap and world map with a chest's icon, rimmed grey

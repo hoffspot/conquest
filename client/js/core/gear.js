@@ -124,7 +124,7 @@ export const SHIELDS = Object.freeze(Object.keys(GEAR).filter((id) => GEAR[id].r
  * (the most robust), the rest as much less as they're less robust (a spellward half of it). Each
  * one made has its own, rolled (rollBlock).
  */
-export const BLOCK_MOST = Object.freeze({ common: 0.5, fine: 0.65, masterwork: 0.8, legendary: 1 });
+export const BLOCK_MOST = Object.freeze({ common: 0.5, fine: 0.65, masterwork: 0.8, rare: 0.87, veryRare: 0.93, legendary: 1 });
 
 /** The most a shield of a make can take of a blow (a share: BLOCK_MOST, as robust as it is). */
 export const blockMost = (id, quality = "common") => Math.round((BLOCK_MOST[quality] ?? BLOCK_MOST.common) * (GEAR[id]?.robust ?? 0) * 100) / 100;
@@ -154,6 +154,14 @@ export const STATS = Object.freeze({
     bash: { label: "Shield bash", share: true },
     haggle: { label: "Haggling", share: true },
     persuade: { label: "Persuasion", share: true },
+    // (Only a charm's: core/goods.js CHARMS)
+    fortune: { label: "Gold found", share: true },
+    endurance: { label: "Running's toll", share: true, less: true },
+    wardFire: { label: "Fire's harm", share: true, less: true },
+    wardWater: { label: "Water's harm", share: true, less: true },
+    wardAir: { label: "Air's harm", share: true, less: true },
+    wardEarth: { label: "Earth's harm", share: true, less: true },
+    wardMagic: { label: "Spells' harm", share: true, less: true },
 });
 
 // Which pieces can have which bonuses (by slot, or a weapon by how it fights)
@@ -187,6 +195,8 @@ export const ROLLS = Object.freeze({
     common: { count: 0, strength: 1 },
     fine: { count: 1, strength: 1 },
     masterwork: { count: 2, strength: 1.25 },
+    rare: { count: 3, strength: 1.3 },
+    veryRare: { count: 3, strength: 1.4 },
     legendary: { count: 3, strength: 1.5 },
 });
 

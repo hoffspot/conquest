@@ -527,6 +527,13 @@ const isSquare = (value) => Array.isArray(value) && value.length === 2 && value.
 const refuse = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
 
+// The charms that count in someone's pack (progress.js charms), as a key to tell a change by
+const charmsOf = (progress) =>
+    Object.entries(progress.charms())
+        .map(([id, quality]) => `${id}:${quality}`)
+        .sort()
+        .join();
+
 // A player's standing as kept, with their guild card: one registered at a guild before the guilds
 // kept a card (the player knew `guildMember`, from the receptionist's talk) given theirs now, its
 // merit from the guild work they've done
@@ -1062,7 +1069,14 @@ export class Host {
         this.recorder?.(["c", playerId, structuredClone(command)]);
 
         try {
-            return this.#command(playerId, command);
+            const result = this.#command(playerId, command);
+
+            // (A charm bought, sold, traded, dropped or picked up: what's carried counted again)
+            for (const player of this.players.values()) {
+                this.#charmed(player);
+            }
+
+            return result;
         } catch (error) {
             console.warn(`Refused ${command?.type} from ${playerId}: it failed.`, error);
 
@@ -1184,7 +1198,7 @@ export class Host {
             case "unequip":
                 return this.#gear(player, player.progress.unequip(command.slot, Number.isInteger(command.to) ? command.to : null));
             case "use":
-                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item));
+                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item), typeof command.target === "string" ? command.target : null);
             case "arrange":
                 return this.#packed(player.progress.move(command.from, command.to));
             case "sort":
@@ -1325,8 +1339,11 @@ export class Host {
 
         this.#scrutiny(ms);
 
-        // Boons worn off (and said)
+        // Boons worn off (and said); and a charm come into the pack or gone from it (found on
+        // the fallen), counted
         for (const player of this.players.values()) {
+            this.#charmed(player);
+
             const ended = player.boons.filter(({ until }) => until <= this.battle.time);
 
             if (ended.length) {
@@ -1837,7 +1854,10 @@ export class Host {
         }
 
         for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety } of snapshot.players) {
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {} });
+            const kept = new Progress(progress, hero);
+
+            // (Outfitted as they were: their actor's carried on as it was, charms and all)
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept) });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -2020,13 +2040,23 @@ export class Host {
             return;
         }
 
-        player.progress.gold += gold;
-        this.#event("loot", { id: player.id, from: fallen.id, gold, items: kept });
+        const found = this.#fortune(player, gold);
+
+        player.progress.gold += found;
+        this.#event("loot", { id: player.id, from: fallen.id, gold: found, items: kept });
     }
 
     // A player's character in the battle as their skills, gear and boons have them: the weapon
     // they wield, how strong their blows, heals and stuns are, their armour, their hit points and
     // stamina; and the war as mighty as the mightiest player
+    // Outfitted again if the charms that count in their pack (progress.js charms) aren't those
+    // they were last outfitted with
+    #charmed(player) {
+        if (player.charms !== charmsOf(player.progress)) {
+            this.#outfit(player);
+        }
+    }
+
     #outfit(player) {
         const actor = this.battle.actor(player.id);
 
@@ -2062,6 +2092,12 @@ export class Host {
 
         actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell, bash: 1 + bonus.bash };
         actor.armor = Math.min(ARMOR_CAP, bonus.armor);
+        // (An oil on their weapon, what it leaves on what it strikes; the charms they carry: how
+        // much less each element's harm, and running's toll: core/goods.js)
+        actor.oil = player.boons.find(({ oil }) => oil)?.oil ?? null;
+        actor.wards = { fire: bonus.wardFire, water: bonus.wardWater, air: bonus.wardAir, earth: bonus.wardEarth, magic: bonus.wardMagic };
+        actor.endurance = bonus.endurance;
+        player.charms = charmsOf(player.progress);
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
 
@@ -2300,7 +2336,7 @@ export class Host {
                 return refuse("full");
             }
 
-            player.progress.gold += gold;
+            player.progress.gold += this.#fortune(player, gold);
             dropped.bundle = { gold: 0, items: left };
 
             if (!left.length) {
@@ -2580,8 +2616,9 @@ export class Host {
         return OK;
     }
 
-    // Something from the pack used (drunk, eaten; a tome read): one off its stack
-    #use(player, actor, index) {
+    // Something from the pack used (drunk, eaten; a tome or a scroll read, on `target` if it's
+    // a spell's): one off its stack
+    #use(player, actor, index, target = null) {
         const stack = player.progress.pack[index];
         const use = stack && ITEMS[stack.id].use;
 
@@ -2615,9 +2652,28 @@ export class Host {
             return refuse("unafflicted");
         }
 
-        // (A boon in a bottle, a Stamina Boost: one at a time; and a Scroll of Safety)
-        if (use.boon && player.boons.some(({ id }) => id === use.boon.id)) {
+        // (A boon in a bottle, a Stamina Boost: one at a time, and one oil on a weapon at a time;
+        // and a Scroll of Safety)
+        if (use.boon && player.boons.some(({ id, oil }) => id === use.boon.id || (oil && use.boon.oil))) {
             return refuse("boosted");
+        }
+
+        // (A spell's scroll: the spell cast as its reader would (refused, the scroll's kept), on
+        // the foe they've named or are set on, or the nearest they can see in its reach)
+        if (use.cast) {
+            const spell = SPELLS[use.cast];
+            const foe = spell.target === "enemy" ? (target ?? actor.order?.target ?? actor.target ?? this.#foeNear(actor, spell.reach)?.id ?? null) : target;
+            const cast = this.battle.cast(actor.id, use.cast, foe, { level: 1 });
+
+            if (!cast.ok) {
+                return cast;
+            }
+
+            const item = player.progress.take(index, 1);
+
+            this.#event("used", { id: player.id, item });
+
+            return cast;
         }
 
         if (use.safety && player.safety) {
@@ -2628,6 +2684,12 @@ export class Host {
 
         for (const kind of cures) {
             this.battle.cure(actor.id, kind);
+        }
+
+        // (A warding elixir: its ward's spell on them a while; a phial of shadows or a glowcap
+        // draught, Invisibility's or Light's)
+        if (use.ward || use.buff) {
+            this.battle.buff(actor.id, use.ward ?? use.buff, { ms: use.ms, by: actor.id });
         }
 
         if (use.boon) {
@@ -5800,6 +5862,20 @@ export class Host {
     }
 
     // --- Magic's wonders (spells.js: the tomes' spells the host works) ---
+
+    // The nearest foe someone can see within `reach` squares (a spell scroll read with none
+    // named: goods.js SCROLLS), or null
+    #foeNear(actor, reach) {
+        const near = (one) => one !== actor && !one.dead && one.map === actor.map && distanceBetween(actor.square, one.square) <= reach && this.canFight(actor, one) && this.battle.hostile(actor, one) && this.battle.canSee(actor, one);
+
+        return this.battle.actors.filter(near).sort((a, b) => hypot(a.x - actor.x, a.y - actor.y) - hypot(b.x - actor.x, b.y - actor.y))[0] ?? null;
+    }
+
+    // Gold found on the fallen, as much more as the charms someone carries have it (core/goods.js
+    // CHARMS `fortune`: a lucky coin)
+    #fortune(player, gold) {
+        return gold ? Math.round(gold * (1 + player.progress.bonuses().fortune)) : 0;
+    }
 
     // One of the wild's creatures fallen near someone lately, still lying there (the one named, or the nearest): or null
     #corpseNear(actor, reach, named = null) {

@@ -84,8 +84,16 @@ export function actionOf(key) {
     }
 
     const item = typeof key === "string" && key.startsWith("item:") ? key.slice(5) : null;
+    const def = item && ITEMS[item];
 
-    return item && ITEMS[item]?.use && !ITEMS[item].tome ? { label: SHORT[item] ?? ITEMS[item].label, item, on: "self" } : null;
+    if (!def?.use || def.tome) {
+        return null;
+    }
+
+    // (A spell's scroll: on whichever wheel its spell goes on, by the spell's name)
+    const cast = def.use.cast && SPELLS[def.use.cast];
+
+    return cast ? { label: cast.label, item, on: ON[cast.target] ?? "self" } : { label: SHORT[item] ?? def.label, item, on: "self" };
 }
 
 /** A slice's icon (SVG), for what's in it. */
@@ -158,7 +166,8 @@ export function readWheels(kept) {
  * What can be put on a wheel ("self" or "enemy"), or be a quick action ("quick": either's), for a
  * player who's `learnt` some spells and abilities (core/progress.js Progress known, abilities)
  * and `carries` some things (item ids): the spells they know that go on it, the blows they've
- * learnt, and (their own) each thing to use they carry.
+ * learnt, and each thing to use they carry that goes on it (a spell's scroll on whichever its
+ * spell would; anything else on their own).
  */
 export function assignable(wheel, { learnt = [], carries = [] } = {}) {
     // (A quick action: anything that can go on either wheel)
@@ -169,7 +178,7 @@ export function assignable(wheel, { learnt = [], carries = [] } = {}) {
     const actions = Object.entries(ACTIONS)
         .filter(([, action]) => goesOn(action, wheel) && (!action.learnt || learnt.includes(action.learnt)))
         .map(([key]) => key);
-    const items = wheel === "self" ? [...new Set(carries)].filter((id) => ITEMS[id]?.use).map((id) => `item:${id}`) : [];
+    const items = [...new Set(carries)].map((id) => `item:${id}`).filter((key) => goesOn(actionOf(key), wheel));
 
     return [...actions, ...items];
 }

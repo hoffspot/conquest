@@ -83,10 +83,10 @@ export const CACHE_LOOT = Object.freeze({ gold: [20, 45], gear: [2, 3], potion: 
  * finest, a match for a player near the height of their power.
  */
 export const CACHE_MAKES = Object.freeze([
-    [9, { masterwork: 0.6, legendary: 0.4 }],
-    [7, { fine: 0.2, masterwork: 0.6, legendary: 0.2 }],
-    [5, { fine: 0.45, masterwork: 0.45, legendary: 0.1 }],
-    [3, { common: 0.2, fine: 0.55, masterwork: 0.22, legendary: 0.03 }],
+    [9, { masterwork: 0.3, rare: 0.15, veryRare: 0.15, legendary: 0.4 }],
+    [7, { fine: 0.2, masterwork: 0.45, rare: 0.1, veryRare: 0.05, legendary: 0.2 }],
+    [5, { fine: 0.45, masterwork: 0.37, rare: 0.06, veryRare: 0.02, legendary: 0.1 }],
+    [3, { common: 0.2, fine: 0.55, masterwork: 0.2, rare: 0.02, legendary: 0.03 }],
     [1, { common: 0.55, fine: 0.4, masterwork: 0.05 }],
 ]);
 
