@@ -11,7 +11,7 @@ import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
 import { WORKS_SIZE } from "../../core/setpieces/works.js";
-import { PLOT } from "../../core/setpieces/pieces.js";
+import { PLOT, SHOP_LANDMARKS } from "../../core/setpieces/pieces.js";
 
 /**
  * Each people's colours (sRGB) and how they build: `walls`, `roof`, `stone` (towers, castles,
@@ -440,8 +440,8 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
         const builders = buildersOf(piece.people ?? people);
 
         if (piece.kind === "house" || piece.kind === "landmark") {
-            // (A barracks as many storeys as the house it was)
-            const storeys = piece.name === "hall" || piece.name === "keep" ? 3 : piece.name === "church" && (piece.people ?? people) === "human" ? FAR_CHURCHES[churchLook(piece)].storeys : piece.kind === "landmark" && piece.name !== "barracks" ? 2 : (piece.storeys ?? 1);
+            // (A barracks or a shop as many storeys as the house it was)
+            const storeys = piece.name === "hall" || piece.name === "keep" ? 3 : piece.name === "church" && (piece.people ?? people) === "human" ? FAR_CHURCHES[churchLook(piece)].storeys : piece.kind === "landmark" && piece.name !== "barracks" && !SHOP_LANDMARKS.includes(piece.name) ? 2 : (piece.storeys ?? 1);
 
             if (big && storeys < 2 && Math.max(width, depth) < 8) {
                 continue;

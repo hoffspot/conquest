@@ -49,9 +49,26 @@ export const OUTBUILDINGS = Object.freeze(["barn", "shed", "workshop", "stable"]
 
 /**
  * A town's special buildings, and their sizes. (A town hall and a keep are made over from the
- * biggest house by the market, and a barracks from the biggest out towards the edge, whatever
- * their size: setpieces/town.js; these are theirs as the building lab shows them.)
+ * biggest house by the market, a barracks from the biggest out towards the edge, and the shops
+ * from the houses nearest the market, whatever their size: setpieces/town.js; these are theirs as
+ * the building lab shows them.)
  */
+/**
+ * The specialists' shops (docs/WAR.md *Shops*: core/progress.js SHOPS): a swordsmith's, an
+ * armorer's, an occult scriptorium and an alchemist's, in every settlement with a church, an
+ * adventurers' guild, a blacksmith and a seat (setpieces/town.js keepsShops).
+ */
+export const SPECIALISTS = Object.freeze(["swordsmith", "armorer", "scriptorium", "alchemist"]);
+
+/**
+ * The master shops: the Master Swordsmith's, the Master Armorer's and the Mystic Emporium, each
+ * people's one of each, in a village, town or city of theirs (worldplan/settle.js).
+ */
+export const MASTER_SHOPS = Object.freeze(["masterSwordsmith", "masterArmorer", "emporium"]);
+
+/** Every shop made over from a house (setpieces/town.js), by its landmark's name. */
+export const SHOP_LANDMARKS = Object.freeze([...SPECIALISTS, ...MASTER_SHOPS]);
+
 export const LANDMARKS = Object.freeze({
     tavern: [3, 3],
     church: [3, 4],
@@ -62,6 +79,14 @@ export const LANDMARKS = Object.freeze({
     hall: [2.5, 3],
     keep: [2.75, 3.25],
     barracks: [2.5, 2.25],
+    // (The specialists' and the masters' shops: houses made over too, near the market)
+    swordsmith: [2.5, 2.25],
+    armorer: [2.5, 2.25],
+    scriptorium: [2.5, 2.25],
+    alchemist: [2.5, 2.25],
+    masterSwordsmith: [2.5, 2.5],
+    masterArmorer: [2.5, 2.5],
+    emporium: [2.5, 2.5],
 });
 
 /**

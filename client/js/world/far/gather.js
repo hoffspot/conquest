@@ -53,7 +53,7 @@ export function gatherSilhouettes(plan, { x, z, reach, settled = new Map(), layo
                 continue;
             }
 
-            layouts.set(place.id, layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(plan, place), people: place.race ?? "human" }).pieces);
+            layouts.set(place.id, layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(plan, place), people: place.race ?? "human", master: place.master ?? null }).pieces);
         }
 
         settlementShapes(shapes, { pieces: layouts.get(place.id), people: place.race ?? "human", origin: place.id === start?.id ? start.origin : squareOf(place).at, heightOf, big: distance > SILHOUETTES.big });

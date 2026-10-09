@@ -25,6 +25,7 @@ import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from 
 import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, lamp, m, pole, post, randomFor, stake, steps, wallPoint } from "./kit.js";
 import { apsidal, deckHouse, egg, hipThatch, marshHut, rail, reedHouse, serpent, stilts, toned } from "./lizard.js";
+import { dressShop, SHOP_NAMES, SHOPFRONTS, standingSign } from "../kits/shopfront.js";
 
 // A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round
 function board(solid, at, out, [u0, u1, v0, v1], texture, name, proud = m(0.2)) {
@@ -536,7 +537,56 @@ export function windmill(piece) {
     return market(piece);
 }
 
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
+/**
+ * A specialist's or a master's shop (kits/shopfront.js SHOPFRONTS), built as the guard's house is, plastered on its platform under a band of glyphs: its name on
+ * a board over its door, its sign on a post by the way in, and what it sells set out before it.
+ */
+export async function shop(piece) {
+    await loadSignFont();
+
+    const front = SHOPFRONTS[piece.name];
+    const random = randomFor(piece, 48);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const solid = new Solid();
+    const face = D - m(ENTRY) + m(0.4);
+    const floor = m(0.3);
+    const [x0, x1, z0] = [m(0.6), W - m(0.6), m(0.6)];
+    const width = x1 - x0;
+    const wide = front.name.length > 12 ? m(3.2) : m(2.6);
+
+    toned(solid, random, []);
+    solid.extrude([[x0 - m(0.3), z0 - m(0.3)], [x1 + m(0.3), z0 - m(0.3)], [x1 + m(0.3), face + m(0.3)], [x0 - m(0.3), face + m(0.3)]], 0, floor, material("stone-lime"));
+
+    const outline = [[x0, z0], [x1, z0], [x1, face], [x0, face]];
+    const bays = Math.max(3, Math.round(width / m(2.4))) | 1;
+    const openings = Array.from({ length: bays }, (_, k) => {
+        const u = ((k + 0.5) * width) / bays;
+        const middle = k === Math.floor(bays / 2);
+
+        return middle ? { u0: width / 2 - m(0.8), u1: width / 2 + m(0.8), v0: 0, v1: m(2.3), depth: m(0.5), back: material("planks-dark") } : { u0: u - m(0.2), u1: u + m(0.2), v0: m(1.5), v1: m(2.3), depth: m(0.4), back: material("shadow") };
+    });
+    const faces = solid.walls(outline, floor, m(3.4), { 2: openings }, material(front.master ? "plaster-red" : "plaster-white"));
+    const at = wallPoint(faces[2]);
+
+    solid.facing([at(0, m(2.85), m(0.05)), at(width, m(2.85), m(0.05)), at(width, m(3.4), m(0.05)), at(0, m(3.4), m(0.05))], [0, 0, 1], material("glyphs"));
+
+    let top = floor + m(3.4);
+
+    for (let k = 0; k < 2; k++) {
+        solid.extrude(inset(outline, -m(0.25) + k * m(0.5)), top, top + m(0.35), material(k === 0 ? "plaster-red" : "stone-lime"));
+        top += m(0.35);
+    }
+
+    board(solid, at, faces[2].out, [width / 2 - wide / 2, width / 2 + wide / 2, m(2.45), m(2.45) + wide * (9 / 56)], nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark }), `board ${piece.name}`, m(0.12));
+
+    // (Before its door, past the edge of its platform)
+    standingSign(solid, piece.name, W / 2 - m(1.4), face + m(0.35));
+    dressShop(solid, piece.name, { x0: W / 2, z: face + m(0.35), room: width / m(1) / 2, seed: random.int(1, 1 << 30), aside: 2.6 });
+
+    return solid.toObject();
+}
+
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
 
 export function landmark(piece) {
     return (LANDMARKS[piece.name] ?? market)(piece);

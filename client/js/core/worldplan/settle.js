@@ -9,6 +9,7 @@
 import { dungeonName, themeFor, THEMES } from "../dungeons/themes.js";
 import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
+import { MASTER_SHOPS } from "../setpieces/pieces.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES, WORKS } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
 import { stillWaterAt } from "../terrain/height.js";
@@ -648,9 +649,25 @@ export function settleLand(land, seed) {
     // (Each people's works after them, the same way: docs/WAR.md *The works*)
     sites.push(...workings(land, road, places, sites, camps, createRandom(seed * 41 + 13), used));
 
+    // (And each people's master shops, last, from numbers of their own: nothing moves for them)
+    masterShops(places, createRandom(seed * 47 + 23));
+
     // (And the land's waters, as far as they've been worked out, for the plan to take on: the same
     // land)
     return { places, road, roads, sites, camps, waters: watersOf(view) };
+}
+
+// Where each people keeps its master shops (setpieces/pieces.js MASTER_SHOPS: docs/WAR.md *Shops*):
+// each in a village, town or city of theirs (not their capital), chosen at random, no two in the
+// same (the place's `master`: which it is)
+function masterShops(places, random) {
+    for (const { id } of RACES) {
+        const fit = places.filter(({ race, kind }) => race === id && ["village", "town", "city"].includes(kind));
+
+        random.shuffle(fit).slice(0, MASTER_SHOPS.length).forEach((place, k) => {
+            place.master = MASTER_SHOPS[k];
+        });
+    }
 }
 
 // How much of a place of a kind at a point (metres) would stand in water: how many of its points

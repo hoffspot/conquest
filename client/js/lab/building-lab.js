@@ -27,6 +27,7 @@ import { readPlan } from "../core/interiors.js";
 import { barracksRooms, guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
 import { fortObject } from "../world/art/kits/forts.js";
+import { SHOP_NAMES } from "../world/art/kits/shopfront.js";
 import { Camps } from "../world/camps3d.js";
 import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -145,7 +146,8 @@ const FINGERPOST = [
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep;
 // a barracks (of one storey and of two, among the humans) and a village's guardhouse, each of a
-// house's size as its people builds them (setpieces/town.js makes one over: BARRACKS_SIZES)
+// house's size as its people builds them (setpieces/town.js makes one over: BARRACKS_SIZES); and
+// the specialists' and the masters' shops (art/kits/shopfront.js), made over the same way
 function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
@@ -162,6 +164,8 @@ function landmarksOf(seed, people = "human") {
         { name: "keep", ...(own ? { size: [3.5, 4] } : {}) },
         ...(own ? [{ storeys: 1 }, { storeys: 2 }] : [{ storeys: 1, style: "stone" }, { storeys: 2, style: "timber" }]).map((more) => ({ name: "barracks", grade: "barracks", ...more, size: BARRACKS_SIZES[people] })),
         { name: "barracks", grade: "guardhouse", storeys: 1, style: "cottage", size: BARRACKS_SIZES[people].map((plots) => plots - 0.25) },
+        // (The specialists' and the masters' shops, a house's size too: two storeys and one)
+        ...SHOP_NAMES.map((name, k) => ({ name, storeys: k % 3 === 2 ? 1 : 2, style: ["timber", "stone", "brick"][(seed + k) % 3], ...(own ? { size: BARRACKS_SIZES[people] } : {}) })),
     ].map((piece) => (own ? { ...piece, people } : piece));
     let x = 4;
 
