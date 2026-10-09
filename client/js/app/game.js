@@ -33,7 +33,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
-import { STEP_MS, TALK_REACH } from "../core/battle.js";
+import { sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
@@ -2186,6 +2186,11 @@ export class Game {
             }
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
+
+            // (One of the folk who sits: up and away in a fright, and back to its seat after)
+            if (actor.routine?.seated) {
+                avatar.actions.setSeated(sitting(actor));
+            }
 
             // (An emote's over once they're off somewhere, or fighting)
             if (avatar.actions.emoting && (actor.dead || actor.path.length || actor.attack || actor.casting)) {

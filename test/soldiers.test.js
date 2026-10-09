@@ -338,6 +338,36 @@ describe("guards, patrols and grudges (battle.js)", () => {
         assert.ok(battle.actor("g").square[1] > 12);
     });
 
+    it("has a guard defend itself: shot at from beyond its leash, it goes after whoever's shooting; and back to its post once they're gone", () => {
+        const battle = new Battle(open(60));
+
+        battle.add({ id: "g", kind: "soldier", weapon: "sword", team: "a", square: [10, 10], ai: "patrol", patrol: [[10, 10]], leash: 8, facing: 1.2 });
+        battle.add({ id: "archer", kind: "player", weapon: "bow", team: "b", square: [10, 22] });
+        battle.command("archer", { type: "engage", target: "g" });
+
+        const guard = battle.actor("g");
+        let furthest = 0;
+
+        for (let t = 0; t < 4000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            furthest = Math.max(furthest, guard.square[1] - 10);
+        }
+
+        assert.ok(guard.hp < guard.maxHp, "(shot)");
+        assert.equal(guard.target, "archer");
+        assert.ok(furthest > 3, `after them, beyond its leash: ${furthest}`);
+
+        // They gone: back to its post (from where it last saw them), facing out
+        battle.remove("archer");
+
+        for (let t = 0; t < 25000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+        }
+
+        assert.deepEqual(guard.square, [10, 10]);
+        assert.equal(guard.facing, 1.2);
+    });
+
     it("keeps a patrol within its leash of the round it walks, wherever on it it is", () => {
         const battle = new Battle(open(80));
 

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 import { Doors } from "../client/js/app/doors.js";
-import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, FLEE, sitting, STEP_MS } from "../client/js/core/battle.js";
 import { COME_IN, comeIn, FACING, linkAt, MAP_ORIGINS, offStairs, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
 import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
@@ -801,5 +801,138 @@ describe("seeing the player indoors (interiors3d.js)", () => {
         const found = doorways(upstairs).map(({ along, x0, y0, length }) => `${along} ${x0},${y0} ${length}`).sort();
 
         assert.deepEqual(found, ["x 10,5 2", "x 10,9 2", "x 15,5 2", "x 15,9 2"]);
+    });
+});
+
+describe("the folk in danger (battle.js #afraid)", () => {
+    const open = (size) => ({ blocked: Array.from({ length: size }, () => new Uint8Array(size)) });
+    const apart = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    // One of the folk going between two stops in an open field, of `side`'s town
+    const folk = (battle, id, square, { role = "townsfolk", side = null } = {}) => {
+        const stops = [square, [square[0], square[1] + 4]].map((each) => ({ square: each, facing: 0, group: "a" }));
+
+        battle.add({ id, kind: "folk", team: "folk", square, ai: "routine", neutral: true, routine: { order: "cycle", wait: [500, 1000], stops }, role, side, facing: 0 });
+
+        return battle.actor(id);
+    };
+
+    it("run from a fight they can see, the seated getting up from their tables; and once it's been over a while, back about their business, and to their seats", () => {
+        const { battle } = (() => {
+            const world = generateWorld({ seed: 1 });
+            const battle = new Battle(world, { seed: 1 });
+
+            for (const one of world.folk) {
+                battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
+            }
+
+            return { battle };
+        })();
+        const drinker = battle.actor("drinker");
+        const upstairs = battle.actor("madam");
+        const seat = [...drinker.square];
+        const facing = drinker.facing;
+
+        // (Calm, to begin with: the drinker sitting at its table)
+        run(battle, 2000);
+        assert.ok(sitting(drinker) && drinker.afraid === null);
+
+        // An orc and the player fighting it out in the middle of the taproom
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [8, 7], map: "taproom", ai: "patrol", patrol: [[8, 7]] });
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [8, 8], map: "taproom" });
+
+        for (const id of ["orc", "player"]) {
+            Object.assign(battle.actor(id), { hp: 5000, maxHp: 5000 });
+        }
+
+        const fight = battle.actor("orc");
+        const before = apart(drinker, fight);
+        let running = false;
+
+        for (let t = 0; t < 3000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            running ||= drinker.path.length > 0 && drinker.walkPace === FLEE.pace;
+        }
+
+        // Up from its table, running away from it; not those upstairs, who can't see it
+        assert.ok(["orc", "player"].includes(drinker.afraid), `${drinker.afraid}`);
+        assert.ok(!sitting(drinker), "up from its table");
+        assert.ok(running, "running");
+        assert.ok(apart(drinker, fight) > before, "further from it");
+        assert.equal(upstairs.afraid, null);
+
+        // The fight over: calm again a while after, and the drinker back at its table, as it sat
+        battle.remove("orc");
+        run(battle, FLEE.calm + 12000);
+        assert.equal(drinker.afraid, null);
+        assert.ok(same(drinker.square, seat) && sitting(drinker), `${drinker.square}`);
+        assert.equal(drinker.facing, facing);
+
+        // (And the wench at her round again: at one of its stops, and on to the next)
+        const wench = battle.actor("wench");
+        const stops = new Set();
+
+        for (let t = 0; t < 30000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+
+            if (wench.arrived) {
+                stops.add(wench.stop);
+            }
+        }
+
+        assert.equal(wench.afraid, null);
+        assert.ok(stops.size >= 2, `${stops.size}`);
+    });
+
+    it("run from an enemy of the people whose town they're in, as the war has it, or a creature out for blood; not from their own, a friend, one passing for one of them, or a wagon", () => {
+        // (The orcs at war with the humans; the elves at peace with both)
+        const battle = new Battle(open(60), { relations: (one, other) => [one.team, other.team].includes("orc") && one.team !== other.team });
+        const townsman = folk(battle, "townsman", [30, 30], { side: "human" });
+        const look = () => {
+            run(battle, FLEE.look * 2);
+
+            return townsman.afraid;
+        };
+
+        battle.add({ id: "guard", kind: "soldier", weapon: "sword", team: "human", square: [33, 30], ai: "patrol", patrol: [[33, 30]] });
+        battle.add({ id: "elf", kind: "soldier", weapon: "bow", team: "elf", square: [27, 30], ai: "patrol", patrol: [[27, 30]] });
+        battle.add({ id: "wagon", kind: "wagon", team: "orc", square: [30, 34], ai: "patrol", patrol: [[30, 34]], neutral: true });
+        assert.equal(look(), null, "their own, a friend, a wagon");
+
+        // (An orc in a human's uniform: taken for one of them. The elf gone, who'd see through it)
+        battle.remove("elf");
+        battle.add({ id: "spy", kind: "player", weapon: "sword", team: "orc", square: [30, 25] });
+        battle.actor("spy").guise = "human";
+        assert.equal(look(), null, "one passing for one of them");
+
+        // An orc, just standing there (no guard about to fall on it): run from it
+        battle.remove("guard");
+        battle.actor("spy").guise = null;
+        assert.equal(look(), "spy");
+        battle.remove("spy");
+        run(battle, FLEE.calm + 1000);
+        assert.equal(townsman.afraid, null);
+
+        // A wolf out for blood; not a deer that only fights back
+        battle.add({ id: "deer", kind: "beast", team: "wild", square: [26, 26], wild: { temper: "defensive" } });
+        assert.equal(look(), null);
+        battle.add({ id: "wolf", kind: "beast", team: "wild", square: [34, 26], wild: { temper: "aggressive" } });
+        assert.equal(look(), "wolf");
+    });
+
+    it("has those whose part is to fight (a sentry) stand their ground, facing the danger, while the rest run", () => {
+        const battle = new Battle(open(60));
+        const sentry = folk(battle, "sentry", [30, 30], { role: "sentry", side: "human" });
+        const townsman = folk(battle, "townsman", [32, 30], { side: "human" });
+
+        battle.add({ id: "wolf", kind: "beast", team: "wild", square: [31, 22], wild: { temper: "aggressive" } });
+
+        const [from, there] = [[...sentry.square], [townsman.x, townsman.y]];
+
+        run(battle, 3000);
+        assert.equal(sentry.afraid, "wolf");
+        assert.deepEqual(sentry.square, from, "stands its ground");
+        assert.ok(Math.abs(sentry.facing - Math.atan2(31.5 - sentry.x, 22.5 - sentry.y)) < 0.01, "facing it");
+        assert.ok(Math.hypot(townsman.x - there[0], townsman.y - there[1]) > 4, "the rest run");
     });
 });
