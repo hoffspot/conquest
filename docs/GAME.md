@@ -610,8 +610,9 @@ mage's staff; a ledger open on the palm). Lingering where a player can see them,
 ease a moment (`ROLES.townsfolk`: looking about, stretching the back, a yawn, shifting the weight,
 a glance back), the left hand's alone, what's in the right kept there. Tapped, they talk
 (`TREES.townsfolk`): busy but glad of a word, of their town, and of the war as it's heard there.
-No one fights them. The host keeps them in its snapshot (`townsfolk`: each place's, their looks
-and errands with them; `SNAPSHOT_VERSION` 5).
+No one fights them; they run from danger (*The battle*, *The folk in danger*), the enemies of
+whoever holds their town among it. The host keeps them in its snapshot (`townsfolk`: each place's,
+their looks and errands with them; `SNAPSHOT_VERSION` 5).
 
 **Drawn.** A step at a time, as the soldiers and the wild's creatures are (app/game.js
 `#nextEnlistee`), but after them, the nearest the player first, and none while a building's being
@@ -793,6 +794,25 @@ hundreds has a fight, not a crowd, on them.
   pouring: an `act` event). Someone standing on a stop, they stop next to it; unable to get to
   one for 8 seconds, they go on to the next. Their comings and goings use their own random
   numbers, so they don't change how the fighting goes.
+- **The folk in danger** (`#afraid`, `FLEE`). Every 0.4 seconds each of the folk looks about them
+  for whoever frightens them, within 12 squares and in sight:
+  - anyone fighting (set on someone still standing);
+  - a creature of the wild out for blood (aggressive, or a menace to all), not one following
+    someone;
+  - an enemy of the people whose town they're in (their `side`: whoever holds it in the war, the
+    host says): a soldier of a people at war with them, a player of one, the orc; not one passing
+    for one of them in their uniform.
+
+  Not one of the folk, a wagon, or a fortification standing there. They run from the nearest,
+  3.2 m/s, 8 squares at a time away from it (or as near that way as there's room, turning up to
+  100° aside; nowhere, cowering where they are), leaving whatever they were doing: one at a table
+  gets up from it (`sitting`, for the game's drawing). Once they've seen no one to fear for 6
+  seconds, they go back to what they were doing, where they were going, and one that sits back to
+  its seat, sitting in it the way it sat. A keep's sentries, a watchtower's lookouts and the
+  guild's adventurers, whose part is to fight (roles.js `fights`), stand their ground instead,
+  facing it. One talking with a player keeps talking, as with Fear. (`SNAPSHOT_VERSION` 21: the
+  battle keeps whose town they're in and whom they're afraid of; `NET_VERSION` 85: both ends of a
+  game must agree on who runs where, and on the soldiers defending themselves: docs/WAR.md.)
 - **Resting.** While the player can see them (`canSee`), the folk rest now and then: every 4 to
   9 seconds, seated or waiting at a stop, one of their class's five rests (roles.js), never the
   same twice running (a `rest` event: `{ id, role, rest }`), staying where they are until it's

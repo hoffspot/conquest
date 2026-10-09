@@ -162,6 +162,12 @@ export function keepingUp(metres) {
  */
 export const hostile = (a, b) => a.team !== b.team && !a.neutral && !b.neutral;
 
+/**
+ * Whether one of the folk who sits (at a table, a pew) is sitting just now: not up and away in a
+ * fright (#afraid), nor on its way back to its seat after.
+ */
+export const sitting = (actor) => Boolean(actor.routine?.seated) && (actor.afraid ?? null) === null && !actor.reseat;
+
 /** How long (ms) someone struck, and those of its own who saw, hold it against the striker. */
 export const FOE_MS = 60000;
 
@@ -232,6 +238,21 @@ const RETHINK_MS = 250;
 // `melee` of them up close and `ranged` shooting or casting at once (the rest fight whoever else
 // is near)
 export const AGGRO = Object.freeze({ reach: 15, melee: 6, ranged: 4 });
+
+// One struck (or cast at) goes after whoever did it, however far that is beyond the leash that
+// keeps it near its post or its round otherwise, until this long after they last did (ms): a guard
+// shot at from beyond its leash defends itself, rather than standing there to be shot down
+const DEFEND_MS = 10000;
+
+/**
+ * The folk in danger (#afraid): afraid of whoever they can see within `sight` squares that's
+ * fighting (set on someone still standing), a creature of the wild that's a menace to all, or an
+ * enemy of the people whose town they're in (their `side`). They run from the nearest, at `pace`
+ * m/s, `hop` squares at a time, looking about them every `look` ms; once they've seen no one to
+ * fear for `calm` ms, they go back about their business. Those whose part is to fight (roles.js
+ * `fights`: a keep's sentries, the guild's adventurers) stand their ground instead, facing it.
+ */
+export const FLEE = Object.freeze({ sight: SIGHT, pace: 3.2, hop: 8, look: 400, calm: 6000 });
 
 // A healer heals whoever of its own in reach is the most hurt, under `below` of their health;
 // under `mend`, with the strongest of its spells that's ready
@@ -437,11 +458,12 @@ export class Battle {
      * them, and they fight no one), routine (the folk's: see #routine), facing, armed (its
      * weapon drawn to start with; else it's put away), leash (a guard's: how far from its post,
      * its patrol's first point, it goes after an enemy, metres) }. It comes back to life where
-     * it's added. The folk have a `role` (roles.js ROLES: how they rest). A patrol goes round its
+     * it's added. The folk have a `role` (roles.js ROLES: how they rest), and a `side` (the people
+     * whose town they're in, whose enemies they run from: #afraid). A patrol goes round its
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
      * carrying a shield has `shield` (#hit: { chance, share, spells }).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -464,8 +486,10 @@ export class Battle {
             // (A follower's: whom it follows, by id)
             leader,
             post: facing,
-            // Whom it holds a grudge against (by id), and until when (FOE_MS)
+            // Whom it holds a grudge against (by id), and until when (FOE_MS); and who's struck it,
+            // until when it goes after them beyond its leash (DEFEND_MS)
             foes: {},
+            struckBy: {},
             // How much stronger its blows (up close, from afar), heals and stuns are than their
             // own (a player's skills and gear: core/progress.js), the share of each blow its
             // armour takes off, and how much stronger its next blow is (a power strike: null
@@ -512,6 +536,14 @@ export class Battle {
             neutral,
             routine,
             role,
+            // The folk's: whose town they're in; whom they're afraid of (an id, or null), until
+            // when (they're calm again then), and when they next look about them (FLEE); and
+            // whether one that sits has to go back to its seat
+            side,
+            afraid: null,
+            calmAt: 0,
+            lookAt: 0,
+            reseat: false,
             // The folk's routine: the stop it's making for, whether it's there, and since when
             stop: 0,
             arrived: false,
@@ -1588,7 +1620,25 @@ export class Battle {
         const routine = actor.routine;
         const between = ([least, most]) => least + actor.chance.next() * (most - least);
 
+        // (Danger near: running from it, or standing their ground)
+        if (this.#afraid(actor)) {
+            return;
+        }
+
         actor.walkPace = actor.speed;
+
+        // (One that sits, up and away from its seat: back to it, as near as there's a way (its seat
+        // in a booth, or at a table), and sitting down in it the way it sat)
+        if (routine.seated && actor.reseat) {
+            if (!actor.path.length && ringsApart(actor.square, actor.spawn) <= 1) {
+                Object.assign(actor, { reseat: false, facing: actor.post, x: actor.spawn[0] + 0.5, y: actor.spawn[1] + 0.5, square: [...actor.spawn], pathGoal: null });
+                this.#moved(actor);
+            } else if (!actor.path.length && this.time - (actor.lastPathAt ?? -Infinity) >= REPATH_MS) {
+                this.#pathTo(actor, actor.spawn);
+            }
+
+            return;
+        }
 
         if (routine.seated) {
             if (routine.act && this.time >= actor.waitUntil) {
@@ -1646,6 +1696,114 @@ export class Battle {
         if (!there && (!same(actor.pathGoal, stop.square) || this.time - actor.lastPathAt >= REPATH_MS)) {
             this.#pathTo(actor, stop.square);
         }
+    }
+
+    /**
+     * One of the folk in danger (FLEE): the nearest they can see who frightens them (#frightens),
+     * looked for every so often. They run from them (`hop` squares at a time, away from them, or
+     * as near that way as there's room), or, those whose part is to fight (roles.js `fights`),
+     * stand their ground, facing them; until they've seen no one to fear for a while, and then go
+     * back to what they were doing (one that sits, back to its seat). Whether they're afraid.
+     */
+    #afraid(actor) {
+        if (this.time >= (actor.lookAt ?? 0)) {
+            actor.lookAt = this.time + FLEE.look;
+
+            const danger = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
+
+            if (danger) {
+                Object.assign(actor, { afraid: danger.id, calmAt: this.time + FLEE.calm });
+            }
+        }
+
+        if (actor.afraid === null || actor.afraid === undefined) {
+            return false;
+        }
+
+        // Calm again: back to what they were doing, where they were going (or sat)
+        if (this.time >= (actor.calmAt ?? 0)) {
+            Object.assign(actor, { afraid: null, path: [], pathGoal: null, arrived: false, stopSince: this.time, waitUntil: 0, reseat: Boolean(actor.routine.seated) });
+
+            return false;
+        }
+
+        const from = this.actor(actor.afraid);
+        const there = from && !from.dead && from.map === actor.map;
+
+        Object.assign(actor, { restingUntil: 0, beckoningUntil: 0 });
+
+        // (One whose part is to fight: where it is, facing it)
+        if (ROLES[actor.role]?.fights) {
+            actor.path = [];
+
+            if (there) {
+                actor.facing = atan2(from.x - actor.x, from.y - actor.y);
+            }
+
+            return true;
+        }
+
+        actor.walkPace = FLEE.pace;
+        actor.reseat = Boolean(actor.routine.seated);
+
+        if (actor.path.length) {
+            return true;
+        }
+
+        // (Away from them, or as near that way as there's room to run: else cowering where they are)
+        const away = there ? atan2(actor.y - from.y, actor.x - from.x) : actor.chance.next() * Math.PI * 2;
+        const jitter = (actor.chance.next() - 0.5) * 0.8;
+
+        for (const turn of [0, 0.9, -0.9, 1.8, -1.8]) {
+            const angle = away + turn + jitter;
+            const goal = [Math.floor(actor.x + cos(angle) * FLEE.hop), Math.floor(actor.y + sin(angle) * FLEE.hop)];
+
+            try {
+                this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 3 }));
+            } catch {
+                continue;
+            }
+
+            if (actor.path.length) {
+                break;
+            }
+        }
+
+        return true;
+    }
+
+    // Whether one of the folk is afraid of someone (FLEE): anyone fighting (set on someone still
+    // standing); a creature of the wild that's out for blood (aggressive, or a menace to all), not
+    // one following anyone; or whoever the folk's people (`side`) would fight, as the war has it:
+    // a soldier of an enemy's, a player at war with them (unless they pass for one of them). Not
+    // one of the folk, a wagon or a fortification standing there
+    #frightens(other, folk) {
+        if (other === folk || other.neutral || other.dead) {
+            return false;
+        }
+
+        const set = other.target === null || other.target === undefined ? null : this.actor(other.target);
+
+        if (set && !set.dead) {
+            return true;
+        }
+
+        if (other.kind === "fort") {
+            return false;
+        }
+
+        if (other.wild) {
+            return !other.leader && Boolean(other.wild.menace || other.wild.temper === "aggressive");
+        }
+
+        if (!folk.side || other.team === folk.side) {
+            return false;
+        }
+
+        // (As one of their own people's soldiers would see them)
+        const as = { id: folk.id, kind: "soldier", team: folk.side, map: folk.map, foes: {}, spared: {} };
+
+        return !this.passes(other, as) && (this.relations ? this.relations(as, other) : true);
     }
 
     /**
@@ -2164,14 +2322,14 @@ export class Battle {
     }
 
     // Is someone within a guard's leash of its post, or of the round it walks (always, for those
-    // with none)?
+    // with none), or one who's struck it lately (DEFEND_MS: it defends itself), however far?
     #leashed(actor, other) {
-        return !actor.leash || !other || (other.map === actor.spawnMap && offRound(actor.patrol, other.square) <= actor.leash);
+        return !actor.leash || !other || (other.map === actor.spawnMap && (offRound(actor.patrol, other.square) <= actor.leash || (actor.struckBy?.[other.id] ?? -Infinity) > this.time));
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
-    // squares each way, that passes `test`
-    #nearestEnemy(actor, test, within = Infinity) {
+    // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it)
+    #nearestEnemy(actor, test, within = Infinity, enemy = (other) => this.hostile(other, actor)) {
         let best = null;
         let bestDistance = Infinity;
         let bestK = Infinity;
@@ -2198,7 +2356,7 @@ export class Battle {
 
                 const distance = distanceBetween(actor.square, other.square);
 
-                if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && this.hostile(other, actor) && this.#noticed(actor, other) && test(other)) {
+                if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && enemy(other) && this.#noticed(actor, other) && test(other)) {
                     best = other;
                     bestDistance = distance;
                     bestK = k;
@@ -3677,6 +3835,19 @@ export class Battle {
     #provoke(attacker, target, { turn = true } = {}) {
         // (Struck while it waited, holding a place: it fights back at once)
         target.waryUntil = 0;
+
+        // (After whoever did it, beyond its leash if need be, a while: the rest forgotten)
+        if (attacker !== target) {
+            target.struckBy ??= {};
+
+            for (const id in target.struckBy) {
+                if (target.struckBy[id] <= this.time) {
+                    delete target.struckBy[id];
+                }
+            }
+
+            target.struckBy[attacker.id] = this.time + DEFEND_MS;
+        }
 
         if (turn) {
             this.#turnOn(target, attacker, this.time);

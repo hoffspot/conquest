@@ -389,7 +389,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 20;
+export const SNAPSHOT_VERSION = 21;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -824,7 +824,7 @@ export class Host {
         }
 
         for (const one of this.world.folk ?? []) {
-            this.#addFolk(one);
+            this.#addFolk(one, this.#sideOf(this.world.start?.id, "human"));
         }
     }
 
@@ -2857,7 +2857,7 @@ export class Host {
                 continue;
             }
 
-            if (this.#addFolk(one)) {
+            if (this.#addFolk(one, this.#sideOf(id, people))) {
                 ids.push(one.id);
             }
         }
@@ -7354,7 +7354,8 @@ export class Host {
         this.world.interiors.make(key);
         this.#enthrone(building);
 
-        const folk = this.#notTheirs(building) ? [] : building.folk.filter((one) => this.#addFolk(one)).map(({ id }) => id);
+        const side = this.#sideOf(building.place === "home" ? this.world.start?.id : building.place, building.people);
+        const folk = this.#notTheirs(building) ? [] : building.folk.filter((one) => this.#addFolk(one, side)).map(({ id }) => id);
 
         this.open.set(key, folk);
         this.#event("open", { key, folk });
@@ -7424,16 +7425,23 @@ export class Host {
         this.#event("close", { key, folk });
     }
 
-    // One of the folk, going about their business in the battle (no one fights them)
-    #addFolk(one) {
+    // One of the folk, going about their business in the battle (no one fights them), of the town
+    // of `side`'s people (whose enemies they run from: battle.js #afraid)
+    #addFolk(one, side = null) {
         if (this.battle.actor(one.id) || this.hired.has(one.id)) {
             return false;
         }
 
         this.folk.set(one.id, one);
-        this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
+        this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, side, facing: one.facing });
 
         return true;
+    }
+
+    // Whose a place's folk are, for whom to fear: the people holding it in the war, if it's one of
+    // the war's towns; else whose it is (`people`)
+    #sideOf(id, people) {
+        return (id && this.war?.town(id)?.owner) || people || null;
     }
 
     #event(type, details) {

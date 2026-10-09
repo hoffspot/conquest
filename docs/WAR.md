@@ -384,6 +384,10 @@ whoever holds the town, and whom they fight is as their peoples stand.
   wherever on it it is (not from where it began: the round of a town is about 350 metres long).
 - **The alarm.** A soldier who sees one of its own fighting goes to their help, though the enemy's
   further off than it can see (12 metres) or out of its sight, if the enemy's within its leash.
+- **Defending itself.** Struck (or cast at) by someone beyond its leash, a soldier goes after them
+  all the same, till 10 seconds after they last did it (`DEFEND_MS`), or it's lost sight of them
+  3 seconds; then back to its post or its round. Before, one shot at from beyond its leash stood
+  there to be shot down.
 - **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
   the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life.
 - **Relief.** A minute after one of a town's soldiers is taken away, another of its garrison takes
@@ -422,7 +426,9 @@ whoever holds the town, and whom they fight is as their peoples stand.
   adventurers' guild's warriors and rangers; orcs are dressed as the orc is.
 
 **Who fights whom** (`Battle.hostile`, and the host's `relations`):
-- The folk: no one, ever.
+- The folk: no one, ever. They run from danger instead: a fight they can see, a creature out for
+  blood, or an enemy of the people holding their town (docs/GAME.md, *The battle*, *The folk in
+  danger*); a keep's sentries and the guild's adventurers stand their ground.
 - Anyone who has lately struck someone, or someone of their own they saw: the one struck, and its
   fellows who saw, hold it against them for a minute (`FOE_MS`), whatever their peoples.
 - Two of the same people: never, otherwise.

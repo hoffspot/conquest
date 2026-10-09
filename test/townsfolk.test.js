@@ -135,6 +135,8 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
             assert.ok(TOWNSFOLK_PARTS.includes(kept.look));
             assert.ok(squaresOf(host.world.maps.town).roomy(...one.square), "put where there's room");
             assert.ok(!host.canFight(host.battle.actor(HOST_PLAYER), one), "no one to fight");
+            // (Running from the enemies of whoever holds the town: battle.js #afraid)
+            assert.equal(one.side, host.war.town(host.world.start.id)?.owner ?? kept.people);
         }
 
         // A minute on: most of them have gone somewhere, most of the time walking

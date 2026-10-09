@@ -7,7 +7,9 @@
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
-// upstairs, BECKON), its face at rest (`mood`: a face of characters/expressions.js FACES, as
+// upstairs, BECKON), whether its part is to fight (`fights`: a keep's sentries and a watchtower's,
+// the guild's adventurers; they stand their ground when danger comes near, where the rest of the
+// folk run from it: battle.js #afraid), its face at rest (`mood`: a face of characters/expressions.js FACES, as
 // "smiling"; none, its face at ease), and how it passes the time: five resting animations of its own, and for many
 // some of an animator's clips after them (`rests`), one of which it plays every several seconds
 // while the player can see it (battle.js #rest; the player, after standing a while with nothing
@@ -161,6 +163,7 @@ export const ROLES = Object.freeze({
     },
     adventurer: {
         title: "Adventurer",
+        fights: true,
         rests: [
             { name: "stretching", hitAt: 1.2, duration: 3.2 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
@@ -262,6 +265,7 @@ export const ROLES = Object.freeze({
     },
     sentry: {
         title: "Sentry",
+        fights: true,
         rests: [
             { name: "looking about", hitAt: 1, duration: 3.4 },
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
