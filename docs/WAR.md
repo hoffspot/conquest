@@ -218,7 +218,7 @@ The engine is built for this from the start. These are its rules:
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
 | **M20** | Built | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after; a seat's ruler and the captain of its guard making their last stand at its keep before it's taken. |
-| **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
+| **M21** | Built in part | The war table in the keep: its map of the war as their people's council sees it, live, lit where their scouts, armies and holdings see, the scouts lifting the fog (built); raising and disbanding, orders and counsel from it (to come). |
 
 ## What's built
 
@@ -739,7 +739,7 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Commoner | 0 | Work from the reeves at the town halls. |
 | Freeholder | 60 | Scouting for the reeves. |
 | Retainer | 180 | An audience at the keep, work from the ruler, and the pick of its armoury. |
-| Knight | 400 | A say in where the army marches next and where the council builds. |
+| Knight | 400 | The war table in the keep, and a say in where the army marches next and where the council builds. |
 | Lord | 800 | A say in war and peace. |
 | Councillor | 1500 | A seat on the council: your word weighs the most. |
 
@@ -1287,7 +1287,7 @@ ground). So:
   2 turns going up, 6 of the army staying to hold it, made up from the army while it's there. Once
   it's up, the army goes against what it was sent for.
 - **A scout** out from each, seeing 300 m round it (`SIGHT`; an army and a town see 150), for the
-  war table's map (M21).
+  war table's map (M21, *The war table*), and lifting the fog round it for its people's players.
 - **Skirmishers,** a pair every 3 turns, against the nearest of the enemy's within 600 m: a town's
   garrison (never its last, and its taxes lost for the turn), a works' guard, an army, a reserve,
   reinforcements, a convoy or a camp. Each brings one down half the time, and is lost a quarter of
@@ -1618,6 +1618,57 @@ to, wagon, ids, at, over }`), the skirmishers out (`skirmishers`: `{ camp, peopl
 ids, since, fought, back }`) and the seats' leaders out (`leaders`: `{ people, ids, at }`;
 `SNAPSHOT_VERSION` 20), their lines in the battle's. What two games share changed (`NET_VERSION`
 81).
+
+### The war table (M21)
+
+The last of the standing armies' parts: the war table in each keep, where a player reads the war
+as their people's council sees it (`core/wartable.js`, `app/battlemap.js`). A Lord's orders for
+their army, and a Knight's counsel, given from it, come next.
+
+**The table** stands in every keep's great hall, west of the carpet below the council's tables: a
+heavy board on turned legs, the map of the land spread over it, the peoples' pieces stood on it,
+candles at two corners (`insides.js` `KEEP`, `interiors3d.js` `warTable`). Tapped, the player walks
+up to it, and its map opens.
+
+**Who reads it** (`mayRead`): a Knight or above (`OPENS.table`) of the people whose keep it is, or
+of a people under the same liege (a vassal's keep, or their liege's). Anyone else is told: "The war
+table's for the council and its Knights to read. You're a Retainer", or, at another people's, "The
+Orcs' war table: its map isn't for you to read".
+
+**What a people sees** with its friends (its liege, its vassals and its allies: `war.sight`,
+`war.sees`; `armies.js` `SIGHT`):
+- round each of its camps that's up, as far as its scout sees, 300 m;
+- round each of its armies and reserves out, 150 m;
+- round each of its depots that's up, and each of its towns from its edge, 150 m.
+
+**Its map** (`battleMapView`; the world map as the war table: `worldmap.js` `war`). The world isn't
+stopped while it's read, and it's drawn again every half second as the war goes on.
+- **Lit** where they see now, the rest shaded, the reach of each camp's scout ringed.
+- **Their own and their friends'** are always shown, as they are now, in their peoples' colours:
+  - towns, armies, reserves, reinforcements, supply wagons, convoys, envoys, camps, depots and
+    fortifications;
+  - where their own armies, reserves and reinforcements are going, dashed.
+- **Everyone else's** are shown only where they're seen. Their towns are shown where the player's
+  uncovered the map too, but how strongly they're held only where they're seen.
+- **Marks** (`mapicons.js` `drawWarMark`, and the key), each with how strong it is:
+  - an army a shield, a reserve a banner, reinforcements dots;
+  - a supply wagon or a convoy a wagon, an envoy a scroll;
+  - a camp a tent, a depot a crate (faint while going up);
+  - a town a dot in its holder's colour, a seat's ringed.
+- **Headed** by what their army and reserve are about: "Our army, 46 strong of 80: attacking
+  Grimhold. Our reserve, 80 strong of 80: at Mardenmoor."
+- **Tapped,** what's there is told:
+  - "The Orcish army, 52 strong: falling back to its camp to be made up";
+  - "Grimhold, the Orcish seat: 30 of 40 on guard";
+  - "Talaemere, the Elven town. How strongly it's held, we can't see from here".
+
+**The scouts lift the fog** (`host.js` `#scoutsSee`). Each camp's scout of their people and their
+friends uncovers what it sees on the maps of their people's players, as where they've been: every
+chunk whose middle is within 300 m of its camp. This happens at each turn of the war, and as a
+player comes in.
+
+**Kept.** Nothing new: what's uncovered is kept with where the player's been. What two games share
+changed (`NET_VERSION` 82): the host uncovers what the scouts see, and says so.
 
 ### Playing together (M11)
 

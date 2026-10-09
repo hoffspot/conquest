@@ -639,8 +639,8 @@ export function hallFolkOf(building, chamber) {
 // A keep's great hall, 22 by 16 metres: two thrones against the north wall, the carpet laid from
 // them to the door in the middle of the south wall; the steward's desk to the west of the thrones
 // and the armoury's racks in the north-west corner, shelves in the north-east and strongboxes
-// by them; the council's two tables with their benches either side of the carpet; a hearth in
-// each side wall; pillars down the hall
+// by them; the council's two tables with their benches either side of the carpet; the war table
+// below them to the west (core/wartable.js); a hearth in each side wall; pillars down the hall
 const KEEP = [
     "RRR.......YY.......eee",
     "..........rr..........",
@@ -652,8 +652,8 @@ const KEEP = [
     "H..TTTTT..rr..TTTTT..H",
     "...bbbbb..rr..bbbbb...",
     "...I......rr......I...",
-    "..........rr..........",
-    "..........rr..........",
+    ".....NNNN.rr..........",
+    ".....NNNN.rr..........",
     "...I......rr......I...",
     "..........rr..........",
     "..........rr..........",

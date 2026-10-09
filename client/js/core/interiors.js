@@ -60,11 +60,13 @@ export const PLAN_KEY = Object.freeze({
     q: { kind: "board", blocks: true, joins: true },
     e: { kind: "shelves", blocks: true, joins: true },
     U: { kind: "portal", blocks: true, joins: true },
-    // A keep's: the thrones (each square a seat), the pillars holding up the roof, and a carpet
-    // laid from the door to the thrones
+    // A keep's: the thrones (each square a seat), the pillars holding up the roof, a carpet laid
+    // from the door to the thrones, and the war table, its map of the war spread over it (core/
+    // wartable.js)
     Y: { kind: "throne", blocks: true },
     I: { kind: "pillar", blocks: true },
     r: { kind: "carpet", joins: true },
+    N: { kind: "war-table", blocks: true, joins: true },
     // The places worth finding gone into (a cave, the dragon's lair, a broken watchtower): their
     // rock; where the chest's put (its hoard), where those who hold the place stand (their
     // leader, and their guards), outlaws' bedrolls and their fire, and bones

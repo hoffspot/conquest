@@ -411,3 +411,120 @@ export function drawBuildingIcon(context, kind, x, y, size, rim = null) {
 
     context.restore();
 }
+
+/** The kinds of the war's marks on the war table's map (drawWarMark). */
+export const WAR_MARKS = Object.freeze(["army", "reserve", "reinforcement", "supply", "convoy", "envoy", "expedition", "camp", "depot"]);
+
+/**
+ * Draw one of the war's marks on the war table's map (app/battlemap.js; docs/WAR.md *The war
+ * table*) on a canvas's context, centred at x, y, `size` pixels across, in its people's `colour`:
+ * an army a shield, a reserve a banner, reinforcements a dot, a supply wagon or a convoy a wagon,
+ * an envoy a scroll, an expedition a small shield, a camp a tent, a depot a crate. `going` (a camp
+ * or depot going up): drawn faint, dashed.
+ */
+export function drawWarMark(context, kind, x, y, size, colour, { going = false } = {}) {
+    const s = size;
+
+    context.save();
+    context.translate(x, y);
+    context.lineJoin = context.lineCap = "round";
+    context.lineWidth = Math.max(1.2, s / 12);
+    context.strokeStyle = "#140e08";
+    context.fillStyle = colour;
+    context.beginPath();
+
+    if (going) {
+        context.globalAlpha = 0.65;
+        context.setLineDash([3, 2]);
+    }
+
+    if (kind === "army" || kind === "expedition") {
+        const k = kind === "army" ? 1 : 0.7;
+
+        context.moveTo(-s * 0.42 * k, -s * 0.45 * k);
+        context.lineTo(s * 0.42 * k, -s * 0.45 * k);
+        context.lineTo(s * 0.42 * k, s * 0.02 * k);
+        context.quadraticCurveTo(s * 0.4 * k, s * 0.38 * k, 0, s * 0.55 * k);
+        context.quadraticCurveTo(-s * 0.4 * k, s * 0.38 * k, -s * 0.42 * k, s * 0.02 * k);
+        context.closePath();
+        context.fill();
+        context.stroke();
+
+        // (Its boss)
+        context.beginPath();
+        context.arc(0, -s * 0.05 * k, s * 0.1 * k, 0, Math.PI * 2);
+        context.fillStyle = "#140e08";
+        context.fill();
+    } else if (kind === "reserve") {
+        context.moveTo(-s * 0.36, -s * 0.5);
+        context.lineTo(s * 0.44, -s * 0.5);
+        context.lineTo(s * 0.26, -s * 0.24);
+        context.lineTo(s * 0.44, s * 0.02);
+        context.lineTo(-s * 0.36, s * 0.02);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.beginPath();
+        context.moveTo(-s * 0.36, -s * 0.56);
+        context.lineTo(-s * 0.36, s * 0.55);
+        context.lineWidth = Math.max(1.6, s / 9);
+        context.stroke();
+    } else if (kind === "reinforcement") {
+        for (const [dx, dy, r] of [[-s * 0.2, s * 0.08, 0.15], [s * 0.2, s * 0.08, 0.15], [0, -s * 0.2, 0.17]]) {
+            context.moveTo(dx + s * r, dy);
+            context.arc(dx, dy, s * r, 0, Math.PI * 2);
+        }
+
+        context.fill();
+        context.stroke();
+    } else if (kind === "supply" || kind === "convoy") {
+        const k = kind === "convoy" ? 1 : 0.8;
+
+        context.rect(-s * 0.45 * k, -s * 0.3 * k, s * 0.9 * k, s * 0.38 * k);
+        context.fill();
+        context.stroke();
+
+        for (const dx of [-0.25, 0.25]) {
+            context.beginPath();
+            context.arc(dx * s * k, s * 0.17 * k, s * 0.13 * k, 0, Math.PI * 2);
+            context.fillStyle = "#2a1c10";
+            context.fill();
+            context.stroke();
+        }
+    } else if (kind === "envoy") {
+        context.rect(-s * 0.3, -s * 0.38, s * 0.6, s * 0.76);
+        context.fill();
+        context.stroke();
+
+        for (const dy of [-0.38, 0.38]) {
+            context.beginPath();
+            context.moveTo(-s * 0.4, dy * s);
+            context.lineTo(s * 0.4, dy * s);
+            context.lineWidth = Math.max(2, s / 7);
+            context.stroke();
+        }
+    } else if (kind === "camp") {
+        context.moveTo(0, -s * 0.5);
+        context.lineTo(s * 0.52, s * 0.4);
+        context.lineTo(-s * 0.52, s * 0.4);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.beginPath();
+        context.moveTo(0, -s * 0.05);
+        context.lineTo(0, s * 0.4);
+        context.stroke();
+    } else if (kind === "depot") {
+        context.rect(-s * 0.4, -s * 0.4, s * 0.8, s * 0.8);
+        context.fill();
+        context.stroke();
+        context.beginPath();
+        context.moveTo(-s * 0.4, -s * 0.4);
+        context.lineTo(s * 0.4, s * 0.4);
+        context.moveTo(s * 0.4, -s * 0.4);
+        context.lineTo(-s * 0.4, s * 0.4);
+        context.stroke();
+    }
+
+    context.restore();
+}

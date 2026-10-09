@@ -18,7 +18,7 @@
 
 import { createRandom } from "../random.js";
 import { RACES, WORKS } from "../worldplan/races.js";
-import { ARMY, CAMP, campSite, CLOSE, fullOf, HELD, LEADERS, REINFORCE, WATCH_TURNS } from "./armies.js";
+import { ARMY, CAMP, campSite, CLOSE, fullOf, HELD, LEADERS, REINFORCE, SIGHT, WATCH_TURNS } from "./armies.js";
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { ACROSS_COUNTRY, Roads } from "./roads.js";
@@ -467,6 +467,52 @@ export class War {
     /** A liege's strength: its own and all its vassals' (and theirs). */
     strength(id) {
         return this.realms.filter((realm) => realm.alive && this.liege(realm.id) === id).reduce((sum, realm) => sum + this.power(realm.id), 0);
+    }
+
+    /**
+     * What a people and its friends (its liege, its vassals, its allies) see now, for the war table
+     * (docs/WAR.md *The war table*; armies.js SIGHT): round each of their camps that's up, its
+     * scout, as far as SIGHT.scout; round each of their armies and reserves out, SIGHT.army; round
+     * each of their depots that's up and each of their towns (from its edge), SIGHT.holding.
+     * [{ id, realm, kind ("scout", "army", "reserve", "depot", "town"), at, reach (metres) }]
+     */
+    sight(id) {
+        const friends = new Set(this.realms.filter((realm) => realm.alive && this.friendly(id, realm.id)).map((realm) => realm.id));
+        const sources = [];
+
+        for (const camp of this.camps) {
+            if (friends.has(camp.realm) && camp.built !== null) {
+                sources.push({ id: camp.id, realm: camp.realm, kind: "scout", at: camp.at, reach: SIGHT.scout });
+            }
+        }
+
+        for (const force of this.forces) {
+            if (friends.has(force.realm) && (force.kind === "army" || force.kind === "reserve") && force.size > 0) {
+                sources.push({ id: force.id, realm: force.realm, kind: force.kind, at: force.at, reach: SIGHT.army });
+            }
+        }
+
+        for (const depot of this.depots) {
+            if (friends.has(depot.realm) && depot.built !== null) {
+                sources.push({ id: depot.id, realm: depot.realm, kind: "depot", at: depot.at, reach: SIGHT.holding });
+            }
+        }
+
+        for (const town of this.towns) {
+            if (friends.has(town.owner)) {
+                sources.push({ id: town.id, realm: town.owner, kind: "town", at: town.at, reach: SIGHT.holding + this.#radius(town.id) });
+            }
+        }
+
+        return sources;
+    }
+
+    /**
+     * Whether a people and its friends see a point now (`at`), or anything of it within `edge`
+     * metres of it; `sight` as sight(id) gave it, if it's been worked out.
+     */
+    sees(id, at, edge = 0, sight = this.sight(id)) {
+        return sight.some((source) => apart(source.at, at) <= source.reach + edge);
     }
 
     /** Whom a realm's at war with (lieges). */

@@ -28,8 +28,8 @@ export const ARMY = Object.freeze({ size: 80, vassal: 0.5, ready: 0.7, regroup: 
 export const CAMP = Object.freeze({ reach: 300, build: 2, cost: 20, guard: 6, scout: 300, every: 3, pair: 2, skirmish: 600, hits: 0.5, lost: 0.25, most: 3, idle: 40 });
 
 /**
- * How far each sees (metres, for the war table's map: docs/WAR.md *Sight*): a camp's scout, an
- * army or reserve, and a town.
+ * How far each sees (metres, for the war table's map: docs/WAR.md *The war table*; war.js sight): a
+ * camp's scout, an army or reserve, and a town (from its edge) or a depot.
  */
 export const SIGHT = Object.freeze({ scout: CAMP.scout, army: 150, holding: 150 });
 
