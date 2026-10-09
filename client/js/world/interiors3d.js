@@ -2401,6 +2401,76 @@ function armoury(solid, rack) {
     }
 }
 
+// A keep's war table (core/wartable.js): a heavy board on turned legs, the map of the land spread
+// over it (its sea along the north, a river winding down to it, woods and roads), the peoples'
+// pieces stood on it where their armies are, a pointer laid by, and candles at two corners
+function warTable(solid, piece) {
+    const [x0, z0, x1, z1] = [m(piece.x + 0.12), m(piece.y + 0.12), m(piece.x + piece.w - 0.12), m(piece.y + piece.h - 0.12)];
+    const top = m(0.86);
+    const sheet = top + m(0.012);
+    const [w, d] = [x1 - x0, z1 - z0];
+    const at = (u, v) => [x0 + w * u, z0 + d * v];
+
+    for (const [u, v] of [[0.06, 0.1], [0.94, 0.1], [0.06, 0.9], [0.94, 0.9]]) {
+        const [x, z] = at(u, v);
+
+        solid.cylinder(x, z, 0, m(0.12), m(0.11), m(0.09), material("timber"), { segments: 8 });
+        solid.cylinder(x, z, m(0.12), top - m(0.1), m(0.07), m(0.07), material("timber"), { segments: 8 });
+    }
+
+    solid.box(x0 + m(0.1), m(0.2), (z0 + z1) / 2 - m(0.05), x1 - m(0.1), m(0.3), (z0 + z1) / 2 + m(0.05), material("timber"));
+    solid.box(x0, top - m(0.1), z0, x1, top, z1, material("planks-dark"));
+
+    // The map: its parchment, the sea along its north edge, the river, the woods, the roads
+    const [mx0, mz0, mx1, mz1] = [x0 + m(0.12), z0 + m(0.12), x1 - m(0.12), z1 - m(0.12)];
+
+    solid.box(mx0, top, mz0, mx1, top + m(0.01), mz1, material("parchment"));
+    solid.box(mx0, top + m(0.01), mz0, mx1, sheet, mz0 + (mz1 - mz0) * 0.18, material("water"));
+
+    for (const [u0, v0, u1, v1] of [[0.62, 0.16, 0.66, 0.4], [0.58, 0.38, 0.63, 0.62], [0.52, 0.6, 0.6, 0.88]]) {
+        const [ax, az] = at(u0, v0);
+        const [bx, bz] = at(u1, v1);
+
+        solid.box(Math.min(ax, bx), top + m(0.01), az, Math.max(ax, bx), sheet, bz, material("water"));
+    }
+
+    for (const [u, v, r] of [[0.2, 0.35, 0.09], [0.28, 0.6, 0.07], [0.82, 0.7, 0.08], [0.4, 0.8, 0.06]]) {
+        const [x, z] = at(u, v);
+
+        solid.cylinder(x, z, top + m(0.01), sheet, w * r, w * r, material("grass"), { segments: 10 });
+    }
+
+    for (const [u0, v0, u1, v1] of [[0.1, 0.5, 0.9, 0.53], [0.33, 0.25, 0.36, 0.9]]) {
+        const [ax, az] = at(u0, v0);
+        const [bx, bz] = at(u1, v1);
+
+        solid.box(ax, top + m(0.01), az, bx, sheet + m(0.002), bz, material("ochre"));
+    }
+
+    // The pieces: their own in gold, the enemy's in red, each a block with a pennant on a pin;
+    // and the towns, little towers of stone
+    for (const [u, v, kind] of [[0.24, 0.47, "gold"], [0.3, 0.44, "gold"], [0.45, 0.72, "gold"], [0.74, 0.3, "paint-red"], [0.8, 0.36, "paint-red"], [0.7, 0.56, "paint-red"]]) {
+        const [x, z] = at(u, v);
+
+        solid.box(x - m(0.05), sheet, z - m(0.035), x + m(0.05), sheet + m(0.05), z + m(0.035), material(kind));
+        solid.cylinder(x, z, sheet + m(0.05), sheet + m(0.17), m(0.006), m(0.006), material("iron"), { segments: 4 });
+        solid.box(x, sheet + m(0.13), z - m(0.004), x + m(0.06), sheet + m(0.17), z + m(0.004), material(kind === "gold" ? "velvet" : "wine"));
+    }
+
+    for (const [u, v] of [[0.18, 0.62], [0.86, 0.5]]) {
+        const [x, z] = at(u, v);
+
+        solid.cylinder(x, z, sheet, sheet + m(0.09), m(0.04), m(0.045), material("stone"), { segments: 6 });
+        solid.cylinder(x, z, sheet + m(0.09), sheet + m(0.13), m(0.05), 0, material("stone-dark"), { segments: 6 });
+    }
+
+    // (A pointer laid along its south edge)
+    solid.box(x0 + w * 0.3, top, z1 - m(0.08), x0 + w * 0.7, top + m(0.025), z1 - m(0.055), material("timber-light"));
+
+    candle(solid, x0 + m(0.12), z0 + m(0.12), top);
+    candle(solid, x1 - m(0.12), z1 - m(0.12), top);
+}
+
 function keep(map) {
     const solid = new Solid();
     const [w, h] = [m(map.width), m(map.height)];
@@ -2475,6 +2545,11 @@ function keep(map) {
 
     for (const run of benchRuns(map)) {
         bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+    }
+
+    // The war table, below the council's
+    for (const piece of at("war-table")) {
+        warTable(solid, piece);
     }
 
     for (const counter of at("counter")) {

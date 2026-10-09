@@ -339,7 +339,7 @@ export const CATALOG = Object.freeze({
     scroll: { group: "In hand", label: "A scroll unrolled", about: "A scroll unrolling: a long paper crackle (spookymodem's).", plays: "A Scroll of Safety read." },
     bookOpen: { group: "In hand", label: "A book opened", about: "A heavy old book opened, its cover and pages (j1987's bible).", plays: "The spellbook or the journal opened; a tome read." },
     pageTurn: { group: "In hand", label: "A page turned", about: "A page riffled over (rubberduck's).", plays: "The pack's pages turned, and its tabs (Gear and Skills, Buy and Sell) changed." },
-    mapUnfold: { group: "In hand", label: "A map unfolded", about: "A map unfolded, and stiff parchment unrolled (Breviceps's and Vrymaa's).", plays: "The world map opened." },
+    mapUnfold: { group: "In hand", label: "A map unfolded", about: "A map unfolded, and stiff parchment unrolled (Breviceps's and Vrymaa's).", plays: "The world map opened, and the maps opened on it: a guild portal's, the council's plans, and the war table's in a keep." },
     packOpen: { group: "In hand", label: "The pack opened", about: "A strap's buckle undone and the leather creaking (Jan Schupke's sword sheath, standing in for a satchel's).", plays: "The pack opened." },
     packClose: { group: "In hand", label: "The pack closed", about: "The strap buckled again.", plays: "The pack closed." },
     chestOpen: { group: "In hand", label: "A chest opened", about: "A wooden chest's lid lifted: its latch, then its creak (The_Frisbee_of_Peace's chest and Vrymaa's cupboard).", plays: "A place's chest opening once it's cleared, the player's share in it." },

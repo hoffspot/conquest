@@ -859,11 +859,12 @@ export class Host {
         this.battle.add({ id, kind: "player", name: hero.name, weapon: player.hero.weapon, boots: player.hero.boots, team: player.realm, square: at, map });
         this.#outfit(player);
 
-        // (Their followers, with them)
+        // (Their followers, with them; and what their people's scouts see on their maps)
         for (const one of followers) {
             this.#follow(player, one);
         }
 
+        this.#scoutsSee([player]);
         this.#event("join", { id, name: hero.name, realm: player.realm });
 
         return player;
@@ -1593,7 +1594,38 @@ export class Host {
         }
 
         if (this.war.turn !== turn) {
+            this.#scoutsSee();
             this.#event("turn", { turn: this.war.turn });
+        }
+    }
+
+    // What the camps' scouts of each player's people and their friends see (war.js sight: as far
+    // as SIGHT.scout round each camp that's up) uncovered on the player's maps, every chunk whose
+    // middle they see, as where the player's been (docs/WAR.md *The war table*): at each turn of
+    // the war, and as a player comes in
+    #scoutsSee(players = this.players.values()) {
+        for (const player of players) {
+            if (!this.war?.realm(player.realm)) {
+                continue;
+            }
+
+            let uncovered = false;
+
+            for (const { at: [x, y], reach } of this.war.sight(player.realm).filter(({ kind }) => kind === "scout")) {
+                for (let cy = Math.floor((y - reach) / CHUNK); cy <= Math.floor((y + reach) / CHUNK); cy++) {
+                    for (let cx = Math.floor((x - reach) / CHUNK); cx <= Math.floor((x + reach) / CHUNK); cx++) {
+                        const [mx, my] = [(cx + 0.5) * CHUNK, (cy + 0.5) * CHUNK];
+
+                        if (hypot(mx - x, my - y) <= reach && player.explored.visit(mx, my)) {
+                            uncovered = true;
+                        }
+                    }
+                }
+            }
+
+            if (uncovered) {
+                this.#event("explored", { id: player.id, scouted: true });
+            }
         }
     }
 

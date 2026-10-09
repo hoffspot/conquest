@@ -664,10 +664,15 @@ function quickBack() {
 
 // --- The world map (the minimap held, or M) ---
 
+// How often the war table's map is drawn again as the war goes on (ms)
+const WAR_LIVE_MS = 500;
+
 // (Opened to pick somewhere to go: Wizard's Walk. `pick` hears the point tapped, somewhere
 // uncovered, or null if it's called off. Or as the travel map, from a guild's portal: `travel`;
-// or the building screen, at a ruler's: `build`, app/building.js buildingView's, and `choose`)
-async function openWorldMap({ pick = null, travel = null, build = null } = {}) {
+// the building screen, at a ruler's: `build`, app/building.js buildingView's, and `choose`; or the
+// war table's map, at the war table in a keep: `war`, { view (app/battlemap.js battleMapView's),
+// refresh() (the view as it is now) }. The war isn't stopped while its table's read)
+async function openWorldMap({ pick = null, travel = null, build = null, war = null } = {}) {
     const game = state.game;
 
     if (!game?.running || $("#menu").open || $("#worldmap").open) {
@@ -676,7 +681,7 @@ async function openWorldMap({ pick = null, travel = null, build = null } = {}) {
         return;
     }
 
-    game.pause();
+    game.pause({ world: !war });
     $("#worldmap").showModal();
     state.session?.sound?.play("mapUnfold");
 
@@ -694,10 +699,42 @@ async function openWorldMap({ pick = null, travel = null, build = null } = {}) {
     state.picking = pick;
     state.travel = travel;
     state.plans = build;
-    $("#worldmappick").hidden = !pick && !travel && !build;
+    $("#worldmappick").hidden = !pick && !travel && !build && !war;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
-    $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : "The world";
-    $("#worldmapkey").hidden = Boolean(travel || build);
+    $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : war ? "The war table" : "The world";
+    $("#worldmapkey").hidden = Boolean(travel || build || war);
+    $("#warmapkey").hidden = !war;
+
+    // (At the war table: the war as their council sees it, drawn again as it goes on; anything
+    // tapped told of; nothing held or tapped twice)
+    if (war) {
+        const said = (view) => `${view.said} Tap anything on the map for more.`;
+
+        warKey(war.view.colour);
+        $("#worldmappicktext").textContent = said(war.view);
+        $("#worldmapcancel").textContent = "Leave the table";
+        map.onPick = (point) => {
+            const what = map.warAt(point);
+
+            mapNote(what?.told ?? "Tap a town, or anything of the war's", what ? 6000 : 2800);
+        };
+        map.onHold = null;
+        map.onDoubleTap = null;
+        $("#worldmapunpin").hidden = true;
+        $("#worldmapnote").hidden = true;
+        map.open({ ...game.worldMapView(), war: war.view });
+        clearInterval(state.warLive);
+        state.warLive = setInterval(() => {
+            const view = war.refresh();
+
+            if (view && state.worldMap?.war) {
+                state.worldMap.setWar(view);
+                $("#worldmappicktext").textContent = said(view);
+            }
+        }, WAR_LIVE_MS);
+
+        return;
+    }
 
     // (At a ruler's: where the council would build, one tapped asked about; nothing held or tapped
     // twice)
@@ -799,14 +836,14 @@ function unpin() {
     mapNote("The pin's taken away");
 }
 
-// Something said on the world map for a moment
-function mapNote(text) {
+// Something said on the world map for a moment (`ms`)
+function mapNote(text, ms = 2800) {
     const note = $("#worldmapnote");
 
     note.textContent = text;
     note.hidden = false;
     clearTimeout(state.mapNoted);
-    state.mapNoted = setTimeout(() => (note.hidden = true), 2800);
+    state.mapNoted = setTimeout(() => (note.hidden = true), ms);
 }
 
 // A branch of the guild tapped on the travel map: asked first, with its fare (and what their rank
@@ -879,17 +916,22 @@ function closeWorldMap() {
     state.picking = null;
     state.travel = null;
     state.plans = null;
+    clearInterval(state.warLive);
+    state.warLive = 0;
 
     if (state.worldMap) {
         state.worldMap.onPick = null;
         state.worldMap.travel = null;
         state.worldMap.build = null;
+        state.worldMap.war = null;
         state.worldMap.rest();
     }
 
     $("#worldmappick").hidden = true;
     $("#worldmaptitle").textContent = "The world";
     $("#worldmapkey").hidden = false;
+    $("#warmapkey").hidden = true;
+    $("#worldmapcancel").textContent = "Cancel";
     picking?.(null);
 
     if ($("#worldmap").open) {
@@ -937,6 +979,33 @@ async function keyOf() {
     context.stroke();
     pin.append(glyph, "Hold: drop a pin · tap twice: run there");
     list.append(pin);
+}
+
+// The war table's key, in their people's colour: each of the war's marks, and what's seen now
+async function warKey(colour) {
+    const { drawWarMark } = await import("./app/mapicons.js");
+    const list = $("#warmapkey");
+
+    if (list.dataset.colour === colour) {
+        return;
+    }
+
+    list.dataset.colour = colour;
+    list.replaceChildren();
+
+    for (const [kind, label] of [["army", "Army"], ["reserve", "Reserve"], ["reinforcement", "Reinforcements"], ["supply", "Supply wagon"], ["camp", "Camp"], ["depot", "Supply depot"]]) {
+        const item = document.createElement("li");
+        const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+
+        drawWarMark(icon.getContext("2d"), kind, 22, 22, 34, colour);
+        item.append(icon, label);
+        list.append(item);
+    }
+
+    const lit = document.createElement("li");
+
+    lit.append(Object.assign(document.createElement("span"), { className: "lit" }), "Seen now; the rest of theirs unseen");
+    list.append(lit);
 }
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);

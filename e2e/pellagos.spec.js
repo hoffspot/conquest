@@ -5876,6 +5876,163 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
     expect(told).toEqual(["Our army's supplies are cut off again: 4 have deserted."]);
 });
 
+test("the war table in the keep: a Retainer's told it isn't theirs to read; a Knight taps it, walks up to it, and its map shows the war as their council sees it, their army at their camp and the enemy's army its scout sees, not the one beyond, drawn again as the war goes on; what's tapped told of", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // A Retainer at war with the orcs, a camp of theirs up before the orcs' seat, their army at it,
+    // an orc army in its scout's sight and another far beyond: into the keep, across the hall from
+    // the war table, looking at it
+    const set = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "keep");
+        const player = game.battle.actor("player");
+        const seat = war.town(war.realm("orc").seat);
+        const off = ([x, y], dx, dy) => [x + dx, y + dy];
+        const camp = { id: "camp-900", realm: "human", at: off(seat.at, 0, 280), guard: 6, built: war.turn, done: war.turn, toward: seat.id, used: 1e6, skirmished: war.turn };
+        const army = (id, realm, at, size, mission) => ({ id, realm, kind: "army", size, at, path: [at], leg: 0, target: null, home: war.realm(realm).seat, mission, about: null, camp: null, orders: null, went: size, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 });
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.standing.points = 200;
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.known.push("human|orc");
+        war.camps.push(camp);
+        war.forces.push(army("force-900", "human", off(camp.at, 0, 30), 30, "camp"), army("force-901", "orc", off(camp.at, 200, 0), 40, "regroup"), army("force-902", "orc", off(seat.at, 0, -1600), 50, "regroup"));
+
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const table = game.world.maps[player.map].pieces.find(({ kind }) => kind === "war-table");
+
+        return { map: player.map, table, camp: camp.at, far: war.sees("human", war.force("force-902").at), near: war.sees("human", war.force("force-901").at) };
+    });
+
+    expect(set.map).toMatch(/great-hall$/);
+    expect(set.table).toMatchObject({ w: 4, h: 2 });
+    expect([set.near, set.far]).toEqual([true, false]);
+
+    // Tapped from across the hall: walked up to it
+    const tap = () =>
+        page.evaluate(({ x, y, w, h }) => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+            const [ox, oz] = game.originOf(game.mapId);
+            const at = [x + Math.floor(w / 2), y + h + 2];
+
+            window.said = [];
+
+            const message = game.hud.message.bind(game.hud);
+
+            game.hud.message = (text, ...rest) => {
+                window.said.push(text);
+
+                return message(text, ...rest);
+            };
+
+            Object.assign(player, { square: at, x: at[0] + 0.5, y: at[1] + 0.5, path: [], facing: Math.PI });
+
+            for (let k = 0; k < 8; k++) {
+                game.advance(0.25);
+            }
+
+            Object.assign(game.cameraFollow, { yaw: 0, turning: 0, pitch: 35 });
+            game.cameraFollow.heading = { x: 0, z: 0 };
+            game.advance(0.05);
+            game.start();
+
+            return game.view.toScreen(game.view.camera.position.clone().set(ox + x + w / 2, 0.87, oz + y + h * 0.7));
+        }, set.table);
+
+    let at = await tap();
+
+    await page.mouse.click(at.x, at.y);
+    await page.waitForFunction(() => window.said.some((text) => /war table/.test(text)), null, { timeout: 60000, polling: 100 });
+
+    const refused = await page.evaluate(() => ({ said: window.said, open: document.querySelector("#worldmap").open, square: window.pellagos.game.battle.actor("player").square }));
+
+    expect(refused.said).toContain("The war table's for the council and its Knights to read. You're a Retainer.");
+    expect(refused.open).toBe(false);
+    expect(refused.square).toEqual([set.table.x + 2, set.table.y + 2]);
+
+    // A Knight: its map open, the war going on as it's read
+    await page.evaluate(() => (window.pellagos.game.standing.points = 420));
+    at = await tap();
+    await page.mouse.click(at.x, at.y);
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.war, null, { timeout: 60000, polling: 100 });
+
+    const map = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        return {
+            title: document.querySelector("#worldmaptitle").textContent,
+            text: document.querySelector("#worldmappicktext").textContent,
+            key: document.querySelector("#worldmapkey").hidden,
+            warKey: [...document.querySelectorAll("#warmapkey li")].map((item) => item.textContent),
+            running: game.running,
+            forces: worldMap.war.forces.map(({ id, ours, told }) => ({ id, ours, told })),
+            camps: worldMap.war.camps.map(({ id, own }) => ({ id, own })),
+            drawn: worldMap.drawn.war,
+        };
+    });
+
+    expect(map.title).toBe("The war table");
+    expect(map.text).toMatch(/^Our army, 30 strong of \d+: at its camp\. Our reserve .* Tap anything on the map for more\.$/);
+    expect(map.key).toBe(true);
+    expect(map.warKey).toEqual(["Army", "Reserve", "Reinforcements", "Supply wagon", "Camp", "Supply depot", "Seen now; the rest of theirs unseen"]);
+    expect(map.running).toBe(true);
+    expect(map.camps).toContainEqual({ id: "camp-900", own: true });
+    expect(map.forces.find(({ id }) => id === "force-901")).toMatchObject({ ours: false, told: "The Orcish army, 40 strong: falling back to its camp to be made up." });
+    expect(map.forces.some(({ id }) => id === "force-902")).toBe(false);
+    expect(map.drawn.forces).toBeGreaterThanOrEqual(2);
+    expect(map.drawn.seen).toBeGreaterThanOrEqual(1);
+    expect(map.drawn.camps).toBeGreaterThanOrEqual(1);
+
+    // (Drawn again as the war goes on: the orc army moved, moved on the map)
+    const moved = await page.evaluate(() => {
+        const force = window.pellagos.game.host.war.force("force-901");
+
+        force.at = [force.at[0] - 60, force.at[1]];
+
+        return force.at[0];
+    });
+
+    await page.waitForFunction((x) => window.pellagos.worldMap.war?.forces.find(({ id }) => id === "force-901")?.x === x, moved, { timeout: 10000, polling: 100 });
+
+    // (The orc army tapped: told of)
+    const spot = await page.evaluate(() => {
+        const map = window.pellagos.worldMap;
+        const { x, z } = map.war.forces.find(({ id }) => id === "force-901");
+        const rect = map.canvas.getBoundingClientRect();
+
+        return { x: rect.left + (x - map.view.x) / map.view.scale + rect.width / 2, y: rect.top + (z - map.view.z) / map.view.scale + rect.height / 2 };
+    });
+
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#worldmapnote")).toHaveText("The Orcish army, 40 strong: falling back to its camp to be made up.");
+
+    // Left: the map closed, and the camp's scout's ground uncovered at the war's next turn
+    await page.locator("#worldmapcancel").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+
+    const uncovered = await page.evaluate(([x, y]) => {
+        const { game } = window.pellagos;
+        const before = game.explored.visitedAt(x, y);
+
+        game.host.war.clock = 60000 - 100;
+        game.advance(0.5);
+
+        return { before, after: game.explored.visitedAt(x, y), cancel: document.querySelector("#worldmapcancel").textContent };
+    }, set.camp);
+
+    expect(uncovered.after).toBe(true);
+    expect(uncovered.cancel).toBe("Cancel");
+});
+
 test("a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
