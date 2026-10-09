@@ -63,6 +63,9 @@ export const PLACES = Object.freeze({
     guild: { score: "tavern", level: 0.7, muffle: null },
     // (In a town hall, the town's music through its windows; in a keep, far off through stone)
     hall: { score: "town", level: 0.35, muffle: 800 },
+    // (In a shop, the specialists' and the masters', the town's music through its windows, a
+    // little nearer than a hall's)
+    shop: { score: "town", level: 0.4, muffle: 850 },
     keep: { score: "town", level: 0.25, muffle: 500 },
     // (In a castle keep's undercroft, under its great hall, further off yet)
     undercroft: { score: "town", level: 0.15, muffle: 350 },

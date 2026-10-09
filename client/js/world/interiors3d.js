@@ -4396,8 +4396,291 @@ function barracks(map) {
     };
 }
 
+// --- The specialists' and the masters' shops (core/insides.js SHOP_INSIDES: docs/WAR.md *Shops*) ---
+
+// Each shop's look inside (its map's `look`: the shop's kind): its walls' finish, its counter's
+// cloth, what's on its shelves (phials and jars, books and scrolls, or the gear it sells), its
+// banners' cloth and trim (a master's), and whether its rug's laid up from the door
+const SHOP_LOOKS = Object.freeze({
+    swordsmith: { walls: "stone", cloth: "leather", shelves: "hilts", rug: "rug" },
+    armorer: { walls: "stone", cloth: "wool-blue", shelves: "helms", rug: "rug" },
+    scriptorium: { walls: "plaster-white", cloth: "velvet", shelves: "books", rug: "rug" },
+    alchemist: { walls: "plaster-ochre", cloth: "wool-green", shelves: "phials", rug: null },
+    masterSwordsmith: { walls: "stone", cloth: "velvet", shelves: "hilts", rug: "rug", banner: ["velvet", "cloth-gold"] },
+    masterArmorer: { walls: "stone", cloth: "velvet", shelves: "helms", rug: "rug", banner: ["velvet", "cloth-gold"] },
+    emporium: { walls: "plaster-white", cloth: "velvet-purple", shelves: "curios", rug: "rug", banner: ["velvet-purple", "cloth-gold"] },
+});
+
+// Shelves against whichever wall they stand by (a run of squares along it: core/insides.js
+// SHOP_INSIDES), four boards up, and on them what the shop sells: phials and jars of every colour
+// (`phials`), books and scrolls (`books`), helms and gauntlets (`helms`), sheathed blades and
+// daggers (`hilts`), or a curio-seller's mix of them all (`curios`)
+function wallShelves(solid, shelf, map, what) {
+    const along = shelf.w >= shelf.h;
+    const side = along ? (shelf.y === 0 ? "n" : "s") : shelf.x === 0 ? "w" : "e";
+    const origin = { n: [m(shelf.x), m(shelf.y)], s: [m(shelf.x), m(shelf.y + 1)], w: [m(shelf.x), m(shelf.y)], e: [m(shelf.x + 1), m(shelf.y)] }[side];
+    const out = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[side];
+    const dir = along ? [1, 0] : [0, 1];
+    const length = m(along ? shelf.w : shelf.h);
+    const at = (u, d) => [origin[0] + dir[0] * u + out[0] * d, origin[1] + dir[1] * u + out[1] * d];
+    const box = (u0, y0, d0, u1, y1, d1, name) => {
+        const [[ax, az], [bx, bz]] = [at(u0, d0), at(u1, d1)];
+
+        solid.box(Math.min(ax, bx), y0, Math.min(az, bz), Math.max(ax, bx), y1, Math.max(az, bz), material(name, WALL));
+    };
+    const glass = ["glass-green", "glass-violet", "wine", "glass", "calabash", "pewter", "glow-blue", "glow-green"];
+
+    box(0, 0, 0, length, m(2.2), m(0.1), "planks-dark");
+
+    for (const [k, y] of [0.35, 0.8, 1.25, 1.7].entries()) {
+        box(0, m(y), 0, length, m(y + 0.05), m(0.42), "planks");
+
+        for (let u = m(0.22), n = 0; u < length - m(0.18); u += m(what === "phials" ? 0.22 : 0.32), n++) {
+            const pick = roughOf(shelf.x * 7 + n, shelf.y * 5 + k);
+            const base = m(y + 0.05);
+            const [cx, cz] = at(u, m(0.22));
+            const kind = what === "curios" ? ["phials", "books", "phials", "skull"][Math.floor(pick * 4)] : what;
+
+            if (kind === "phials") {
+                const [tall, wide] = [m(0.12 + pick * 0.16), m(0.05 + ((n * 3) % 3) * 0.018)];
+
+                solid.cylinder(cx, cz, base, base + tall, wide, wide, material(glass[Math.floor(pick * 97) % glass.length], WALL), { segments: 8 });
+                solid.cylinder(cx, cz, base + tall, base + tall + m(0.05), wide * 0.45, wide * 0.4, material(pick < 0.5 ? "timber" : "linen", WALL), { segments: 6 });
+            } else if (kind === "books") {
+                if (pick < 0.25) {
+                    solid.cylinder(cx, cz, base, base + m(0.25), m(0.07), m(0.07), material("parchment", WALL), { segments: 8 });
+                } else if (pick < 0.85) {
+                    box(u - m(0.08), base, m(0.1), u + m(0.08), base + m(0.3 + pick * 0.08), m(0.4), pick < 0.5 ? "ledger" : pick < 0.7 ? "velvet" : "leather");
+                }
+            } else if (kind === "helms") {
+                if (pick < 0.6) {
+                    solid.lathe(cx, cz, [[m(0.14), base], [m(0.15), base + m(0.12)], [m(0.11), base + m(0.25)], [0, base + m(0.29)]], material(pick < 0.3 ? "iron" : "pewter"), { segments: 10 });
+                } else {
+                    box(u - m(0.14), base, m(0.1), u - m(0.02), base + m(0.07), m(0.32), "iron");
+                    box(u + m(0.02), base, m(0.1), u + m(0.14), base + m(0.07), m(0.32), "iron");
+                }
+            } else if (kind === "hilts") {
+                // (A blade in its scabbard, standing hilt up, or a dagger laid flat)
+                if (pick < 0.65) {
+                    box(u - m(0.03), base, m(0.12), u + m(0.03), base + m(0.32), m(0.18), "leather");
+                    box(u - m(0.1), base + m(0.32), m(0.11), u + m(0.1), base + m(0.35), m(0.19), pick < 0.3 ? "brass" : "iron");
+                    box(u - m(0.02), base + m(0.35), m(0.13), u + m(0.02), base + m(0.42), m(0.17), "leather");
+                } else {
+                    box(u - m(0.14), base, m(0.2), u + m(0.14), base + m(0.03), m(0.26), "iron");
+                }
+            } else if (pick < 0.5) {
+                solid.lathe(cx, cz, [[m(0.07), base], [m(0.09), base + m(0.06)], [m(0.08), base + m(0.14)], [0, base + m(0.16)]], material("bone", WALL), { segments: 8 });
+            }
+        }
+    }
+}
+
+// A wall of shields hung on a rack: round ones and kite shields in turn, painted
+function shieldRack(solid, rack) {
+    const along = rack.w >= rack.h;
+    const [x0, z0] = [m(rack.x), m(rack.y)];
+    const length = m(along ? rack.w : rack.h);
+    const paints = ["paint-red", "paint-blue", "paint-green", "paint-ochre"];
+
+    solid.box(x0, m(0.4), z0, x0 + (along ? length : m(0.1)), m(2.3), z0 + (along ? m(0.1) : length), material("planks-dark", WALL));
+
+    for (let s = m(0.5), k = 0; s < length - m(0.3); s += m(0.75), k++) {
+        const [x, z] = along ? [x0 + s, z0 + m(0.14)] : [x0 + m(0.14), z0 + s];
+        const y = m(k % 2 ? 1.0 : 1.75);
+        const r = m(k % 3 === 2 ? 0.26 : 0.3);
+        const ring = Array.from({ length: 12 }, (_, i) => {
+            const a = (i / 12) * Math.PI * 2;
+
+            return along ? [x + Math.cos(a) * r, y + Math.sin(a) * r, z] : [x, y + Math.sin(a) * r, z + Math.cos(a) * r];
+        });
+
+        solid.facing(ring, along ? [0, 0, 1] : [1, 0, 0], material(paints[k % paints.length]));
+        solid.box(x - m(0.05), y - m(0.05), z - m(0.02), x + m(0.05), y + m(0.05), z + m(0.06), material("iron"));
+    }
+}
+
+// A display table: a cloth over it, and on it what the shop sells laid out (blades, gauntlets and
+// a helm; a book open by a candle; jewels and an orb)
+function displayTable(solid, piece, look, kind) {
+    const [x0, z0, x1, z1] = [m(piece.x + 0.1), m(piece.y + 0.1), m(piece.x + piece.w - 0.1), m(piece.y + piece.h - 0.1)];
+    const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+    const top = m(0.85);
+
+    table(solid, x0, z0, x1, z1);
+    solid.box(x0 + m(0.1), top - m(0.06), z0 + m(0.1), x1 - m(0.1), top - m(0.04), z1 - m(0.1), material(look.cloth));
+
+    if (kind === "swordsmith" || kind === "masterSwordsmith") {
+        for (let k = 0; k < 3; k++) {
+            const z = z0 + m(0.4) + k * m(0.45);
+
+            solid.box(x0 + m(0.25), top - m(0.04), z - m(0.03), x1 - m(0.45), top - m(0.01), z + m(0.03), material("iron"));
+            solid.box(x1 - m(0.45), top - m(0.04), z - m(0.09), x1 - m(0.4), top, z + m(0.09), material(k % 2 ? "brass" : "gold"));
+            solid.box(x1 - m(0.4), top - m(0.03), z - m(0.02), x1 - m(0.22), top - m(0.01), z + m(0.02), material("leather"));
+        }
+    } else if (kind === "armorer" || kind === "masterArmorer") {
+        solid.lathe(cx - m(0.35), cz, [[m(0.16), top - m(0.04)], [m(0.17), top + m(0.1)], [m(0.12), top + m(0.26)], [0, top + m(0.3)]], material("iron"), { segments: 10 });
+
+        for (const dz of [-0.25, 0.25]) {
+            solid.box(cx + m(0.15), top - m(0.04), cz + m(dz) - m(0.07), cx + m(0.55), top + m(0.04), cz + m(dz) + m(0.07), material("pewter"));
+        }
+    } else if (kind === "scriptorium") {
+        for (const side of [-1, 1]) {
+            solid.box(cx + side * m(0.02), top - m(0.03), cz - m(0.22), cx + side * m(0.35), top - m(0.01), cz + m(0.22), material("parchment"));
+        }
+
+        candle(solid, x0 + m(0.3), z0 + m(0.3), top - m(0.04));
+        solid.cylinder(x1 - m(0.3), z0 + m(0.3), top - m(0.04), top + m(0.04), m(0.05), m(0.04), material("iron-black"), { segments: 8 });
+    } else {
+        // (The Emporium's: an orb on its stand, glowing, and jewels on a velvet cushion)
+        solid.cylinder(cx - m(0.3), cz, top - m(0.04), top + m(0.06), m(0.12), m(0.08), material("brass"), { segments: 8 });
+        solid.lathe(cx - m(0.3), cz, Array.from({ length: 7 }, (_, k) => [Math.sin((k / 6) * Math.PI) * m(0.16), top + m(0.06) + m(0.16) - Math.cos((k / 6) * Math.PI) * m(0.16)]), material("glow-violet"), { segments: 12 });
+        solid.box(cx + m(0.1), top - m(0.04), cz - m(0.25), cx + m(0.6), top + m(0.04), cz + m(0.25), material("velvet"));
+
+        for (const [dx, dz, gem] of [[0.22, -0.12, "gold"], [0.4, 0.1, "silver"], [0.5, -0.15, "jade"]]) {
+            solid.cylinder(cx + m(dx), cz + m(dz), top + m(0.04), top + m(0.06), m(0.05), m(0.05), material(gem), { segments: 8 });
+        }
+    }
+}
+
+// A lectern by the wall, a great book open on it
+function lectern(solid, piece) {
+    const [cx, cz] = [m(piece.x + 0.5), m(piece.y + 0.5)];
+
+    solid.box(cx - m(0.05), 0, cz - m(0.05), cx + m(0.05), m(1.05), cz + m(0.05), material("planks-dark"));
+    solid.box(cx - m(0.3), m(1.0), cz - m(0.22), cx + m(0.3), m(1.06), cz + m(0.22), material("planks-dark"));
+
+    for (const side of [-1, 1]) {
+        solid.box(cx + side * m(0.02), m(1.06), cz - m(0.18), cx + side * m(0.26), m(1.08), cz + m(0.18), material("parchment"));
+    }
+}
+
+// A whetting bench (or a fitting bench) against the wall: a table, tools on it, a vice
+function benchOfTools(solid, piece) {
+    const [x0, z0, x1, z1] = [m(piece.x + 0.1), m(piece.y + 0.05), m(piece.x + piece.w - 0.05), m(piece.y + piece.h - 0.05)];
+
+    table(solid, x0, z0, x1, z1);
+
+    for (let k = 0; k < 3; k++) {
+        const z = z0 + m(0.3) + k * ((z1 - z0 - m(0.6)) / 2);
+
+        solid.box(x0 + m(0.15), m(0.78), z - m(0.03), x0 + m(0.55), m(0.81), z + m(0.03), material("iron"));
+    }
+
+    solid.box(x1 - m(0.35), m(0.78), (z0 + z1) / 2 - m(0.1), x1 - m(0.1), m(0.98), (z0 + z1) / 2 + m(0.1), material("iron-black"));
+}
+
+// A grindstone on its frame, its crank
+function grindwheel(solid, piece) {
+    const [cx, cz] = [m(piece.x + 0.5), m(piece.y + 0.5)];
+
+    for (const side of [-1, 1]) {
+        solid.box(cx + side * m(0.3) - m(0.04), 0, cz - m(0.3), cx + side * m(0.3) + m(0.04), m(0.75), cz + m(0.3), material("timber"));
+    }
+
+    solid.lathe(cx, cz, [[0, m(0.45)], [m(0.35), m(0.45)], [m(0.35), m(0.55)], [0, m(0.55)]], material("stone"), { segments: 14 });
+}
+
+/**
+ * A specialist's or a master's shop inside (core/insides.js SHOP_INSIDES, by its `look`): its
+ * floorboards and walls, the door south, windows either side of it; the counter across the room
+ * under its cloth; its shelves along the walls, its racks of blades or shields, its stands of
+ * harness, its display tables, its benches, casks and strongboxes; a rug up from the door; a
+ * master's banners either side of the counter; lit by torches on the walls and candle stands.
+ */
+function shop(map) {
+    const solid = new Solid();
+    const kind = map.look ?? "swordsmith";
+    const look = SHOP_LOOKS[kind] ?? SHOP_LOOKS.swordsmith;
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (piece) => map.pieces.filter((each) => each.kind === piece);
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    walledIn(solid, map, look.walls, [{ side: "s", from: doorMiddle - 0.9, to: doorMiddle + 0.9, lintel: 2.4 }], [{ side: "s", at: 4 }, { side: "s", at: map.width - 4 }]);
+    solid.box(m(doorMiddle - 0.9), 0, h - 0.2, m(doorMiddle + 0.9), m(2.4), h + 0.4, material("planks-dark", WALL));
+    ceiling(solid, map);
+
+    for (const counter of at("counter")) {
+        desk(solid, counter, look.cloth);
+    }
+
+    for (const shelf of at("shelves")) {
+        wallShelves(solid, shelf, map, look.shelves);
+    }
+
+    for (const rack of at("rack")) {
+        if (kind === "armorer" || kind === "masterArmorer") {
+            shieldRack(solid, rack);
+        } else {
+            armoury(solid, rack);
+        }
+    }
+
+    for (const stand of at("stand")) {
+        armourStand(solid, m(stand.x + 0.5), m(stand.y + 0.5), roughOf(stand.x, stand.y));
+    }
+
+    // (An alchemist's tables its stills; any other's its wares set out)
+    for (const piece of at("table")) {
+        if (kind === "alchemist") {
+            worktable(solid, piece);
+        } else {
+            displayTable(solid, piece, look, kind);
+        }
+    }
+
+    for (const piece of at("side-table")) {
+        lectern(solid, piece);
+    }
+
+    for (const piece of at("workbench")) {
+        benchOfTools(solid, piece);
+    }
+
+    for (const piece of at("grindstone")) {
+        grindwheel(solid, piece);
+    }
+
+    for (const barrels of at("barrels")) {
+        for (let y = barrels.y; y < barrels.y + barrels.h; y++) {
+            cask(solid, m(barrels.x + 0.1), m(y + 0.5), 0, m(0.8), m(0.4));
+        }
+    }
+
+    for (const box of at("chest")) {
+        chest(solid, m(box.x + 0.5), m(box.y + 0.5));
+    }
+
+    for (const carpet of at("carpet")) {
+        if (look.rug) {
+            rug(solid, m(carpet.x), m(carpet.y), m(carpet.x + carpet.w), m(carpet.y + carpet.h));
+        }
+    }
+
+    if (look.banner) {
+        const [counter] = at("counter");
+
+        for (const x of [counter.x - 1, counter.x + counter.w + 1]) {
+            wallBanner(solid, m(x), 0.3, "z", ...look.banner, { low: 1.2, high: 3 });
+        }
+    }
+
+    const stands = at("votive").map((stand) => candleStand(solid, stand));
+    const torches = [[0.3, map.height / 2], [map.width - 0.3, map.height / 2], [map.width / 2, map.height - 0.3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
+
+    return {
+        solid,
+        moving: [],
+        flames: torches.map(({ fire }) => fire),
+        lights: [...torches.map(({ light }) => light), ...stands],
+    };
+}
+
 // (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, barracks, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, barracks, undercroft, shop, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
 
 // --- Each people's own ---
 

@@ -4847,6 +4847,103 @@ test("what lingers after a creature's blow shows on the player's plate, and its 
     expect(await page.evaluate(() => window.pellagos.game.progress.count("antidote"))).toBe(1);
 });
 
+test("the swordsmith's in the start town: its keeper behind the counter tells of today's special and sells it, once; what's on the racks today, so many of each, one fewer once bought", async ({ page }) => {
+    // (Into the shop and a few clicks in it, each waiting on frames drawn in software)
+    test.setTimeout(180000);
+
+    // A saved game in seed 1's world, whose start town keeps a swordsmith's, with gold enough
+    await page.addInitScript((save) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+
+        if (!localStorage.getItem("pellagos.progress")) {
+            localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, gold: 20000, pack: [], gear: null }));
+        }
+    }, { ...SAVE, seed: 1 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // In by its door, and up to its keeper
+    const inside = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "swordsmith");
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+        const [keeper] = folk;
+
+        game.approaching = keeper.id;
+        game.battle.command("player", { type: "approach", target: keeper.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const stock = game.host.stockOf(keeper.id);
+
+        game.start();
+
+        return { map: player.map, folk: folk.map(({ id }) => game.host.folk.get(id)?.title), keeper: keeper.id, talking: Boolean(game.talking), shop: stock?.shop, wares: stock?.wares.length, specialLeft: stock?.specialLeft };
+    });
+
+    expect(inside).toMatchObject({ map: "home:swordsmith-1/shop", folk: ["Swordsmith"], talking: true, shop: "swordsmith", specialLeft: true });
+    expect(inside.wares).toBeGreaterThanOrEqual(7);
+
+    // Asked, they tell of today's special and its price, and show it
+    const talk = page.locator(".talk");
+    const pack = page.locator(".pack");
+
+    await expect(talk).toBeVisible();
+    await talk.getByRole("button", { name: "What's today's special?" }).click();
+
+    const told = await talk.locator(".talk-line").textContent();
+    const [, price] = told.match(/(\d+) gold/);
+
+    await talk.getByRole("button", { name: "Let me see it." }).click();
+    await expect(talk).toBeHidden();
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-title")).toContainText("Trading with");
+
+    // The special first, under its own heading, then the racks: so many of each left today
+    const special = pack.locator(".pack-list.special .pack-row");
+
+    await expect(pack.locator(".pack-heading").first()).toHaveText("Today's special");
+    await expect(special).toHaveCount(1);
+    await expect(special.locator(".pack-price")).toHaveText(`${price} gold`);
+    expect(told.toLowerCase()).toContain((await special.locator(".pack-label").textContent()).toLowerCase());
+    await expect(special.locator(".pack-left")).toHaveCount(0);
+
+    const racked = pack.locator(".pack-list.wares:not(.special) .pack-row");
+
+    await expect(racked).toHaveCount(inside.wares);
+    expect(await racked.locator(".pack-left").allTextContents()).toEqual(Array(inside.wares).fill(expect.stringMatching(/^[123] left$/)));
+
+    // One bought off the racks: one fewer of it, its price paid
+    const first = racked.first();
+    const left = Number((await first.locator(".pack-left").textContent()).split(" ")[0]);
+    const cost = Number((await first.locator(".pack-price").textContent()).split(" ")[0]);
+
+    await first.getByRole("button", { name: /^Buy / }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost} gold`);
+    await expect(first.locator(".pack-left")).toHaveText(left > 1 ? `${left - 1} left` : "Sold out");
+
+    // The special bought: paid for, and gone for the day
+    await special.getByRole("button", { name: /^Buy today's special/ }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost - Number(price)} gold`);
+    await expect(special.locator(".pack-left")).toHaveText("Sold out");
+    await expect(special.getByRole("button", { name: /^Buy today's special/ })).toBeDisabled();
+    expect(await page.evaluate((keeper) => window.pellagos.game.host.stockOf(keeper).specialLeft, inside.keeper)).toBe(false);
+});
+
 test("a Scroll of Safety read from the pack: a circle of runes grows under the player for three seconds, then they're in their home town's market square, the circle shrinking away there; struck down first, it's lost", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

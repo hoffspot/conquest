@@ -14,6 +14,7 @@ import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from 
 import { awning, ears, finial, hearth, jar, jars, MUDS, PAINTS, studded, toron, townHouse } from "./cat.js";
 import { band, CELL, circle, ENTRY, lamp, m, pinnacle, pole, post, randomFor, steps, wallPoint, weathering } from "./kit.js";
 import { fireLight } from "../kits/torches.js";
+import { dressShop, SHOP_NAMES, SHOPFRONTS, standingSign } from "../kits/shopfront.js";
 
 // Each of the Six's emblem, for their temples' plaques
 const GOD_EMBLEMS = Object.freeze({ aurelia: "sun", brannoc: "stag", ithriel: "star", morvaine: "lantern", seliane: "rose", dunmar: "anvil" });
@@ -776,7 +777,43 @@ export function windmill(piece) {
 }
 
 /** Every one of the cat folk's special buildings, by name. */
-export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill });
+/**
+ * A specialist's or a master's shop (kits/shopfront.js SHOPFRONTS), built as a town house of theirs is, of mud brick: its name on
+ * a plaque over its door, its sign on a post by the way in, and what it sells set out before it.
+ */
+export async function shop(piece) {
+    await loadSignFont();
+
+    const front = SHOPFRONTS[piece.name];
+    const random = randomFor(piece, 8);
+    const [W, D] = [piece.w * CELL, piece.h * CELL];
+    const mud = random.pick(["mud", "mud-red", "mud-dark"]);
+    const solid = new Solid();
+    const face = D - m(ENTRY) + m(0.35);
+    const storeys = (piece.storeys ?? 1) > 1 ? [m(3.2), m(2.9)] : [m(3.6)];
+
+    toned(solid, random, [storeys.reduce((a, b) => a + b, 0) + m(0.5)]);
+
+    const boardOf = (length) => Math.min(m(front.name.length > 12 ? 4.4 : 3.6), length - m(4.4));
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), face, { storeys, name: mud, random, wealth: 0.7, paint: null, doorway: { width: m(1.6), height: m(2.3) }, plinth: m(0.3), roofHouse: false, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
+    const at = wallPoint(house.front, { lean: house.lean });
+    const middle = house.front.length / 2;
+    const boardWidth = boardOf(house.front.length);
+
+    if (boardWidth > m(1.5)) {
+        plaque(solid, at, house.front.out, [middle - boardWidth / 2, middle + boardWidth / 2, house.bayTop + m(0.1), house.bayTop + m(0.1) + (boardWidth * 9) / 56], nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark }), `board ${piece.name}`, { proud: m(0.45) });
+    }
+
+    // (Before its door, out past its plinth)
+    const [dx, , dz] = at(middle, 0, 0);
+
+    standingSign(solid, piece.name, dx - m(1.4), dz + m(0.3));
+    dressShop(solid, piece.name, { x0: dx, z: dz + m(0.3), room: Math.min(dx, W - dx) / m(1), seed: random.int(1, 1 << 30), aside: 2.6 });
+
+    return solid.toObject();
+}
+
+export const LANDMARKS = Object.freeze({ tavern, church, blacksmith, guild, hall, keep, barracks, market, windmill, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
 
 /** A cat folk town's special building (its layout piece). */
 export function landmark(piece) {

@@ -2,7 +2,8 @@
 // pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
 // the houses, with their names and signs), the adventurers' guild's hall, a stone church as big as
 // its place (church.js), a blacksmith's smithy with an open forge, a market hall on columns with stalls
-// beneath, a windmill, a town hall, a capital's keep, and a barracks. Each is built facing south;
+// beneath, a windmill, a town hall, a capital's keep, a barracks, and the specialists' and masters'
+// shops (shopfront.js). Each is built facing south;
 // the town turns it to face its street.
 
 import { GODS } from "../../../core/lore/gods.js";
@@ -13,6 +14,7 @@ import { Solid } from "../engine/solid.js";
 import { churchBody } from "./church.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
+import { dressShop, SHOP_NAMES, SHOPFRONTS } from "./shopfront.js";
 import { fireLight, lanternLight, torch } from "./torches.js";
 
 const M = 5;
@@ -761,12 +763,101 @@ export async function barracks(piece) {
     return solid.toObject();
 }
 
+/**
+ * A specialist's or a master's shop (shopfront.js SHOPFRONTS: a swordsmith's, an armorer's, an
+ * occult scriptorium, an alchemist's; the Master Swordsmith's, the Master Armorer's, the Mystic
+ * Emporium): the house it was, made over (timber if it was a cottage), its name along the floor
+ * above (or over the door), its sign by the door, a striped awning over the window either side,
+ * and what it sells set out before it (dressShop).
+ */
+export async function shop(piece) {
+    await loadSignFont();
+
+    const front = SHOPFRONTS[piece.name];
+    const { w, h } = piece;
+    // (In its street's look, but timber where it was a cottage: a cottage's rooms above are in its
+    // thatch, its eaves down over where the name would go)
+    const style = HOUSE_STYLES[piece.style] && piece.style !== "cottage" ? piece.style : "timber";
+    const reveal = HOUSE_STYLES[style].reveal + 0.04;
+    const [width, depth] = [w * 20, h * 20];
+    const board = Math.min(m(front.name.length > 12 ? 5.4 : 4.4), width - m(3.2));
+    const storeys = piece.storeys ?? 1;
+    const plan = planHouse({
+        w,
+        h,
+        style,
+        storeys,
+        seed: seedOf(piece),
+        x: piece.x,
+        y: piece.y,
+        facing: piece.facing,
+        front: depth - m(ENTRY) + m(reveal),
+        entrance: { width: m(1.6), height: m(2.3) },
+        board,
+        jettied: false,
+        lofty: m(storeys < 2 ? 4 : 3.2),
+    });
+    const solid = buildHouse(plan);
+    const oak = plan.frame ?? "timber";
+    const ground = plan.levels[0];
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const boardHeight = (board * 9) / 56;
+    const texture = nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark });
+
+    // Its name: along the floor above, or over the door
+    if (plan.levels.length > 1) {
+        const level = plan.levels[1];
+        const v0 = Math.min(level.height - boardHeight - m(0.35), m(1.05));
+
+        nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], texture, `board ${piece.name}`, oak);
+    } else {
+        const small = Math.min(board, m(4));
+        const v0 = m(2.6);
+
+        nameBoard(solid, face, [middle - small / 2, middle + small / 2, v0, v0 + Math.min((small * 9) / 56, ground.height - v0 - m(0.2))], texture, `board ${piece.name}`, oak);
+    }
+
+    const aside = plan.levels.length > 1 ? m(1.6) : Math.min(board, m(4)) / 2 + m(0.55);
+    const top = Math.min(m(3.2), ground.height - m(0.1));
+
+    hangingSign(solid, face, middle + aside, top, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: 0.9, height: 1.08, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
+
+    // A striped awning over each window of the ground floor, clear of the door (a master's shop
+    // has banners instead)
+    const [x0, z] = [face.origin[0] + middle, face.origin[2]];
+    const stripes = ["awning", "paint-cream"];
+
+    for (const { u0, u1 } of front.master ? [] : (plan.openings.front[0] ?? [])) {
+        if (Math.abs((u0 + u1) / 2 - middle) < m(1.2) || u1 - u0 > m(2)) {
+            continue;
+        }
+
+        const [a, b] = [face.origin[0] + u0 - m(0.15), face.origin[0] + u1 + m(0.15)];
+        const [high, low, out] = [Math.min(ground.height - m(0.2), m(2.55)), Math.min(ground.height - m(0.2), m(2.55)) - m(0.45), m(0.8)];
+        const count = Math.max(2, Math.round((b - a) / m(0.3)));
+
+        for (let k = 0; k < count; k++) {
+            const [s0, s1] = [a + ((b - a) * k) / count, a + ((b - a) * (k + 1)) / count];
+            const strip = [[s0, high, z + m(0.02)], [s1, high, z + m(0.02)], [s1, low, z + out], [s0, low, z + out]];
+
+            solid.facing(strip, [0, 0.85, 0.5], material(stripes[k % 2]));
+            solid.facing([...strip].reverse(), [0, -0.85, -0.5], material(stripes[k % 2]));
+        }
+    }
+
+    solid.box(x0 - m(1), 0, z, x0 + m(1), m(0.25), z + m(0.55), material("stone"));
+    dressShop(solid, piece.name, { x0, z, room: width / M / 2, seed: seedOf(piece) });
+
+    return solid.toObject();
+}
+
 // Where a keep's door stands: this far in from the front of its lot (metres), and its size and sill
 const KEEP_ENTRY = 1.4;
 const KEEP_DOOR = Object.freeze({ width: 2.4, height: 3.2, floor: 0.8 });
 
 /** Every special building, by name (setpieces/pieces.js LANDMARKS). */
-export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep, barracks });
+export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep, barracks, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
 
 /** A town's special building (its layout piece), filling its footprint. */
 export function landmark(piece) {
