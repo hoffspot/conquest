@@ -52,6 +52,8 @@ const BURSTS = {
     sap: { count: 14, colours: [0xf0a830, 0x7a4a08], size: [0.025, 0.05], speed: [1, 2.6], life: [0.45, 0.8], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8 },
     boneChips: { count: 12, colours: [0xf2ead0, 0xb8a888], size: [0.02, 0.045], speed: [1.6, 3.6], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
     stoneChips: { count: 14, colours: [0x9a8a78, 0x4a4038], size: [0.025, 0.05], speed: [1.8, 3.8], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
+    // Splinters off a camp's stakes hacked at (pale fresh wood and dark bark)
+    woodChips: { count: 16, colours: [0xe2c48a, 0x5a3e22], size: [0.025, 0.06], speed: [1.6, 3.6], life: [0.4, 0.7], gravity: 9.8, spread: 1.3, glow: false, opacity: 1, late: true, drag: 0.5 },
     // Where the wild's creatures' own land: venom splashing, lava spattering, a web bursting,
     // earth thrown up by roots, a curse's shadows
     venomSplash: { count: 26, colours: [0xd8ff8a, 0x3a7a10], size: [0.03, 0.08], speed: [1.2, 3], life: [0.35, 0.7], gravity: 9, spread: 1.4, glow: false, opacity: 0.9, late: true, drag: 0.6 },

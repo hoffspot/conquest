@@ -3,8 +3,9 @@
 // walkway along the inside of its wall to fight from, a lane inside that, and the camp within: its
 // fire in the middle, its tents in rows either side of the street from gate to gate behind it, and
 // its parade ground before it, where its army stands. Each of its walls is in sections, any of them
-// broken open by an assault beaten off (war.js `breaches`, #pressed) and mended again in quiet
-// (#mend); the order they break in is the camp's own, the same every time.
+// broken open (war.js `broken`): by an assault beaten off where it was pressed (#pressed), in an
+// order the camp's own, the same every time; or hacked down in the world, where that's done
+// (`breach`); and mended again in quiet (#mend).
 //
 // Squares of the world (1 m, each [x, y] its corner), set square to the world's lie whichever way
 // it faces: the world's squares under it (core/overworld.js setStockades) and what's drawn
@@ -191,12 +192,52 @@ export function stockadeOf({ id, at, front = 0 }) {
 }
 
 /**
- * The squares a stockade stands over with so many of its sections broken open (`breaches`): its
- * `wall`'s (blocked, solid, and none can see through) and its `walk`way's (blocked and solid), as
- * [[x, y], ...]; the gates' and the breaches' left open.
+ * Which of a camp's sections of wall are broken open, as indices into its stockade's `sections`,
+ * in the order they broke: its own list (`broken`); or, for one kept before it had one, as many of
+ * them as its breaches, in its stockade's order.
  */
-export function squaresOf(stockade, breaches = 0) {
-    const standing = stockade.sections.slice(Math.max(0, breaches));
+export function brokenOf(camp) {
+    return camp.broken ?? Array.from({ length: Math.max(0, camp.breaches ?? 0) }, (_, k) => k);
+}
+
+/**
+ * The next of a stockade's sections to break, of those not `broken` (indices): the first of them in
+ * its order; or the one whose middle's nearest `near` ([x, y] metres: where it's pressed in the
+ * world; of two as near, the first in its order). Null with none left standing.
+ */
+export function nextBreak(stockade, broken = [], near = null) {
+    const down = new Set(broken);
+    let best = null;
+    let bestDistance = Infinity;
+
+    for (let k = 0; k < stockade.sections.length; k++) {
+        if (down.has(k)) {
+            continue;
+        }
+
+        if (!near) {
+            return k;
+        }
+
+        const { at } = stockade.sections[k];
+        const distance = hypot(at[0] - near[0], at[1] - near[1]);
+
+        if (distance < bestDistance) {
+            [best, bestDistance] = [k, distance];
+        }
+    }
+
+    return best;
+}
+
+/**
+ * The squares a stockade stands over with those of its sections `broken` open (indices: brokenOf):
+ * its `wall`'s (blocked, solid, and none can see through) and its `walk`way's (blocked and solid),
+ * as [[x, y], ...]; the gates' and the breaches' left open.
+ */
+export function squaresOf(stockade, broken = []) {
+    const down = new Set(broken);
+    const standing = stockade.sections.filter((_, k) => !down.has(k));
 
     return {
         wall: [...stockade.corners.wall, ...standing.flatMap(({ wall }) => wall)],

@@ -3686,6 +3686,83 @@ test("an enemy army's camp near the player is pitched within its stockade, tents
     expect(errors).toEqual([]);
 });
 
+test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    // An orc army at its camp just outside the town, at war with the humans, and the humans'
+    // reserve come to storm it; the player looking on, all that's said kept
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const at = [mx + 110, my + 5];
+        const from = [at[0] - 50, at[1] + 4];
+        const player = game.battle.actor("player");
+        const message = game.hud.message;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        war.camps.push({ id: "camp-900", realm: "orc", at, guard: 0, built: 0, done: 0, toward: null, used: 1e6, skirmished: 1e6, breaches: 0, broken: [], troubled: null });
+        war.forces.push({ id: "force-900", realm: "orc", kind: "army", size: 10, at: [...at], path: [[...at]], leg: 0, target: null, home: war.realm("orc").seat, mission: "camp", about: [...at], camp: "camp-900", orders: null, went: 10, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 });
+        war.forces.push({ id: "force-901", realm: "human", kind: "reserve", size: 14, at: [...from], path: [[...from], [...at]], leg: 0, target: "force-900", home: war.realm("human").seat, mission: "defend", about: null, since: 0 });
+        Object.assign(player, { square: [Math.floor(at[0] - 70), Math.floor(at[1] - 15)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+            message.call(game.hud, text, seconds);
+        };
+        game.advance(0.1);
+    });
+
+    // Its wall hacked at: the section's stakes stood in for in the battle, a bar over them
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const stakes = game.battle.actors.find(({ kind }) => kind === "stakes");
+
+        return Boolean(stakes && game.avatars.has(stakes.id) && game.hud.tracked.has(stakes.id));
+    })).toBe(true);
+
+    // Hacked through: broken open in the war, drawn so, the stand-in let go; the player told
+    const breached = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const stakes = game.battle.actors.find(({ kind }) => kind === "stakes");
+
+        stakes.hp = 1;
+
+        return stakes.id;
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.host.war.camp("camp-900")?.broken.length === 1)).toBe(true);
+
+    const after = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        game.advance(0.2);
+
+        return {
+            broken: game.host.war.camp("camp-900").broken.length,
+            drawn: game.stockades.drawn?.get("camp-900")?.broken.size ?? null,
+            stakes: game.avatars.has(id) || Boolean(game.battle.actor(id)),
+            said: window.said.filter((text) => /palisade|breach/.test(text)),
+        };
+    }, breached);
+
+    expect(after.broken).toBe(1);
+    expect(after.drawn).toBe(1);
+    expect(after.stakes).toBe(false);
+    // (Their people's reserve storming it: the player's own, through it)
+    expect(after.said).toContain("We're hacking at the orcish camp's palisade: break it open!");
+    expect(after.said).toContain("The orcish palisade is breached: we're through!");
+    expect(errors).toEqual([]);
+});
+
 test("an army in the field near the player, in its line of battle: the player told of it, its soldiers drawn, marching where the war has it going; the orcs' their enemies, their own people's their friends", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 

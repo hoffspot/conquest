@@ -27,9 +27,10 @@ const SUNK = 2;
 
 /**
  * How tall each kind stands (metres: its bar shows over it), and how high its archers loose from
- * (`loops`).
+ * (`loops`); and a camp's stakes being hacked at (core/host.js #hack: as tall as stockades3d.js
+ * draws them), loosing nothing.
  */
-export const FORT_HEIGHTS = Object.freeze({ tower: { height: TOWER.high + 1.2, loops: TOWER.loops[1] }, garrison: { height: GARRISON.high + 1.8, loops: GARRISON.high } });
+export const FORT_HEIGHTS = Object.freeze({ tower: { height: TOWER.high + 1.2, loops: TOWER.loops[1] }, garrison: { height: GARRISON.high + 1.8, loops: GARRISON.high }, stakes: { height: 3.1, loops: 2.4 } });
 
 export class Forts {
     /**
@@ -229,7 +230,8 @@ export class Forts {
 
 /**
  * A fortification in the battle, as an avatar (game.js #register): standing at its point, as tall as
- * its kind (FORT_HEIGHTS), loosing from its loops; drawn by Forts, so nothing of its own.
+ * its kind (FORT_HEIGHTS), loosing from its loops; drawn by Forts, so nothing of its own. (A camp's
+ * stakes hacked at stand in the same way, drawn by world/stockades3d.js)
  */
 export class FortAvatar {
     constructor(kind) {

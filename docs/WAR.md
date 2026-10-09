@@ -1957,7 +1957,8 @@ richest end with 21,000 gold, as they did with 15,000 before.
 
 The first of the palisades' parts: the war's own rules for them, as numbers (`war.js`
 `PALISADE`, `DEFEND`, `DUTY`; `armies.js` `ARMY`). The second, the stockade in the world, its gates,
-walkway and breaches, is below (*The stockade*); the fighting at it comes after.
+walkway and breaches, is below (*The stockade*); the third, the fighting at it near a player, after
+that (*A storm near a player*).
 
 **What was out** (the war study: each way of playing it in 72 worlds, as below):
 - **A reserve never followed a beaten army.** It had once, all the way to its camp, and ground
@@ -2097,6 +2098,61 @@ player, as before):
 **Kept.** Which way each camp faces (`front`) is in the war's snapshot (`WAR_VERSION` 8; a war kept
 before has each camp face what it was pitched against). The stockades are made again from the
 war's camps. What two games share changed (`NET_VERSION` 93): the world's squares.
+
+#### A storm near a player
+
+The third of the palisades' parts: a camp held and stormed in the world, where a player's near
+(`core/host.js` `STORM`, `#storms`), not reckoned by the war (as the armies near a player are,
+M20), and the war told how it went.
+
+**Manned** once an enemy army or reserve met in the world comes within 60 m of a camp's stockade
+whose army or guard is out (or a player of its enemies does), and stood down once none has been
+near for 20 s (`#holdStockade`):
+- its army's shield line and two-handers in ranks across its openings (its gates, and its breaches),
+  1.2 m inside them, ranks 1.6 m apart, each kept within 3 m of its place; each opening's share as
+  near it is to the enemy (weighed by 1 / (10 + metres)³, the nearest the most);
+- its archers and casters 7 m inside behind them;
+- any enemy within the stockade theirs to go after, as far as it takes;
+- posted again only as its openings, their shares or its numbers change.
+
+**Stormed** by those that come within 60 m of it (`#storming`): their archers and casters before
+the opening nearest them, 14 m out, facing in; the rest making for its parade ground, by its gates
+or breaches, and fighting whoever stands in the way, within 40 m of it.
+
+**Hacked at** (`#hack`): the section of its wall nearest them, 8 m or more clear of its openings,
+stood up in the battle as its stakes (`KINDS.stakes`: 900 hit points, standing over the section's
+squares), and a fifth of their shield line and two-handers (2 to 6) set at it from 1.5 m outside.
+None set on a palisade of their own accord, nor come to the help of those hacking at one. Felled,
+it's broken open in the war (`war.breach`: that section, one more breach) and so in the world, a
+way in; another's hacked at 45 s on. **In the game** the stakes stand in as a fortification does,
+a bar over them; each blow on them chops into the wood (*Chop*), splinters flying; felled, the
+section crashes down (*Treant dying*: a great tree splintering) in its dust.
+
+**Over:**
+- **held,** once those storming it are down to 35% of what they went in with and fewer than those
+  holding it (its army and its guard, in the war's numbers), or all gone;
+- **carried,** once those holding it are, the same way (or its army's put down to the last);
+- the war told (`war.stormEnded`): held, those storming it beaten and getting away (as one beaten
+  off is: M18 *Camps*); carried, the camp razed, its army sent home beaten;
+- those storming it gone off or let go: stood down, nothing told.
+
+**Routed in the field** (`#routed`): an army or reserve met fighting in the world (not holding its
+camp) that's down to 35% of what it went in with, and outnumbered by the enemy's met near it, is
+broken, the war told (`war.routed`: beaten, as in its own reckoning) and the news with it. Beaten,
+it runs at 3 m/s, its line broken, none turning on it, till it's got away.
+
+**The player told** of each, if it's near them (120 m), or it's their people's camp, or force, or
+their people storming or routing it: the stakes hacked at, the palisade breached, the camp held or
+carried, a force broken and running; with the news's bell for those that matter to them.
+
+**Mended in quiet,** as before (M18 *Camps*): a breach in the world troubles the camp as one in the
+war's reckoning does, so its guard sets to mending it only once it's been quiet, from the stores'
+wood.
+
+**Kept.** Which sections of each camp's palisade are broken open (`broken`) are in the war's
+snapshot (`WAR_VERSION` 9; a war kept before has the first of its stockade's order broken, as many
+as its breaches). The storms under way are in the host's. What two games share changed
+(`NET_VERSION` 94): the storms, and those hacking at a palisade left to it.
 
 ### Playing together (M11)
 
