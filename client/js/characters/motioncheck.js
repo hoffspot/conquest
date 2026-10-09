@@ -21,6 +21,7 @@ import { CLIP_KEYS } from "./clip-keys.js";
 import { EVERYDAY, theirs } from "./dress.js";
 import { EQUIPMENT, heldRound, secondGrip, SLING, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
+import { HeadMap, rimLine } from "./headwear.js";
 import { buildItem } from "./items.js";
 import { Walker, WALK_STYLES } from "./locomotion.js";
 import { LOOKS } from "./peoples.js";
@@ -229,8 +230,26 @@ function touches({ userData: { socket, holder } }) {
 
 // Is a point of head-wear (in its own frame: meshes of it aren't moved in it) hidden within its
 // dome or band (items.js: its shell as fitted), a little in from it: the roots of its horns and
-// crests, a hat's brim across the head
-const within = ({ across, up, back, front, rim, band }, { x, y, z }) => (band ? y >= band[0] && y <= band[1] : y > -rim) && (x / across) ** 2 + (band ? 0 : (y / up) ** 2) + (z / (z < 0 ? back : front)) ** 2 < 0.9 ** 2;
+// crests, a hat's brim across the head. Fitted to the head (`head`: headwear.js), within its rim
+// and the dome grown over it (a helm's `tall` crown)
+const within = (shell, p) => (shell.head ? withinFitted(shell, p) : withinOval(shell, p));
+const withinOval = ({ across, up, back, front, rim, band }, { x, y, z }) => (band ? y >= band[0] && y <= band[1] : y > -rim) && (x / across) ** 2 + (band ? 0 : (y / up) ** 2) + (z / (z < 0 ? back : front)) ** 2 < 0.9 ** 2;
+const fitted = new WeakMap();
+
+function withinFitted(shell, p) {
+    if (!fitted.has(shell)) {
+        const head = new HeadMap(shell.head, { overEars: shell.overEars });
+
+        fitted.set(shell, { head, line: rimLine(head, shell.rim, { overEars: shell.overEars }) });
+    }
+
+    const { head, line } = fitted.get(shell);
+    const around = Math.atan2(p.x, p.z);
+    const length = p.length();
+    const up = Math.asin(Math.max(-1, Math.min(1, p.y / (length || 1))));
+
+    return p.y > line(around) - 0.003 && length < head.radius(around, up) + shell.out + shell.tall * Math.max(0, Math.sin(up)) ** 6 - 0.002;
+}
 
 // How far along a tail its root, set into the body, goes (metres)
 const ROOT = 0.1;

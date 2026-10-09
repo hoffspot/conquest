@@ -347,6 +347,8 @@ export class Character {
         this.held = 0;
         this.slung = false;
         this.hairHidden = false;
+        /** The rim its hair is cut along under what's on its head (headwear.js RIMS), or null. */
+        this.hairRim = null;
 
         // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail.
         // `level`: 0 in full, then each of LODS')
@@ -486,11 +488,21 @@ export class Character {
 
     // Whether what it carries hides its hair (a hat or helmet)
     #hidesHair() {
-        return [...this.equipment.values()].some((id) => {
-            const { kind, hides } = EQUIPMENT[id];
+        return this.#hairRim() !== null;
+    }
 
-            return kind !== "garment" && kind !== "drape" && Boolean(hides?.includes("hair"));
-        });
+    // The rim the hair's cut along under the hat or helmet that hides it (equipment.js ITEMS `rim`),
+    // or null
+    #hairRim() {
+        for (const id of this.equipment.values()) {
+            const { kind, hides, rim } = EQUIPMENT[id];
+
+            if (kind !== "garment" && kind !== "drape" && hides?.includes("hair")) {
+                return rim ?? "helm";
+            }
+        }
+
+        return null;
     }
 
     /** Build everything worn and carried (after equipping, or when the body changes). */
@@ -773,10 +785,11 @@ export class Character {
         this.sheathe(this.sheathed);
 
         // Under a hat or helmet, only the hair below its rim shows
-        const hairHidden = this.#hidesHair();
+        const hairRim = this.#hairRim();
 
-        if (this.hairHidden !== hairHidden) {
-            this.hairHidden = hairHidden;
+        if (this.hairRim !== hairRim) {
+            this.hairRim = hairRim;
+            this.hairHidden = hairRim !== null;
             yield* this.#growingHair();
         }
     }
@@ -1452,12 +1465,12 @@ export class Character {
     // The same, a step at a time (each a yield: hair.js growingHair's)
     *#growingHair() {
         const { style, beard } = this.look.hair;
-        const below = this.hairHidden ? 0.0 : Infinity;
+        const under = this.hairRim;
         // (Where it grows worked out once for both)
         const shared = {};
-        const geometry = yield* growingHair(this, style, beard, { below, detail: this.hairDetail, shared });
+        const geometry = yield* growingHair(this, style, beard, { under, detail: this.hairDetail, shared });
         // (And for those drawn with fewer triangles from afar, a far thinner one: setDetail)
-        const far = this.far ? yield* growingHair(this, style, beard, { below, detail: FAR.hair, far: true, shared }) : null;
+        const far = this.far ? yield* growingHair(this, style, beard, { under, detail: FAR.hair, far: true, shared }) : null;
 
         for (const mesh of [this.hairMesh, this.farHairMesh]) {
             if (mesh) {

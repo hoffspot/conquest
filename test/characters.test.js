@@ -14,6 +14,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { allAtOnce } from "../client/js/core/steps.js";
 import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
+import { HeadMap, measureHead, rimLine } from "../client/js/characters/headwear.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap, underneath } from "../client/js/characters/garments.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
@@ -787,8 +788,8 @@ describe("hair (hair.js)", () => {
 
     // Every point of a style's hair, in face coordinates (metres from between the eyes: x to the
     // left, y up, z forward)
-    function grown({ body, face }, style, detail = 0.2) {
-        const position = buildHair(body, style, "none", { detail })?.attributes.position;
+    function grown({ body, face }, style, detail = 0.2, options = {}) {
+        const position = buildHair(body, style, "none", { detail, ...options })?.attributes.position;
 
         return Array.from({ length: position?.count ?? 0 }, (_, i) => face.toFace(position.getX(i), position.getY(i), position.getZ(i)));
     }
@@ -853,6 +854,42 @@ describe("hair (hair.js)", () => {
 
         assert.ok(tail.length > 200);
         assert.ok(span(0) > 0.04 && span(2) > 0.04, `the tail is ${span(0).toFixed(3)} wide and ${span(2).toFixed(3)} deep`);
+    });
+
+    it("grows none through a helm or hat: what's above the rim within its lining, tails tied below it, tucked in under a coif", () => {
+        for (const who of [woman, man]) {
+            const middle = new THREE.Vector3(...who.face.fromFace(0, 0.035, -0.068));
+            const head = new HeadMap(measureHead(who.body, middle, who.face));
+
+            for (const rim of ["helm", "hat"]) {
+                const line = rimLine(head, rim);
+
+                for (const style of Object.keys(HAIRSTYLES)) {
+                    const position = buildHair(who.body, style, "none", { detail: 0.2, under: rim })?.attributes.position;
+                    let most = -Infinity;
+
+                    // (Off the head more than a few millimetres above the rim, it'd come through)
+                    for (let i = 0; i < (position?.count ?? 0); i++) {
+                        const p = new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i)).sub(middle);
+                        const around = Math.atan2(p.x, p.z);
+
+                        if (p.y > line(around) + 0.005) {
+                            most = Math.max(most, p.length() - head.radius(around, Math.asin(p.y / p.length())));
+                        }
+                    }
+
+                    assert.ok(most < 0.006, `${style} under a ${rim}: ${(most * 1000).toFixed(1)} mm off the head above its rim`);
+                }
+            }
+        }
+
+        const tail = grown(woman, "ponytail", 0.2, { under: "helm" }).filter(([, y, z]) => z < -0.12 && y < -0.1);
+
+        assert.ok(tail.length > 200, `${tail.length} points of a ponytail hanging from under a helm`);
+
+        for (const style of ["ponytail", "twintails", "long"]) {
+            assert.equal(grown(woman, style, 0.2, { under: "coif" }).length, 0, `${style} under a coif`);
+        }
     });
 
     it("grows twin tails, one either side as full as the other, and bangs over the brow", () => {
@@ -2267,18 +2304,82 @@ describe("the other peoples (peoples.js, equipment.js, skin.js)", () => {
 describe("items (items.js)", () => {
     // Every item's every model: held, put away, and what it hangs in
     const models = [...new Set(Object.values(ITEMS).flatMap((item) => [...(item.parts ?? [item]).map(({ model }) => model), item.sheath?.model, item.sheath?.holder]).filter(Boolean))];
+
+    it("grows a helm over the head it's on: down past the back of the skull and over it all, clear of the eyes", () => {
+        // (The ears aside: what the "ears set high" shapes move)
+        const ears = new Set(["ears/l-ear-trans-up", "ears/r-ear-trans-up"].flatMap((name) => [...human.details.get(name).vertices]));
+        const ray = new THREE.Raycaster();
+
+        for (const people of ["human", "elf", "darkElf", "orc", "lizard"]) {
+            for (const sex of ["m", "f"]) {
+                const f = figure(peopleLook({ people, sex, seed: 3 })?.shape ?? PRESETS.hero.shape);
+                const face = faceFrame(human, f.positions);
+                const socket = socketOn(f, "head");
+                const middle = socket.position.clone().add(f.rig.heads[f.rig.index.get("Head")]);
+                const helm = buildItem(`helm.${people}`, socket.fit);
+                const head = new HeadMap(socket.fit.head);
+                const line = rimLine(head, "helm");
+                const meshes = [];
+                const bones = new Set(["Head", "Neck"].map((name) => f.rig.index.get(name)));
+                let [skull, bare] = [0, 0];
+
+                helm.updateMatrixWorld(true);
+                helm.traverse((node) => node.isMesh && meshes.push(node));
+
+                // Each point of the skull above the rim, behind the brow, under the helm: a ray out
+                // from the middle through it meets the helm beyond it
+                for (let v = 0; v < human.vertexCount; v += 3) {
+                    if (human.partOf[v] !== 0 || ears.has(v) || !bones.has(human.skinIndices[v * 4])) {
+                        continue;
+                    }
+
+                    const p = new THREE.Vector3(f.positions[v * 3], f.positions[v * 3 + 1], f.positions[v * 3 + 2]).sub(middle);
+
+                    if (p.y < line(Math.atan2(p.x, p.z)) + 0.004 || face.toFace(...p.clone().add(middle).toArray())[2] > -0.04) {
+                        continue;
+                    }
+
+                    skull++;
+                    ray.set(new THREE.Vector3(), p.clone().normalize());
+
+                    if (!ray.intersectObjects(meshes).some(({ distance }) => distance > p.length())) {
+                        bare++;
+                    }
+                }
+
+                assert.ok(skull > 50 && bare === 0, `${people} ${sex}: ${bare} of ${skull} points of the skull bare`);
+
+                // Nothing of it before the eyes, from the brows to the cheekbones, but a nasal
+                const position = [];
+
+                for (const mesh of meshes) {
+                    const at = mesh.geometry.attributes.position;
+
+                    for (let i = 0; i < at.count; i++) {
+                        position.push(face.toFace(at.getX(i) + middle.x, at.getY(i) + middle.y, at.getZ(i) + middle.z));
+                    }
+                }
+
+                const over = position.filter(([x, y, z]) => Math.abs(x) > 0.008 && Math.abs(x) < 0.05 && y > -0.02 && y < 0.012 && z > -0.02);
+
+                assert.equal(over.length, 0, `${people} ${sex}: over the eyes at ${over[0]?.map((n) => n.toFixed(3))}`);
+            }
+        }
+    });
     const folded = (mesh) => Boolean(mesh.geometry.attributes.fold);
     // (Whether a material's parts could be folded in with others': opaque, not glowing, not skin)
     const foldable = ({ name, transparent, emissive }) => name !== "skin" && !transparent && emissive.getHex() === 0;
 
     it("draws each item's opaque parts in one mesh, each part as its own material, and the rest a mesh for each", () => {
         let [before, after] = [0, 0];
+        // (Head-wear fitted to a head measured all round, too)
+        const head = socketOn(figure(), "head").fit;
 
         for (const model of models) {
-            for (const ears of [false, true]) {
+            for (const fit of [{ headRadius: 0.1, scale: 1, ears: false }, { headRadius: 0.1, scale: 1, ears: true }, head]) {
                 const meshes = [];
 
-                buildItem(model, { headRadius: 0.1, scale: 1, ears }).traverse((node) => node.isMesh && meshes.push(node));
+                buildItem(model, fit).traverse((node) => node.isMesh && meshes.push(node));
 
                 const one = meshes.filter(folded);
                 const apart = meshes.filter((mesh) => !folded(mesh));

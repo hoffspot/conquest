@@ -50,6 +50,7 @@ to them.
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
 | `items.js` | Rigid equipment: weapons, shields, helmets, packs, tusks |
+| `headwear.js` | The head measured all round, the lines head-wear's rims follow, plates grown over it |
 | `equipment.js` | Slots, sockets and the equipment catalogue |
 | `gait.js` | Walking and running data: joint angle curves, cadence and stride by speed |
 | `locomotion.js` | The walker: poses the skeleton from the gait data as the character walks and runs |
@@ -572,8 +573,12 @@ strands run is found where they're drawn, from how the texture runs along each c
 to tip), so nothing more is stored; about twenty operations a pixel of hair.
 
 Hair near the head is skinned to the head; long hair hands over to the neck and upper back.
-Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, only hair from
-below the rim is grown, so long hair hangs from under a helmet.
+Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, the hair is cut
+along the line the head-wear's rim follows round the head (its item's `rim`: *Fitted clear of the
+body*, below), 4 mm under it, and only hair rooted below that grows, so long hair hangs from under
+a helm and none comes through it. What a style draws to a tie is drawn below the rim instead: a
+ponytail's tie goes down to the nape and twin tails' behind the ears; a topknot is combed back and
+down, short, and a crest isn't grown at all.
 
 ### The other peoples
 
@@ -902,7 +907,8 @@ shape:
 - the palm of either hand, with the grip across it (a hilt or haft on the palm's skin, the
   fingers fitted round it: *Grips*, below)
 - the outside of the left forearm, for shields
-- the middle of the head, for helmets, sized to fit it
+- the middle of the head, for helmets, the head measured all round from it (*Fitted clear of the
+  body*, below)
 - the upper back, for packs, quivers and slung guns
 - inside the lower lip, for tusks
 - the outside of each hip, on the belt, for what hangs from it
@@ -934,17 +940,34 @@ wears spiked knuckles (at 10°, a running cat woman's left fist came 1.9 cm into
 fuller thigh), so it swings past them, not through them (`Character.clearing`); an arm carrying
 something, 5° further out from what hangs at its hip only (`Character.hung`).
 
-**Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
-`skullOf`: how far the head reaches behind and before its middle at each height, and how high):
-its back drawn out and its crown raised as far as the skull needs, with 6 mm to spare for a
-lining, so a longer or taller head never comes through a helm, a hat or a crown; a band (a crown,
-the cat folk's open helm) is drawn out both ways. A shield stands off the forearm by its straps
-and pad, as far as the upper arm is thick and 4.5 cm more, so the upper arm bent up behind it
-clears it; the lizard folk's and the orcs' round shields are held by a grip behind the boss,
-their middle over the fist, and the others strapped along the forearm. A quiver stands 8.5 cm off
-the back, a little right of the middle, clear of the shoulder blades as they roll and of an
-arm reaching behind. Tails are held out behind, clear of the
-heels swinging up in a run.
+**Fitted clear of the body.** Head-wear is grown over the head it's on (`headwear.js`). The head is
+measured all round from its middle (`measureHead`): how far its skin reaches in each direction, 48
+round and 34 from under the jaw to the crown, with its ears and without them (the ears are the
+vertices MakeHuman's "ears set high" shapes move), and where its ears join it near their top. Each
+kind of head-wear's rim follows its own line round the head (`RIMS`, heights above the eyes by the
+angle round from the front): a helm's just above the brows, round the temples, over the ears in an
+arch clear of where they join the head, and down past the back of the skull to the nape; a leather
+cap's a little higher; a coif's and a hood's under the ears and round the jaw to the nape (a hood's
+a little lower, and looser; any further down the neck and the upper back came up into it as the head
+bowed), unless the ears are too long for that (an elf's), when they come through; a hat's round the
+head where it's widest. Its plates are grown over the head between such lines (`headPlate`), 6 mm
+off it for a lining and the hair pressed under it (half that on the bare forehead above the brows,
+and a nasal as close over the nose), so a longer, wider or taller head never comes through: a helm's
+dome to the crown (taller for the elves'), its band round the rim, and each people's own pieces
+stood on it or hung from it (a human's nasal and plume, an elf's silver leaf and cheek guards, a
+dark elf's crest of spikes, brow point, cheek guards and flared nape guard, the lizard folk's
+feathers and stone, an orc's horns). A hat's crown rises from a band round its rim, its brim
+drooping from its foot. The hair under it is cut along the same line (*Hair*, above), and the motion
+check takes what's within the plates (the roots of horns and spikes) as out of sight. Crowns and
+circlets, and head-wear built without a head to fit (the item gallery), are fitted to the skull as
+before (`fitted`, from `skullOf`: how far the head reaches behind and before its middle at each
+height, and how high): its back drawn out and its crown raised as far as the skull needs, with 6 mm
+to spare; a band drawn out both ways. A shield stands off the forearm by its straps and pad, as far
+as the upper arm is thick and 4.5 cm more, so the upper arm bent up behind it clears it; the lizard
+folk's and the orcs' round shields are held by a grip behind the boss, their middle over the fist,
+and the others strapped along the forearm. A quiver stands 8.5 cm off the back, a little right of
+the middle, clear of the shoulder blades as they roll and of an arm reaching behind. Tails are held
+out behind, clear of the heels swinging up in a run.
 
 The game's weapons are items too: a sword, a mage's staff, a crystal-tipped wand, an open
 grimoire (in the left hand, the right hand free to cast), a two-handed war hammer, a longbow with
