@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "c17339a7a5",
+    release: "063bb2e74c",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1562,6 +1562,270 @@ export const ASSETS = Object.freeze({
                     "path": "models/dungeons/pelvis.glb",
                     "hash": "98edeec2e7",
                     "bytes": 65008
+                }
+            ]
+        },
+        "dungeon-prop-sword-arming": {
+            "tier": "demand",
+            "label": "An arming sword (\"Arming Sword\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sword-arming.glb",
+                    "hash": "fa2e4779dd",
+                    "bytes": 78968
+                }
+            ]
+        },
+        "dungeon-prop-sword-long": {
+            "tier": "demand",
+            "label": "A long sword (\"Long Sword\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sword-long.glb",
+                    "hash": "8b01d87489",
+                    "bytes": 57132
+                }
+            ]
+        },
+        "dungeon-prop-claymore": {
+            "tier": "demand",
+            "label": "A claymore (\"Claymore\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/claymore.glb",
+                    "hash": "bf667299d9",
+                    "bytes": 105664
+                }
+            ]
+        },
+        "dungeon-prop-zweihander": {
+            "tier": "demand",
+            "label": "A two-handed sword (\"Zweihänder\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/zweihander.glb",
+                    "hash": "eefce275c4",
+                    "bytes": 101776
+                }
+            ]
+        },
+        "dungeon-prop-sword-chevalier": {
+            "tier": "demand",
+            "label": "A knight's sword (\"Chevalier Sword\" by rubenve on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sword-chevalier.glb",
+                    "hash": "863ab96bde",
+                    "bytes": 159908
+                }
+            ]
+        },
+        "dungeon-prop-sword-rack": {
+            "tier": "demand",
+            "label": "A rack of long swords (\"Long Sword Rack\" by Multipainkiller Studio on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/sword-rack.glb",
+                    "hash": "29ac35149f",
+                    "bytes": 170888
+                }
+            ]
+        },
+        "dungeon-prop-grindstone": {
+            "tier": "demand",
+            "label": "A grindstone (\"Asset03 Medieval Grindstone\" by Margot D. on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/grindstone.glb",
+                    "hash": "426c16fa12",
+                    "bytes": 132188
+                }
+            ]
+        },
+        "dungeon-prop-barbuta": {
+            "tier": "demand",
+            "label": "A barbute (\"Barbuta Helmet\" by Multipainkiller Studio on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/barbuta.glb",
+                    "hash": "3c92331fff",
+                    "bytes": 76212
+                }
+            ]
+        },
+        "dungeon-prop-barbuta-visored": {
+            "tier": "demand",
+            "label": "A visored barbute (\"Visored Barbuta Helmet\" by Multipainkiller Studio on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/barbuta-visored.glb",
+                    "hash": "deb6dd9c23",
+                    "bytes": 114348
+                }
+            ]
+        },
+        "dungeon-prop-great-helm": {
+            "tier": "demand",
+            "label": "A great helm (\"Great Helm\" by Ole Gunnar Isager on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/great-helm.glb",
+                    "hash": "a5579b484f",
+                    "bytes": 126396
+                }
+            ]
+        },
+        "dungeon-prop-shield-heater": {
+            "tier": "demand",
+            "label": "A heater shield (\"Heater Shield\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/shield-heater.glb",
+                    "hash": "128d9275be",
+                    "bytes": 74200
+                }
+            ]
+        },
+        "dungeon-prop-book-open": {
+            "tier": "demand",
+            "label": "An open book (\"Medieval Open Book 1\" by J0Y on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/book-open.glb",
+                    "hash": "ce223762a0",
+                    "bytes": 76312
+                }
+            ]
+        },
+        "dungeon-prop-books": {
+            "tier": "demand",
+            "label": "A stack of books (\"Medieval Book Stack\" by GetDeadEntertainment on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/books.glb",
+                    "hash": "f235bf1459",
+                    "bytes": 225420
+                }
+            ]
+        },
+        "dungeon-prop-quill": {
+            "tier": "demand",
+            "label": "A quill and inkpot (\"Quill\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/quill.glb",
+                    "hash": "06587b43c5",
+                    "bytes": 43800
+                }
+            ]
+        },
+        "dungeon-prop-scroll": {
+            "tier": "demand",
+            "label": "A scroll (\"Scroll\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/scroll.glb",
+                    "hash": "b5f8f646b1",
+                    "bytes": 56980
+                }
+            ]
+        },
+        "dungeon-prop-hourglass": {
+            "tier": "demand",
+            "label": "An hourglass (\"Hour Glass\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/hourglass.glb",
+                    "hash": "d50eb51b58",
+                    "bytes": 118744
+                }
+            ]
+        },
+        "dungeon-prop-crystal-ball": {
+            "tier": "demand",
+            "label": "A crystal ball on its stand (\"Magic crystal ball\" by terpsichore on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/crystal-ball.glb",
+                    "hash": "947ac6180d",
+                    "bytes": 92392
+                }
+            ]
+        },
+        "dungeon-prop-globe-celestial": {
+            "tier": "demand",
+            "label": "A celestial globe (the Virtual Museums of Małopolska's celestial globe, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/globe-celestial.glb",
+                    "hash": "9fd67c915f",
+                    "bytes": 296720
+                }
+            ]
+        },
+        "dungeon-prop-alembic": {
+            "tier": "demand",
+            "label": "An alembic (\"Alembic\" by FlukierJupiter on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/alembic.glb",
+                    "hash": "9141b9d493",
+                    "bytes": 124176
+                }
+            ]
+        },
+        "dungeon-prop-bottle-magic": {
+            "tier": "demand",
+            "label": "A stoppered flask (\"Magic Bottle 01\" by Multipainkiller Studio on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bottle-magic.glb",
+                    "hash": "ae013f2373",
+                    "bytes": 143364
+                }
+            ]
+        },
+        "dungeon-prop-bottle-magic-2": {
+            "tier": "demand",
+            "label": "A round flask (\"Magic Bottle 02\" by Multipainkiller Studio on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/bottle-magic-2.glb",
+                    "hash": "f597228cc0",
+                    "bytes": 131576
+                }
+            ]
+        },
+        "dungeon-prop-mortar": {
+            "tier": "demand",
+            "label": "A bronze mortar (the Virtual Museums of Małopolska's pharmaceutical mortar (Wawel Royal Castle), CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mortar.glb",
+                    "hash": "64797d6c49",
+                    "bytes": 58628
+                }
+            ]
+        },
+        "dungeon-prop-albarello": {
+            "tier": "demand",
+            "label": "An apothecary's jar (the Virtual Museums of Małopolska's apothecary albarello (the Museum of Pharmacy, Kraków), CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/albarello.glb",
+                    "hash": "7637e55802",
+                    "bytes": 58152
+                }
+            ]
+        },
+        "dungeon-prop-hauberk": {
+            "tier": "demand",
+            "label": "A mail shirt (\"Hauberk\" by askei on Sketchfab, CC BY 4.0)",
+            "files": [
+                {
+                    "path": "models/dungeons/hauberk.glb",
+                    "hash": "0571bd5382",
+                    "bytes": 78776
                 }
             ]
         }

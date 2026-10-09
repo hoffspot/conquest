@@ -343,7 +343,8 @@ furniture: a model added to `scripts/build-props.js` `PROPS` (Poly Haven's id, o
 a GLB, or an OBJ or STL and its pictures, with whose it is and its licence; how big its pictures,
 how many triangles at most; a set's pieces; `bone` for a bone, so it's BONE's colour), made with
 `npm run build:props` (then `npm run build:manifest`), and placed by `dungeondressing.js` (a kind
-of what's left against a wall, in a theme's `CLUTTER`) or in `dungeon` for a plan character. Only
+of what's left against a wall, in a theme's `CLUTTER`) or in `dungeon` for a plan character (the
+shops' wares the same way, placed by `interiors3d.js` `shopWares`: docs/GAME.md *A shop*). Only
 CC0 or CC BY (its maker named), and only what can be downloaded without an account. Its bosses'
 and mini-bosses' looks: an entry each in `beasts/champions.js` `REGALIA`, by its id (one not
 there looks as its rank has it).

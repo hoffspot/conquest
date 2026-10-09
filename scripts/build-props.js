@@ -1,5 +1,6 @@
-// Makes the scanned and modelled things a dungeon's rooms are furnished with (client/models/dungeons,
-// placed by client/js/world/dungeons3d.js), each free to use and change: most CC0
+// Makes the scanned and modelled things a dungeon's rooms and the shops are furnished with
+// (client/models/dungeons, placed by client/js/world/dungeons3d.js, and the shops' by
+// client/js/world/interiors3d.js shopWares), each free to use and change: most CC0
 // (https://creativecommons.org/publicdomain/zero/1.0/), from Poly Haven's models, OpenGameArt's
 // and museums' scans mirrored on Zenodo; some CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/),
 // their makers named in PROPS' `by` (and so in the catalog, and the README's credits). Each
@@ -20,7 +21,8 @@
 // models are sets (three candleholders, a heap of rocks, skulls and bones): each thing in a set is
 // a prop of its own (`pieces`: its nodes), all of them in one file, sharing its pictures. Each file
 // is listed in client/models/assets.json's catalog, with its pieces and whose it is, downloaded
-// only once a dungeon's wanted (then: npm run build:manifest).
+// only once a dungeon's wanted (then: npm run build:manifest); and in that folder's LICENSE.md,
+// with its licence and where it came from.
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Document, NodeIO, getBounds } from "@gltf-transform/core";
@@ -34,6 +36,7 @@ import { fetchSource } from "./sounds/sources.js";
 
 const OUT = new URL("../client/models/dungeons/", import.meta.url);
 const CATALOG = new URL("../client/models/assets.json", import.meta.url);
+const LICENSE = new URL("LICENSE.md", OUT);
 
 /**
  * The models' files, by name: which of Poly Haven's (`id`), or its own files (`from`: fromFiles,
@@ -200,6 +203,32 @@ export const PROPS = {
     "sheep-skull": { from: objaverse("000-116/2803d96915c4418b83618c17f45d50a6"), by: '"sheep skull 3D scan" by Model Thomas (daaanin) on Sketchfab, CC BY 4.0', of: "a ram's skull", size: 0.3, bone: 0.25, pixels: 256, triangles: 2500 },
     ribcage: { from: { glb: { url: "https://3d.nih.gov/api/download?submissionId=22678&fileIds=498606" }, plain: true }, by: '"Rib Cage_Human Skeleton" (3DPX-016836) by My Segmenter on NIH 3D, CC BY 4.0', of: "a ribcage", size: 0.36, bone: true, rough: 0.75, pixels: 256, triangles: 4000 },
     pelvis: { from: { glb: { url: "https://cdn.humanatlas.io/digital-objects/ref-organ/pelvis-male/v1.3/assets/3d-vh-m-pelvis.glb" }, plain: true }, by: "the Human Reference Atlas's male pelvis (v1.3), CC BY 4.0", of: "a pelvis", size: 0.3, bone: true, rough: 0.75, pixels: 256, triangles: 2500 },
+    // The shops' wares and fittings (docs/GAME.md *A shop*): makers' models from Objaverse, each CC BY
+    // 4.0 as its maker's page on Sketchfab says, and the Virtual Museums of Małopolska's scans, CC0
+    "sword-arming": { from: objaverse("000-156/9cb2f6bc2f544997bf15d30f55a6b289"), by: '"Arming Sword" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "an arming sword", size: 0.95, pixels: 256, triangles: 900 },
+    "sword-long": { from: objaverse("000-123/43ef6dfb74f74fcca79b203c829d8033"), by: '"Long Sword" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a long sword", size: 1.15, pixels: 256, triangles: 800 },
+    claymore: { from: objaverse("000-003/637ab40144a641f5ba66be540c68a48b"), by: '"Claymore" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a claymore", size: 1.4, pixels: 256, triangles: 1500 },
+    zweihander: { from: objaverse("000-136/95d0f219d52b40d19006c6c941ae9644"), by: '"Zweihänder" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a two-handed sword", size: 1.75, pixels: 256, triangles: 1500 },
+    "sword-chevalier": { from: objaverse("000-005/b2662f2666a844e8a1bd0e7c4a7672d8"), by: '"Chevalier Sword" by rubenve on Sketchfab, CC BY 4.0', of: "a knight's sword", size: 1.05, pixels: 256, triangles: 2500 },
+    "sword-rack": { from: objaverse("000-078/24473982824d456bb38d7bfe29a4cc8a"), by: '"Long Sword Rack" by Multipainkiller Studio on Sketchfab, CC BY 4.0', of: "a rack of long swords", size: 1.6, pixels: 256, triangles: 3000 },
+    grindstone: { from: objaverse("000-050/376eb8506e1f419d8d2933454cd332ff"), by: '"Asset03 Medieval Grindstone" by Margot D. on Sketchfab, CC BY 4.0', of: "a grindstone", size: 1.2, pixels: 256, triangles: 900 },
+    hauberk: { from: objaverse("000-036/8881e32f0595469fa12b18e28155cc78"), by: '"Hauberk" by askei on Sketchfab, CC BY 4.0', of: "a mail shirt", size: 0.8, pixels: 256, triangles: 800 },
+    barbuta: { from: objaverse("000-042/69c05f5b114f4ec1a92eea3d36e1b078"), by: '"Barbuta Helmet" by Multipainkiller Studio on Sketchfab, CC BY 4.0', of: "a barbute", size: 0.32, pixels: 256, triangles: 1500 },
+    "barbuta-visored": { from: objaverse("000-134/8ce8003e097a4e30a5b96f612200f986"), by: '"Visored Barbuta Helmet" by Multipainkiller Studio on Sketchfab, CC BY 4.0', of: "a visored barbute", size: 0.34, pixels: 256, triangles: 2000 },
+    "great-helm": { from: objaverse("000-141/620ca8f54ce64561829809a8b782e78c"), by: '"Great Helm" by Ole Gunnar Isager on Sketchfab, CC BY 4.0', of: "a great helm", size: 0.36, pixels: 256, triangles: 2000 },
+    "shield-heater": { from: objaverse("000-078/9b1161c5e56e43218d42c639e3511fe5"), by: '"Heater Shield" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a heater shield", size: 0.8, pixels: 256, triangles: 700 },
+    "book-open": { from: objaverse("000-030/b30b6a9018f842e7b12622387979b0fa"), by: '"Medieval Open Book 1" by J0Y on Sketchfab, CC BY 4.0', of: "an open book", size: 0.45, pixels: 256, triangles: 600 },
+    books: { from: objaverse("000-058/0ea43f7fdcb7411cb1123b987f297d41"), by: '"Medieval Book Stack" by GetDeadEntertainment on Sketchfab, CC BY 4.0', of: "a stack of books", size: 0.4, pixels: 256, triangles: 1500 },
+    quill: { from: objaverse("000-023/67771bc3f8024e6faea9af9f6f7d6bfb"), by: '"Quill" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a quill and inkpot", size: 0.3, pixels: 256, triangles: 400 },
+    scroll: { from: objaverse("000-054/7450e494eb654e9b937bb52724220e77"), by: '"Scroll" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "a scroll", size: 0.35, pixels: 256, triangles: 800 },
+    hourglass: { from: objaverse("000-088/baafc6537f2c4b6696ff0829cc32f772"), by: '"Hour Glass" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "an hourglass", size: 0.28, pixels: 256, triangles: 1500 },
+    "crystal-ball": { from: objaverse("000-102/0d241e81ec6c446aafeb941492915909"), by: '"Magic crystal ball" by terpsichore on Sketchfab, CC BY 4.0', of: "a crystal ball on its stand", size: 0.32, pixels: 256, triangles: 1500 },
+    "globe-celestial": { from: zenodo(21376883, "341fa8a777e94883841409438756f747_normalized-0.100.glb"), by: "the Virtual Museums of Małopolska's celestial globe, CC0", of: "a celestial globe", size: 0.3, pixels: 256, triangles: 2500 },
+    alembic: { from: objaverse("000-112/811618ea79ba4aac95d7f7312a2128ec"), by: '"Alembic" by FlukierJupiter on Sketchfab, CC BY 4.0', of: "an alembic", size: 0.6, pixels: 256, triangles: 1500 },
+    "bottle-magic": { from: objaverse("000-137/a52a07fd29974fccb69fe0983c36e52d"), by: '"Magic Bottle 01" by Multipainkiller Studio on Sketchfab, CC BY 4.0', of: "a stoppered flask", size: 0.25, pixels: 256, triangles: 1200 },
+    "bottle-magic-2": { from: objaverse("000-008/51ebe9ddfa654ee7ab8eb38671fcddcc"), by: '"Magic Bottle 02" by Multipainkiller Studio on Sketchfab, CC BY 4.0', of: "a round flask", size: 0.25, pixels: 256, triangles: 1200 },
+    mortar: { from: zenodo(21291002, "331027dcfc934eec955d30abf8cf9916_normalized-0.100.glb"), by: "the Virtual Museums of Małopolska's pharmaceutical mortar (Wawel Royal Castle), CC0", of: "a bronze mortar", size: 0.2, pixels: 256, triangles: 1500 },
+    albarello: { from: zenodo(21355431, "7f50157193de45798d464696dae7acf2_normalized-0.100.glb"), by: "the Virtual Museums of Małopolska's apothecary albarello (the Museum of Pharmacy, Kraków), CC0", of: "an apothecary's jar", size: 0.25, pixels: 256, triangles: 1500 },
     // And what lives in the dark
     rat: { id: "street_rat", of: "a rat", pixels: 256, triangles: 1200 },
 };
@@ -733,5 +762,25 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     }
 
     await writeFile(CATALOG, `${JSON.stringify(catalog, null, 4)}\n`);
+
+    // (And each file's licence, whose it is and where it came from: a Poly Haven model's page, or
+    // the first address among its own files')
+    const first = (value) => (value && typeof value === "object" ? (value.url ?? Object.values(value).map(first).find(Boolean) ?? null) : null);
+    const lines = Object.entries(PROPS).map(([name, { id, from, by, of }]) => `- \`${name}.glb\`: ${of}, ${by ?? `Poly Haven's ${id}, CC0`}; from <${id ? `https://polyhaven.com/a/${id}` : first(from)}>`);
+
+    await writeFile(
+        LICENSE,
+        [
+            "# The models in this folder, and their licences",
+            "",
+            "Made simpler and smaller by `scripts/build-props.js` from these, each free to use, change and share:",
+            "CC0 (<https://creativecommons.org/publicdomain/zero/1.0/>) or, where it says so, CC BY 4.0",
+            "(<https://creativecommons.org/licenses/by/4.0/>), its maker credited as below and in the README's",
+            "*Credits and license*. Written by `npm run build:props`.",
+            "",
+            ...lines,
+            "",
+        ].join("\n"),
+    );
     console.log("Now npm run build:manifest");
 }
