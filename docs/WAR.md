@@ -217,7 +217,7 @@ The engine is built for this from the start. These are its rules:
 | **M17** | Built | Lines of battle: each people's armies mixed by its own lean (shield line, two-handers with the new greatsword and battle axe, archers, casters, healers), standing in a line and closing its ranks as they fall; at most so many on a player at once. Battles of hundreds drawn in crowds. |
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
-| **M20** | Built in part | The armies in the world near a player: armies and reserves met in their lines, drawn in their crowds, marching and fighting it out there; supply wagons on their way and depots pitched there, to be fought (built); reinforcements, scouts, skirmishers there, and a seat's ruler and captain of its guard fought before it's taken (to come). |
+| **M20** | Built in part | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after (built); a seat's ruler and captain of its guard fought before it's taken (to come). |
 | **M21** | Planned | The war table at the keep: the battle map, raising and disbanding, orders, and what the scouts see. |
 
 ## What's built
@@ -1291,7 +1291,8 @@ ground). So:
 - **Skirmishers,** a pair every 3 turns, against the nearest of the enemy's within 600 m: a town's
   garrison (never its last, and its taxes lost for the turn), a works' guard, an army, a reserve,
   reinforcements, a convoy or a camp. Each brings one down half the time, and is lost a quarter of
-  the time. Not against anything a player's near: that's for the world (M20).
+  the time. From a camp a player's near, or against anything a player's near, they go out in the
+  world instead (M20, *A camp's scout and skirmishers near a player*).
 - **Struck:** a people keeps 3 camps at most, the least used struck for a new one; one no army's
   been near for 40 turns is struck too. Its guard goes into the nearest of their towns.
 - **Razed:** an enemy army puts its guard down; or, in the world, its sentries all brought down with
@@ -1471,11 +1472,12 @@ next wagon due 5 turns on, none missed. What two games share changed (`NET_VERSI
 
 ### The armies near a player (M20)
 
-The fourth of the standing armies' parts, begun: the armies and reserves in the world near a
-player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`), and their supply wagons and depots
-there (`WAGON_NEAR`, `#meetWagon`, `#watchWagons`; *Supply wagons and depots near a player*,
-below). Their reinforcements, the camps' scouts and skirmishers, and a seat's ruler and captain of
-its guard fought before it's taken, come after.
+The fourth of the standing armies' parts, begun: the armies, reserves and reinforcements in the
+world near a player (`host.js` `ARMY_NEAR`, `#meetArmy`, `#watchArmies`), their supply wagons and
+depots there (`WAGON_NEAR`, `#meetWagon`, `#watchWagons`; *Supply wagons and depots near a
+player*, below), and the camps' scouts and skirmishers (`CAMP_NEAR`, `SKIRMISH_NEAR`; *A camp's
+scout and skirmishers near a player*, below). A seat's ruler and captain of its guard fought
+before it's taken come after.
 
 **Met** once a player's within 300 m of an army or reserve out in the field, or once it's within
 140 m of an enemy's that's met. Not an army mustering at its seat, nor a reserve at home: they're
@@ -1540,10 +1542,59 @@ and struck once every player's further than 300 m, or it's gone:
 - **not reckoned twice:** while it's pitched, the war doesn't raze it itself. An army come to
   attack it has 3 turns to fight it out there, as with what else it attacks.
 
-**Kept.** The armies met are in the host's snapshot (`armies`: `{ people, kind, formation, ids, at
-}`), and the supply wagons met (`supplies`: `{ people, mission, to, wagon, ids, at, over }`;
-`SNAPSHOT_VERSION` 18), their lines in the battle's. What two games share changed (`NET_VERSION`
-79).
+#### Reinforcements near a player
+
+**Met** as an army is: once a player's within 300 m of them, or they're within 140 m of an
+enemy's met; let go once every player's further than 450 m, or they're gone. Stood up in their
+line, as an army is, mixed as their people's are. The player's told of another people's: "Orcish
+reinforcements are on their way near you, 5 strong". Not of their own people's: they're out of
+their towns every turn.
+
+**On their way** they march for their army's (or reserve's) line, if it's met, else for where it is
+in the war, at 1.4 m a second, the war told where they've got to (`war.move`):
+- **there** (within 60 m), each of them still standing takes a place at the back of its line, one
+  of it now, as they are in the war (`#joined`); with it not met, they're let go;
+- **another column** for the same army near them on its own way (not one a player's near) bands
+  with them, more of them stood up behind;
+- **theirs gone**, they go into the nearest of their people's towns, as in the war.
+
+**Fallen on:** an enemy's army met within 140 m turns on them, and they on it. Each that falls is
+one fewer of them in the war; put down to the last, they're gone ("cut down on the road"). The war
+no longer reckons an army catching reinforcements when either's met.
+
+#### A camp's scout and skirmishers near a player
+
+**Its scout.** A camp pitched near a player (M6) sends one of its guard out as its scout, if it
+can spare one: 5 sentries round its fire and its scout, for a guard of 6. The scout walks a round
+of 8 points 40 m out from the fire. Brought down, it's one fewer of the camp's guard, as a sentry
+is.
+
+**Its skirmishers.** Every 3 turns, a camp sends a pair out against the nearest of the enemy's
+within 600 m (M18, *Camps*). When the camp is pitched, or what they're after is near a player, the
+war hands them to the world ("skirmishers") instead of reckoning their falling on it itself:
+- **Set off** out of the camp's fire if it's pitched; else 120 m from what they're after, on the
+  camp's side.
+- **Going** at a run (2.3 m a second) for the nearest of it stood up in the world (an army's,
+  reserve's or reinforcements' soldiers, a supply wagon's or convoy's guards, a camp's or depot's
+  sentries, a town's soldiers mustered, a works' guard), else for where it is in the war.
+- **Fighting** it once they're within 25 m of any of it, for 30 seconds; then back to their camp,
+  and let go there. Each of them brought down is one fewer of the camp's guard; each of it they
+  bring down is one fewer of it, as any of it brought down is.
+- **Gone off** beyond every player (300 m) before they came up to it, or come up to where it was
+  with none of it there to fight, the war reckons their falling on it there, as it would have
+  (`war.skirmish`). Out four minutes without coming up to it, they turn back.
+- **The player's told** when they're after something of the player's people: "Orcish skirmishers
+  are out after our army!"
+
+**Not reckoned twice:** while a camp is pitched, the war doesn't reckon its fights there itself.
+An army that comes to attack it has 3 turns to fight it out in the world, as with what else it
+attacks.
+
+**Kept.** The armies, reserves and reinforcements met are in the host's snapshot (`armies`: `{
+people, kind, formation, ids, at }`), with the supply wagons met (`supplies`: `{ people, mission,
+to, wagon, ids, at, over }`) and the skirmishers out (`skirmishers`: `{ camp, people, target, kind,
+ids, since, fought, back }`; `SNAPSHOT_VERSION` 19), their lines in the battle's. What two games
+share changed (`NET_VERSION` 80).
 
 ### Playing together (M11)
 

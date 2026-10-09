@@ -489,7 +489,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "army", "supply", "skirmishers", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -6276,18 +6276,39 @@ export class Game {
 
                 break;
             case "army":
-                // (An army or reserve met in the field near the player, in its line: drawn, and the
-                // player told; or more of it stood up, joined it)
+                // (An army, a reserve or reinforcements met in the field near the player, in its
+                // line: drawn, and the player told; or more of it stood up, joined it. Not of their
+                // own people's reinforcements: they're out of their towns every turn)
                 this.enlisting.push(...event.ids);
 
                 if (event.met) {
                     const adjective = ADJECTIVES[event.people] ?? event.people;
-                    const theirs = event.people === this.self?.realm ? `Our ${event.kind}` : `The ${adjective[0].toUpperCase()}${adjective.slice(1)} ${event.kind}`;
+                    const Adjective = `${adjective[0].toUpperCase()}${adjective.slice(1)}`;
+                    const ours = event.people === this.self?.realm;
 
-                    this.hud.message(`${theirs} is in the field near you, ${event.ids.length} strong.`, 3);
+                    if (event.kind === "reinforcement" && !ours) {
+                        this.hud.message(`${Adjective} reinforcements are on their way near you, ${event.ids.length} strong.`, 3);
+                    } else if (event.kind !== "reinforcement") {
+                        this.hud.message(`${ours ? `Our ${event.kind}` : `The ${Adjective} ${event.kind}`} is in the field near you, ${event.ids.length} strong.`, 3);
+                    }
                 }
 
                 break;
+            case "skirmishers": {
+                // (A camp's skirmishers out near the player: drawn; the player told if they're after
+                // something of their people's)
+                this.enlisting.push(...event.ids);
+
+                const after = { army: "army", reserve: "reserve", reinforcement: "reinforcements", supply: "supply wagon", convoy: "convoy", camp: "camp", depot: "supply depot", town: "town", works: "works" }[event.kind];
+
+                if (after && event.against && event.against === this.self?.realm) {
+                    const adjective = ADJECTIVES[event.people] ?? event.people;
+
+                    this.hud.message(`${adjective[0].toUpperCase()}${adjective.slice(1)} skirmishers are out after our ${after}!`, 3);
+                }
+
+                break;
+            }
             case "war":
                 // (A fortification gone up or come down: the ground under it, and round it, drawn
                 // again: core/overworld.js setForts. Not a camp: nothing's built under it)

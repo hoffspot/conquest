@@ -585,9 +585,15 @@ export class War {
         } else if (force) {
             force.size = Math.max(0, force.size - lost);
 
-            // (An army put to the sword to the last in the world: gone)
+            // (An army put to the sword to the last in the world: gone; reinforcements too)
             if (force.kind === "army" && force.size <= 0) {
                 this.#destroyed(force);
+            } else if (force.kind === "reinforcement" && force.size <= 0) {
+                this.forces.splice(this.forces.indexOf(force), 1);
+
+                if (by) {
+                    this.#emit("intercepted", { realm: force.realm, by, killed: lost, lost: 0, at: [...force.at] });
+                }
             }
         }
 
@@ -652,15 +658,23 @@ export class War {
     }
 
     /**
-     * An envoy, a convoy, a supply wagon, an army or a reserve a player's near, where it's got to in
-     * the world: `at` ([x, y] metres), past the point `leg` of its path. At the end of it, an envoy's
-     * heard (and gone); a convoy's goods go into its people's stores (and it turns for home), or
-     * it's home; a supply wagon's load is its army's or depot's (or, they gone, it's gone); an army
-     * or reserve does what it does there at its next turn (#march). Returns whether an envoy, a
-     * convoy or a supply wagon is at the end of its way.
+     * An envoy, a convoy, a supply wagon, reinforcements, an army or a reserve a player's near,
+     * where it's got to in the world: `at` ([x, y] metres), past the point `leg` of its path. At
+     * the end of it, an envoy's heard (and gone); a convoy's goods go into its people's stores (and
+     * it turns for home), or it's home; a supply wagon's load is its army's or depot's (or, they
+     * gone, it's gone); reinforcements join theirs (or, it gone, go into the nearest of their
+     * people's towns), taking in another column for it near them on its own way; an army or
+     * reserve does what it does there at its next turn (#march). Returns whether an envoy, a
+     * convoy, a supply wagon or reinforcements are at the end of their way.
      */
     move(id, at, leg) {
         const force = this.force(id);
+
+        if (force?.kind === "reinforcement") {
+            force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
+
+            return this.#reinforced(force);
+        }
 
         if (force?.kind === "supply") {
             force.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
@@ -1747,8 +1761,9 @@ export class War {
     // theirs, a band winning back its works to them, envoys to be heard, convoys to their seat
     #march() {
         for (const force of [...this.forces]) {
-            // (An envoy, a convoy or a supply wagon a player's near goes as it's seen to go there: move)
-            if (!this.forces.includes(force) || (["envoy", "convoy", "supply"].includes(force.kind) && this.watched.has(force.id))) {
+            // (An envoy, a convoy, a supply wagon or reinforcements a player's near go as they're
+            // seen to go there: move)
+            if (!this.forces.includes(force) || (["envoy", "convoy", "supply", "reinforcement"].includes(force.kind) && this.watched.has(force.id))) {
                 continue;
             }
 
@@ -2123,6 +2138,22 @@ export class War {
     #onReinforcement(column) {
         const force = this.force(column.target);
 
+        if (force) {
+            Object.assign(column, { path: [[...column.at], [...force.at]], leg: 0 });
+            this.#go(column, REINFORCE.speed);
+        }
+
+        this.#reinforced(column);
+    }
+
+    // Reinforcements where they've got to: theirs gone, into the nearest of their people's towns;
+    // there, joining it; else banding with another column for it near them, the one nearer it
+    // taking the other in (not one a player's near taken in: it goes on as it's seen to go).
+    // Returns whether they're done (gone, or joined, or taken in)
+    #reinforced(column) {
+        const band = (each) => !this.watched.has(each.id);
+        const force = this.force(column.target);
+
         if (!force) {
             const home = this.#nearestOwn(column.realm, column.at);
 
@@ -2132,28 +2163,28 @@ export class War {
 
             this.forces.splice(this.forces.indexOf(column), 1);
 
-            return;
+            return true;
         }
-
-        Object.assign(column, { path: [[...column.at], [...force.at]], leg: 0 });
-        this.#go(column, REINFORCE.speed);
 
         if (apart(column.at, force.at) <= REINFORCE.join) {
             force.size += column.size;
             this.forces.splice(this.forces.indexOf(column), 1);
 
-            return;
+            return true;
         }
 
-        const other = this.forces.find((each) => each !== column && each.kind === "reinforcement" && each.target === column.target && apart(each.at, column.at) <= REINFORCE.band);
+        const other = this.forces.find((each) => each !== column && each.kind === "reinforcement" && each.target === column.target && apart(each.at, column.at) <= REINFORCE.band && band(each));
 
         if (other) {
-            // (The one nearer it takes the other in)
-            const [keep, merged] = apart(other.at, force.at) <= apart(column.at, force.at) ? [other, column] : [column, other];
+            const [keep, merged] = apart(other.at, force.at) <= apart(column.at, force.at) && band(column) ? [other, column] : [column, other];
 
             keep.size += merged.size;
             this.forces.splice(this.forces.indexOf(merged), 1);
+
+            return merged === column;
         }
+
+        return false;
     }
 
     // The way from a point to another for an army or reserve: by the roads, from the place nearest
@@ -2569,7 +2600,7 @@ export class War {
                 continue;
             }
 
-            if (this.turn - camp.skirmished >= CAMP.every && camp.guard >= CAMP.pair && !this.watched.has(camp.id)) {
+            if (this.turn - camp.skirmished >= CAMP.every && camp.guard >= CAMP.pair) {
                 camp.skirmished = this.turn;
                 this.#skirmish(camp);
             }
@@ -2579,9 +2610,48 @@ export class War {
     // A pair of a camp's skirmishers out against the nearest of the enemy's within reach
     // (CAMP.skirmish): a town's garrison (its taxes lost for a turn; never its last), a works'
     // guard, an army, a reserve, reinforcements, a supply wagon (taken, its guards down), a convoy,
-    // a camp, a supply depot (a load carried off, or one of its guard). Each of them may bring one
-    // down, or be lost
+    // a camp, a supply depot (a load carried off, or one of its guard). The camp, or what they're
+    // after, a player's near: they go out in the world, to fight it out there ("skirmishers").
+    // Else each of them may bring one down, or be lost (#fallOn)
     #skirmish(camp) {
+        const [target] = this.#skirmishable(camp);
+
+        if (!target) {
+            return;
+        }
+
+        this.remember(target.realm, camp.realm, -1);
+
+        if (this.watched.has(camp.id) || this.watched.has(target.id)) {
+            this.#emit("skirmishers", { realm: camp.realm, camp: camp.id, against: target.realm, target: target.id, kind: target.kind, at: [...target.at] });
+
+            return;
+        }
+
+        this.#fallOn(camp, target, CAMP.pair);
+    }
+
+    /**
+     * A camp's skirmishers sent out in the world (a "skirmishers" event) who've gone off beyond
+     * every player before falling on what they were after (`target`'s id): `count` of them, still
+     * standing, fall on it as they would have (#fallOn), if it's still there and within their reach.
+     * Returns whether they did.
+     */
+    skirmish(campId, targetId, count) {
+        const camp = this.camp(campId);
+        const target = camp && this.#skirmishable(camp).find(({ id }) => id === targetId);
+
+        if (!target || count <= 0) {
+            return false;
+        }
+
+        this.#fallOn(camp, target, count);
+
+        return true;
+    }
+
+    // What a camp's skirmishers may fall on (#skirmish), the nearest first
+    #skirmishable(camp) {
         const enemy = (realm) => this.hostile(camp.realm, realm);
         const targets = [
             ...this.towns.filter((town) => enemy(town.owner) && town.garrison > 1).map((town) => ({ id: town.id, kind: "town", realm: town.owner, at: town.at, hit: () => ((town.garrison -= 1), (town.raidedAt = this.turn)) })),
@@ -2589,16 +2659,17 @@ export class War {
             ...this.forces.filter((force) => ["army", "reserve", "reinforcement", "convoy", "supply"].includes(force.kind) && enemy(force.realm) && force.size > 0).map((force) => ({ id: force.id, kind: force.kind, realm: force.realm, at: force.at, hit: () => (force.size -= 1) })),
             ...this.camps.filter((other) => other !== camp && enemy(other.realm) && other.guard > 1).map((other) => ({ id: other.id, kind: "camp", realm: other.realm, at: other.at, hit: () => (other.guard -= 1) })),
             ...this.depots.filter((depot) => enemy(depot.realm) && (depot.level > 0 || depot.guard > 1)).map((depot) => ({ id: depot.id, kind: "depot", realm: depot.realm, at: depot.at, hit: () => (depot.level > 0 ? (depot.level -= 1) : (depot.guard -= 1)) })),
-        ].filter(({ id, at }) => apart(at, camp.at) <= CAMP.skirmish && !this.watched.has(id));
-        const target = targets.sort((a, b) => apart(a.at, camp.at) - apart(b.at, camp.at) || (a.id < b.id ? -1 : 1))[0];
+        ].filter(({ at }) => apart(at, camp.at) <= CAMP.skirmish);
 
-        if (!target) {
-            return;
-        }
+        return targets.sort((a, b) => apart(a.at, camp.at) - apart(b.at, camp.at) || (a.id < b.id ? -1 : 1));
+    }
 
+    // A camp's skirmishers (`count` of them) falling on what they're after, unseen by any player:
+    // each may bring one of it down, or be lost
+    #fallOn(camp, target, count) {
         let [killed, lost] = [0, 0];
 
-        for (let k = 0; k < CAMP.pair; k++) {
+        for (let k = 0; k < count; k++) {
             if (this.random.chance(CAMP.hits)) {
                 target.hit();
                 killed++;
@@ -2610,7 +2681,6 @@ export class War {
         }
 
         camp.guard -= lost;
-        this.remember(target.realm, camp.realm, -1);
         this.#emit("skirmish", { realm: camp.realm, camp: camp.id, against: target.realm, target: target.id, kind: target.kind, killed, lost });
 
         // (A supply wagon's guards put down: it's taken)
@@ -2982,8 +3052,10 @@ export class War {
             }
         }
 
-        for (const column of this.forces.filter(({ kind }) => kind === "reinforcement")) {
-            const by = fighters().find((force) => force.kind === "army" && this.hostile(force.realm, column.realm) && apart(force.at, column.at) <= CLOSE.fight);
+        // (Reinforcements caught by an enemy army: cut down. Not those a player's near, nor by an
+        // army a player's near: that's fought out in the world)
+        for (const column of this.forces.filter(({ kind, id }) => kind === "reinforcement" && !this.watched.has(id))) {
+            const by = fighters().find((force) => force.kind === "army" && !this.watched.has(force.id) && this.hostile(force.realm, column.realm) && apart(force.at, column.at) <= CLOSE.fight);
 
             if (by && this.forces.includes(column)) {
                 const { attackers, defenders } = this.#fight(by.size, column.size, 1);
