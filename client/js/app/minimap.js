@@ -98,6 +98,29 @@ const SCALE = 4;
  */
 export const LOOK = Object.freeze({ reach: 0.3, spread: 1.1, fade: 0.35 });
 
+// One of the wild's elites marked (core/creatures.js ELITES `marker`): its star's size, and how far
+// in from the edge (pixels) one further than shown is marked
+const ELITE_MARK = Object.freeze({ size: 6.5, inset: 8 });
+
+// A star of gold, five-pointed, edged dark (an elite's mark), `size` pixels from its middle to a point
+function star(context, x, y, size) {
+    context.beginPath();
+
+    for (let k = 0; k < 10; k++) {
+        const angle = -Math.PI / 2 + (k * Math.PI) / 5;
+        const reach = k % 2 ? size * 0.45 : size;
+
+        context.lineTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+    }
+
+    context.closePath();
+    context.fillStyle = "#ffd23a";
+    context.fill();
+    context.strokeStyle = "rgba(40, 22, 2, 0.95)";
+    context.lineWidth = 1.3;
+    context.stroke();
+}
+
 // Out in the world: how much of it the minimap shows round the player (metres across), and how
 // much is painted at a time (the player can go a quarter of the difference before it's painted
 // again: metres)
@@ -401,10 +424,11 @@ export class Minimap {
     /**
      * Draw it: `player` { x, z, facing } (metres, radians), `others` [{ x, z, hostile,
      * targeted }], `destination` [x, z] or null, `look` the way the player's looking over the
-     * ground (radians, as `facing`: 0 south, towards +z) or null, and `icons` over the buildings
-     * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]).
+     * ground (radians, as `facing`: 0 south, towards +z) or null, `icons` over the buildings
+     * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
+     * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK).
      */
-    draw({ player, others = [], destination = null, look = null, icons = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -522,6 +546,32 @@ export class Minimap {
                 drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                 this.icons.push(icon.kind);
             }
+        }
+
+        // The wild's elites near enough (core/creatures.js ELITES `marker`): each a star of gold,
+        // further than shown, at the edge the way it is (those drawn kept for tests: `elites`,
+        // and whether at the edge)
+        this.elites = [];
+
+        const [cx, cy] = player ? at(player.x, player.z) : [width / 2, height / 2];
+
+        for (const elite of elites) {
+            const [ex, ey] = at(elite.x, elite.z);
+            const [dx, dy] = [ex - cx, ey - cy];
+            const fits = (d, middle, size) => (d > 0 ? (size - ELITE_MARK.inset - middle) / d : d < 0 ? (ELITE_MARK.inset - middle) / d : Infinity);
+            const k = Math.min(1, fits(dx, cx, width), fits(dy, cy, height));
+            const [x, y] = [cx + dx * k, cy + dy * k];
+
+            if (elite.targeted) {
+                context.beginPath();
+                context.arc(x, y, ELITE_MARK.size + 3.5 + Math.sin(now / 160), 0, 2 * Math.PI);
+                context.strokeStyle = "#ff4a2e";
+                context.lineWidth = 2;
+                context.stroke();
+            }
+
+            star(context, x, y, ELITE_MARK.size * (k < 1 ? 0.85 : 1) * (1 + 0.08 * Math.sin(now / 220)));
+            this.elites.push({ x, y, edge: k < 1 });
         }
 
         // The player: an arrowhead pointing the way they face (0 is south, towards east positive)

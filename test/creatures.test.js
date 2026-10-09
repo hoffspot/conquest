@@ -9,19 +9,23 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { LOOKS } from "../client/js/beasts/looks.js";
-import { KINDS, STEP_MS } from "../client/js/core/battle.js";
-import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
+import { elitePrize } from "../client/js/core/caches.js";
+import { GEAR } from "../client/js/core/gear.js";
+import { CHARMS } from "../client/js/core/goods.js";
+import { Battle, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { PARTS, rollSpoils, SPOILS } from "../client/js/core/spoils.js";
+import { ELITE_SPOILS, PARTS, rollSpoils, SPOILS, TOME_DROP } from "../client/js/core/spoils.js";
 import { GUILD_REACH, offerContract, WANTED_PARTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { armsOf, chooseAttack, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { FACTIONS } from "../client/js/core/worldplan/plan.js";
+import { FACTIONS, landAt } from "../client/js/core/worldplan/plan.js";
+import { parseGrid } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const TEMPERS = new Set(["aggressive", "territorial", "defensive"]);
@@ -62,6 +66,35 @@ function outside(context, out = 80) {
 
 // The creatures about, as the host has them
 const about = (host) => [...host.wild.keys()].map((id) => host.battle.actor(id)).filter(Boolean);
+
+// The elites out, as the host has them (their ids)
+const elitesOf = (host) => [...host.wild].filter(([, one]) => one.elite === "lead").map(([id]) => id);
+
+// A player walked west across the land past the first tier's in seed 2's world (4 m a second, from
+// 1,460 m west of home) till an elite's put out near them, or `most` seconds: the elite's id and
+// where the player was then
+function walkTillElite(host, actor, most = 120) {
+    const [hx, hy] = host.world.start.at;
+    let at = [Math.floor(hx - 1460), Math.floor(hy)];
+
+    for (let s = 0; s < most; s++) {
+        Object.assign(actor, { square: [...at], x: at[0] + 0.5, y: at[1] + 0.5, path: [], order: null, target: null });
+        run(host, 1000);
+
+        const [elite] = elitesOf(host);
+
+        if (elite) {
+            return { elite, at: [actor.x, actor.y] };
+        }
+
+        at = [at[0] - 4, at[1]];
+    }
+
+    return { elite: null, at };
+}
+
+// An open field (no walls, nothing in the way) `size` squares across, for a battle alone
+const field = (size) => ({ blocked: parseGrid(Array.from({ length: size }, () => ".".repeat(size))).map((row) => Uint8Array.from(row)) });
 
 // The average damage a second of an attack
 const perSecond = (attack) => ((attack.either?.[0] ?? attack).damage[0] + (attack.either?.[0] ?? attack).damage[1]) / 2 / ((attack.either?.[0] ?? attack).interval / 1000);
@@ -151,6 +184,30 @@ describe("the wild's creatures (creatures.js)", () => {
         assert.equal(packOf("wolf", 4), 3);
         assert.equal(packOf("wolf", 9), 4);
         assert.equal(packOf("bear", 7), 1);
+    });
+
+    it("makes an elite far stronger than its kind, a tier up, named for it, walking a round about where it's put out", () => {
+        assert.deepEqual([ELITES.hp, ELITES.power, ELITES.up, ELITES.least], [3, 1.25, 1, 2]);
+        assert.equal(eliteName("wolf"), "Elite Wolf");
+        assert.equal(eliteName("bear"), "Elite Brown bear");
+
+        // (About four of its kind to beat, before its tier: hit points times blows)
+        assert.ok(ELITES.hp * ELITES.power * tierPower(1 + ELITES.up) ** 2 > 5);
+
+        // Put out further off than the rest (out of sight, but on the minimap as it comes), seeing
+        // further, but going no further after anyone than a little beyond its round
+        assert.ok(ELITES.from > WILDS.to && ELITES.from <= ELITES.marker + 20 && ELITES.to < ELITES.far);
+        assert.ok(ELITES.sight > SIGHT && ELITES.sight < ELITES.loop + ELITES.leash);
+        assert.ok(ELITES.apart > 2 * ELITES.far, "never two about one player");
+        assert.ok(ELITES.chance <= 0.1 && ELITES.rest >= 5 * 60000, "rare");
+
+        const round = eliteRound([100, 200]);
+
+        assert.equal(round.length, ELITES.stops);
+
+        for (const [x, y] of round) {
+            assert.ok(Math.abs(Math.hypot(x - 100, y - 200) - ELITES.loop) < 0.01);
+        }
     });
 
     it("has folk for every wild camp's faction, and a master and guards for every perilous site", () => {
@@ -561,6 +618,110 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.ok(!host.lairs.get(site.id).ids.some((id) => host.wild.get(id)?.master), "not back yet");
     });
 
+    it("puts out an elite now and then past the first tier's land, far off, leading its kind, and no other near it or that player a while", () => {
+        const { host, world, me } = hosted();
+        const home = world.start.at;
+
+        Object.assign(me, { hp: 1e7, maxHp: 1e7 });
+
+        const { elite, at } = walkTillElite(host, me);
+
+        assert.ok(elite, "one put out");
+
+        const leader = host.battle.actor(elite);
+        const { creature, pack } = host.wild.get(elite);
+        const spec = CREATURES[creature];
+        const spawn = leader.spawn.map((v) => v + 0.5);
+        const land = tierAt(spawn, [home], landAt(world.plan, ...spawn).biome);
+        const tier = Math.min(TIERS, land + ELITES.up);
+
+        // Far stronger than its kind, a tier up on the land's, named for it
+        assert.ok(land >= ELITES.least && !spec.perilous);
+        assert.equal(leader.name, eliteName(creature));
+        assert.equal(leader.wild.tier, tier);
+        assert.equal(leader.hp, Math.round(spec.hp * tierPower(tier) * ELITES.hp));
+        assert.ok(Math.abs(leader.power.melee - tierPower(tier) * ELITES.power) < 1e-9);
+        assert.deepEqual([leader.wild.elite, leader.wild.sight, leader.wild.leash, leader.wild.champion], [true, ELITES.sight, ELITES.loop + ELITES.leash, "elite"]);
+
+        // Put out further off than the rest, clear of the settlements and the roads, the round it
+        // walks on dry land
+        const off = Math.hypot(spawn[0] - at[0], spawn[1] - at[1]);
+
+        assert.ok(off >= ELITES.from - 3 && off <= ELITES.to + 3, `${Math.round(off)} m off`);
+        assert.ok(clearOfSettlements(world.plan, spawn, WILDS.clear - 4));
+        assert.ok(!world.maps.town.nearRoad(...spawn, WILDS.road - 4));
+        assert.ok(leader.wild.round.length === ELITES.stops && leader.wild.round.every((stop) => !landAt(world.plan, ...stop).water));
+
+        // Leading its kind, as many as a pack of theirs there, at the land's tier
+        const escorts = [...host.wild].filter(([id, one]) => one.pack === pack && id !== elite);
+
+        assert.equal(escorts.length, packOf(creature, land) - 1);
+
+        for (const [id, one] of escorts) {
+            const escort = host.battle.actor(id);
+
+            assert.deepEqual([one.creature, one.elite, escort.wild.tier, escort.wild.leader, escort.name], [creature, "escort", land, elite, spec.name]);
+            assert.ok(!escort.wild.elite);
+        }
+
+        // That player has no other a while
+        assert.ok(host.eliteRest.get(HOST_PLAYER) > host.battle.time && host.eliteRest.get(HOST_PLAYER) <= host.battle.time + ELITES.rest);
+
+        // All of it kept in a snapshot
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.eliteRest], [...host.eliteRest]);
+        assert.deepEqual([again.wild.get(elite).elite, again.battle.actor(elite).wild.sight, again.battle.actor(elite).name], ["lead", ELITES.sight, leader.name]);
+
+        // None other near it: a friend with no elite lately walking all about it, many packs put
+        // out near them, none an elite
+        host.eliteRest.clear();
+        host.join({ id: "guest", hero: { ...HERO, name: "Bea" } });
+
+        const guest = host.battle.actor("guest");
+        let roused = 0;
+
+        Object.assign(guest, { hp: 1e7, maxHp: 1e7 });
+        Object.assign(me, { square: [Math.floor(spawn[0]) + 120, Math.floor(spawn[1])], path: [], target: null });
+        Object.assign(me, { x: me.square[0] + 0.5, y: me.square[1] + 0.5 });
+
+        for (let k = 0; k < 24; k++) {
+            const angle = k * 2.4;
+            const square = [Math.floor(spawn[0] + Math.cos(angle) * (110 + (k % 4) * 10)), Math.floor(spawn[1] + Math.sin(angle) * (110 + (k % 4) * 10))];
+
+            if (landAt(world.plan, ...square).water) {
+                continue;
+            }
+
+            put(guest, square);
+            roused += run(host, 4000).filter(({ type }) => type === "roused").length;
+        }
+
+        assert.ok(roused >= 10, `${roused} packs put out`);
+        assert.deepEqual(elitesOf(host), [elite], "no other");
+
+        // Still about a little beyond the rest's reach
+        assert.ok(host.battle.actor(elite), "about");
+
+        // Felled, with the player near: its prize on it for them, a piece of gear or a charm, made
+        // better than common
+        put(guest, [Math.floor(spawn[0]) + 600, Math.floor(spawn[1])]);
+        put(me, [leader.square[0] + 1, leader.square[1]]);
+        host.battle.afflict(elite, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        run(host, 3000);
+
+        const found = [...host.ground.values()].filter((each) => each.for === HOST_PLAYER && each.from === creature);
+
+        assert.ok(host.battle.actor(elite)?.dead ?? true, "felled");
+        assert.ok(found.some(({ bundle }) => bundle.items.some(({ id, quality }) => (GEAR[id] || CHARMS[id]) && quality !== "common")), JSON.stringify(found.map(({ bundle }) => bundle)));
+
+        // Its kind let go once every player's further
+        put(me, [Math.floor(spawn[0]) + 600, Math.floor(spawn[1]) + 2]);
+        run(host, 1500);
+
+        assert.ok(escorts.every(([id]) => !host.battle.actor(id) || host.battle.actor(id).dead), "let go");
+    });
+
     it("carries on exactly from a snapshot, the creatures and all", () => {
         const { host } = outside(hosted());
 
@@ -575,5 +736,119 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
 
         assert.equal(again.checksum(), host.checksum());
         assert.deepEqual([...again.wild.keys()], [...host.wild.keys()]);
+    });
+});
+
+describe("the wild's elites (creatures.js ELITES, battle.js, spoils.js ELITE_SPOILS)", () => {
+    it("leaves far richer spoils on an elite: its kind's gold thrice over, its things likelier, a tome likelier, and always a prize", () => {
+        const tally = (creature, tier, elite, n = 3000) => {
+            const random = createRandom(11);
+            const counts = { gold: 0, nothing: 0, items: {}, tomes: 0 };
+
+            for (let k = 0; k < n; k++) {
+                const { gold, items } = rollSpoils(creature, tier, random, CREATURES[creature].tiers[0], { elite });
+
+                counts.gold += gold / n;
+                counts.nothing += gold || items.length ? 0 : 1 / n;
+                counts.tomes += items.filter(({ id }) => ITEMS[id].use?.learn).length / n;
+
+                for (const { id } of items) {
+                    counts.items[id] = (counts.items[id] ?? 0) + 1 / n;
+                }
+            }
+
+            return counts;
+        };
+
+        // Gold thrice over (and a purse on a beast that carries none), never nothing
+        const [bandit, eliteBandit] = [tally("bandit", 3, false), tally("bandit", 3, true)];
+        const [wolf, eliteWolf] = [tally("wolf", 3, false), tally("wolf", 3, true)];
+
+        assert.ok(Math.abs(eliteBandit.gold / bandit.gold - ELITE_SPOILS.gold) < 0.3, `${eliteBandit.gold} against ${bandit.gold}`);
+        assert.equal(wolf.gold, 0);
+        assert.ok(eliteWolf.gold > 10 && eliteWolf.nothing === 0, JSON.stringify(eliteWolf));
+
+        // Its kind's things much likelier
+        for (const id of ["wolfPelt", "wolfFang"]) {
+            assert.ok(eliteWolf.items[id] > wolf.items[id] + 0.25, `${id}: ${eliteWolf.items[id]} against ${wolf.items[id]}`);
+        }
+
+        // A tome, on one with hands, before the tiers others carry one at, and likelier
+        assert.ok(3 < TOME_DROP.tier && !bandit.tomes);
+        assert.ok(Math.abs(eliteBandit.tomes - TOME_DROP.chance * ELITE_SPOILS.tome) < 0.025, `${eliteBandit.tomes}`);
+        assert.equal(eliteWolf.tomes, 0, "none on a beast");
+
+        // Its prize: a piece of gear or a charm, never common, mostly fine to rare, now and then better
+        const random = createRandom(5);
+        const prizes = Array.from({ length: 1000 }, () => elitePrize(3, random));
+        const share = (test) => prizes.filter(test).length / prizes.length;
+
+        assert.ok(prizes.every(({ id }) => GEAR[id] || CHARMS[id]));
+        assert.ok(Math.abs(share(({ id }) => CHARMS[id]) - ELITE_SPOILS.charm) < 0.05);
+        assert.equal(share(({ quality }) => quality === "common"), 0);
+        assert.ok(share(({ quality }) => ["fine", "masterwork", "rare"].includes(quality)) > 0.8);
+        assert.ok(share(({ quality }) => ["veryRare", "legendary"].includes(quality)) > 0.03);
+    });
+
+    // An elite wolf on its round in an open field, and a player; and an ordinary wolf, to compare
+    function patrol(seed = 3) {
+        const battle = new Battle(field(80), { seed });
+        const home = [40, 40];
+        const wolf = { creature: "wolf", tier: 3, temper: "aggressive", guard: 0, roam: 12, pack: "e", leader: null, menace: true };
+
+        battle.add({ id: "elite", kind: "beast", name: eliteName("wolf"), weapon: "wolf", team: WILD, square: home, ai: "wild", hp: 5000, speed: 1.4, chase: 3.2, wild: { ...wolf, leash: ELITES.loop + ELITES.leash, elite: true, sight: ELITES.sight, round: eliteRound(home), stop: 0 } });
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2], hp: 1e6 });
+
+        return { battle, home, elite: battle.actor("elite"), player: battle.actor("player") };
+    }
+
+    it("walks its round about where it was put out", () => {
+        const { battle, home, elite } = patrol();
+        const stops = new Set();
+
+        for (let t = 0; t < 60000; t += 1000) {
+            run(battle, 1000);
+
+            const off = Math.hypot(elite.x - home[0] - 0.5, elite.y - home[1] - 0.5);
+
+            assert.ok(off <= ELITES.loop + 3, `${off.toFixed(1)} m from where it was put out`);
+            stops.add(elite.wild.stop);
+            assert.equal(elite.target, null, "the player far off, left be");
+        }
+
+        assert.ok(stops.size >= 4, `${stops.size} stops of its round walked to`);
+    });
+
+    it("sees further than its kind, but leaves be anyone who keeps a wide berth, and goes no further after them than a little beyond its round", () => {
+        // Further off than its kind sees, but near its round: seen, and gone after
+        const { battle, home, elite, player } = patrol();
+
+        put(player, [home[0] + SIGHT + 4, home[1]]);
+        run(battle, 1000);
+        assert.equal(elite.target, "player", "seen from further than its kind sees");
+
+        // An ordinary wolf as far off doesn't
+        const ordinary = new Battle(field(80), { seed: 3 });
+
+        ordinary.add({ id: "wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: WILD, square: home, ai: "wild", hp: 5000, speed: 1.4, chase: 3.2, wild: { creature: "wolf", tier: 2, temper: "aggressive", guard: 0, roam: 0, leash: 24, pack: "w", leader: null, menace: true } });
+        ordinary.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [home[0] + SIGHT + 4, home[1]], hp: 1e6 });
+        run(ordinary, 1000);
+        assert.equal(ordinary.actor("wolf").target, null, "its kind sees no further than SIGHT");
+
+        // Off beyond its leash: given up, and back to its round
+        put(player, [home[0] + ELITES.loop + ELITES.leash + 6, home[1]]);
+        run(battle, 5000);
+        assert.equal(elite.target, null, "given up");
+        run(battle, 10000);
+        assert.ok(Math.hypot(elite.x - home[0], elite.y - home[1]) <= ELITES.loop + 3, "back on its round");
+
+        // A wide berth: walked by, past its round and beyond its leash, never gone after
+        const { battle: again, home: there, elite: other, player: passer } = patrol(5);
+
+        for (let y = 2; y < 78; y += 2) {
+            put(passer, [there[0] + ELITES.loop + ELITES.leash + 2, y]);
+            run(again, 1000);
+            assert.equal(other.target, null, `left be at ${y}`);
+        }
     });
 });

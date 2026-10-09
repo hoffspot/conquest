@@ -9,11 +9,14 @@ import { EQUIPMENT } from "../characters/equipment.js";
 
 /**
  * By rank: how much bigger than others of its kind (`scale`), and how much brighter what glows on
- * it (`glow`: its eyes, a wraith's light).
+ * it (`glow`: its eyes, a wraith's light); the colour its body's tinted, if any (`tint`). A dungeon's
+ * boss or mini-boss; or one of the wild's elites (core/creatures.js ELITES), gilded, and radiant
+ * besides (world/ailments3d.js "elite").
  */
 export const CHAMPION_LOOKS = Object.freeze({
     boss: { scale: 1.22, glow: 1.6 },
     mini: { scale: 1.1, glow: 1.25 },
+    elite: { scale: 1.25, glow: 1.8, tint: 0xf4dc9c },
 });
 
 /**
@@ -58,9 +61,9 @@ export const REGALIA = Object.freeze({
 });
 
 /**
- * How a champion looks (`rank`: "boss" or "mini"; `id`: its REGALIA id), or null for one that isn't:
- * { scale (times its kind's size), glow (times what glows on it), tint (a colour its body's darkened
- * to, or null), wear (EQUIPMENT ids it wears) }.
+ * How a champion looks (`rank`: "boss", "mini" or "elite"; `id`: its REGALIA id), or null for one
+ * that isn't: { scale (times its kind's size), glow (times what glows on it), tint (a colour its
+ * body's darkened to, or null), wear (EQUIPMENT ids it wears) }.
  */
 export function championLook(rank, id = null) {
     const ranked = CHAMPION_LOOKS[rank];
@@ -71,7 +74,7 @@ export function championLook(rank, id = null) {
 
     const own = REGALIA[id] ?? {};
 
-    return { scale: ranked.scale * (own.scale ?? 1), glow: ranked.glow * (own.glow ?? 1), tint: own.tint ?? null, wear: own.wear ?? [] };
+    return { scale: ranked.scale * (own.scale ?? 1), glow: ranked.glow * (own.glow ?? 1), tint: own.tint ?? ranked.tint ?? null, wear: own.wear ?? [] };
 }
 
 /**
