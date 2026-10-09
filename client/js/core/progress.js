@@ -517,6 +517,13 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
 /** The most of each blow armour takes off, all of it together. */
 export const ARMOR_CAP = 0.6;
 
+/**
+ * The most a bargain is bettered, all the haggling together (Trade's, the Fox's, a set's and a
+ * rabbit's foot's): off what's bought, onto what's sold. Below where a thing bought could be sold
+ * straight back for more (1 - h < SELL_SHARE (1 + h) from h = 3/7, about 0.43), with room to spare.
+ */
+export const HAGGLE_CAP = 0.35;
+
 /** The most chance of catching a blow on a shield there is (the Shield skill's half, and a shield's own bonus). */
 export const BLOCK_CAP = 0.6;
 
@@ -810,6 +817,7 @@ export class Progress {
         // (A grimoire held open in both hands: all of it a quarter stronger again)
         totals.spell = (1 + totals.spell) * (ITEMS[weapon?.id]?.spellTimes ?? 1) - 1;
         totals.armor = Math.min(ARMOR_CAP, totals.armor);
+        totals.haggle = Math.min(HAGGLE_CAP, totals.haggle);
 
         return totals;
     }

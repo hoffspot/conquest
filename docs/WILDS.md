@@ -259,9 +259,9 @@ and a dragon a fortune. Some are good to eat or drink: boar, bear and frog meat 
 heals more, a wisp's essence fills your stamina. Each has its picture in the pack, in its colour.
 
 The guilds' boards want them too ("Wanted at the guild": `standing.js` `offerContract`): a few of
-one creature's parts (a creature found near home, anywhere), brought to the counter, paid half as
-much again as they'd sell for (and handed over out of the pack). "Beasts on the roads" counts the
-creatures brought down.
+one creature's parts (a creature found near home, anywhere), brought to the counter, paid 1.6
+times what they'd sell for, and a few gold more (and handed over out of the pack). "Beasts on the
+roads" counts the creatures brought down.
 
 ## Trading face to face
 

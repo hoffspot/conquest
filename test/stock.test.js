@@ -8,7 +8,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { dayOf, elapsedOf } from "../client/js/core/daytime.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { buys, gradeOf, ITEMS, priceOf, QUALITIES, SHOPS, SMITH_MAKES, wares } from "../client/js/core/progress.js";
+import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SHARE, SHOPS, SMITH_MAKES, wares } from "../client/js/core/progress.js";
 import { dailyStock, SPECIAL_MARKUP, shopPrice, stockKey } from "../client/js/core/stock.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
@@ -115,6 +115,48 @@ describe("a shop's daily stock (stock.js)", () => {
         assert.equal(stockKey("town-3/smithy-2/smith"), "town-3/smithy-2");
         assert.equal(stockKey("town-3/smithy-2/apprentice"), "town-3/smithy-2");
         assert.equal(stockKey("keeper"), "keeper");
+    });
+});
+
+describe("haggling, as far as it goes (progress.js HAGGLE_CAP)", () => {
+    it("takes no more than 35% off, however much is piled up: the Trade skill's best, the Fox on every piece that takes it, a legendary rabbit's foot", () => {
+        const fox = (id) => ({ id, quality: "legendary", bonuses: { haggle: 0.06 }, affixes: ["fox"] });
+        const piled = new Progress({ skills: { trade: 99999 }, gear: { mainHand: { id: "sword" }, belt: fox("belt"), amulet: fox("amulet"), ring1: fox("ring"), ring2: fox("ring") }, pack: [{ id: "rabbitsFoot", quality: "legendary" }] });
+        const trader = new Progress({ skills: { trade: 99999 }, gear: { mainHand: { id: "sword" }, ring1: fox("ring") } });
+
+        assert.ok(Math.abs(trader.bonuses().haggle - 0.31) < 1e-9, "(under it, all of it)");
+        assert.equal(piled.bonuses().haggle, HAGGLE_CAP);
+        assert.ok(1 - HAGGLE_CAP > SELL_SHARE * (1 + HAGGLE_CAP), "below where buying and selling back would pay");
+    });
+
+    it("so nothing any shop sells, of any make, sells back for more than it cost, at the cap, its special included; and none sells a creature's part, the guild's to buy at its worth", () => {
+        const sold = new Set();
+
+        for (const shop of Object.keys(SHOPS)) {
+            for (const { id } of wares(shop, "human", { might: 8 })) {
+                sold.add(id);
+            }
+
+            for (let day = 0; day < 20 && SHOPS[shop].daily; day++) {
+                const { wares: today, special } = dailyStock(shop, { seed: 3, key: `${shop}-1/shop/keeper`, day, people: "human" });
+
+                for (const { id } of [...today, ...(special ? [special] : [])]) {
+                    sold.add(id);
+                }
+            }
+        }
+
+        assert.deepEqual([...sold].filter((id) => ITEMS[id]?.part), []);
+
+        for (const id of sold) {
+            for (const quality of Object.keys(QUALITIES)) {
+                const back = priceOf({ id, quality }, { haggle: HAGGLE_CAP, selling: true });
+
+                for (const shop of Object.keys(SHOPS)) {
+                    assert.ok(back <= shopPrice({ id, quality }, shop, { haggle: HAGGLE_CAP }), `${quality} ${id} at the ${shop}'s`);
+                }
+            }
+        }
     });
 });
 
