@@ -650,12 +650,20 @@ describe("the works in the war (core/war: docs/WAR.md *The works*)", () => {
         assert.equal(works.yard, 0);
         assert.match(tell(events.find(({ type, works: id }) => type === "overrun" && id === works.id), war), /^Brigands have overrun the .+\. Nothing comes out of it for the Lizard folk now\.$/);
 
-        // (Its people march to win it back, out of their nearest town's garrison, and do)
+        // (Its people send a force to win it back, out of their nearest town's garrison, or their
+        // reserve, and do)
         war.realm("lizard").treasury = 1e4;
 
-        const after = play(war, 30);
+        const after = [];
+        let sent = false;
 
-        assert.ok(after.some(({ type, realm, target, mission }) => type === "marched" && realm === "lizard" && target === works.id && mission === "retake"));
+        for (let k = 0; k < 30; k++) {
+            after.push(...play(war, 1));
+            sent ||= war.reserveOf("lizard").target === works.id;
+        }
+
+        sent ||= after.some(({ type, realm, target, mission }) => type === "marched" && realm === "lizard" && target === works.id && mission === "retake");
+        assert.ok(sent, "a force sent");
         assert.ok(after.some(({ type, works: id }) => type === "retaken" && id === works.id), "won back");
         assert.ok(!works.held && works.guard > 0 && works.owner === "lizard");
     });

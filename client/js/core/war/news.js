@@ -143,7 +143,25 @@ export function tell(event, war) {
             return `${People(event.realm)} are restless under ${people(event.against)}. There's talk of rising.`;
         case "risen":
             return `${People(event.realm)} have risen in ${town(event.town)}, and thrown out ${people(event.from)}!`;
+        case "stormed": {
+            const who = event.reserve ? `The ${own(event.realm)} reserve` : `The ${own(event.realm)} army`;
+            const camp = `the ${own(event.against)} camp${war.town(event.toward) ? ` before ${war.town(event.toward).name}` : ""}`;
+
+            if (event.won) {
+                return `${who} stormed ${camp}, and sent their army home.`;
+            }
+
+            return `${who} fell upon ${camp} and was beaten off${event.breaches ? `, its palisade breached in ${event.breaches === 1 ? "one place" : `${event.breaches} places`}` : ""}.`;
+        }
+        case "mended":
+            return `${People(event.realm)} have mended their camp's palisade.`;
+        case "scattered":
+            return `${People(event.realm)} have scattered the ${brigands(event.faction)} camped in their lands.`;
         case "battle":
+            if (event.brigands) {
+                return event.won ? `The ${own(event.realm)} reserve fell upon the ${brigands(event.faction)} camped in their lands and scattered them.` : `The ${own(event.realm)} reserve fell upon the ${brigands(event.faction)} camped in their lands, and were beaten off.`;
+            }
+
             if (event.works) {
                 return !event.against ? (event.won ? `${People(event.realm)} fell upon the brigands at ${works(event.works)} and put them to the sword.` : `${People(event.realm)} fell upon the brigands at ${works(event.works)}, and were beaten off.`) : event.won ? `${People(event.realm)} fell upon ${works(event.works)} and took it from ${people(event.against)}.` : `${People(event.realm)} fell upon ${works(event.works)}, and its guard beat them off.`;
             }
@@ -217,7 +235,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned", "mended", "scattered"]);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
