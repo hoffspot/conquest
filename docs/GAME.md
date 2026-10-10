@@ -3952,9 +3952,13 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   (docs/MAGIC.md), things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
   there are, and greyed out once none are left, and the emotes (`emote:wave`...: *Emotes*,
   under *Characters in the world*).
-- **An enemy's**: the elements' spells, Stun, and once learnt Hold and the tomes' spells cast at
-  enemies, a power strike and an aimed shot (a blow for another kind of weapon than the one in
-  hand is greyed out).
+- **An enemy's**: Attack (`attack`, at the top to start with: walking up to them, into reach of
+  what's in hand, and fighting them, as a tap on them did before a tap set on them where the
+  player stands: *Tapping*), the elements' spells, Stun, and once learnt Hold and the tomes'
+  spells cast at enemies, a power strike and an aimed shot (a blow for another kind of weapon
+  than the one in hand is greyed out). Wheels kept from before Attack was have it put at the top
+  of their first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty
+  slice.
 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
 (picking a fight with them), and no other side.
@@ -4095,7 +4099,13 @@ it.
    `?play` to playing: the page's own work 11.7 to 13.5 s before, 9.7 to 10.4 s now; building the
    world (`Game.build`) 7.4 s of it before, 4.2 to 4.7 s now. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
-   a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
+   a Shift-click. **Tapping an enemy** sets the player on them where they stand (an `engage`
+   order with `stand`, `NET_VERSION` 98: battle.js strikes them while they're in reach, a bow's
+   shot or a blow's, and doesn't go after them; out of reach, whoever is in reach is struck, as standing), ringed as
+   their target; tapped twice, the player runs up to them, into reach of what's in hand; Attack,
+   at the top of an enemy's wheel, walks up to them. Tapping whoever the player's going after,
+   or the player themselves, while they're walking or running anywhere, stops them where they
+   are (game.js `#halt`: still set on whoever they were after, where they stand). A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
    turns them the way the camera looks (over the ground) and sends them straight ahead that way,
    running while their stamina lasts and then walking (an `ahead` order, which turns them as

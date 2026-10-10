@@ -8,7 +8,8 @@
 // other seven slices themselves (Game options, Action wheels: app/wheelsetup.js): for their own
 // wheel ("self": opened on themselves, or held on anyone else who isn't an enemy), their healing,
 // things from their pack to use, and emotes (a wave, a bow: core/emotes.js); for an enemy's,
-// their attack spells, hexes and blows (and healing: it can be cast on anyone). What's in each
+// Attack (walking up to them, into reach of what's in hand, and fighting them: as a tap on them
+// once did), their attack spells, hexes and blows (and healing: it can be cast on anyone). What's in each
 // slice is an action (ACTIONS), or a thing to use ("item:potion").
 //
 // While a slice's action is cooling down, the slice is greyed out over as much of it as the
@@ -57,6 +58,7 @@ export const ACTIONS = Object.freeze({
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
     shieldBash: { label: "Shield bash", ability: "shieldBash", learnt: "shieldBash", on: "enemy" },
+    attack: { label: "Attack", order: "engage", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
     camp: { label: "Make camp", order: "camp", on: "self" },
     ...Object.fromEntries(Object.entries(EMOTES).map(([name, { label }]) => [`emote:${name}`, { label, emote: name, on: "self" }])),
@@ -109,18 +111,47 @@ function lookOf(key) {
 /**
  * What's on each wheel until the player changes it: each side's slices (a direction and what's
  * in it). Vigor at the top of their own, and Make camp at the top of its other side, with a wave,
- * a bow, a nod and a cheer round it; the four elements' first spells and Stun on an enemy's;
- * everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
- * pick a fight with them.)
+ * a bow, a nod and a cheer round it; Attack at the top of an enemy's, the four elements' first
+ * spells and Stun round it; everything else empty. (A soldier's of a people not friendly to
+ * theirs has one side: Fight, to pick a fight with them.)
  */
 export const WHEELS = Object.freeze({
     self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" })]),
-    enemy: Object.freeze([Object.freeze({ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }), Object.freeze({})]),
+    enemy: Object.freeze([Object.freeze({ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }), Object.freeze({})]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
 });
 
 /** The wheels a player sets themselves. */
 export const SETTABLE = Object.freeze(["self", "enemy"]);
+
+/**
+ * Which wheels kept these are (`version`): kept before 2, Attack wasn't on an enemy's; read, it's
+ * put at the top of its first side (once: taken off after, it stays off), whatever was there moved
+ * to the first empty slice.
+ */
+export const WHEELS_VERSION = 2;
+
+// Attack put at the top of an enemy's wheel (`sides`), unless it's on it already
+function withAttack(sides) {
+    if (sides.some((slots) => Object.values(slots).includes("attack"))) {
+        return;
+    }
+
+    const there = sides[0].n;
+
+    sides[0].n = "attack";
+
+    // (What was there moved to the first empty slice; every one full, it's left off)
+    for (const slots of there ? sides : []) {
+        const place = PLACES.find((each) => !slots[each]);
+
+        if (place) {
+            slots[place] = there;
+
+            return;
+        }
+    }
+}
 
 /**
  * The quick actions until the player changes them, left to right: Vigor and Stun (known from the
@@ -139,8 +170,9 @@ export const offensive = (key) => actionOf(key)?.on === "enemy";
 
 /**
  * The player's wheels as kept (or nothing kept: the WHEELS they start with), made safe: each of
- * their own and an enemy's, two sides, each slice holding something that goes on that wheel; and
- * their quick actions (`quick`: QUICK's four slots, each something that can be one, or null).
+ * their own and an enemy's, two sides, each slice holding something that goes on that wheel; their
+ * quick actions (`quick`: QUICK's four slots, each something that can be one, or null); and which
+ * wheels they are (`version`: WHEELS_VERSION, kept from before brought up to it).
  */
 export function readWheels(kept) {
     const wheels = {};
@@ -158,6 +190,12 @@ export function readWheels(kept) {
     const quick = Array.isArray(kept?.quick) ? kept.quick : QUICK;
 
     wheels.quick = QUICK.map((_, slot) => (quickable(actionOf(quick[slot])) ? (RENAMED[quick[slot]] ?? quick[slot]) : null));
+
+    if (kept && !(kept.version >= WHEELS_VERSION)) {
+        withAttack(wheels.enemy);
+    }
+
+    wheels.version = WHEELS_VERSION;
 
     return wheels;
 }

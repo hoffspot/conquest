@@ -2245,6 +2245,81 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
+test("tapping an enemy sets the player on them where they stand; tapped twice, they run up to them; tapped again on the way, or the player tapped, they stop, still set on them; Attack at the top of an enemy's wheel walks up to them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const taps = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const square = [0, 1, -1, 2, -2].map((dx) => [px + dx, py - 8]).find(([x, y]) => !squares.blocked(x, y));
+        const at = (id) => session.view.toScreen(game.avatars.get(id).point(0.5));
+        const now = performance.now();
+        const state = () => ({ order: player.order && { ...player.order }, square: [...player.square], walking: player.path.length > 0 });
+
+        // The orc 8 squares off, stunned where it stands
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], order: null, attack: null, target: null, stunnedUntil: battle.time + 600000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.advance(0.1);
+
+        // Tapped: set on it where the player stands
+        let spot = at("orc");
+
+        game.tap(spot.x, spot.y, { time: now });
+        game.advance(1);
+
+        const tapped = state();
+
+        // Tapped twice in quick succession: running up to it
+        spot = at("orc");
+        game.tap(spot.x, spot.y, { time: now + 5000 });
+        game.tap(spot.x, spot.y, { time: now + 5150 });
+        game.advance(0.6);
+
+        const doubled = { ...state(), running: player.running };
+
+        // Tapped again on the way: stopped there, still set on it
+        spot = at("orc");
+        game.tap(spot.x, spot.y, { time: now + 10000 });
+        game.advance(0.5);
+
+        const stopped = state();
+
+        // Attack, at the top of an enemy's wheel: walking up to it; the player tapped, stopped
+        const top = game.wheels.enemy[0].n;
+
+        game.act(top, "orc");
+        game.advance(0.4);
+
+        const attacking = state();
+
+        spot = at("player");
+        game.tap(spot.x, spot.y, { time: now + 15000 });
+        game.advance(0.5);
+
+        return { start: [px, py], tapped, doubled, stopped, top, attacking, halted: state() };
+    });
+
+    expect(taps.tapped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.tapped.square).toEqual(taps.start);
+    expect(taps.doubled.order).toMatchObject({ type: "engage", target: "orc", run: true });
+    expect(taps.doubled.order.stand).toBeUndefined();
+    expect(taps.doubled.walking).toBe(true);
+    expect(taps.doubled.running).toBe(true);
+    expect(taps.stopped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.stopped.walking).toBe(false);
+    expect(taps.top).toBe("attack");
+    expect(taps.attacking.order).toEqual({ type: "engage", target: "orc", run: false });
+    expect(taps.attacking.walking).toBe(true);
+    expect(taps.halted.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.halted.walking).toBe(false);
+});
+
 test("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -7706,14 +7781,15 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
         game.start();
     }, seconds);
 
-    // Held on the orc: its wheel's eight slices, the four elements' first spells round the top
-    // (Burn at N), Stun at W, S to turn it over, and the rest empty
+    // Held on the orc: its wheel's eight slices, Attack at the top (N), the four elements' first
+    // spells round it, Stun at W, S to turn it over, and the rest empty
     await hold(orcAt);
-    await expect(up.locator(".label")).toHaveText("Burn");
+    await expect(up.locator(".label")).toHaveText("Attack");
     await expect(left.locator(".label")).toHaveText("Stun");
+    await expect(wheel.locator('.slice[data-direction="se"] .label')).toHaveText("Burn");
     await expect(wheel.locator(".slice")).toHaveCount(8);
     await expect(wheel.locator('.slice.flip[data-direction="s"] .label')).toHaveText("Wheel 2");
-    await expect(wheel.locator(".slice.empty")).toHaveCount(2);
+    await expect(wheel.locator(".slice.empty")).toHaveCount(1);
     await flickLeft(orcAt);
     await page.mouse.up();
     await playOn(0.6);
@@ -8047,11 +8123,11 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
     // What can go on it: nothing, the healing spells known, making camp, the emotes and the
-    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's) and Stun,
-    // and no draughts or emotes
+    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's), Stun and
+    // Attack, and no draughts or emotes
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun", "Attack"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
     // A draught at NE of wheel two, for the bow there (tapping S turns it over, as flicking it does)
