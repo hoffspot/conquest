@@ -882,7 +882,9 @@ for 20 turns or until it's acted on:
   how long's left (each can be given up);
 - their people: who rules them and from where, whom they're at war with and allied to, how many
   towns they hold;
-- what's lately done, failed or given up.
+- what's lately done, failed or given up;
+- and, by its Messages button, the last ten messages told across the screen: war news among
+  them, as a convoy waylaid or a town fallen (docs/GAME.md *The heads-up display*).
 
 Where the requests take the player is marked on the world map with a gold star.
 

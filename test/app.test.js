@@ -11,7 +11,8 @@ import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
+import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
+import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
@@ -382,6 +383,53 @@ describe("saving (save.js)", () => {
         // (Anything else kept there isn't a pin)
         globalThis.localStorage.setItem("pellagos.abcd1234.pin", JSON.stringify({ ...save, pin: ["a", 2] }));
         assert.equal(loadPin(save), null);
+    });
+
+    it("keeps the last messages a saved game's character was told, the last ten; not for another, nor what isn't one", () => {
+        useStorage();
+
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-03T10:00:00.000Z" };
+        const told = Array.from({ length: 12 }, (_, k) => ({ text: `Message ${k}`, at: 1000 + k, times: 1 }));
+
+        assert.deepEqual(loadMessages(save), []);
+        assert.equal(saveMessages(save, told.slice(0, 3)), true);
+        assert.deepEqual(loadMessages(save), told.slice(0, 3));
+        assert.deepEqual(loadMessages({ ...save, seed: 13 }), []);
+        assert.equal(saveMessages({ seed: 1 }, told), false);
+
+        // (Kept more than ten, only the last ten; anything else kept there let go)
+        globalThis.localStorage.setItem("pellagos.abcd1234.messages", JSON.stringify({ ...save, messages: [{ text: 3, at: 1, times: 1 }, ...told, { text: "Bad", at: "now", times: 1 }] }));
+        assert.deepEqual(loadMessages(save), told.slice(-MESSAGES_KEPT));
+    });
+
+    it("keeps the last ten messages told the player across the screen, not refusals, the same again counted (journal.js)", () => {
+        let log = [];
+
+        for (let k = 0; k < 12; k++) {
+            log = keepMessage(log, `News ${k}`, 3, k * 1000);
+        }
+
+        assert.equal(log.length, MESSAGES_KEPT);
+        assert.deepEqual(log[0], { text: "News 2", at: 2000, times: 1 });
+        assert.deepEqual(log.at(-1), { text: "News 11", at: 11000, times: 1 });
+
+        // (Refusals and the like, shown less than KEPT_FROM; one shown till the next; and none at all: not kept)
+        assert.equal(keepMessage(log, "Can't do that.", KEPT_FROM - 0.4, 12000), log);
+        assert.equal(keepMessage(log, "The picture was lost. Waiting for it to come back…", 0, 12000), log);
+        assert.equal(keepMessage(log, "", 3, 12000), log);
+
+        // (The same again: counted, its time moved on)
+        const again = keepMessage(log, "News 11", 4, 15000);
+
+        assert.equal(again.length, MESSAGES_KEPT);
+        assert.deepEqual(again.at(-1), { text: "News 11", at: 15000, times: 2 });
+        assert.deepEqual(again.slice(0, -1), log.slice(0, -1));
+
+        assert.equal(ago(0, 30_000), "just now");
+        assert.equal(ago(0, 5 * 60_000), "5 min ago");
+        assert.equal(ago(0, 2 * 3_600_000 + 1), "2 h ago");
+        assert.equal(ago(0, 24 * 3_600_000), "1 day ago");
+        assert.equal(ago(0, 3 * 24 * 3_600_000), "3 days ago");
     });
 
     it("still plays when the browser won't store anything", () => {

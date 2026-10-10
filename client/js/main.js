@@ -23,7 +23,7 @@ import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -530,6 +530,8 @@ async function playing(save) {
         onPin: (pin) => savePin(save, pin),
         place: loadPlace(save),
         vitals: loadVitals(save),
+        messages: loadMessages(save),
+        onMessages: (messages) => saveMessages(save, messages),
     });
 
     state.keepPlace = () => {
