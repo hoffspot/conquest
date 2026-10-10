@@ -414,7 +414,11 @@ describe("a dungeon against a stronger side (host.js #dungeons, #wakeLevel; stre
             assert.ok(out.length - (pack.foes.length - ordinary.length) <= Math.ceil(ordinary.length * scale.count));
 
             for (const actor of out) {
-                const { champion } = host.wild.get(actor.id);
+                const { champion, foe, extra = false } = host.wild.get(actor.id);
+
+                // (Those beside the plan's marked one more than alone: their gold and their parts only)
+                assert.equal(extra, Number(foe.split("/")[2]) >= pack.foes.length, foe);
+
                 const spec = CREATURES[actor.wild.creature];
                 const stands = CHAMPIONS[champion] ?? { hp: 1 };
                 const hp = Math.round(spec.hp * tierPower(actor.wild.tier) * stands.hp * (champion ? scale.leader : scale.health));

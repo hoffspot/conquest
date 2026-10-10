@@ -9,8 +9,9 @@
 
 import * as THREE from "three";
 import { Character } from "../characters/character.js";
+import { keyOf, LODS } from "../characters/lod.js";
 import { allAtOnce } from "../core/steps.js";
-import { Avatar } from "../world/avatar.js";
+import { Avatar, POSING } from "../world/avatar.js";
 import { arachnid } from "./arachnid.js";
 import { biped } from "./biped.js";
 import { blob } from "./blob.js";
@@ -51,6 +52,46 @@ const RUN_SPEED = 1.9;
  * swirling round it, a slime engulfing.
  */
 export const BOUNDS = Object.freeze({ margin: 2, reach: 2 });
+
+// Creatures start counting to their first pose at different frames, as characters do (avatar.js)
+let staggered = 0;
+
+// Each of a creature's meshes with fewer triangles, at each of LODS' levels, by its whole one: made
+// once for everyone of its kind built alike (who share the whole one), over its very vertices
+const lowered = new WeakMap();
+
+// The lower levels of a creature's mesh (`geometry`), asked for from `lods` (lod.js) and kept:
+// resolves to a geometry for each of LODS' levels, sharing the whole one's vertices
+function levelsOf(geometry, lods) {
+    if (!lowered.has(geometry)) {
+        const indices = geometry.index.array;
+        const positions = geometry.attributes.position.array;
+        const uvs = geometry.attributes.uv?.array ?? new Float32Array((positions.length / 3) * 2);
+        const key = keyOf(`creature:${positions.length}`, indices);
+        const levels = LODS.map(({ share, error }, k) => lods.of(`${key}@${k + 1}`, () => ({ indices, positions, uvs, share, error })));
+
+        lowered.set(
+            geometry,
+            Promise.all(levels).then((lows) =>
+                lows.map((low) => {
+                    const lower = new THREE.BufferGeometry();
+
+                    for (const [name, attribute] of Object.entries(geometry.attributes)) {
+                        lower.setAttribute(name, attribute);
+                    }
+
+                    lower.setIndex(new THREE.BufferAttribute(low, 1));
+                    lower.boundingSphere = geometry.boundingSphere;
+                    lower.boundingBox = geometry.boundingBox;
+
+                    return lower;
+                }),
+            ),
+        );
+    }
+
+    return lowered.get(geometry);
+}
 
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const smoothstep = (u) => u * u * (3 - 2 * u);
@@ -121,6 +162,22 @@ export class BeastAvatar {
 
         /** Is it in view? The game says so each frame: a creature out of view doesn't move what's only for looking at (a cape blown about). */
         this.seen = true;
+
+        /**
+         * How often its body's posed: every so many updates, as a character's is (avatar.js
+         * posingEvery: the smaller on the screen, the seldomer). Where it is and which way it
+         * faces, every update.
+         */
+        this.every = 1;
+        this.unposed = { frames: staggered++ % POSING.unseen, dt: 0 };
+
+        /** Does it cast its shadow? (castShadows: not when it's too small on the screen for one to show) */
+        this.shadowed = true;
+        this.casters = null;
+
+        /** Which of LODS' levels it's drawn at (0: in full; lowerDetail, fitDetail), and its meshes' levels. */
+        this.level = 0;
+        this.levels = [];
         this.facing = 0;
         this.last = new THREE.Vector3();
         this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -406,7 +463,94 @@ export class BeastAvatar {
             this.speed += (moved / dt - this.speed) * Math.min(1, dt * 8);
         }
 
-        this.animate(dt);
+        // (Its body posed every so many updates, all the time since then at once)
+        const unposed = this.unposed;
+
+        unposed.frames++;
+        unposed.dt += dt;
+
+        if (unposed.frames >= this.every) {
+            this.animate(unposed.dt);
+            Object.assign(unposed, { frames: 0, dt: 0 });
+        }
+    }
+
+    /**
+     * Get ready to be drawn with fewer triangles when it's small on the screen (fitDetail): each of
+     * its skinned meshes' triangles at each of LODS' levels, asked for from `lods` (the kit's:
+     * lod.js), made once for everyone of its kind built alike, and put in when they come.
+     */
+    lowerDetail(lods) {
+        this.levels = [];
+        this.object.traverse((node) => {
+            if (node.isSkinnedMesh && node.geometry.index) {
+                this.levels.push({ mesh: node, whole: node.geometry, lower: null });
+            }
+        });
+
+        for (const each of this.levels) {
+            levelsOf(each.whole, lods).then(
+                (lower) => {
+                    each.lower = lower;
+                    each.mesh.geometry = this.level ? lower[this.level - 1] : each.whole;
+                },
+                () => {},
+            );
+        }
+    }
+
+    /**
+     * Drawn with fewer triangles the smaller it is on the screen (`tall`, drawing buffer pixels), as
+     * a character is (Character.fitDetail): at each of LODS' levels under its `below`, and at the
+     * level above again over its `above`; out of view (0), left as it is.
+     */
+    fitDetail(tall) {
+        if (tall <= 0 || !this.levels.length) {
+            return;
+        }
+
+        let level = this.level;
+
+        while (level < LODS.length && tall < LODS[level].below) {
+            level++;
+        }
+
+        while (level > 0 && tall > LODS[level - 1].above) {
+            level--;
+        }
+
+        if (level !== this.level) {
+            this.level = level;
+
+            for (const { mesh, whole, lower } of this.levels) {
+                mesh.geometry = level && lower ? lower[level - 1] : whole;
+            }
+        }
+    }
+
+    /**
+     * Its shadow cast or not (`on`): those of its pieces that cast one when it was built (not
+     * what glows, nor what's seen through), all together.
+     */
+    castShadows(on) {
+        if (on === this.shadowed) {
+            return;
+        }
+
+        if (!this.casters) {
+            this.casters = [];
+            this.object.traverse((node) => {
+                if (node.isMesh && node.castShadow) {
+                    this.casters.push(node);
+                }
+            });
+        }
+
+        for (const mesh of this.casters) {
+            mesh.castShadow = on;
+        }
+
+        this.shadowed = on;
     }
 
     // Gliding down to land at (x, z): along a curve from where it came from, sinking faster the

@@ -38,9 +38,11 @@ export const OPPOSITION = Object.freeze({ answer: 0.8 });
  * How an opposition F is spent: an ordinary one of a pack, more of them (how many × F^`count`),
  * each a little tougher (hit points × F^`health`); a pack's leader (an elite, a cache's chief)
  * tougher still (hit points × F^`leader`), the escort with it more (× F^`count`). For four alike
- * (F about 3): about 2.3 times as many, each about 1.3 times as tough, a leader 2.4 times.
+ * (F about 3): about 3 times as many, each about 1.3 times as tough, a leader 2.4 times; so each
+ * of a side of N alike takes about N^-0.2 of what one alone would (the balance runner,
+ * scripts/balance.js, bears it out: docs/WILDS.md *Tuning it*).
  */
-export const SCALING = Object.freeze({ count: 0.75, health: 0.25, leader: 0.8 });
+export const SCALING = Object.freeze({ count: 1, health: 0.25, leader: 0.8 });
 
 /**
  * The body budget near one fight: at most `most` of the side's and the wild's within `reach`

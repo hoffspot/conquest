@@ -1,6 +1,7 @@
 // Creatures left undrawn out of view (client/js/beasts/beast.js BOUNDS): one sphere round each,
-// which its skinned meshes and cape are culled by, holds it however it moves; and the wight lord's
-// cape isn't blown about out of view
+// which its skinned meshes and cape are culled by, holds it however it moves; the wight lord's
+// cape isn't blown about out of view; and a creature small on the screen is drawn with fewer
+// triangles
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
@@ -24,6 +25,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { BeastAvatar } = await import("../client/js/beasts/beast.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
+const { LODS, Lods } = await import("../client/js/characters/lod.js");
 
 const KINDS = Object.keys(LOOKS).filter((id) => LOOKS[id].body !== "humanoid");
 const DT = 1 / 30;
@@ -188,4 +190,49 @@ describe("creatures culled out of view (beast.js BOUNDS)", () => {
         assert.notDeepEqual(points(), blowing, "seen again, blown about");
     });
 
+    it("draws a creature with fewer triangles the smaller it is on the screen, over its very vertices, made once for its kind alike (lowerDetail, fitDetail)", async () => {
+        const lods = new Lods();
+        const wolf = new BeastAvatar("wolf", { seed: 1 });
+        const other = new BeastAvatar("wolf", { seed: 1 });
+        const meshes = (beast) => beast.levels.map(({ mesh }) => mesh);
+        const counts = (beast) => meshes(beast).map((mesh) => mesh.geometry.index.count);
+
+        wolf.lowerDetail(lods);
+        other.lowerDetail(lods);
+        await Promise.all(lods.made.values());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const whole = counts(wolf);
+
+        assert.ok(wolf.levels.length > 0 && wolf.levels.every(({ lower }) => lower?.length === LODS.length), "every skinned mesh has each level");
+
+        wolf.fitDetail(LODS[0].below - 1);
+        assert.equal(wolf.level, 1);
+        counts(wolf).forEach((count, k) => assert.ok(count < whole[k], `mesh ${k}: ${count} of ${whole[k]}`));
+
+        wolf.fitDetail(LODS[1].below - 1);
+        assert.equal(wolf.level, 2);
+
+        for (const { mesh, whole: full } of wolf.levels) {
+            assert.ok(mesh.geometry.index.count < full.index.count * LODS[0].share * 1.5);
+            assert.equal(mesh.geometry.attributes.position, full.attributes.position, "over the whole one's vertices");
+            assert.equal(mesh.geometry.attributes.skinIndex, full.attributes.skinIndex);
+        }
+
+        // (Up again only past each level's `above`, not at its `below`)
+        wolf.fitDetail(LODS[1].below + 1);
+        assert.equal(wolf.level, 2);
+        wolf.fitDetail(LODS[0].above + 1);
+        assert.equal(wolf.level, 0);
+        assert.deepEqual(counts(wolf), whole);
+
+        // (Out of view, left as it was)
+        wolf.fitDetail(0);
+        assert.equal(wolf.level, 0);
+
+        other.fitDetail(1);
+        wolf.fitDetail(1);
+        meshes(other).forEach((mesh, k) => assert.equal(mesh.geometry, meshes(wolf)[k].geometry, "one of its kind alike shares them"));
+        lods.dispose();
+    });
 });

@@ -141,7 +141,7 @@ m of one another (`STRENGTH.apart`), one after another, so three walking in a li
 one group. A player on their own is a group of one.
 
 The host keeps about four creatures (`WILDS.count`; five after dark; against a stronger side, as
-many more as *How the wild answers* has it: nine for four alike) within 60 m of each group out in
+many more as *How the wild answers* has it: twelve for four alike, fifteen after dark) within 60 m of each group out in
 the world (of any of its players), each pack as big and as tough as their side has it, put out about its leader (their party's leader, if
 they're with them, or else the first of them into the world), as strong as the land is from that
 leader's home, 30 to 44 m away (out of sight), 60 m or more clear of every settlement
@@ -189,7 +189,7 @@ The debug overlay shows it for the player's side ("Side S 2.00  F 1.74  (2 playe
 The opposition's spent as most games played together spend theirs (`SCALING`, worked out when
 the foes are put out, never after):
 
-- **An ordinary one of a pack:** more of them (how many × F^0.75), each a little tougher (hit
+- **An ordinary one of a pack:** more of them (how many × F), each a little tougher (hit
   points × F^0.25).
 - **A pack's leader** (an elite, a cache's chief): tougher still (hit points × F^0.8), the escort
   with it more and each a little tougher, as ordinary ones are.
@@ -200,12 +200,14 @@ the foes are put out, never after):
 | Their side | S | How many | Each one's hit points | A leader's |
 | --- | --- | --- | --- | --- |
 | Alone | 1 | ×1 | ×1 | ×1 |
-| Two alike | 2 | ×1.5 | ×1.15 | ×1.6 |
-| Four alike | 4 | ×2.3 | ×1.3 | ×2.4 |
-| A new adventurer and a new hire | about 2 | ×1.5 | ×1.15 | ×1.6 |
+| Two alike | 2 | ×1.7 | ×1.15 | ×1.6 |
+| Four alike | 4 | ×3 | ×1.3 | ×2.4 |
+| A new adventurer and a new hire | about 2 | ×1.7 | ×1.15 | ×1.6 |
 
-So a tier-4 wolf pack is three wolves of 39 hit points against one player, four or five of 45
-against two, about seven of 52 against four.
+So a tier-4 wolf pack is three wolves of 39 hit points against one player, five of 45 against two,
+nine of 52 against four. Each of a side of N alike so takes about N^-0.2 of what one alone would
+(0.87 for two, 0.76 for four): a little easier together, as the balance runner bears out (*Tuning
+it*, below: it was F^0.75 first, and each of four took under half).
 
 ### Where it applies
 
@@ -247,10 +249,50 @@ Every machine in a game draws everyone near a fight, so there's a body budget th
   spells' levels (docs/MAGIC.md); but where the budget's full about a player who calls or raises
   another, the oldest of theirs goes for it.
 
+So many near a fight are drawn for less (`app/game.js` `MANY`):
+
+- **A creature small on the screen** (under 40 pixels tall) casts no shadow, and is posed only as
+  often as a character as small would be (`world/avatar.js` `posingEvery`: every second to fourth
+  frame, every eighth out of view); where it is and which way it faces, every frame.
+- **A creature drawn smaller** is drawn with fewer triangles, as a character is (`characters/lod.js`
+  `LODS`: a quarter of them under 360 pixels tall, a tenth under 140), made once for each kind
+  built alike, off the page's thread, over its very vertices (`beasts/beast.js` `lowerDetail`).
+- **The players' allies past the nearest four** (hired adventurers, creatures called or raised in
+  people's shape) are drawn at the middle level of detail (`characters/lod.js`), with their
+  contact shadow and not the sun's, and so posed seldom out of view.
+
+### What the more leave
+
+Those of a pack more than a player alone would have met (`extra`: past as many as there'd be
+alone, or come mid-fight) leave their gold and their parts, and nothing else: no gear, no tome, no
+draught nor bomb (*What they leave*, below). Their dice are thrown all the same, and what's found
+on them left out, so the world's dice go on as they would. Otherwise four together would each
+come away with about twice the gear for three quarters of the fight. An elite, a cache's chief and
+its hoard, a dungeon's boss and mini-bosses, and every pack's first as many as alone keep one roll
+for each player near.
+
+### Tuning it
+
+`npm run balance` (`scripts/balance.js`) runs the world's rules alone, nothing drawn: sides of
+each make-up out in the wilds at tiers 2, 5 and 8 (`SIDES`: one player, two, four, one with four
+hirelings, a summoner with five creatures), the players as strong for the tier as its creatures,
+each at the nearest of the wild's about, fight after fight on fresh ground. For each it says the
+side's S and F, how many foes a fight brought, how long it lasted, the hit points each player lost
+in it and how often one fell, and the share of what one alone loses that each of them does. The
+aim is about three quarters for four together; the numbers here (`OPPOSITION`, `SCALING`,
+`BODIES`) are where it started, for it to bear out or change.
+
+```
+npm run balance                        # every side, at tiers 2, 5 and 8 (a few minutes)
+npm run balance -- --tiers 5 --sides solo,four --fights 6
+npm run balance -- --json              # the numbers as JSON
+```
+
 That the players together are one group, one roll for an elite and one cache between them, the
-wild answering their side's strength wherever foes are put out, more coming mid-fight, and a
-dungeon as strong as its finders, changed the rules every game plays by (`NET_VERSION` 106), and
-what a snapshot holds (`SNAPSHOT_VERSION` 26: the packs kept, each dungeon's tier).
+wild answering their side's strength wherever foes are put out, more coming mid-fight, a dungeon
+as strong as its finders, and the more of a pack leaving only their gold and parts, changed the
+rules every game plays by (`NET_VERSION` 107), and what a snapshot holds (`SNAPSHOT_VERSION` 26:
+the packs kept, each dungeon's tier).
 
 ## Elites
 
@@ -446,8 +488,9 @@ ones a little gold and gear (`core/spoils.js`). Every player within 30 m when it
 own bundle on it, rolled for them alone: a leather sack where it fell, seen only by them, there
 for five minutes to tap and take (what doesn't fit in the pack stays in the sack). Nothing's
 certain: each thing has its chance, a little better for each tier the creature's above its least,
-and gold's as much more as the creature's stronger. The only way to share what's found is to trade
-it (below).
+and gold's as much more as the creature's stronger. One of a pack more than a player alone would
+meet leaves only its gold and its parts (*What the more leave*, above). The only way to share
+what's found is to trade it (below).
 
 The parts are worth what the adventurers' guild pays for them (only the guild buys them; other
 shops have no use for them): a couple of gold for a rat's tail near home, a few for a wolf's pelt,
