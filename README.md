@@ -353,6 +353,20 @@ Soldiers sometimes drop a piece of theirs, and the smiths sell their own people'
 six of a people's pieces for their set's bonuses, and their helm, chest and cloak together to
 pass for one of their soldiers (till one sees through it, or you strike one of them).
 
+**Your party.** Those with you are your party: the adventurers you've hired, the creatures you've
+called to your side with Summon, and the dead you've raised with Zombify. Each has an icon down
+the left side, under the minimap (and over the thumb stick), in that order, with their likeness
+in a green frame (violet for a creature called, bone for one raised), their health along its foot
+and a creature's time left along its head; they shrink to fit, and past that a "+N" chip opens
+the party menu. Their names over them are green, as are their dots on the minimap. Tap one to
+help them: ringed in green, your heals and wards from the quick actions go to them (tap again,
+and they're yours again); double-tap to run to them; hold, and a wheel opens there to tell them
+to go for whoever you're set on, to follow, to wait where they are, or to go (flick down for your
+healing and wards to cast on them). The **party menu** (the Party button heading the icons, or P)
+lists them all, what they are, how they are, and buttons to tell them to follow, wait, or go
+(Dismiss asks twice). What a creature at your side brings down counts for you, as a follower's
+does: its loot's yours.
+
 **The pack** (its button, or I) shows you in the middle of your gear, live, each slot round you
 (the other hand greyed out behind a two-handed weapon), with the totals of all you wear, and 40
 slots for what you carry, two pages of 20, each a stack of things alike with its icon and how
@@ -404,6 +418,8 @@ remembered.
 | Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
 | Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
 | Fight from the icons down the right | Tap an attacker's icon to set on them where you stand (the glowing one: stop going after them); double-tap to run at them; hold to walk up to them | Click (double-click to run at them; hold to walk up to them) |
+| Your party, from the icons down the left | Tap one's icon to choose them to help (ringed in green: your heals and wards from the quick actions go to them; tap again for yourself); double-tap to run to them; hold, then flick: Attack my target, Follow me, Wait here, Dismiss, or flick down for your heals and wards on them | The same with the mouse |
+| Party menu | The Party button (top of the icons down the left) | The Party button, or P |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |

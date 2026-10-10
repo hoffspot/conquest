@@ -15,6 +15,12 @@
     --hostile: #d4533b;
     --stamina: #ec8a1c;
 
+    /* The player's party (app/hud.js party): their hired adventurers' (and anyone with them), the
+       creatures they've called and the dead they've raised */
+    --ally: #58d26e;
+    --summoned: #a98bff;
+    --risen: #b2c9a4;
+
     /* The adventurers' guilds' ranks, each its metal: light, middle and dark (core/standing.js GUILD_RANKS) */
     --copper: #f0b48c, #c27a4a, #7a4524;
     --iron: #c9ced3, #8d949b, #4f555b;
@@ -1272,6 +1278,201 @@ line of health along its foot; whoever the player's set on glowing and pulsing (
         width: 40px;
         height: 40px;
     }
+}
+
+/* The player's party: an icon each down the left side under the minimap (over the thumb stick),
+   a likeness in a green frame (violet, a creature called; bone, the dead raised), a thin line of
+   health along its foot, a called creature's time left along its head; the one chosen to help
+   glowing, those told to wait marked, those not here faded; shrunk to fit, then a "+N" chip for the
+   rest (app/hud.js party) */
+#party {
+    --member-size: 44px;
+    position: absolute;
+    z-index: 14;
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 12px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+
+/* (The Party button heading the column, the party's own icons under it) */
+#partybutton {
+    position: relative;
+    margin-bottom: 2px;
+}
+
+body[data-minimap="on"] #party {
+    top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
+}
+
+.member,
+.member-more {
+    position: relative;
+    width: var(--member-size);
+    height: var(--member-size);
+    padding: 0;
+    border: 2px solid var(--ally);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #16201a;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+.member.summon {
+    border-color: var(--summoned);
+    background: #1d1828;
+}
+
+.member.risen {
+    border-color: var(--risen);
+    background: #1a1d18;
+}
+
+.member-more {
+    display: grid;
+    place-items: center;
+    color: var(--ink);
+    background: var(--panel);
+    border-color: var(--panel-border);
+    font: 600 14px/1 var(--font-ui);
+    font-variant-numeric: tabular-nums;
+}
+
+.member-initial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--ally);
+    font: 600 calc(var(--member-size) * 0.42) / 1 var(--font-ui);
+}
+
+.member.summon .member-initial {
+    color: var(--summoned);
+}
+
+.member.risen .member-initial {
+    color: var(--risen);
+}
+
+.member-likeness {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.member.painted .member-likeness {
+    opacity: 1;
+}
+
+.member-health,
+.member-time {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+}
+
+.member-time {
+    top: 3px;
+    bottom: auto;
+    height: 2px;
+}
+
+.member-health-fill,
+.member-time-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--health);
+    transform-origin: 0 50%;
+}
+
+.member-time-fill {
+    background: var(--summoned);
+}
+
+/* (A party's icon, or the chip, as wide as the Party button over it, centred under it) */
+.member,
+.member-more {
+    flex: none;
+}
+
+/* (Told to wait where they are: two bars, as a pause, in the corner) */
+.member-wait {
+    position: absolute;
+    right: 3px;
+    top: 5px;
+    display: none;
+    width: 9px;
+    height: 10px;
+    border-left: 3px solid var(--ink);
+    border-right: 3px solid var(--ink);
+    filter: drop-shadow(0 0 2px #000);
+}
+
+.member.waiting .member-wait {
+    display: block;
+}
+
+.member.away {
+    opacity: 0.55;
+}
+
+.member.ally {
+    border-color: #8dffa0;
+    animation: member-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes member-pulse {
+    from {
+        box-shadow:
+            0 0 4px 1px rgba(90, 230, 120, 0.55),
+            0 1px 4px rgba(0, 0, 0, 0.6);
+    }
+
+    to {
+        box-shadow:
+            0 0 14px 5px rgba(90, 230, 120, 0.9),
+            0 1px 4px rgba(0, 0, 0, 0.6);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .member.ally {
+        animation: none;
+        box-shadow: 0 0 10px 3px rgba(90, 230, 120, 0.85);
+    }
+}
+
+/* One of the player's party's name over them, in green */
+.floater.ally .name {
+    color: #a6f0b2;
+}
+
+.floater.ally .name::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--ally);
+    vertical-align: 1px;
 }
 
 /* Arrows at the screen's edge pointing the way to those attacking the player out of view
@@ -2607,8 +2808,17 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     border-radius: 0 0 14px 14px;
 }
 
-.pack-dolled #minimap {
+.pack-dolled #minimap,
+.pack-dolled #party {
     visibility: hidden;
+}
+
+/* (A panel open as wide as a narrow screen, the party's column, which would cover its left edge,
+   out of its way) */
+@media (max-width: 640px) {
+    #hud:has(> .journal:not([hidden]), > .pack:not([hidden])) #party {
+        visibility: hidden;
+    }
 }
 
 .pack.dolled .doll-view {
@@ -3348,6 +3558,133 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-size: 12px;
     color: var(--muted);
     text-transform: capitalize;
+}
+
+/* The party menu (app/partypanel.js): a row for each of those with the player, their likeness
+   framed as their icon is down the left, what they are, their health, and what to tell them */
+.party-list {
+    margin-top: 10px;
+}
+
+.party-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+}
+
+.party-row.ally {
+    border-color: var(--ally);
+    box-shadow: 0 0 0 1px rgba(88, 210, 110, 0.35);
+}
+
+.party-row.away {
+    opacity: 0.7;
+}
+
+.party-face {
+    position: relative;
+    flex: none;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid var(--ally);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #16201a;
+    cursor: pointer;
+}
+
+.party-row.summon .party-face {
+    border-color: var(--summoned);
+    background: #1d1828;
+}
+
+.party-row.risen .party-face {
+    border-color: var(--risen);
+    background: #1a1d18;
+}
+
+.party-initial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--ally);
+    font: 600 20px/1 var(--font-ui);
+}
+
+.party-likeness {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+
+.party-face.painted .party-likeness {
+    opacity: 1;
+}
+
+.party-text {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.party-name {
+    font-size: 15px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.party-kind,
+.party-state {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.party-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+.party-fill {
+    height: 100%;
+    background: var(--health);
+}
+
+.party-actions {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 150px;
+}
+
+.party-actions .journal-button {
+    min-width: 0;
+    padding: 0 10px;
+}
+
+.party-dismiss.sure {
+    color: #ffd2c8;
+    border-color: var(--hostile);
+    background: rgba(212, 83, 59, 0.25);
+}
+
+.party-empty {
+    margin-top: 10px;
 }
 
 /* Where the player's people stand at the war's end (M10) */

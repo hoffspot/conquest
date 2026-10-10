@@ -511,6 +511,7 @@ export const REFUSALS = Object.freeze({
     hire: "They're not for hire.",
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
+    untargeted: "Set on an enemy first, for them to fight.",
     shop: "They've nothing like that to sell.",
     soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
     full: "Your pack is full.",
@@ -1296,6 +1297,8 @@ export class Host {
                 return this.#abandon(player, command.request);
             case "talk":
                 return this.#talk(actor, command.with ?? null);
+            case "order":
+                return this.#orderUnit(player, command.unit, command.order);
             case "effect":
                 return this.#effect(player, actor, command.effect);
             case "camp":
@@ -2059,6 +2062,22 @@ export class Host {
                     this.#loot(leader, fallen);
                     this.#felled(leader, fallen);
                 }
+            }
+
+            return;
+        }
+
+        // (What a creature called to a player's side, or raised from the dead, brings down counts
+        // for the player too: what's on it theirs, and their requests)
+        const called = this.companions.get(event.by);
+
+        if (called) {
+            const leader = this.players.get(called.leader);
+            const fallen = event.type === "death" ? this.battle.actor(event.id) : null;
+
+            if (leader && fallen && !this.players.has(fallen.id) && fallen.kind !== "follower" && !this.companions.has(fallen.id)) {
+                this.#loot(leader, fallen);
+                this.#felled(leader, fallen);
             }
 
             return;
@@ -6608,7 +6627,7 @@ export class Host {
         for (const id of [...this.#company(playerId), ...[...this.companions].filter(([, one]) => one.leader === playerId).map(([each]) => each)]) {
             const follower = this.battle.actor(id);
 
-            if (!follower || follower.dead || follower.map === leader.map || this.followers.get(id)?.waiting) {
+            if (!follower || follower.dead || follower.map === leader.map || this.waiting(id)) {
                 continue;
             }
 
@@ -6623,29 +6642,79 @@ export class Host {
         }
     }
 
-    // A follower told what to do, by the player they follow: to wait where they stand, to follow
-    // again, or to go their own way (gone)
+    // A follower told what to do in talk, by the player they follow (#orderUnit)
     #tell(player, actor, order) {
-        const id = actor.talkingTo;
-        const one = this.followers.get(id);
-        const follower = this.battle.actor(id);
+        const result = this.#orderUnit(player, actor.talkingTo, order);
 
-        if (!one || one.leader !== player.id || !follower) {
+        if (result.ok && order === "dismiss") {
+            actor.talkingTo = null;
+        }
+
+        return result;
+    }
+
+    /**
+     * The player's party (the docs/GAME.md party): those with them, each as { id, kind } in
+     * order: their hired adventurers ("adventurer"), then the creatures they've called to their
+     * side ("summon"), then the dead they've raised ("risen").
+     */
+    partyOf(playerId) {
+        const companions = [...this.companions].filter(([, one]) => one.leader === playerId);
+
+        return [
+            ...this.#company(playerId).map((id) => ({ id, kind: "adventurer" })),
+            ...companions.filter(([, one]) => !one.risen).map(([id]) => ({ id, kind: "summon" })),
+            ...companions.filter(([, one]) => one.risen).map(([id]) => ({ id, kind: "risen" })),
+        ];
+    }
+
+    /** Whether one with a player (a follower, or a companion) was told to wait where they stood. */
+    waiting(id) {
+        return Boolean((this.followers.get(id) ?? this.companions.get(id))?.waiting);
+    }
+
+    // One of a player's party (a follower, or a companion: #companion) told what to do by them:
+    // to wait where they stand, to follow again, to fight whoever the player's set on ("assist":
+    // till they're down), or to go their own way (gone)
+    #orderUnit(player, id, order) {
+        const one = this.followers.get(id) ?? this.companions.get(id);
+        const unit = this.battle.actor(id);
+
+        if (!one || one.leader !== player.id || !unit || unit.dead) {
             return refuse("follower");
         }
 
         if (order === "wait") {
             one.waiting = true;
-            Object.assign(follower, { ai: "patrol", patrol: [[...follower.square]], patrolIndex: 0, leash: LEASH, post: follower.facing, spawnMap: follower.map });
+            Object.assign(unit, { ai: "patrol", patrol: [[...unit.square]], patrolIndex: 0, leash: LEASH, post: unit.facing, spawnMap: unit.map, assist: null });
         } else if (order === "follow") {
             one.waiting = false;
-            Object.assign(follower, { ai: "follow", patrol: null, leash: null });
+            Object.assign(unit, { ai: "follow", patrol: null, leash: null });
+        } else if (order === "assist") {
+            const leader = this.battle.actor(player.id);
+            const engaged = leader?.order?.type === "engage" ? leader.order.target : leader?.target;
+            const target = engaged ? this.battle.actor(engaged) : null;
+
+            if (!target || target.dead || target.map !== unit.map || target === unit || !this.canFight(leader, target)) {
+                return refuse("untargeted");
+            }
+
+            // (Turned on someone who's no enemy of theirs, as the player did: held against them)
+            if (!this.battle.hostile(unit, target)) {
+                unit.foes[target.id] = this.battle.time + FOE_MS;
+            }
+
+            one.waiting = false;
+            Object.assign(unit, { ai: "follow", patrol: null, leash: null, assist: target.id });
         } else if (order === "dismiss") {
-            this.followers.delete(id);
-            this.battle.remove(id);
-            actor.talkingTo = null;
-            this.#event("follower", { id: player.id, follower: id, name: one.name, change: "dismissed" });
-            this.#event("gone", { id });
+            if (this.companions.has(id)) {
+                this.#letGo(id, "dismissed");
+            } else {
+                this.followers.delete(id);
+                this.battle.remove(id);
+                this.#event("follower", { id: player.id, follower: id, name: one.name, change: "dismissed" });
+                this.#event("gone", { id });
+            }
         } else {
             return refuse("command");
         }
@@ -6844,7 +6913,7 @@ export class Host {
                 continue;
             }
 
-            if (this.#caughtUp(actor, leader)) {
+            if (!one.waiting && this.#caughtUp(actor, leader)) {
                 this.#event("companion", { id: one.leader, companion: id, creature: one.creature, change: "caught up" });
             }
         }

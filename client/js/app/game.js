@@ -122,6 +122,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
+import { PartyPanel } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
 import { Pacing } from "./pacing.js";
@@ -275,6 +276,22 @@ const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
 // The icons down the right side for those attacking the player (hud.js attackers): the first
 // `most` to set on them, in the order they did
 const ATTACKERS = Object.freeze({ most: 6 });
+
+// How often the party menu, open, is shown again as those in it change (s); and how long someone's
+// drawn before their likeness is (s: game.js #likeness)
+const PARTY_MENU_EVERY = 0.25;
+const LIKENESS_AFTER = 0.5;
+
+// Whether a likeness came back with nothing on it, all one colour: drawn before its subject was
+function blank({ data }) {
+    for (let k = 4; k < data.length; k += 4 * 37) {
+        if (data[k] !== data[0] || data[k + 1] !== data[1] || data[k + 2] !== data[2]) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 // The tavern's folk: how much hair they grow (at most: less than the player, as there are more
 // of them), and what each of their acts is: its animation's timing (s: core/roles.js ACT_TIMES)
@@ -604,6 +621,18 @@ export class Game {
         this.likenesses = new Map();
         this.lastIconTap = null;
         hud.onAttacker = (id, gesture, time) => this.#attackerPressed(id, gesture, time);
+
+        // The player's party, an icon each down the left side: their likenesses (as the
+        // attackers'), the one the player's chosen to help (their heals and wards go to them: an
+        // id, or null), the last of their icons tapped ({ id, time: ms }), and how to let go of
+        // the wheel held open on one
+        this.partyLikenesses = new Map();
+        this.likenessSince = new Map();
+        this.allyTarget = null;
+        this.lastMemberTap = null;
+        this.memberWheel = null;
+        hud.onPartyMember = (id, gesture, press) => this.#memberPressed(id, gesture, press);
+        hud.onPartyMore = () => this.toggleParty();
 
         // The world (the host's: made here, playing alone), this game's player in it (by id,
         // come in before the world's own people), and the battle as the host has it
@@ -1302,6 +1331,10 @@ export class Game {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
         };
         this.journal.onClose = () => this.closeJournal();
+        this.partyPanel = new PartyPanel(this.hud.root);
+        this.partyPanel.onOrder = (id, order) => this.#orderUnit(id, order);
+        this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
+        this.partyPanel.onClose = () => this.closeParty();
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
@@ -1751,6 +1784,9 @@ export class Game {
         this.hud.clear();
         this.hud.onMessage = () => {};
         this.hud.onAttacker = () => {};
+        this.hud.onPartyMember = () => {};
+        this.hud.onPartyMore = () => {};
+        this.memberWheel?.();
 
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
@@ -1826,6 +1862,7 @@ export class Game {
         this.pack?.dispose();
         this.drops?.dispose();
         this.journal?.panel.remove();
+        this.partyPanel?.panel.remove();
         this.spellbook?.panel.remove();
         this.fate?.panel.remove();
         this.curtain?.remove();
@@ -2357,6 +2394,14 @@ export class Game {
 
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
+
+        // The one of their party the player's chosen to help, ringed in green; and the party's
+        // icons down the left (and the party menu, if it's open)
+        const ally = this.#ally();
+        const helped = ally ? this.avatars.get(ally.id) : null;
+
+        this.effects.setAlly(helped?.object ?? null, helped ? Math.max(0.5, helped.character.height * 0.33) : 0.6);
+        this.#partyIcons();
         this.#quickActions(target);
         this.#bleed(dt);
         this.#ailing();
@@ -3094,7 +3139,7 @@ export class Game {
             others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
-                return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target };
+                return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
             }),
             // (The wild's elites, marked their own way as soon as they're near enough: core/
             // creatures.js ELITES `marker`, drawn or not)
@@ -3704,16 +3749,7 @@ export class Game {
         }
 
         for (const actor of shown) {
-            const avatar = this.avatars.get(actor.id);
-
-            if (!this.likenesses.has(actor.id) && avatar && !(avatar instanceof CrowdAvatar)) {
-                this.likenesses.set(actor.id, null);
-                this.view.portrait(avatar.object, { tall: avatar.point(1, _head).y - avatar.object.position.y, facing: avatar.facing, whole: avatar instanceof BeastAvatar }).then((picture) => {
-                    if (this.likenesses.has(actor.id) && this.avatars.get(actor.id) === avatar) {
-                        this.likenesses.set(actor.id, picture);
-                    }
-                });
-            }
+            this.#likeness(this.likenesses, actor.id);
         }
 
         this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, picture: this.likenesses.get(actor.id) ?? null })));
@@ -5181,6 +5217,7 @@ export class Game {
         } else {
             this.closePack();
             this.closeSpellbook();
+            this.closeParty();
             this.#showJournal();
             this.sound?.play("bookOpen");
         }
@@ -5193,6 +5230,7 @@ export class Game {
         } else {
             this.closePack();
             this.closeJournal();
+            this.closeParty();
             this.#showSpellbook();
             this.sound?.play("bookOpen");
         }
@@ -5239,6 +5277,268 @@ export class Game {
     /** Close the journal. */
     closeJournal() {
         this.journal?.hide();
+    }
+
+    /** Open the party menu (or close it, if it's open): those with the player, and what to tell them. */
+    toggleParty() {
+        if (this.partyPanel?.open) {
+            this.closeParty();
+        } else {
+            this.closePack();
+            this.closeJournal();
+            this.closeSpellbook();
+            this.#showParty();
+            this.sound?.play("bookOpen");
+        }
+    }
+
+    /** Close the party menu. */
+    closeParty() {
+        this.partyPanel?.hide();
+    }
+
+    // The party menu as it is now (and when it was shown: game time, s)
+    #showParty() {
+        this.partyShownAt = this.clock;
+        this.partyPanel.show({
+            members: this.#party().map(({ id, kind, actor, waiting, left, picture }) => {
+                const follower = this.host.followers.get(id);
+                const called = this.host.companions.get(id);
+
+                return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture };
+            }),
+            most: this.host.mostFollowers(this.me),
+        });
+    }
+
+    // Those with the player (core/host.js partyOf) still standing, in order: { id, kind, actor,
+    // waiting, left: a called creature's time left ({ ms, share }) or null, picture: their
+    // likeness (an ImageData), or null till it's drawn }
+    #party() {
+        const player = this.battle.actor(this.me);
+
+        if (!player) {
+            return [];
+        }
+
+        return this.host.partyOf(this.me).flatMap(({ id, kind }) => {
+            const actor = this.battle.actor(id);
+            const called = this.host.companions.get(id);
+
+            if (!actor || actor.dead) {
+                return [];
+            }
+
+            const lasts = called ? SPELLS[called.risen ? "zombify" : "summon"].lasts : 0;
+            const ms = called ? Math.max(0, called.until - this.battle.time) : 0;
+
+            return [{ id, kind, actor, waiting: this.host.waiting(id), left: called ? { ms, share: lasts ? Math.min(1, ms / lasts) : 1 } : null, picture: this.partyLikenesses.get(id) ?? null }];
+        });
+    }
+
+    // The player's party, an icon each down the left side (hud.js party), each with their
+    // likeness, drawn once (view.js portrait) when they're drawn in full (not one of a crowd), the
+    // one chosen to help (#chooseAlly) marked, and their names over them in green; the party menu
+    // shown again, if it's open, every PARTY_MENU_EVERY
+    #partyIcons() {
+        const party = this.#party();
+        const ids = new Set(party.map(({ id }) => id));
+
+        for (const id of this.partyLikenesses.keys()) {
+            if (!ids.has(id)) {
+                this.partyLikenesses.delete(id);
+            }
+        }
+
+        for (const id of this.allied ?? []) {
+            if (!ids.has(id)) {
+                this.hud.setAlly(id, false);
+            }
+        }
+
+        this.allied = ids;
+
+        if (this.allyTarget && !ids.has(this.allyTarget)) {
+            this.allyTarget = null;
+        }
+
+        const player = this.battle.actor(this.me);
+
+        for (const { id } of party) {
+            this.hud.setAlly(id, true);
+            this.#likeness(this.partyLikenesses, id);
+        }
+
+        // (Those no longer drawn, forgotten for drawing their likenesses)
+        for (const id of this.likenessSince.keys()) {
+            if (!this.avatars.has(id)) {
+                this.likenessSince.delete(id);
+            }
+        }
+
+        this.hud.party(
+            player && !player.dead
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture }))
+                : [],
+        );
+
+        if (this.partyPanel?.open && this.clock - (this.partyShownAt ?? -Infinity) >= PARTY_MENU_EVERY) {
+            this.#showParty();
+        }
+    }
+
+    // Someone's likeness for their icon (view.js portrait), into `cache` (by id: null while it's
+    // drawn, then an ImageData), once they've been drawn in full (not one of a crowd) for
+    // LIKENESS_AFTER: drawn the moment they're built, they'd come out blank (the picture all the
+    // paperdoll's dark), and any that does is drawn again as long after
+    #likeness(cache, id) {
+        const avatar = this.avatars.get(id);
+
+        if (cache.has(id) || !avatar || avatar instanceof CrowdAvatar) {
+            return;
+        }
+
+        if (!this.likenessSince.has(id)) {
+            this.likenessSince.set(id, this.clock);
+        }
+
+        if (this.clock - this.likenessSince.get(id) < LIKENESS_AFTER) {
+            return;
+        }
+
+        cache.set(id, null);
+        this.view.portrait(avatar.object, { tall: avatar.point(1, _head).y - avatar.object.position.y, facing: avatar.facing, whole: avatar instanceof BeastAvatar }).then((picture) => {
+            if (!cache.has(id) || this.avatars.get(id) !== avatar) {
+                return;
+            }
+
+            if (picture && blank(picture)) {
+                cache.delete(id);
+                this.likenessSince.set(id, this.clock);
+            } else {
+                cache.set(id, picture);
+            }
+        });
+    }
+
+    // The one of their party the player's chosen to help (and still can: standing, where they
+    // are), or null
+    #ally() {
+        const player = this.battle.actor(this.me);
+        const ally = this.allyTarget ? this.battle.actor(this.allyTarget) : null;
+
+        return ally && !ally.dead && player && !player.dead && ally.map === player.map ? ally : null;
+    }
+
+    // Choose one of the party to help (their heals and wards from the quick actions go to them,
+    // ringed in green), or no one (null): theirs again
+    #chooseAlly(id) {
+        const was = this.allyTarget;
+
+        this.allyTarget = id;
+        this.sound?.play("tap");
+
+        if (id && id !== was) {
+            this.hud.message(`Your heals and wards go to ${this.battle.actor(id)?.name ?? "them"}.`, 1.6);
+        } else if (!id && was) {
+            this.hud.message("Your heals and wards are your own again.", 1.6);
+        }
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
+    // Tell one of the party to follow, wait or go (core/host.js #orderUnit); said why not, if not
+    #orderUnit(id, order) {
+        this.#command({ type: "order", unit: id, order }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.4);
+                this.sound?.play("denied");
+            } else if (order !== "dismiss") {
+                this.hud.message(`${this.battle.actor(id)?.name ?? "They"} ${{ follow: "follows you.", wait: "waits here.", assist: "goes for your target." }[order]}`, 1.4);
+            }
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
+        });
+    }
+
+    // One of the party's icons tapped or held (hud.js onPartyMember; `time`: ms, as
+    // performance.now()): held, the wheel opened at it (what to tell them, then, turned over, the
+    // player's healing and wards for them), steered by the finger still down; tapped twice in
+    // quick succession, running to them (and choosing them to help); tapped once, choosing them to
+    // help, or, tapped on the one chosen, no one
+    #memberPressed(id, gesture, { time, x, y, pointerId }) {
+        const player = this.battle.actor(this.me);
+        const member = this.battle.actor(id);
+        const last = this.lastMemberTap;
+
+        this.lastMemberTap = gesture === "tap" ? { id, time } : null;
+
+        if (!player || player.dead || !member || member.dead) {
+            return;
+        }
+
+        if (gesture === "hold") {
+            this.#openMemberWheel(id, x, y, pointerId);
+        } else if (last?.id === id && time - last.time <= DOUBLE_TAP_MS) {
+            this.lastMemberTap = null;
+
+            if (this.allyTarget !== id) {
+                this.#chooseAlly(id);
+            }
+
+            this.#endTalk();
+            this.approaching = null;
+            this.#command({ type: "approach", target: id, run: true });
+        } else {
+            this.#chooseAlly(this.allyTarget === id ? null : id);
+        }
+    }
+
+    // The wheel opened on one of the party's icons, under the finger (`x`, `y`), held by the
+    // pointer `pointerId`: steered as it moves, closed as it's lifted
+    #openMemberWheel(id, x, y, pointerId) {
+        if (this.wheel?.open || pointerId === null) {
+            return;
+        }
+
+        const own = [this.host.followers.get(id), this.host.companions.get(id)].some((one) => one?.leader === this.me);
+        const pointer = { x, y, wheel: { originX: x, originY: y, target: id, kind: own ? "unit" : "ally", side: 0, refused: null, done: false } };
+        const mine = (event) => event.pointerId === pointerId;
+        const move = (event) => {
+            if (mine(event)) {
+                pointer.x = event.clientX;
+                pointer.y = event.clientY;
+                this.#steerWheel(pointer);
+            }
+        };
+        const up = (event) => {
+            if (mine(event)) {
+                letGo();
+
+                if (!pointer.wheel.done) {
+                    this.#closeWheel();
+                }
+            }
+        };
+        const letGo = () => {
+            document.removeEventListener("pointermove", move);
+            document.removeEventListener("pointerup", up);
+            document.removeEventListener("pointercancel", up);
+            this.memberWheel = null;
+        };
+
+        this.memberWheel?.();
+        this.memberWheel = letGo;
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+        this.#showWheel(pointer.wheel, x, y);
+        this.sound?.play("wheel");
+        globalThis.navigator?.vibrate?.(12);
     }
 
     // The journal as it is now
@@ -5383,6 +5683,7 @@ export class Game {
         } else {
             this.closeJournal();
             this.closeSpellbook();
+            this.closeParty();
             this.#showPack();
             this.sound?.play("packOpen");
         }
@@ -7390,8 +7691,8 @@ export class Game {
         const [ox, oz] = this.originOf(this.mapId);
         const at = avatar?.object.visible ? avatar.object.position.clone() : one?.map === this.mapId ? new THREE.Vector3(ox + one.x, this.#groundOn(one.map, ox + one.x, oz + one.y), oz + one.y) : null;
 
-        if (at && ["risen", "called", "over", "lost"].includes(change)) {
-            this.spellFx.appear(at, change);
+        if (at && ["risen", "called", "over", "lost", "dismissed"].includes(change)) {
+            this.spellFx.appear(at, change === "dismissed" ? "over" : change);
         }
 
         if (id !== this.me) {
@@ -7399,7 +7700,7 @@ export class Game {
         }
 
         const name = CREATURES[creature]?.name.toLowerCase() ?? "creature";
-        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.` }[change];
+        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.` }[change];
 
         if (said) {
             this.hud.message(said, 3);
@@ -7797,6 +8098,7 @@ export class Game {
         this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
         this.#on(this.hud.root.querySelector("#journalbutton") ?? document.createElement("button"), "click", () => this.toggleJournal());
         this.#on(this.hud.root.querySelector("#spellbookbutton") ?? document.createElement("button"), "click", () => this.toggleSpellbook());
+        this.#on(this.hud.root.querySelector("#partybutton") ?? document.createElement("button"), "click", () => this.toggleParty());
         this.#on(document, "keydown", (event) => {
             if (!this.running || this.talk?.open) {
                 return;
@@ -7808,12 +8110,13 @@ export class Game {
                 // (What was open in the pack to see what it is, put away first)
                 event.preventDefault();
                 event.stopPropagation();
-            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open)) {
+            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
                 this.closeJournal();
                 this.closeSpellbook();
+                this.closeParty();
                 this.fate?.hide();
             } else if ((event.key === "i" || event.key === "I") && plain) {
                 this.togglePack();
@@ -7821,6 +8124,8 @@ export class Game {
                 this.toggleJournal();
             } else if ((event.key === "b" || event.key === "B") && plain) {
                 this.toggleSpellbook();
+            } else if ((event.key === "p" || event.key === "P") && plain) {
+                this.toggleParty();
             } else if (/^[1-4]$/.test(event.key) && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
                 this.quick(Number(event.key) - 1);
             }
@@ -8125,7 +8430,7 @@ export class Game {
             return null;
         }
 
-        if (this.talk?.open || this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open) {
+        if (this.talk?.open || this.pack?.open || this.journal?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open) {
             return null;
         }
 
@@ -8174,7 +8479,7 @@ export class Game {
     act(action, target, { refused = null } = {}) {
         this.#wake();
 
-        const { spell, order, ability, item, emote } = actionOf(action) ?? {};
+        const { spell, order, ability, item, emote, unit } = actionOf(action) ?? {};
         const on = target === "self" ? null : target;
 
         // (Somewhere to go, picked on the world map; someone to summon, chosen)
@@ -8189,6 +8494,13 @@ export class Game {
         // (Making camp: how long, asked once it's somewhere a camp can be made)
         if (order === "camp") {
             return this.#chooseCamp();
+        }
+
+        // (What one of the party's told: core/host.js #orderUnit)
+        if (unit) {
+            this.#orderUnit(target, unit);
+
+            return { ok: true };
         }
 
         const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item, target: on } : emote ? { type: "emote", emote } : null;
@@ -8345,7 +8657,7 @@ export class Game {
 
                 // (Enemies first, where they and the player overlap)
                 if (distance < bestDistance - (mine ? 6 : 0)) {
-                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? "ally" : "talk" };
+                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? (this.allied?.has(actor.id) ? "unit" : "ally") : "talk" };
                     bestDistance = distance;
                 }
             }
@@ -8377,7 +8689,13 @@ export class Game {
     // A wheel open (or turned over) at a point on the screen: its side's slices, how many of each
     // thing to use there are, which can't be used as things are, and what's cooling down
     #showWheel(open, x, y) {
-        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[open.kind === "ally" ? "self" : open.kind]?.[open.side] ?? {});
+        // (One of the party's: what to tell them, then, turned over, the player's own first side,
+        // their healing and wards, to cast on them)
+        const commands = open.kind === "unit" && open.side === 0;
+        const friendly = open.kind === "ally" || (open.kind === "unit" && !commands);
+        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : commands ? WHEELS.unit[0] : (this.wheels[friendly ? "self" : open.kind]?.[open.kind === "unit" ? 0 : open.side] ?? {});
+        const unit = commands ? this.battle.actor(open.target) : null;
+        const waiting = commands && this.host.waiting(open.target);
         const counts = {};
         const off = [];
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
@@ -8393,9 +8711,11 @@ export class Game {
 
             // (A thing all used up; an ability not learnt; a blow for another kind of weapon; held
             // on someone else who isn't an enemy, anything but a spell that can be cast on them)
-            const notForThem = open.kind === "ally" && (action?.spell ? !forFriends(action.spell) : Boolean(action));
+            const notForThem = friendly && (action?.spell ? !forFriends(action.spell) : Boolean(action));
+            // (Told to do what they're doing already: following, or waiting)
+            const already = commands && ((action?.unit === "wait" && waiting) || (action?.unit === "follow" && !waiting && !unit?.assist));
 
-            if (notForThem || (action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
+            if (notForThem || already || (action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
                 off.push(direction);
             }
         }
@@ -8611,7 +8931,11 @@ export class Game {
         this.quickBar?.mark(slot, "chosen");
         this.sound?.play("quickAction");
 
-        return this.act(key, offensive(key) ? target.id : "self", { refused: () => this.quickBar?.mark(slot, "refused") });
+        // (Healing or a ward, with one of the party chosen to help: on them)
+        const ally = this.#ally();
+        const on = offensive(key) ? target.id : ally && forFriends(actionOf(key)?.spell) ? ally.id : "self";
+
+        return this.act(key, on, { refused: () => this.quickBar?.mark(slot, "refused") });
     }
 
     /**

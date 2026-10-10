@@ -10,7 +10,10 @@
 // in one row as wide as the bars, the last that won't fit an ellipsis, all of them shown while the
 // player's card is held. A choice to be made (who to summon; whether to go to someone summoning
 // them) asked in a small panel. Once they've registered with the adventurers' guilds, their rank
-// shows on their card by their name, a chip of its metal (Copper to Mithril).
+// shows on their card by their name, a chip of its metal (Copper to Mithril). Down the left side,
+// under the minimap, an icon for each of the player's party (their hired adventurers, the creatures
+// they've called, the dead they've raised), a likeness in a green frame, the one they've chosen to
+// help glowing; tapped or held, the game's told.
 
 import { ICONS, useDefs } from "./icons.js";
 
@@ -32,6 +35,85 @@ export const PLATE_SIZE = Object.freeze({ near: 12, far: 60 });
 /** How long the player's card is held (ms), not moving more than HOLD_MOVE pixels, to show all that's on them. */
 export const HOLD_MS = 500;
 const HOLD_MOVE = 10;
+
+/**
+ * The party's icons down the left side (pixels): as big as `most` while they fit between the
+ * minimap and the thumb stick (or the bottom of the screen, `margin` from it), shrunk to fit as
+ * small as `least`, `gap` between them; and more than fit at that, the last a "+N" chip for the rest.
+ */
+export const PARTY_ICON = Object.freeze({ most: 44, least: 30, gap: 6, margin: 16 });
+
+/**
+ * How the party's icons fit `count` of them into `room` pixels down the side (PARTY_ICON): how
+ * big each is, how many are shown, and how many are left for the "+N" chip (0: none).
+ */
+export function partyFit(count, room) {
+    const { most, least, gap } = PARTY_ICON;
+    const size = Math.min(most, Math.floor((room - (count - 1) * gap) / Math.max(1, count)));
+
+    if (size >= least || count === 0) {
+        return { size: Math.max(least, size), shown: count, more: 0 };
+    }
+
+    // (At their least, as many as fit with the chip under them)
+    const shown = Math.max(0, Math.floor((room + gap) / (least + gap)) - 1);
+
+    return { size: least, shown, more: count - shown };
+}
+
+// Taps and holds on an icon (an attacker's, one of the party's), each told `onPress` (gesture "tap"
+// or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels, pointerId }):
+// held HOLD_MS, not moving off it (HOLD_MOVE), a hold; let go before then, a tap; pressed from the
+// keyboard, a tap
+function pressable(root, onPress) {
+    let held = null;
+    const letGo = () => {
+        clearTimeout(held?.timer);
+        held = null;
+    };
+
+    root.addEventListener("pointerdown", (event) => {
+        letGo();
+
+        const press = { x: event.clientX, y: event.clientY, at: [event.clientX, event.clientY], done: false };
+
+        press.timer = setTimeout(() => {
+            press.done = true;
+            onPress("hold", { time: performance.now(), x: press.at[0], y: press.at[1], pointerId: event.pointerId });
+        }, HOLD_MS);
+        held = press;
+    });
+    root.addEventListener("pointermove", (event) => {
+        if (held && !held.done) {
+            held.at = [event.clientX, event.clientY];
+
+            if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+                letGo();
+            }
+        }
+    });
+    root.addEventListener("pointerup", (event) => {
+        if (held && !held.done) {
+            onPress("tap", { time: event.timeStamp, x: event.clientX, y: event.clientY, pointerId: event.pointerId });
+        }
+
+        letGo();
+    });
+    root.addEventListener("pointercancel", letGo);
+    root.addEventListener("contextmenu", (event) => event.preventDefault());
+
+    // (Pressed from the keyboard, as a tap)
+    root.addEventListener("click", (event) => {
+        if (event.detail === 0) {
+            const { left, top, width, height } = root.getBoundingClientRect();
+
+            onPress("tap", { time: performance.now(), x: left + width / 2, y: top + height / 2, pointerId: null });
+        }
+    });
+}
+
+// What each kind of the party's called, said with their name
+const PARTY_KINDS = { player: "player", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", unit: "with you" };
 
 /**
  * How big a bar's drawn (a share of its full size, and as faint: 0, not at all) over a character
@@ -97,6 +179,10 @@ export class Hud {
 
         /** The minimap's canvas (app/minimap.js draws it). */
         this.map = root.querySelector("#minimap");
+
+        /** The column down the left for the player's party (party), headed by the Party button. */
+        this.partyColumn = root.querySelector("#party");
+        this.partyButton = root.querySelector("#partybutton");
         this.tracked = new Map();
 
         /** The id of the player the plate's for (this game's own: app/game.js me). */
@@ -112,6 +198,14 @@ export class Hud {
          * performance.now()).
          */
         this.onAttacker = () => {};
+
+        /**
+         * Hears one of the party's icons (party) tapped or held: (id, "tap" or "hold", { time: ms,
+         * as performance.now(), x, y: where the finger is, pixels, pointerId: the finger still
+         * down, held, or null }); and the "+N" chip for the rest of them tapped.
+         */
+        this.onPartyMember = () => {};
+        this.onPartyMore = () => {};
 
         // Held, the player's card grows to show all that's on them (not one row of it, the rest
         // an ellipsis); a tap, or held again, and it's back
@@ -173,9 +267,9 @@ export class Hud {
      * or a camp's stakes hacked at, "stakes", broader and heavier, as strong as it stands; one of
      * the wild's elites', core/creatures.js ELITES, edged and named in gold).
      */
-    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null }) {
+    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null, ally = false }) {
         const level = wild?.tier ?? null;
-        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${kind === "fort" || kind === "stakes" ? " fort" : ""}${wild?.elite ? " elite" : ""}`);
+        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${ally ? " ally" : ""}${kind === "fort" || kind === "stakes" ? " fort" : ""}${wild?.elite ? " elite" : ""}`);
         const bar = element("div", "bar");
         const breath = element("div", "bar stamina");
 
@@ -342,6 +436,11 @@ export class Hud {
         if (plate) {
             this.#setStamina(plate, stamina, maxStamina);
         }
+    }
+
+    /** Mark another character as one of the player's party (its name in green), or not. */
+    setAlly(id, ally) {
+        this.tracked.get(id)?.classList.toggle("ally", ally);
     }
 
     /** Mark the character the player is set to fight (its bar lit up), or no one (null). */
@@ -566,50 +665,151 @@ export class Hud {
         const initial = element("span", "attacker-initial");
         const line = element("span", "attacker-health");
         const health = element("span", "attacker-health-fill");
-        let held = null;
-        const letGo = () => {
-            clearTimeout(held?.timer);
-            held = null;
-        };
 
         root.type = "button";
         root.dataset.id = id;
         line.append(health);
         initial.setAttribute("aria-hidden", "true");
         root.append(initial, canvas, line);
-        root.addEventListener("pointerdown", (event) => {
-            letGo();
-            held = { x: event.clientX, y: event.clientY, done: false };
-            held.timer = setTimeout(() => {
-                held.done = true;
-                this.onAttacker(id, "hold", performance.now());
-            }, HOLD_MS);
-        });
-        root.addEventListener("pointermove", (event) => {
-            if (held && !held.done && Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
-                letGo();
-            }
-        });
-        root.addEventListener("pointerup", (event) => {
-            if (held && !held.done) {
-                this.onAttacker(id, "tap", event.timeStamp);
-            }
-
-            letGo();
-        });
-        root.addEventListener("pointercancel", letGo);
-        root.addEventListener("contextmenu", (event) => event.preventDefault());
-
-        // (Pressed from the keyboard, as a tap)
-        root.addEventListener("click", (event) => {
-            if (event.detail === 0) {
-                this.onAttacker(id, "tap", performance.now());
-            }
-        });
+        pressable(root, (gesture, { time }) => this.onAttacker(id, gesture, time));
 
         const icon = { root, canvas, initial, health, painted: false };
 
         this.attackerIcons.set(id, icon);
+
+        return icon;
+    }
+
+    /**
+     * The icons down the left side of the screen, under the minimap and the Party button (over the
+     * thumb stick, if it's shown), for the player's party, in order (none: gone): [{ id, name, hp, maxHp, kind, ally,
+     * waiting, away, left, picture }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
+     * `ally`: the one the player's chosen to help, its frame glowing green; `waiting`: told to wait
+     * where they are; `away`: not where the player is; `left`: a called creature's time, the share
+     * of it left, or null; `picture` as attackers'). As many as fit (partyFit), shrunk to, then a
+     * "+N" chip for the rest. Tapped or held, each tells onPartyMember; the chip, onPartyMore.
+     */
+    party(list) {
+        if (!this.partyIcons) {
+            this.partyMore = element("button", "member-more", "+0");
+            this.partyMore.type = "button";
+            this.partyMore.hidden = true;
+            this.partyMore.addEventListener("click", () => this.onPartyMore());
+            this.partyColumn.append(this.partyMore);
+            this.partyIcons = new Map();
+        }
+
+        const column = this.partyColumn;
+        const { size, shown, more } = list.length ? this.#partyFit(list.length) : { size: PARTY_ICON.most, shown: 0, more: 0 };
+        const showing = list.slice(0, shown);
+        const ids = new Set(showing.map(({ id }) => id));
+
+        for (const [id, icon] of this.partyIcons) {
+            if (!ids.has(id)) {
+                icon.root.remove();
+                this.partyIcons.delete(id);
+            }
+        }
+
+        if (column.dataset.size !== String(size)) {
+            column.dataset.size = String(size);
+            column.style.setProperty("--member-size", `${size}px`);
+        }
+
+        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null }, k) => {
+            const icon = this.partyIcons.get(id) ?? this.#memberIcon(id);
+            const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+            const look = `${kind}|${ally}|${waiting}|${away}|${name}`;
+
+            // (Under the Party button)
+            if (column.children[k + 1] !== icon.root) {
+                column.insertBefore(icon.root, column.children[k + 1] ?? null);
+            }
+
+            // (What doesn't change from frame to frame, set only when it does)
+            if (icon.look !== look) {
+                icon.look = look;
+                icon.root.className = `member ${kind}${ally ? " ally" : ""}${waiting ? " waiting" : ""}${away ? " away" : ""}${icon.painted ? " painted" : ""}`;
+                icon.initial.textContent = name.slice(0, 1).toUpperCase();
+                icon.root.setAttribute("aria-label", `${name}, ${PARTY_KINDS[kind] ?? PARTY_KINDS.unit}${waiting ? ", waiting" : ""}${ally ? ", chosen to help" : ""}`);
+                icon.root.setAttribute("aria-pressed", String(ally));
+            }
+
+            icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
+            icon.time.hidden = left === null;
+
+            if (left !== null) {
+                icon.time.firstChild.style.transform = `scaleX(${Math.max(0, Math.min(1, left)).toFixed(3)})`;
+            }
+
+            if (picture && !icon.painted) {
+                icon.canvas.width = picture.width;
+                icon.canvas.height = picture.height;
+                icon.canvas.getContext("2d").putImageData(picture, 0, 0);
+                icon.painted = true;
+                icon.root.classList.add("painted");
+            }
+        });
+
+        if (this.partyMore.textContent !== `+${more}`) {
+            this.partyMore.hidden = more === 0;
+            this.partyMore.textContent = `+${more}`;
+            this.partyMore.setAttribute("aria-label", `${more} more of your party`);
+        }
+    }
+
+    // How the party's icons fit (partyFit) between where they start, under the minimap, and the
+    // thumb stick (if it's shown), the quick actions (if they're up, under them) or the bottom:
+    // measured again only when what decides it changes (how many, the screen, the stick, the
+    // minimap, the quick actions), and for a moment after, while things slide into place
+    #partyFit(count) {
+        const body = document.body.dataset;
+        const quickUp = this.root.classList.contains("quick-up");
+        const key = `${count} ${innerWidth}x${innerHeight} ${body.stick} ${body.stickFloat} ${body.minimap} ${quickUp}`;
+        const now = performance.now();
+
+        if (key !== this.partyKey) {
+            this.partyKey = key;
+            this.partySettle = now + 400;
+        } else if (now > this.partySettle && this.partyFitted) {
+            return this.partyFitted;
+        }
+
+        const screen = this.root.getBoundingClientRect();
+        const top = this.partyButton.getBoundingClientRect().bottom + PARTY_ICON.gap;
+        const stick = body.stick === "on" ? this.root.querySelector("#stick")?.getBoundingClientRect() : null;
+        const quick = quickUp && this.quick ? this.quick.getBoundingClientRect() : null;
+        const floor = Math.min(stick?.height ? stick.top - PARTY_ICON.gap * 2 : Infinity, quick && quick.left < screen.left + PARTY_ICON.most * 2 ? quick.top - PARTY_ICON.gap * 2 : Infinity, screen.bottom - PARTY_ICON.margin);
+
+        this.partyFitted = partyFit(count, floor - top);
+
+        return this.partyFitted;
+    }
+
+    // One of the party's icons (party): a button with their likeness, a line of their health along
+    // its foot and, a called creature's, a line of its time along its head; a tap or a hold on it heard
+    #memberIcon(id) {
+        const root = element("button", "member");
+        const canvas = element("canvas", "member-likeness");
+        const initial = element("span", "member-initial");
+        const line = element("span", "member-health");
+        const health = element("span", "member-health-fill");
+        const time = element("span", "member-time");
+        const wait = element("span", "member-wait");
+
+        root.type = "button";
+        root.dataset.id = id;
+        line.append(health);
+        time.append(element("span", "member-time-fill"));
+        time.hidden = true;
+        initial.setAttribute("aria-hidden", "true");
+        wait.setAttribute("aria-hidden", "true");
+        root.append(initial, canvas, line, time, wait);
+        pressable(root, (gesture, press) => this.onPartyMember(id, gesture, press));
+
+        const icon = { root, canvas, initial, health, time, painted: false, look: null };
+
+        this.partyIcons.set(id, icon);
 
         return icon;
     }
@@ -755,6 +955,10 @@ export class Hud {
 
         if (this.attackerColumn) {
             this.attackers([]);
+        }
+
+        if (this.partyIcons) {
+            this.party([]);
         }
     }
 

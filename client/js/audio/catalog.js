@@ -345,7 +345,7 @@ export const CATALOG = Object.freeze({
     potionDrink: { group: "In hand", label: "A draught drunk", about: "A vial uncorked, then two gulps (Jan Schupke's pop, Vrymaa's drink).", plays: "Any draught, potion or tankard drunk: healing, stamina, a cure, troll's blood." },
     eat: { group: "In hand", label: "Eating", about: "Bites of an apple, close (Vrymaa's).", plays: "A hot meal, boar or bear meat or frog's legs eaten." },
     scroll: { group: "In hand", label: "A scroll unrolled", about: "A scroll unrolling: a long paper crackle (spookymodem's).", plays: "A Scroll of Safety read." },
-    bookOpen: { group: "In hand", label: "A book opened", about: "A heavy old book opened, its cover and pages (j1987's bible).", plays: "The spellbook or the journal opened; a tome read." },
+    bookOpen: { group: "In hand", label: "A book opened", about: "A heavy old book opened, its cover and pages (j1987's bible).", plays: "The spellbook, the journal or the party menu opened; a tome read." },
     pageTurn: { group: "In hand", label: "A page turned", about: "A page riffled over (rubberduck's).", plays: "The pack's pages turned, and its tabs (Gear and Skills, Buy and Sell) changed." },
     mapUnfold: { group: "In hand", label: "A map unfolded", about: "A map unfolded, and stiff parchment unrolled (Breviceps's and Vrymaa's).", plays: "The world map opened, and the maps opened on it: a guild portal's, the council's plans, and the war table's in a keep." },
     packOpen: { group: "In hand", label: "The pack opened", about: "A strap's buckle undone and the leather creaking (Jan Schupke's sword sheath, standing in for a satchel's).", plays: "The pack opened." },
@@ -356,10 +356,10 @@ export const CATALOG = Object.freeze({
     quill: { group: "In hand", label: "A quill", about: "A sharp point scratching over stiff parchment (Vrymaa's: the CC0 recordings of real quills were too noisy).", plays: "A request taken, written in the journal; signing up at an adventurers' guild." },
 
     // The interface (scripts/sounds/items.js)
-    wheel: { group: "The interface", label: "Action wheel", about: "A soft wooden tok: a woodblock (the Versilian Community Sample Library's), near F above the treble.", plays: "The action wheel opening, and turned to its other side." },
+    wheel: { group: "The interface", label: "Action wheel", about: "A soft wooden tok: a woodblock (the Versilian Community Sample Library's), near F above the treble.", plays: "The action wheel opening (on someone, or on one of the party's icons), and turned to its other side." },
     wheelSelect: { group: "The interface", label: "Chosen on the wheel", about: "A fuller wooden tick, small things in a wooden box (Vrymaa's).", plays: "An action chosen on the wheel." },
     quickAction: { group: "The interface", label: "Quick action", about: "An arrow grabbed from a leather quiver: a quick rattle (Jan Schupke's).", plays: "A quick action used (its button, or keys 1 to 4)." },
-    tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away." },
+    tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away; one of the party chosen to help, or let go." },
     talk: { group: "The interface", label: "Talk", about: "A card slid over felt: a soft, papery swish (Kenney's).", plays: "A talk begun." },
     denied: { group: "The interface", label: "Refused", about: "Two dull wooden knocks, the second softer: \"tok-tok, no\" (Kenney's).", plays: "A slice of the wheel that can't be used; anything refused but for gold (too far, on cooldown, no room); a request failed." },
     lock: { group: "The interface", label: "Target", about: "A key turning in a lock: one soft metallic click (Jan Schupke's).", plays: "An enemy chosen to fight." },

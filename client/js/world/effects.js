@@ -675,6 +675,14 @@ export class Effects {
         this.target = null;
         scene.add(this.targetRing);
 
+        // The green ring round the one of their party the player's chosen to help: likewise
+        this.allyRing = new THREE.Mesh(targetGeometry(GREEN, { arrows: false }), this.targetRing.material.clone());
+        this.allyRing.name = "ally";
+        this.allyRing.renderOrder = 1;
+        this.allyRing.visible = false;
+        this.ally = null;
+        scene.add(this.allyRing);
+
         // Rings spreading on the ground (a heal), and stars circling dazed heads; and things to do
         // in a moment ({ left (s), run })
         this.pulses = [];
@@ -802,6 +810,16 @@ export class Effects {
     }
 
     /**
+     * Ring, in green, the one of their party the player's chosen to help (their heals and blessings
+     * go to them): as setTarget.
+     */
+    setAlly(object, radius = 0.6) {
+        if (object !== (this.ally?.object ?? null)) {
+            this.ally = object ? { object, radius, age: 0 } : null;
+        }
+    }
+
+    /**
      * Let go of all it made (the game's over): its particles, blood, rings, arrows and stars, their
      * geometries, materials and textures. (The balls' spheres and materials are kept: shared.)
      */
@@ -816,7 +834,7 @@ export class Effects {
             }
         };
 
-        for (const object of [this.group, this.marker, this.targetRing, this.arrow, this.bloodied]) {
+        for (const object of [this.group, this.marker, this.targetRing, this.allyRing, this.arrow, this.bloodied]) {
             object.traverse(free);
             object.removeFromParent();
         }
@@ -1230,26 +1248,29 @@ export class Effects {
             return true;
         });
 
-        // The target's ring closes in when it's chosen, then turns slowly and pulses
-        const target = this.target;
-        const ring = this.targetRing;
+        // The target's ring closes in when it's chosen, then turns slowly and pulses; the ally's too
+        this.#ring(this.targetRing, this.target, dt);
+        this.#ring(this.allyRing, this.ally, dt);
+    }
 
-        const { x, y, z } = target?.object.position ?? {};
-        const ground = target ? lieOn(this.groundAt, x, z, target.radius, ring.quaternion) : 0;
+    // One of the rings kept round `held` ({ object, radius, age }, or null): closing in, turning
+    #ring(ring, held, dt) {
+        const { x, y, z } = held?.object.position ?? {};
+        const ground = held ? lieOn(this.groundAt, x, z, held.radius, ring.quaternion) : 0;
 
         // (Not while it's sunk into the ground: fallen)
-        ring.visible = Boolean(target?.object.visible) && y > ground - 0.2;
+        ring.visible = Boolean(held?.object.visible) && y > ground - 0.2;
 
         if (ring.visible) {
-            target.age += dt;
+            held.age += dt;
 
-            const lock = Math.min(1, target.age / LOCK_ON);
+            const lock = Math.min(1, held.age / LOCK_ON);
             const closing = 1 + 0.9 * (1 - lock) ** 2;
-            const pulse = 1 + 0.04 * Math.sin(target.age * 2 * Math.PI * 1.2);
+            const pulse = 1 + 0.04 * Math.sin(held.age * 2 * Math.PI * 1.2);
 
             ring.position.set(x, ground + 0.035, z);
-            ring.scale.setScalar(target.radius * closing * pulse);
-            ring.rotateY(-target.age * 0.7);
+            ring.scale.setScalar(held.radius * closing * pulse);
+            ring.rotateY(-held.age * 0.7);
             ring.material.opacity = lock;
         }
     }
@@ -1274,17 +1295,21 @@ function starShape(outer, inner) {
 // How long a new target's ring takes to close in on it (s)
 const LOCK_ON = 0.25;
 
+// The rings' colours (linear, shown as they are: not toned down with the lit scene)
+const RED = [1, 0.08, 0.03];
+const GREEN = [0.12, 1, 0.3];
+
 /**
- * The target ring, a unit's radius across, flat on the ground: a bright red band with a soft glow
- * inside it and a dark edge outside (to show on light ground too), and four arrowheads pointing in
- * at it. One mesh, with its colours (and see-through-ness) in the vertices.
+ * The target ring, a unit's radius across, flat on the ground: a bright band (red, or `colour`)
+ * with a soft glow inside it and a dark edge outside (to show on light ground too), and four
+ * arrowheads pointing in at it (unless not `arrows`). One mesh, with its colours (and
+ * see-through-ness) in the vertices.
  */
-function targetGeometry() {
+function targetGeometry(colour = RED, { arrows = true } = {}) {
     const positions = [];
     const colours = [];
-    // (Linear colours, shown as they are: not toned down with the lit scene)
-    const red = [1, 0.08, 0.03];
-    const dark = [0.02, 0, 0];
+    const red = colour;
+    const dark = colour.map((value) => value * 0.02);
     const vertex = (x, z, [r, g, b], a) => {
         positions.push(x, 0, z);
         colours.push(r, g, b, a);
@@ -1315,7 +1340,7 @@ function targetGeometry() {
     band(1, 1.14, dark, 0.5, dark, 0);
 
     // Arrowheads outside the ring, pointing in
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < (arrows ? 4 : 0); k++) {
         const angle = (k + 0.5) * (Math.PI / 2);
         const [cx, cz] = [Math.cos(angle), Math.sin(angle)];
         const [sx, sz] = [-cz, cx];
