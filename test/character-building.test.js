@@ -170,15 +170,15 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.deepEqual(boot.geometry.attributes.position.array, buildGarment(character, "boots", measures).geometry.attributes.position.array);
 
         const map = texelMap(human, 64);
-        const [paintSteps, cloth] = count(paintingGarment(map, GARMENTS.chemise));
+        const [paintSteps, cloth] = count(paintingGarment(map, GARMENTS.chemise, measures));
 
         assert.ok(paintSteps >= 1);
-        assert.deepEqual(cloth.data, paintGarment(map, GARMENTS.chemise).data);
+        assert.deepEqual(cloth.data, paintGarment(map, GARMENTS.chemise, measures).data);
 
-        const layers = [{ data: cloth.data, bump: cloth.bump, inside: new Float32Array(human.vertexCount).fill(1) }];
+        const layers = [{ data: cloth.data, bump: cloth.bump, garment: GARMENTS.chemise }];
 
-        assert.deepEqual(count(compositingGarments(map, layers))[1].data, compositeGarments(map, layers).data);
-        assert.deepEqual(allAtOnce(compositingGarments(map, layers)).surface, compositeGarments(map, layers).surface);
+        assert.deepEqual(count(compositingGarments(map, layers, measures))[1].data, compositeGarments(map, layers, measures).data);
+        assert.deepEqual(allAtOnce(compositingGarments(map, layers, measures)).surface, compositeGarments(map, layers, measures).surface);
     });
 
     it("draws a soldier's things in few meshes: each item's opaque parts in one, the lashes both sides at once", () => {
