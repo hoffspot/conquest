@@ -2854,7 +2854,7 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite });
+            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite, extra: Boolean(beast.extra) });
 
             if (elite) {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human" }));
@@ -5449,12 +5449,13 @@ export class Host {
         // tougher too: strength.js; each of them as much of the war's band as ever, between them)
         const side = this.#sideNear(set.heart, "town", PLACE_BANDS.near);
         const scale = side ? scalingOf(side.opposition) : null;
-        const folk = this.#scaled(Math.min(WORKS_OUT.most, Math.max(1, Math.round(works.band))) - 1, scale, set.heart);
+        const least = Math.min(WORKS_OUT.most, Math.max(1, Math.round(works.band))) - 1;
+        const folk = this.#scaled(least, scale, set.heart);
         const keeps = { works: works.id, temper: "territorial", guard: PLACE_BANDS.guard };
         const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + WORKS_OUT.lead), count: 1 }, set.heart, { ...keeps, master: true, roam: 2, health: scale?.leader ?? 1 });
 
         for (let k = 1; k <= folk.count; k++) {
-            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, set.round[k % set.round.length], { ...keeps, roam: 4, health: folk.health }));
+            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, set.round[k % set.round.length], { ...keeps, roam: 4, health: folk.health, extra: k > least }));
         }
 
         this.worksOut.set(works.id, { people: null, held: true, band: band.id, ids, share: works.band / Math.max(1, ids.length), relief: null });
@@ -5691,7 +5692,7 @@ export class Host {
                 for (let k = 0; k < count; k++) {
                     const more = `wild-${this.nextWild++}`;
 
-                    this.#rouse(more, pack.creature, pack.tier, free(at), { pack: id, leader: members[0].id, ...pack.keeps, health: now.health * health });
+                    this.#rouse(more, pack.creature, pack.tier, free(at), { pack: id, leader: members[0].id, ...pack.keeps, health: now.health * health, extra: true });
                     ids.push(more);
                 }
             } catch {
@@ -5851,7 +5852,7 @@ export class Host {
             // (Against a stronger side, more of its kind with it and each tougher, and it tougher
             // still: strength.js SCALING)
             const escort = this.#scaled(encounter.count - 1, scale, at);
-            const ids = this.#pack({ ...encounter, count: 1 + escort.count }, at, { elite: true, health: escort.health, leading: scale?.leader ?? 1 });
+            const ids = this.#pack({ ...encounter, count: 1 + escort.count }, at, { elite: true, health: escort.health, leading: scale?.leader ?? 1, least: encounter.count });
 
             if (ids.length) {
                 this.#keepPack(ids, { strength, least: encounter.count - 1, creature: encounter.creature, tier: encounter.tier, keeps: { elite: "escort" } });
@@ -5903,7 +5904,7 @@ export class Host {
                 const least = Math.max(1, Math.min(room, encounter.count));
                 const { count, health } = this.#scaled(least, scale, at, Math.max(least, room));
 
-                this.#keepPack(this.#pack({ ...encounter, count }, at, { health }), { strength, least, creature: encounter.creature, tier: encounter.tier });
+                this.#keepPack(this.#pack({ ...encounter, count }, at, { health, least }), { strength, least, creature: encounter.creature, tier: encounter.tier });
 
                 return;
             }
@@ -5914,8 +5915,9 @@ export class Host {
     // on a building's `map`), the first its leader (an `elite` pack's, an elite: ELITES); what
     // they're of (`camp`, `lair`, `place`, `cache`) and how they keep (`roam`, `temper`, `guard`,
     // the `round` they walk; one `pack` with others, if it's given); against a stronger side, each
-    // one's hit points × `health`, its leader's × `leading` (strength.js SCALING): their ids
-    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", elite = false, health = 1, leading = health, ...more } = {}) {
+    // one's hit points × `health`, its leader's × `leading` (strength.js SCALING), and those past
+    // the first `least` (as many as against a player alone) `extra` (#rouse): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", elite = false, health = 1, leading = health, least = Infinity, ...more } = {}) {
         const free = this.#spots(map);
         const pack = `pack-${this.nextWild}`;
         const ids = [];
@@ -5930,7 +5932,7 @@ export class Host {
                 // now and then one of its pack one of those it goes about with: a goblin bomber)
                 const kind = elite && k === 0 ? eliteOf(creature) : CREATURES[creature].band && k > 0 ? memberOf(creature, k, this.random.next()) : creature;
 
-                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, health: k === 0 ? leading : health, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
+                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, health: k === 0 ? leading : health, ...(k >= least ? { extra: true } : {}), ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
                 ids.push(id);
             }
         } catch {
@@ -5947,8 +5949,9 @@ export class Host {
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js); an
     // elite (`elite` "lead") a tier up, stronger still, walking its round about where it's put
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
-    // points × `health` against a stronger side (strength.js SCALING)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1 }) {
+    // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
+    // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -5958,7 +5961,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -6045,17 +6048,19 @@ export class Host {
             // (Against the side of the players near it, more of them and each tougher: strength.js)
             const side = this.#sideNear(camp.at, "town", camp.roam + WILDS.camp);
             const scale = side ? scalingOf(side.opposition) : null;
-            const folk = this.#scaled(Math.min(5, 1 + Math.floor(tier / 2)), scale, at);
-            const ids = this.#pack({ creature, tier, count: folk.count }, at, { camp: camp.id, roam: 4, temper: "territorial", health: folk.health });
+            const least = Math.min(5, 1 + Math.floor(tier / 2));
+            const folk = this.#scaled(least, scale, at);
+            const ids = this.#pack({ creature, tier, count: folk.count }, at, { camp: camp.id, roam: 4, temper: "territorial", health: folk.health, least });
 
             // (Its patrols, roaming out from it: as many as it has, fewer near home)
             for (let k = 0; k < patrols; k++) {
                 const angle = ((k + 0.5) / patrols) * Math.PI * 2;
                 const out = camp.roam * 0.5;
                 const point = [at[0] + cos(angle) * out, at[1] + sin(angle) * out];
-                const patrol = this.#scaled(Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)), scale, point);
+                const least = Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0));
+                const patrol = this.#scaled(least, scale, point);
 
-                ids.push(...this.#pack({ creature, tier, count: patrol.count }, point, { camp: camp.id, roam: camp.roam * 0.4, health: patrol.health }));
+                ids.push(...this.#pack({ creature, tier, count: patrol.count }, point, { camp: camp.id, roam: camp.roam * 0.4, health: patrol.health, least }));
             }
 
             this.wildCamps.set(camp.id, { ids });
@@ -6130,12 +6135,12 @@ export class Host {
 
                 post += posts.length;
 
-                for (const { map, square } of posts) {
-                    ids.push(...this.#pack({ creature, tier: guardTier, count: 1 }, square, { lair: site.id, roam: 3, map, health }));
-                }
+                posts.forEach(({ map, square }, j) => {
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: 1 }, square, { lair: site.id, roam: 3, map, health, extra: j >= least }));
+                });
 
                 if (count > posts.length) {
-                    ids.push(...this.#pack({ creature, tier: guardTier, count: count - posts.length }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6, health }));
+                    ids.push(...this.#pack({ creature, tier: guardTier, count: count - posts.length }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6, health, least: least - posts.length }));
                 }
             });
 
@@ -6244,7 +6249,8 @@ export class Host {
             // its band, each tougher too: strength.js)
             const side = this.#sideOn(inside?.maps ?? [], at, PLACE_BANDS.near);
             const scale = side ? scalingOf(side.opposition) : null;
-            const { count, health } = this.#scaled(PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per), scale, at);
+            const least = PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per);
+            const { count, health } = this.#scaled(least, scale, at);
             const ring = PLACE_BANDS.ring[place.size];
             const keeps = { place: place.id, temper: "territorial", guard: PLACE_BANDS.guard };
             const leader = inside?.leader ?? { map: "town", square: at };
@@ -6254,7 +6260,7 @@ export class Host {
 
             // (Each of the band its kind: the dead's bones, ghosts and wraiths in turn)
             for (const { map, square } of within) {
-                ids.push(...this.#pack({ creature: bandFolk(band, member++), tier, count: 1 }, square, { ...keeps, roam: 3, map, health }));
+                ids.push(...this.#pack({ creature: bandFolk(band, member), tier, count: 1 }, square, { ...keeps, roam: 3, map, health, extra: member++ >= least }));
             }
 
             // (The rest round its heart; or, a place gone into, before its way in, out on the open
@@ -6265,7 +6271,7 @@ export class Host {
             for (let k = 0; k < count - within.length; k++) {
                 const angle = ((k + 0.5) / (count - within.length)) * Math.PI * 2;
 
-                ids.push(...this.#pack({ creature: bandFolk(band, member++), tier, count: 1 }, [middle[0] + cos(angle) * ring, middle[1] + sin(angle) * ring], { ...keeps, roam: 4, health }));
+                ids.push(...this.#pack({ creature: bandFolk(band, member), tier, count: 1 }, [middle[0] + cos(angle) * ring, middle[1] + sin(angle) * ring], { ...keeps, roam: 4, health, extra: member++ >= least }));
             }
 
             // (The chest on open ground by the leader: not in a wall)
@@ -6464,8 +6470,8 @@ export class Host {
             const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2, health: scale?.leader ?? 1 });
             const round = roundOf(heart);
 
-            startsOf(folk.count).forEach((stop) => {
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop }, health: folk.health }));
+            startsOf(folk.count).forEach((stop, k) => {
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop }, health: folk.health, extra: k >= count - 1 }));
             });
 
             this.#keepPack(ids, { strength: side?.strength ?? 1, least: count - 1, creature: band.folk, tier, keeps: { cache: id, temper: "territorial", guard: CACHES.guard, roam: CACHES.round * 2 } });
@@ -6636,7 +6642,7 @@ export class Host {
                     }
                 }
 
-                this.#rouse(id, foe.creature, foe.tier, square, { pack: group, leader: out[0] ?? null, master: Boolean(champion), map, dungeon: site.id, foe: key, champion, title: foe.title ?? null, regalia: foe.regalia ?? null, roam: champion ? 3 : 4, temper: "territorial", guard: champion ? 9 : 7, health: champion ? (scale?.leader ?? 1) : health });
+                this.#rouse(id, foe.creature, foe.tier, square, { pack: group, leader: out[0] ?? null, master: Boolean(champion), map, dungeon: site.id, foe: key, champion, title: foe.title ?? null, regalia: foe.regalia ?? null, roam: champion ? 3 : 4, temper: "territorial", guard: champion ? 9 : 7, health: champion ? (scale?.leader ?? 1) : health, extra: Boolean(foe.more) });
                 out.push(id);
             });
 

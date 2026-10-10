@@ -457,7 +457,8 @@ way!", "Help!"); Enter opens it ready to type. A chime and a red count on the Pa
 how many lines you haven't seen. The wild answers how strong your side is, those with you and
 all (docs/WILDS.md, *A side's strength*): out in the wilds, players together find more of a pack
 and each a little tougher, an elite or a cache's chief tougher still; each of you faces a little
-less than you would alone. Games play together through the relay on the game's server
+less than you would alone, and those more than one alone would meet leave only their gold and
+their parts. Games play together through the relay on the game's server
 (`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
 See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 
@@ -809,7 +810,8 @@ test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
                         build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js,
-                        e2e-shard.js and e2e-durations.js (CI's split of the browser tests)
+                        e2e-shard.js and e2e-durations.js (CI's split of the browser tests),
+                        balance.js (the wild against sides of each size, rules alone: npm run balance)
 utilities/blenderpipeline/  Turns .blend files into game-ready GLB models, animations and all
                         (its own README.md, dependencies and tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
