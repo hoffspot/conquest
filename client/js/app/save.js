@@ -2,7 +2,8 @@
 // with the seed of the world it lives in, what the folk in it remember of them and what they've
 // learnt talking (core/dialogue.js), what they've found of the world (core/explored.js: the
 // buildings gone into, the chunks set foot in), where they were when the game last stopped and
-// how they were (hurt, poisoned, blessed: core/host.js vitalsOf); and settings (the game options,
+// how they were (hurt, poisoned, blessed: core/host.js vitalsOf), the last messages they were told
+// (app/journal.js keepMessage); and settings (the game options,
 // debug mode, drawing quality), the same whoever's played. Kept apart from each character: their
 // world's own state, the war between its peoples (core/war/war.js), as it's got to (docs/WAR.md:
 // a world's save is its host's).
@@ -16,13 +17,14 @@
 // and write is guarded: without it the game still plays, it just doesn't remember.
 
 import { ELEMENT_TOMES } from "../core/spells.js";
+import { MESSAGES_KEPT } from "./journal.js";
 import { decode, encode } from "../core/wire.js";
 
 const ROSTER_KEY = "pellagos.characters";
 const SETTINGS_KEY = "pellagos.settings";
 
 // What's kept of each character, each under its own key
-const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world"]);
+const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages"]);
 
 // A character's id: eight letters and digits
 const ID = /^[a-z0-9]{8}$/;
@@ -409,6 +411,22 @@ export function loadPin(save) {
 /** Keep where the character's pinned on the world map (or that they've none: null), in a saved game. */
 export function savePin(save, pin) {
     return save?.id ? write(keyOf(save, "pin"), { created: save.created, seed: save.seed, pin }) : false;
+}
+
+/**
+ * The last messages the character was told across the screen, in a saved game ([{ text, at (ms since
+ * 1970), times }], oldest first: journal.js keepMessage), or none (none kept, or another game's).
+ */
+export function loadMessages(save) {
+    const kept = own(save, "messages");
+    const messages = Array.isArray(kept?.messages) ? kept.messages : [];
+
+    return messages.filter((message) => typeof message?.text === "string" && message.text && Number.isFinite(message.at) && Number.isInteger(message.times) && message.times >= 1).slice(-MESSAGES_KEPT).map(({ text, at, times }) => ({ text, at, times }));
+}
+
+/** Keep the last messages the character was told, in a saved game. */
+export function saveMessages(save, messages) {
+    return save?.id ? write(keyOf(save, "messages"), { created: save.created, seed: save.seed, messages }) : false;
 }
 
 /**

@@ -59,6 +59,9 @@ export class Hud {
         this.bannerTimer = null;
         this.targeted = null;
 
+        /** Hears each message told across the screen (text, seconds): the game's, to keep the last (journal.js). */
+        this.onMessage = () => {};
+
         // Held, the player's card grows to show all that's on them (not one row of it, the rest
         // an ellipsis); a tap, or held again, and it's back
         let held = null;
@@ -392,6 +395,10 @@ export class Hud {
         clearTimeout(this.bannerTimer);
         this.banner.textContent = text;
         this.banner.hidden = !text;
+
+        if (text) {
+            this.onMessage(text, seconds);
+        }
 
         if (text && seconds) {
             this.bannerTimer = setTimeout(() => (this.banner.hidden = true), seconds * 1000);

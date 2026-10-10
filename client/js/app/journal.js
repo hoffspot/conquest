@@ -11,7 +11,9 @@
 // - the requests lately done, failed or given up;
 // - where their people stand at the war's end: serving another and how near to rising, fallen, or
 //   ruling the continent (docs/WAR.md M10);
-// - their company: the followers they lead (docs/WAR.md M9), and how many more they could.
+// - their company: the followers they lead (docs/WAR.md M9), and how many more they could;
+// - and, by a button at its top, the last messages they were told across the screen (the HUD's
+//   banner: hud.js message), the newest first, and how long ago.
 //
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
@@ -64,6 +66,58 @@ export function regardOf(standing) {
     return { words: "think little of you either way", tone: "none" };
 }
 
+/** How many of the messages told the player across the screen the journal keeps (the newest). */
+export const MESSAGES_KEPT = 10;
+
+/**
+ * How long a message must be shown for (s) to be kept: those shown for less, refusals and the like
+ * ("Can't do that.", "Out of breath"), aren't news; nor is one shown till the next (0: the picture
+ * lost, waiting for it to come back).
+ */
+export const KEPT_FROM = 2;
+
+/**
+ * The messages kept (`log`: [{ text, at (ms since 1970), times }], oldest first) with another told
+ * at `at`, shown for `seconds`: the same as the last told again only counted (`times`) and its time
+ * moved on, the oldest let go past MESSAGES_KEPT. The log as it was if it isn't kept.
+ */
+export function keepMessage(log, text, seconds, at) {
+    if (!text || !(seconds >= KEPT_FROM)) {
+        return log;
+    }
+
+    const last = log.at(-1);
+
+    if (last?.text === text) {
+        return [...log.slice(0, -1), { text, at, times: last.times + 1 }];
+    }
+
+    return [...log, { text, at, times: 1 }].slice(-MESSAGES_KEPT);
+}
+
+/** How long ago something was (`at` and `now`: ms since 1970), in words: "just now", "5 min ago", "2 h ago", "3 days ago". */
+export function ago(at, now) {
+    const minutes = Math.floor((now - at) / 60000);
+
+    if (minutes < 1) {
+        return "just now";
+    }
+
+    if (minutes < 60) {
+        return `${minutes} min ago`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return `${hours} h ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
 export class JournalPanel {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
     constructor(root) {
@@ -83,7 +137,23 @@ export class JournalPanel {
         this.close.title = "Close (Esc)";
         this.close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.close.addEventListener("click", () => this.onClose());
-        header.append(this.title, this.rank, this.close);
+
+        // (The last messages told, or the journal again)
+        this.toggle = element("button", "journal-button journal-toggle", "Messages");
+        this.toggle.type = "button";
+        this.toggle.setAttribute("aria-pressed", "false");
+        this.toggle.addEventListener("click", () => {
+            this.view = this.view === "messages" ? "journal" : "messages";
+
+            if (this.shown) {
+                this.show(this.shown);
+            }
+        });
+        header.append(this.title, this.rank, this.toggle, this.close);
+
+        /** What's shown: the journal, or the last messages told ("messages"). */
+        this.view = "journal";
+        this.shown = null;
 
         this.body = element("div", "journal-body");
         this.panel.append(header, this.body);
@@ -104,11 +174,22 @@ export class JournalPanel {
      * next }, or null till they register), requests: [{ id, title, from, text, progress, where, left }], people: { name,
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
      * null: serving another, fallen, ruling the continent) }, done: [{
-     * title, from, state }] }.
+     * title, from, state }], messages: the last told, oldest first (keepMessage) }.
      */
-    show({ standing, guild = null, requests, people, done, company = [], most = 1 }) {
+    show(shown) {
+        const { standing, guild = null, requests, people, done, company = [], most = 1, messages = [] } = shown;
+
+        this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
         this.panel.hidden = false;
+        this.toggle.textContent = this.view === "messages" ? "Journal" : "Messages";
+        this.toggle.setAttribute("aria-pressed", String(this.view === "messages"));
+
+        if (this.view === "messages") {
+            this.body.replaceChildren(this.#messages(messages));
+
+            return;
+        }
 
         const sections = [];
 
@@ -238,6 +319,29 @@ export class JournalPanel {
 
     hide() {
         this.panel.hidden = true;
+        this.view = "journal";
+    }
+
+    // The last messages told, the newest first
+    #messages(messages) {
+        const list = element("ol", "journal-list messages");
+        const now = Date.now();
+
+        list.append(
+            ...[...messages].reverse().map(({ text, at, times }) => {
+                const row = element("li", "journal-message");
+
+                row.append(element("span", "journal-message-text", text), element("span", "journal-message-when", `${times > 1 ? `${times} times, last ` : ""}${ago(at, now)}`));
+
+                return row;
+            }),
+        );
+
+        if (!messages.length) {
+            list.append(element("li", "journal-empty", "No messages yet. What you're told across the screen is kept here, the last ten."));
+        }
+
+        return this.#section(`The last ${MESSAGES_KEPT} messages`, list);
     }
 
     #section(heading, content) {

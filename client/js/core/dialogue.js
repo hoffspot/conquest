@@ -795,7 +795,7 @@ export const TREES = Object.freeze({
             },
             register: {
                 say: "Wonderful! Name: {player}. Rank: Copper. Everyone starts at Copper, don't pout! Here's your card. Don't lose it; the replacement fee is terrible, and I have to fill in the form.",
-                choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }, { guild: "register" }] }],
+                choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { guild: "register" }] }],
             },
             // (Their rank, and how near the next: the game's words)
             card: {
