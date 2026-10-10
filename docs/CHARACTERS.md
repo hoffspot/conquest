@@ -728,7 +728,12 @@ slots, sockets and hidden skin.
    of the usual shape (`referenceMeasures`), its trims and borders along its edges as they're
    cut, measured at each texel from the body there (between the corners of each of the body's
    triangles, they were stepped wherever the region ran out in a corner, as at a neckline), its
-   emblem placed by the body's landmarks. Then it's spread a
+   emblem placed by the body's landmarks. Only near its edges, though (`EDGE_PAINTED`: 10 cm in,
+   the vine's leaves the deepest, and 2 cm out; beads all over): where a triangle's corners are
+   all further in or out, it's all kept or all cut away, so between them will do, and measuring
+   every texel made dressing someone twice as slow, too slow for those met on the road to be
+   drawn in time. Where each texel is on that body is kept with the texel map for the next
+   picture (`pointsOf`). Then it's spread a
    few texels past the edges of the layout's pieces so no seam shows as it's minified. Which
    texel is spread to from which is the same for every picture painted over the texel map, so
    the map lists it once (`spread`, three rings of texels round the pieces' edges) and each
@@ -742,7 +747,8 @@ slots, sockets and hidden skin.
    ten garments, each a draw call. As every garment is painted on the whole body in the body's
    texture layout, one picture can show them all (`compositeGarments`): at each texel, the
    outermost garment whose region takes it in (each texel knows which body triangle it's in and
-   where, so each garment's region is worked out there exactly as its edge is cut), tinted as its
+   where, so each garment's region is worked out there exactly as its edge is cut; between the
+   corners of a triangle all inside it, or all 2 cm or more outside, all kept or cut away), tinted as its
    make is, with a second picture of its heights, roughness and metalness (a bump, roughness and
    metalness map). Across each edge the two are mixed as much as the outer one covers of the
    texel, by how many texels inside its edge it is (from how fast its region changes across the

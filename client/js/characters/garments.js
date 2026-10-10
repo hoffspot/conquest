@@ -1057,21 +1057,28 @@ function insideAt(garment, landmarks, point, toes) {
     return Math.min(value, garment.toeBox && !toes && point.region === "foot" ? Math.min(1, TOE_CUT - point.foot) : 1);
 }
 
-// What's measured of the body that runs smoothly from vertex to vertex
-const MEASURED = Object.freeze(["armShare", "legShare", "arm", "leg", "foot", "x", "y", "z"]);
-
-/** What's measured of the body (measureBody) between three of its vertices, by weights, as `out` (its region the nearest's). */
+/**
+ * What's measured of the body (measureBody) between three of its vertices, by weights, as `out`:
+ * what runs smoothly from vertex to vertex between them, its region the nearest's. (Field by
+ * field: it's measured at every texel of every garment's picture)
+ */
 function pointBetween(vertices, a, b, c, wa, wb, wc, out) {
-    const [pa, pb, pc] = [vertices[a], vertices[b], vertices[c]];
+    const pa = vertices[a];
+    const pb = vertices[b];
+    const pc = vertices[c];
     const nearest = wa >= wb && wa >= wc ? pa : wb >= wc ? pb : pc;
 
     out.region = nearest.region;
     out.side = nearest.side;
     out.face = nearest.face;
-
-    for (const key of MEASURED) {
-        out[key] = wa * pa[key] + wb * pb[key] + wc * pc[key];
-    }
+    out.armShare = wa * pa.armShare + wb * pb.armShare + wc * pc.armShare;
+    out.legShare = wa * pa.legShare + wb * pb.legShare + wc * pc.legShare;
+    out.arm = wa * pa.arm + wb * pb.arm + wc * pc.arm;
+    out.leg = wa * pa.leg + wb * pb.leg + wc * pc.leg;
+    out.foot = wa * pa.foot + wb * pb.foot + wc * pc.foot;
+    out.x = wa * pa.x + wb * pb.x + wc * pc.x;
+    out.y = wa * pa.y + wb * pb.y + wc * pc.y;
+    out.z = wa * pa.z + wb * pb.z + wc * pc.z;
 
     return out;
 }
@@ -1816,24 +1823,44 @@ export function* compositingGarments(map, layers, measures) {
         }
 
         const t = triangles[i];
-        const [a, b, c] = [corners[t * 3], corners[t * 3 + 1], corners[t * 3 + 2]];
+        const a = corners[t * 3];
+        const b = corners[t * 3 + 1];
+        const c = corners[t * 3 + 2];
         const w0 = weights[i * 2];
         const w1 = weights[i * 2 + 1];
-        const [s0x, s0y, s1x, s1y] = [slopes[t * 4], slopes[t * 4 + 1], slopes[t * 4 + 2], slopes[t * 4 + 3]];
-
-        pointBetween(vertices, a, b, c, w0, w1, 1 - w0 - w1, point);
+        const w2 = 1 - w0 - w1;
+        let measured = false;
 
         // Each garment there over those under it, as much of the texel as it covers (the innermost
-        // wholly); where none is, the one nearest to being there
+        // wholly); where none is, the one nearest to being there. (Measured there near its edge;
+        // between its triangle's corners where they're all inside it or all well outside, as the
+        // triangle's all kept or all cut away: cutGarment)
         let shown = false;
         let nearest = -1;
         let nearness = -Infinity;
 
         for (let g = 0; g < layers.length; g++) {
-            const value = insideAt(layers[g].garment, landmarks, point, true);
             const inside = insides[g];
-            const change = Math.hypot((inside[a] - inside[c]) * s0x + (inside[b] - inside[c]) * s1x, (inside[a] - inside[c]) * s0y + (inside[b] - inside[c]) * s1y);
-            const share = value > 0 ? 1 : value > -EDGE_REACH && change > 1e-9 ? Math.min(1, Math.max(0, value / change + 0.5 + EDGE_TEXELS)) : 0;
+            const ia = inside[a];
+            const ib = inside[b];
+            const ic = inside[c];
+            let value = w0 * ia + w1 * ib + w2 * ic;
+            let share = 0;
+
+            if (Math.min(ia, ib, ic) > 0) {
+                share = 1;
+            } else if (Math.max(ia, ib, ic) > -EDGE_REACH) {
+                if (!measured) {
+                    pointBetween(vertices, a, b, c, w0, w1, w2, point);
+                    measured = true;
+                }
+
+                value = insideAt(layers[g].garment, landmarks, point, true);
+
+                const change = Math.hypot((ia - ic) * slopes[t * 4] + (ib - ic) * slopes[t * 4 + 2], (ia - ic) * slopes[t * 4 + 1] + (ib - ic) * slopes[t * 4 + 3]);
+
+                share = value > 0 ? 1 : value > -EDGE_REACH && change > 1e-9 ? Math.min(1, Math.max(0, value / change + 0.5 + EDGE_TEXELS)) : 0;
+            }
 
             if (share > 0) {
                 blend(colour, layers[g], looks[g], i, shown ? share : 1);
@@ -1841,7 +1868,8 @@ export function* compositingGarments(map, layers, measures) {
             }
 
             if (value > nearness) {
-                [nearest, nearness] = [g, value];
+                nearest = g;
+                nearness = value;
             }
         }
 
@@ -1849,8 +1877,13 @@ export function* compositingGarments(map, layers, measures) {
             blend(colour, layers[nearest], looks[nearest], i, 1);
         }
 
-        data.set([colour[0], colour[1], colour[2], 255], i * 4);
-        surface.set([colour[3], colour[4], colour[5], 255], i * 4);
+        for (let k = 0; k < 3; k++) {
+            data[i * 4 + k] = colour[k];
+            surface[i * 4 + k] = colour[k + 3];
+        }
+
+        data[i * 4 + 3] = 255;
+        surface[i * 4 + 3] = 255;
     }
 
     yield;
@@ -1863,13 +1896,18 @@ export function* compositingGarments(map, layers, measures) {
 
 /** A garment's picture at texel `i` mixed into `colour` ([r, g, b, height, roughness, metalness]) by `share`. */
 function blend(colour, layer, look, i, share) {
-    const own = [0, 1, 2].map((k) => (look.tables ? look.tables[k][layer.data[i * 4 + k]] : layer.data[i * 4 + k]));
+    const { data, bump } = layer;
+    const { tables } = look;
 
-    own.push(128 + (layer.bump[i] - 128) * look.height, look.roughness, look.metalness);
+    for (let k = 0; k < 3; k++) {
+        const own = tables ? tables[k][data[i * 4 + k]] : data[i * 4 + k];
 
-    for (let k = 0; k < 6; k++) {
-        colour[k] += (own[k] - colour[k]) * share;
+        colour[k] += (own - colour[k]) * share;
     }
+
+    colour[3] += (128 + (bump[i] - 128) * look.height - colour[3]) * share;
+    colour[4] += (look.roughness - colour[4]) * share;
+    colour[5] += (look.metalness - colour[5]) * share;
 }
 
 /**
@@ -1890,9 +1928,46 @@ const SOFT = 0.004;
 // softened at its inner side
 const border = (edge, width) => smoothstep(width + SOFT, width - SOFT, edge);
 
+// The patterns painted by how far inside the garment's edge they are; how far inside it (metres)
+// the deepest of them but beads reaches (the vine's leaves), and how far outside it one is drawn
+// (a texel or two). Beyond those, by its triangle's corners: a triangle wholly inside or outside
+// them is all kept or all cut away (cutGarment), and measuring every texel's twice as slow
+const EDGED = new Set(["surcoat", "trim", "vine", "web", "fret", "beads"]);
+const EDGE_PAINTED = Object.freeze({ inside: 0.1, outside: 0.02 });
+
 // How far below the chest (metres, on a body 1.7 m tall) the middle of an emblem is, and how much
 // bigger than its `size` it's painted
 const EMBLEM = Object.freeze({ below: 0.045, scale: 1.3 });
+
+// Where each texel is on the body garments' pictures are painted for: { measures, points (x, y,
+// z, how much it moves with the limbs: 4 floats a texel) } by texel map, kept for the next
+const texelPoints = new WeakMap();
+
+function pointsOf(map, measures) {
+    if (texelPoints.get(map)?.measures !== measures) {
+        const { size, covered, triangles, weights, corners } = map;
+        const points = new Float32Array(size * size * 4);
+        const point = {};
+
+        for (let i = 0; i < size * size; i++) {
+            if (covered[i]) {
+                const t = triangles[i] * 3;
+                const w0 = weights[i * 2];
+                const w1 = weights[i * 2 + 1];
+                const { x, y, z, armShare, legShare } = pointBetween(measures.vertices, corners[t], corners[t + 1], corners[t + 2], w0, w1, 1 - w0 - w1, point);
+
+                points[i * 4] = x;
+                points[i * 4 + 1] = y;
+                points[i * 4 + 2] = z;
+                points[i * 4 + 3] = armShare + legShare;
+            }
+        }
+
+        texelPoints.set(map, { measures, points });
+    }
+
+    return texelPoints.get(map).points;
+}
 
 // Where in a texel (and round it) an emblem is looked for, across and up: four by four
 const EMBLEM_SAMPLES = Object.freeze([-0.75, -0.25, 0.25, 0.75]);
@@ -1921,6 +1996,11 @@ export function* paintingGarment(map, garment, measures = null) {
     // (A third colour, for the peoples' everyday dress: its bands' and beads' and frets')
     const accent = new THREE.Color(garment.accent ?? garment.trim ?? garment.colour);
     const mixed = new THREE.Color();
+    // (How far inside its edge each of the body's vertices is, if it's painted by that, and how
+    // far inside that's measured at each texel: beads all over)
+    const inside = EDGED.has(pattern) ? Float32Array.from(vertices, (vertex) => insideAt(garment, landmarks, vertex, true)) : null;
+    const inward = pattern === "beads" ? Infinity : EDGE_PAINTED.inside;
+    const points = pointsOf(map, measures);
 
     for (let i = 0; i < count; i++) {
         if (i % TEXELS_A_STEP === 0) {
@@ -1931,15 +2011,28 @@ export function* paintingGarment(map, garment, measures = null) {
             continue;
         }
 
-        // (Where it is on the body, and how far inside the garment's edge)
+        // (Where it is on the body, and how far inside the garment's edge: measured there near
+        // it, between its triangle's corners further off)
         const t = triangles[i] * 3;
-        const [a, b, k] = [corners[t], corners[t + 1], corners[t + 2]];
+        const a = corners[t];
+        const b = corners[t + 1];
+        const k = corners[t + 2];
         const w0 = weights[i * 2];
         const w1 = weights[i * 2 + 1];
         const w2 = 1 - w0 - w1;
-        const { x, y, z, armShare, legShare } = pointBetween(vertices, a, b, k, w0, w1, w2, point);
-        const edge = insideAt(garment, landmarks, point, true);
-        const limb = armShare + legShare > 0.5;
+        const x = points[i * 4];
+        const y = points[i * 4 + 1];
+        const z = points[i * 4 + 2];
+        const limb = points[i * 4 + 3] > 0.5;
+        let edge = 0;
+
+        if (inside) {
+            const least = Math.min(inside[a], inside[b], inside[k]);
+            const most = Math.max(inside[a], inside[b], inside[k]);
+
+            edge = least > inward || most < -EDGE_PAINTED.outside ? w0 * inside[a] + w1 * inside[b] + w2 * inside[k] : insideAt(garment, landmarks, pointBetween(vertices, a, b, k, w0, w1, w2, point), true);
+        }
+
         let shade = 1;
         let height = 0.5;
         let c = colour;
