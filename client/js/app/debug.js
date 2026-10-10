@@ -4,7 +4,8 @@
 //  - what's drawn: draw calls, triangles, geometries, textures, shader programs
 //  - memory (where the browser tells), the screen, the drawing buffer, the GPU (and its time for a
 //    frame, where the browser can say: world/gputimer.js) and device
-//  - the battle: its time, characters, orders and projectiles
+//  - the battle: its time, characters, orders and projectiles; how strong the player's side is,
+//    as the wild weighs it (core/strength.js: S, and the opposition F set against it)
 //  - how long each group of files took to download, and each part of the world to build
 //  - the downloader (app/fetcher.js): its rate, the queueing it sees, what it's fetching and what's
 //    queued, and why it's quiet
@@ -65,6 +66,21 @@ export function netLine({ remote, hosting }, per) {
     }
 
     return null;
+}
+
+/**
+ * How strong the player's side is, as the wild weighs it (core/host.js strengthOf: strength.js):
+ * its strength S (1 alone), the opposition F the wild sets against it, and who's counted; or
+ * null, for none (fallen, or not playing).
+ */
+export function sideLine(side) {
+    if (!side) {
+        return null;
+    }
+
+    const { strength, opposition, players, allies } = side;
+
+    return `Side S ${strength.toFixed(2)}  F ${opposition.toFixed(2)}  (${players} player${players === 1 ? "" : "s"}, ${allies} ${allies === 1 ? "ally" : "allies"})`;
 }
 
 /**
@@ -220,8 +236,9 @@ export class Debug {
             };
 
             const net = netLine(game, this.#perSecond(game.remote?.received ?? game.hosting?.sent));
+            const side = sideLine(game.host?.strengthOf?.(game.me) ?? null);
 
-            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...(net ? [net] : []), ...battle.actors.map(describe));
+            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...(net ? [net] : []), ...(side ? [side] : []), ...battle.actors.map(describe));
         }
 
         if (loader) {

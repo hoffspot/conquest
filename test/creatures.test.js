@@ -723,6 +723,46 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.ok(escorts.every(([id]) => !host.battle.actor(id) || host.battle.actor(id).dead), "let go");
     });
 
+    it("puts out one elite for players together, not one each: none while any of them has had one lately, and then none for any of them a while", () => {
+        const { host, me } = hosted();
+
+        host.join({ id: "guest", hero: { ...HERO, name: "Bea" } });
+
+        const guest = host.battle.actor("guest");
+
+        Object.assign(me, { hp: 1e7, maxHp: 1e7 });
+        Object.assign(guest, { hp: 1e7, maxHp: 1e7 });
+
+        // (Walking together, the guest a step behind)
+        const together = (most) => {
+            const [hx, hy] = host.world.start.at;
+
+            for (let s = 0; s < most; s++) {
+                const at = [Math.floor(hx - 1460 - 4 * s), Math.floor(hy)];
+
+                put(me, at);
+                put(guest, [at[0] + 3, at[1]]);
+                run(host, 1000);
+
+                if (elitesOf(host).length) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        // The guest's had one lately: none for either of them
+        host.eliteRest.set("guest", Infinity);
+        assert.equal(together(120), false, "none while one of them rests from the last");
+
+        // Neither has: one between them, and both rest from it
+        host.eliteRest.clear();
+        assert.equal(together(120), true, "one put out");
+        assert.equal(elitesOf(host).length, 1);
+        assert.ok(host.eliteRest.get(HOST_PLAYER) > host.battle.time && host.eliteRest.get("guest") === host.eliteRest.get(HOST_PLAYER));
+    });
+
     it("carries on exactly from a snapshot, the creatures and all", () => {
         const { host } = outside(hosted());
 

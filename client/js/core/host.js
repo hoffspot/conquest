@@ -48,6 +48,7 @@ import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
+import { fightingValue, groupsOf, opposition, sideStrength, STRENGTH } from "./strength.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -5589,35 +5590,92 @@ export class Host {
         this.#caches(homes);
         this.#dungeons(places);
 
-        for (const player of this.players.values()) {
-            const actor = this.battle.actor(player.id);
+        // (Those together as one: the wild about them all counted once, and put out about their
+        // leader, as strong as the land is from their leader's home)
+        for (const group of this.#groups()) {
+            const { leader, actor } = group;
 
-            if (!actor || actor.dead || actor.map !== "town") {
+            if (actor.map !== "town") {
                 continue;
             }
 
+            const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
                 const beast = !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
 
-                return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
+                return beast && !beast.dead && nearAny(beast.x, beast.y);
             }).length;
 
             // (One fewer for each felled near them lately: the ground they cleared stays clear)
-            const cleared = this.cleared.filter(({ at: [x, y] }) => hypot(x - actor.x, y - actor.y) < WILDS.about).length;
+            const cleared = this.cleared.filter(({ at: [x, y] }) => nearAny(x, y)).length;
             const room = WILDS.count + (dark ? WILDS.night : 0) - about - cleared;
 
             // (Now and then, where the land's wild enough, an elite and its kind instead, further
             // off: ELITES)
-            if (room > 0 && !(this.#eliteDue(player, actor) && this.random.next() < ELITES.chance && this.#putOutElite(player, [actor.x, actor.y], dark))) {
-                this.#putOut([actor.x, actor.y], this.#homeOf(player), room, dark);
+            if (room > 0 && !(this.#eliteDue(group) && this.random.next() < ELITES.chance && this.#putOutElite(group, [actor.x, actor.y], dark))) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(leader), room, dark);
             }
         }
     }
 
-    // Could an elite be put out near a player (ELITES): out in land of tier `least` or more (from
-    // their home), none put out near them lately, and none about already
-    #eliteDue(player, actor) {
-        if (this.eliteRest.has(player.id) || tierAt([actor.x, actor.y], [this.#homeOf(player)]) < ELITES.least) {
+    // The players in groups (strength.js groupsOf: those on one map within STRENGTH.apart of one
+    // another, one after another), the standing only: each { players, actors (theirs, in the
+    // same order), leader (their party's leader, if they're in the group, or the first of them),
+    // actor (the leader's) }, in the order of their first
+    #groups() {
+        const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
+        const at = new Map(standing.map((one) => [one.player.id, one]));
+
+        return groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y }))).map((members) => {
+            const players = members.map(({ id }) => at.get(id).player);
+            const led = this.partyFor(players[0].id)?.leader;
+            const leader = players.find((player) => player.id === led) ?? players[0];
+
+            return { players, actors: players.map((player) => at.get(player.id).actor), leader, actor: at.get(leader.id).actor };
+        });
+    }
+
+    // The group a player's in (#groups), or null (fallen, or not playing)
+    #groupOf(playerId) {
+        return this.#groups().find(({ players }) => players.some((player) => player.id === playerId)) ?? null;
+    }
+
+    // Someone's fighting value (strength.js): a player's with the spells they know
+    #valueOf(actor) {
+        const player = actor.kind === "player" ? this.players.get(actor.id) : null;
+
+        return fightingValue(actor, player ? player.progress.known() : (actor.casts ?? []));
+    }
+
+    // A group's side (#groups): its players, and everyone with any player (their hired adventurers,
+    // the creatures they've called or raised) on their map within STRENGTH.reach of one of them;
+    // its strength (strength.js sideStrength: over its strongest player's) and the opposition the
+    // wild sets against it (opposition). { strength, opposition, players, allies }
+    #side(group) {
+        const near = (actor) => !actor.dead && group.actors.some((each) => each.map === actor.map && hypot(actor.x - each.x, actor.y - each.y) <= STRENGTH.reach);
+        const allies = [...this.followers.keys(), ...this.companions.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && near(actor));
+        const players = group.actors.map((actor) => this.#valueOf(actor));
+        const strength = sideStrength([...players, ...allies.map((actor) => this.#valueOf(actor))], Math.max(0, ...players));
+
+        return { strength, opposition: opposition(strength), players: players.length, allies: allies.length };
+    }
+
+    /**
+     * How strong a player's side is, as the wild weighs it (strength.js): the strength S of the
+     * group they're in and everyone with it, the opposition F the wild sets against it, how many
+     * players and allies are counted; or null (fallen, or not playing).
+     */
+    strengthOf(playerId) {
+        const group = this.#groupOf(playerId);
+
+        return group ? this.#side(group) : null;
+    }
+
+    // Could an elite be put out near a group (ELITES): out in land of tier `least` or more (from
+    // their leader's home, about the leader), none put out near any of them lately, and none
+    // about already
+    #eliteDue({ players, leader, actor }) {
+        if (players.some((player) => this.eliteRest.has(player.id)) || tierAt([actor.x, actor.y], [this.#homeOf(leader)]) < ELITES.least) {
             return false;
         }
 
@@ -5629,14 +5687,14 @@ export class Host {
         return [...this.wild].filter(([, one]) => one.elite === "lead").map(([id]) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
     }
 
-    // An elite and its kind put out near a player (ELITES): further off than the wild's others,
+    // An elite and its kind put out near a group (ELITES): further off than the wild's others,
     // clear of the settlements, the roads and the ground cleared lately, the round it walks on dry
     // land, far from any other elite; a kind that lives there (none of the perilous), led by one a
-    // tier up on the land's, as many as a pack of theirs there. That player has no other for a
-    // while. Whether one was put out
-    #putOutElite(player, [x, y], dark = false) {
+    // tier up on the land's (from their leader's home), as many as a pack of theirs there. None
+    // of the group has another for a while. Whether one was put out
+    #putOutElite({ players, leader }, [x, y], dark = false) {
         const plan = this.world.plan;
-        const home = this.#homeOf(player);
+        const home = this.#homeOf(leader);
         const elites = this.#elites();
 
         for (let tries = 0; tries < 6; tries++) {
@@ -5651,7 +5709,9 @@ export class Host {
             const encounter = encounterAt(plan, at, [home], this.random, dark);
 
             if (encounter && !CREATURES[encounter.creature].perilous && this.#pack(encounter, at, { elite: true }).length) {
-                this.eliteRest.set(player.id, this.battle.time + ELITES.rest);
+                for (const player of players) {
+                    this.eliteRest.set(player.id, this.battle.time + ELITES.rest);
+                }
 
                 return true;
             }
@@ -6120,8 +6180,11 @@ export class Host {
 
     // The adventurers' caches (core/caches.js): those every player's left far behind let go (their
     // guards, and the cache); and, for each player crossing the wilds (out of the settlements),
-    // one put out ahead of them once they've crossed as far as the last one's CACHES.every had it
+    // one put out ahead of them once they've crossed as far as the last one's CACHES.every had it:
+    // one for those together (#groups), the way each of them has come counted afresh from it
     #caches(homes) {
+        const groups = this.#groups();
+
         for (const [id, cache] of [...this.caches]) {
             const fighting = cache.ids.some((each) => (this.battle.actor(each)?.target ?? null) !== null);
 
@@ -6174,8 +6237,16 @@ export class Host {
             }
 
             if (was.next !== null && was.walked >= was.next && this.#putCache(actor, was.heading, homes)) {
-                was.walked = 0;
-                was.next = null;
+                const together = groups.find(({ players }) => players.includes(player))?.players ?? [player];
+
+                for (const each of together) {
+                    const walking = this.travel.get(each.id);
+
+                    if (walking) {
+                        walking.walked = 0;
+                        walking.next = null;
+                    }
+                }
             }
         }
     }
