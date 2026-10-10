@@ -1092,7 +1092,15 @@ $("#worldmap").addEventListener("cancel", (event) => {
     event.preventDefault();
     closeWorldMap();
 });
-window.addEventListener("resize", () => $("#worldmap").open && state.worldMap?.redraw());
+// (Drawn again whenever the map's canvas changes size, not only when the window says it's been
+// resized: Chrome on Android says so while a phone's still turning, and not once it's done)
+const redrawMap = () => $("#worldmap").open && state.worldMap?.redraw();
+
+if (typeof ResizeObserver === "function") {
+    new ResizeObserver(redrawMap).observe($("#worldmapcanvas"));
+} else {
+    window.addEventListener("resize", redrawMap);
+}
 
 function quit() {
     keepPlace();

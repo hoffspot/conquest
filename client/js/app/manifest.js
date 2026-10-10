@@ -336,7 +336,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/terrain-worker.js", 1089],
             ["js/world/terrains.js", 3972],
             ["js/world/town3d.js", 27020],
-            ["js/world/view.js", 77125],
+            ["js/world/view.js", 78262],
             ["js/world/water.js", 23384],
             ["js/world/wind.js", 4057],
             ["js/world/windowpools.js", 6382],
