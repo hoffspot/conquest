@@ -10,6 +10,12 @@
 // answers it with an opposition a little less than it (F = S^0.8: OPPOSITION), each of a
 // party's members finding it a little easier than alone, and every ally still worth having.
 //
+// The opposition's spent as most games played together spend theirs (SCALING): more of a pack,
+// each of them a little tougher; a pack's leader (an elite, a cache's chief) tougher still; their
+// blows as hard as ever. Near one fight there's a body budget (BODIES), for every machine
+// draws everyone there: past it, what more of them there'd have been goes into the hit points of
+// those there are instead.
+//
 // Pure data and arithmetic, no DOM: the world's host weighs sides with it (host.js #side), and
 // what's made of it is the same in every browser (exact.js pow, sqrt).
 
@@ -27,6 +33,20 @@ export const STRENGTH = Object.freeze({ reach: 60, apart: 60, most: 0.9, front: 
 
 /** How the wild answers a side's strength S: an opposition of S^`answer` (1 alone; about 3 for four alike). */
 export const OPPOSITION = Object.freeze({ answer: 0.8 });
+
+/**
+ * How an opposition F is spent: an ordinary one of a pack, more of them (how many × F^`count`),
+ * each a little tougher (hit points × F^`health`); a pack's leader (an elite, a cache's chief)
+ * tougher still (hit points × F^`leader`), the escort with it more (× F^`count`). For four alike
+ * (F about 3): about 2.3 times as many, each about 1.3 times as tough, a leader 2.4 times.
+ */
+export const SCALING = Object.freeze({ count: 0.75, health: 0.25, leader: 0.8 });
+
+/**
+ * The body budget near one fight: at most `most` of the side's and the wild's within `reach`
+ * metres of where foes are put out (every machine draws them all: docs/WILDS.md, *A ceiling*).
+ */
+export const BODIES = Object.freeze({ most: 40, reach: 80 });
 
 // What a spell does on average, before the caster's power
 const meanOf = ([least, most]) => (least + most) / 2;
@@ -155,4 +175,32 @@ export function groupsOf(players, apart = STRENGTH.apart) {
     }
 
     return groups;
+}
+
+/** What an opposition F makes of a pack (SCALING): × for how many, × an ordinary one's hit points, × a leader's. 1 each alone. */
+export function scalingOf(opposition) {
+    return { count: pow(opposition, SCALING.count), health: pow(opposition, SCALING.health), leader: pow(opposition, SCALING.leader) };
+}
+
+/**
+ * So many made whole with the world's own dice (`random`: random.js): 4.5 as often 4 as 5, 4.25
+ * once in four 5; a number already whole as it is, no dice thrown.
+ */
+export function wholeOf(count, random) {
+    const whole = Math.floor(count + 1e-9);
+    const part = count - whole;
+
+    return part > 1e-9 && random.next() < part ? whole + 1 : whole;
+}
+
+/**
+ * A pack held to the body budget (BODIES): of `wanted` (as many as the opposition has them), as
+ * many as `room` leaves (the budget less those already near), never fewer than `least` (as many as
+ * there'd be alone); what's left over going into each one's hit points instead (× `health`).
+ * { count, health }
+ */
+export function withinBudget(wanted, least, room) {
+    const count = Math.max(Math.min(least, wanted), Math.min(wanted, room));
+
+    return { count, health: count > 0 && wanted > count ? wanted / count : 1 };
 }

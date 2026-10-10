@@ -48,7 +48,7 @@ import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
-import { fightingValue, groupsOf, opposition, sideStrength, STRENGTH } from "./strength.js";
+import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -5591,13 +5591,16 @@ export class Host {
         this.#dungeons(places);
 
         // (Those together as one: the wild about them all counted once, and put out about their
-        // leader, as strong as the land is from their leader's home)
+        // leader, as strong as the land is from their leader's home; more about them, and more of
+        // each pack, the stronger their side: strength.js)
         for (const group of this.#groups()) {
             const { leader, actor } = group;
 
             if (actor.map !== "town") {
                 continue;
             }
+
+            const scale = scalingOf(this.#side(group).opposition);
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
@@ -5608,12 +5611,12 @@ export class Host {
 
             // (One fewer for each felled near them lately: the ground they cleared stays clear)
             const cleared = this.cleared.filter(({ at: [x, y] }) => nearAny(x, y)).length;
-            const room = WILDS.count + (dark ? WILDS.night : 0) - about - cleared;
+            const room = Math.round((WILDS.count + (dark ? WILDS.night : 0)) * scale.count) - about - cleared;
 
             // (Now and then, where the land's wild enough, an elite and its kind instead, further
             // off: ELITES)
-            if (room > 0 && !(this.#eliteDue(group) && this.random.next() < ELITES.chance && this.#putOutElite(group, [actor.x, actor.y], dark))) {
-                this.#putOut([actor.x, actor.y], this.#homeOf(leader), room, dark);
+            if (room > 0 && !(this.#eliteDue(group) && this.random.next() < ELITES.chance && this.#putOutElite(group, [actor.x, actor.y], dark, scale))) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(leader), room, dark, scale);
             }
         }
     }
@@ -5660,6 +5663,36 @@ export class Host {
         return { strength, opposition: opposition(strength), players: players.length, allies: allies.length };
     }
 
+    // How many are about a place (`at`, on `map`) as the body budget counts them (BODIES): the
+    // players, those with them, and the wild's creatures, standing, within BODIES.reach
+    #bodiesNear([x, y], map = "town") {
+        let count = 0;
+
+        for (const actor of this.battle.actors) {
+            if (!actor.dead && actor.map === map && (actor.kind === "player" || actor.kind === "follower" || this.wild.has(actor.id) || this.companions.has(actor.id)) && hypot(actor.x - x, actor.y - y) <= BODIES.reach) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    // How many of a pack, and how tough, against a side (`scale`: strength.js scalingOf) where
+    // it's put out (`at`): `least` of them as there'd be alone, as many more as the opposition has
+    // them (made whole with the world's dice), no more than `most` (the room about them), held to
+    // the body budget there, what's over it in their hit points ({ count, health: × an ordinary
+    // one's hit points })
+    #scaled(least, scale, at, most = Infinity) {
+        if (!scale || scale.count === 1) {
+            return { count: least, health: 1 };
+        }
+
+        const wanted = Math.min(most, Math.max(least, wholeOf(least * scale.count, this.random)));
+        const { count, health } = withinBudget(wanted, least, BODIES.most - this.#bodiesNear(at));
+
+        return { count, health: health * scale.health };
+    }
+
     /**
      * How strong a player's side is, as the wild weighs it (strength.js): the strength S of the
      * group they're in and everyone with it, the opposition F the wild sets against it, how many
@@ -5692,7 +5725,7 @@ export class Host {
     // land, far from any other elite; a kind that lives there (none of the perilous), led by one a
     // tier up on the land's (from their leader's home), as many as a pack of theirs there. None
     // of the group has another for a while. Whether one was put out
-    #putOutElite({ players, leader }, [x, y], dark = false) {
+    #putOutElite({ players, leader }, [x, y], dark = false, scale = null) {
         const plan = this.world.plan;
         const home = this.#homeOf(leader);
         const elites = this.#elites();
@@ -5708,7 +5741,15 @@ export class Host {
 
             const encounter = encounterAt(plan, at, [home], this.random, dark);
 
-            if (encounter && !CREATURES[encounter.creature].perilous && this.#pack(encounter, at, { elite: true }).length) {
+            if (!encounter || CREATURES[encounter.creature].perilous) {
+                continue;
+            }
+
+            // (Against a stronger side, more of its kind with it and each tougher, and it tougher
+            // still: strength.js SCALING)
+            const escort = this.#scaled(encounter.count - 1, scale, at);
+
+            if (this.#pack({ ...encounter, count: 1 + escort.count }, at, { elite: true, health: escort.health, leading: scale?.leader ?? 1 }).length) {
                 for (const player of players) {
                     this.eliteRest.set(player.id, this.battle.time + ELITES.rest);
                 }
@@ -5736,8 +5777,9 @@ export class Host {
 
     // A pack of what lives there put out near a place (out of sight of it, as strong as its
     // distance from `home` has it, what's about at that hour), clear of the settlements, the roads,
-    // the water and the ground cleared lately, no bigger than `room`
-    #putOut([x, y], home, room, dark = false) {
+    // the water and the ground cleared lately, no bigger than `room`; against a stronger side
+    // (`scale`: strength.js scalingOf), more of them and each tougher
+    #putOut([x, y], home, room, dark = false, scale = null) {
         const plan = this.world.plan;
 
         for (let tries = 0; tries < 6; tries++) {
@@ -5752,7 +5794,10 @@ export class Host {
             const encounter = encounterAt(plan, at, [home], this.random, dark);
 
             if (encounter) {
-                this.#pack({ ...encounter, count: Math.max(1, Math.min(room, encounter.count)) }, at);
+                const least = Math.max(1, Math.min(room, encounter.count));
+                const { count, health } = this.#scaled(least, scale, at, Math.max(least, room));
+
+                this.#pack({ ...encounter, count }, at, { health });
 
                 return;
             }
@@ -5762,8 +5807,9 @@ export class Host {
     // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
     // on a building's `map`), the first its leader (an `elite` pack's, an elite: ELITES); what
     // they're of (`camp`, `lair`, `place`, `cache`) and how they keep (`roam`, `temper`, `guard`,
-    // the `round` they walk; one `pack` with others, if it's given): their ids
-    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", elite = false, ...more } = {}) {
+    // the `round` they walk; one `pack` with others, if it's given); against a stronger side, each
+    // one's hit points × `health`, its leader's × `leading` (strength.js SCALING): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, map = "town", elite = false, health = 1, leading = health, ...more } = {}) {
         const free = this.#spots(map);
         const pack = `pack-${this.nextWild}`;
         const ids = [];
@@ -5778,7 +5824,7 @@ export class Host {
                 // now and then one of its pack one of those it goes about with: a goblin bomber)
                 const kind = elite && k === 0 ? eliteOf(creature) : CREATURES[creature].band && k > 0 ? memberOf(creature, k, this.random.next()) : creature;
 
-                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
+                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, health: k === 0 ? leading : health, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
                 ids.push(id);
             }
         } catch {
@@ -5794,8 +5840,9 @@ export class Host {
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js); an
     // elite (`elite` "lead") a tier up, stronger still, walking its round about where it's put
-    // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null }) {
+    // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
+    // points × `health` against a stronger side (strength.js SCALING)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1 }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -5815,7 +5862,7 @@ export class Host {
             square,
             map,
             ai: "wild",
-            hp: Math.round(spec.hp * tierPower(at) * stands.hp),
+            hp: Math.round(spec.hp * tierPower(at) * stands.hp * health),
             speed: spec.speed,
             chase: spec.chase,
             power: { melee: power, ranged: power },
@@ -6236,8 +6283,10 @@ export class Host {
                 was.next = this.random.int(...CACHES.every);
             }
 
-            if (was.next !== null && was.walked >= was.next && this.#putCache(actor, was.heading, homes)) {
-                const together = groups.find(({ players }) => players.includes(player))?.players ?? [player];
+            const group = groups.find(({ players }) => players.includes(player)) ?? null;
+
+            if (was.next !== null && was.walked >= was.next && this.#putCache(actor, was.heading, homes, group)) {
+                const together = group?.players ?? [player];
 
                 for (const each of together) {
                     const walking = this.travel.get(each.id);
@@ -6254,8 +6303,10 @@ export class Host {
     // A cache put out ahead of a player (`actor`, going the way of `heading`, or any way), as
     // CACHES has it, where it may be (cacheClear: off the roads, away from everywhere; openAround:
     // on open ground): its band of the land there, as strong as the land or the mightiest player
-    // near it, their leader by it and the rest on their round about it; whether it could be
-    #putCache(actor, heading, homes) {
+    // near it, their leader by it and the rest on their round about it; against the side of the
+    // `group` they're in (#side), more of the band and each tougher, their leader tougher still
+    // (strength.js SCALING); whether it could be
+    #putCache(actor, heading, homes, group = null) {
         const plan = this.world.plan;
         const overworld = this.world.maps.town;
         const squares = squaresOf(overworld);
@@ -6283,13 +6334,15 @@ export class Host {
             const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
             const band = cacheBand(landAt(plan, ...heart).biome, this.random);
             const count = cacheCount(tier, this.random);
+            const scale = group ? scalingOf(this.#side(group).opposition) : null;
+            const folk = this.#scaled(count - 1, scale, heart);
             const id = `cache-${this.nextCache++}`;
             const keeps = { cache: id, pack: id, temper: "territorial", guard: CACHES.guard };
-            const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2 });
+            const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2, health: scale?.leader ?? 1 });
             const round = roundOf(heart);
 
-            startsOf(count - 1).forEach((stop) => {
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop } }));
+            startsOf(folk.count).forEach((stop) => {
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop }, health: folk.health }));
             });
 
             this.caches.set(id, { id, at: heart, chest, band: band.id, tier, ids, opened: false });
@@ -7221,6 +7274,14 @@ export class Host {
         // (The oldest first: the companions are kept in the order they came)
         for (const [old] of already.slice(0, Math.max(0, already.length - most + 1))) {
             this.#letGo(old, "replaced");
+        }
+
+        // (And where there are already as many about as the body budget has room for (strength.js
+        // BODIES), the oldest of theirs, called or raised, let go for this one)
+        const oldest = [...this.companions].find(([, one]) => one.leader === player.id);
+
+        if (oldest && this.#bodiesNear([free[0] + 0.5, free[1] + 0.5], map) >= BODIES.most) {
+            this.#letGo(oldest[0], "replaced");
         }
 
         this.companions.set(id, { leader: player.id, creature, tier, until: this.battle.time + spell.lasts, risen });
