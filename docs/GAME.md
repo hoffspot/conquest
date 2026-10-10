@@ -1509,6 +1509,12 @@ from one framing to the other in about half a second. The pitch and zoom the fol
 player ask for are the same either way: only where the view places the camera changes. Indoors
 only the lens is wider: the room's ceiling and walls keep the camera where it is.
 
+The drawing's fitted to the canvas whenever the canvas's size on the page changes (a
+`ResizeObserver` on it), not only when the window says it's been resized: Chrome on Android says
+so while the phone's still turning, the page half laid out, and not again once it's done, and the
+world was left drawn stretched or squashed. The world map's canvas is watched the same way, and
+the 3D view drawn at the screen's pixels again if they change (`matchMedia` on the resolution).
+
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
