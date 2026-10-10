@@ -161,8 +161,10 @@ its spell is (`TOME_RARITY`): common ones found ten times as often as the rare, 
 120 or 300 gold to the adventurers' guild, an occult scriptorium and the Mystic Emporium, which
 buy them (docs/WAR.md *Shops*), and shown in the colour of a make as rare (progress.js
 `TOME_GRADE`: a common tome's fine, an uncommon one's masterwork, a rare one's rare). An occult
-scriptorium sells them among its scrolls, as does the Mystic Emporium the rare. (The elements'
-first spells' tomes, above, are the guild's to sell, never found or given.)
+scriptorium sells them among its scrolls, as does the Mystic Emporium the rare; and now and then
+the Mystic Emporium has the Tome of Explosion in as its daily special, as if it were of the
+rarest (`SHOPS.emporium.daily.specials`: about one day in ten). (The elements' first spells'
+tomes, above, are the guild's to sell, never found or given.)
 
 - **Found**: on those with hands (bandits, goblins, skeletons, cultists, trolls, ogres, boggarts,
   the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:
@@ -190,6 +192,7 @@ first spells' tomes, above, are the guild's to sell, never found or given.)
 | Levitate | common | oneself | 600 ms | 20 s | float above the ground, five minutes: nothing on it touches you |
 | Fear | uncommon | an enemy | 500 ms | 8 s | it runs blindly away, ten seconds |
 | Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's |
+| Explosion | rare | an enemy | 1400 ms | 20 s | a blast round them (*Explosion*, below): every foe within 4 m hurt, 20–32 at its heart and half that at its edge, and thrown |
 | Attraction | uncommon | oneself | 800 ms | 30 s | a puff of smoke, and out of it one of the creatures of these parts |
 | Inertial Barrier | uncommon | oneself or a friend | 700 ms | 20 s | a quarter less from blows and arrows, five minutes |
 | Surge | uncommon | oneself | 500 ms | 60 s | blows and arrows 30% stronger, everything hurts 15% more, two minutes |
@@ -198,6 +201,17 @@ first spells' tomes, above, are the guild's to sell, never found or given.)
 | Dodge | uncommon | oneself | 500 ms | 30 s | a chance to slip every blow and spell, five minutes: one in ten, growing to one in four; added to the player's own knack for slipping blows (Evasion: docs/WAR.md) |
 | Poison | common | an enemy | 500 ms | 5 s | poisons them: 2 a time, growing to 7 |
 | Light | common (10 gold at every adventurers' guild) | oneself | 500 ms | 3 s | a globe of light over their shoulder, fifteen minutes: the dark round them as bright as day; cast again to put it out |
+
+**Explosion.** A blast of fire round the enemy it's cast at (battle.js `#blast`): every enemy of
+the caster's within 4 metres is hurt (20–32 at its heart, times the caster's spell power, half
+that at its edge; as fire, and as magic: a ward against fire or magic takes its share, but no
+shield, cover or dodge does) and thrown (`TOSS`: away from the heart, the one it's cast at away
+from the caster; as far as 4.5 metres at the heart and half that at the edge, as far as the
+ground's clear, onto the nearest free square; down and getting up, 2.6 seconds; not thrown again
+for 4). Never the caster or their friends and allies. Its look and sound are the blast's
+(*Blasts*, below); casting, heat's drawn in round where it's going, the air stilling a moment.
+There's no scroll of it, only its tome: found on those with hands (much likelier on the Goblin
+King, docs/WILDS.md *Goblins*), and now and then the Mystic Emporium's special.
 
 **Growing.** Vampirism, Dodge and Poison grow as they're used (their own experience, `SPELL_XP` a
 cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`), each stronger, and said
@@ -252,7 +266,8 @@ reader would cast it at the first level of it, though they've never learnt it; t
 There's one for every school's spell, the Hexes' Stun and Hold, and the tomes' spells cast on an
 enemy, oneself or a friend with nothing in hand (`SCROLL_SPELLS`: 48). The wards and cures aren't
 among them (they come in bottles: docs/WAR.md *The alchemist's brews*), nor a wand's or a
-grimoire's spells, nor those cast on a place, the fallen or a summons, nor Teleport.
+grimoire's spells, nor those cast on a place, the fallen or a summons, nor Teleport, nor
+Explosion (only ever its tome).
 
 - **Read** from the pack, or from an action wheel: a scroll goes on the wheel its spell would (an
   enemy's for a spell cast on one), shown by its spell's name with the scroll's icon (a rolled
@@ -377,6 +392,36 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
     a whirling column of fire 26 m high, a hotter one inside it reaching 30, a wide swirl of fire
     at its foot, five rings of runes rising up it, fire running round the great circle's rim, a
     crown of black smoke spreading over it.
+- **Blasts** (`blast`: Explosion's, a goblin bomb's, the Goblin King's bigger one), built in
+  layers as realtime effects artists build an explosion (researched for it: the flash only a
+  frame or two, the shockwave first, smoke starting at once and lasting longest; fast fire
+  slowed hard by drag; sparks thrown in jets, not evenly, or they look floaty; earth and dust
+  tying it to the ground; one clear focal point), each from what the spells are drawn with:
+  - a flash of white-yellow light for a moment (lent a light, and a glow sprite), and its heat
+    lighting what's round it longer, orange, fading;
+  - **its fireball** (`fireball`): a ball heaved out and in by noise boiling up it (its vertices
+    pushed along their normals by turbulence, after Jaume Sanchez's "fireball explosion"),
+    swelling to its size in its first 0.15 s and slowing, rising once it's out, coloured by how
+    hot it is as the flames are (red, orange, white-yellow, through fire.js's soft shoulder),
+    hottest at its heart and where it bulges, cooling into sooty smoke and eaten away from its
+    edges as it thins; premultiplied, as the flames: its heart adds light, its smoke hides what's
+    behind it, the more by day. Its shader's made with the rest before play (`warm`), so the
+    first blast doesn't stall while it compiles;
+  - puffs of fire flung out and stopped short (drag 6), white-hot to orange to a dull red (the
+    particles' colours can run through a third now: effects.js);
+  - two shockwaves racing over the ground, the first pale and fast (to 2.2 times its reach in
+    0.28 s), the next deeper; the spell's a third, and a dome of heat;
+  - sparks in five or seven jets, up and out, falling;
+  - soil and stones thrown up and pattering down, and a skirt of dust rolling out low round it;
+  - dark smoke billowing up after it, higher the later, and embers drifting;
+  - the spell's ground left burning in eight small fires round it;
+  - scorched where it was (3 m round; the spell's 4.5 m, and cracked), glowing as it cools;
+  - the camera shaken (the nearer the player, the harder: none past 25 m) and, for the spell,
+    the screen washed with its light.
+  A goblin bomb in flight is an iron-dark pot tumbling through the air, its wick sputtering
+  sparks (`lob`); landed, it sits fizzing in a ring of light on the ground as wide as its blast
+  will be, pulsing quicker and quicker as its wick burns down, till it bursts (`burst`).
+  About 130 glowing particles and 70 of dust a bomb, 300 and 150 the spell (of 3,000 each).
 - **What lasts** shows on whoever it's on: motes of its colour now and then; Levitate lifts them
   0.35 metres off the ground, bobbing; Invisibility leaves a shimmer of them.
 - **What lies on the ground** glows there for as long as it lasts, leaving its mark.

@@ -52,7 +52,7 @@ describe("a shop's daily stock (stock.js)", () => {
         }
     });
 
-    it("has in what the shop deals in, as well made or as rare as it keeps, so many of each; and a special of the rarest", () => {
+    it("has in what the shop deals in, as well made or as rare as it keeps, so many of each; and a special of the rarest (or one it has in as if it were)", () => {
         for (const shop of DAILY) {
             const { items, daily } = SHOPS[shop];
 
@@ -72,7 +72,7 @@ describe("a shop's daily stock (stock.js)", () => {
                 assert.ok(shelves.every(({ id }) => shelves.filter((ware) => ware.id === id).length <= 2));
 
                 assert.ok(items.includes(special.id), `${shop}'s special ${special.id}`);
-                assert.ok(daily.special[gradeOf(special)] > 0, `${shop}'s special ${special.id} ${gradeOf(special)}`);
+                assert.ok(daily.special[gradeOf(special)] > 0 || daily.specials?.includes(special.id), `${shop}'s special ${special.id} ${gradeOf(special)}`);
             }
         }
     });

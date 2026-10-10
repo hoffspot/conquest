@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { SPELLS } from "../core/spells.js";
+import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 import { FLAT, lieOn } from "./effects.js";
 import { fireFlames, flamesMesh } from "./fire.js";
 
@@ -102,6 +103,88 @@ void main() {
     vec3 light = colour * (0.12 + rim * 1.5 + bands * 0.4 + lines * 0.5) + vec3(1.0) * (rising * 1.4 + flare * (0.35 + rim));
 
     gl_FragColor = vec4(light * fade, 1.0);
+}
+`;
+
+// A blast's fireball (SpellFx fireball): a ball's surface heaved out and in by noise that boils up
+// it (after Jaume Sanchez's "fireball explosion": vertices pushed along their normals by
+// turbulence), coloured as a glowing body's by how hot it is (fire.js's flames: red, orange,
+// white-yellow, through their soft shoulder), hottest at its heart and where it bulges, cooling
+// as it goes (`heat`, 1 to 0) into sooty smoke, eaten away from its edges as it thins
+// (`dissolve`, 0 to 1). Premultiplied, as the flames: its heart adds light, its smoke hides what's
+// behind it, more so by day (fire.js's `solid`), so it keeps its colour against bright ground
+const FIREBALL_NOISE = /* glsl */ `
+float fireballHash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float fireballNoise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+
+    return mix(mix(mix(fireballHash(i), fireballHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(fireballHash(i + vec3(0.0, 1.0, 0.0)), fireballHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+        mix(mix(fireballHash(i + vec3(0.0, 0.0, 1.0)), fireballHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(fireballHash(i + vec3(0.0, 1.0, 1.0)), fireballHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+}
+
+float fireballTurbulence(vec3 p) {
+    return fireballNoise(p) * 0.55 + fireballNoise(p * 2.03 + 3.1) * 0.3 + fireballNoise(p * 4.1 + 7.7) * 0.15;
+}
+`;
+
+const FIREBALL_VERTEX = /* glsl */ `
+uniform float time;
+uniform float seed;
+uniform float boil;
+varying float vBulge;
+varying vec3 vNormal;
+varying vec3 vView;
+${FIREBALL_NOISE}
+
+void main() {
+    vec3 dir = normalize(position);
+    // (Great lumps, and finer turbulence boiling up over them)
+    float lumps = fireballNoise(dir * 1.3 + seed * 11.0);
+    float churn = fireballTurbulence(dir * 2.6 + vec3(seed * 5.0, -time * 1.7, seed * 3.0));
+    float bulge = (lumps - 0.5) * 0.55 + (churn - 0.5) * 0.7;
+    vBulge = clamp(bulge + 0.5, 0.0, 1.0);
+    vec4 seen = modelViewMatrix * vec4(position * (1.0 + bulge * boil), 1.0);
+    vView = -seen.xyz;
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * seen;
+}
+`;
+
+const FIREBALL_FRAGMENT = /* glsl */ `
+uniform float heat;
+uniform float dissolve;
+uniform float fade;
+uniform float day;
+varying float vBulge;
+varying vec3 vNormal;
+varying vec3 vView;
+
+void main() {
+    // (Facing the eye: its heart; edge on: its cooler skin)
+    float facing = clamp(dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
+    float eaten = vBulge * 0.75 + facing * 0.35;
+
+    if (eaten < dissolve) {
+        discard;
+    }
+
+    float hot = clamp(heat * (0.45 + 0.55 * facing) * (0.7 + 0.6 * vBulge), 0.0, 1.0);
+    vec3 colour = vec3(1.0, 0.11 + 0.42 * hot + 0.4 * hot * hot, 0.02 + 0.5 * pow(hot, 3.5)) * (0.2 + 4.2 * hot * hot * hot) * 1.6;
+    colour = linearToOutputTexel(vec4(1.0 - exp(-colour), 1.0)).rgb;
+    // (Cooled, smoke: dark, and hiding what's behind it, the more so by day)
+    float sooty = smoothstep(0.32, 0.04, hot);
+    float edge = smoothstep(dissolve, dissolve + 0.12, eaten);
+    float hide = mix(0.1 + 0.35 * (1.0 - hot), 0.55 + 0.3 * day, sooty) * edge * fade;
+    vec3 smoke = vec3(0.075, 0.064, 0.058) * (0.6 + 0.6 * facing);
+    gl_FragColor = vec4(mix(colour * fade * edge, smoke * hide, sooty), hide);
 }
 `;
 
@@ -549,6 +632,9 @@ export class SpellFx {
         // Spells' things flying (by the caster's id): an orb, a rock, an ice blade
         this.missiles = new Map();
 
+        // Bombs lobbed and not burst yet (by the battle's bomb id): { object, ring, light, alive }
+        this.bombs = new Map();
+
         this.textures = {};
         this.geometries = {
             ring: new THREE.RingGeometry(0.9, 1, 64).rotateX(-Math.PI / 2),
@@ -565,6 +651,8 @@ export class SpellFx {
             spike: new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0),
             blade: new THREE.OctahedronGeometry(1, 0).scale(0.25, 0.25, 1.6),
             crescent: new THREE.TorusGeometry(0.5, 0.06, 6, 20, Math.PI).rotateX(Math.PI / 2),
+            fireball: new THREE.IcosahedronGeometry(1, 3),
+            wick: new THREE.CylinderGeometry(1, 1, 1, 6, 1).translate(0, 0.5, 0),
         };
 
         // The lights lent to flashes (never added or taken away, so nothing's compiled again)
@@ -1479,6 +1567,268 @@ export class SpellFx {
         this.decal(at, { texture: "scorch", colour: mark, radius: radius * 1.1, life: seconds + 2, dark: true, fade: 0.3 });
     }
 
+    // --- Blasts (docs/MAGIC.md *Explosion*, docs/WILDS.md *Goblins*) ---
+
+    // A fireball's own material (FIREBALL_VERTEX: the same shader each time, so it's made once)
+    #fireballMaterial() {
+        return new THREE.ShaderMaterial({
+            name: "fireball",
+            uniforms: { time: { value: 0 }, seed: { value: Math.random() }, boil: { value: 0.3 }, heat: { value: 1 }, dissolve: { value: 0 }, fade: { value: 1 }, day: { value: 1 - WINDOW_LIGHT.value.x } },
+            vertexShader: FIREBALL_VERTEX,
+            fragmentShader: FIREBALL_FRAGMENT,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            toneMapped: false,
+        });
+    }
+
+    /**
+     * A blast's fireball at a point, `size` metres across at its biggest: swelling out fast and
+     * slowing (all but there in its first 0.15 s), boiling, rising once it's out, cooling from
+     * white-hot through orange to sooty smoke and thinning away over its `life` (seconds).
+     */
+    fireball(at, { size = 2, life = 0.9 } = {}) {
+        const material = this.#fireballMaterial();
+        const mesh = new THREE.Mesh(this.geometries.fireball, material);
+        const { uniforms } = material;
+
+        mesh.position.copy(at);
+        this.#show(mesh, life, (t, dt, age = 0) => {
+            const swell = 1 - (1 - Math.min(1, age / 0.15)) ** 3;
+
+            mesh.scale.setScalar((size / 2) * swell * (1 + 0.15 * t));
+
+            if (age > 0.3) {
+                mesh.position.y += 0.8 * dt;
+            }
+
+            uniforms.time.value = age;
+            uniforms.heat.value = Math.max(0, 1 - age / (life * 0.55));
+            uniforms.dissolve.value = t < 0.45 ? 0 : (t - 0.45) / 0.55;
+            uniforms.boil.value = 0.25 + 0.3 * t;
+            uniforms.fade.value = t > 0.85 ? (1 - t) / 0.15 : 1;
+        });
+    }
+
+    /**
+     * A blast (a bomb bursting, the Explosion spell) on the ground at a point, `radius` metres
+     * round; the spell's `grand`er. In layers, as the realtime effects artists build one: a flash
+     * of white-yellow light a moment, and its heat lighting what's round it longer; the fireball
+     * swelling and boiling up (fireball) and puffs of fire flung out and stopped short; shockwaves
+     * racing over the ground, the first pale and fast, the next deeper; sparks in jets, not evenly
+     * (they read as sparks then); soil and stones thrown up and falling; a skirt of dust rolling
+     * out low; dark smoke rising after, and embers drifting; for the spell, the ground left
+     * burning. A scorch where it was, and cracks; the camera shaken (`shake`: how near it is,
+     * 0 to 1) and, for the spell, the screen washed with its light.
+     */
+    blast(at, { radius = 2.5, grand = false, shake = 1 } = {}) {
+        const ground = this.onGround(at.x, at.z);
+        const heart = this.onGround(at.x, at.z, 0.9);
+        const size = grand ? 1.6 : 1;
+
+        this.flash(heart, { colour: 0xfff2d0, intensity: grand ? BRIGHTEST : 22, distance: grand ? 16 : 11, life: grand ? 0.18 : 0.12, size: grand ? 6 : 3 });
+        this.glow(heart.clone(), { colour: 0xff7a2a, strength: grand ? 28 : 18, reach: grand ? 14 : 9, life: grand ? 0.8 : 0.5 });
+        this.fireball(this.onGround(at.x, at.z, 0.35 * size), { size: 2 * size, life: grand ? 1.3 : 0.9 });
+        this.spray(p([0xfff4d8, 0xffa040, 0xb81e00], { count: grand ? 50 : 24, size: [0.4, 0.8], speed: [6, 11], life: [0.3, 0.6], gravity: -2, spread: 2.2, grow: 1.2, drag: 6 }), heart);
+
+        // (The shockwaves: pale and fast, then deeper; the spell's a third, and a dome of heat)
+        this.ring(ground, { colour: 0xffe6b0, from: 0.3, to: 2.2 * radius, life: 0.28, opacity: 0.9 });
+        this.after(0.05, () => this.ring(ground, { colour: FIRE.deep, from: 0.3, to: 1.6 * radius, life: 0.4, opacity: 0.8 }));
+
+        if (grand) {
+            this.after(0.1, () => this.ring(ground, { colour: 0xffd090, from: 0.5, to: 2.6 * radius, life: 0.5, opacity: 0.5 }));
+            this.dome(() => ground, { colour: 0xffb060, radius: radius * 0.9, life: 0.35, wire: false, height: 0.7, opacity: 0.2 });
+        }
+
+        // (Sparks in jets, up and out)
+        for (let k = 0; k < (grand ? 7 : 5); k++) {
+            const angle = Math.random() * Math.PI * 2;
+            const jet = new THREE.Vector3(Math.cos(angle), 0.5 + Math.random() * 0.9, Math.sin(angle)).normalize().multiplyScalar(9);
+
+            this.spray(p([0xfff6d0, 0xffb040, 0xff3a00], { count: grand ? 12 : 8, size: [0.04, 0.09], speed: [7, 12], life: [0.35, 0.7], gravity: 9.8, spread: 0.35, drag: 1.5 }), heart, jet);
+        }
+
+        // (Soil and stones thrown up, and earth falling)
+        this.shards(this.onGround(at.x, at.z, 0.2), { count: grand ? 12 : 8, colour: 0x4a3a2a, size: 0.09, speed: 5, up: 5, life: 1.6 });
+        this.spray(p([0x6a5a46, 0x3a2e22], { count: grand ? 40 : 24, size: [0.04, 0.1], speed: [3, 7], life: [0.6, 1.1], gravity: 9.8, spread: 1.8, glow: false, opacity: 0.9, late: true, drag: 0.6 }), this.onGround(at.x, at.z, 0.3));
+
+        // (A skirt of dust rolling out low, round where it burst)
+        this.after(0.03, () => {
+            const around = grand ? 16 : 12;
+
+            for (let k = 0; k < around; k++) {
+                const angle = (k / around) * Math.PI * 2 + Math.random() * 0.3;
+                const out = new THREE.Vector3(Math.cos(angle), 0.08, Math.sin(angle));
+
+                this.spray(p([0x9a8a70, 0x6a5e4c], { count: grand ? 4 : 3, size: [0.5, 0.9], speed: [2.5, 4.5], life: [0.9, 1.5], gravity: -0.2, spread: 0.4, glow: false, opacity: 0.5, grow: 2.5, drag: 3 }), this.onGround(at.x + out.x * radius * 0.5, at.z + out.z * radius * 0.5, 0.4), out.multiplyScalar(3));
+            }
+        });
+
+        // (Dark smoke billowing up after it, higher the later)
+        for (let k = 0; k < (grand ? 12 : 7); k++) {
+            this.after(0.12 + k * 0.035, () => {
+                const angle = Math.random() * Math.PI * 2;
+                const reach = Math.random() * radius * 0.6;
+
+                this.spray(p([0x2a2420, 0x6a625a], { count: 1, size: [1, 1.8], speed: [0.4, 1.2], life: grand ? [2.6, 3.5] : [1.8, 2.5], gravity: -1.2, spread: 1.4, glow: false, opacity: 0.55, grow: 2.5 }), this.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.5 + k * 0.08));
+            });
+        }
+
+        this.spray(p([0xffd070, 0xff6a10, 0xa01800], { count: grand ? 60 : 20, size: [0.03, 0.07], speed: [2, 5], life: [1, 2], gravity: -1.2, spread: 2, drag: 1.2 }), heart);
+
+        // (The ground left burning round it: the spell's)
+        if (grand) {
+            for (let k = 0; k < 8; k++) {
+                const angle = (k / 8) * Math.PI * 2 + Math.random() * 0.4;
+                const reach = radius * (0.45 + Math.random() * 0.3);
+
+                this.blaze(new THREE.Vector3(at.x + Math.cos(angle) * reach, 0, at.z + Math.sin(angle) * reach), { width: 0.35, height: 0.6 + Math.random() * 0.4, tongues: 4, life: 1.2 + Math.random() * 0.5, rise: 0.1, fall: 0.5 });
+            }
+        }
+
+        // (Where it was: scorched, glowing as it cools; the spell's cracked)
+        this.decal(at, { texture: "scorch", colour: 0xffffff, radius: grand ? 4.5 : 3, life: grand ? 18 : 12, dark: true, fade: 0.3 });
+        this.decal(at, { texture: "glow", colour: 0xff4a0a, radius: radius * 0.8, life: 1.5, opacity: 0.8, fade: 0.8 });
+
+        if (grand) {
+            this.decal(at, { texture: "cracks", colour: 0xff6a20, radius: 3, life: 2.5, vivid: 2, fade: 0.6 });
+        }
+
+        if (shake > 0) {
+            this.shake((grand ? 0.32 : 0.15) * shake);
+        }
+
+        if (grand && shake > 0) {
+            this.screen(0xffb060, 0.12 * shake, 0.35);
+        }
+    }
+
+    // A bomb: an iron-dark pot, its wick, and the spark at its end (lit, the bigger the King's)
+    #bombBody(big) {
+        const bomb = new THREE.Group();
+        const pot = new THREE.Mesh(this.geometries.ball, new THREE.MeshStandardMaterial({ color: 0x2b2522, roughness: 0.55, metalness: 0.2 }));
+        const wick = new THREE.Mesh(this.geometries.wick, new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.9 }));
+        const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: 0xffd070, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        const size = big ? 0.17 : 0.12;
+
+        pot.scale.setScalar(size);
+        wick.scale.set(0.012, 0.09, 0.012);
+        wick.position.y = size * 0.85;
+        spark.position.y = wick.position.y + 0.09;
+        spark.scale.setScalar(0.16);
+        bomb.add(pot, wick, spark);
+        bomb.userData = { size, spark };
+
+        return bomb;
+    }
+
+    /**
+     * A bomb lobbed (battle.js BOMBS; `key`: its id), from where it's let go (`from`: a
+     * function) to a point on the ground (`to`), `travel` seconds through the air, tumbling, its
+     * wick sputtering; there it fizzes, a ring on the ground round it warning how far it'll reach
+     * (`radius`), pulsing quicker as its wick burns down (`fuse` seconds), till it bursts (burst).
+     * `big`: the Goblin King's.
+     */
+    lob(key, from, to, { travel = 0.6, fuse = 1.5, radius = 2.5, big = false } = {}) {
+        const start = from()?.clone();
+
+        if (!start) {
+            return;
+        }
+
+        this.burst(key);
+
+        const bomb = this.#bombBody(big);
+        const { size, spark } = bomb.userData;
+        const end = this.onGround(to.x, to.z, size);
+        const high = 0.8 + 0.15 * start.distanceTo(end);
+        const spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(16);
+        const entry = { object: bomb, ring: null, alive: true, light: null };
+        let next = 0;
+
+        bomb.position.copy(start);
+        entry.light = this.glow(bomb.position, { colour: 0xffb050, strength: 1.5, reach: 3, life: travel + fuse + 1, steady: 0.4, fade: () => 1 });
+        this.bombs.set(key, entry);
+        this.#show(bomb, travel + fuse + 1, (t, dt, age = 0) => {
+            if (!entry.alive) {
+                return;
+            }
+
+            if (age < travel) {
+                const u = age / travel;
+
+                bomb.position.lerpVectors(start, end, u);
+                bomb.position.y += Math.sin(Math.PI * u) * high;
+                bomb.rotation.x += spin.x * dt;
+                bomb.rotation.z += spin.z * dt;
+            } else if (!entry.ring) {
+                // (Down: sitting up, a puff of dust, and the ring warning of it)
+                bomb.position.copy(end);
+                bomb.rotation.set(0, Math.random() * Math.PI * 2, 0);
+                this.spray(p([0xb8a78a, 0x8a7a62], { count: 4, size: [0.1, 0.2], speed: [0.3, 0.8], life: [0.4, 0.7], gravity: -0.2, spread: 1.6, glow: false, opacity: 0.5, grow: 1.5 }), end);
+                entry.ring = this.#warning(end, radius, fuse);
+            }
+
+            // (The wick sputtering)
+            spark.scale.setScalar((0.12 + Math.random() * 0.1) * (big ? 1.3 : 1));
+            next -= dt;
+
+            if (next <= 0) {
+                next = 0.035;
+                this.spray(p([0xfff4c0, 0xff8a1a], { count: 2, size: [0.02, 0.045], speed: [1, 2.5], life: [0.15, 0.3], gravity: 6, spread: 1.5 }), spark.getWorldPosition(new THREE.Vector3()));
+            }
+        });
+    }
+
+    // A ring on the ground `radius` m round a point, warning of a blast, `seconds`: pulsing,
+    // quicker and quicker, a faint glow within it
+    #warning(centre, radius, seconds) {
+        const group = new THREE.Group();
+        const ring = new THREE.Mesh(this.geometries.ring, this.#additive(0xff5a1a, { opacity: 0.8 }));
+        const fill = new THREE.Mesh(this.geometries.disc, this.#additive(0xff3a0a, { map: this.#texture("glow"), opacity: 0.2 }));
+        let phase = 0;
+
+        ring.scale.set(radius, 1, radius);
+        fill.scale.set(radius * 1.1, 1, radius * 1.1);
+        ring.renderOrder = ORDER.ring;
+        fill.renderOrder = ORDER.glow;
+        group.add(ring, fill);
+        this.#lay(group, centre, radius, 0.06);
+        this.#show(group, seconds, (t, dt) => {
+            phase += dt * (2 + 8 * t);
+
+            const pulse = 0.5 + 0.5 * Math.cos(phase * Math.PI * 2);
+
+            ring.material.opacity = 0.35 + 0.55 * pulse;
+            fill.material.opacity = 0.08 + 0.16 * pulse;
+        });
+
+        return group;
+    }
+
+    /** A bomb (lob's `key`) gone: burst (blast), or come to nothing. */
+    burst(key) {
+        const entry = this.bombs.get(key);
+
+        if (!entry) {
+            return;
+        }
+
+        entry.alive = false;
+        entry.object.visible = false;
+
+        if (entry.ring) {
+            entry.ring.visible = false;
+        }
+
+        entry.light.age = entry.light.life;
+        entry.light.fade = 0;
+        this.bombs.delete(key);
+    }
+
     /**
      * One of each kind of thing drawn, for their shaders to be made before play (they're gone
      * again at the first step).
@@ -1491,7 +1841,10 @@ export class SpellFx {
         const shard = new THREE.Mesh(this.geometries.shard, new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, transparent: true }));
         const ward = new THREE.Mesh(this.geometries.ball, new THREE.ShaderMaterial({ name: "wardShell", uniforms: { colour: { value: new THREE.Color() }, reveal: { value: 1 }, flare: { value: 0 }, fade: { value: 0 }, time: { value: 0 } }, vertexShader: WARD_VERTEX, fragmentShader: WARD_FRAGMENT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
 
-        for (const object of [...warming, dark, lattice, shard, ward]) {
+        const fireball = new THREE.Mesh(this.geometries.fireball, this.#fireballMaterial());
+        const bomb = this.#bombBody(false);
+
+        for (const object of [...warming, dark, lattice, shard, ward, fireball, bomb]) {
             object.position.copy(at);
             this.#show(object, 1e-3, () => {});
         }
@@ -1701,6 +2054,7 @@ export class SpellFx {
         this.shining.length = 0;
         this.casting.clear();
         this.missiles.clear();
+        this.bombs.clear();
     }
 
     /** Stop everything showing and let go of the shapes and pictures it made (the game's over). */
@@ -2495,6 +2849,22 @@ const RECIPES = {
             fx.stream(caster.hand, target.point, p([0x9a6ac8, 0x1a0a24], { size: [0.12, 0.24], speed: [3, 5], life: [0.25, 0.45], gravity: 0, spread: 1, glow: false, opacity: 0.6, grow: 1 }), { life: 0.3, rate: 70 });
             fx.spray(p([0x2a1438, 0x0c0612], { count: 12, size: [0.3, 0.5], speed: [0.6, 1.6], life: [0.8, 1.2], gravity: -0.4, spread: 2, glow: false, opacity: 0.55, grow: 1.4 }), point);
             fx.flash(point, { colour: 0x9a4aff, intensity: 10, distance: 5, life: 0.4 });
+        },
+    },
+    // (Heat drawn in round where it's cast as the spell's let go, the sky dimming a moment; the
+    // blast itself drawn as the battle tells it: SpellFx blast, app/game.js "blast")
+    explosion: {
+        palette: { glow: [0xfff0c0, 0xff5a0a], deep: 0xff4a0a, bright: 0xffd080 },
+        charging: (fx, { target, seconds }) => {
+            fx.after(Math.max(0, seconds - 0.3), () => {
+                const at = target?.();
+
+                if (at) {
+                    fx.ring(at, { colour: 0xff8a3a, from: 4.2, to: 0.2, life: 0.3, opacity: 0.7 });
+                    fx.scatter(p([0xffe0a0, 0xff5a0a], { count: 2, size: [0.06, 0.12], speed: [1, 2], life: [0.25, 0.35], gravity: 0, spread: 1, swirl: 10 }), at, 3, 8);
+                    fx.omen(0.2, 0.6);
+                }
+            });
         },
     },
     polymorph: {

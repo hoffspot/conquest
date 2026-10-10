@@ -106,12 +106,13 @@ const HEX_SCROLLS = Object.freeze({ stun: { rarity: "fine", price: 40 }, hold: {
 /**
  * The spells there are scrolls of (an occult scriptorium's): every school's (spells.js SCHOOLS),
  * the Hexes', and the tomes' cast on an enemy, oneself or a friend with nothing in hand (not a
- * place, the fallen or a summons; not the wards' and cures', which come in bottles).
+ * place, the fallen or a summons; not the wards' and cures', which come in bottles; not
+ * Explosion's, only ever its tome).
  */
 export const SCROLL_SPELLS = Object.freeze([
     ...Object.values(SCHOOLS).flatMap(({ tiers }) => tiers),
     ...Object.keys(HEX_SCROLLS),
-    ...Object.keys(SPELLS).filter((id) => SPELLS[id].tome && !SPELLS[id].ward && !SPELLS[id].cures && !SPELLS[id].needs && ["enemy", "self", "friend"].includes(SPELLS[id].target) && id !== "teleport"),
+    ...Object.keys(SPELLS).filter((id) => SPELLS[id].tome && !SPELLS[id].ward && !SPELLS[id].cures && !SPELLS[id].needs && ["enemy", "self", "friend"].includes(SPELLS[id].target) && id !== "teleport" && !SPELLS[id].blast),
 ]);
 
 /** A spell's scroll's item id ("scrollFireball"). */

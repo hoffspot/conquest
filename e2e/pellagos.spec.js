@@ -5497,6 +5497,73 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
     expect(await page.evaluate((keeper) => window.pellagos.game.host.stockOf(keeper).specialLeft, inside.keeper)).toBe(false);
 });
 
+test("the Explosion spell bursts on an orc and throws it limp through the air, to land and get up again; a Goblin Bomb thrown from the pack lands lit and fizzing, then bursts and throws a wolf, tumbling", async ({ page }) => {
+    test.setTimeout(150000);
+    await playing(page, "/?play&seed=1");
+
+    // An orc and a wolf by the player, standing still; the Tome of Explosion read
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.battle.add({ id: "target", kind: "orc", weapon: "cleaver", team: "orcs", square: [me.square[0] + 1, me.square[1] - 6], hp: 5000 }).stunnedUntil = 1e9;
+        game.battle.add({ id: "wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square: [me.square[0] - 6, me.square[1] - 2], hp: 5000, wild: { creature: "wolf", tier: 2, temper: "aggressive", guard: 0, roam: 0, leash: 24, pack: "w", leader: null, menace: false } }).stunnedUntil = 1e9;
+        game.enlisting.push("target", "wolf");
+        game.progress.stow({ id: "tomeExplosion", quality: "common" });
+        game.host.command(game.me, { type: "use", item: "tomeExplosion" });
+        game.stop();
+    });
+    expect(await playUntil(page, () => ["target", "wolf"].every((id) => window.pellagos.game.avatars.has(id)))).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.progress.knows("explosion"))).toBe(true);
+
+    // Cast on the orc: a burst of fire where it stands, the camera shaken, and the orc flung limp
+    // into the air
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor(game.me), { spellReadyAt: 0, spellsReadyAt: {} });
+
+        return game.host.command(game.me, { type: "cast", spell: "explosion", target: "target" });
+    })).toEqual({ ok: true });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get("target").airborne, { seconds: 4 })).toBe(true);
+
+    const burst = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { showing: game.spellFx.running.length, shaking: game.shaking, thrown: game.avatars.get("target").thrown };
+    });
+
+    expect(burst.showing).toBeGreaterThan(3);
+    expect(burst.shaking).toBeGreaterThan(0);
+    expect(burst.thrown).toBe(true);
+
+    // Down, then up on its feet where the battle has it
+    expect(await playUntil(page, () => !window.pellagos.game.avatars.get("target").airborne, { seconds: 3 })).toBe(true);
+    expect(await playUntil(page, () => !window.pellagos.game.avatars.get("target").thrown, { seconds: 6 })).toBe(true);
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [actor, { object }] = [game.battle.actor("target"), game.avatars.get("target")];
+        const [ox, oz] = game.originOf(actor.map);
+
+        return Math.hypot(object.position.x - ox - actor.x, object.position.z - oz - actor.y);
+    })).toBeLessThan(1.5);
+
+    // A Goblin Bomb thrown at the wolf: one used; the bomb in the air, then lying lit where it
+    // lands; then it bursts, gone, and the wolf's thrown
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.progress.stow({ id: "goblinBomb", quality: "common" }, 2);
+
+        return game.host.command(game.me, { type: "use", item: "goblinBomb", target: "wolf" });
+    })).toEqual({ ok: true });
+    expect(await page.evaluate(() => window.pellagos.game.progress.pack.find(({ id }) => id === "goblinBomb").count)).toBe(1);
+    expect(await playUntil(page, () => window.pellagos.game.spellFx.bombs.size === 1, { seconds: 2 })).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get("wolf").thrown, { seconds: 4 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.spellFx.bombs.size)).toBe(0);
+    expect(await playUntil(page, () => !window.pellagos.game.avatars.get("wolf").thrown, { seconds: 6 })).toBe(true);
+});
+
 test("a Scroll of Safety read from the pack: a circle of runes grows under the player for three seconds, then they're in their home town's market square, the circle shrinking away there; struck down first, it's lost", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

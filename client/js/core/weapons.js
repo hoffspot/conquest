@@ -29,6 +29,8 @@
 //    how likely it is to (`chance`), and how it shows (`look`: a web, roots, frost)
 //  - pool (some spat): what it leaves on the ground where it lands a while (battle.js HAZARDS: its
 //    `kind`, `ms`, `radius` in metres), hurting whoever stands in it
+//  - bomb (a goblin bomber's): instead of a projectile, a bomb lobbed where the target stands,
+//    bursting there a moment later (battle.js BOMBS: which), its damage at the blast's heart
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
 
@@ -172,6 +174,15 @@ export const NATURAL = Object.freeze({
         ],
     },
     blackShuck: { label: "Fangs", attacks: [melee({ id: "bite", damage: [4, 8], hitAt: 350, duration: 750, interval: 1200, reaction: "hack", animation: "melee", afflict: { kind: "wither", chance: 0.3 } })] },
+    // (A goblin bomber's: lit bombs lobbed at whoever's further off than its claws reach, bursting
+    // round where they stood: battle.js BOMBS)
+    goblinBomber: {
+        label: "Claws and bombs",
+        attacks: [
+            melee({ id: "claw", damage: [2, 4], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch" }),
+            ranged({ id: "bomb", reach: 10, damage: [5, 10], hitAt: 650, duration: 1200, interval: 3800, stagger: 300, reaction: "crush", animation: "throw", bomb: "goblinBomb" }),
+        ],
+    },
     boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch", afflict: { kind: "disease", chance: 0.15 } })] },
     wisp: {
         label: "Light",

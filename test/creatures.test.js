@@ -12,7 +12,7 @@ import { LOOKS } from "../client/js/beasts/looks.js";
 import { elitePrize } from "../client/js/core/caches.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { CHARMS } from "../client/js/core/goods.js";
-import { Battle, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
 import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -123,7 +123,8 @@ describe("the wild's creatures (creatures.js)", () => {
                 assert.ok(Number.isInteger(least) && Number.isInteger(most) && least >= 1 && most >= least, `${id} ${attack.id}: damage`);
                 assert.ok(attack.hitAt < attack.duration && attack.duration <= attack.interval, `${id} ${attack.id}: timing`);
                 assert.ok(reactions.has(attack.reaction), `${id} ${attack.id}: a reaction`);
-                assert.equal(attack.kind === "ranged", Boolean(attack.projectile), `${id} ${attack.id}: a projectile`);
+                assert.equal(attack.kind === "ranged", Boolean(attack.projectile || attack.bomb), `${id} ${attack.id}: a projectile, or a bomb`);
+                assert.ok(!attack.bomb || (BOMBS[attack.bomb] && !attack.projectile), `${id} ${attack.id}: a bomb of the battle's`);
             }
 
             assert.ok(weapon.label, id);

@@ -42,8 +42,8 @@ export function wearSound(item) {
 
 /**
  * The sound of something used (an ITEMS id): a tome opened, a scroll unrolled, food eaten, a
- * bandage wound on (cloth), a salve's pot uncorked; anything else drunk. Null for what can't be
- * used.
+ * bandage wound on (cloth), a salve's pot uncorked, a bomb taken out to throw (its throw heard as
+ * it's let go); anything else drunk. Null for what can't be used.
  */
 export function useSound(id) {
     const def = ITEMS[id];
@@ -58,6 +58,10 @@ export function useSound(id) {
 
     if (def.scroll) {
         return "scroll";
+    }
+
+    if (def.bomb) {
+        return "pickup";
     }
 
     return id === "meal" || def.food ? "eat" : id === "bandage" ? "equipCloth" : id === "burnSalve" ? "potionCork" : "potionDrink";

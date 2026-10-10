@@ -62,6 +62,8 @@ export const DRAPES = Object.freeze({
     // A cloak (`cape`), from the shoulders down the back to below the knees, behind the arms,
     // edged at its hem and sides in its trim (`trim`)
     travelCloak: { label: "Travelling cloak", slot: "cloak", cape: true, length: 0.55, flare: 0.3, pleats: 7, colour: "#5e4e3a", trim: "#3e3226", roughness: 0.92 },
+    // (The Goblin King's: blood red, edged in gold)
+    kingsCape: { label: "King's cape", slot: "cloak", cape: true, length: 0.5, flare: 0.32, pleats: 7, colour: "#7a1c1c", trim: "#c9a24a", roughness: 0.8 },
     // Each people's: their cloak in their colours, and an official's long robe (liveries.js)
     ...Object.fromEntries(Object.entries(LIVERIES).flatMap(([people, { main, trim, dark }]) => [
         [`cloak.${people}`, { label: "Cloak", slot: "cloak", cape: true, length: 0.55, flare: 0.3, pleats: 7, colour: main, trim, roughness: 0.85 }],

@@ -468,6 +468,14 @@ function ailmentOf(kind, look = null) {
 // how high, m), or along the ground (roots burrowing: `ground`)
 const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
 
+/**
+ * A blast heard and felt (#blast): heard as far as `far` metres (further than a blow); from
+ * further than `clear`, the air taking the highs out of it (a low-pass at `highs` Hz there,
+ * lower the further); from further than `late`, heard as long after as sound takes to come
+ * (`sound` m/s); the camera shaken within `shaken` metres of it, harder the nearer.
+ */
+const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, sound: 343, shaken: 25 });
+
 // What bursts where each of the creatures' own lands (besides the burst in its look)
 const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"] });
 
@@ -727,6 +735,9 @@ export class Game {
         this.lastAttack = new Map();
         this.flights = new Map();
         this.flash = new Map();
+
+        // The bombs fizzing, their wicks heard (by the battle's bomb id: the sound's source, to cut)
+        this.fuses = new Map();
 
         // Those with something lingering on them (their ids), and when each's next shows it (by
         // id and kind: s); those whose skin's tinged by it
@@ -2841,10 +2852,90 @@ export class Game {
         }
     }
 
+    // A bomb lobbed (battle.js BOMBS): drawn flying from the hand of whoever threw it (or where
+    // they stood) to where it lands, fizzing there, a ring warning how far it'll reach; its wick
+    // heard sputtering till it bursts (#blast)
+    #bomb(event) {
+        if (event.map !== this.mapId) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf(event.map);
+        const thrower = this.avatars.get(event.id);
+        const from = () => (thrower ? thrower.hand("Right") : this.spellFx.onGround(ox + event.from[0], oz + event.from[1], 1.2));
+        const to = new THREE.Vector3(ox + event.x, 0, oz + event.y);
+        const travel = Math.max(0.1, (event.lands - this.battle.time) / 1000);
+        const fuse = (event.bursts - event.lands) / 1000;
+
+        this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb" });
+        this.fuses.set(event.bomb, this.sound?.play("fuse", { at: to, delay: travel, far: 20 }) ?? null);
+    }
+
+    // A blast (battle.js #blast: a bomb bursting, the Explosion spell): the bomb gone and its wick
+    // quiet; drawn and heard where it is (the nearer the player, the harder the camera's shaken;
+    // heard further than a blow, and duller and later the further off: the air takes the highs
+    // out of it, and sound's slower than light); whoever's caught thrown (Actions.toss, a
+    // creature's body tumbling), each hitting the ground as it comes down
+    #blast(event) {
+        const { battle, hud } = this;
+
+        if (event.bomb !== null) {
+            this.spellFx.burst(event.bomb);
+            this.sound?.cut(this.fuses.get(event.bomb));
+            this.fuses.delete(event.bomb);
+        }
+
+        if (event.map !== this.mapId) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf(event.map);
+        const at = new THREE.Vector3(ox + event.x, 0, oz + event.y);
+        const me = this.avatars.get(this.me)?.object.position;
+        const off = me ? Math.hypot(me.x - at.x, me.z - at.z) : Infinity;
+        const grand = event.kind !== "goblinBomb";
+
+        this.spellFx.blast(at, { radius: event.radius, grand, shake: Math.max(0, 1 - off / BLAST_HEARD.shaken) ** 2 });
+        this.sound?.play(grand ? "explosionLarge" : "explosionSmall", { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+
+        for (const { id, to, flight, up, until } of event.throws) {
+            const avatar = this.avatars.get(id);
+            const actor = battle.actor(id);
+
+            if (!avatar?.actions.toss || !actor || actor.map !== this.mapId || avatar.object.visible === false) {
+                continue;
+            }
+
+            const lands = avatar.actions.toss({ to: [ox + to[0], oz + to[1]], flight: flight / 1000, up, ground: (x, z) => this.#standsAt(actor.map, x - ox, z - oz), seconds: actor.dead ? null : (until - battle.time) / 1000 }) ?? flight / 1000;
+
+            // (Hitting the ground: the dead are heard falling as they die)
+            if (!actor.dead) {
+                const fall = CREATURE_VOICES[actor.wild?.creature]?.fall;
+
+                if (fall !== null) {
+                    this.sound?.play(fall ?? (["mail", "plate"].includes(armourOf(avatar.character)) ? "fallArmoured" : "fall"), { at: new THREE.Vector3(ox + to[0], 0, oz + to[1]), delay: lands });
+                }
+            }
+
+            if (id === this.me) {
+                hud.message("Thrown off your feet!", 1.2);
+            }
+        }
+    }
+
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
     // still a while, then sinking out of sight until they come back to life
     #updateBody(actor, avatar, dt, ground = 0) {
         const object = avatar.object;
+
+        // (Thrown by a blast, flung where it's drawn (Actions.toss): in the air, or alive till
+        // it's on its feet again)
+        if (avatar.thrown && (!actor.dead || avatar.airborne)) {
+            avatar.ground = ground;
+            avatar.standing = ground;
+
+            return;
+        }
 
         // (A winged one coming down out of the sky, drawn gliding down to the ground: arrive)
         if (avatar.arriving) {
@@ -5471,7 +5562,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
@@ -6149,6 +6240,17 @@ export class Game {
                     this.grounds.delete(event.hazard);
                 }
 
+                continue;
+            }
+
+            // (A bomb lobbed, and a blast: no one's, drawn and heard where they are)
+            if (event.type === "bomb") {
+                this.#bomb(event);
+                continue;
+            }
+
+            if (event.type === "blast") {
+                this.#blast(event);
                 continue;
             }
 

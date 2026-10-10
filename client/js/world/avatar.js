@@ -82,11 +82,12 @@ export class Avatar {
         this.walker = new Walker(character, WALK_STYLES[walk] ?? WALK_STYLES.natural);
         this.actions = new Actions(character);
         this.actions.setWeapon(guard);
-        // (Its head turned to where it's looking, on top of whatever it's doing, unless it's down)
+        // (Its head turned to where it's looking, on top of whatever it's doing, unless it's down
+        // or thrown)
         this.walker.overlay = (dt, walking) => {
             const planted = this.actions.apply(dt, walking);
 
-            if (!this.actions.fall) {
+            if (!this.actions.fall && !this.actions.tossed) {
                 character.gaze?.turn();
             }
 
@@ -127,6 +128,13 @@ export class Avatar {
         const object = this.object;
         const follow = this.follow;
 
+        // (Thrown by a blast: where the body's flung, every frame, till it's up again)
+        if (this.actions.tossed) {
+            this.#thrown(dt);
+
+            return;
+        }
+
         // The spring, stepped exactly (so it's the same at any frame rate)
         const decay = Math.exp(-FOLLOW * dt);
         const ex = follow.x - x;
@@ -162,6 +170,32 @@ export class Avatar {
             this.character.expressions?.update(unposed.dt, this.actions);
             Object.assign(unposed, { frames: 0, dt: 0, moved: 0 });
         }
+    }
+
+    /**
+     * Is it thrown by a blast (Actions.toss) and not on its feet again yet? Drawn where the body's
+     * flung till then; then it walks back to its actor.
+     */
+    get thrown() {
+        return this.actions.thrown;
+    }
+
+    /** Is it in the air, thrown, not down yet? */
+    get airborne() {
+        return this.actions.airborne;
+    }
+
+    // Thrown: posed every frame (the ragdoll moving it, Actions.toss), what follows its actor kept
+    // where it is, facing the way it lies, to walk back from once it's up
+    #thrown(dt) {
+        const object = this.object;
+
+        this.walker.update(dt, { moved: 0 });
+        this.character.expressions?.update(dt, this.actions);
+        Object.assign(this.follow, { x: object.position.x, z: object.position.z, vx: 0, vz: 0 });
+        this.last.set(object.position.x, 0, object.position.z);
+        this.facing = wrapAngle(object.rotation.y);
+        Object.assign(this.unposed, { frames: 0, dt: 0, moved: 0 });
     }
 
     /**

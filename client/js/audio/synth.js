@@ -104,6 +104,35 @@ function grains(random, length, n, low, high, { decay = 0.003, bunch = 1.4, q = 
     return out;
 }
 
+// A blast (a bomb bursting, the Explosion spell: docs/MAGIC.md), `size` times a goblin bomb's, in
+// layers as sound designers build one, each doing one thing: a crack at its front (the shock, a
+// few milliseconds); a thud falling from 110 to 38 Hz for its weight (with its harmonics, so a
+// phone's speaker gives it too); a boom of noise low-passed from bright down to dull, the bulk of
+// it; a roar in the middle, which a phone plays; earth and stones pattering down after it; for a
+// big one, its echoes coming back off the land round it, duller; all of it softened, so it's as
+// loud as can be without clipping
+function blast(random, size) {
+    const length = 1.05 * size;
+    const crack = burst(random, 0.08, "highpass", 1800, 0.7, 0.0005, 0.012);
+    const body = thud(110, 38, 0.5 * size, 0.16 * size);
+    const boom = shape(filter(noise(random, length), "lowpass", (t) => 120 + 2600 * Math.exp(-t / (0.13 * size)), 0.9), hit(0.004, 0.42 * size));
+    const roar = shape(filter(noise(random, length), "bandpass", (t) => 250 + 900 * Math.exp(-t / 0.3), 0.8), hit(0.01, 0.25 * size));
+    const debris = grains(random, length * 0.85, Math.round(24 * size), 1500, 6000, { decay: 0.004, bunch: 1.8 });
+    let out = add(add(add(crack, body), boom, 0.9), roar, 0.5);
+
+    out = add(out, debris, 0.25, 0.06 + random.next() * 0.04);
+
+    if (size > 1.2) {
+        const echo = filter(out, "lowpass", 1300);
+
+        for (let k = 0; k < 3; k++) {
+            out = add(out, echo, 0.3 * 0.55 ** k, 0.06 + k * 0.05 + random.next() * 0.03);
+        }
+    }
+
+    return softened(out, 2.6);
+}
+
 // Bubbles: `n` short rising tones (a bubble's pitch climbs as it forms and pops) from `low` to
 // `high` Hz, strewn over `length` seconds
 function bubbles(random, length, n, low, high) {
@@ -332,6 +361,27 @@ export const SOUNDS = {
         volume: 0.6,
         make: (random) => add(whoosh(random, { length: 0.45, from: 250, top: 2200, to: 400, peak: 0.35, q: 0.8, body: 0.8 }), thump(90, 55, 0.35, 0.12), 0.4),
     },
+    // (A bomb lobbed, underarm or over: a short low whoosh, loudest as it's let go)
+    bombThrow: { variants: 3, volume: 0.5, make: swing({ name: "bombThrow", length: 0.38, from: 260, top: 1100, to: 420, peak: 0.4, q: 0.9, body: 0.6 }) },
+
+    // Blasts (blast): a goblin bomb's, and the Explosion spell's (and the Goblin King's bigger
+    // bomb's), its echoes coming back; and a bomb's wick, lit: struck, then fizzing and
+    // sputtering (hiss band-passed high, fluttering, and crackling), cut short as it bursts
+    explosionSmall: { variants: 4, volume: 0.9, make: (random) => blast(random, 0.9 + random.next() * 0.2) },
+    explosionLarge: { variants: 4, volume: 1, make: (random) => blast(random, 1.4 + random.next() * 0.2) },
+    fuse: {
+        variants: 3,
+        volume: 0.3,
+        make: (random) => {
+            const length = 1.8;
+            const flutter = 8 + random.next() * 6;
+            const strike = burst(random, 0.06, "highpass", 3000, 0.7, 0.001, 0.015);
+            const hissing = shape(filter(noise(random, length), "bandpass", 3800, 1.6), (t) => Math.min(1, t / 0.05) * (0.7 + 0.3 * Math.sin(TAU * flutter * t)));
+            const sputter = grains(random, length, 63, 2500, 7000, { decay: 0.002, bunch: 1 });
+
+            return add(add(hissing, sputter, 0.5), strike, 0.8);
+        },
+    },
 
     // Footsteps
     stepStone: { variants: 4, volume: 0.3, make: (random) => softened(step(random, "stone")) },
@@ -392,6 +442,22 @@ export const SOUNDS = {
     },
 
     // Spells: a rising shimmer as a heal is cast, a warm swell as it lands; a dizzy warble for a stun
+    // Casting Explosion: heat drawn in, rising (noise band-passed from 250 Hz up to 3.2 kHz,
+    // a tone climbing two octaves under it), crackling thicker and thicker, and a breath held a
+    // moment before it's let go: loudest at its release (PEAKS)
+    castExplosion: {
+        variants: 3,
+        volume: 0.6,
+        make: (random) => {
+            const length = 1.4;
+            const release = length * 0.94;
+            const rising = shape(filter(noise(random, length), "bandpass", (t) => 250 * (3200 / 250) ** (t / length), 1.1), swell(length, 0.94));
+            const climbing = shape(tone(length, (t) => 70 * 4 ** (t / length), { fm: [1.5, 1.2], harmonics: [[1, 1], [2, 0.4]] }), swell(length, 0.94));
+            const crackling = grains(random, length, 50, 1500, 5000, { decay: 0.003, bunch: 0.5 });
+
+            return shape(add(add(rising, climbing, 0.5), crackling, 0.3), (t) => (t > release - 0.06 && t < release - 0.01 ? 0.4 : 1));
+        },
+    },
     castHeal: {
         variants: 2,
         volume: 0.45,
@@ -587,6 +653,9 @@ export const SOUNDS = {
         },
     },
 };
+
+// (Casting Explosion loudest as it's let go: its swell's peak)
+PEAKS.castExplosion = 1.4 * 0.94;
 
 /** The wind: ten seconds of gusting, low noise, which loops without a seam. */
 export function wind(seed = 1) {
