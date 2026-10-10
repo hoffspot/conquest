@@ -264,6 +264,10 @@ const CREAKS = 1.4;
 // fighting (a moment's lull, a blow from another)
 const LEAN = { share: 0.4, most: 4.5, away: 0.25 };
 const FIGHT_VIEW = Object.freeze({ margin: 0.6, hold: 2 });
+// A message kept clear of those fighting (hud.js keepClear): each taken to be `wide` of their
+// height either side of their feet (no less than `least` pixels tall), with `over` pixels over
+// their head for their name and bar, and `under` under their feet
+const MESSAGE_CLEAR = Object.freeze({ wide: 0.35, least: 40, over: 34, under: 6 });
 // Arrows at the screen's edge for those attacking the player out of view: the nearest `most`, so
 // far in from its sides and top (pixels), and from its bottom, clear of the quick actions risen in
 // a fight
@@ -2921,6 +2925,7 @@ export class Game {
 
         this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
         this.#threats();
+        this.#clearOfFight(foe);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
         // never lagging far under it, climbing)
@@ -3562,6 +3567,33 @@ export class Game {
         }
 
         this.hud.threats(arrows);
+    }
+
+    // A message on the screen kept clear of those fighting (hud.js keepClear): the player, who
+    // they're fighting (`foe`), and whoever's after them, each where they are on the screen with
+    // their name and bar over them
+    #clearOfFight(foe) {
+        if (this.hud.banner.hidden) {
+            return;
+        }
+
+        const player = this.battle.actor(this.me);
+        const fighting = player && !player.dead ? this.battle.actors.filter((actor) => actor === foe || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const rects = [];
+
+        for (const actor of fighting.length ? [player, ...fighting] : []) {
+            const avatar = this.avatars.get(actor.id);
+            const feet = avatar && this.view.toScreen(avatar.object.position);
+            const head = avatar && this.view.toScreen(avatar.point(1, _head));
+
+            if (feet && head) {
+                const tall = Math.max(MESSAGE_CLEAR.least, feet.y - head.y);
+
+                rects.push({ left: feet.x - tall * MESSAGE_CLEAR.wide, right: feet.x + tall * MESSAGE_CLEAR.wide, top: head.y - MESSAGE_CLEAR.over, bottom: feet.y + MESSAGE_CLEAR.under });
+            }
+        }
+
+        this.hud.keepClear(rects);
     }
 
     // Whoever the camera keeps in view in a fight: who the player's fighting (#foe), or who they
