@@ -151,9 +151,11 @@ const MOST_CHANCE = 0.95;
  * What one player finds on a creature they were near when it fell (random.js random): { gold,
  * items: [{ id, quality, count }] }, for its tier: its gold that much more (as its strength is:
  * creatures.js tierPower), each thing a little likelier. Often nothing at all. More, on an
- * `elite` (ELITE_SPOILS; its prize apart: caches.js elitePrize).
+ * `elite` (ELITE_SPOILS; its prize apart: caches.js elitePrize). On an `extra` one (one more of
+ * its pack than there'd have been against a player alone: docs/WILDS.md *What they leave*), its
+ * gold and its parts only: no gear, no tome, nothing else it carried.
  */
-export function rollSpoils(creature, tier, random, least = tier, { elite = false } = {}) {
+export function rollSpoils(creature, tier, random, least = tier, { elite = false, extra = false } = {}) {
     const table = SPOILS[creature];
 
     if (!table) {
@@ -179,5 +181,7 @@ export function rollSpoils(creature, tier, random, least = tier, { elite = false
         items.push({ id: tomeOf(rollTome(random)), quality: "common", count: 1 });
     }
 
-    return { gold, items };
+    // (One more than there'd have been against a player alone: its gold and its parts, no more;
+    // rolled all the same, so the world's dice go on as they would)
+    return { gold, items: extra ? items.filter(({ id }) => PARTS[id]) : items };
 }

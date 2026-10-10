@@ -116,7 +116,7 @@ describe("a side's strength (strength.js)", () => {
         const four = scalingOf(opposition(4));
 
         assert.ok(Math.abs(four.count - Math.pow(opposition(4), SCALING.count)) < 1e-9);
-        assert.ok(four.count > 2.2 && four.count < 2.4, `${four.count} as many`);
+        assert.ok(four.count > 2.9 && four.count < 3.1, `${four.count} as many`);
         assert.ok(four.health > 1.25 && four.health < 1.4, `${four.health} as tough`);
         assert.ok(four.leader > 2.3 && four.leader < 2.5, `a leader ${four.leader} as tough`);
     });

@@ -402,6 +402,17 @@ export class View {
             this.onRestored?.();
         });
 
+        // Fitted to the canvas whenever its size on the page changes, whatever changed it, not only
+        // when the window says it's been resized: Chrome on Android says so while a phone's still
+        // turning, the page half laid out, and not again once it's done, and the world was left
+        // drawn stretched or squashed till the next. And drawn at the screen's pixels again if they
+        // change (dragged to another screen)
+        if (typeof ResizeObserver === "function") {
+            new ResizeObserver(() => this.resize()).observe(canvas);
+        }
+
+        this.#watchPixels();
+
         this.sun = new THREE.DirectionalLight(...OUTDOORS.sun);
         this.sun.castShadow = true;
         this.sun.shadow.bias = -0.0005;
@@ -755,6 +766,22 @@ export class View {
         });
     }
 
+
+    // Told when the screen's pixels to the page's change (devicePixelRatio: a window dragged to
+    // another screen), once for each ratio: drawn at the new one
+    #watchPixels() {
+        const query = globalThis.matchMedia?.(`(resolution: ${globalThis.devicePixelRatio || 1}dppx)`);
+
+        query?.addEventListener?.(
+            "change",
+            () => {
+                this.#pixelRatio();
+                this.resize();
+                this.#watchPixels();
+            },
+            { once: true },
+        );
+    }
 
     // As many pixels as the screen has, as far as the quality level goes, times the render scale
     // (debug mode) and the share the device can keep up with (adapt)
