@@ -4326,7 +4326,9 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   browsers and few phones yet; each read a frame or more later, once the GPU's done, never waited
   for, and only while the overlay's shown), the JavaScript heap (Chrome), the screen, cores and
   memory;
-- the battle: its time, how many steps each frame ran, projectiles in flight, and each character's
+- the battle: its time, how many steps each frame ran, projectiles in flight, how strong the
+  player's side is as the wild weighs it (its strength S, the opposition F set against it, and how
+  many players and allies are counted: docs/WILDS.md *A side's strength*), and each character's
   place, hit points, stamina and what it's doing (with its speed, running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build;
