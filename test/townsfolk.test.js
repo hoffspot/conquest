@@ -5,7 +5,7 @@
 // a snapshot; a castle's folk in its wards; dressed for their calling, carrying what it carries.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { BODY, STEP_MS } from "../client/js/core/battle.js";
 import { treeFor, TREES } from "../client/js/core/dialogue.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -164,6 +164,52 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
         assert.deepEqual(home.map(({ change }) => change), ["home"]);
         assert.equal(townsfolkOut(host).length, 0);
         assert.ok(folk.every(({ id }) => !host.folk.has(id)));
+    });
+
+    it("never has them stand in one another, nor in the player, gathered where they're going: by one another; and passing in a narrow way, no longer than a squeeze", () => {
+        // (Before, they walked round and round whoever stood where they were going, then squeezed
+        // through onto where they stood, and stood there in them: the player too, standing on an
+        // errand's square; seconds at a time, every minute or so)
+        for (const seed of [1, 2]) {
+            const host = hosted(seed);
+            const player = host.battle.actor(HOST_PLAYER);
+            const overlapping = new Map();
+            const [inPlayer, standingIn] = [new Set(), new Set()];
+            let longest = 0;
+
+            for (let t = 0; t < 90000; t += STEP_MS) {
+                host.advance(STEP_MS);
+
+                const near = host.battle.actors.filter((one) => !one.dead && one.map === player.map && Math.hypot(one.x - player.x, one.y - player.y) < 60);
+                const now = new Set();
+
+                for (const [k, one] of near.entries()) {
+                    for (const other of near.slice(k + 1)) {
+                        if (Math.hypot(one.x - other.x, one.y - other.y) < 2 * BODY - 0.01) {
+                            const pair = `${one.id} and ${other.id}`;
+
+                            now.add(pair);
+                            overlapping.set(pair, (overlapping.get(pair) ?? 0) + STEP_MS);
+                            longest = Math.max(longest, overlapping.get(pair));
+
+                            if (one === player || other === player) {
+                                inPlayer.add(pair);
+                            } else if (!one.path.length && !other.path.length) {
+                                standingIn.add(pair);
+                            }
+                        }
+                    }
+                }
+
+                for (const pair of [...overlapping.keys()].filter((pair) => !now.has(pair))) {
+                    overlapping.delete(pair);
+                }
+            }
+
+            assert.deepEqual([...inPlayer], [], `seed ${seed}: in the player`);
+            assert.deepEqual([...standingIn], [], `seed ${seed}: standing in one another`);
+            assert.ok(longest <= 2000, `seed ${seed}: in one another for ${longest / 1000} s`);
+        }
     });
 
     it("keeps them in a snapshot, as they are, and their looks and errands with them", () => {

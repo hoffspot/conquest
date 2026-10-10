@@ -913,10 +913,14 @@ describe("the folk in danger (battle.js #afraid)", () => {
         run(battle, FLEE.calm + 1000);
         assert.equal(townsman.afraid, null);
 
-        // A wolf out for blood; not a deer that only fights back
-        battle.add({ id: "deer", kind: "beast", team: "wild", square: [26, 26], wild: { temper: "defensive" } });
+        // A wolf out for blood; not a deer that only fights back (each in sight, four squares
+        // off either way from where the townsman's run to)
+        const [x, y] = townsman.square;
+
+        battle.add({ id: "deer", kind: "beast", team: "wild", square: [x - 4, y - 4], wild: { temper: "defensive" } });
+        assert.ok(battle.canSee(townsman, battle.actor("deer")));
         assert.equal(look(), null);
-        battle.add({ id: "wolf", kind: "beast", team: "wild", square: [34, 26], wild: { temper: "aggressive" } });
+        battle.add({ id: "wolf", kind: "beast", team: "wild", square: [x + 4, y - 4], wild: { temper: "aggressive" } });
         assert.equal(look(), "wolf");
     });
 

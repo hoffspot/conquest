@@ -1045,7 +1045,7 @@ seat, or its wagons going back for more) is met once a player's within 150 metre
   a wagon, 1.7 metres across behind an ox 4 metres ahead of its tail, went through at a slant and
   into the gatehouse's sides. Its way bends round corners 0.6 metres wider than someone's on foot
   (`WAGON_ROOM`), where there's room, and it keeps to its way rather than stepping round whoever's
-  in it: it waits, then squeezes past;
+  in it: it waits, then squeezes past (never a player, nor whoever's standing where it's going);
 - **drawn,** each wagon follows the way its ox has gone (art/kits/wagon.js `trail`), as a wagon
   follows its team round a corner, rather than turning with the ox: its tail swung four metres out
   into whatever was beside its way.
