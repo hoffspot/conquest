@@ -31,7 +31,8 @@ const { CONVOY } = await import("../client/js/core/war/war.js");
 const { decode, encode } = await import("../client/js/core/wire.js");
 const { BeastAvatar } = await import("../client/js/beasts/beast.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
-const { hitch, LADEN, WAGON, wagonOf } = await import("../client/js/world/art/kits/wagon.js");
+const { hitch, LADEN, trail, WAGON, wagonOf } = await import("../client/js/world/art/kits/wagon.js");
+const { nearestFree, squaresOf } = await import("../client/js/core/grid.js");
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -320,6 +321,102 @@ describe("the keep's requests about the convoys and the works (standing.js, host
         other.owner = "elf";
         run(host, 1000);
         assert.ok(!player.standing.find(again.id), "come to nothing");
+    });
+
+    it("takes its wagons through a town's gate along its middle, each drawn behind its ox clear of the gatehouse's sides", () => {
+        // (A cat player's home town (seed 2), walled; a convoy of theirs on the road in that passes
+        // nearest one of its gates, from 100 m out along it)
+        const world = buildWorld({ seed: 2, race: "cat" });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const war = host.war;
+        const [mx, my] = world.start.at;
+        const gates = world.maps.town.gatesNear(mx - 200, my - 200, mx + 200, my + 200);
+        const off = (gate, [x, y]) => [(x - gate.x) * gate.along[1] - (y - gate.y) * gate.along[0], (x - gate.x) * gate.along[0] + (y - gate.y) * gate.along[1]];
+        const nearest = (gate, points) =>
+            Math.min(
+                ...points.slice(1).map((b, k) => {
+                    const a = points[k];
+                    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+                    const t = Math.max(0, Math.min(1, ((gate.x - a[0]) * dx + (gate.y - a[1]) * dy) / (dx * dx + dy * dy)));
+
+                    return Math.hypot(a[0] + dx * t - gate.x, a[1] + dy * t - gate.y);
+                }),
+            );
+        const { gate, path } = war.roads.edges
+            .get(world.start.id)
+            .filter(({ kind }) => kind !== "across")
+            .flatMap(({ points }) => gates.map((each) => ({ gate: each, path: [...points].reverse(), apart: nearest(each, points) })))
+            .reduce((best, each) => (each.apart < best.apart ? each : best));
+        const lengths = path.map((point, k) => (k ? Math.hypot(point[0] - path[k - 1][0], point[1] - path[k - 1][1]) : 0));
+        const total = lengths.reduce((sum, length) => sum + length, 0);
+        let [leg, walked] = [0, 0];
+
+        while (walked + lengths[leg + 1] < total - 100) {
+            walked += lengths[++leg];
+        }
+
+        const t = (total - 100 - walked) / lengths[leg + 1];
+        const at = [path[leg][0] + (path[leg + 1][0] - path[leg][0]) * t, path[leg][1] + (path[leg + 1][1] - path[leg][1]) * t];
+        const convoy = { id: "force-970", realm: "cat", kind: "convoy", size: CONVOY.guards + 1, at, path, leg, target: world.start.id, home: war.works.find(({ owner }) => owner === "cat").id, mission: null, about: null, cargo: { wood: 60 }, back: false, since: war.turn };
+
+        assert.ok(gates.length >= 2, "a walled town");
+        assert.ok(nearest(gate, path) < gate.half, "its road in through a gate");
+        war.forces.push(convoy);
+        put(host.battle.actor(HOST_PLAYER), nearestFree(squaresOf(world.maps.town), [Math.floor(gate.x - gate.along[0] * 20 + gate.along[1] * 6), Math.floor(gate.y - gate.along[1] * 20 - gate.along[0] * 6)]));
+
+        // Each wagon as it's drawn (art/kits/wagon.js): its ox, the shafts beside it, and the wagon
+        // behind along the way the ox has gone. Within the gatehouse's depth, every part of it
+        // within WAY of the middle of its way through: the narrowest of the peoples' drawn ways a
+        // wagon goes through (a lizard folk's, between its pyramids: 2.6 m; a cat folk's arch,
+        // 3 m), not the width of the street through it (4.4 m and more)
+        const WAY = 1.3;
+        const front = LOOKS.ox.length * 0.55 + WAGON.gap;
+        const across = WAGON.wide / 2 + 0.2;
+        const tracks = new Map();
+        const through = new Set();
+        let worst = { u: 0 };
+
+        for (let time = 0; time < 150000 && host.convoys.get(convoy.id)?.cargo !== null; time += STEP_MS) {
+            host.advance(STEP_MS);
+
+            for (const id of host.convoys.get(convoy.id)?.wagons ?? []) {
+                const wagon = host.battle.actor(id);
+                const track = tracks.get(id) ?? tracks.set(id, []).get(id);
+                const [fx, fy] = [Math.sin(wagon.facing), Math.cos(wagon.facing)];
+
+                track.unshift([wagon.x, wagon.y]);
+
+                const bed = trail(track.slice(1), [wagon.x, wagon.y], wagon.facing, front);
+                const [bx, by] = [Math.sin(bed.facing), Math.cos(bed.facing)];
+                const parts = [
+                    ...[-0.52, 0, 0.52].flatMap((side) => [LOOKS.ox.length / 2, 0, -front].map((ahead) => [wagon.x + fx * ahead + fy * side, wagon.y + fy * ahead - fx * side])),
+                    ...[-across, 0, across].flatMap((side) => [0, WAGON.long / 2, WAGON.long].map((back) => [bed.at[0] - bx * back + by * side, bed.at[1] - by * back - bx * side])),
+                ];
+
+                for (const part of parts) {
+                    const [u, v] = off(gate, part);
+
+                    if (Math.abs(v) <= gate.deep && Math.abs(u) > worst.u) {
+                        worst = { u: Math.abs(u), id, time };
+                    }
+                }
+
+                const [u, v] = off(gate, [wagon.x, wagon.y]);
+
+                if (Math.abs(v) < 0.5 && Math.abs(u) < gate.half) {
+                    through.add(id);
+                }
+            }
+        }
+
+        assert.equal(host.convoys.get(convoy.id)?.cargo, null, "its goods in");
+        assert.equal(through.size, CONVOY.wagons, "each wagon through the gate");
+        assert.ok(worst.u <= WAY, `${worst.id} ${worst.u.toFixed(2)} m from the middle of the gate's way at ${worst.time} ms`);
     });
 });
 

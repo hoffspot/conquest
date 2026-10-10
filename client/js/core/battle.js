@@ -345,6 +345,94 @@ function offRound(patrol, [x, y]) {
     return nearest;
 }
 
+// How far before and past a town's gatehouse (metres) a wagon goes along the middle of its way
+// through. A wagon behind its ox (art/kits/wagon.js) is 1.7 m across, its tail 4 m behind the
+// ox's middle, and a gate's way is narrower than the street through it (a cat folk's arch 3 m
+// across, a lizard folk's 2.6), so it goes through in line, the ox turning off once it's through
+const GATE_RUN = 5;
+
+/**
+ * A wagon's way from one point to another over a map's mesh: anyone's way, but through a town's
+ * gate (a gatehouse whose middle the way crosses: the map's gatesNear) along the middle of its way
+ * through, from GATE_RUN metres before the gatehouse to as far past it, rather than wherever
+ * there's room for someone on foot. As anyone's where there's no straight way along it.
+ */
+function wagonWay(map, from, to) {
+    const navigation = navigatorOf(map);
+    const way = navigation.path(from, to);
+    const corners = [from, ...way];
+    const [xs, ys] = [corners.map(([x]) => x), corners.map(([, y]) => y)];
+
+    for (const gate of map.gatesNear?.(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)) ?? []) {
+        const [ax, ay] = gate.along;
+        // (How far a point is along the gate's way from its middle, and how far to its side)
+        const along = ([x, y]) => (x - gate.x) * ax + (y - gate.y) * ay;
+        const aside = ([x, y]) => (x - gate.x) * ay - (y - gate.y) * ax;
+        const through = corners.some((b, k) => {
+            const a = corners[k - 1];
+            const [va, vb] = k ? [along(a), along(b)] : [0, 0];
+            const t = va / (va - vb);
+
+            return k > 0 && va > 0 !== vb > 0 && Math.abs(aside([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])) <= gate.half;
+        });
+        const reach = gate.deep + GATE_RUN;
+        const [starting, ending] = [from, to].map((point) => Math.abs(along(point)) < reach && Math.abs(aside(point)) <= gate.half);
+
+        if (!through && !starting && !ending) {
+            continue;
+        }
+
+        // (Out to past it, and on from there; or, going no further, as far along it as where it's
+        // going: beside it, in line. In from before it; or, in it already, straight on from where
+        // it is, or from beside it)
+        const on = (v) => [gate.x + ax * v, gate.y + ay * v];
+        const exit = on(ending ? along(to) : (along(to) > 0 ? 1 : -1) * reach);
+        const before = on(Math.sign(along(from)) * reach);
+        const entry = (starting ? [from, on(along(from)), before] : [before]).find((point) => navigation.walkable(...point) && navigation.raycast(point, exit)?.hit === false);
+
+        if (!entry || !navigation.walkable(...exit)) {
+            continue;
+        }
+
+        return [...(entry === from ? [] : roomy(navigation, from, navigation.path(from, entry))), ...(ending ? [exit] : roomy(navigation, exit, navigation.path(exit, to)))];
+    }
+
+    return roomy(navigation, from, way);
+}
+
+// How much further than someone on foot a wagon keeps from what its way bends round (metres): its
+// wheels' half-width (art/kits/wagon.js: 0.83 m) past the room the mesh keeps (AGENT.radius, 0.25)
+const WAGON_ROOM = 0.6;
+
+// A way found from `from` with each corner it bends round between its ends moved out from the
+// turn by WAGON_ROOM (or half that), where that's on the mesh and the way to and from it is clear
+function roomy(navigation, from, way) {
+    const corners = [from, ...way];
+
+    for (let k = 1; k < corners.length - 1; k++) {
+        const [a, b, c] = [corners[k - 1], corners[k], corners[k + 1]];
+        const [into, out] = [hypot(b[0] - a[0], b[1] - a[1]), hypot(c[0] - b[0], c[1] - b[1])];
+
+        if (into < 1e-6 || out < 1e-6) {
+            continue;
+        }
+
+        const [nx, ny] = [(b[0] - a[0]) / into - (c[0] - b[0]) / out, (b[1] - a[1]) / into - (c[1] - b[1]) / out];
+        const n = hypot(nx, ny);
+
+        for (const push of n > 1e-6 ? [WAGON_ROOM, WAGON_ROOM / 2] : []) {
+            const moved = [b[0] + (nx / n) * push, b[1] + (ny / n) * push];
+
+            if (navigation.walkable(...moved) && navigation.raycast(a, moved)?.hit === false && navigation.raycast(moved, c)?.hit === false) {
+                corners[k] = moved;
+                break;
+            }
+        }
+    }
+
+    return corners.slice(1);
+}
+
 // Walking a path, a character heads straight for the furthest square of it that it can see (at
 // most this many squares on), with this much room either side of it (metres: its body, so it
 // doesn't graze a corner), rather than from square to square; and moves at most this far at a
@@ -2948,14 +3036,14 @@ export class Battle {
     }
 
     // Find the way to a square (to `point` on it: its middle, unless said), over the map's
-    // navigation mesh
+    // navigation mesh; a wagon's through a town's gate along its middle (wagonWay)
     #pathTo(actor, goal, point = [goal[0] + 0.5, goal[1] + 0.5]) {
         // (Somewhere else: how near it's got starts again)
         if (!same(actor.pathGoal, goal)) {
             actor.progress = null;
         }
 
-        actor.path = this.#route(actor, () => navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point));
+        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point)));
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
@@ -3136,9 +3224,10 @@ export class Battle {
             let along = true;
             const blocker = this.#bumps(actor, next);
 
-            // Someone in the way (or, off its way, a wall): round them, if there's room
+            // Someone in the way (or, off its way, a wall): round them, if there's room (a wagon
+            // keeps to its way, the wagon behind its ox in line: waiting, then squeezing past)
             if (blocker || (actor.offPath && !this.#clear(actor.map, next, actor))) {
-                const aside = blocker ? this.#aside(actor, [ux, uy], step, blocker) : null;
+                const aside = blocker && actor.kind !== "wagon" ? this.#aside(actor, [ux, uy], step, blocker) : null;
 
                 if (!aside) {
                     this.#blocked(actor, blocker);

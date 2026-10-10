@@ -47,11 +47,11 @@ import { FORD_WAY, WADE, wadeable, watersOf } from "./terrain/waters.js";
 import { rounded, wayOver } from "./terrain/ways.js";
 import { FLATS, flatSpot } from "./terrain/flats.js";
 import { metresOf } from "./terrain/curve.js";
-import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
+import { GROUND, HOME_TREES, PLOT, TREE_KINDS } from "./setpieces/pieces.js";
 import { buildingOutline, fenceOutlines, propOutlines } from "./setpieces/standing.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
-import { hypot } from "./exact.js";
+import { cos, hypot, sin } from "./exact.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
 
@@ -156,6 +156,9 @@ const STANDING_REACH = 12;
 // How far a building's outline reaches from its middle (metres: setpieces/standing.js
 // buildingOutline): a capital's keep's or a city's church's lot, corner to corner
 const BUILDING_REACH = 32;
+
+// How far a town's gatehouse reaches from its middle (metres: three plots across, two along)
+const GATE_REACH = 10;
 
 /**
  * How far from a building's walls someone's put to stand (metres, from its outline: setpieces/
@@ -1681,6 +1684,37 @@ export class Overworld {
     }
 
     /**
+     * The towns' gates reaching into a box (metres): the gatehouses of the town and of the
+     * settlements laid out round it (setpieces/town.js), each { x, y (its middle), along ([x, y]:
+     * the way through it, a unit), half (half its width, across the way), deep (half its depth,
+     * along it) }.
+     */
+    gatesNear(x0, y0, x1, y1) {
+        const gates = [];
+        const add = (piece) => {
+            const [half, deep] = [(piece.w * PLOT) / 2, (piece.h * PLOT) / 2];
+
+            if (piece.kind === "gatehouse" && piece.x + half + deep >= x0 && piece.x - half - deep <= x1 && piece.y + half + deep >= y0 && piece.y - half - deep <= y1) {
+                gates.push({ x: piece.x, y: piece.y, along: [sin(piece.facing), cos(piece.facing)], half, deep });
+            }
+        };
+
+        for (const piece of this.stamp.gates ?? []) {
+            add(piece);
+        }
+
+        for (let cy = Math.max(0, Math.floor((y0 - GATE_REACH) / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor((y1 + GATE_REACH) / CHUNK)); cy++) {
+            for (let cx = Math.max(0, Math.floor((x0 - GATE_REACH) / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor((x1 + GATE_REACH) / CHUNK)); cx++) {
+                for (const piece of this.settlements.piecesIn(cx, cy)) {
+                    add(piece);
+                }
+            }
+        }
+
+        return gates;
+    }
+
+    /**
      * The buildings reaching within ROOM of a chunk (cx, cy), as they're walked round: the town's
      * and the settlements' laid out, [[[x, y] x 4], ...] in the world's metres (setpieces/
      * standing.js buildingOutline). Kept with the chunk once it's made (every settlement near it
@@ -2341,7 +2375,9 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     // (And its props, walked round as they're drawn, and its buildings as they stand: setpieces/standing.js)
     const props = town.town.pieces.filter(({ kind }) => kind === "prop").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
     const buildings = town.town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, buildings, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius, market: town.town.market && [town.town.market.centre[0] + town.origin + at[0], town.town.market.centre[1] + town.origin + at[1]] };
+    // (And its gatehouses, that wagons go through along the middle of: Overworld gatesNear)
+    const gates = town.town.pieces.filter(({ kind }) => kind === "gatehouse").map((piece) => ({ ...piece, x: piece.x + town.origin + at[0], y: piece.y + town.origin + at[1] }));
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, standing: town.town.standing, water: town.town.water, walks, yards, trunks, props, buildings, gates, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius, market: town.town.market && [town.town.market.centre[0] + town.origin + at[0], town.town.market.centre[1] + town.origin + at[1]] };
     const overworld = new Overworld({ plan, stamp, start });
 
     // (Its fingerpost, by its main road out: Overworld's, in its own metres)
