@@ -27,6 +27,12 @@ import { torch } from "./torches.js";
 const M = 5;
 const m = (metres) => metres * M;
 
+// How far over its terrace's level a gate's passage is paved (metres): over the ground under it,
+// levelled to the same height, and the moat's water drawn a little over the ground near it (as
+// level with it, the stones and the ground flickered by turns under every gate's arch), and over
+// its bridge's cobbles where they run under the gate tower
+const PAVING = 0.05;
+
 /**
  * How a citadel's built (metres): its battlements' merlons (wide, high, how far apart, how thick;
  * the parapet under them, how high); the batter at the foot of a wall or tower that stands on
@@ -228,7 +234,7 @@ function gateInto(solid, piece, house, stone) {
 
     solid.box(-r, spring + r, z0, r, top, z1, stone);
     archInto(solid, r, spring, z0, z1, stone);
-    solid.box(-r - m(0.3), foot, z0, r + m(0.3), 0, z1, dark);
+    solid.box(-r - m(0.3), foot, z0, r + m(0.3), m(PAVING), z1, dark);
     crownInto(solid, -house, house, z1, top, stone);
     battlements(solid, [house - m(0.35), z0], [house - m(0.35), z1], top, stone);
     battlements(solid, [-house + m(0.35), z1], [-house + m(0.35), z0], top, stone);
@@ -476,7 +482,7 @@ function gatetowerInto(solid, piece) {
 
     solid.box(-r, spring + r, -hz, r, top, hz, stone);
     archInto(solid, r, spring, -hz, hz, stone);
-    solid.box(-r - m(0.3), foot, -hz, r + m(0.3), 0, hz, dark);
+    solid.box(-r - m(0.3), foot, -hz, r + m(0.3), m(PAVING), hz, dark);
 
     // (A string course; its crown over the gate's face and battlements round the rest)
     solid.box(-hx - m(0.2), m(6) - m(0.35), -hz - m(0.2), hx + m(0.2), m(6), hz + m(0.2), dark);
