@@ -6,7 +6,7 @@ import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
-import { memberKind, timeLeft } from "../client/js/app/partypanel.js";
+import { memberKind, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -983,6 +983,13 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
         assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");
         assert.equal(memberKind({ kind: "unit" }), "With you");
+    });
+
+    it("counts the party chat's unseen lines as a badge does (none, 1 to 9, then 9+), and has its quick phrases each short enough for a tap", () => {
+        assert.deepEqual([0, 1, 9, 10, 250].map(unreadLabel), ["", "1", "9", "9+", "9+"]);
+        assert.equal(QUICK_PHRASES.length, 8);
+        assert.equal(new Set(QUICK_PHRASES).size, QUICK_PHRASES.length);
+        assert.ok(QUICK_PHRASES.every((phrase) => phrase.length <= 14), "(a chip each, a few on a row)");
     });
 
     it("draws a bar full size near the player's character, then smaller and fainter evenly with the distance, gone at the edge of sight", () => {

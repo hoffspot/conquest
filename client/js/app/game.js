@@ -59,7 +59,7 @@ import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { shopPrice } from "../core/stock.js";
-import { PACE } from "../core/netplay.js";
+import { CHAT, PACE } from "../core/netplay.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
@@ -771,6 +771,20 @@ export class Game {
         this.refuseInvites = false;
 
         /**
+         * Party chat (core/netplay.js CHAT): what's been said in the player's party, and its comings
+         * and goings, the oldest first ({ id, name, text, mine, system }: CHAT.kept at most); and how
+         * many lines of others' they haven't seen (on the Party button: hud.js partyUnread).
+         */
+        this.chatLines = [];
+        this.chatUnread = 0;
+        this.chatCount = 0;
+
+        if (remote) {
+            remote.onChat = (line) => this.chatHeard(line);
+            remote.onUnsaid = (reason) => this.#unsaid(reason);
+        }
+
+        /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
          * player as they walk (app/camera.js `follows`), whether the greater spells shake it,
          * how far a drag turns and tilts it (times DRAG_TURN and DRAG_TILT), and whether dragging
@@ -1327,6 +1341,8 @@ export class Game {
         this.partyPanel.onOrder = (id, order) => this.#orderUnit(id, order);
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
         this.partyPanel.onParty = (what, who) => this.#partyOrder(what, who);
+        this.partyPanel.onSay = (text) => this.#sayToParty(text);
+        this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
@@ -5192,16 +5208,24 @@ export class Game {
         this.journal?.hide();
     }
 
-    /** Open the party menu (or close it, if it's open): those with the player, and what to tell them. */
-    toggleParty() {
+    /**
+     * Open the party menu (or close it, if it's open): those with the player, and what to tell
+     * them; on its chat (`chat`, or with lines said there they haven't seen), ready to type.
+     */
+    toggleParty({ chat = false } = {}) {
         if (this.partyPanel?.open) {
             this.closeParty();
         } else {
             this.closePack();
             this.closeJournal();
             this.closeSpellbook();
+            this.partyPanel.showTab(chat || this.chatUnread > 0 ? "chat" : "party");
             this.#showParty();
             this.sound?.play("bookOpen");
+
+            if (this.partyPanel.tab === "chat" && chat) {
+                this.partyPanel.input.focus();
+            }
         }
     }
 
@@ -5222,7 +5246,74 @@ export class Game {
             }),
             most: this.host.mostFollowers(this.me),
             ...this.#partyPlayers(),
+            chat: this.#chat(),
         });
+    }
+
+    // The party chat as the menu shows it: { lines, unread, canSay }; seen, if it's on its tab
+    #chat() {
+        if (this.partyPanel?.open && this.partyPanel.tab === "chat" && this.chatUnread) {
+            this.chatUnread = 0;
+            this.hud.partyUnread(0);
+        }
+
+        return { lines: this.chatLines, unread: this.chatUnread, canSay: Boolean((this.hosting || this.remote) && this.host.partyFor(this.me)) };
+    }
+
+    /**
+     * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
+     * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
+     */
+    chatHeard({ from, name, text }) {
+        const mine = from === this.me;
+
+        this.#chatLine({ name: mine ? "You" : name, text, mine });
+
+        if (!mine) {
+            this.sound?.play("chatHeard");
+            this.chatUnread++;
+        }
+
+        this.#chatShown();
+    }
+
+    // A line into the chat (the oldest let go past CHAT.kept)
+    #chatLine(line) {
+        this.chatLines.push({ id: ++this.chatCount, mine: false, system: false, ...line });
+
+        if (this.chatLines.length > CHAT.kept) {
+            this.chatLines.splice(0, this.chatLines.length - CHAT.kept);
+        }
+    }
+
+    // The chat shown as it now is: the menu, if it's open (seen there, if it's on its tab), and
+    // the Party button's badge
+    #chatShown() {
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+
+        this.hud.partyUnread(this.chatUnread);
+    }
+
+    // Something the player says to their party (typed, or a quick phrase): to the host, which sends
+    // it on to those in it (the host's own game: core/netplay.js Hosting.chat); said why not, if not
+    #sayToParty(text) {
+        const said = !this.host.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text) : this.remote ? this.remote.chat(text) : { ok: false, reason: "unpartied" };
+
+        if (said.ok) {
+            this.sound?.play("tap");
+        } else {
+            this.#unsaid(said.reason);
+        }
+    }
+
+    // A line of the player's not said (core/netplay.js CHAT_REFUSED), and why (nothing to say: nothing)
+    #unsaid(reason) {
+        if (reason !== "empty") {
+            this.hud.message(REFUSALS[reason] ?? "That wasn't said.", 1.6);
+            this.sound?.play("denied");
+        }
     }
 
     // Playing together, the party of players this one's in (core/host.js partyFor) and the
@@ -5286,6 +5377,12 @@ export class Game {
             leader: mine ? "You lead the party now." : `${name} leads the party now.`,
             disbanded: "The party's no more: no one's left in it with you.",
         }[event.change];
+
+        // (The party's comings and goings in its chat too, among what's said)
+        if (said && ["joined", "left", "removed", "leader", "disbanded"].includes(event.change)) {
+            this.#chatLine({ name: "", text: said, system: true });
+            this.#chatShown();
+        }
 
         if (event.change === "invited" && !this.refuseInvites) {
             this.sound?.play("wake");
@@ -8120,7 +8217,9 @@ export class Game {
                 return;
             }
 
-            const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey;
+            // (Typing, in the party's chat, isn't asking for anything with a key; Escape still closes)
+            const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+            const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !typing;
 
             if (event.key === "Escape" && this.pack?.open && this.pack.unpeek()) {
                 // (What was open in the pack to see what it is, put away first)
@@ -8142,6 +8241,10 @@ export class Game {
                 this.toggleSpellbook();
             } else if ((event.key === "p" || event.key === "P") && plain) {
                 this.toggleParty();
+            } else if (event.key === "Enter" && plain && (event.target === document.body || event.target instanceof HTMLCanvasElement) && !this.partyPanel?.open && (this.hosting || this.remote) && this.host.partyFor(this.me)) {
+                // (Enter, in a party of players, with nothing else to press: its chat, ready to type)
+                event.preventDefault();
+                this.toggleParty({ chat: true });
             } else if (/^[1-4]$/.test(event.key) && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
                 this.quick(Number(event.key) - 1);
             }

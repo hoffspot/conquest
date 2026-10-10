@@ -6,14 +6,15 @@
 // drops; told when the host's stopped; those who can't join told why; the ways the host's
 // characters find over the navigation meshes taken by every copy, never found again; where the
 // host's characters stand compared every few steps (the motion stream), a copy gone astray found
-// at once; the link timed; and steps kept in hand, as many as the host's sendings' unevenness asks
+// at once; the link timed; and steps kept in hand, as many as the host's sendings' unevenness asks;
+// and what's said in a party heard by those in it, sent to no one else
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
@@ -648,5 +649,81 @@ describe("playing together (netplay.js)", () => {
         host.advance(STEP_MS);
         assert.deepEqual(seen, ["a", "a"]);
         assert.throws(() => host.adopt({ version: -1 }), /another version/);
+    });
+
+    it("says a line to the sayer's party alone: heard by each in it (the sayer too), sent to no one else; tidied, held to its length, too many too quickly held back, and none said out of a party", () => {
+        const { host, hosting, join, deliver, play, catchUp } = opened();
+        const bryn = join(guest("Bryn"));
+        const cass = join(guest("Cass"));
+        const heard = { host: [], bryn: [], cass: [] };
+        const unsaid = { bryn: [], cass: [] };
+
+        hosting.onChat = (line) => heard.host.push(line);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass]]) {
+            joining.onChat = (line) => heard[who].push(line);
+            joining.onUnsaid = (reason) => unsaid[who].push(reason);
+        }
+
+        // (The host and Bryn a party; Cass in none)
+        assert.equal(host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" }).ok, true);
+        bryn.joining.command({ type: "party", do: "accept" });
+        deliver();
+        play(1);
+        catchUp(bryn.joining);
+        catchUp(cass.joining);
+        assert.deepEqual(host.partyFor("guest-1")?.members, [HOST_PLAYER, "guest-1"]);
+
+        const toCass = [];
+        const watch = hosting.send;
+
+        hosting.send = (peer, text) => {
+            if (peer === cass.peer) {
+                toCass.push(text);
+            }
+
+            watch(peer, text);
+        };
+
+        // The host says a line: the host and Bryn hear it, Cass is never sent it
+        assert.deepEqual(hosting.chat("Over here!"), { ok: true });
+        deliver();
+        assert.deepEqual(heard.host, [{ from: HOST_PLAYER, name: "Ada", text: "Over here!" }]);
+        assert.deepEqual(heard.bryn, [{ from: HOST_PLAYER, name: "Ada", text: "Over here!" }]);
+
+        // Bryn says one, run together: tidied, heard by both (Bryn too, as everyone hears it)
+        assert.deepEqual(bryn.joining.chat("  On  my\n\tway!  "), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual(heard.host.at(-1), { from: "guest-1", name: "Bryn", text: "On my way!" });
+        assert.deepEqual(heard.bryn.at(-1), { from: "guest-1", name: "Bryn", text: "On my way!" });
+
+        // Cass, in no party: not said, and told why; and nothing to say isn't sent
+        assert.deepEqual(cass.joining.chat("Wait for me"), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual(unsaid.cass, ["unpartied"]);
+        assert.deepEqual(cass.joining.chat("   "), { ok: false, reason: "empty" });
+        assert.deepEqual(hosting.chat("\u0007"), { ok: false, reason: "empty" });
+        assert.deepEqual(heard.cass, []);
+        assert.ok(toCass.every((text) => decode(text).kind === "unsaid"), "(nothing said in the party ever sent to Cass)");
+
+        // Held to its length (whole characters), and too many too quickly held back
+        assert.equal(chatLine("x".repeat(CHAT.most + 50)).length, CHAT.most);
+        assert.equal([...chatLine("🗡".repeat(CHAT.most + 1))].length, CHAT.most);
+
+        for (let k = 1; k < CHAT.burst; k++) {
+            assert.deepEqual(hosting.chat(`Line ${k}`), { ok: true });
+        }
+
+        assert.deepEqual(hosting.chat("One too many"), { ok: false, reason: "chatty" });
+        play(CHAT.burstMs / STEP_MS + 1);
+        assert.deepEqual(hosting.chat("Again"), { ok: true });
+        deliver();
+        assert.equal(heard.bryn.at(-1).text, "Again");
+
+        // (Not done to the world: every copy the same as ever)
+        catchUp(bryn.joining);
+        catchUp(cass.joining);
+        assert.equal(bryn.joining.host.checksum(), host.checksum());
+        assert.equal(cass.joining.host.checksum(), host.checksum());
     });
 });

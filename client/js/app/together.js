@@ -426,6 +426,7 @@ export async function openWorld(game, { address = relayAddress(), onChange = () 
 
     hosting.onJoin = () => onChange();
     hosting.onLeave = () => onChange();
+    hosting.onChat = (line) => game.chatHeard(line);
     link.onFrom = (peer, text) => hosting.hear(peer, text);
     link.onGone = (peer) => hosting.gone(peer);
     link.onHere = (peers) => hosting.still(peers);

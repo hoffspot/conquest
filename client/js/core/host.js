@@ -577,6 +577,7 @@ export const REFUSALS = Object.freeze({
     asked: "They've been asked already.",
     uninvited: "No one's asked you to a party.",
     unpartied: "You're not in a party.",
+    chatty: "Not so fast: give it a moment before saying more.",
     leader: "Only the party's leader can do that.",
     member: "They're not in your party.",
     invitee: "Not someone to ask.",
