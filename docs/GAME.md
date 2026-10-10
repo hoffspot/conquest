@@ -4328,8 +4328,11 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   memory;
 - the battle: its time, how many steps each frame ran, projectiles in flight, how strong the
   player's side is as the wild weighs it (its strength S, the opposition F set against it, and how
-  many players and allies are counted: docs/WILDS.md *A side's strength*), and each character's
-  place, hit points, stamina and what it's doing (with its speed, running);
+  many players and allies are counted: docs/WILDS.md *A side's strength*), how many characters
+  and creatures were drawn that frame, how many of them were posed in it and how many cast a
+  shadow, and how many soldiers in their crowds ("Bodies 38 drawn  12 posed  9 shadows  0 in
+  crowds"); and each character's place, hit points, stamina and what it's doing (with its speed,
+  running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build;
 - the downloader (app/fetcher.js, which fetches the models the game downloads only as they're

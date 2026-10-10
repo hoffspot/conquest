@@ -374,6 +374,14 @@ const DRAW_REACH = 160;
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 
+// The many near a fight drawn for less (docs/WILDS.md *A ceiling*): a creature too small on the
+// screen for its shadow to show casts none (under `shadow` drawing buffer pixels tall; again over
+// `again`), and is posed as seldom as a character that size would be (avatar.js posingEvery); of
+// the players' allies (hired adventurers, creatures called or raised in people's shape), the
+// `full` nearest the player drawn in full and casting their shadows, the rest at the middle level
+// of detail (lod.js) with only their contact shadows, and posed seldom out of view
+const MANY = Object.freeze({ shadow: 40, again: 48, full: 4 });
+
 // How near (metres) an adventurers' cache has to be to be seen, and marked on the maps from then
 // on (core/caches.js: they're put out further off than this, ahead of the player)
 const CACHE_SEEN = 60;
@@ -731,6 +739,9 @@ export class Game {
         // there are more than that: #crowding)
         this.crowd = new Set();
         this.crowded = false;
+        // (The players' allies about, and the nearest of them drawn in full: #allying)
+        this.allies = new Set();
+        this.alliesNear = new Set();
         this.running = false;
         this.accumulator = 0;
         this.lastFrame = 0;
@@ -748,7 +759,7 @@ export class Game {
         this.onAdapt = null;
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
-        this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0 };
+        this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0, bodies: { drawn: 0, posed: 0, shadows: 0, crowd: 0 } };
 
         // (The errors a frame's work has thrown, each reported once: #fault)
         this.faults = new Set();
@@ -1599,9 +1610,10 @@ export class Game {
 
         avatar.character.sheathe(true);
 
-        // (One people-shaped drawn with fewer triangles when small on the screen, as folk are: #built)
-        if (!(avatar instanceof BeastAvatar) && this.kit.lods) {
-            avatar.character.lowerDetail(this.kit.lods);
+        // (Drawn with fewer triangles when small on the screen: one people-shaped as folk are,
+        // #built; a creature its own way, BeastAvatar.lowerDetail)
+        if (this.kit.lods) {
+            (avatar instanceof BeastAvatar ? avatar : avatar.character).lowerDetail(this.kit.lods);
         }
 
         // (Its voice downloaded now it's near: audio/sound.js want)
@@ -2312,6 +2324,9 @@ export class Game {
         this.contacts?.begin();
         this.#marshal(dt);
         this.#crowding();
+        this.#allying();
+
+        const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
         this.#cheered();
 
         for (const actor of battle.actors) {
@@ -2361,6 +2376,7 @@ export class Game {
             avatar.every = this.#posing(actor, avatar, dt, pixels);
             this.#gazing(actor, avatar, mine);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
+            this.#counted(avatar, bodies);
             // (Where they're drawn, which trails where they are a little)
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
@@ -2375,7 +2391,7 @@ export class Game {
         }
 
         this.contacts?.end();
-        this.crowds?.draw(view.camera);
+        bodies.crowd = this.crowds?.draw(view.camera) ?? 0;
 
         // Projectiles, between their last two steps, rising and falling on the way
         for (const projectile of battle.projectiles) {
@@ -2639,7 +2655,7 @@ export class Game {
     // in view: BeastAvatar.seen)
     #posing(actor, avatar, dt, pixels) {
         if (avatar instanceof BeastAvatar) {
-            avatar.seen = this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) > 0;
+            return this.#posingBeast(avatar, dt, pixels);
         }
 
         if (actor.id === this.me || !(avatar instanceof Avatar)) {
@@ -2648,13 +2664,96 @@ export class Game {
 
         const { position } = avatar.object;
         const { height, mesh } = avatar.character;
+        // (One of the players' allies not among the nearest: casting no shadow, at the middle
+        // level at most: MANY)
+        const distant = this.allies.has(actor.id) && !this.alliesNear.has(actor.id);
+
+        if (this.allies.has(actor.id)) {
+            this.#shadowing(avatar, !distant);
+        }
+
         const tall = this.view.heightOnScreen(position, height, pixels, { anywhere: mesh.castShadow });
 
         // (And drawn with fewer triangles if it's small, or one of a crowd but not among the biggest
         // on the screen: Character.fitDetail)
-        avatar.character.fitDetail(tall, this.crowded && !this.crowd.has(actor.id) ? 1 : 0);
+        avatar.character.fitDetail(tall, distant || (this.crowded && !this.crowd.has(actor.id)) ? 1 : 0);
 
         return posingEvery(tall, (avatar.motion * dt * tall) / height);
+    }
+
+    // A creature (BeastAvatar): whether it's in view (what's only for looking at, a cape blown
+    // about, moved only then), whether it casts its shadow (not when it's too small on the screen
+    // for one to show: MANY), how many of its triangles are drawn (BeastAvatar.fitDetail), and
+    // how often it's posed, as a character as big is (posingEvery); out of view, as seldom as can
+    // be, unless its shadow may be seen
+    #posingBeast(avatar, dt, pixels) {
+        const { position } = avatar.object;
+        const { height } = avatar.character;
+        const near = this.view.heightOnScreen(position, height, pixels, { anywhere: true });
+        const seen = this.view.heightOnScreen(position, height, pixels);
+
+        avatar.seen = seen > 0;
+        avatar.castShadows(near >= (avatar.shadowed ? MANY.shadow : MANY.again));
+        avatar.fitDetail(seen);
+
+        const tall = seen || (avatar.shadowed ? near : 0);
+
+        return posingEvery(tall, (avatar.speed * dt * tall) / height);
+    }
+
+    // The players' allies about (hired adventurers, creatures called or raised: core/host.js
+    // followers, companions), and the MANY.full of them nearest the player, drawn in full
+    #allying() {
+        const me = this.battle.actor(this.me);
+        const ids = [...(this.host?.followers?.keys() ?? []), ...(this.host?.companions?.keys() ?? [])];
+
+        this.allies = new Set(ids);
+        this.alliesNear = new Set(
+            ids
+                .map((id) => this.battle.actor(id))
+                .filter((actor) => actor && me && actor.map === me.map)
+                .sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))
+                .slice(0, MANY.full)
+                .map(({ id }) => id),
+        );
+    }
+
+    // A character's shadow cast or not (`on`): those of its pieces casting one as it was, put
+    // back as they were
+    #shadowing(avatar, on) {
+        if (on === (avatar.shadowed ?? true)) {
+            return;
+        }
+
+        if (!on) {
+            avatar.casters = [];
+            avatar.object.traverse((node) => {
+                if (node.isMesh && node.castShadow) {
+                    avatar.casters.push(node);
+                    node.castShadow = false;
+                }
+            });
+        } else {
+            for (const node of avatar.casters ?? []) {
+                node.castShadow = true;
+            }
+
+            avatar.casters = null;
+        }
+
+        avatar.shadowed = on;
+    }
+
+    // Someone drawn this frame counted (Game.stats.bodies, the debug overlay): posed this frame,
+    // casting a shadow
+    #counted(avatar, bodies) {
+        if (!avatar.object.visible || !(avatar instanceof Avatar || avatar instanceof BeastAvatar)) {
+            return;
+        }
+
+        bodies.drawn++;
+        bodies.posed += avatar.unposed?.frames === 0 ? 1 : 0;
+        bodies.shadows += (avatar instanceof BeastAvatar ? avatar.shadowed : avatar.character.mesh?.castShadow) ? 1 : 0;
     }
 
     // Where someone's looking (characters/gaze.js): whoever they're fighting, or talking with; the
