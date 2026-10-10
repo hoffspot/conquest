@@ -118,12 +118,14 @@ async function doubleTap(page, { x, y }, { touch = false } = {}) {
 test("loads everything, listing what it downloads, then shows the title", async ({ page }) => {
     await page.goto("/");
 
-    // Each group of files on the loading screen, with the manifest's sizes
-    await expect(page.locator("#loadlist li")).toHaveCount(7);
+    // Each group of files on the loading screen, with the manifest's sizes (the chest's model is
+    // in the catalog, fetched once the game's started: not among them)
+    await expect(page.locator("#loadlist li")).toHaveCount(6);
     await expect(page.locator("#loadlist")).toContainText("3D engine");
     await expect(page.locator("#loadlist")).toContainText("Ways over the world");
     await expect(page.locator("#loadlist")).toContainText("Lettering");
-    await expect(page.locator("#loadlist")).toContainText("Things in the world");
+    await expect(page.locator("#loadlist")).toContainText("Skin details");
+    await expect(page.locator("#loadlist")).not.toContainText("Things in the world");
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
     await expect(page.locator("#titlename")).toHaveText("Pellagos");
     await expect(page.locator("#continuebutton")).toBeHidden();
@@ -132,7 +134,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
 
     expect(loaded.loaded).toBe(loaded.total);
     expect(loaded.total).toBeGreaterThan(2_000_000);
-    expect(loaded.groups).toEqual([true, true, true, true, true, true, true]);
+    expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
@@ -3590,7 +3592,7 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
-test("an enemy army's camp near the player is pitched, tents, fire, banner and its guard as sentries and its scout; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
+test("an enemy army's camp near the player is pitched within its stockade, tents, fire, banner and its guard as sentries and its scout; struck once the player's far; razed in the war, the game goes on", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     // An orc army's camp just outside the town, at war with the humans; the player by it
@@ -3624,8 +3626,15 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
         const player = game.battle.actor("player");
         const sentries = game.host.camps.get("camp-900")?.ids ?? [];
 
+        // (Its stockade round it, its wall over the world's squares)
+        const stockade = game.host.war.stockade("camp-900");
+        const [wx, wy] = stockade.sections[0].wall[0];
+        const chunk = game.world.maps.town.chunkAt(wx, wy);
+
         return {
             drawn: game.camps.size,
+            stockade: game.stockades.size,
+            wall: chunk.solid[(wy - chunk.y0) * 64 + (wx - chunk.x0)],
             tents: game.camps.camps.get("camp-900")?.object.children.length ?? 0,
             banner: game.banners.group.children.some(({ name }) => name === "banner:camp:camp-900"),
             sentries: sentries.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id), hostile: game.battle.hostile(game.battle.actor(id), player) })),
@@ -3633,6 +3642,8 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     });
 
     expect(camp.drawn).toBe(1);
+    expect(camp.stockade).toBe(1);
+    expect(camp.wall).toBe(1);
     expect(camp.tents).toBeGreaterThan(5);
     expect(camp.banner).toBe(true);
     // (Its guard of 6: five sentries round its fire, and its scout out on its round)
@@ -3672,6 +3683,83 @@ test("an enemy army's camp near the player is pitched, tents, fire, banner and i
     });
 
     expect(razed).toEqual({ gone: true, told: true, went: true });
+    expect(errors).toEqual([]);
+});
+
+test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    // An orc army at its camp just outside the town, at war with the humans, and the humans'
+    // reserve come to storm it; the player looking on, all that's said kept
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const at = [mx + 110, my + 5];
+        const from = [at[0] - 50, at[1] + 4];
+        const player = game.battle.actor("player");
+        const message = game.hud.message;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        war.camps.push({ id: "camp-900", realm: "orc", at, guard: 0, built: 0, done: 0, toward: null, used: 1e6, skirmished: 1e6, breaches: 0, broken: [], troubled: null });
+        war.forces.push({ id: "force-900", realm: "orc", kind: "army", size: 10, at: [...at], path: [[...at]], leg: 0, target: null, home: war.realm("orc").seat, mission: "camp", about: [...at], camp: "camp-900", orders: null, went: 10, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 });
+        war.forces.push({ id: "force-901", realm: "human", kind: "reserve", size: 14, at: [...from], path: [[...from], [...at]], leg: 0, target: "force-900", home: war.realm("human").seat, mission: "defend", about: null, since: 0 });
+        Object.assign(player, { square: [Math.floor(at[0] - 70), Math.floor(at[1] - 15)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+            message.call(game.hud, text, seconds);
+        };
+        game.advance(0.1);
+    });
+
+    // Its wall hacked at: the section's stakes stood in for in the battle, a bar over them
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const stakes = game.battle.actors.find(({ kind }) => kind === "stakes");
+
+        return Boolean(stakes && game.avatars.has(stakes.id) && game.hud.tracked.has(stakes.id));
+    })).toBe(true);
+
+    // Hacked through: broken open in the war, drawn so, the stand-in let go; the player told
+    const breached = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const stakes = game.battle.actors.find(({ kind }) => kind === "stakes");
+
+        stakes.hp = 1;
+
+        return stakes.id;
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.host.war.camp("camp-900")?.broken.length === 1)).toBe(true);
+
+    const after = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        game.advance(0.2);
+
+        return {
+            broken: game.host.war.camp("camp-900").broken.length,
+            drawn: game.stockades.drawn?.get("camp-900")?.broken.size ?? null,
+            stakes: game.avatars.has(id) || Boolean(game.battle.actor(id)),
+            said: window.said.filter((text) => /palisade|breach/.test(text)),
+        };
+    }, breached);
+
+    expect(after.broken).toBe(1);
+    expect(after.drawn).toBe(1);
+    expect(after.stakes).toBe(false);
+    // (Their people's reserve storming it: the player's own, through it)
+    expect(after.said).toContain("We're hacking at the orcish camp's palisade: break it open!");
+    expect(after.said).toContain("The orcish palisade is breached: we're through!");
     expect(errors).toEqual([]);
 });
 

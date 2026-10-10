@@ -1511,6 +1511,15 @@
                     "path": "models/dungeons/hauberk.glb"
                 }
             ]
+        },
+        "chest": {
+            "tier": "near",
+            "label": "A treasure chest, thrown open on a place's spoils (the JMI 3D Toolkit's, MIT)",
+            "files": [
+                {
+                    "path": "models/jmi/chest.glb"
+                }
+            ]
         }
     }
 }

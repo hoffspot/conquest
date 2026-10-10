@@ -116,12 +116,12 @@ export class Hud {
 
     /**
      * Show a bar over another character (hostile ones in red; a fortification's, `kind` "fort",
-     * broader and heavier, as strong as it stands; one of the wild's elites', core/creatures.js
-     * ELITES, edged and named in gold).
+     * or a camp's stakes hacked at, "stakes", broader and heavier, as strong as it stands; one of
+     * the wild's elites', core/creatures.js ELITES, edged and named in gold).
      */
     track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null }) {
         const level = wild?.tier ?? null;
-        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${kind === "fort" ? " fort" : ""}${wild?.elite ? " elite" : ""}`);
+        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${kind === "fort" || kind === "stakes" ? " fort" : ""}${wild?.elite ? " elite" : ""}`);
         const bar = element("div", "bar");
         const breath = element("div", "bar stamina");
 

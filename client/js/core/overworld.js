@@ -31,6 +31,7 @@ import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { byRank, SIGNED, signpostBeside, signpostPiece } from "./signposts.js";
 import { CLEARING, footprintOf } from "./war/forts.js";
+import { squaresOf, STOCKADE } from "./war/stockade.js";
 import { LAGOON, lagoonDepths, lagoonReach } from "./lagoons.js";
 import { PEOPLE_TOWNS } from "./setpieces/town.js";
 import { Sites } from "./sites.js";
@@ -341,6 +342,14 @@ export class Overworld {
         /** The fortifications standing (setForts): by id, { kind, box (footprintOf's squares) }. */
         this.forts = new Map();
 
+        /**
+         * The armies' camps' stockades standing (setStockades): by the camp's id, { key (what
+         * it's made from), box (its squares), cleared (with the ground round it), clearing (as
+         * the trees keep clear of it: { at, radius }), wall, walk (squares: [[x, y], ...]),
+         * trodden (boxes of squares) }.
+         */
+        this.stockades = new Map();
+
         // The places trees keep clear of: the settlements (but the town, which is set in), the
         // sites, the camps, the arches of rock (arches.js: their own room round them) and the
         // aqueducts' piers
@@ -453,6 +462,48 @@ export class Overworld {
         const changed = [...[...this.forts].filter(([id]) => !next.has(id)), ...[...next].filter(([id]) => !this.forts.has(id))].map(([, { cleared }]) => cleared);
 
         this.forts = next;
+
+        for (const [x0, y0, x1, y1] of changed) {
+            for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
+                for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
+                    this.chunks.delete(cy * CHUNKS + cx);
+
+                    if (this.last?.cx === cx && this.last?.cy === cy) {
+                        this.last = null;
+                    }
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * The armies' camps' stockades standing in the world (core/war/stockade.js; [{ stockade
+     * (stockadeOf's), broken (its sections broken open: brokenOf) }]): the squares of each one's
+     * wall blocked as chunks are made and not seen through, its walkway's blocked, its gates and
+     * breaches open; its ground cleared and round it (STOCKADE.clear: no crops, no trees, nothing
+     * else of the land's), its street and parade ground trodden bare. Those made already that one's
+     * gone up in, come down from, or been breached or mended in let go, to be made again. Returns
+     * the boxes of squares that changed (with the ground cleared round them), as setForts.
+     */
+    setStockades(stockades) {
+        const next = new Map(
+            stockades.map(({ stockade, broken = [] }) => {
+                const [x0, y0, x1, y1] = stockade.box;
+                const clear = STOCKADE.clear;
+                const { wall, walk } = squaresOf(stockade, broken);
+                const [mx, my] = stockade.middle;
+
+                return [stockade.id, { key: `${stockade.front}:${mx}:${my}:${[...broken].sort((a, b) => a - b)}`, box: stockade.box, cleared: [x0 - clear, y0 - clear, x1 + clear, y1 + clear], clearing: { at: [mx + 0.5, my + 0.5], radius: (STOCKADE.half + clear) * Math.SQRT2 }, wall, walk, trodden: stockade.trodden }];
+            }),
+        );
+        // (Each that's changed: where it was and where it is, once if that's the same)
+        const changed = [...new Set([...this.stockades.keys(), ...next.keys()])]
+            .filter((id) => this.stockades.get(id)?.key !== next.get(id)?.key)
+            .flatMap((id) => [...new Set([this.stockades.get(id)?.cleared, next.get(id)?.cleared].filter(Boolean).map(String))].map((box) => box.split(",").map(Number)));
+
+        this.stockades = next;
 
         for (const [x0, y0, x1, y1] of changed) {
             for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
@@ -791,8 +842,10 @@ export class Overworld {
     #clearingsNear(x0, y0) {
         const near = ({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius;
         const camps = this.#campsNear(x0, y0, x0 + CHUNK, y0 + CHUNK, CLEAR_OF_PLACES).map((camp) => ({ at: this.campAt(camp), radius: CLEAR_OF_PLACES }));
+        // (And the armies' camps' stockades standing: setStockades)
+        const stockades = [...this.stockades.values()].map(({ clearing }) => clearing);
 
-        return [...this.clearings, ...camps].filter(near);
+        return [...this.clearings, ...camps, ...stockades].filter(near);
     }
 
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the
@@ -1180,6 +1233,55 @@ export class Overworld {
             }
 
             chunk.trees = chunk.trees.filter(({ x, y }) => ![[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]].some(([sx, sy]) => under(sx, sy)));
+        }
+
+        // The armies' camps' stockades standing in it (setStockades): the ground within and round
+        // each cleared (the trees and the land's features kept clear of it as they're made), its
+        // street and parade ground trodden bare, its wall over its squares and not seen through,
+        // its walkway over its own
+        for (const { cleared, wall, walk, trodden } of this.stockades.values()) {
+            const [sx0, sy0, sx1, sy1] = cleared;
+
+            if (sx1 < x0 || sy1 < y0 || sx0 >= x0 + CHUNK || sy0 >= y0 + CHUNK) {
+                continue;
+            }
+
+            const inChunk = ([x, y]) => x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK;
+            const each = ([bx0, by0, bx1, by1], visit) => {
+                for (let y = Math.max(by0, y0); y <= Math.min(by1, y0 + CHUNK - 1); y++) {
+                    for (let x = Math.max(bx0, x0); x <= Math.min(bx1, x0 + CHUNK - 1); x++) {
+                        visit((y - y0) * CHUNK + (x - x0));
+                    }
+                }
+            };
+
+            each(cleared, (k) => {
+                crops[k] = 0;
+                ground[k] = ground[k] === GROUND.soil ? GROUND.grass : ground[k];
+            });
+
+            // (Not where the land's own blocks the way, or there's water: trodden over, it would
+            // be walked)
+            for (const box of trodden) {
+                each(box, (k) => {
+                    ground[k] = blocked[k] || water[k] || bridge[k] ? ground[k] : GROUND.road;
+                });
+            }
+
+            for (const square of wall.filter(inChunk)) {
+                const k = (square[1] - y0) * CHUNK + (square[0] - x0);
+
+                blocked[k] = 1;
+                solid[k] = 1;
+                opaque[k] = 1;
+            }
+
+            for (const square of walk.filter(inChunk)) {
+                const k = (square[1] - y0) * CHUNK + (square[0] - x0);
+
+                blocked[k] = 1;
+                solid[k] = 1;
+            }
         }
 
         return chunk;

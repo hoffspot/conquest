@@ -252,6 +252,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      anything that changes the world or the rules two games must agree on. A game of another
      version can't join.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds.
+   - `WAR_VERSION` (`client/js/core/war/war.js`): what the war's snapshot holds. A war kept by an
+     older version is carried on, not set aside: `War.restore` fills in what it hadn't kept, a
+     step for each version, so add yours there.
    - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
      set aside, not misread; or, where it can be, moved to the new one, as version 1's one
      character is (save.js `migrate`). Players keep their characters.
@@ -389,6 +392,7 @@ moves first, update the branch again.
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
 | `NET_VERSION`, `SNAPSHOT_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
+| `WAR_VERSION` | If both sides bumped it, take the higher number and add one, and keep both sides' steps in `War.restore`, the older side's first, each for a war kept before the merged number. |
 | `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |
 
 **Claude sessions merging their own pull requests** (only where the owner has said so): bring the

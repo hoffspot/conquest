@@ -176,6 +176,11 @@ export function tell(event, war) {
                 return event.won ? `${who} fell upon the ${own(event.against)} supply depot and put its guard to the sword.` : `${who} fell upon the ${own(event.against)} supply depot, and were beaten off.`;
             }
 
+            // (Broken in a fight played out in the world: war.routed)
+            if (event.routed) {
+                return `The ${own(event.against)} ${event.kind === "reserve" ? "reserve" : "army"} broke and ran before ${people(event.realm)} in the field, ${event.killed} of it killed and ${event.lost} of theirs lost.`;
+            }
+
             return `The ${own(event.realm)} army met the ${own(event.against)} ${event.kind === "reserve" ? "reserve" : "army"} in the field, ${event.killed} of them killed and ${event.lost} of its own lost, and ${event.won ? "drove them off" : "was driven off"}.`;
         case "withdrew":
             return `${People(event.realm)} have turned back from ${target(event.target)}.`;

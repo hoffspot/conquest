@@ -115,7 +115,7 @@ const hashedFiles = async (files) => Promise.all((await sized(files)).map(async 
 
 // (Groups of data, which the loader keeps and the service worker keeps by hash; the rest is code
 // and fonts, which the page asks for by their names)
-const HASHED = new Set(["body", "skin", "models"]);
+const HASHED = new Set(["body", "skin"]);
 
 /** The manifest's groups: [{ id, label, detail, files: [[path, bytes, hash?]] }]. */
 export async function manifestGroups() {
@@ -145,7 +145,6 @@ export async function manifestGroups() {
         { id: "body", label: "Body and shapes", detail: BODY_DETAILS[GAME_BODY].body, files: await sized([`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`]) },
         { id: "skin", label: "Skin details", detail: BODY_DETAILS[GAME_BODY].skin, files: await sized(masks) },
         { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
-        { id: "models", label: "Things in the world", detail: "A treasure chest (JMI 3D Toolkit)", files: await sized(["models/jmi/chest.glb"]) },
     ];
 
     for (const group of groups) {

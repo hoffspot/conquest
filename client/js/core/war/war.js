@@ -22,6 +22,7 @@ import { ARMY, CAMP, campSite, CLOSE, EDGES, fullOf, HELD, LEADERS, PALISADE, RE
 import { affords, COUNCIL, FORTS, mayBuild, plansFor } from "./forts.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { ACROSS_COUNTRY, Roads } from "./roads.js";
+import { brokenOf, frontOf, nextBreak, standsAt, stockadeOf } from "./stockade.js";
 import { DEPOT, HUNGER, SUPPLY } from "./supply.js";
 import { atan2, cos, hypot, sin } from "../exact.js";
 import { landAt } from "../worldplan/plan.js";
@@ -202,7 +203,7 @@ export const SQUAD_NAMES = Object.freeze([...Array.from({ length: SQUADS.patrols
 export const TAKEN = 0.25;
 
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
-export const WAR_VERSION = 7;
+export const WAR_VERSION = 9;
 
 // How many things that happened are kept (the log)
 const KEEP_LOG = 300;
@@ -333,7 +334,10 @@ export class War {
          * The forward camps the armies are staged from (armies.js CAMP): { id, realm, at, guard
          * (those holding it), built (the turn it was finished: null while it's going up), done
          * (when it will be), toward (the town or works it was built before), used (the turn an
-         * army was last near it), skirmished (the turn its skirmishers last went out) }.
+         * army was last near it), skirmished (the turn its skirmishers last went out), breaches
+         * (its palisade's: PALISADE), broken (which of its stockade's sections they are, in the
+         * order they broke: stockade.js brokenOf), troubled (the turn an enemy was last near it),
+         * front (the side its stockade's front gate is on: stockade.js SIDES) }.
          */
         this.camps = [];
         this.nextCamp = 1;
@@ -414,6 +418,16 @@ export class War {
     /** A camp (by its id), or null. */
     camp(id) {
         return this.camps.find((camp) => camp.id === id) ?? null;
+    }
+
+    /**
+     * A camp's stockade as it stands in the world (stockade.js stockadeOf), by the camp's id: its
+     * front gate towards what it was pitched against. Null if there's no such camp.
+     */
+    stockade(id) {
+        const camp = this.camp(id);
+
+        return camp && stockadeOf({ id: camp.id, at: camp.at, front: camp.front ?? frontOf(camp.id, camp.at, this.#targetOf(camp.toward)?.at) });
     }
 
     /** A supply depot (supply.js), by its id, or null. */
@@ -770,6 +784,107 @@ export class War {
         this.#seize(works, by, { played: true });
 
         return "seized";
+    }
+
+    /**
+     * A section of a camp's palisade hacked down in the world (from the host: docs/WAR.md *A storm
+     * near a player*) by the people `by` (a realm's id): `section` (an index into its stockade's
+     * sections) broken open, one more breach in it, as one beaten off breaches it in the war's own
+     * reckoning (#pressed). Returns whether it was standing.
+     */
+    breach(id, section, by = null) {
+        const camp = this.camp(id);
+        const broken = camp ? brokenOf(camp) : [];
+
+        if (!camp || broken.includes(section) || !this.stockade(id)?.sections[section]) {
+            return false;
+        }
+
+        camp.broken = [...broken, section];
+        camp.breaches = camp.broken.length;
+        camp.troubled = this.turn;
+        this.#emit("breached", { realm: camp.realm, by, camp: camp.id, at: [...camp.at], breaches: camp.breaches, played: true });
+
+        return true;
+    }
+
+    /**
+     * A force broken in a fight played out in the world (from the host: down to ARMY.rout of what it
+     * went in with, and outnumbered), by the people `by` (a realm's id): beaten, and getting away,
+     * as one beaten in the war's own reckoning is (#beaten: an army to its camp to be made up, a
+     * reserve home), the fight told of, `killed` of it and `lost` of those it fought brought down
+     * there. Returns whether it was there to be.
+     */
+    routed(id, { by = null, killed = 0, lost = 0 } = {}) {
+        const force = this.force(id);
+
+        if (!force || !FIGHTING.includes(force.kind)) {
+            return false;
+        }
+
+        this.#emit("battle", { realm: by, against: force.realm, at: [...force.at], won: true, killed, lost, other: force.id, kind: force.kind, routed: true, played: true });
+        this.#beaten(force);
+
+        return true;
+    }
+
+    /**
+     * An assault on a camp played out in the world (from the host: docs/WAR.md *A storm near a
+     * player*), over: `held` (its attackers, the forces `by`, broken or gone) or carried (those
+     * holding it broken, or put down), `killed` of those holding it and `lost` of its attackers
+     * brought down, its palisade breached in `breaches` places there. Held, its attackers are
+     * beaten, as one beaten off is in the war's own reckoning (#storm); carried, it's razed, and
+     * its army there, if any's left, sent home, beaten. Returns "held", "carried", or null (no such
+     * camp).
+     */
+    stormEnded(id, { by = [], held = false, killed = 0, lost = 0, breaches = 0 } = {}) {
+        const camp = this.camp(id);
+
+        if (!camp) {
+            return null;
+        }
+
+        const army = this.forces.find((force) => force.kind === "army" && force.camp === camp.id && this.#campOf(force) === camp) ?? null;
+        const attackers = by.map((each) => this.force(each)).filter(Boolean);
+        const realm = attackers[0]?.realm ?? null;
+
+        camp.troubled = this.turn;
+
+        if (realm) {
+            this.remember(camp.realm, realm, -4);
+        }
+
+        this.#emit("stormed", { realm, against: camp.realm, ...(attackers[0] ? { [attackers[0].kind]: attackers[0].id } : {}), army: army?.id ?? null, camp: camp.id, at: [...camp.at], toward: camp.toward, won: !held, killed, lost, breaches, played: true });
+
+        if (held) {
+            for (const force of attackers) {
+                this.#beaten(force);
+            }
+
+            return "held";
+        }
+
+        if (army) {
+            army.beaten = this.turn;
+            army.orders = null;
+        }
+
+        this.#razeCamp(camp, realm, { played: true });
+
+        if (army && army.size <= 0) {
+            this.#destroyed(army);
+        } else if (army) {
+            this.#goHome(army);
+        }
+
+        return "carried";
+    }
+
+    /** Whether a force (by id) is beaten and still getting away (ARMY.flee turns: #fleeing). */
+    fleeing(id) {
+        const force = this.force(id);
+
+        return Boolean(force) && this.#fleeing(force);
     }
 
     /**
@@ -1292,7 +1407,7 @@ export class War {
 
     /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
     static restore(plan, snapshot) {
-        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5, 6].includes(snapshot.version)) {
+        if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5, 6, 7, 8].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
@@ -1326,9 +1441,21 @@ export class War {
         // (version 3), each forward garrison's are whole)
         war.forts = (kept.forts ?? []).map((fort) => ({ ...fort, struck: fort.struck ?? null, ...(fort.kind === "garrison" && !fort.squads ? fullSquads(kept.turn) : {}) }));
         war.nextFort = kept.nextFort ?? 1;
-        // (A camp kept before their palisades (version 6 or before) has none breached: none kept)
+        // (A camp kept before their palisades (version 6 or before) has none breached: none kept;
+        // before their stockades in the world (version 7), it faces what it's pitched against)
         war.camps = kept.camps ?? [];
         war.nextCamp = kept.nextCamp ?? 1;
+
+        for (const camp of kept.version < 8 ? war.camps : []) {
+            camp.front ??= frontOf(camp.id, camp.at, war.#targetOf(camp.toward)?.at);
+        }
+
+        // (Before its sections were kept (version 8 or before), its breaches are the first of them
+        // in its stockade's order)
+        for (const camp of kept.version < 9 ? war.camps : []) {
+            camp.broken = brokenOf(camp);
+        }
+
         war.depots = kept.depots ?? [];
         war.nextDepot = kept.nextDepot ?? 1;
 
@@ -2449,14 +2576,15 @@ export class War {
             return false;
         }
 
-        this.#toCamp(army, this.#siteFor(army.at, target.at, target.edge + CAMP.reach * 0.6), id);
+        this.#toCamp(army, this.#siteFor(army.at, target.at, target.edge + CAMP.reach * 0.6, { stockade: true }), id);
 
         return true;
     }
 
     // Where a camp before something may go: `out` metres from it on the way from `from`, or turned
-    // a little either way, on dry land off the roads; or there anyway, failing that
-    #siteFor(from, to, out) {
+    // a little either way, on dry land off the roads (and a camp's, with room for its stockade:
+    // stockade.js standsAt); or there anyway, failing that
+    #siteFor(from, to, out, { stockade = false } = {}) {
         const [dx, dy] = [from[0] - to[0], from[1] - to[1]];
         const heading = atan2(dx, dy);
 
@@ -2464,7 +2592,7 @@ export class War {
             const at = campSite([to[0] + sin(heading + turn) * (out + 1), to[1] + cos(heading + turn) * (out + 1)], to, out);
             const land = landAt(this.plan, at[0], at[1]);
 
-            if (land.water === WATER.none && !land.road && land.biome !== "sea") {
+            if (land.water === WATER.none && !land.road && land.biome !== "sea" && (!stockade || standsAt(this.plan, at))) {
                 return at;
             }
         }
@@ -2647,7 +2775,7 @@ export class War {
         const { at, edge } = this.#targetOf(aim.id);
 
         if (!this.#toAttack(army, aim.id)) {
-            this.#toCamp(army, this.#siteFor(army.at, at, edge + CAMP.reach * 0.6), aim.id);
+            this.#toCamp(army, this.#siteFor(army.at, at, edge + CAMP.reach * 0.6, { stockade: true }), aim.id);
         }
 
         this.#emit("marched", { realm: army.realm, army: army.id, target: aim.id, size: army.size });
@@ -2717,7 +2845,10 @@ export class War {
         }
 
         const guard = Math.min(CAMP.guard, Math.max(0, army.size - 1));
-        const camp = { id: `camp-${this.nextCamp++}`, realm: army.realm, at: [...(army.about ?? army.at)], guard, built: null, done: this.turn + CAMP.build, toward: army.target, used: this.turn, skirmished: this.turn, breaches: 0, troubled: null };
+        const [id, at] = [`camp-${this.nextCamp++}`, [...(army.about ?? army.at)]];
+        // (Its stockade's front gate towards what it's pitched against: stockade.js)
+        const front = frontOf(id, at, this.#targetOf(army.target)?.at);
+        const camp = { id, realm: army.realm, at, guard, built: null, done: this.turn + CAMP.build, toward: army.target, used: this.turn, skirmished: this.turn, breaches: 0, broken: [], troubled: null, front };
 
         realm.treasury -= CAMP.cost;
         army.size -= guard;
@@ -2840,6 +2971,8 @@ export class War {
                 realm.stores[good] = Math.round((realm.stores[good] - amount) * 10) / 10;
             }
 
+            // (The oldest breach mended first)
+            camp.broken = brokenOf(camp).slice(1);
             camp.breaches--;
             mended++;
         }
@@ -3606,12 +3739,27 @@ export class War {
     }
 
     // A camp's palisade breached by an assault beaten off, as hard as it was pressed: a breach for
-    // each PALISADE.press of those holding it (`of`) brought down (`fell`), as far as PALISADE.most.
-    // How many more
+    // each PALISADE.press of those holding it (`of`) brought down (`fell`), as far as PALISADE.most
+    // (none mended for those hacked open in the world beyond it), the next of its sections in its
+    // stockade's order broken open for each. How many more
     #pressed(camp, fell, of) {
         const was = camp.breaches ?? 0;
+        const stockade = this.stockade(camp.id);
+        const broken = brokenOf(camp);
 
-        camp.breaches = Math.min(PALISADE.most, was + Math.floor(fell / Math.max(1, of) / PALISADE.press + 1e-9));
+        camp.breaches = Math.max(was, Math.min(PALISADE.most, was + Math.floor(fell / Math.max(1, of) / PALISADE.press + 1e-9)));
+
+        while (stockade && broken.length < camp.breaches) {
+            const next = nextBreak(stockade, broken);
+
+            if (next === null) {
+                break;
+            }
+
+            broken.push(next);
+        }
+
+        camp.broken = broken;
 
         return camp.breaches - was;
     }
@@ -3649,7 +3797,7 @@ export class War {
 
             if (cover) {
                 if (!this.#toAttack(army, cover.id)) {
-                    this.#toCamp(army, this.#siteFor(army.at, cover.at, CAMP.reach * 0.6), cover.id);
+                    this.#toCamp(army, this.#siteFor(army.at, cover.at, CAMP.reach * 0.6, { stockade: true }), cover.id);
                 }
 
                 return;
