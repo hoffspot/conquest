@@ -652,21 +652,56 @@ slots, sockets and hidden skin.
      level, it crossed Vitruvian's shoulders, which rise to the neck and are its torso's (on
      MakeHuman's the shoulders' tops are the arm's, under the sleeve), and left their tops bare:
      the shirt showed through a jerkin in patches.
+   - **Smooth across the bones.** Each vertex belongs to a part of the body by the bone that moves
+     it most (torso, arm, leg...), which changes from one triangle to the next along a ragged
+     line. So no region is cut there: it's measured the same on either side, and where it has to
+     part an arm or a leg from the torso, it goes by how much of the skin moves with the arm's
+     bones (`armShare`, the hand's included) or the leg's (`legShare`, the foot's), which runs
+     smoothly from vertex to vertex (`onArm`, `onLeg`: roughly metres, about 25 cm from none to
+     all round a shoulder or a hip). Cut where the bones change, a surcoat's armholes were ragged,
+     and left a sliver of shoulder at the front trimmed all over; trousers' cuffs were ragged at
+     the ankle; and a chain of office, a band across the body, lay across the nearly level tops
+     of the shoulders out to the arms, a broad ragged patch of gold on each. (It's now a U down
+     the front, a strip over each shoulder beside the neck and a band across the back, each
+     running out smoothly into the next.) A test checks that every garment's region, on both
+     bodies, changes by at most 25 a metre wherever its edge crosses the body: a step was 40 to
+     130.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
-   not jagged along the mesh. The cut (which triangles, which points are one, what's beside
+   not jagged along the mesh. Where it crosses between two of the body's vertices is found by
+   measuring the body along the way (`insideBetween`: by false position, exact at once where the
+   region runs straight), not where a line between how far inside each is crosses nothing. That
+   line was well off wherever the region runs out in a ridge or a corner between them, as it does
+   across a strap's middle: a baldric cut across the body's large chest triangles was notched
+   all along its edges. The cut (which triangles, which points are one, what's beside
    what, the edge and hem, texture coordinates and skin weights) doesn't depend on the body's
-   shape, only on its measures, so it's kept for everyone measured alike (`cutOf`: everyone
-   drawn all at once is fitted to the same measures), compactly (typed arrays, about 70 kB a
-   garment, the 40 most recently wanted): fitting a garment again takes about 7 ms, not 23.
+   shape, only on its measures, so it's kept for everyone measured alike (`cutOf`: everyone is
+   fitted to the same measures, below), compactly (typed arrays, about 70 kB a garment, the 40
+   most recently wanted): fitting a garment again takes about 7 ms, not 23.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
-   looseness, and smoothed. A breastplate is smoothed more than a shirt.
-   - **Straps lie over what's under them** (`over`: a baldric, pack straps). A strap is pushed
-     out by its own thickness past the furthest of the garments on lower layers at each point
-     (`underneath`). At its own thickness, 1 cm, it was under a jerkin (1.2 cm) and well under
-     a breastplate (3 cm): only its middle showed, its edges bitten into. Now it stands 6 to
-     15 mm over either, on both bodies. Where it crosses the shoulder, posed, a jerkin under it
-     can still show through its edge on MakeHuman's body: the shoulder's bones turn each shell's
-     offset their own way.
+   looseness, and smoothed: only out or in, along the body's normal (slid across the body, a
+   garment's picture slid with it, and a surcoat's emblem and trims ran crooked over the bust;
+   footwear slides, to merge the toes). A breastplate is smoothed more than a shirt.
+   - **One over another.** An outfit is fitted under garments first (`fittingOutfit`, in
+     `stackOrder`: by layer, then thickness), each over how far out those under it reach at each
+     of the body's vertices: at least `STAND_OFF` (3 mm) further, however it's smoothed. Grown out
+     at their own thicknesses, a livery's sleeves stood further out than the mail over them and a
+     surcoat's skirt than the belt over it, and wherever an edge only part covered the triangles
+     under it, those showed past it in spikes, so every hem looked torn. A test fits every outfit
+     worn in the game (the players' and the folk's, and each people's soldiers, officials and
+     townsfolk: about 150) and checks each garment is at least 3 mm over every one under it.
+   - **Straps lie over what's under them** (`over`: a baldric, pack straps, a chain of office,
+     belts and sashes). A
+     strap is pushed out by its own thickness past the furthest of the garments under it, which
+     it bridges as a strap of leather does: ramped up to the edges of what's under it, never down
+     (let down over them, it jogged at every neckline it crossed), and smoothed in by less of its
+     thickness (to 3 mm over what's under it, it was as thin as cloth at its edges, and creased).
+     It's grown along the body's normals smoothed along it, over about its breadth (along the
+     skin's own, they ran together over the hollow between a man's breasts, and its edges crossed
+     there), and shades as they run (its own normals, from the few large triangles it's cut
+     across, made it look crumpled). At its own thickness, 1 cm, it was under a jerkin (1.2 cm)
+     and well under a breastplate (3 cm): only its middle showed. Where it crosses the shoulder,
+     posed, a jerkin under it can still show through its edge on MakeHuman's body: the
+     shoulder's bones turn each shell's offset their own way.
    - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
      is cut just behind the ball of the foot, and a toe cap is lofted forward from the cut, ring
      by ring, to a dome over the longest toe:
@@ -683,10 +718,22 @@ slots, sockets and hidden skin.
    - **Size.** Boots come out about a centimetre bigger than the foot all round, and plate about
      two. They are skinned from the foot to the toe bone so they still bend as the heel lifts.
      Tests check the size, and that the toe caps are closed, unfolded and on their texture.
-4. **Hem.** A hem folds back to the skin, so edges have visible thickness.
+4. **Hem.** A hem folds back to the skin, or to just under the garment under it there
+   (`HEM_UNDER`), so edges have visible thickness. Down to the skin through the garment under it,
+   its edge where it went through ran from triangle to triangle: a sawtooth along every hem. Its
+   strip shades as the edge it folds back from, as an edge rolled under.
 5. **Skinning and texture.** Every garment vertex comes from the body, so it inherits the body's
    skin weights (it bends exactly like the skin) and texture coordinates. It is painted in the
-   body's texture layout (cloth, leather, quilting, mail, plate, embroidered trim), then spread a
+   body's texture layout (cloth, leather, quilting, mail, plate, embroidered trim), on the body
+   of the usual shape (`referenceMeasures`), its trims and borders along its edges as they're
+   cut, measured at each texel from the body there (between the corners of each of the body's
+   triangles, they were stepped wherever the region ran out in a corner, as at a neckline), its
+   emblem placed by the body's landmarks. Only near its edges, though (`EDGE_PAINTED`: 10 cm in,
+   the vine's leaves the deepest, and 2 cm out; beads all over): where a triangle's corners are
+   all further in or out, it's all kept or all cut away, so between them will do, and measuring
+   every texel made dressing someone twice as slow, too slow for those met on the road to be
+   drawn in time. Where each texel is on that body is kept with the texel map for the next
+   picture (`pointsOf`). Then it's spread a
    few texels past the edges of the layout's pieces so no seam shows as it's minified. Which
    texel is spread to from which is the same for every picture painted over the texel map, so
    the map lists it once (`spread`, three rings of texels round the pieces' edges) and each
@@ -694,17 +741,26 @@ slots, sockets and hidden skin.
    each: in headless Chromium, spreading the start town's garments and outfits went from 280 ms
    to 30, and putting the outfits' pictures together from about 210 to 90.
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
-   Layers go underwear, clothing, mid layer, armour, belts and straps.
+   Layers go 0 underwear, 1 clothing, 2 a mid layer, 3 armour, 4 what's over the armour (a
+   surcoat, a mantle), 5 belts and sashes, 6 straps, chains and collars.
 7. **Drawn all at once** (`merge`: everyone but a player). A soldier in uniform wears nine or
    ten garments, each a draw call. As every garment is painted on the whole body in the body's
    texture layout, one picture can show them all (`compositeGarments`): at each texel, the
    outermost garment whose region takes it in (each texel knows which body triangle it's in and
-   where, so each garment's region is worked out there exactly as its edge is cut), tinted as its
+   where, so each garment's region is worked out there exactly as its edge is cut; between the
+   corners of a triangle all inside it, or all 2 cm or more outside, all kept or cut away), tinted as its
    make is, with a second picture of its heights, roughness and metalness (a bump, roughness and
-   metalness map). Their meshes are then one mesh, one draw call. So that one picture fits
-   everyone in the outfit, the garments are fitted as they'd fit a body of the usual shape
-   (`referenceMeasures`), their hems falling in the same place on the body's surface whatever its
-   build. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
+   metalness map). Across each edge the two are mixed as much as the outer one covers of the
+   texel, by how many texels inside its edge it is (from how fast its region changes across the
+   texel, in its triangle of the body), the outer one wholly half a texel past it
+   (`EDGE_TEXELS`), so its edge is drawn from its own picture, and within 2 cm of it only
+   (`EDGE_REACH`). Each texel all one's or the other's, every edge ran in steps across the
+   texels: close up, a strap's or a trim's edges were serrated. Their meshes are then one mesh,
+   one draw call. So that one picture fits everyone in the outfit, the garments are fitted as
+   they'd fit a body of the usual shape (`referenceMeasures`), their hems falling in the same
+   place on the body's surface whatever its build. So is a player's, drawn a garment at a time:
+   each garment's picture is painted for the usual shape, and cut where a player's own body put
+   it, a surcoat's hem ran across its trim, ragged at the hips. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
    while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
    metal from cloth by the metalness picture.
 
@@ -774,6 +830,13 @@ cloth round the body:
 - **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
   under it: over a skirt, as far out as the skirt flares at each height, pleats and all (`under`:
   the skirts worn with it), so the skirt never comes through it at its hem.
+- **A cloak** (`cape`) hangs from the base of the neck over the shoulders and down the back,
+  behind the arms. It's measured round what's worn under it (`worn`: how far out the garments
+  reach at each of the body's vertices, along its normals), not the skin: put out from the skin
+  alone, a soldier's cloak ran in under his surcoat, mail and livery at the front of his
+  shoulders and showed through the surcoat there. Over the shoulders it goes round to just
+  behind the middle of their tops (`CAPE_ROUND`): further round, its corners showed over each
+  shoulder from the front, a triangle on each.
 - **Banded** (`bands`: [from, to, colour], shares of the way from the hips to the hem): rings
   either side of each band's edges, a few millimetres apart, its colours in its vertices, so a
   band of trim at the hem or stripes round a wrap change sharply.

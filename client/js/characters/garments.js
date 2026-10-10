@@ -26,8 +26,10 @@ const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
 
 /**
  * Measurements of the body at every vertex, for garments' regions: { region ("head", "torso",
- * "arm", "hand", "leg", "foot"), side (1 left, -1 right), arm and leg (fractions down the
- * limb), y, front (how far forward of the body's middle), face ([x, y, z] face coordinates) },
+ * "arm", "hand", "leg", "foot": by the bone that moves it most), armShare and legShare (how much
+ * of it moves with the arm's bones, the hand's included, and the leg's, the foot's included: 0
+ * to 1), side (1 left, -1 right), arm and leg (fractions down the limb), x, y, z, face ([x, y, z]
+ * face coordinates) },
  * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }, and the neck's
  * radius (`neckRadius`).
  */
@@ -80,6 +82,8 @@ export function measureBody(character) {
         return first.distance <= second.distance ? first.t * 0.5 : 0.5 + second.t * 0.5;
     };
     const vertices = [];
+    const armBone = human.bones.map(({ name }) => ARM.test(name) || HAND.test(name));
+    const legBone = human.bones.map(({ name }) => LEG.test(name) || FOOT.test(name));
 
     for (let v = 0; v < human.vertexCount; v++) {
         p.fromArray(positions, v * 3);
@@ -87,9 +91,25 @@ export function measureBody(character) {
         const name = human.bones[human.skinIndices[v * 4]].name;
         const side = p.x >= 0 ? "Left" : "Right";
         const region = name === "Head" ? "head" : HAND.test(name) ? "hand" : ARM.test(name) ? "arm" : LEG.test(name) ? "leg" : FOOT.test(name) ? "foot" : "torso";
+        // (How much of its skin moves with the arm's bones, and with the leg's: smooth from one
+        // vertex to the next, where its region, by its strongest bone, isn't)
+        let total = 0;
+        let arm = 0;
+        let leg = 0;
+
+        for (let k = 0; k < 4; k++) {
+            const weight = human.skinWeights[v * 4 + k];
+            const bone = human.skinIndices[v * 4 + k];
+
+            total += weight;
+            arm += armBone[bone] ? weight : 0;
+            leg += legBone[bone] ? weight : 0;
+        }
 
         vertices.push({
             region,
+            armShare: total ? arm / total : 0,
+            legShare: total ? leg / total : 0,
             side: side === "Left" ? 1 : -1,
             arm: along(chains[`arm${side}`]),
             leg: along(chains[`leg${side}`]),
@@ -123,10 +143,6 @@ function segment(p, a, b) {
 
 const OUTSIDE = -1;
 
-// Where a tunic's hem and neck come on the base body (its height, metres: the trim's bands)
-const HEM_Y = 0.045;
-const NECK_Y = 0.585;
-
 /**
  * Up to the neck: a round neckline, dipping at the front and rising over the shoulders, out past
  * the neck's sides (level, it cut across shoulders that rise to the neck, as Vitruvian's do, and
@@ -134,44 +150,49 @@ const NECK_Y = 0.585;
  */
 const neckline = (v, l, depth = 0.03) => l.neck - depth - v.y - 0.035 * smoothstep(0, 0.12, v.z - l.neckZ) + 2 * Math.max(0, Math.abs(v.x) - l.neckRadius - depth / 2);
 
-/** The torso from `bottom` up to the neckline, arms down to `sleeve` (0 none, 1 the wrist). */
+// How far onto an arm or a leg (above 0) or off it a point is, by how much of its skin moves
+// with the limb's bones: roughly metres. An edge round a limb follows where that's half, smooth
+// across the skin (by the strongest bone, ragged: docs/CHARACTERS.md)
+const SHARE_REACH = 0.25;
+const onArm = (v) => SHARE_REACH * (v.armShare - 0.5);
+const onLeg = (v) => SHARE_REACH * (v.legShare - 0.5);
+
+/**
+ * The torso from `bottom` up to the neckline, arms down to `sleeve` (0 none, 1 the wrist): below
+ * the hips, round the tops of the thighs too. Measured alike either side of where the skin goes
+ * from one bone to the next, so its edges are smooth.
+ */
 function top(bottom, sleeve, neck = 0.03) {
-    return (v, l) => {
-        switch (v.region) {
-            case "torso":
-                return Math.min(v.y - bottom(l), neckline(v, l, neck));
-            case "arm":
-                return sleeve - v.arm;
-            default:
-                return OUTSIDE;
-        }
-    };
+    return (v, l) => (v.region === "foot" ? OUTSIDE : Math.min(Math.max(v.y - bottom(l), onArm(v)), neckline(v, l, neck), Math.max(sleeve - v.arm, -onArm(v))));
 }
 
-/** A band round the torso, from `bottom` up to `top`. */
+/** A band round the body, from `bottom` up to `top`, not the arms. */
 function band(bottom, top) {
-    return (v, l) => (v.region === "torso" ? Math.min(v.y - bottom(l), top(l) - v.y) : OUTSIDE);
+    return (v, l) => (v.region === "foot" ? OUTSIDE : Math.min(v.y - bottom(l), top(l) - v.y, -onArm(v)));
 }
 
-/** From `waist` down the legs to `length` (0 the hip, 1 the ankle). */
+/** From `waist` down the legs to `length` (0 the hip, 1 the ankle; past it, the foot). */
 function bottoms(waist, length) {
-    return (v, l) => {
-        switch (v.region) {
-            case "torso":
-                return waist(l) - v.y;
-            case "leg":
-                return length - v.leg;
-            default:
-                return OUTSIDE;
-        }
-    };
+    return (v, l) => Math.min(waist(l) - v.y, Math.max(length - v.leg, -onLeg(v)), -onArm(v));
+}
+
+/** Round the arms, from `from` down to `to` (0 the shoulder, 1 the wrist; past it, the hand). */
+function sleeves(from, to) {
+    return (v) => Math.min(v.arm - from, to - v.arm, onArm(v));
+}
+
+/** The feet, and the legs up to `from` (1 the ankle, 0 the hip). */
+function legs(from) {
+    return (v) => (v.region === "foot" ? 1 : Math.min(v.leg - from, onLeg(v)));
 }
 
 /**
- * Every garment: its slot, layer (under garments first), region, thickness and looseness (metres),
- * whether it lies over what's worn under it (`over`: a strap, grown out past it), smoothing, and
- * look (colour, roughness, metalness, a pattern painted in, a tiling detail); or, for lingerie,
- * the design it's cut from (DESIGNS), clear wherever that has no fabric.
+ * Every garment: its slot, layer (under garments first: 0 underwear, 1 clothing, 2 a mid layer,
+ * 3 armour, 4 what's over the armour, a surcoat or a mantle, 5 belts and sashes, 6 straps, chains
+ * and collars), region, thickness and looseness (metres), whether it lies over what's worn under
+ * it by its own thickness (`over`: a strap), smoothing, and look (colour, roughness, metalness, a
+ * pattern painted in, a tiling detail); or, for lingerie, the design it's cut from (DESIGNS), clear
+ * wherever that has no fabric.
  */
 const MADE = {
     briefs: { label: "Briefs", slot: "underwear", layer: 0, thickness: 0.0015, smooth: 2, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: bottoms((l) => l.hips + 0.02, 0.1) },
@@ -187,19 +208,19 @@ const MADE = {
     gambeson: { label: "Gambeson", slot: "chest", layer: 2, thickness: 0.012, loose: 0.006, smooth: 6, colour: "#b3a47e", roughness: 0.9, pattern: "quilted", inside: top((l) => l.hips - 0.07, 0.9, 0.035) },
     mail: { label: "Mail shirt", slot: "chest", layer: 2, thickness: 0.007, loose: 0.004, smooth: 4, colour: "#9aa0a4", roughness: 0.45, metalness: 0.85, pattern: "mail", inside: top((l) => l.hips - 0.06, 0.4, 0.04) },
     breastplate: { label: "Breastplate", slot: "armour", layer: 3, thickness: 0.02, loose: 0.01, smooth: 14, colour: "#b8bec2", roughness: 0.28, metalness: 1, pattern: "plate", inside: top((l) => l.waist - 0.04, 0.02, 0.05) },
-    bracers: { label: "Leather bracers", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, colour: "#5c3a22", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.64, 0.93 - v.arm) : OUTSIDE) },
-    belt: { label: "Belt", slot: "waist", layer: 4, thickness: 0.012, smooth: 6, colour: "#3a2616", roughness: 0.55, pattern: "leather", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.07), l.waist - 0.025 - v.y) : OUTSIDE) },
-    boots: { label: "Leather boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, colour: "#3b2a1c", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.66 : OUTSIDE) },
+    bracers: { label: "Leather bracers", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, colour: "#5c3a22", roughness: 0.6, pattern: "leather", inside: sleeves(0.64, 0.93) },
+    belt: { label: "Belt", slot: "waist", layer: 5, thickness: 0.008, over: true, smooth: 6, colour: "#3a2616", roughness: 0.55, pattern: "leather", inside: band((l) => l.waist - 0.07, (l) => l.waist - 0.025) },
+    boots: { label: "Leather boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, colour: "#3b2a1c", roughness: 0.6, pattern: "leather", inside: legs(0.66) },
     // (Spiked boots' leather: under the iron at their toes, heels and shins, equipment.js)
-    spikedBootLeather: { label: "Spiked boots' leather", slot: "feet", layer: 2, thickness: 0.008, smooth: 8, toeBox: true, colour: "#3d291a", roughness: 0.68, pattern: "leather", hidden: true, inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.6 : OUTSIDE) },
-    sabatons: { label: "Plate boots", slot: "feet", layer: 2, thickness: 0.012, smooth: 10, toeBox: true, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.72 : OUTSIDE) },
-    gloves: { label: "Gloves", slot: "hands", layer: 2, thickness: 0.002, smooth: 1, colour: "#4a3322", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "hand" ? 1 : v.region === "arm" ? v.arm - 0.9 : OUTSIDE) },
-    gauntlets: { label: "Gauntlets", slot: "hands", layer: 2, thickness: 0.007, smooth: 2, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "hand" ? 1 : v.region === "arm" ? v.arm - 0.8 : OUTSIDE) },
-    greaves: { label: "Greaves", slot: "shins", layer: 3, thickness: 0.014, smooth: 8, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "leg" ? Math.min(v.leg - 0.56, 0.86 - v.leg) : OUTSIDE) },
+    spikedBootLeather: { label: "Spiked boots' leather", slot: "feet", layer: 2, thickness: 0.008, smooth: 8, toeBox: true, colour: "#3d291a", roughness: 0.68, pattern: "leather", hidden: true, inside: legs(0.6) },
+    sabatons: { label: "Plate boots", slot: "feet", layer: 2, thickness: 0.012, smooth: 10, toeBox: true, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: legs(0.72) },
+    gloves: { label: "Gloves", slot: "hands", layer: 2, thickness: 0.002, smooth: 1, colour: "#4a3322", roughness: 0.6, pattern: "leather", inside: (v) => Math.min(v.arm - 0.9, onArm(v)) },
+    gauntlets: { label: "Gauntlets", slot: "hands", layer: 2, thickness: 0.007, smooth: 2, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => Math.min(v.arm - 0.8, onArm(v)) },
+    greaves: { label: "Greaves", slot: "shins", layer: 3, thickness: 0.014, smooth: 8, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => Math.min(v.leg - 0.56, 0.86 - v.leg, onLeg(v)) },
     // (A strap from the right shoulder across the chest and back to the left hip, for what's
     // carried on the back: equipment.js SHEATHS. Straps lie over what's worn under them)
-    baldric: { label: "Baldric", slot: "straps", layer: 5, thickness: 0.01, over: true, smooth: 3, colour: "#3a2616", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.02 * (l.height / 1.7) - Math.abs(0.83 * (v.x - 0.015 * (l.height / 1.7)) + 0.56 * (v.y - (l.armpit + l.waist + 0.07 * (l.height / 1.7)) / 2)), v.y - (l.waist - 0.07)) : OUTSIDE) },
-    straps: { label: "Pack straps", slot: "straps", layer: 5, thickness: 0.012, over: true, smooth: 3, colour: "#2e1d12", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.016 * (l.height / 1.7) - Math.abs(Math.abs(v.x) - 0.085 * (l.height / 1.7)), v.y - l.armpit + 0.04) : OUTSIDE) },
+    baldric: { label: "Baldric", slot: "straps", layer: 6, thickness: 0.01, over: true, smooth: 3, colour: "#3a2616", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "foot" ? OUTSIDE : Math.min(0.02 * (l.height / 1.7) - Math.abs(0.83 * (v.x - 0.015 * (l.height / 1.7)) + 0.56 * (v.y - (l.armpit + l.waist + 0.07 * (l.height / 1.7)) / 2)), v.y - (l.waist - 0.07), -onArm(v), l.neck - v.y)) },
+    straps: { label: "Pack straps", slot: "straps", layer: 6, thickness: 0.012, over: true, smooth: 3, colour: "#2e1d12", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "foot" ? OUTSIDE : Math.min(0.016 * (l.height / 1.7) - Math.abs(Math.abs(v.x) - 0.085 * (l.height / 1.7)), v.y - l.armpit + 0.04, -onArm(v), l.neck - v.y)) },
     loincloth: { label: "Loincloth", slot: "underwear", layer: 0, thickness: 0.003, smooth: 3, colour: "#5b4632", roughness: 0.9, pattern: "leather", inside: bottoms((l) => l.hips + 0.03, 0.2) },
 
     // The tavern's folk: a chemise with a low neck and short sleeves, and a bodice laced up the
@@ -241,47 +262,42 @@ const MADE = {
     // on the chest; plate vambraces; a tunic of livery with the emblem; a chain of office in gold,
     // over the shoulders and down the front
     surcoat: { label: "Surcoat", slot: "surcoat", layer: 4, thickness: 0.005, loose: 0.008, smooth: 6, colour: "#27407a", roughness: 0.82, pattern: "surcoat", trim: "#d9b44a", inside: top((l) => l.hips - 0.07, 0.02, 0.05) },
-    vambraces: { label: "Vambraces", slot: "forearms", layer: 3, thickness: 0.011, smooth: 6, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.62, 0.93 - v.arm) : OUTSIDE) },
+    vambraces: { label: "Vambraces", slot: "forearms", layer: 3, thickness: 0.011, smooth: 6, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: sleeves(0.62, 0.93) },
     livery: { label: "Livery", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#27407a", roughness: 0.85, pattern: "trim", trim: "#d9b44a", inside: top((l) => l.hips - 0.06, 0.95) },
     chain: {
         label: "Chain of office",
         slot: "neck",
-        layer: 5,
-        thickness: 0.018,
+        layer: 6,
+        thickness: 0.008,
+        over: true,
         smooth: 2,
         colour: "#d8b24a",
         roughness: 0.3,
         metalness: 1,
         pattern: "chain",
         inside: (v, l) => {
-            if (v.region !== "torso") {
+            if (v.region === "foot") {
                 return OUTSIDE;
             }
 
-            // (A U down the front, from over each shoulder to the breastbone, its links a band
-            // as wide however steep it runs; straight across the back)
+            // (A U down the front to the breastbone, as wide however steep it runs; over each
+            // shoulder beside the neck; across the back: each running out smoothly into the next)
             const s = l.height / 1.7;
-            const reach = 0.11 * s;
-            const drop = 0.2 * s;
+            const [width, reach, drop, top] = [0.011 * s, 0.11 * s, 0.2 * s, l.neck - 0.02 * s];
             const x = Math.min(1, Math.abs(v.x) / reach);
-
-            if (v.z <= 0) {
-                return 0.011 * s - Math.abs(v.y - (l.neck - 0.035 * s));
-            }
-
-            const line = l.neck - 0.02 * s - drop * (1 - x * x);
             const slope = (2 * drop * x) / reach;
+            const across = reach - Math.abs(v.x);
+            const front = Math.min(width - Math.abs(v.y - (top - drop * (1 - x * x))) / Math.sqrt(1 + slope * slope), across, v.z);
+            const over = Math.min(width - Math.abs(Math.abs(v.x) - reach), v.y - (top - 0.045 * s));
+            const back = Math.min(width - Math.abs(v.y - (l.neck - 0.035 * s)), across, -v.z);
 
-            return 0.011 * s - Math.abs(v.y - line) / Math.sqrt(1 + slope * slope);
+            return Math.min(Math.max(front, over, back), -onArm(v), l.neck - v.y);
         },
     },
 };
 
-// The base body's height (metres) of a tunic's hem, from how far above the hips it comes
-const hemAt = (above) => HEM_Y + 0.06 + above;
-
 // Round the neck down onto the shoulders, as a collar of beads lies (`deep`: metres down from the neck)
-const collar = (deep) => (v, l) => (v.region === "torso" ? Math.min(v.y - (l.neck - deep * (l.height / 1.7)), l.neck + 0.01 - v.y) : OUTSIDE);
+const collar = (deep) => band((l) => l.neck - deep * (l.height / 1.7), (l) => l.neck + 0.01);
 
 // The bust's band, as a chest wrap's
 const bustBand = band((l) => l.chest - 0.75 * (l.chest - l.waist), (l) => l.armpit + 0.02);
@@ -295,43 +311,43 @@ const EVERYDAY = {
     // The elves': fine cloth, long and flowing, a vine in leaf worked round the neck and hem; a
     // silk sash; soft boots
     // (A tunic to the hips, over the leggings)
-    elfTunic: [{ label: "Elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.55, pattern: "vine", hem: hemAt(-0.06), inside: top((l) => l.hips - 0.06, 0.97, 0.045) }, { Moss: ["#4f6f4a", "#dde3ea"], Silver: ["#b9c0c4", "#3a8a55"], Dusk: ["#3d4f7a", "#dde3ea"] }],
-    elfBlouse: [{ label: "Elven blouse", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.008, smooth: 4, roughness: 0.55, pattern: "vine", hem: hemAt(-0.03), inside: top((l) => l.hips - 0.03, 0.97, 0.07) }, { Ivory: ["#e8e2d0", "#3a8a55"], Sage: ["#a9b9a2", "#f2f2ec"] }],
-    elfVest: [{ label: "Elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.55, pattern: "vine", hem: hemAt(-0.02), inside: top((l) => l.hips - 0.02, 0.03, 0.06) }, { Moss: ["#3e5a44", "#dde3ea"], Dusk: ["#2e3c60", "#dde3ea"] }],
+    elfTunic: [{ label: "Elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.55, pattern: "vine", inside: top((l) => l.hips - 0.06, 0.97, 0.045) }, { Moss: ["#4f6f4a", "#dde3ea"], Silver: ["#b9c0c4", "#3a8a55"], Dusk: ["#3d4f7a", "#dde3ea"] }],
+    elfBlouse: [{ label: "Elven blouse", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.008, smooth: 4, roughness: 0.55, pattern: "vine", inside: top((l) => l.hips - 0.03, 0.97, 0.07) }, { Ivory: ["#e8e2d0", "#3a8a55"], Sage: ["#a9b9a2", "#f2f2ec"] }],
+    elfVest: [{ label: "Elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.55, pattern: "vine", inside: top((l) => l.hips - 0.02, 0.03, 0.06) }, { Moss: ["#3e5a44", "#dde3ea"], Dusk: ["#2e3c60", "#dde3ea"] }],
     elfBodice: [{ label: "Elven bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, roughness: 0.5, pattern: "laced", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) }, { Moss: ["#3e5a44", "#dde3ea"], Dusk: ["#2e3c60", "#dde3ea"] }],
-    elfSash: [{ label: "Silk sash", slot: "waist", layer: 4, thickness: 0.006, smooth: 6, roughness: 0.45, pattern: "cloth", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.1), l.waist - 0.01 - v.y) : OUTSIDE) }, { Silver: ["#c9ced6"], Green: ["#3a8a55"] }],
+    elfSash: [{ label: "Silk sash", slot: "waist", layer: 5, thickness: 0.006, over: true, smooth: 6, roughness: 0.45, pattern: "cloth", inside: band((l) => l.waist - 0.1, (l) => l.waist - 0.01) }, { Silver: ["#c9ced6"], Green: ["#3a8a55"] }],
     // The dark elves': close-fitted and high at the neck, black and violet, a silver web across
     // the breast; tall boots to the knee
-    darkTunic: [{ label: "Dark elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.006, smooth: 4, roughness: 0.5, pattern: "web", hem: hemAt(-0.1), inside: top((l) => l.hips - 0.1, 0.97, 0.008) }, { Black: ["#1d1724", "#d6cfe6"], Violet: ["#3e2266", "#d6cfe6"], Plum: ["#4a2340", "#b8a6ff"] }],
-    darkVest: [{ label: "Dark elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.45, pattern: "web", hem: hemAt(-0.02), inside: top((l) => l.hips - 0.02, 0.03, 0.01) }, { Black: ["#16121b", "#8a5cc4"] }],
+    darkTunic: [{ label: "Dark elven tunic", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.006, smooth: 4, roughness: 0.5, pattern: "web", inside: top((l) => l.hips - 0.1, 0.97, 0.008) }, { Black: ["#1d1724", "#d6cfe6"], Violet: ["#3e2266", "#d6cfe6"], Plum: ["#4a2340", "#b8a6ff"] }],
+    darkVest: [{ label: "Dark elven vest", slot: "chest", layer: 2, thickness: 0.005, loose: 0.003, smooth: 6, roughness: 0.45, pattern: "web", inside: top((l) => l.hips - 0.02, 0.03, 0.01) }, { Black: ["#16121b", "#8a5cc4"] }],
     darkBodice: [{ label: "Dark elven bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, roughness: 0.45, pattern: "laced", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) }, { Black: ["#1d1724", "#8a5cc4"], Violet: ["#3e2266", "#d6cfe6"] }],
-    darkBoots: [{ label: "Tall boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, roughness: 0.45, pattern: "leather", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.48 : OUTSIDE) }, { Black: ["#121016"] }],
+    darkBoots: [{ label: "Tall boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, roughness: 0.45, pattern: "leather", inside: legs(0.48) }, { Black: ["#121016"] }],
     // The cat folk's: light wraps for the sun, bare at the arms, woven in bold zigzagged bands of
     // saffron, indigo and red; collars of beads; bronze bangles; bare feet
     catWrap: [{ label: "Wrap", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.85, pattern: "bands", inside: top((l) => l.hips - 0.04, 0.05, 0.075) }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"], Red: ["#b33224", "#1e1a18", "#e0a02a"] }],
     catBandeau: [{ label: "Breast wrap", slot: "shirt", layer: 1, thickness: 0.003, smooth: 6, roughness: 0.85, pattern: "bands", inside: bustBand }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"] }],
-    beadedCollar: [{ label: "Beaded collar", slot: "neck", layer: 5, thickness: 0.006, smooth: 3, roughness: 0.4, pattern: "beads", inside: collar(0.1) }, { Bright: ["#b33224", "#efe2c4", "#2f6fb5"], Gold: ["#e0a02a", "#1e1a18", "#b33224"] }],
+    beadedCollar: [{ label: "Beaded collar", slot: "neck", layer: 6, thickness: 0.006, smooth: 3, roughness: 0.4, pattern: "beads", inside: collar(0.1) }, { Bright: ["#b33224", "#efe2c4", "#2f6fb5"], Gold: ["#e0a02a", "#1e1a18", "#b33224"] }],
     // (A man's: wide trousers to the calf, loose and light, and a banded sash)
     catTrousers: [{ label: "Wide trousers", slot: "legs", layer: 1, thickness: 0.003, loose: 0.016, smooth: 4, roughness: 0.85, pattern: "cloth", inside: bottoms((l) => l.waist - 0.02, 0.78) }, { Indigo: ["#2f3f95"], Ochre: ["#c47a2c"], Red: ["#8e2a20"] }],
-    catSash: [{ label: "Banded sash", slot: "waist", layer: 4, thickness: 0.006, smooth: 6, roughness: 0.8, pattern: "bands", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.11), l.waist - 0.0 - v.y) : OUTSIDE) }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"] }],
-    bangles: [{ label: "Bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.35, metalness: 1, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.84, 0.93 - v.arm) : OUTSIDE) }, { Bronze: ["#b8863a"] }],
+    catSash: [{ label: "Banded sash", slot: "waist", layer: 5, thickness: 0.006, over: true, smooth: 6, roughness: 0.8, pattern: "bands", inside: band((l) => l.waist - 0.11, (l) => l.waist) }, { Saffron: ["#e0a02a", "#2f3f95", "#b33224"], Indigo: ["#2f3f95", "#e0a02a", "#efe2c4"] }],
+    bangles: [{ label: "Bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.35, metalness: 1, pattern: "bangles", inside: sleeves(0.84, 0.93) }, { Bronze: ["#b8863a"] }],
     // The lizard folk's: white cotton with stepped frets round the neck and hem in turquoise and
     // crimson, a row of diamonds over the breast; a short jacket; a loincloth; bangles of jade
-    huipil: [{ label: "Huipil", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.012, smooth: 4, roughness: 0.88, pattern: "fret", hem: hemAt(-0.1), inside: top((l) => l.hips - 0.1, 0.22, 0.06) }, { White: ["#ece6d6", "#2fb3a0", "#a8322a"], Ochre: ["#c9962e", "#a8322a", "#2fb3a0"], Turquoise: ["#2fb3a0", "#ece6d6", "#a8322a"] }],
-    xicolli: [{ label: "Xicolli", slot: "chest", layer: 2, thickness: 0.004, loose: 0.006, smooth: 4, roughness: 0.85, pattern: "fret", hem: hemAt(-0.03), inside: top((l) => l.hips - 0.03, 0.03, 0.06) }, { Crimson: ["#a8322a", "#2fb3a0", "#ece6d6"], White: ["#ece6d6", "#a8322a", "#2fb3a0"] }],
+    huipil: [{ label: "Huipil", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.012, smooth: 4, roughness: 0.88, pattern: "fret", inside: top((l) => l.hips - 0.1, 0.22, 0.06) }, { White: ["#ece6d6", "#2fb3a0", "#a8322a"], Ochre: ["#c9962e", "#a8322a", "#2fb3a0"], Turquoise: ["#2fb3a0", "#ece6d6", "#a8322a"] }],
+    xicolli: [{ label: "Xicolli", slot: "chest", layer: 2, thickness: 0.004, loose: 0.006, smooth: 4, roughness: 0.85, pattern: "fret", inside: top((l) => l.hips - 0.03, 0.03, 0.06) }, { Crimson: ["#a8322a", "#2fb3a0", "#ece6d6"], White: ["#ece6d6", "#a8322a", "#2fb3a0"] }],
     // (A man's: breeches of cotton to the knee)
     lizardBreeches: [{ label: "Cotton breeches", slot: "legs", layer: 1, thickness: 0.003, loose: 0.01, smooth: 4, roughness: 0.88, pattern: "cloth", inside: bottoms((l) => l.waist - 0.02, 0.5) }, { White: ["#ece6d6"], Ochre: ["#c9962e"] }],
     maxtlatl: [{ label: "Maxtlatl", slot: "underwear", layer: 0, thickness: 0.003, smooth: 3, roughness: 0.9, pattern: "cloth", inside: bottoms((l) => l.hips + 0.03, 0.2) }, { White: ["#ece6d6"] }],
-    jadeBangles: [{ label: "Jade bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.3, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.84, 0.93 - v.arm) : OUTSIDE) }, { Green: ["#3f8f5f"] }],
+    jadeBangles: [{ label: "Jade bangles", slot: "forearms", layer: 3, thickness: 0.006, smooth: 2, roughness: 0.3, pattern: "bangles", inside: sleeves(0.84, 0.93) }, { Green: ["#3f8f5f"] }],
     // The orcs': hide, in patches stitched together, bare at the arms; a mantle of fur over the
     // shoulders; a string of bones and teeth; bands of iron round the forearms
     hideVest: [{ label: "Hide vest", slot: "chest", layer: 2, thickness: 0.008, loose: 0.004, smooth: 6, roughness: 0.8, pattern: "hide", inside: top((l) => l.hips - 0.02, 0.03, 0.08) }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"], Red: ["#7a2a1c", "#1b1614"] }],
     // (A man's: trousers of patched hide)
     hidePants: [{ label: "Hide trousers", slot: "legs", layer: 1, thickness: 0.006, loose: 0.006, smooth: 4, roughness: 0.82, pattern: "hide", inside: bottoms((l) => l.waist - 0.02, 0.95) }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"] }],
     hideWrap: [{ label: "Hide wrap", slot: "shirt", layer: 1, thickness: 0.006, smooth: 6, roughness: 0.8, pattern: "hide", inside: bustBand }, { Tan: ["#8a6a48", "#2a1a10"], Dark: ["#4e3826", "#7a6042"] }],
-    furMantle: [{ label: "Fur mantle", slot: "surcoat", layer: 4, thickness: 0.018, loose: 0.006, smooth: 6, roughness: 0.95, pattern: "fur", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.armpit - 0.03), neckline(v, l, 0)) : v.region === "arm" ? 0.2 - v.arm : OUTSIDE) }, { Grey: ["#6e6a64"], Brown: ["#5a4632"], Black: ["#2a2622"] }],
-    boneNecklace: [{ label: "Bone necklace", slot: "neck", layer: 5, thickness: 0.007, smooth: 3, roughness: 0.5, pattern: "beads", inside: collar(0.05) }, { Bone: ["#e8dcc0", "#8a2a1a", "#2a1a10"] }],
-    ironBands: [{ label: "Iron bands", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, roughness: 0.5, metalness: 0.8, pattern: "bangles", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.64, 0.93 - v.arm) : OUTSIDE) }, { Iron: ["#4a4642"] }],
+    furMantle: [{ label: "Fur mantle", slot: "surcoat", layer: 4, thickness: 0.018, loose: 0.006, smooth: 6, roughness: 0.95, pattern: "fur", inside: top((l) => l.armpit - 0.03, 0.2, 0) }, { Grey: ["#6e6a64"], Brown: ["#5a4632"], Black: ["#2a2622"] }],
+    boneNecklace: [{ label: "Bone necklace", slot: "neck", layer: 6, thickness: 0.007, smooth: 3, roughness: 0.5, pattern: "beads", inside: collar(0.05) }, { Bone: ["#e8dcc0", "#8a2a1a", "#2a1a10"] }],
+    ironBands: [{ label: "Iron bands", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, roughness: 0.5, metalness: 0.8, pattern: "bangles", inside: sleeves(0.64, 0.93) }, { Iron: ["#4a4642"] }],
 };
 
 // The peoples' everyday dress (EVERYDAY), each piece in each of its colours; and what's only a
@@ -384,8 +400,7 @@ function liveried(made) {
         tinted("greaves", metal);
         tinted("sabatons", metal);
         tinted("trousers", dark);
-        // (A belt over the surcoat, the chain of office over the livery: further out than either)
-        tinted("belt", leather, { layer: 5, thickness: 0.018 });
+        tinted("belt", leather);
         painted("surcoat", { colour: main, trim, emblem: { mark: emblem, colour: trim } });
         painted("livery", { colour: main, trim, emblem: { mark: emblem, colour: trim, size: 0.055 } });
 
@@ -414,11 +429,11 @@ function lingerie(name, colour) {
         [`laceBra${name}`]: { label: `${name} lace bra`, slot: "undershirt", layer: 0, thickness: 0.002, smooth: 2, design: "bra", inside: top((l) => l.waist + 0.02, 0.08, -0.03) },
         [`laceBriefs${name}`]: { label: `${name} lace briefs`, slot: "underwear", layer: 0, thickness: 0.002, smooth: 2, design: "briefs", inside: bottoms((l) => l.hips + 0.03, 0.22) },
         [`suspenders${name}`]: { label: `${name} suspender belt`, slot: "waist", layer: 1, thickness: 0.0025, smooth: 2, design: "suspenders", inside: bottoms((l) => l.waist, 0.5) },
-        [`stockings${name}`]: { label: `${name} stockings`, slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "stockings", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.12 : OUTSIDE) },
+        [`stockings${name}`]: { label: `${name} stockings`, slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "stockings", inside: legs(0.12) },
     };
 
     if (name === "Black") {
-        pieces.fishnets = { label: "Fishnet stockings", slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "fishnets", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.12 : OUTSIDE) };
+        pieces.fishnets = { label: "Fishnet stockings", slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "fishnets", inside: legs(0.12) };
     }
 
     for (const piece of Object.values(pieces)) {
@@ -530,7 +545,7 @@ function cutGarment(human, garment, measures) {
             }
 
             if ((va > 0) !== (vb > 0)) {
-                polygon.push(point(a, b, va / (va - vb)));
+                polygon.push(point(a, b, insideBetween(garment, measures, source[a], source[b], va, vb)));
             }
         }
 
@@ -683,39 +698,57 @@ export function buildGarment(character, id, measures, under = null) {
     return allAtOnce(fittingGarment(character, id, measures, under));
 }
 
+/** How far (metres) a garment stands at least over every one worn under it (fittingOutfit). */
+export const STAND_OFF = 0.003;
+
+// How far (metres) a hem over another garment goes down under its surface
+const HEM_UNDER = 0.0008;
+
+// How many times what a strap's grown over, and its normals, are smoothed along it (over about 5 cm)
+const STRAP_PASSES = 8;
+
+/** The order garments are worn in, under ones first: by layer, then how far out each is grown, then id. */
+export function stackOrder(a, b) {
+    const [ga, gb] = [GARMENTS[a], GARMENTS[b]];
+    const reach = (garment) => garment.thickness + (garment.loose ?? 0);
+
+    return ga.layer - gb.layer || reach(ga) - reach(gb) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
 /**
- * How far out the garments worn under one that lies over them (`over`: a strap) reach at each
- * of the body's vertices (metres): the furthest of those on lower layers whose region it's in.
- * A step (a yield) for each of them, returning it. (A strap at its own thickness was under a
- * jerkin, which stands further out: only its middle showed, its edges bitten into)
+ * Garments (`ids`) fitted one over another, as worn (stackOrder): each over how far out those
+ * under it reach at each of the body's vertices (`reach`). A step at a time, returning them,
+ * under ones first.
  */
-export function* underneath(human, id, worn, measures) {
-    const { layer } = GARMENTS[id];
-    const under = new Float32Array(human.vertexCount);
+export function* fittingOutfit(character, ids, measures) {
+    const under = new Float32Array(character.human.vertexCount);
+    const built = [];
 
-    for (const other of worn) {
-        const garment = GARMENTS[other];
+    for (const id of [...new Set(ids)].filter((each) => GARMENTS[each]).sort(stackOrder)) {
+        yield;
 
-        if (!garment || garment.layer >= layer) {
+        const garment = yield* fittingGarment(character, id, measures, under);
+
+        if (!garment) {
             continue;
         }
 
-        const reach = garment.thickness + (garment.loose ?? 0);
-        const inside = insideOf(human, garment, measures);
-
-        for (let v = 0; v < human.vertexCount; v++) {
-            if (inside[v] > 0 && reach > under[v]) {
-                under[v] = reach;
-            }
+        for (let v = 0; v < under.length; v++) {
+            under[v] = Math.max(under[v], garment.reach[v]);
         }
 
-        yield;
+        built.push({ id, ...garment });
     }
 
-    return under;
+    return built;
 }
 
-/** The same (buildGarment), a step at a time (each a yield: its shell, each toe box, its mesh), returning it. */
+/**
+ * The same (buildGarment), a step at a time, returning it: { geometry, covers (the body's
+ * triangles it covers whole), sources (the body triangle each of its triangles is cut from),
+ * garment, reach (metres out at each of the body's vertices) }. At least STAND_OFF over what's
+ * under it (`under`: reach, or none), a strap (`over`) its own thickness.
+ */
 export function* fittingGarment(character, id, measures, under = null) {
     const garment = GARMENTS[id];
     const { human, positions, normals } = character;
@@ -731,10 +764,11 @@ export function* fittingGarment(character, id, measures, under = null) {
     const sources = Array.from(cut.sources);
     const base = new Float32Array(count * 3);
     const normal = new Float32Array(count * 3);
-    // (How far out it's grown at each point: its thickness, and for one over others, how far
-    // they reach there)
+    // (How far out it's grown at each point, and how near the skin smoothing may bring it)
     const thickness = garment.thickness + (garment.loose ?? 0);
     const grown = new Float32Array(count).fill(thickness);
+    const least = new Float32Array(count).fill(thickness * 0.7);
+    const beneath = new Float32Array(count);
 
     for (let i = 0; i < size; i++) {
         const s = sharedOf[i];
@@ -747,17 +781,70 @@ export function* fittingGarment(character, id, measures, under = null) {
             normal[s * 3 + k] = normals[sa + k] * (1 - t) + normals[sb + k] * t;
         }
 
-        if (garment.over && under) {
-            grown[s] = thickness + under[sa / 3] * (1 - t) + under[sb / 3] * t;
+        const below = under ? under[sa / 3] * (1 - t) + under[sb / 3] * t : 0;
+
+        if (below > 0) {
+            grown[s] = garment.over ? thickness + below : Math.max(thickness, below + STAND_OFF);
+            least[s] = Math.max(grown[s] * 0.7, below + STAND_OFF);
+            beneath[s] = below;
         }
     }
 
-    for (let s = 0; s < count; s++) {
-        const length = Math.hypot(normal[s * 3], normal[s * 3 + 1], normal[s * 3 + 2]) || 1;
+    // (A strap bridges the edges of what's under it, ramped up to them, never down, and keeps
+    // most of its thickness)
+    if (garment.over) {
+        const bridged = beneath.slice();
 
-        normal[s * 3] /= length;
-        normal[s * 3 + 1] /= length;
-        normal[s * 3 + 2] /= length;
+        for (let pass = 0; pass < STRAP_PASSES; pass++) {
+            const next = bridged.slice();
+
+            for (let s = 0; s < count; s++) {
+                const [first, end] = [near.start[s], near.start[s + 1]];
+                let sum = 0;
+
+                for (let m = first; m < end; m++) {
+                    sum += bridged[near.list[m]];
+                }
+
+                next[s] = end > first ? Math.max(beneath[s], 0.5 * bridged[s] + (0.5 * sum) / (end - first)) : bridged[s];
+            }
+
+            bridged.set(next);
+        }
+
+        for (let s = 0; s < count; s++) {
+            grown[s] = thickness + bridged[s];
+            least[s] = bridged[s] + thickness * 0.6;
+        }
+    }
+
+    const normalize = () => {
+        for (let s = 0; s < count; s++) {
+            const length = Math.hypot(normal[s * 3], normal[s * 3 + 1], normal[s * 3 + 2]) || 1;
+
+            normal[s * 3] /= length;
+            normal[s * 3 + 1] /= length;
+            normal[s * 3 + 2] /= length;
+        }
+    };
+
+    normalize();
+
+    // (A strap's grown along the body's normals smoothed along it, so its edges don't cross
+    // over a hollow)
+    for (let pass = 0; garment.over && pass < STRAP_PASSES; pass++) {
+        const next = normal.slice();
+
+        for (let s = 0; s < count; s++) {
+            for (let m = near.start[s]; m < near.start[s + 1]; m++) {
+                for (let k = 0; k < 3; k++) {
+                    next[s * 3 + k] += normal[near.list[m] * 3 + k];
+                }
+            }
+        }
+
+        normal.set(next);
+        normalize();
     }
 
     // Grow outward, then smooth, keeping at least most of the thickness everywhere
@@ -767,6 +854,7 @@ export function* fittingGarment(character, id, measures, under = null) {
         shell[j] = base[j] + normal[j] * grown[Math.floor(j / 3)];
     }
 
+    const footwear = Boolean(garment.toeBox);
     const smoothPasses = (passes, keepOut, only = null) => {
         for (let pass = 0; pass < passes; pass++) {
             const next = shell.slice();
@@ -774,9 +862,14 @@ export function* fittingGarment(character, id, measures, under = null) {
             for (let s = 0; s < count; s++) {
                 const [first, end] = [near.start[s], near.start[s + 1]];
 
-                if (onEdge[s] || first === end || (only && !only.has(s))) {
+                // (Its edges too, only out or in, so they stay where they were cut; footwear's stay)
+                if ((footwear ? onEdge[s] : onCut[s]) || first === end || (only && !only.has(s))) {
                     continue;
                 }
+
+                // (Toward the middle of those beside it, only out or in along the normal, so its
+                // picture doesn't slide; footwear's slide too, merging the toes)
+                let moved = 0;
 
                 for (let k = 0; k < 3; k++) {
                     let sum = 0;
@@ -786,18 +879,26 @@ export function* fittingGarment(character, id, measures, under = null) {
                     }
 
                     next[s * 3 + k] = shell[s * 3 + k] * 0.4 + (sum / (end - first)) * 0.6;
+                    moved += (next[s * 3 + k] - shell[s * 3 + k]) * normal[s * 3 + k];
+                }
+
+                if (!footwear) {
+                    for (let k = 0; k < 3; k++) {
+                        next[s * 3 + k] = shell[s * 3 + k] + normal[s * 3 + k] * moved;
+                    }
                 }
 
                 if (!keepOut) {
                     continue;
                 }
 
-                // Not closer to the skin than 70% of how far it's grown
+                // Not closer to the skin than 70% of how far it's grown, nor than STAND_OFF over
+                // what's under it
                 const now = (next[s * 3] - base[s * 3]) * normal[s * 3] + (next[s * 3 + 1] - base[s * 3 + 1]) * normal[s * 3 + 1] + (next[s * 3 + 2] - base[s * 3 + 2]) * normal[s * 3 + 2];
 
-                if (now < grown[s] * 0.7) {
+                if (now < least[s]) {
                     for (let k = 0; k < 3; k++) {
-                        next[s * 3 + k] += normal[s * 3 + k] * (grown[s] * 0.7 - now);
+                        next[s * 3 + k] += normal[s * 3 + k] * (least[s] - now);
                     }
                 }
             }
@@ -823,6 +924,21 @@ export function* fittingGarment(character, id, measures, under = null) {
     smoothPasses(garment.smooth ?? 0, true);
     yield;
 
+    // How far out it stands at each of the body's vertices it's on, and at those beside where its
+    // edge crosses (for what's worn over it: its edge covered too)
+    const reach = new Float32Array(human.vertexCount);
+
+    for (let i = 0; i < size; i++) {
+        const s = sharedOf[i];
+        const stands = (shell[s * 3] - base[s * 3]) * normal[s * 3] + (shell[s * 3 + 1] - base[s * 3 + 1]) * normal[s * 3 + 1] + (shell[s * 3 + 2] - base[s * 3 + 2]) * normal[s * 3 + 2];
+
+        for (const [v, on] of [[source[from[i]], along[i] < 1], [source[to[i]], along[i] > 0]]) {
+            if (on && stands > reach[v]) {
+                reach[v] = stands;
+            }
+        }
+    }
+
     // The mesh: the shell, then a hem folding back to the skin along the garment's edge
     const out = {
         positions: [],
@@ -843,14 +959,20 @@ export function* fittingGarment(character, id, measures, under = null) {
     out.skinWeights.push(...cut.skinWeights);
     out.indices.push(...triangles);
 
-    // Hem: for each edge side, a strip from the shell back down to near the skin
-    const hemDepth = Math.max(0.0015, thickness * 0.85);
+    // Hem: for each edge side, a strip from the shell back down to near the skin, or just under
+    // what's worn under it there
+    const hemOf = [];
 
     for (let h = 0; h < hem.length; h += 3) {
         const [i, j, t] = [hem[h], hem[h + 1], hem[h + 2]];
         const first = out.positions.length / 3;
 
         for (const [index, s] of [[i, sharedOf[i]], [j, sharedOf[j]]]) {
+            hemOf.push(out.positions.length / 3, index);
+
+            const stands = (shell[s * 3] - base[s * 3]) * normal[s * 3] + (shell[s * 3 + 1] - base[s * 3 + 1]) * normal[s * 3 + 1] + (shell[s * 3 + 2] - base[s * 3 + 2]) * normal[s * 3 + 2];
+            const hemDepth = beneath[s] > 0 ? Math.max(0.0015, stands - beneath[s] + HEM_UNDER) : Math.max(0.0015, stands * 0.85);
+
             for (let k2 = 0; k2 < 3; k2++) {
                 out.positions.push(shell[s * 3 + k2] - normal[s * 3 + k2] * hemDepth);
             }
@@ -886,33 +1008,118 @@ export function* fittingGarment(character, id, measures, under = null) {
     geometry.setAttribute("skinWeight", new THREE.BufferAttribute(new Uint8Array(out.skinWeights), 4, true));
     geometry.setIndex(out.positions.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(out.indices, 1) : new THREE.Uint16BufferAttribute(out.indices, 1));
     geometry.computeVertexNormals();
-    // Hem and toe cap vertices keep their own normals
+    // Toe cap vertices keep their own normals; the hem's are the edge's it folds back from
     smoothNormalsAcrossSeams(geometry, [...sharedOf, ...new Array(out.positions.length / 3 - size).fill(-1)]);
+
+    const shading = geometry.attributes.normal;
+
+    // (A strap's shell shades as the normals it's grown along, not its own few faces')
+    if (garment.over) {
+        for (let i = 0; i < size; i++) {
+            const s = sharedOf[i];
+
+            shading.setXYZ(i, normal[s * 3], normal[s * 3 + 1], normal[s * 3 + 2]);
+        }
+    }
+
+    for (let h = 0; h < hemOf.length; h += 2) {
+        shading.setXYZ(hemOf[h], shading.getX(hemOf[h + 1]), shading.getY(hemOf[h + 1]), shading.getZ(hemOf[h + 1]));
+    }
 
     if (garment.toeBox) {
         joinToeCaps(geometry, out.capJoins ?? []);
     }
 
-    return { geometry, covers: new Set(covers), sources: Int32Array.from(sources), garment };
+    return { geometry, covers: new Set(covers), sources: Int32Array.from(sources), garment, reach };
 }
 
 // Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
 const TOE_CUT = 0.85;
 
 /**
- * How far inside a garment's region each of the body's vertices is (above 0 inside it; along
- * any edge between two, where it crosses 0 is where the garment's edge is). Footwear with a toe
- * box stops at the ball of the foot (the toe box is built separately), unless `toes`.
+ * How far inside a garment's region each of the body's vertices is (above 0 inside it; between
+ * two, its edge: insideBetween). Footwear with a toe box stops at the ball of the foot, unless `toes`.
  */
 export function insideOf(human, garment, { vertices, landmarks }, { toes = false } = {}) {
     const inside = new Float32Array(human.vertexCount);
-    const cut = (v) => (garment.toeBox && !toes && vertices[v].region === "foot" ? Math.min(1, TOE_CUT - vertices[v].foot) : 1);
 
     for (let v = 0; v < human.vertexCount; v++) {
-        inside[v] = human.partOf[v] === 0 ? Math.min(garment.inside(vertices[v], landmarks), cut(v)) : OUTSIDE;
+        inside[v] = human.partOf[v] === 0 ? insideAt(garment, landmarks, vertices[v], toes) : OUTSIDE;
     }
 
     return inside;
+}
+
+/** How far inside a garment's region a point of the body (measureBody, pointBetween) is. */
+function insideAt(garment, landmarks, point, toes) {
+    const value = garment.inside(point, landmarks);
+
+    return Math.min(value, garment.toeBox && !toes && point.region === "foot" ? Math.min(1, TOE_CUT - point.foot) : 1);
+}
+
+/**
+ * What's measured of the body (measureBody) between three of its vertices, by weights, as `out`:
+ * what runs smoothly from vertex to vertex between them, its region the nearest's. (Field by
+ * field: it's measured at every texel of every garment's picture)
+ */
+function pointBetween(vertices, a, b, c, wa, wb, wc, out) {
+    const pa = vertices[a];
+    const pb = vertices[b];
+    const pc = vertices[c];
+    const nearest = wa >= wb && wa >= wc ? pa : wb >= wc ? pb : pc;
+
+    out.region = nearest.region;
+    out.side = nearest.side;
+    out.face = nearest.face;
+    out.armShare = wa * pa.armShare + wb * pb.armShare + wc * pc.armShare;
+    out.legShare = wa * pa.legShare + wb * pb.legShare + wc * pc.legShare;
+    out.arm = wa * pa.arm + wb * pb.arm + wc * pc.arm;
+    out.leg = wa * pa.leg + wb * pb.leg + wc * pc.leg;
+    out.foot = wa * pa.foot + wb * pb.foot + wc * pc.foot;
+    out.x = wa * pa.x + wb * pb.x + wc * pc.x;
+    out.y = wa * pa.y + wb * pb.y + wc * pc.y;
+    out.z = wa * pa.z + wb * pb.z + wc * pc.z;
+
+    return out;
+}
+
+/**
+ * How far along (0 to 1) from one of the body's vertices to another (`a` to `b`, `va` and `vb`
+ * inside the garment's region and not) its edge crosses: measured along the way, not where a
+ * line between `va` and `vb` crosses 0, well off where its region has a ridge (a strap's middle).
+ */
+export function insideBetween(garment, { vertices, landmarks }, a, b, va, vb, toes = false) {
+    if (a > b) {
+        return 1 - insideBetween(garment, { vertices, landmarks }, b, a, vb, va, toes);
+    }
+
+    const point = {};
+    let [t0, f0, t1, f1] = [0, va, 1, vb];
+    let t = va / (va - vb);
+    let kept = 0;
+
+    // (By false position, halving the side kept twice running)
+    for (let step = 0; step < 30; step++) {
+        const f = insideAt(garment, landmarks, pointBetween(vertices, a, b, b, 1 - t, t, 0, point), toes);
+
+        if (Math.abs(f) < 1e-7) {
+            break;
+        }
+
+        if ((f > 0) === (f0 > 0)) {
+            [t0, f0] = [t, f];
+            f1 = kept === -1 ? f1 / 2 : f1;
+            kept = -1;
+        } else {
+            [t1, f1] = [t, f];
+            f0 = kept === 1 ? f0 / 2 : f0;
+            kept = 1;
+        }
+
+        t = t0 - (f0 * (t1 - t0)) / (f1 - f0);
+    }
+
+    return t;
 }
 
 /**
@@ -1496,7 +1703,8 @@ function mixSkin(human, a, b, t) {
  * { size, covered, positions (3 floats a texel), bones (each texel's main bone), names (the
  * bones' names), triangles (the body triangle each texel is in, by its place in the body's
  * triangles), weights (how near it is to that triangle's first two corners: 2 floats a texel),
- * corners (each body triangle's three vertices) }.
+ * corners (each body triangle's three vertices), slopes (how those change, a texel across and
+ * one down, in each body triangle: 4 floats a triangle) }.
  */
 export function texelMap(human, size = 512) {
     const count = size * size;
@@ -1510,6 +1718,7 @@ export function texelMap(human, size = 512) {
     const uvs = human.uvs;
     const source = human.renderSource;
     const corners = Int32Array.from(indices, (r) => source[r]);
+    const slopes = new Float32Array((indices.length / 3) * 4);
 
     for (let t = 0; t < indices.length; t += 3) {
         const r = [indices[t], indices[t + 1], indices[t + 2]];
@@ -1521,6 +1730,8 @@ export function texelMap(human, size = 512) {
         if (Math.abs(area) < 1e-12) {
             continue;
         }
+
+        slopes.set([(y[1] - y[2]) / area, (x[2] - x[1]) / area, (y[2] - y[0]) / area, (x[0] - x[2]) / area], (t / 3) * 4);
 
         for (let py = Math.max(0, Math.floor(Math.min(...y))); py <= Math.min(size - 1, Math.ceil(Math.max(...y))); py++) {
             for (let px = Math.max(0, Math.floor(Math.min(...x))); px <= Math.min(size - 1, Math.ceil(Math.max(...x))); px++) {
@@ -1548,7 +1759,7 @@ export function texelMap(human, size = 512) {
         }
     }
 
-    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name), triangles, weights, corners, spread: spreadOf(size, covered) };
+    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name), triangles, weights, corners, slopes, spread: spreadOf(size, covered) };
 }
 
 /** The bumpScale a composite's heights are for (compositeGarments). */
@@ -1561,24 +1772,31 @@ const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.0
 /**
  * One picture of all a character's garments together, to draw them all at once (each is painted
  * on the whole body, and they're all laid out on the body's texture): at each texel, the
- * outermost garment that's there. `layers`, under ones first: { data (its picture, RGBA), bump
- * (its heights, a byte a texel), tint (linear [r, g, b] its picture is multiplied by, or null),
- * bumpScale, roughness, metalness, inside (insideOf: which of the body it covers, and where its
- * edges are) }. Where none is (under a gap between them, or bare skin), the one nearest to being
- * there, so edges don't blend into anything else. Returns { size, data (RGBA, sRGB colours),
- * surface (RGBA: height, roughness, metalness, for a bump, roughness and metalness map; heights
- * scaled for a bumpScale of COMPOSITE_BUMP) }.
+ * outermost garment that's there, on the body they're fitted to (`measures`), mixed across
+ * their edges. `layers`, under ones first: { data (RGBA), bump (a byte a texel), tint (linear
+ * [r, g, b], or null), bumpScale, roughness, metalness, garment (GARMENTS') }. Where none is,
+ * the one nearest to being there. Returns { size, data (RGBA, sRGB), surface (RGBA: height,
+ * roughness, metalness; heights for a bumpScale of COMPOSITE_BUMP) }.
  */
-export function compositeGarments(map, layers) {
-    return allAtOnce(compositingGarments(map, layers));
+export function compositeGarments(map, layers, measures) {
+    return allAtOnce(compositingGarments(map, layers, measures));
 }
 
 // How many texels the garments' pictures are painted (or put together) a step
 const TEXELS_A_STEP = 16384;
 
+// How many texels past its edge each garment's picture is drawn wholly over what's under it, then
+// mixed with it as much as it covers of each texel (all one's or the other's, edges were serrated)
+const EDGE_TEXELS = 0.5;
+
+// How near its edge (about metres) a texel must be for a garment to be mixed into it at all
+const EDGE_REACH = 0.02;
+
 /** The same (compositeGarments), a step at a time (each a yield: a few rows of texels), returning it. */
-export function* compositingGarments(map, layers) {
-    const { size, covered, triangles, weights, corners } = map;
+export function* compositingGarments(map, layers, measures) {
+    const { size, covered, triangles, weights, corners, slopes } = map;
+    const { vertices, landmarks } = measures;
+    const point = {};
     const count = size * size;
     const data = new Uint8ClampedArray(count * 4);
     const surface = new Uint8ClampedArray(count * 4);
@@ -1590,6 +1808,11 @@ export function* compositingGarments(map, layers) {
         metalness: Math.round(metalness * 255),
     }));
 
+    // How far inside each garment's region each of the body's vertices is (how fast that changes
+    // across a texel, between its triangle's corners)
+    const insides = layers.map(({ garment }) => Float32Array.from(vertices, (vertex) => insideAt(garment, landmarks, vertex, true)));
+    const colour = [0, 0, 0, 0, 0, 0];
+
     for (let i = 0; i < count; i++) {
         if (i % TEXELS_A_STEP === 0) {
             yield;
@@ -1599,44 +1822,67 @@ export function* compositingGarments(map, layers) {
             continue;
         }
 
-        const t = triangles[i] * 3;
-        const a = corners[t];
-        const b = corners[t + 1];
-        const c = corners[t + 2];
+        const t = triangles[i];
+        const a = corners[t * 3];
+        const b = corners[t * 3 + 1];
+        const c = corners[t * 3 + 2];
         const w0 = weights[i * 2];
         const w1 = weights[i * 2 + 1];
         const w2 = 1 - w0 - w1;
-        let chosen = -1;
-        let nearest = -Infinity;
+        let measured = false;
 
-        for (let g = layers.length - 1; g >= 0; g--) {
-            const inside = layers[g].inside;
-            const value = w0 * inside[a] + w1 * inside[b] + w2 * inside[c];
+        // Each garment there over those under it, as much of the texel as it covers (the innermost
+        // wholly); where none is, the one nearest to being there. (Measured there near its edge;
+        // between its triangle's corners where they're all inside it or all well outside, as the
+        // triangle's all kept or all cut away: cutGarment)
+        let shown = false;
+        let nearest = -1;
+        let nearness = -Infinity;
 
-            if (value > 0) {
-                chosen = g;
-                break;
+        for (let g = 0; g < layers.length; g++) {
+            const inside = insides[g];
+            const ia = inside[a];
+            const ib = inside[b];
+            const ic = inside[c];
+            let value = w0 * ia + w1 * ib + w2 * ic;
+            let share = 0;
+
+            if (Math.min(ia, ib, ic) > 0) {
+                share = 1;
+            } else if (Math.max(ia, ib, ic) > -EDGE_REACH) {
+                if (!measured) {
+                    pointBetween(vertices, a, b, c, w0, w1, w2, point);
+                    measured = true;
+                }
+
+                value = insideAt(layers[g].garment, landmarks, point, true);
+
+                const change = Math.hypot((ia - ic) * slopes[t * 4] + (ib - ic) * slopes[t * 4 + 2], (ia - ic) * slopes[t * 4 + 1] + (ib - ic) * slopes[t * 4 + 3]);
+
+                share = value > 0 ? 1 : value > -EDGE_REACH && change > 1e-9 ? Math.min(1, Math.max(0, value / change + 0.5 + EDGE_TEXELS)) : 0;
             }
 
-            if (value > nearest) {
-                nearest = value;
-                chosen = g;
+            if (share > 0) {
+                blend(colour, layers[g], looks[g], i, shown ? share : 1);
+                shown = true;
+            }
+
+            if (value > nearness) {
+                nearest = g;
+                nearness = value;
             }
         }
 
-        const layer = layers[chosen];
-        const look = looks[chosen];
+        if (!shown) {
+            blend(colour, layers[nearest], looks[nearest], i, 1);
+        }
 
         for (let k = 0; k < 3; k++) {
-            const value = layer.data[i * 4 + k];
-
-            data[i * 4 + k] = look.tables ? look.tables[k][value] : value;
+            data[i * 4 + k] = colour[k];
+            surface[i * 4 + k] = colour[k + 3];
         }
 
         data[i * 4 + 3] = 255;
-        surface[i * 4] = 128 + (layer.bump[i] - 128) * look.height;
-        surface[i * 4 + 1] = look.roughness;
-        surface[i * 4 + 2] = look.metalness;
         surface[i * 4 + 3] = 255;
     }
 
@@ -1648,48 +1894,148 @@ export function* compositingGarments(map, layers) {
     return { size, data, surface };
 }
 
-/**
- * Paint a garment's texture: { data (RGBA), bump (one byte a texel), size }. A garment cut from a
- * design is painted white (its material's colour tints it), clear where there's no fabric.
- */
-export function paintGarment(map, garment) {
-    return allAtOnce(paintingGarment(map, garment));
+/** A garment's picture at texel `i` mixed into `colour` ([r, g, b, height, roughness, metalness]) by `share`. */
+function blend(colour, layer, look, i, share) {
+    const { data, bump } = layer;
+    const { tables } = look;
+
+    for (let k = 0; k < 3; k++) {
+        const own = tables ? tables[k][data[i * 4 + k]] : data[i * 4 + k];
+
+        colour[k] += (own - colour[k]) * share;
+    }
+
+    colour[3] += (128 + (bump[i] - 128) * look.height - colour[3]) * share;
+    colour[4] += (look.roughness - colour[4]) * share;
+    colour[5] += (look.metalness - colour[5]) * share;
 }
 
-/** The same (paintGarment), painted a step at a time (each a yield: a few rows of texels), returning it. */
-export function* paintingGarment(map, garment) {
+/**
+ * Paint a garment's texture: { data (RGBA), bump (one byte a texel), size }, on the body it's
+ * fitted to (`measures`: character.js referenceMeasures): its trims along its edges, measured at
+ * each texel as they're cut; its emblem, bands and lacing by the body's landmarks. One cut from a
+ * design is painted white (its material's colour tints it), clear where there's no fabric.
+ */
+export function paintGarment(map, garment, measures = null) {
+    return allAtOnce(paintingGarment(map, garment, measures));
+}
+
+// How wide (metres) the edges of what's painted on a garment are softened, so a trim's or an
+// emblem's edge is clean at a few millimetres a texel (two or three texels), not stepped
+const SOFT = 0.004;
+
+// How much of a border `width` wide along a garment's edge a point `edge` inside it is in (0 to 1),
+// softened at its inner side
+const border = (edge, width) => smoothstep(width + SOFT, width - SOFT, edge);
+
+// The patterns painted by how far inside the garment's edge they are; how far inside it (metres)
+// the deepest of them but beads reaches (the vine's leaves), and how far outside it one is drawn
+// (a texel or two). Beyond those, by its triangle's corners: a triangle wholly inside or outside
+// them is all kept or all cut away (cutGarment), and measuring every texel's twice as slow
+const EDGED = new Set(["surcoat", "trim", "vine", "web", "fret", "beads"]);
+const EDGE_PAINTED = Object.freeze({ inside: 0.1, outside: 0.02 });
+
+// How far below the chest (metres, on a body 1.7 m tall) the middle of an emblem is, and how much
+// bigger than its `size` it's painted
+const EMBLEM = Object.freeze({ below: 0.045, scale: 1.3 });
+
+// Where each texel is on the body garments' pictures are painted for: { measures, points (x, y,
+// z, how much it moves with the limbs: 4 floats a texel) } by texel map, kept for the next
+const texelPoints = new WeakMap();
+
+function pointsOf(map, measures) {
+    if (texelPoints.get(map)?.measures !== measures) {
+        const { size, covered, triangles, weights, corners } = map;
+        const points = new Float32Array(size * size * 4);
+        const point = {};
+
+        for (let i = 0; i < size * size; i++) {
+            if (covered[i]) {
+                const t = triangles[i] * 3;
+                const w0 = weights[i * 2];
+                const w1 = weights[i * 2 + 1];
+                const { x, y, z, armShare, legShare } = pointBetween(measures.vertices, corners[t], corners[t + 1], corners[t + 2], w0, w1, 1 - w0 - w1, point);
+
+                points[i * 4] = x;
+                points[i * 4 + 1] = y;
+                points[i * 4 + 2] = z;
+                points[i * 4 + 3] = armShare + legShare;
+            }
+        }
+
+        texelPoints.set(map, { measures, points });
+    }
+
+    return texelPoints.get(map).points;
+}
+
+// Where in a texel (and round it) an emblem is looked for, across and up: four by four
+const EMBLEM_SAMPLES = Object.freeze([-0.75, -0.25, 0.25, 0.75]);
+
+/**
+ * The same (paintGarment), painted a step at a time (each a yield: a few rows of texels), returning
+ * it. `measures` is wanted for all but one cut from a design.
+ */
+export function* paintingGarment(map, garment, measures = null) {
     if (garment.design) {
         return paintDesign(map, garment.design);
     }
 
-    const { size, covered, positions } = map;
+    const { size, covered, triangles, weights, corners } = map;
+    const { vertices, landmarks } = measures;
+    const point = {};
+    const s = landmarks.height / 1.7;
     const count = size * size;
     const data = new Uint8ClampedArray(count * 4);
     const bump = new Uint8ClampedArray(count);
     const colour = new THREE.Color(garment.colour);
     const trim = new THREE.Color(garment.trim ?? garment.colour);
     const pattern = garment.pattern ?? "cloth";
-    const mark = garment.emblem ? { mark: garment.emblem.mark, colour: new THREE.Color(garment.emblem.colour), size: garment.emblem.size ?? 0.075 } : null;
-    // (A third colour, for the peoples' everyday dress: its bands' and beads' and frets'; and how
-    // far down its hem comes on the base body, if not a tunic's)
+    const mark = garment.emblem ? { mark: garment.emblem.mark, colour: new THREE.Color(garment.emblem.colour), size: (garment.emblem.size ?? 0.075) * EMBLEM.scale * s } : null;
+    const emblemY = landmarks.chest - EMBLEM.below * s;
+    // (A third colour, for the peoples' everyday dress: its bands' and beads' and frets')
     const accent = new THREE.Color(garment.accent ?? garment.trim ?? garment.colour);
-    const hem = garment.hem ?? HEM_Y;
+    const mixed = new THREE.Color();
+    // (How far inside its edge each of the body's vertices is, if it's painted by that, and how
+    // far inside that's measured at each texel: beads all over)
+    const inside = EDGED.has(pattern) ? Float32Array.from(vertices, (vertex) => insideAt(garment, landmarks, vertex, true)) : null;
+    const inward = pattern === "beads" ? Infinity : EDGE_PAINTED.inside;
+    const points = pointsOf(map, measures);
 
     for (let i = 0; i < count; i++) {
         if (i % TEXELS_A_STEP === 0) {
             yield;
         }
 
-        const x = positions[i * 3];
-        const y = positions[i * 3 + 1];
-        const z = positions[i * 3 + 2];
-        let shade = 1;
-        let height = 0.5;
-        let c = colour;
-
         if (!covered[i]) {
             continue;
         }
+
+        // (Where it is on the body, and how far inside the garment's edge: measured there near
+        // it, between its triangle's corners further off)
+        const t = triangles[i] * 3;
+        const a = corners[t];
+        const b = corners[t + 1];
+        const k = corners[t + 2];
+        const w0 = weights[i * 2];
+        const w1 = weights[i * 2 + 1];
+        const w2 = 1 - w0 - w1;
+        const x = points[i * 4];
+        const y = points[i * 4 + 1];
+        const z = points[i * 4 + 2];
+        const limb = points[i * 4 + 3] > 0.5;
+        let edge = 0;
+
+        if (inside) {
+            const least = Math.min(inside[a], inside[b], inside[k]);
+            const most = Math.max(inside[a], inside[b], inside[k]);
+
+            edge = least > inward || most < -EDGE_PAINTED.outside ? w0 * inside[a] + w1 * inside[b] + w2 * inside[k] : insideAt(garment, landmarks, pointBetween(vertices, a, b, k, w0, w1, w2, point), true);
+        }
+
+        let shade = 1;
+        let height = 0.5;
+        let c = colour;
 
         switch (pattern) {
             case "leather": {
@@ -1733,14 +2079,14 @@ export function* paintingGarment(map, garment) {
                 height = 0.5 + 0.2 * (weave - 0.5);
 
                 // Down the front: the gap between its edges, criss-crossed by a cord
-                if (z > 0 && Math.abs(x) < 0.022) {
+                if (z > 0 && Math.abs(x) < 0.028 * s) {
                     const frac = (value) => value - Math.floor(value);
-                    const cross = Math.min(Math.abs(frac((y + Math.abs(x)) * 55) - 0.5), Math.abs(frac((y - Math.abs(x)) * 55) - 0.5));
+                    const cross = Math.min(Math.abs(frac(((y + Math.abs(x)) * 43) / s) - 0.5), Math.abs(frac(((y - Math.abs(x)) * 43) / s) - 0.5));
 
                     if (cross < 0.12) {
                         c = trim;
                         height += 0.25;
-                    } else if (Math.abs(x) < 0.008) {
+                    } else if (Math.abs(x) < 0.01 * s) {
                         shade *= 0.45;
                         height -= 0.2;
                     }
@@ -1754,12 +2100,11 @@ export function* paintingGarment(map, garment) {
                 shade = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
                 height = 0.5 + 0.2 * (weave - 0.5);
 
-                // Trimmed at the neck and the hem
-                if (Math.abs(y - 0.585) < 0.014 || Math.abs(y - 0.04) < 0.02) {
-                    c = trim;
-                    height += 0.2;
-                }
+                // Trimmed all round its edges: the neck, the arms and the hem
+                const band = border(edge, 0.022);
 
+                c = mixed.copy(colour).lerp(trim, band);
+                height += 0.2 * band;
                 break;
             }
             case "chain": {
@@ -1776,15 +2121,11 @@ export function* paintingGarment(map, garment) {
                 shade = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
                 height = 0.5 + 0.2 * (weave - 0.5);
 
-                // Bands of embroidered trim round the neck and the bottom
-                const neck = Math.abs(y - 0.585);
-                const hem = Math.abs(y - 0.045);
+                // A band of embroidered trim all round its edges: the neck, the sleeves and the hem
+                const band = border(edge, 0.016);
 
-                if (neck < 0.012 || hem < 0.016) {
-                    c = trim;
-                    height += 0.2;
-                }
-
+                c = mixed.copy(colour).lerp(trim, band);
+                height += 0.2 * band;
                 break;
             }
             case "vine":
@@ -1795,7 +2136,7 @@ export function* paintingGarment(map, garment) {
             case "fur":
             case "beads":
             case "bangles": {
-                [c, shade, height] = everydayAt(pattern, x, y, z, { colour, trim, accent, hem });
+                [c, shade, height] = everydayAt(pattern, x, y, z, { colour, trim, accent, edge, limb, landmarks });
                 break;
             }
             default: {
@@ -1806,10 +2147,23 @@ export function* paintingGarment(map, garment) {
             }
         }
 
-        // (The people's emblem on the chest, embroidered or painted)
-        if (mark && z > 0.04 && emblemAt(mark.mark, x / mark.size, (y - EMBLEM_Y) / mark.size)) {
-            c = mark.colour;
-            height += 0.15;
+        // (The people's emblem on the chest, embroidered or painted: its edge softened, from how
+        // much of the texel and round it it takes, sixteen points of it)
+        if (mark && z > 0.03 * s && Math.abs(x) < mark.size * 1.2 && Math.abs(y - emblemY) < mark.size * 1.2) {
+            const [u, v] = [x / mark.size, (y - emblemY) / mark.size];
+            const d = SOFT / mark.size / 2;
+            let taken = 0;
+
+            for (const du of EMBLEM_SAMPLES) {
+                for (const dv of EMBLEM_SAMPLES) {
+                    taken += emblemAt(mark.mark, u + du * d, v + dv * d) ? 1 / 16 : 0;
+                }
+            }
+
+            if (taken > 0) {
+                c = mixed.copy(c).lerp(mark.colour, taken);
+                height += 0.15 * taken;
+            }
         }
 
         data[i * 4] = Math.min(255, c.r * shade * 255);
@@ -1826,53 +2180,59 @@ export function* paintingGarment(map, garment) {
 }
 
 /**
- * The peoples' everyday dress (dress.js): each one's own work on its cloth, at a point of the base
- * body (x across, y up, z forward: metres), in its colours (`colour`, `trim`, `accent`) and down to
- * its `hem`: [colour, shade, height]. Sized to show at the textures' few millimetres a texel.
+ * The peoples' everyday dress (dress.js): each one's own work on its cloth, at a point of the body
+ * it's painted from (x across, y up, z forward: metres; paintGarment), `edge` metres inside its
+ * edge (on a `limb`, an arm's or a leg's), in its colours (`colour`, `trim`, `accent`), by the body's
+ * `landmarks`: [colour, shade, height]. Sized to show at the textures' few millimetres a texel.
  *
- *  - vine (the elves'): a trailing vine in leaf round the neck and the hem, on fine cloth;
+ *  - vine (the elves'): a band along its edges, and a trailing vine in leaf inside it, a leaf off
+ *    its winding stem to either side by turns (round the neck and the hem: on the sleeves, the band);
  *  - web (the dark elves'): a spider's web in silver thread across the chest from its middle, a
- *    band round the neck;
+ *    band along its edges;
  *  - bands (the cat folk's): bold bands round the body, their edges zigzagged, in three colours;
- *  - fret (the lizard folk's): stepped frets round the neck and hem in bands edged with the third
+ *  - fret (the lizard folk's): stepped frets in a band along its edges, edged with the third
  *    colour, a row of diamonds across the chest;
  *  - hide (the orcs'): patches of hide each its own shade, stitched together;
  *  - fur: long hair, streaked, its tips lighter;
- *  - beads: rows of beads round the neck, by turns in the three colours;
+ *  - beads: rows of beads along its edges, by turns in the three colours;
  *  - bangles: rings of metal round the wrists.
  */
-function everydayAt(pattern, x, y, z, { colour, trim, accent, hem }) {
+function everydayAt(pattern, x, y, z, { colour, trim, accent, edge, limb, landmarks }) {
     const weave = fbm(x * 160, y * 160, z * 160, 2);
     const cloth = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
     const round = Math.atan2(x, z);
     const frac = (value) => value - Math.floor(value);
+    // (Across and up the chest, from the middle of its breast: as wide as MakeHuman's base body
+    // is, which the patterns were drawn at)
+    const s = (landmarks.height / 1.7) * 1.29;
+    const [across, up] = [x / s, (y - landmarks.chest) / s];
 
     switch (pattern) {
         case "vine": {
-            // (A band round the neck, and a vine in leaf below it, a leaf off its winding stem
-            // to either side by turns; the same round the hem)
-            const leafy = (across) => {
+            // (A band along its edges, and a vine in leaf inside it, a leaf off its winding stem
+            // to either side by turns: on a sleeve, the band)
+            const leafy = (inward) => {
                 const stem = 0.009 * Math.sin(round * 7);
                 const turn = (round * 7) / (2 * Math.PI) + 0.25;
                 const side = Math.floor(turn) % 2 ? 1 : -1;
-                const [du, dv] = [(frac(turn) - 0.5) / 0.26, (across - stem - side * 0.013) / 0.008];
+                const [du, dv] = [(frac(turn) - 0.5) / 0.26, (inward - stem - side * 0.013) / 0.008];
 
-                return Math.abs(across - stem) < 0.0035 || du * du + dv * dv < 1;
+                return Math.abs(inward - stem) < 0.0035 || du * du + dv * dv < 1;
             };
 
-            if (Math.abs(y - (NECK_Y - 0.018)) < 0.007 || leafy(y - (NECK_Y - 0.05)) || leafy(y - (hem + 0.035))) {
+            if (Math.abs(edge - 0.011) < 0.007 || (!limb && leafy(edge - 0.042))) {
                 return [trim, 1, 0.65];
             }
 
             return [colour, cloth, 0.5 + 0.2 * (weave - 0.5)];
         }
         case "web": {
-            const [u, v] = [x, y - 0.4];
+            const [u, v] = [across, up + 0.011];
             const reach = Math.hypot(u, v);
             const spoke = Math.abs(Math.sin(Math.atan2(v, u) * 4)) * reach;
             const ring = Math.abs(frac(reach / 0.04) - 0.5) * 0.04;
 
-            if (Math.abs(y - NECK_Y + 0.012) < 0.012 || (z > 0.03 && reach < 0.17 && (spoke < 0.0022 || ring < 0.0016))) {
+            if (edge < 0.016 || (!limb && z > 0.03 && reach < 0.17 && (spoke < 0.0022 || ring < 0.0016))) {
                 return [trim, 1, 0.62];
             }
 
@@ -1882,33 +2242,31 @@ function everydayAt(pattern, x, y, z, { colour, trim, accent, hem }) {
             // (Bands 3 cm deep, by turns the main colour, the trim, the main and the third, their
             // edges zigzagging round the body)
             const zig = 0.007 * Math.abs(frac(round * 6 / Math.PI) - 0.5) * 2;
-            const band = Math.floor((y + zig) / 0.03);
+            const band = Math.floor((up + zig) / 0.03);
             const of = ((band % 4) + 4) % 4;
 
             return [[colour, trim, colour, accent][of], cloth, 0.5 + 0.2 * (weave - 0.5) + (of % 2 ? 0.08 : 0)];
         }
         case "fret": {
-            // (A band 4 cm deep at the neck and the hem, edged in the third colour, its frets
-            // stepping round: each step 1 cm, up and along by turns)
-            for (const at of [NECK_Y - 0.03, hem + 0.03]) {
-                const v = (y - at) / 0.02;
+            // (A band 4 cm deep along its edges, a centimetre in, edged in the third colour, its
+            // frets stepping round: each step 1 cm, up and along by turns)
+            const v = (edge - 0.03) / 0.02;
 
-                if (Math.abs(v) < 1) {
-                    if (Math.abs(v) > 0.78) {
-                        return [accent, 1, 0.62];
-                    }
-
-                    const step = Math.floor((round * 0.15) / 0.01);
-                    const rise = Math.floor((v + 0.78) / 0.39);
-
-                    return [(step + rise) % 4 < 2 ? trim : colour, cloth, 0.58];
+            if (Math.abs(v) < 1) {
+                if (Math.abs(v) > 0.78) {
+                    return [accent, 1, 0.62];
                 }
+
+                const step = Math.floor((round * 0.15) / 0.01);
+                const rise = Math.floor((v + 0.78) / 0.39);
+
+                return [(step + rise) % 4 < 2 ? trim : colour, cloth, 0.58];
             }
 
             // (A row of diamonds across the chest)
-            const [du, dv] = [Math.abs(frac(x / 0.035) - 0.5), Math.abs(y - 0.43) / 0.015];
+            const [du, dv] = [Math.abs(frac(across / 0.035) - 0.5), Math.abs(up - 0.011) / 0.015];
 
-            if (z > 0.03 && du + dv * 0.5 < 0.5 && dv < 1) {
+            if (!limb && z > 0.03 && du + dv * 0.5 < 0.5 && dv < 1) {
                 return [accent, 1, 0.6];
             }
 
@@ -1950,9 +2308,9 @@ function everydayAt(pattern, x, y, z, { colour, trim, accent, hem }) {
             return [colour, 0.62 + 0.62 * streak, 0.25 + 0.7 * streak];
         }
         case "beads": {
-            // (Rows a centimetre apart down from the neck, each a string of beads by turns in
-            // the three colours, dark between them)
-            const row = (NECK_Y + 0.01 - y) / 0.011;
+            // (Rows a centimetre apart in from its edges, each a string of beads by turns in the
+            // three colours, dark between them)
+            const row = edge / 0.011;
             const across = frac((round * 0.16) / 0.011);
             const [du, dv] = [across - 0.5, frac(row) - 0.5];
 
@@ -1972,9 +2330,7 @@ function everydayAt(pattern, x, y, z, { colour, trim, accent, hem }) {
     }
 }
 
-// Where the emblem goes on the chest (the base body's height, metres), and its shape: whether a
-// point (u to one side, v up: -1 to 1 across it) is in it
-const EMBLEM_Y = 0.36;
+// An emblem's shape: whether a point (u to one side, v up: -1 to 1 across it) is in it
 
 // How far a point is from a segment (points [x, y])
 function toSegment(u, v, [ax, ay], [bx, by]) {
