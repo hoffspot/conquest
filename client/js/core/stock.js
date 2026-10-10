@@ -97,8 +97,10 @@ export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human"
         wares.push({ id, quality, count: random.int(...daily.count), ...whose(id) });
     }
 
-    // Its special: one thing, of the rarest, the more likely the more it's worth
-    const specials = choicesOf(SHOPS[shop].items, daily.special);
+    // Its special: one thing, of the rarest (or what it may have in as if it were: `specials`),
+    // the more likely the more it's worth
+    const rarest = Math.max(...Object.values(daily.special));
+    const specials = [...choicesOf(SHOPS[shop].items, daily.special), ...(daily.specials ?? []).map((id) => ({ id, quality: "common", weight: rarest }))];
     const pick = specials.length ? random.pickWeighted(specials, ({ id, weight }) => weight * (ITEMS[id]?.price ?? 1)) : null;
     const special = pick && madeOf({ id: pick.id, quality: pick.quality, people: ITEMS[pick.id]?.uniform ? maker : null }, random);
 

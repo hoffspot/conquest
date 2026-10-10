@@ -193,6 +193,38 @@ export const HAZARDS = Object.freeze({
 });
 
 /**
+ * Bombs (docs/WILDS.md *Goblins*): lobbed at a spot on the ground (where whoever they're thrown
+ * at stands then), landing after a flight as long as it's far (`speed` m/s, `soonest` ms at the
+ * least), then fizzing there `fuse` ms before bursting: a blast (#blast) `radius` metres round,
+ * hurting the thrower's enemies in it (its thrower's attack's `damage` at its heart, half that at
+ * its edge, times a creature's blows from afar: its tier; a player's Goblin Bomb's, the item's:
+ * progress.js ITEMS) and throwing them (`toss`, times TOSS.far). A goblin bomber's, and the
+ * Goblin King's bigger one (creatures.js `bomb`).
+ */
+export const BOMBS = Object.freeze({
+    goblinBomb: { radius: 2.5, toss: 1, fuse: 1500, speed: 9, soonest: 500 },
+    bigBomb: { radius: 3.5, toss: 1.4, fuse: 1800, speed: 8, soonest: 600 },
+});
+
+/**
+ * Thrown by a blast (docs/CHARACTERS.md *Thrown*): flung away from its heart, `far` metres from
+ * the heart of it (times the blast's `toss`), half that from its edge, as far as there's clear
+ * ground that way (the nearest free square, else where they stood); in the air `flight` ms and
+ * `per` ms more a metre, `up` metres high and `upPer` more a metre; down, and getting up, `down`
+ * ms in all (they can't move, fight, cast or use anything till then); and not thrown again for
+ * `spared` ms after. Never one too heavy to throw or not solid enough to (creatures.js `steady`),
+ * the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or a wagon.
+ */
+export const TOSS = Object.freeze({ far: 3, flight: 550, per: 90, up: 1.1, upPer: 0.25, down: 2600, spared: 4000 });
+
+/**
+ * One that keeps its distance (a goblin bomber: creatures.js `keep`): come nearer than its `keep`
+ * metres, it backs off that far again (KEEP.off metres more), at most once every KEEP.every ms;
+ * between, cornered, it fights where it stands.
+ */
+export const KEEP = Object.freeze({ off: 2, every: 4000 });
+
+/**
  * How much likelier one of the wild's mightier creatures is to shrug off a spell that would bend
  * its will (Fear, Pacify, Polymorph) for each tier past the middle ones (from none at tier 4 to
  * RESIST.most); the unique (the perilous places' own) and players never bend.
@@ -555,6 +587,11 @@ export class Battle {
         // radius, until, next, damage, by, team, spell }
         this.hazards = [];
         this.nextHazard = 1;
+
+        // The bombs lobbed and not burst yet (BOMBS): { id, kind, map, x, y, lands, bursts,
+        // damage, power, by, team, caster }
+        this.bombs = [];
+        this.nextBomb = 1;
 
         // The formations in it, by id (formation): { anchor: [x, y] (the middle of its front rank),
         // facing, to: where it's marching ([x, y], or null standing), speed (m/s), advance (whether,
@@ -956,6 +993,8 @@ export class Battle {
             projectiles: structuredClone(this.projectiles),
             hazards: structuredClone(this.hazards),
             nextHazard: this.nextHazard,
+            bombs: structuredClone(this.bombs),
+            nextBomb: this.nextBomb,
             formations: structuredClone(this.formations),
         };
     }
@@ -964,7 +1003,7 @@ export class Battle {
     static restore(world, snapshot, { relations = null, allied = null } = {}) {
         const battle = new Battle(world, { seed: snapshot.seed, relations, allied });
 
-        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, formations: structuredClone(snapshot.formations ?? {}) });
+        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
             const actor = structuredClone(kept);
@@ -1236,6 +1275,38 @@ export class Battle {
         if (spellId !== "invisibility") {
             this.unbuff(actor.id, "invisibility");
         }
+
+        return { ok: true };
+    }
+
+    /**
+     * Throw a bomb (a player's Goblin Bomb: BOMBS `kind`) at an enemy (`targetId`) within `reach`
+     * metres that they can see, doing `damage` ([least, most] at its heart): an attack, let go as
+     * its blow would land. { ok } or why not ({ ok: false, reason }: "midst", in the middle of
+     * a blow or a spell, staggered or stunned; "target", "range", "sight").
+     */
+    lob(id, targetId, { kind, damage, reach }) {
+        const actor = this.actor(id);
+        const target = targetId === null ? null : this.actor(targetId);
+
+        if (!actor || actor.dead || this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.casting || (actor.attack && !actor.attack.struck)) {
+            return { ok: false, reason: "midst" };
+        }
+
+        if (!target || target.dead || target.map !== actor.map || !this.hostile(actor, target)) {
+            return { ok: false, reason: "target" };
+        }
+
+        if (hypot(target.x - actor.x, target.y - actor.y) > reach) {
+            return { ok: false, reason: "range" };
+        }
+
+        if (!this.canSee(actor, target, Math.max(SIGHT, reach))) {
+            return { ok: false, reason: "sight" };
+        }
+
+        actor.path = [];
+        this.#throwAt(actor, target, { id: kind, kind: "ranged", reach, damage, given: damage, hitAt: 450, duration: 900, interval: 900, stagger: 300, reaction: "crush", animation: "throw", bomb: kind });
 
         return { ok: true };
     }
@@ -1641,6 +1712,7 @@ export class Battle {
         }
 
         this.#fly();
+        this.#burst();
         this.#ground();
         this.#ail();
     }
@@ -2478,7 +2550,13 @@ export class Battle {
     // Go after a target: attack it if it's within reach, otherwise walk towards it (a creature
     // with a ranged attack not ready yet closing in to strike up close, if it can)
     #pursue(actor, target) {
-        const closing = actor.wild && this.time < actor.readyAt && ringsApart(actor.square, this.#aimAt(target, actor.square)) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
+        // (One that keeps its distance, backing off from one come too near: a goblin bomber; one
+        // with bombs besides, lobbing one now and then at whoever keeps off: the Goblin King)
+        if ((actor.wild?.keep && this.#backOff(actor, target)) || (actor.wild?.bomb && this.#lobs(actor, target))) {
+            return;
+        }
+
+        const closing = actor.wild && !actor.wild.keep && this.time < actor.readyAt && ringsApart(actor.square, this.#aimAt(target, actor.square)) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
 
         if (!closing && this.#reachable(actor, target) && (!actor.path.length || this.#stopsHere(actor, target))) {
             actor.path = [];
@@ -2497,6 +2575,67 @@ export class Battle {
         if ((idle && moved) || ((idle || moved) && due)) {
             this.#pathTo(actor, goal, target.footprint ? [goal[0] + 0.5, goal[1] + 0.5] : [target.x, target.y]);
         }
+    }
+
+    // Come nearer than it keeps (`wild.keep` metres), backing off that far again, away from them
+    // (KEEP), if it hasn't lately and there's somewhere to go: whether it is. Backing off, it
+    // keeps on till it's there
+    #backOff(actor, target) {
+        const keep = actor.wild.keep;
+
+        if (actor.backing && actor.path.length) {
+            return true;
+        }
+
+        actor.backing = false;
+
+        if (hypot(target.x - actor.x, target.y - actor.y) >= keep || this.time < (actor.backOffAt ?? 0)) {
+            return false;
+        }
+
+        actor.backOffAt = this.time + KEEP.every;
+
+        const away = atan2(actor.y - target.y, actor.x - target.x);
+        const goal = [Math.floor(actor.x + cos(away) * (keep + KEEP.off)), Math.floor(actor.y + sin(away) * (keep + KEEP.off))];
+
+        try {
+            this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 2 }));
+        } catch {
+            // (Nowhere to go that way: cornered)
+        }
+
+        actor.backing = actor.path.length > 0;
+
+        return actor.backing;
+    }
+
+    // A bomb lobbed (`wild.bomb`: { kind, damage, every, beyond, reach, volley, spread }) at
+    // whoever it's after, now and then (every `every` ms), while they keep `beyond` metres off and
+    // within its `reach`, in sight (and `volley` at a time, the others about them, `spread` metres
+    // off at most: the caves' Goblin King): whether it's thrown
+    #lobs(actor, target) {
+        const { kind, damage, every, beyond, reach, volley = 1, spread = 0 } = actor.wild.bomb;
+        const far = hypot(target.x - actor.x, target.y - actor.y);
+
+        if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed || target.map !== actor.map || far < beyond || far > reach || !this.canSee(actor, target, Math.max(SIGHT, reach))) {
+            return false;
+        }
+
+        actor.bombAt = this.time + every;
+        actor.path = [];
+        this.#throwAt(actor, target, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread });
+
+        return true;
+    }
+
+    // Start throwing a bomb at someone (an attack whose `bomb` says which: BOMBS), facing them;
+    // let go as the attack's blow would land (#fight)
+    #throwAt(actor, target, attack) {
+        actor.facing = atan2(target.x - actor.x, target.y - actor.y);
+        actor.attack = { attack, target: target.id, start: this.time, struck: false };
+        actor.readyAt = Math.max(actor.readyAt, this.time + attack.interval);
+        this.unbuff(actor.id, "invisibility");
+        this.#emit("attack", { id: actor.id, target: target.id, weapon: actor.weapon, attack: attack.id, animation: attack.animation, duration: attack.duration, hitAt: attack.hitAt });
     }
 
     /**
@@ -3254,7 +3393,8 @@ export class Battle {
      */
     #travel(actor, budget) {
         const start = budget;
-        const target = this.#aim(actor);
+        // (Backing off from whoever it's after, a goblin bomber's: on till it's there)
+        const target = actor.backing ? null : this.#aim(actor);
 
         while (budget > 1e-9 && actor.path.length) {
             const [tx, ty] = actor.path[0];
@@ -3506,7 +3646,9 @@ export class Battle {
                 actor.facing = atan2(target.x - actor.x, target.y - actor.y);
             }
 
-            if (attack.kind === "ranged") {
+            if (attack.bomb) {
+                this.#lob(actor, target, attack);
+            } else if (attack.kind === "ranged") {
                 this.#launch(actor, target, attack);
             } else if (target && !target.dead && this.#reachable(actor, target)) {
                 this.#hit(actor, target, attack);
@@ -3713,6 +3855,11 @@ export class Battle {
     // `area`), and leaping on to others near (its `chain`), each less; with whatever else it does.
     // How many it struck.
     #smite(caster, target, id, spell) {
+        // (A blast: Explosion, round its target, throwing them all, the target away from the caster)
+        if (spell.blast) {
+            return this.#blast(caster, caster, target.map, target.x, target.y, { radius: spell.area, damage: spell.damage, power: caster.power?.spell ?? 1, toss: spell.blast.toss, kind: id, spell: id, heart: [caster.x, caster.y] });
+        }
+
         // (Each struck, and how many leaps it is from the target: 0 for those round it)
         const struck = [{ one: target, leap: 0 }];
         const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
@@ -3856,6 +4003,163 @@ export class Battle {
                 projectile.y += (dy / distance) * travel;
             }
         }
+    }
+
+    // A bomb let go (an attack's `bomb`) at where whoever it's thrown at stands: missing if they're
+    // gone. A player's Goblin Bomb does the item's damage (`given`, lob); a creature's, its own
+    // times its blows from afar
+    #lob(actor, target, attack) {
+        if (!target || target.dead || target.map !== actor.map) {
+            this.#emit("miss", { id: actor.id, target: target?.id ?? null, attack: attack.id });
+
+            return;
+        }
+
+        const damage = attack.given ?? attack.damage;
+        const power = attack.given ? 1 : (actor.power?.ranged ?? 1);
+
+        this.#throwBomb(actor, [target.x, target.y], attack.bomb, damage, power);
+
+        // (A volley: the others about them, half to all of `spread` metres off, each where there's
+        // ground clear enough to stand on)
+        for (let k = 1; k < (attack.volley ?? 1); k++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const off = attack.spread * (0.5 + 0.5 * this.random.next());
+            const at = [target.x + cos(angle) * off, target.y + sin(angle) * off];
+
+            if (this.#clear(target.map, at)) {
+                this.#throwBomb(actor, at, attack.bomb, damage, power);
+            }
+        }
+    }
+
+    // A bomb in the air (BOMBS), from where `by` stands to (x, y): landing a moment later, and
+    // bursting once its fuse burns down. Told as "bomb": where it's from and to, when it lands and
+    // when it bursts, and how far its blast reaches
+    #throwBomb(by, [x, y], kind, damage, power) {
+        const spec = BOMBS[kind];
+        const flight = Math.max(spec.soonest, Math.round((hypot(x - by.x, y - by.y) / spec.speed) * 1000));
+        const bomb = { id: this.nextBomb++, kind, map: by.map, x, y, lands: this.time + flight, bursts: this.time + flight + spec.fuse, damage: [...damage], power, by: by.id, team: by.team, caster: by.kind };
+
+        this.bombs.push(bomb);
+        this.#emit("bomb", { bomb: bomb.id, kind, id: by.id, map: by.map, from: [by.x, by.y], x, y, lands: bomb.lands, bursts: bomb.bursts, radius: spec.radius });
+    }
+
+    // Bombs whose fuses have burnt down, bursting (#blast): whoever threw them, or, gone (a player
+    // who's left), the side they were on, whose enemies they hurt
+    #burst() {
+        for (const bomb of [...this.bombs]) {
+            if (this.time < bomb.bursts) {
+                continue;
+            }
+
+            this.bombs.splice(this.bombs.indexOf(bomb), 1);
+
+            const by = this.actor(bomb.by);
+            const side = by ?? { id: bomb.by, team: bomb.team, kind: bomb.caster };
+            const { radius, toss } = BOMBS[bomb.kind];
+
+            this.#blast(by && !by.dead ? by : null, side, bomb.map, bomb.x, bomb.y, { radius, damage: bomb.damage, power: bomb.power, toss, kind: bomb.kind, bomb: bomb.id });
+        }
+    }
+
+    /**
+     * A blast at (x, y) on a map (a bomb bursting, the Explosion spell): every enemy of `side`'s
+     * within `radius` metres hurt (`damage` rolled, times `power`, at its heart; half that at its
+     * edge), whatever's in their way (a shield, cover), and thrown (#toss: `toss` times as far as
+     * TOSS has it; away from `heart` at the very heart of it). Told as "blast", before what it
+     * does: where, how far it reached, and who's thrown where ({ id, from, to, flight, up, until }).
+     * How many it caught.
+     */
+    #blast(by, side, map, x, y, { radius, damage, power = 1, toss, kind, spell = null, heart = null, bomb = null }) {
+        const caught = this.actors.filter((actor) => !actor.dead && actor.map === map && hypot(actor.x - x, actor.y - y) <= radius && this.hostile(side, actor));
+        // (How near the heart each was, before any's thrown)
+        const near = caught.map((actor) => hypot(actor.x - x, actor.y - y));
+        const throws = caught.map((actor, k) => this.#toss(actor, [x, y], near[k] / radius, toss, heart)).filter(Boolean);
+
+        this.#emit("blast", { kind, map, x, y, radius, by: side.id, spell, bomb, throws });
+
+        caught.forEach((actor, k) => {
+            const share = 1 - 0.5 * Math.min(1, near[k] / radius);
+            const hurt = Math.max(1, Math.round(rollDamage({ damage }, this.random) * power * share));
+
+            if (!actor.dead) {
+                this.#hit(by, actor, { id: kind, kind: "blast", reaction: "crush", stagger: 300, element: "fire" }, null, { damage: hurt, spell, ground: true });
+            }
+        });
+
+        return caught.length;
+    }
+
+    // Can someone be thrown by a blast (TOSS)? Not too heavy or not solid (`steady`), one of the
+    // perilous places' own, an elite or a dungeon's boss, what stands over more than its square, a
+    // wagon; nor one thrown lately
+    #throwable(actor) {
+        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+    }
+
+    // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
+    // from it (at its very heart, away from `heart`, whoever set it off, or any way), as far as
+    // the ground's clear that way, onto the nearest free square there; down till it's up again,
+    // whatever it was doing stopped. What's told of it, or null if it isn't thrown
+    #toss(actor, [x, y], out, toss, heart) {
+        if (!this.#throwable(actor)) {
+            return null;
+        }
+
+        let [dx, dy] = [actor.x - x, actor.y - y];
+        const off = hypot(dx, dy);
+
+        if (off < 0.2) {
+            const away = heart && hypot(actor.x - heart[0], actor.y - heart[1]) > 0.2 ? atan2(actor.y - heart[1], actor.x - heart[0]) : this.random.next() * Math.PI * 2;
+
+            [dx, dy] = [cos(away), sin(away)];
+        } else {
+            [dx, dy] = [dx / off, dy / off];
+        }
+
+        // (As far as the ground's clear that way, a quarter of a metre at a time)
+        const far = TOSS.far * toss * (1 - 0.5 * Math.min(1, out));
+        let [tx, ty] = [actor.x, actor.y];
+
+        for (let step = 0.25; step <= far + 1e-9; step += 0.25) {
+            const at = [actor.x + dx * step, actor.y + dy * step];
+
+            if (!this.#clear(actor.map, at, actor)) {
+                break;
+            }
+
+            [tx, ty] = at;
+        }
+
+        let square = [Math.floor(tx), Math.floor(ty)];
+
+        // (Someone there already: the nearest free square; none, where they stood)
+        if (this.#occupied(actor.map, square, actor)) {
+            try {
+                square = nearestFree(this.#squares(actor.map), square, { taken: this.#others(actor.map, actor), within: 3 });
+                [tx, ty] = [square[0] + 0.5, square[1] + 0.5];
+            } catch {
+                [tx, ty] = [actor.x, actor.y];
+                square = [...actor.square];
+            }
+        }
+
+        const from = [actor.x, actor.y];
+        const flown = hypot(tx - from[0], ty - from[1]);
+        const down = this.time + TOSS.down;
+
+        Object.assign(actor, { x: tx, y: ty, square, path: [], offPath: false, pathGoal: null, progress: null, pace: actor.walkPace, casting: null, backing: false, thrownAt: this.time, facing: atan2(x - tx, y - ty) });
+        actor.stunnedUntil = Math.max(actor.stunnedUntil, down);
+        actor.downUntil = Math.max(actor.downUntil ?? 0, down);
+
+        if (actor.attack && !actor.attack.struck) {
+            actor.attack = null;
+        }
+
+        this.#version++;
+
+        return { id: actor.id, from, to: [tx, ty], flight: TOSS.flight + Math.round(TOSS.per * flown), up: TOSS.up + TOSS.upPer * flown, until: actor.downUntil };
     }
 
     // What lingers on those afflicted: hurting them now and then (and bringing down any it's the

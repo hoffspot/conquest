@@ -36,6 +36,8 @@ const ABOUT = {
     puma: ["Puma", "Far out, in the hills and woods"],
     direWolf: ["Dire wolf", "Far out"],
     goblin: ["Goblin raider", "Far out", "cleaver"],
+    goblinBomber: ["Goblin bomber", "Among goblin raiders: keeps its distance and lobs lit bombs", null],
+    goblinKing: ["Goblin King", "The goblins' elite, leading their war band: a great cleaver, and a bigger bomb now and then", "cleaver"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
     cultist: ["Cultist", "Far out, in camps", "wand"],
     banditChief: ["Bandit chief", "Leading the outlaws who hold a place", "sword"],
@@ -302,7 +304,7 @@ function advance(seconds, step = 1 / 60) {
 // --- The controls ---
 
 const groups = [
-    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
+    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "wisp", "treant", "caveSpider", "shadowStalker", "hyena", "scorpion", "bogFrog", "crocodile", "magmaSlime", "rockTusker"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],

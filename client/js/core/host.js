@@ -30,7 +30,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, TIERS, tierPower, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, memberOf, menaces, outByDay, packOf, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -451,7 +451,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 24;
+export const SNAPSHOT_VERSION = 25;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -2921,6 +2921,23 @@ export class Host {
             this.#event("used", { id: player.id, item });
 
             return cast;
+        }
+
+        // (A bomb: thrown at the foe they've named or are set on, or the nearest they can see in
+        // its reach (refused, it's kept: none, too far, or they can't throw just now))
+        if (use.bomb) {
+            const foe = target ?? actor.order?.target ?? actor.target ?? this.#foeNear(actor, use.reach)?.id ?? null;
+            const thrown = this.battle.lob(actor.id, foe, { kind: use.bomb, damage: use.damage, reach: use.reach });
+
+            if (!thrown.ok) {
+                return thrown;
+            }
+
+            const item = player.progress.take(index, 1);
+
+            this.#event("used", { id: player.id, item });
+
+            return thrown;
         }
 
         if (use.safety && player.safety) {
@@ -5696,8 +5713,11 @@ export class Host {
 
                 // (One alone at its post: right there; a pack round it, three abreast)
                 const at = count === 1 ? [x, y] : [x + (k % 3) - 1, y + Math.floor(k / 3)];
+                // (An elite pack led by its kind's own elite, if it has one: the Goblin King; and
+                // now and then one of its pack one of those it goes about with: a goblin bomber)
+                const kind = elite && k === 0 ? eliteOf(creature) : CREATURES[creature].band && k > 0 ? memberOf(creature, k, this.random.next()) : creature;
 
-                this.#rouse(id, creature, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
+                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
                 ids.push(id);
             }
         } catch {
@@ -5743,7 +5763,7 @@ export class Host {
             // in, battle.js WARY_MS; a dungeon's boss or mini-boss, its rank and its id in its theme,
             // `champion` and `regalia`: how it's drawn, beasts/champions.js; an elite, `elite`, seeing
             // further, `sight`, and drawn as a champion "elite")
-            wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
+            wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...traitsOf(creature, { boss: champion === "boss" }), ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
         });
     }
 
@@ -7135,7 +7155,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
-            wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, companion: risen ? "risen" : "called" },
+            wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, ...traitsOf(creature), companion: risen ? "risen" : "called" },
         });
         this.#event("roused", { ids: [id], creature });
         this.#event("companion", { id: player.id, companion: id, creature, change: risen ? "risen" : "called" });
@@ -7271,7 +7291,7 @@ export class Host {
         const power = tierPower(beast.tier);
 
         beast.creature = creature;
-        this.battle.reshape(targetId, { name: spec.name, weapon: spec.weapon, hp: Math.round(spec.hp * power), speed: spec.speed, chase: spec.chase, armor: spec.armor ?? 0, wild: { creature, temper: spec.temper, guard: spec.guard ?? 0, menace: menaces(creature) } });
+        this.battle.reshape(targetId, { name: spec.name, weapon: spec.weapon, hp: Math.round(spec.hp * power), speed: spec.speed, chase: spec.chase, armor: spec.armor ?? 0, wild: { creature, temper: spec.temper, guard: spec.guard ?? 0, menace: menaces(creature), ...traitsOf(creature) } });
         this.#event("polymorphed", { id: targetId, creature, from });
     }
 

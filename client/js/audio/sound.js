@@ -167,7 +167,7 @@ const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
-const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand" };
+const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand", throw: "bombThrow" };
 const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "dragonBreath" };
 
 // The footsteps on each footing (audio/footing.js SURFACES: "grass" → "stepGrass"...)
@@ -241,6 +241,8 @@ export const CREATURE_VOICES = Object.freeze({
     skeleton: { family: "skeleton", fall: null },
     wightLord: { family: "wight" },
     goblin: { family: "goblin" },
+    goblinBomber: { family: "goblin", rate: 1.08 },
+    goblinKing: { family: "goblin", rate: 0.8 },
     boggart: { family: "goblin", rate: 0.9 },
     troll: { family: "troll" },
     ogre: { family: "troll", rate: 1.05 },
@@ -501,11 +503,16 @@ const LANDINGS = {
 // How loud a landing is against its own sound, where softer (vanishing from sight: a hush)
 const HUSHED = { invisibility: 0.5 };
 
+// The spells with no school cast with their own sound: Explosion's heat drawn in (its blast's
+// heard as the battle tells it: app/game.js "blast")
+const CASTS = { explosion: "castExplosion" };
+
 /**
  * A spell's sounds (core/spells.js): its cast, swelling to its release (`cast`); its missile's
  * flight, if it throws one (`missile`); and its landing (`land`). A school's spells each its
  * school's, by its tier; the rest cast with the arcane bolt (at an enemy) or a healing's swell
- * (at a friend or themselves), and landing as LANDINGS. Any of them null: none.
+ * (at a friend or themselves), or their own (CASTS), and landing as LANDINGS. Any of them null:
+ * none.
  */
 export function spellSounds(id) {
     const spell = SPELLS[id];
@@ -518,7 +525,7 @@ export function spellSounds(id) {
     const band = stem ? bandOf(spell.school, spell.tier) : null;
 
     return {
-        cast: stem ? `cast${stem}${band}` : spell.target === "enemy" ? "bolt" : "castHealingLow",
+        cast: CASTS[id] ?? (stem ? `cast${stem}${band}` : spell.target === "enemy" ? "bolt" : "castHealingLow"),
         missile: MISSILES[id] ?? null,
         land: LANDINGS[id] ?? (stem ? `impact${stem}${band}` : null),
     };

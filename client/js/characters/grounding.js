@@ -18,14 +18,17 @@ const _placed = new THREE.Vector3();
 const _sum = new THREE.Vector3();
 
 // Which part of the body a vertex is on, by its heaviest bone: 0 the body, 1 the left arm, 2 the
-// right (and which are the feet)
+// right (and which are the feet); and on the body, which of what can be kept apart from the rest
+// of it (lowestApart): 1 the head, 2 the left foot, 3 the right
 const ARM = /^(Left|Right)(Arm|ForeArm|Hand)/;
 const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
+const APART = [/^Head$/, /^Left(Foot|ToeBase)$/, /^Right(Foot|ToeBase)$/];
 
 /**
  * Some of a body's vertices (HumanData: the body's own, every so many, about GROUND_POINTS),
- * with the bones that move each and how much (weights out of 1), and which part each is on (0
- * the body, 1 the left arm, 2 the right): { vertices, bones, weights, parts }.
+ * with the bones that move each and how much (weights out of 1), which part each is on (0 the
+ * body, 1 the left arm, 2 the right) and, on the body, what of it (0 the rest, 1 the head, 2 the
+ * left foot, 3 the right): { vertices, bones, weights, parts, apart }.
  */
 export function groundPoints(human) {
     const all = [];
@@ -43,6 +46,7 @@ export function groundPoints(human) {
     const bones = new Uint8Array(vertices.length * 4);
     const weights = new Float32Array(vertices.length * 4);
     const parts = new Uint8Array(vertices.length);
+    const apart = new Uint8Array(vertices.length);
 
     vertices.forEach((v, k) => {
         let heaviest = 0;
@@ -53,12 +57,14 @@ export function groundPoints(human) {
             heaviest = weights[k * 4 + j] > weights[k * 4 + heaviest] ? j : heaviest;
         }
 
-        const arm = human.bones[bones[k * 4 + heaviest]].name.match(ARM);
+        const name = human.bones[bones[k * 4 + heaviest]].name;
+        const arm = name.match(ARM);
 
         parts[k] = arm ? (arm[1] === "Left" ? 1 : 2) : 0;
+        apart[k] = arm ? 0 : APART.findIndex((bone) => bone.test(name)) + 1;
     });
 
-    return { vertices, bones, weights, parts };
+    return { vertices, bones, weights, parts, apart };
 }
 
 /**
@@ -66,7 +72,21 @@ export function groundPoints(human) {
  * body of `positions` (its shape's vertices) posed by `rig` (its bones' world matrices worked
  * out); and each arm's lowest point, into `arms` if given ([left, right] Vector3s).
  */
-export function lowestPoint(rig, positions, { vertices, bones, weights, parts }, arms = null) {
+export function lowestPoint(rig, positions, points, arms = null) {
+    return lowestOf(rig, positions, points, arms, null);
+}
+
+/**
+ * As lowestPoint, but with the head and each foot kept apart from the rest of the body (a thrown
+ * body's, lifted out of the ground by the rest, and each of those turned out of it at its joint:
+ * actions.js): how high the rest's lowest point is, and the head's and each foot's lowest point
+ * into `apart` ([head, left foot, right foot] Vector3s), each arm's into `arms`.
+ */
+export function lowestApart(rig, positions, points, apart, arms) {
+    return lowestOf(rig, positions, points, arms, apart);
+}
+
+function lowestOf(rig, positions, { vertices, bones, weights, parts, apart: of }, arms, apart) {
     rig.bones.forEach((bone, i) => {
         _skinning[i] ??= new THREE.Matrix4();
         _skinning[i].multiplyMatrices(bone.matrixWorld, rig.skeleton.boneInverses[i]);
@@ -75,6 +95,7 @@ export function lowestPoint(rig, positions, { vertices, bones, weights, parts },
     let lowest = Infinity;
 
     arms?.forEach((arm) => arm.set(0, Infinity, 0));
+    apart?.forEach((part) => part.set(0, Infinity, 0));
 
     for (let k = 0; k < vertices.length; k++) {
         const part = parts[k];
@@ -94,10 +115,16 @@ export function lowestPoint(rig, positions, { vertices, bones, weights, parts },
             }
         }
 
-        if (!part) {
+        if (part) {
+            if (_sum.y < arms[part - 1].y) {
+                arms[part - 1].copy(_sum);
+            }
+        } else if (apart && of[k]) {
+            if (_sum.y < apart[of[k] - 1].y) {
+                apart[of[k] - 1].copy(_sum);
+            }
+        } else {
             lowest = Math.min(lowest, _sum.y);
-        } else if (_sum.y < arms[part - 1].y) {
-            arms[part - 1].copy(_sum);
         }
     }
 

@@ -26,7 +26,8 @@ export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "r
  * ("head" to put the boss's hoard at the head of its hall, else at the far end), style (the
  * art's: world/interiors3d.js), ground (setpieces/pieces.js GROUND), sound, names ({ forms, adj,
  * place }: what one's called), packs ([{ id, creatures, size: [least, most], weight }]), minis
- * ([{ id, creature, title, weight }]), bosses (as minis), rooms ({ kind: [{ id, weight, props:
+ * ([{ id, creature, title, weight }]), bosses (as minis, and `guard`: the creatures about it, in
+ * turn, if not one of the theme's packs), rooms ({ kind: [{ id, weight, props:
  * [{ char, count: [least, most], at (PROP_PLACES), size: [w, h], mirror }], torches: [least, most]
  * }] }: each kind of room a layout digs, and "any" for kinds not listed) }.
  */
@@ -66,7 +67,9 @@ export const THEMES = {
         bosses: [
             { id: "trollKing", creature: "troll", title: "the Troll King", weight: 2 },
             { id: "broodmother", creature: "caveSpider", title: "the Broodmother", weight: 2 },
-            { id: "goblinKing", creature: "goblin", title: "the Goblin King", weight: 1 },
+            // (The goblins' elite on its throne, harder than met in the wild: its own war band
+            // about it, raiders and bombers: creatures.js `boss`)
+            { id: "goblinKing", creature: "goblinKing", title: "the Goblin King", weight: 1, guard: ["goblin", "goblinBomber"] },
             { id: "frostTroll", creature: "frostTroll", title: "the Frost Troll", weight: 1 },
         ],
         rooms: {

@@ -120,6 +120,16 @@ export const ITEMS = Object.freeze({
         use: { safety: true },
         price: 25,
     },
+    // A goblin's bomb, lit and thrown at a foe up to `reach` metres off (battle.js lob, BOMBS): it
+    // lands, fizzes and bursts, hurting (`damage`, at its heart) and throwing their side round it;
+    // found on goblins, never sold
+    goblinBomb: {
+        label: "Goblin Bomb",
+        about: "A clay pot of black powder with a short fuse. Lit and thrown at a foe up to 12 metres off, it lands, fizzes a moment and bursts, hurting and throwing everyone of theirs nearby. It never hurts or throws you or your allies.",
+        bomb: true,
+        use: { bomb: "goblinBomb", damage: [14, 24], reach: 12 },
+        price: 18,
+    },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
@@ -162,15 +172,15 @@ const MASTER_SPECIAL = Object.freeze({ legendary: 1 });
  * The lines of things a shop buys (SHOPS `line`), by what each thing is: arms (a weapon but a
  * wand or a grimoire; a quiver), armour (shields, and what's worn but jewellery), the arcane (wands
  * and grimoires, a spellward, a wizard's hat, tomes, scrolls and charms), jewellery, draughts (all
- * that's drunk but ale, and cures) and provisions (ale and a hot meal). The adventurers' guild buys
- * everything.
+ * that's drunk but ale, and cures; not a bomb) and provisions (ale and a hot meal). The
+ * adventurers' guild buys everything.
  */
 export const LINES = Object.freeze({
     arms: (def) => (def.slot === "mainHand" && !def.magic) || Boolean(def.quiver),
     armour: (def) => Boolean(def.slot) && def.slot !== "mainHand" && !def.quiver && !def.jewel,
     arcana: (def) => Boolean(def.magic || def.tome || def.scroll || def.charm || def.id === "spellward" || def.id === "wizardHat"),
     jewels: (def) => Boolean(def.jewel),
-    draughts: (def) => Boolean(def.use && !def.slot && !def.part && !def.food && !def.tome && !def.scroll && def.id !== "meal" && def.id !== "ale"),
+    draughts: (def) => Boolean(def.use && !def.slot && !def.part && !def.food && !def.tome && !def.scroll && !def.bomb && def.id !== "meal" && def.id !== "ale"),
     provisions: (def) => def.id === "meal" || def.id === "ale",
 });
 
@@ -178,8 +188,9 @@ export const LINES = Object.freeze({
  * What each shop sells (`items`: the things it keeps), and the best make it has of each (`best`);
  * what it buys (`line`: LINES); whether its stock is each day's (`daily`: so many things
  * (`picks`), so many of each (`count`), of which makes, or as rare (`grades`), and its daily
- * special's (`special`), and what it always has (`always`): core/stock.js), and how much more it
- * asks (`markup`).
+ * special's (`special`), and what else may be its special as if it were of the rarest
+ * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), and what it always has
+ * (`always`): core/stock.js), and how much more it asks (`markup`).
  *
  * - **A blacksmith** (`smith`): every weapon and piece of armour, and its people's uniform, as well
  *   made as the player buying is mighty (`tiered`: SMITH_MAKES).
@@ -207,7 +218,7 @@ export const SHOPS = Object.freeze({
     alchemist: { items: DRAUGHTS, best: "veryRare", line: ["draughts"], daily: { picks: 12, count: [2, 6], grades: { common: 0.5, ...SPECIALIST }, special: SPECIALIST_SPECIAL } },
     masterSwordsmith: { items: ARMS, best: "legendary", line: ["arms"], markup: 2, daily: { picks: 7, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL, always: ["sword"] } },
     masterArmorer: { items: ARMOUR, best: "legendary", line: ["armour"], markup: 2, daily: { picks: 8, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL } },
-    emporium: { items: [...ARCANA, "amulet", "ring", ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "legendary", line: ["arcana", "jewels"], markup: 2, daily: { picks: 10, count: [1, 2], grades: MASTER, special: MASTER_SPECIAL } },
+    emporium: { items: [...ARCANA, "amulet", "ring", ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "legendary", line: ["arcana", "jewels"], markup: 2, daily: { picks: 10, count: [1, 2], grades: MASTER, special: MASTER_SPECIAL, specials: [tomeOf("explosion")] } },
     armoury: { items: ["sword", "hammer", "greatsword", "axe", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "towerShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary", line: ["arms", "armour"] },
     arcane: { items: ["wand", "grimoire", "staff", "spellward", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork", line: ["arcana", "jewels", "draughts"] },
     abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork", line: ["draughts", "jewels", "arcana"] },

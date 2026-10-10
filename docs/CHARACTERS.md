@@ -1829,6 +1829,51 @@ Mesh2Motion's clips: "Clips in the game", below):
   (its chest nearly as low as it goes): the game times the thud, the blood pooling under them,
   their shadow fading and how long they lie before sinking from then.
 
+**Thrown** (`toss`: a blast, a bomb bursting or the Explosion spell; core/battle.js `TOSS`) is no
+clip: the body's flung limp, a ragdoll (`characters/ragdoll.js`), with no physics engine. Sixteen
+points at its joints (the pelvis, chest, neck and top of the head, and each shoulder, elbow,
+wrist, hip, knee and ankle), each with its share of the body's weight and its flesh's reach,
+are held together by sticks (its bones, and braces across the trunk so it twists but doesn't
+fold up) after Jakobsen's *Advanced Character Physics* (the Hitman ragdolls) and position-based
+dynamics, stepped eight small steps a frame. Knees and elbows bend only the way they do (as the
+limb's swung, its front turned with it from hanging down), no further than 140° and 150°, and no
+further out of the line they bend in than the hip or the shoulder turns the limb. The head, the
+thighs and the arms swing no further than their joints let them, near enough (a cone each, out
+of the trunk: the head 40° about straight on, a thigh forward 120° and back 30°, an arm every way
+but behind the back and across it), and a knee's kept off its shoulder. Whatever holds a joint
+moves the trunk the other way as it moves the limb, each as much as it's light, so the body's
+momentum is kept: held in only the limb, the corrections came out as speed and the body rolled
+metres from where it landed, or flew off. The ground holds every point above it, with a little
+friction and next to no bounce.
+
+- **Thrown.** The battle says where it lands, how long it's in the air and how high it goes, and
+  when it's up again; the body's launched from its pose to land there (its pelvis on the ground
+  then, gravity as strong as that arc takes: a blast's throw is quicker than a fall from that
+  high), turning head over heels the way it's thrown (100° to 180°) and twisting a little.
+- **Drawn as it lies.** Each frame its bones are posed from the points: each limb's two bones
+  turned about its middle joint's hinge, the line it bends about, so a knee or an elbow only
+  ever bends (bent the other way, the limb's turned about itself to suit), the spine a third of
+  the way at each of its bones between the pelvis's turn and the chest's, the head on the neck;
+  each joint then held to its range (`limitRotation`), each from the bone above it as the points
+  have that, so one held doesn't throw out the ones below it. What the points don't reach (hands,
+  feet, fingers, collarbones) keeps the pose it was thrown in. Down, the body's kept out of the
+  ground: lifted as far as its trunk's or its legs' lowest point is in it, and its head, each foot
+  and each arm still in it turned up out of it at the neck (then the head), the ankle and the
+  shoulder (then the elbow), no further than each turns; what can't come out (a face pressed
+  into the ground lying on it, toes, a hand for a moment as it lands) is left in rather than the
+  whole body lifted off the ground by it.
+- **Up again.** As soon as it's let up (lying a moment first), it's turned to lie along the way
+  it lies (from its head to its pelvis, as the clip lies) and the getting-up clip's played from
+  the pose it lies in, let go of over 0.35 s (or 0.6 s on its face: rolled over onto its back
+  first), a little quicker if need be. Then it walks back to where its actor is.
+- **Dead.** It lies where it falls, limp, what's in its hands let go of as it hits the ground;
+  `die`, thrown, says how long until it does.
+- **A creature's body** (beasts/beast.js, no rig) tumbles whole along the arc, rolling over and
+  landing on its side, and rights itself as it's let up (dead, it falls dead there).
+- **Tested by throwing it.** `test/actions.test.js` throws bodies of three builds four ways, up
+  again and dead: never a joint past its range, the trunk never in the ground, landing within
+  0.8 m of where it's thrown to and up by when it's let up.
+
 **The tavern's folk** have a few more:
 
 - **Sitting** (`setSeated`): the thighs level (hips flexed 88°), the knees bent square, the feet

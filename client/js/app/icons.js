@@ -1091,6 +1091,15 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-15,-19 L15,-19 C15,-1 9,12 0,21 C-9,12 -15,-1 -15,-19 Z" fill="none" stroke="#c9d1d8" stroke-width="1.6" transform="scale(0.9) translate(0 -1)"/>`,
 
     // A flask of red draught, stoppered
+    // A goblin's bomb: a round black pot, a band of rope round it, its wick lit and sparking
+    goblinBomb: `
+        <circle cx="-2" cy="5" r="14" fill="#2b2522" stroke="#0e0b09" stroke-width="1.4"/>
+        <path d="M-15.5,3 C-8,7 4,7 11.5,3" fill="none" stroke="#8a6a40" stroke-width="2.2"/>
+        <ellipse cx="-7" cy="-1" rx="3.6" ry="2.4" fill="#ffffff" opacity="0.28" transform="rotate(-30 -7 -1)"/>
+        <rect x="2" y="-12" width="7" height="5" rx="1.2" fill="#4a3a2e" stroke="#1a120c" stroke-width="1" transform="rotate(30 5 -9)"/>
+        <path d="M8,-12 C11,-16 10,-19 14,-20" fill="none" stroke="#c8a070" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="${star(15, -20, 5.2, 1.6)}" fill="#fff0a0" stroke="#e86a10" stroke-width="0.8" filter="url(#icon-glow)"/>`,
+
     potion: `
         <circle cy="6" r="13.5" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
         <path d="M-12.6,3 A13,13 0 1 0 12.6,3 Z" transform="translate(0 0.5) scale(0.97)" fill="url(#icon-potion)"/>

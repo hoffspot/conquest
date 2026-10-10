@@ -5,13 +5,14 @@ import * as THREE from "three";
 import { Actions, ATTACKS, DODGES, DRAWS, FALLS, EMOTE_WAYS, GUARD_SWAYS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { CLIP_HEIGHT, CLIP_KEYS } from "../client/js/characters/clip-keys.js";
 import { Character, placed, slung } from "../client/js/characters/character.js";
-import { groundPoints, lowestPoint } from "../client/js/characters/grounding.js";
+import { groundPoints, lowestApart, lowestPoint } from "../client/js/characters/grounding.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { ITEMS, SLING, socketOn } from "../client/js/characters/equipment.js";
 import { buildItem } from "../client/js/characters/items.js";
 import { limitRotation, Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { createRandom } from "../client/js/core/random.js";
 import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { CHEERING, EMOTES, GREETINGS, greetingOf, isEmote } from "../client/js/core/emotes.js";
 import { FACES } from "../client/js/characters/expressions.js";
@@ -19,7 +20,7 @@ import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { Avatar, POSING, posingEvery } from "../client/js/world/avatar.js";
 import { folkLook } from "../client/js/characters/folk.js";
-import { BODIES, dress, FRAME } from "../client/js/characters/motioncheck.js";
+import { BODIES, dress, FRAME, jointExcess } from "../client/js/characters/motioncheck.js";
 import { soldierLook } from "../client/js/characters/soldiers.js";
 import { readHumanData } from "../scripts/lib/human-data.js";
 
@@ -965,6 +966,94 @@ describe("reactions and falls (actions.js)", () => {
         actions.revive();
         assert.equal(character.items.find((item) => item.name === "sword").parent.name, "RightHand");
         assert.ok(character.holds.Right?.grips);
+    });
+
+    // How far into the ground (metres, below 0) the lowest point of a body's trunk and legs is,
+    // and of its head, its feet and its arms, as it's posed now
+    const sunk = (character) => {
+        const apart = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+        const arms = [new THREE.Vector3(), new THREE.Vector3()];
+
+        character.object.updateMatrixWorld(true);
+
+        const rest = lowestApart(character.rig, character.positions, groundPoints(human), apart, arms);
+        const round = (y) => Math.round(y * 1000) / 1000;
+
+        return { rest: round(rest), head: round(apart[0].y), feet: round(Math.min(apart[1].y, apart[2].y)), arms: round(Math.min(arms[0].y, arms[1].y)) };
+    };
+
+    it("is thrown limp by a blast about where it's thrown to, never in the ground nor a joint past its range; up again when it's let up, or dead, lying there", () => {
+        const flat = () => 0;
+        const down = { frames: 0, armIn: 0 };
+
+        for (const [n, shape] of [{}, { macro: { gender: 0, height: 0.15, muscle: 0.3, weight: 0.3 } }, PRESETS.orc.shape].entries()) {
+            for (const [k, to] of [[3, 0], [0, -3], [-2, 2], [0.5, 4]].entries()) {
+                for (const seconds of [2.6, null]) {
+                    const { character, walker, actions } = fighter(shape, seconds === null ? ["sword"] : []);
+                    const random = createRandom(7 + n * 10 + k);
+                    const what = `${JSON.stringify(shape.macro ?? shape)} to ${to}${seconds === null ? ", dead" : ""}`;
+
+                    for (const method of ["drop", "pickUp"]) {
+                        character[method] = Character.prototype[method].bind(character);
+                    }
+
+                    for (let t = 0; t < 0.5; t += 0.05) {
+                        walker.update(0.05);
+                    }
+
+                    const standing = world("Hips", character).y;
+                    const far = Math.hypot(...to);
+                    const flight = actions.toss({ to, flight: 0.55 + 0.09 * far, up: 1.1 + 0.25 * far, ground: flat, seconds, random: () => random.next() });
+                    let [landed, up] = [null, null];
+
+                    assert.ok(actions.thrown && actions.airborne, what);
+
+                    for (let t = 0; t < 4; t += 1 / 30) {
+                        walker.update(1 / 30);
+
+                        // (Never posed as no body can be; down, its trunk and legs never in the
+                        // ground, its head and feet no further than a face or toes pressed into it,
+                        // and an arm seldom in it, for a moment as it lands or rolls)
+                        if (actions.tossed && !actions.tossed.rising) {
+                            const excess = jointExcess(character.rig, human.bones);
+
+                            assert.ok(excess.degrees < 0.5, `${what}: ${excess.bone} ${excess.degrees.toFixed(1)}° past its range at ${t.toFixed(2)} s`);
+                        }
+
+                        if (actions.ragdoll.grounded && actions.tossed && !actions.tossed.rising) {
+                            const low = sunk(character);
+
+                            landed ??= t;
+                            assert.ok(!actions.airborne, what);
+                            assert.ok(low.rest > -0.02 && low.head > -0.13 && low.feet > -0.2, `${what}: ${JSON.stringify(low)} at ${t.toFixed(2)} s`);
+                            down.frames += 1;
+                            down.armIn += low.arms < -0.05 ? 1 : 0;
+                        }
+
+                        up ??= seconds !== null && !actions.thrown ? t : null;
+                    }
+
+                    const hips = world("Hips", character);
+
+                    assert.ok(landed > flight - 0.2 && landed <= flight + 0.05, `${what}: down at ${landed?.toFixed(2)} s, thrown for ${flight.toFixed(2)}`);
+
+                    if (seconds === null) {
+                        const low = sunk(character);
+
+                        assert.ok(actions.thrown, `${what}: lying there`);
+                        assert.ok(low.rest < 0.01 && low.arms > -0.04, `${what}: lying on the ground, not over it nor an arm in it: ${JSON.stringify(low)}`);
+                        assert.ok(hips.y < standing * 0.45 && Math.hypot(hips.x - to[0], hips.z - to[1]) < 0.8, `${what}: lying at ${hips.toArray().map((v) => v.toFixed(2))}`);
+                        assert.equal(character.items.find((item) => item.name === "sword").parent, character.object, `${what}: the sword let go of`);
+                    } else {
+                        assert.ok(up !== null && up <= seconds + 0.05, `${what}: up at ${up?.toFixed(2)} s`);
+                        assert.ok(hips.y > standing - 0.08 && walker.feet.every((foot) => foot.planted), `${what}: standing again`);
+                        assert.ok(Math.hypot(hips.x - to[0], hips.z - to[1]) < 0.8, `${what}: up at ${hips.toArray().map((v) => v.toFixed(2))}`);
+                    }
+                }
+            }
+        }
+
+        assert.ok(down.armIn / down.frames < 0.05, `an arm in the ground ${down.armIn} frames of ${down.frames}`);
     });
 });
 

@@ -35,6 +35,8 @@ two tiers above it, up to their most.
 | Puma | 40 | territorial | 1 | 3–7 | mountain, woods, heath, badlands, darkwood |
 | Dire wolf | 30 | aggressive | 1–3 | 3–8 | tundra, snow, woods, heath, mountain |
 | Goblin raider | 26 | aggressive | 2–5 | 3–8 | heath, mountain, badlands, woods |
+| Goblin bomber | 22 | aggressive | among goblin raiders | 3–8 | with goblins (*Goblins*, below) |
+| Goblin King | 34 | aggressive | leads goblins | 3–8 | the goblins' elite (*Goblins*, below) |
 | Skeleton | 34 | aggressive | 1–3 | 3–9 | marsh, heath, tundra |
 | Cultist | 28 | aggressive | 1–3 | 3–8 | marsh, jungle, darkwood, volcanic |
 | Troll | 90 | aggressive | 1–2 | 4–9 | mountain, snow, tundra, heath |
@@ -66,6 +68,45 @@ as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws
 The bog frog's tongue reaches two squares off. The rock tusker's charge knocks whoever it catches
 off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
 bleeding wound, a web or roots holding them (below: "What lingers").
+
+### Goblins
+
+Goblins go about in raiding parties, and some of each party (each but its leader, 3 in 10:
+creatures.js `band`, `memberOf`) are **goblin bombers**: slighter, a sack of bombs on the back, a
+leather cap against the sparks. A bomber keeps its distance: come within 4 metres of it, it backs
+off 6 (battle.js `KEEP`), at most once every 4 seconds, and fights where it stands between; it
+never closes in to claw. From up to 10 metres off it lobs a lit bomb (every 3.8 seconds at most)
+at where whoever it's after stands: the bomb flies at 9 m/s (half a second at least), lands and
+fizzes there 1.5 seconds, a ring of light on the ground as wide as its blast, pulsing quicker as
+its wick burns down; then it bursts (battle.js `BOMBS`, `#blast`). The blast hurts its thrower's
+enemies within 2.5 metres (5–10 at its heart, half at its edge, times its tier: as fire, so a
+ward against fire takes its share; but no shield, cover or dodge) and **throws them**: flung away
+from its heart, 3 metres from its heart and half that from its edge, as far as the ground's
+clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the air 0.55 s and
+0.09 s more a metre, and down and getting up 2.6 seconds in all (they can't move, fight, cast or
+use anything); then they can't be thrown again for 4 seconds. Players and their companions are
+thrown as anyone is; never the heavy or the unsolid (bats, bears, trolls, ogres, wyverns, wisps,
+treants, crocodiles, rock tuskers, dragons, ghosts, wraiths, frost trolls: creatures.js
+`steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
+a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
+
+The goblins' elite (*Elites*, below) is the **Goblin King**, not an "Elite Goblin raider":
+bigger than any of them (as tall as a man), broad, crowned and caped in red edged with gold,
+leading a war band of raiders and bombers on its round. A great cleaver up close; and every 7
+seconds, at whoever keeps more than 3.5 metres off (as far as 11), a bigger bomb (`bigBomb`:
+8–15 at its heart, 3.5 metres round, throwing them 1.4 times as far, its wick 1.8 seconds),
+never itself thrown. It leaves the elite's prize, nearly always 3 to 5 Goblin Bombs, and a much
+better chance of the Explosion spell's tome (docs/MAGIC.md): about two in five, where any other
+that carries a tome seldom has this one. On the caves' throne it's harder still: docs/DUNGEONS.md
+*Who's in it*.
+
+A bomber leaves 1 to 3 **Goblin Bombs** three times in four, a raider one now and then (spoils.js).
+A Goblin Bomb (progress.js `ITEMS.goblinBomb`; never sold) is thrown from the pack ("Throw") or
+from an enemy's action wheel or a quick action at the foe the player's named or set on, or the
+nearest they can see within 12 metres (host.js `#use`, battle.js `lob`): thrown as a bomber
+throws (an underarm lob, an overarm one or a sidearm hurl), it does 14–24 at its blast's heart,
+and throws their enemies, never the player or their friends and allies. Refused, and kept, with
+no one in reach, out of sight, or in the middle of a blow or a spell.
 
 ## How strong, and where
 
@@ -113,8 +154,9 @@ and fought by the host like anyone else, so it plays out the same on every machi
 
 Now and then, out past the land nearest home, a pack's led by an elite of its kind: an "Elite
 Wolf" at the head of the wolves, an "Elite Brown bear" alone (`creatures.js` `ELITES`, the host's
-`#putOutElite`). (Not the dungeons' packs' stronger members, `docs/DUNGEONS.md`, which are only a
-tier up.)
+`#putOutElite`). A kind with an elite of its own has that instead (`elite`, `eliteOf`): the
+goblins' is the Goblin King, called by its own name (*Goblins*, above). (Not the dungeons' packs'
+stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
 
 - **Where, and how often.** Each time a pack's put out about a player in land of the second tier
   or further (`ELITES.least`), about one time in twelve (`ELITES.chance`) it's an elite's instead.

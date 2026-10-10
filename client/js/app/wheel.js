@@ -77,7 +77,7 @@ const goesOn = (action, wheel) => action?.on === wheel || (action?.on === "any" 
 export const forFriends = (spell) => ["any", "friend"].includes(SPELLS[spell]?.target);
 
 /** The things to use a wheel shows by a shorter name than their own (core/progress.js ITEMS). */
-const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale", scrollOfSafety: "Safety" };
+const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale", scrollOfSafety: "Safety", goblinBomb: "Bomb" };
 
 /**
  * What's in a slice (an ACTIONS key, or "item:" and a thing to use): { label, spell, ability,
@@ -98,10 +98,11 @@ export function actionOf(key) {
         return null;
     }
 
-    // (A spell's scroll: on whichever wheel its spell goes on, by the spell's name)
+    // (A spell's scroll: on whichever wheel its spell goes on, by the spell's name; a bomb, on an
+    // enemy's)
     const cast = def.use.cast && SPELLS[def.use.cast];
 
-    return cast ? { label: cast.label, item, on: ON[cast.target] ?? "self" } : { label: SHORT[item] ?? def.label, item, on: "self" };
+    return cast ? { label: cast.label, item, on: ON[cast.target] ?? "self" } : { label: SHORT[item] ?? def.label, item, on: def.use.bomb ? "enemy" : "self" };
 }
 
 /** A slice's icon (SVG), for what's in it. */

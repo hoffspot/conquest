@@ -233,8 +233,11 @@ class Particles {
 
     emit(settings, at, direction) {
         const { count, colours, size, speed, life, gravity, spread, grow = 0, swirl = 0, opacity = this.glow ? 1 : 0.55, late = false, drag = 2.5, splash = 0 } = settings;
+        // (Its colour from the first to the last over its life; through a third, halfway, if
+        // it's given one: white-hot, orange, then a dull red)
         const from = new THREE.Color(colours[0]);
-        const to = new THREE.Color(colours[1]);
+        const to = new THREE.Color(colours.at(-1));
+        const via = colours.length > 2 ? new THREE.Color(colours[1]) : null;
 
         for (let k = 0; k < count && this.free.length; k++) {
             const i = this.free.pop();
@@ -254,6 +257,7 @@ class Particles {
                 size: size[0] + Math.random() * (size[1] - size[0]),
                 from,
                 to,
+                via,
                 gravity,
                 grow,
                 swirl,
@@ -315,9 +319,12 @@ class Particles {
 
             this.sizes[i] = particle.size * (1 + particle.grow * t);
             this.alphas[i] = particle.opacity * (particle.late ? 1 - t ** 4 : (1 - t) * (1 - t));
-            this.tints[i * 3] = particle.from.r + (particle.to.r - particle.from.r) * t;
-            this.tints[i * 3 + 1] = particle.from.g + (particle.to.g - particle.from.g) * t;
-            this.tints[i * 3 + 2] = particle.from.b + (particle.to.b - particle.from.b) * t;
+            // (Through its middle colour, if it has one)
+            const [a, b, u] = particle.via ? (t < 0.5 ? [particle.from, particle.via, t * 2] : [particle.via, particle.to, t * 2 - 1]) : [particle.from, particle.to, t];
+
+            this.tints[i * 3] = a.r + (b.r - a.r) * u;
+            this.tints[i * 3 + 1] = a.g + (b.g - a.g) * u;
+            this.tints[i * 3 + 2] = a.b + (b.b - a.b) * u;
 
             return true;
         });

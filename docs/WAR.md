@@ -654,9 +654,11 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     had of that today: there'll be more tomorrow."). The host keeps what's been sold today
     (`stocks`, kept in snapshots: `SNAPSHOT_VERSION` 22), so a guest's shop is the host's;
   - **the daily special**: one thing, of the rarest (a specialist's very rare or legendary, a
-    master's legendary; the dearer it is, the likelier), already made, its rolls on it and its
-    name, shown first, under "Today's special", in a gold frame, for a quarter more than it would
-    be on the shelves (`SPECIAL_MARKUP`). It can be bought once a day, by one player.
+    master's legendary; the dearer it is, the likelier), or what the shop has in as if it were
+    (`daily.specials`: the Mystic Emporium's Tome of Explosion, about one day in ten, docs/MAGIC.md),
+    already made, its rolls on it and its name, shown first, under "Today's special", in a gold
+    frame, for a quarter more than it would be on the shelves (`SPECIAL_MARKUP`). It can be bought
+    once a day, by one player.
 
   A master asks twice what a thing's worth (`markup`), the special a quarter more again
   (`shopPrice`).

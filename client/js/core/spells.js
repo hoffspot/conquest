@@ -93,6 +93,9 @@ export const GROWTH_XP = Object.freeze([0, 60, 200, 500, 1200]);
  *    do: `effect` (an affliction taking hold, `chance` of the time: its `kind` and `look`),
  *    `knockdown` or `stun` (ms), `stagger` (ms, as a blow's), and `hazard`: what it leaves on the
  *    ground round them a while (battle.js HAZARDS: its `kind`, `ms`, `radius` in metres);
+ *  - blast (Explosion's): instead, a blast round them (battle.js #blast), `area` metres round,
+ *    hurting every enemy of the caster's in it, the nearer its heart the more, and throwing them
+ *    (`toss`: how far, times battle.js TOSS);
  *  - stun: stops the target for so many ms (Hexes);
  *  - `reaction`: how whoever's struck by it reacts (as a weapon's blow: characters/actions.js).
  * Healing restores less as damage is dealt more: tier 1 of either is weak, as a new adventurer is.
@@ -179,6 +182,7 @@ export const SPELLS = Object.freeze({
     summon: tome("Summon", "common", { about: "Calls a creature of these parts to your side to fight with you, five minutes; or calls another player (of a people not your enemy) to you, if they'll come.", target: "summon", castTime: 1500, cooldown: 60000, lasts: LASTING }),
     levitate: tome("Levitate", "common", { about: "Float a hand's breadth above the ground, five minutes: nothing on it (traps, pools, fire) touches you.", target: "self", castTime: 600, cooldown: 20000, lasts: LASTING }),
     fear: tome("Fear", "uncommon", { about: "Terror: an enemy runs blindly away, ten seconds (half that cast on them again soon after; a third time, nothing). The mighty may shrug it off; the unique always do.", target: "enemy", castTime: 500, cooldown: 8000, reach: SPELL_REACH.reach + SPELL_REACH.hexes, flee: 10000 }),
+    explosion: tome("Explosion", "rare", { about: "A blast of fire round an enemy: every foe within four metres is hurt (the nearer, the worse) and thrown through the air, and is a few moments getting up. It never hurts or throws you or your allies.", target: "enemy", castTime: 1400, cooldown: 20000, damage: [20, 32], area: 4, blast: { toss: 1.5 }, reaction: "crush" }),
     polymorph: tome("Polymorph", "rare", { about: "Turns a creature into another of the world's creatures, any at all. The mighty may resist; the unique can't be changed.", target: "enemy", castTime: 900, cooldown: 20000 }),
     attraction: tome("Attraction", "uncommon", { about: "A puff of smoke, and out of it one of the creatures of these parts.", target: "self", castTime: 800, cooldown: 30000 }),
     inertialBarrier: tome("Inertial Barrier", "uncommon", { about: "A barrier against blows and arrows: a quarter less from them, five minutes. No help against spells.", target: "friend", castTime: 700, cooldown: 20000, lasts: LASTING, physical: 0.75 }),

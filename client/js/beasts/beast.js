@@ -35,6 +35,11 @@ const HEADING_SPEED = 0.5;
 // How long a flinch lasts, and a fall (seconds); faster than this (m/s, for its size), it runs
 const REACT_TIME = 0.4;
 const DIE_TIME = 1.1;
+
+// Thrown by a blast (toss: a creature's body tumbles whole, docs/CHARACTERS.md *Thrown*): how far
+// it rolls over on the way (turns, at least and at most, landing on its side), how long it lies
+// there at least, and how long righting itself takes (s)
+const TUMBLE = Object.freeze({ turns: [0.25, 1.25], lie: 0.3, right: 0.45 });
 const RUN_SPEED = 1.9;
 
 /**
@@ -121,7 +126,7 @@ export class BeastAvatar {
         this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
         this.speed = 0;
         this.clock = own() * 100;
-        this.doing = { attack: null, react: null, dead: null };
+        this.doing = { attack: null, react: null, dead: null, tossed: null };
         this.random = own;
 
         /** Flying (a winged one: `winged`), if it is: { beat, bank, climb } (fly/soar/arrive). */
@@ -193,14 +198,41 @@ export class BeastAvatar {
                 doing.attack = null;
             },
             die: ({ from = 0 } = {}) => {
-                // (Falling away from whoever killed it)
-                doing.dead = { t: 0, side: from >= 0 ? 1 : -1 };
                 doing.attack = null;
+
+                // (Thrown, in the air: it falls dead where it lands)
+                if (doing.tossed && doing.tossed.t < doing.tossed.flight) {
+                    doing.tossed.dead = true;
+
+                    return doing.tossed.flight - doing.tossed.t;
+                }
+
+                // (Falling away from whoever killed it)
+                doing.tossed = null;
+                doing.dead = { t: 0, side: from >= 0 ? 1 : -1 };
+
+                return undefined;
             },
             revive: () => {
                 doing.dead = null;
                 doing.attack = null;
                 doing.react = null;
+                doing.tossed = null;
+            },
+            // (Thrown by a blast: tumbling whole through the air, landing on its side, and righting
+            // itself `seconds` after it was thrown; or, dead, lying there)
+            toss: ({ to, flight, up, ground, seconds = null }) => {
+                const [least, most] = TUMBLE.turns;
+                const turns = least + Math.floor(this.random() * (most - least + 1)) + 0.25;
+
+                doing.attack = null;
+                doing.react = null;
+                doing.tossed = { t: 0, from: [this.object.position.x, this.object.position.z], to: [...to], flight: Math.max(0.3, flight), up, ground, rights: seconds === null ? Infinity : Math.max(flight + TUMBLE.lie, seconds - TUMBLE.right), roll: (this.random() < 0.5 ? -1 : 1) * turns * Math.PI * 2, dead: seconds === null };
+
+                return doing.tossed.flight;
+            },
+            get tossed() {
+                return doing.tossed;
             },
             draw: noop,
             setGuard: noop,
@@ -339,6 +371,16 @@ export class BeastAvatar {
             return;
         }
 
+        // (Thrown by a blast: tumbling, then righting itself where it lands, and walking back to
+        // its actor from there)
+        if (this.doing.tossed) {
+            this.#tumble(dt);
+            Object.assign(follow, { x: object.position.x, z: object.position.z, vx: 0, vz: 0 });
+            this.last.set(object.position.x, 0, object.position.z);
+
+            return;
+        }
+
         const decay = Math.exp(-FOLLOW * dt);
         const ex = follow.x - x;
         const ez = follow.z - z;
@@ -396,6 +438,55 @@ export class BeastAvatar {
             this.object.position.y = ground;
             this.object.rotation.set(0, this.facing, 0);
         }
+    }
+
+    /** Is it thrown (actions.toss) and not on its feet again yet? */
+    get thrown() {
+        return Boolean(this.doing.tossed);
+    }
+
+    /** Is it in the air, thrown, not down yet? */
+    get airborne() {
+        return Boolean(this.doing.tossed) && this.doing.tossed.t < this.doing.tossed.flight;
+    }
+
+    // Thrown (actions.toss): along its arc, rolling over and over, landing on its side; lying a
+    // moment, then rolled back onto its feet (or, dead, falling dead there)
+    #tumble(dt) {
+        const tossed = this.doing.tossed;
+        const { from, to, flight, up, ground, roll } = tossed;
+
+        tossed.t += dt;
+
+        const u = Math.min(1, tossed.t / flight);
+        const x = from[0] + (to[0] - from[0]) * u;
+        const z = from[1] + (to[1] - from[1]) * u;
+        const below = ground(x, z);
+        const height = this.plan.height * this.scale;
+        let rolled = roll * (1 - (1 - u) ** 2);
+
+        if (u >= 1) {
+            if (tossed.dead && !this.doing.dead) {
+                this.doing.dead = { t: 0, side: roll > 0 ? 1 : -1 };
+            }
+
+            // (Righting itself; dead, rolled back as it falls over as the dead do)
+            const back = tossed.dead ? Math.min(1, (tossed.t - flight) / TUMBLE.right) : Math.max(0, Math.min(1, (tossed.t - tossed.rights) / TUMBLE.right));
+
+            rolled = Math.sign(roll) * (Math.PI / 2) * (1 - smoothstep(back));
+
+            if (!tossed.dead && back >= 1) {
+                this.doing.tossed = null;
+            }
+        }
+
+        // (On its side, its body kept out of the ground: about as thick as a third of its height)
+        const lift = Math.abs(Math.sin(rolled)) * height * 0.3;
+
+        this.object.position.set(x, below + 4 * up * u * (1 - u) + lift, z);
+        this.object.rotation.set(0, this.facing, this.doing.tossed ? rolled : 0);
+        this.speed = 0;
+        this.animate(dt);
     }
 
     /** Move itself for a moment (dt seconds) as it's going and doing (update does this). */

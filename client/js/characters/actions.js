@@ -50,9 +50,10 @@ import { Variety } from "../core/variety.js";
 import { CLIP_HEIGHT, CLIP_KEYS, FALL_KEYS } from "./clip-keys.js";
 import { FIST_HAND, ITEMS, socketOn } from "./equipment.js";
 import { closeHand } from "./grip.js";
-import { groundPoints, lowestPoint } from "./grounding.js";
+import { groundPoints, lowestApart, lowestPoint } from "./grounding.js";
 import { SEATED, STEPPED } from "./locomotion.js";
-import { blendRotation, jointRotation } from "./rig.js";
+import { Ragdoll } from "./ragdoll.js";
+import { blendRotation, jointRotation, limitRotation } from "./rig.js";
 
 const DEG = Math.PI / 180;
 const smooth = (edge0, edge1, x) => {
@@ -761,6 +762,30 @@ export const ATTACKS = Object.freeze({
                 [0.55, { left: { at: [0.35, -0.65, 0.4], palm: [0.3, -0.9, 0.2], towards: [0, -0.2, 1], shape: "relaxed" }, ...spine({ flex: 10, turn: 10 }), offset: [0, -0.03, 0] }],
                 [1, { left: { at: [-0.05, 0.08, 1.06], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ flex: 2, turn: -10 }), offset: [0, -0.01, 0.05] }],
                 [1.5, { left: { at: [-0.05, 0.04, 1.02], palm: [0, -0.3, 0.95], towards: [0, 0.95, 0.3], shape: "open" }, ...spine({ flex: 2, turn: -8 }), offset: [0, -0.01, 0.04] }]),
+        ],
+    },
+
+    // A bomb thrown (a goblin bomber's, the Goblin King's, a player's Goblin Bomb: battle.js
+    // BOMBS), as a spell's cast is, with the free hand, the left (the right, if the left holds
+    // something and the right's free): cupped round it drawn back, then let go
+    throw: {
+        cast: true,
+        variants: [
+            variant("overhand lob", CAST,
+                // Drawn back high behind the shoulder, the body turned away, then flung forward and up
+                [0.55, { left: { at: [0.3, 0.32, -0.2], palm: [0, 0.6, 0.8], towards: [0, 0.75, -0.65], shape: "cup" }, ...spine({ turn: 22, flex: -6 }), offset: [0, 0, -0.04] }],
+                [1, { left: { at: [0, 0.35, 1], palm: [0, -0.45, 0.89], towards: [0, 0.89, 0.45], shape: "open" }, ...spine({ turn: -16, flex: 8 }), offset: [0, -0.02, 0.07] }],
+                [1.5, { left: { at: [-0.12, -0.3, 0.8], palm: [0, -0.85, 0.53], towards: [0, 0.53, 0.85], shape: "relaxed" }, ...spine({ turn: -20, flex: 10 }), offset: [0, -0.03, 0.05] }]),
+            variant("underhand lob", CAST,
+                // Swung back low past the hip, bending, then up and forward, let go high
+                [0.55, { left: { at: [0.3, -0.85, -0.25], palm: [0, 0.3, 0.95], towards: [0, -0.95, 0.3], shape: "cup" }, ...spine({ flex: 10, turn: 12 }), offset: [0, -0.06, -0.03] }],
+                [1, { left: { at: [0.05, 0.05, 0.9], palm: [0, 0.87, -0.5], towards: [0, 0.5, 0.87], shape: "open" }, ...spine({ flex: -2, turn: -8 }), offset: [0, 0, 0.06] }],
+                [1.5, { left: { at: [0.05, 0.22, 0.8], palm: [0, 0.87, -0.5], towards: [0, 0.5, 0.87], shape: "open" }, ...spine({ flex: -4, turn: -6 }), offset: [0, 0, 0.04] }]),
+            variant("sidearm hurl", CAST,
+                // Out to the side, the body turned away, then swung round across the front
+                [0.55, { left: { at: [0.6, -0.1, -0.05], palm: [0.2, 0, 0.98], towards: [0.98, 0, -0.2], shape: "cup" }, ...spine({ turn: 25 }), offset: [0, -0.02, -0.03] }],
+                [1, { left: { at: [-0.05, 0.05, 1], palm: [-1, 0, 0], towards: [0, 0.2, 0.98], shape: "open" }, ...spine({ turn: -18, flex: 6 }), offset: [0, -0.02, 0.06] }],
+                [1.5, { left: { at: [-0.35, -0.25, 0.7], pronate: 30, shape: "relaxed" }, ...spine({ turn: -24, flex: 8 }), offset: [0, -0.03, 0.04] }]),
         ],
     },
 
@@ -1988,6 +2013,15 @@ const DROP_HEIGHT = 0.4;
 /** How long into a fall that doesn't say (a creature's: die and knockdown say) it hits the ground (s). */
 export const FALL_LANDS = 0.7;
 
+/**
+ * Thrown by a blast (toss; docs/CHARACTERS.md *Thrown*): how high its pelvis lands off the ground
+ * (m, for a body of the clips' height: on its back or its side, the ragdoll's points on the
+ * ground); how far it turns head over heels on the way at least and at most (radians), and twists
+ * at most (radians a second); and, getting up, how long the pose it lay in is let go of as the
+ * clip's is taken up (s), lying on its back or its face (rolled over).
+ */
+export const THROWN = Object.freeze({ lands: 0.15, turn: [1.6, 3.2], twist: 1.5, over: { up: 0.35, down: 0.6 } });
+
 // A pose of a fall: each joint's rotation (by its index), the pelvis's turn and offset, each foot
 // let go of the ground, and how high the lowest point is
 const fallPose = () => ({ rotations: new Map(), turn: new THREE.Quaternion(), offset: new THREE.Vector3(), free: { Left: 0, Right: 0 }, low: 0 });
@@ -2473,6 +2507,10 @@ export class Actions {
         this.dodging = null;
         this.turning = 0;
         this.fall = null;
+        /** Thrown by a blast (toss), till it's up again: { start, flight, rises, speed, ground, dead, rising, ... }; null, not. */
+        this.tossed = null;
+        // (The body thrown, limp: ragdoll.js, made the first time it's wanted)
+        this.ragdoll = null;
         // (A fall's poses, worked out each frame; the body's points looked at for its lowest)
         this.fallPoses = [fallPose(), fallPose()];
         this.ground = null;
@@ -2756,6 +2794,15 @@ export class Actions {
      * comes. Returns how long until the body hits the ground (seconds).
      */
     die({ from = 0, way = null } = {}) {
+        // (Thrown, and in the air or lying there still: it lies where it falls, limp)
+        if (this.tossed && !this.tossed.rising) {
+            this.tossed.dead = true;
+
+            return Math.max(0, this.tossed.flight - (this.time - this.tossed.start));
+        }
+
+        this.tossed = null;
+
         const behind = Math.cos(from) < 0;
         const clip = way?.clip ?? (behind ? "deathFront" : ["deathBack", "deathFront"][this.variety.next("death", 2)]);
         const mirror = way?.mirror ?? this.variety.next("deathSide", 2) === 1;
@@ -2776,6 +2823,13 @@ export class Actions {
      * the ground (seconds).
      */
     knockdown({ from = 0, seconds = 1.5, mirror = null } = {}) {
+        // (Thrown, in the air or not up yet: down already)
+        if (this.tossed && !this.tossed.rising) {
+            return 0;
+        }
+
+        this.tossed = null;
+
         const [down, up] = [FALLS.knockedDown, FALLS.gettingUp];
         const lying = down.lands + RISE.lie;
         const speed = Math.min(RISE.fastest, Math.max(1, up.seconds / Math.max(1e-3, seconds - lying)));
@@ -2789,6 +2843,182 @@ export class Actions {
         this.#startFall([{ clip: down, at: 0, speed: 1 }, { clip: up, at: rises, speed }], { from: Math.cos(from) < 0 ? 0 : from, mirror: mirror ?? this.variety.next("knockedSide", 2) === 1, ease: FALL_IN.knocked, end, up: seconds });
 
         return down.lands;
+    }
+
+    /**
+     * Thrown by a blast (docs/CHARACTERS.md *Thrown*): the body flung limp (ragdoll.js) from where
+     * it stands, to land about `to` (a point in the world, [x, z]) `flight` seconds later, its arc
+     * `up` metres high, turning head over heels away from the blast as it goes, over the ground
+     * (`ground(x, z)`: its height there, metres); lying where it falls, then getting up to be on
+     * its feet `seconds` after it was thrown, a little quicker if need be (dead, or `seconds`
+     * null, it lies there: die); `random` (0 to 1) turning it as it goes. Returns how long until
+     * it hits the ground (seconds).
+     */
+    toss({ to, flight, up, ground, seconds = null, random = Math.random }) {
+        const object = this.character.object;
+        const rig = this.rig;
+        const T = Math.max(0.3, flight);
+
+        this.#swapped();
+        this.attack = null;
+        this.reactions = [];
+        this.dodging = null;
+        this.fall = null;
+        this.guard = 0;
+        object.updateMatrixWorld(true);
+        this.ragdoll ??= new Ragdoll(rig, object);
+
+        // (Up and down in its time as a ball's thrown would be, as high as `up`: gravity as strong
+        // as that takes, a blast's throw quicker than a fall from that high)
+        const gravity = (8 * Math.max(0.2, up)) / (T * T);
+        const from = rig.bone("Hips").getWorldPosition(_lunge);
+        const lands = ground(to[0], to[1]) + (THROWN.lands * (this.character.height ?? CLIP_HEIGHT)) / CLIP_HEIGHT;
+        const velocity = new THREE.Vector3((to[0] - from.x) / T, (lands - from.y + 0.5 * gravity * T * T) / T, (to[1] - from.z) / T);
+
+        // (Head over heels, the head going the way it's thrown; and twisting a little)
+        _forward.set(velocity.x, 0, velocity.z);
+
+        const axis = _forward.lengthSq() > 1e-6 ? _axis.crossVectors(_up, _forward.normalize()) : _axis.set(1, 0, 0);
+        const [least, most] = THROWN.turn;
+        const spin = axis.multiplyScalar((least + random() * (most - least)) / T);
+
+        spin.y += (random() - 0.5) * 2 * THROWN.twist;
+        this.ragdoll.throw({ velocity, spin, gravity });
+
+        // (Up again: as soon as it's let up, lying a moment first; a little quicker if need be)
+        const clip = FALLS.gettingUp;
+        const lying = T + RISE.lie;
+        const speed = seconds === null ? 1 : Math.min(RISE.fastest, Math.max(1, clip.seconds / Math.max(1e-3, seconds - lying)));
+
+        this.tossed = { start: this.time, flight: T, ground, rises: seconds === null ? Infinity : Math.max(lying, seconds - clip.seconds / speed), speed, dead: seconds === null, dropped: false, rising: false, over: 0, frozen: rig.rotations.map(() => new THREE.Quaternion()), offset: new THREE.Vector3() };
+
+        return T;
+    }
+
+    /** Is it thrown (toss) and not on its feet again yet: in the air, lying there, or getting up? */
+    get thrown() {
+        return Boolean(this.tossed);
+    }
+
+    /** Is it in the air, thrown (toss), not down yet? */
+    get airborne() {
+        return Boolean(this.tossed) && !this.tossed.rising && !this.ragdoll.grounded;
+    }
+
+    // Thrown (toss): the body as the ragdoll has it now, stepped on, kept out of the ground once
+    // it's down (#outOfGround); dead, what's in its hands let go of as it hits the ground; once
+    // it's time, getting up (#rise)
+    #thrown(dt) {
+        const tossed = this.tossed;
+        const ragdoll = this.ragdoll;
+
+        ragdoll.step(dt, tossed.ground);
+        ragdoll.pose(tossed.ground);
+
+        if (ragdoll.grounded) {
+            this.#outOfGround();
+        }
+
+        if (tossed.dead && ragdoll.grounded && !tossed.dropped) {
+            tossed.dropped = true;
+            this.character.drop?.("Left");
+            this.character.drop?.("Right");
+        }
+
+        if (!tossed.dead && this.time - tossed.start >= tossed.rises) {
+            this.#rise();
+        }
+    }
+
+    // Down from a throw, the body as drawn kept out of the ground (held to its joints' ranges, it
+    // isn't quite where the ragdoll's points are, and the points are only its joints): lifted as
+    // far as its lowest point's in it, but for its head, feet and arms, each turned up out of it
+    // at its joint (the neck, an ankle, a shoulder: #liftAt, as a fall's arm), no further than the
+    // joint turns; what of them can't come out, left in
+    #outOfGround() {
+        const rig = this.rig;
+        const object = this.character.object;
+
+        rig.apply();
+        object.updateMatrixWorld(true);
+        this.ground ??= groundPoints(this.character.human);
+        this.apartLowest ??= [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+        const scale = object.getWorldScale(_scale).y;
+        const floor = object.getWorldPosition(_lunge).y;
+        const lift = Math.max(0, floor - lowestApart(rig, this.character.positions, this.ground, this.apartLowest, this.armsLowest));
+        const [head, left, right] = this.apartLowest;
+        const sunk = [["Neck", head], ["LeftFoot", left], ["RightFoot", right], ["LeftArm", this.armsLowest[0]], ["RightArm", this.armsLowest[1]]].filter(([, low]) => low.y + lift < floor);
+
+        rig.offset.y += lift / scale;
+
+        if (sunk.length) {
+            rig.apply();
+            object.updateMatrixWorld(true);
+
+            for (const [bone, low] of sunk) {
+                this.#liftAt(bone, low.setY(low.y + lift), floor, true);
+            }
+
+            // (A head or an arm still in it, turned at the head or the elbow too)
+            const next = { Neck: ["Head", head], LeftArm: ["LeftForeArm", this.armsLowest[0]], RightArm: ["RightForeArm", this.armsLowest[1]] };
+            const again = sunk.map(([bone]) => next[bone]).filter(Boolean);
+
+            if (again.length) {
+                rig.apply();
+                object.updateMatrixWorld(true);
+                lowestApart(rig, this.character.positions, this.ground, this.apartLowest, this.armsLowest);
+
+                for (const [bone, low] of again) {
+                    if (low.y < floor) {
+                        this.#liftAt(bone, low, floor, true);
+                    }
+                }
+            }
+        }
+    }
+
+    // Getting up from where it was thrown: turned to lie along the way it lies (from its head to
+    // its pelvis, as the clip lies on its back), the pose it lies in kept (to let go of: #unfreeze),
+    // and the clip getting up played from it, rolling over first if it's on its face
+    #rise() {
+        const tossed = this.tossed;
+        const ragdoll = this.ragdoll;
+        const rig = this.rig;
+        const up = FALLS.gettingUp;
+
+        this.character.object.rotation.y = ragdoll.lying;
+        ragdoll.pose(tossed.ground);
+        rig.rotations.forEach((rotation, i) => tossed.frozen[i].copy(rotation));
+        tossed.offset.copy(rig.offset);
+        tossed.over = ragdoll.faceUp ? THROWN.over.up : THROWN.over.down;
+        tossed.rising = true;
+        this.#startFall([{ clip: up, at: 0, speed: tossed.speed }], { from: 0, mirror: this.variety.next("risingSide", 2) === 1, ease: tossed.over, end: up.seconds / tossed.speed });
+    }
+
+    // Getting up from where it was thrown: the pose it lay in, let go of as the clip's taken up
+    // (the clip blends over it, #fall: what the clip doesn't move comes back to the walk's)
+    #unfreeze(time) {
+        const tossed = this.tossed;
+        const keep = 1 - smooth(0, tossed.over, time);
+
+        if (keep <= 0) {
+            return;
+        }
+
+        const rig = this.rig;
+
+        rig.rotations.forEach((rotation, i) => {
+            if (i === 0) {
+                rotation.slerp(tossed.frozen[0], keep);
+            } else {
+                const { kind, side } = rig.joints[i];
+
+                blendRotation(kind, side, rotation, tossed.frozen[i], keep, rotation);
+            }
+        });
+
+        rig.offset.lerp(tossed.offset, keep);
     }
 
     // Start falling: `parts` played one after another (each from `at` seconds into the fall, at
@@ -2805,6 +3035,7 @@ export class Actions {
     /** Get back up (alive again): no fall, attack, reactions or dodge; what was dropped taken back. */
     revive() {
         this.fall = null;
+        this.tossed = null;
         this.character.pickUp?.();
         this.attack = null;
         this.reactions = [];
@@ -2812,16 +3043,17 @@ export class Actions {
         this.guard = 0;
     }
 
-    /** Is anything being done (an attack, a reaction, a dodge or a fall)? */
+    /** Is anything being done (an attack, a reaction, a dodge, a fall, or thrown)? */
     get busy() {
-        return Boolean(this.attack || this.reactions.length || this.dodging || this.fall);
+        return Boolean(this.attack || this.reactions.length || this.dodging || this.fall || this.tossed);
     }
 
-    /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a dodge, a fall till it lies still? */
+    /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a dodge, a fall till it lies still, thrown till it does? */
     get quick() {
         const falling = this.fall && this.time - this.fall.start < Math.min(this.fall.end, this.fall.parts.at(-1).clip.seconds + this.fall.parts.at(-1).at);
+        const flying = this.tossed && !this.tossed.rising && !this.ragdoll.done;
 
-        return Boolean(this.attack || this.reactions.length || this.dodging || falling);
+        return Boolean(this.attack || this.reactions.length || this.dodging || falling || flying);
     }
 
     /**
@@ -2840,6 +3072,16 @@ export class Actions {
         this.reaching = [];
         this.free.Left = 0;
         this.free.Right = 0;
+
+        // (Thrown: the body's the ragdoll's, the feet off the ground, till it's getting up)
+        if (this.tossed && !this.tossed.rising) {
+            this.reactions = [];
+            this.#thrown(dt);
+
+            if (!this.tossed.rising) {
+                return false;
+            }
+        }
 
         if (this.seated) {
             this.#sit();
@@ -2952,13 +3194,22 @@ export class Actions {
 
         this.#restOnPommel(dt, walking);
 
-        // (Knocked down and up again: done)
+        // (Knocked down and up again, or thrown and up again: done)
         if (this.fall && this.time - this.fall.start >= this.fall.end) {
             this.fall = null;
+
+            if (this.tossed?.rising) {
+                this.tossed = null;
+            }
         }
 
         if (this.fall) {
             this.reaching = [];
+
+            // (Getting up from where it was thrown: from the pose it lay in)
+            if (this.tossed?.rising) {
+                this.#unfreeze(this.time - this.fall.start);
+            }
 
             return this.#fall(this.time - this.fall.start);
         }
@@ -4183,7 +4434,7 @@ export class Actions {
         if (this.armsLowest.some((arm) => arm.y + lift < ground)) {
             rig.apply();
             object.updateMatrixWorld(true);
-            this.armsLowest.forEach((arm, k) => arm.y + lift < ground && this.#liftArm(k ? "Right" : "Left", arm.setY(arm.y + lift), ground));
+            this.armsLowest.forEach((arm, k) => arm.y + lift < ground && this.#liftAt(k ? "RightArm" : "LeftArm", arm.setY(arm.y + lift), ground));
         }
 
         for (const side of ["Left", "Right"]) {
@@ -4200,11 +4451,12 @@ export class Actions {
         return this.free.Left > 0.5 && this.free.Right > 0.5 ? false : STEPPED;
     }
 
-    // Turn an arm (`side`, "Left" or "Right") up at the shoulder so its lowest point (`low`, in
-    // the world) comes up to the ground (at height `ground`)
-    #liftArm(side, low, ground) {
+    // Turn a part of the body up at its joint (`bone`'s: an arm at the shoulder, "LeftArm"; the
+    // head at the neck, a foot at the ankle) so its lowest point (`low`, in the world) comes up to
+    // the ground (at height `ground`); `held`, no further than the joint turns
+    #liftAt(bone, low, ground, held = false) {
         const rig = this.rig;
-        const index = rig.index.get(`${side}Arm`);
+        const index = rig.index.get(bone);
         const shoulder = rig.bones[index].getWorldPosition(_shoulder);
         const out = _local.copy(low).sub(shoulder);
         const length = out.length();
@@ -4224,6 +4476,10 @@ export class Actions {
         _turnBy.setFromAxisAngle(_axis.normalize(), angle);
         _now.copy(_frame).invert().multiply(_turnBy).multiply(_frame);
         rig.rotations[index].premultiply(_now);
+
+        if (held) {
+            limitRotation(rig.joints[index].kind, rig.joints[index].side, rig.rotations[index]);
+        }
     }
 
     // A fall's part's pose `time` seconds into the fall (its clip's, played from `at` at `speed`,

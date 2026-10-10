@@ -710,6 +710,16 @@ export const SPELL_ICONS = Object.freeze({
         <ellipse cy="7" rx="3.4" ry="5" fill="#1a0e24"/>
         <path d="M-19,-12 L-15,-10 M-20,-4 L-16,-4 M19,-12 L15,-10 M20,-4 L16,-4" stroke="#c8a8e8" stroke-width="1.6" stroke-linecap="round"/>`,
 
+    // A blast: a white-hot heart, a fireball's lobes round it, sparks flung out and smoke
+    explosion: `
+        <circle r="21" fill="#ff7a2a" opacity="0.28"/>
+        <g stroke="#ffd080" stroke-width="2" stroke-linecap="round">
+            <path d="M0,-22 L0,-16 M15,-15 L11,-11 M22,0 L16,0 M15,15 L11,11 M0,22 L0,16 M-15,15 L-11,11 M-22,0 L-16,0 M-15,-15 L-11,-11"/>
+        </g>
+        <path d="M0,-15 C5,-15 7,-11 10,-11 C15,-11 16,-5 14,-2 C17,2 15,8 11,9 C10,14 4,16 0,13 C-4,16 -10,14 -11,9 C-15,8 -17,2 -14,-2 C-16,-5 -15,-11 -10,-11 C-7,-11 -5,-15 0,-15 Z" fill="#e8420e" stroke="#6a1404" stroke-width="1.3"/>
+        <path d="M0,-9 C4,-9 6,-6 8,-4 C10,0 8,5 5,6 C3,9 -3,9 -5,6 C-8,5 -10,0 -8,-4 C-6,-6 -4,-9 0,-9 Z" fill="#ffa030"/>
+        <circle r="4.6" fill="#fff6d0" filter="url(#icon-glow)"/>`,
+
     // Arrows chasing round a creature turned into a sheep
     polymorph: `
         <circle r="21" fill="#e89aff" opacity="0.2"/>

@@ -33,10 +33,11 @@ export const CHAMPION_HEIGHT = Object.freeze({ tallest: 3.3, least: 1.05 });
  * one not here looks as its rank has it.
  */
 export const REGALIA = Object.freeze({
-    // The caves': a troll and a goblin crowned, the frost troll's circlet of silver like ice; the
+    // The caves': a troll crowned, the Goblin King bigger than the wild's (its own crown and cape
+    // on it already: beasts/looks.js), the frost troll's circlet of silver like ice; the
     // broodmother vast and blood-marked, the cave bear and the old tusker grizzled
     trollKing: { wear: ["crown"] },
-    goblinKing: { wear: ["crown"], scale: 1.3 },
+    goblinKing: { scale: 1.15, glow: 1.2 },
     broodmother: { tint: 0xc07060, scale: 1.45, glow: 1.4 },
     frostTroll: { wear: ["circletElf"] },
     troll: {},

@@ -112,6 +112,8 @@ export const LOOKS = Object.freeze({
         attacks: ["bite", "snap", "pounce", "shake"], rests: ["sit", "lie", "sniff", "scratch", "howl", "shake"],
     },
     goblin: { body: "humanoid", scale: [0.72, 0.82] },
+    goblinBomber: { body: "humanoid", scale: [0.7, 0.78] },
+    goblinKing: { body: "humanoid", scale: [0.98, 1.04] },
     skeleton: {
         body: "biped",
         scale: [0.95, 1.05],
@@ -281,6 +283,26 @@ const BRUTES = {
         irises: ["#e0c020", "#d88a20", "#c8d040"],
         hair: { styles: ["bald", "mohawk", "topknot"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers", null], ["breeches", null]],
+        walk: "orc",
+    },
+    // (A goblin bomber: slighter, its bombs in a sack on its back, a leather cap against the sparks)
+    goblinBomber: {
+        macro: { gender: 1, muscle: [0.25, 0.4], weight: [0.1, 0.25], height: [0, 0.06], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { earSize: [0.8, 1], earPoint: [0.9, 1], earFlare: [0.7, 1], noseLength: [0.7, 1], noseTip: [-0.8, -0.4], noseHump: [0.3, 0.8], eyeSize: [0.4, 0.7], chin: [-0.7, -0.3], jawWidth: [-0.5, -0.1], headSize: [0.4, 0.7], mouthWidth: [0.5, 0.9], browAngle: [-0.9, -0.5], armLength: [0.5, 0.8], handSize: [0.4, 0.7], footSize: [0.3, 0.6] },
+        skin: { tones: ["#6a8a3a", "#7a8a3e", "#5e7a36", "#8a8a48"], warts: [0.3, 0.7], veins: [0.1, 0.3], blush: [0, 0.1], brows: [0.1, 0.3] },
+        irises: ["#e0c020", "#d88a20", "#c8d040"],
+        hair: { styles: ["bald", "topknot"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["backpack"], ["leatherCap", null], ["breeches", null]],
+        walk: "orc",
+    },
+    // (The Goblin King: a goblin grown big and broad, crowned and caped)
+    goblinKing: {
+        macro: { gender: 1, muscle: [0.7, 0.85], weight: [0.45, 0.6], height: [0.2, 0.3], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { earSize: [0.8, 1], earPoint: [0.9, 1], earFlare: [0.8, 1], noseLength: [0.7, 1], noseTip: [-0.8, -0.4], noseHump: [0.5, 0.9], eyeSize: [0.2, 0.4], chin: [-0.3, 0], jawWidth: [0.1, 0.4], headSize: [0.3, 0.5], mouthWidth: [0.5, 0.9], browAngle: [-0.9, -0.6], browRidge: [0.4, 0.7], armLength: [0.5, 0.7], handSize: [0.6, 0.8], footSize: [0.4, 0.7], shoulders: [0.4, 0.7] },
+        skin: { tones: ["#5e7a36", "#6a8a3a"], warts: [0.6, 0.9], veins: [0.3, 0.5], blush: [0, 0.1], brows: [0.4, 0.6], warpaint: "#5a1a14" },
+        irises: ["#e8b020"],
+        hair: { styles: ["topknot", "mohawk"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["breeches"], ["crown"], ["kingsCape"]],
         walk: "orc",
     },
     boggart: {

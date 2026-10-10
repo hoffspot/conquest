@@ -20,6 +20,7 @@ export const GROUPS = Object.freeze([
     "Water spells",
     "Healing spells",
     "Tome spells",
+    "Explosions",
     "Bodies and doors",
     "Beasts",
     "Monsters",
@@ -147,6 +148,13 @@ export const CATALOG = Object.freeze({
     castHealingHigh: { group: "Healing spells", label: "Casting, tier 5", about: "A chord of chimes drawn in backwards, a tubular bell under it.", plays: "Casting Astral Heal, swelling until it's let go." },
     impactHealingHigh: { group: "Healing spells", label: "Landing, tier 5", about: "A tubular bell under the chord, the bowl and the chimes falling.", plays: "Astral Heal landing on whoever's healed." },
 
+    // Explosions (synth.js blast: a goblin bomb's, the Explosion spell's)
+    explosionSmall: { group: "Explosions", label: "A bomb bursting", about: "Made in layers, each doing one thing: a crack at its front, a thud falling from 110 to 38 Hz (with its harmonics, for a phone), a boom of noise closing down from bright to dull, a roar in the middle, then earth and stones pattering down; softened, so it's as loud as can be without clipping.", plays: "A goblin bomb bursting, a goblin bomber's or a player's; heard up to 60 metres off, duller the further (the air takes its highs) and, from past 15 metres, as late as sound takes to come." },
+    explosionLarge: { group: "Explosions", label: "A great blast", about: "The bomb's blast half as big again, longer and lower, its echoes coming back off the land round it, duller.", plays: "The Explosion spell landing, and the Goblin King's bigger bomb bursting; heard as the bomb's is." },
+    fuse: { group: "Explosions", label: "A lit wick", about: "A strike, then a wick fizzing: hiss band-passed high, fluttering 8 to 14 times a second, with sputtering crackles.", plays: "A bomb lying where it landed, its wick burning down; cut short as it bursts. Heard up to 20 metres off." },
+    bombThrow: { group: "Explosions", label: "A bomb lobbed", about: "A short low whoosh, loudest as it's let go.", plays: "A bomb thrown (a goblin bomber's, the Goblin King's or a player's Goblin Bomb), loudest as it leaves the hand." },
+    castExplosion: { group: "Explosions", label: "Casting Explosion", about: "Heat drawn in: noise rising from 250 Hz to 3.2 kHz over a tone climbing two octaves, crackling thicker and thicker, and a breath held a moment before it's let go.", plays: "Casting Explosion, loudest as it's let go; its blast is the great blast." },
+
     // Tome spells (sound.js spellSounds: what each does, as it lands)
     buff: { group: "Tome spells", label: "Strength given", about: "A shimmer of chimes sweeping up to a glockenspiel's note, with a triangle's roll or a cymbal's swell.", plays: "Embolden, Swole, Surge, Dodge or Levitate landing." },
     ward: { group: "Tome spells", label: "A ward raised", about: "A rubbed wine glass singing over a bowed cymbal.", plays: "A Resist spell, Reflect or Inertial Barrier landing." },
@@ -245,10 +253,10 @@ export const CATALOG = Object.freeze({
     dragonDeath: { group: "Monsters", label: "Dragon dying", about: "A bison's long bellow with a lion's growl, dying away.", plays: "A dragon (a wyvern higher) dying." },
     dragonBreath: { group: "Monsters", label: "Dragon's fire", about: "Fire whooshing up (diesel thrown on a bonfire), and a bonfire catching.", plays: "A dragon breathing fire (the made fireball in its place until it's downloaded)." },
     wingbeat: { group: "Monsters", label: "Great wings", about: "Huge wings flapping (bed sheets, whipped).", plays: "A dragon or a wyvern beating its wings in the air near the player, and flaring as it comes down to land." },
-    goblinCall: { group: "Monsters", label: "Goblin calling", about: "A goblin's cackling laugh (voice actors').", plays: "A goblin raider (a boggart lower) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
-    goblinAttack: { group: "Monsters", label: "Goblin attacking", about: "A man's growl, sped up.", plays: "A goblin raider (a boggart lower) striking, loudest as its blow lands: now and then." },
-    goblinHurt: { group: "Monsters", label: "Goblin hurt", about: "A pain grunt, sped up.", plays: "A goblin raider (a boggart lower) struck, no oftener than every 0.7 seconds." },
-    goblinDeath: { group: "Monsters", label: "Goblin dying", about: "A goblin's death cry.", plays: "A goblin raider (a boggart lower) dying." },
+    goblinCall: { group: "Monsters", label: "Goblin calling", about: "A goblin's cackling laugh (voice actors').", plays: "A goblin raider (a goblin bomber higher, the Goblin King and a boggart lower) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
+    goblinAttack: { group: "Monsters", label: "Goblin attacking", about: "A man's growl, sped up.", plays: "A goblin raider (a goblin bomber higher, the Goblin King and a boggart lower) striking, loudest as its blow lands: now and then." },
+    goblinHurt: { group: "Monsters", label: "Goblin hurt", about: "A pain grunt, sped up.", plays: "A goblin raider (a goblin bomber higher, the Goblin King and a boggart lower) struck, no oftener than every 0.7 seconds." },
+    goblinDeath: { group: "Monsters", label: "Goblin dying", about: "A goblin's death cry.", plays: "A goblin raider (a goblin bomber higher, the Goblin King and a boggart lower) dying." },
     trollCall: { group: "Monsters", label: "Troll calling", about: "Men's growls slowed, and a bison's bellow.", plays: "A troll (an ogre a little higher, a frost troll lower) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
     trollAttack: { group: "Monsters", label: "Troll attacking", about: "A deep fight grunt, slowed.", plays: "A troll (an ogre a little higher, a frost troll lower) striking, loudest as its blow lands: now and then." },
     trollHurt: { group: "Monsters", label: "Troll hurt", about: "A deep pain grunt, slowed.", plays: "A troll (an ogre a little higher, a frost troll lower) struck, no oftener than every 0.7 seconds." },
