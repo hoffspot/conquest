@@ -3,7 +3,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, BOMBS, KEEP, STEP_MS, TOSS } from "../client/js/core/battle.js";
-import { candidatesAt, CREATURES, eliteName, eliteOf, memberOf, traitsOf, WILD } from "../client/js/core/creatures.js";
+import { CHAMPION_LOOKS, REGALIA } from "../client/js/beasts/champions.js";
+import { candidatesAt, CREATURES, eliteName, eliteOf, ELITES, memberOf, traitsOf, WILD } from "../client/js/core/creatures.js";
+import { buildDungeon } from "../client/js/core/dungeons/build.js";
+import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
+import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { SCROLLS } from "../client/js/core/goods.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -39,11 +43,12 @@ function standing(battle, id, square, { team = "orcs", hp = 500, wild = null } =
     return actor;
 }
 
-// A creature of the wild (creatures.js) in a battle, as the host puts one out
-function creature(battle, id, kind, square, { hp = 500, elite = false } = {}) {
+// A creature of the wild (creatures.js) in a battle, as the host puts one out (`boss`: as a
+// dungeon's boss, host.js #rouse)
+function creature(battle, id, kind, square, { hp = 500, elite = false, boss = false } = {}) {
     const { weapon, speed, chase } = CREATURES[kind];
 
-    return battle.add({ id, kind: "beast", name: CREATURES[kind].name, weapon, team: WILD, square, ai: "wild", hp, speed, chase, armed: true, wild: { creature: kind, tier: 4, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: id, leader: null, menace: true, elite, ...traitsOf(kind) } });
+    return battle.add({ id, kind: "beast", name: CREATURES[kind].name, weapon, team: WILD, square, ai: "wild", hp, speed, chase, armed: true, wild: { creature: kind, tier: 4, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: id, leader: null, menace: true, elite, ...traitsOf(kind, { boss }), ...(boss ? { champion: "boss", regalia: kind } : {}) } });
 }
 
 const apart = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -283,6 +288,84 @@ describe("the goblins' bombs (creatures.js, weapons.js NATURAL)", () => {
         const close = run(battle, 4000);
 
         assert.ok(close.some(({ type, id, weapon }) => type === "attack" && id === "king" && weapon === "cleaver"), "cleaves up close");
+    });
+});
+
+describe("the caves' Goblin King (dungeons/themes.js, creatures.js `boss`)", () => {
+    it("sits on the caves' throne as the goblins' elite made harder: more of it, harder blows and bigger than the wild's, its war band of raiders and bombers about it", () => {
+        const boss = THEMES.caves.bosses.find(({ id }) => id === "goblinKing");
+
+        assert.equal(boss.creature, "goblinKing");
+        assert.equal(boss.title, "the Goblin King");
+        assert.ok(CHAMPIONS.boss.hp > ELITES.hp && CHAMPIONS.boss.power > ELITES.power);
+        assert.ok(CHAMPION_LOOKS.boss.scale * REGALIA.goblinKing.scale > CHAMPION_LOOKS.elite.scale);
+
+        // (Made where it's the caves' boss: its war band about it)
+        let found = 0;
+
+        for (let seed = 1; seed <= 40; seed++) {
+            const dungeon = buildDungeon({ seed, theme: "caves", tier: 5 });
+            const throne = dungeon.levels.at(-1).packs.find(({ role }) => role === "boss");
+            const [king, ...band] = throne.foes;
+
+            if (king.creature !== "goblinKing") {
+                continue;
+            }
+
+            found += 1;
+            assert.ok(king.boss && king.title === "the Goblin King" && king.regalia === "goblinKing");
+            assert.ok(band.length >= 2 && band.every(({ creature: kind }) => boss.guard.includes(kind)), JSON.stringify(band));
+            assert.ok(band.some(({ creature: kind }) => kind === "goblinBomber"), "a bomber among them");
+        }
+
+        assert.ok(found > 0, "the Goblin King on some caves' throne");
+    });
+
+    it("throws its big bombs three at a time and oftener than the wild's, about whoever it's after; never thrown itself", () => {
+        const wild = traitsOf("goblinKing").bomb;
+        const throne = traitsOf("goblinKing", { boss: true }).bomb;
+
+        assert.equal(wild.volley ?? 1, 1);
+        assert.ok(throne.volley === 3 && throne.every < wild.every && throne.kind === wild.kind, JSON.stringify(throne));
+
+        const battle = new Battle(field(60), { seed: 8 });
+        const me = battle.add({ id: "me", kind: "player", weapon: "sword", team: "hero", square: [30, 30], hp: 50000 });
+
+        const king = creature(battle, "king", "goblinKing", [37, 30], { hp: 50000, boss: true });
+        const events = [];
+
+        // (The player keeping off, seven metres or so from it, as it comes on)
+        for (let t = 0; t < throne.every + 3000; t += STEP_MS) {
+            if (apart(me, king) < 6) {
+                const x = king.x < 30 ? king.x + 7 : king.x - 7;
+
+                Object.assign(me, { x, y: king.y, square: [Math.floor(x), Math.floor(king.y)], path: [] });
+            }
+
+            me.stunnedUntil = 1e9;
+            events.push(...battle.advance(STEP_MS));
+        }
+
+        const bombs = events.filter(({ type, id }) => type === "bomb" && id === "king");
+        const volleys = Object.values(Object.groupBy(bombs, ({ time }) => time));
+
+        assert.ok(volleys.length >= 2, `${volleys.length} volleys`);
+        assert.ok(volleys.every((volley) => volley.length === throne.volley && volley.every(({ kind }) => kind === "bigBomb")), JSON.stringify(volleys.map((volley) => volley.length)));
+        assert.ok(volleys[1][0].time - volleys[0][0].time < wild.every, "oftener than the wild's");
+
+        // (The first at where the player stood; the others about them, within its spread)
+        for (const [first, ...others] of volleys) {
+            for (const bomb of others) {
+                const off = Math.hypot(bomb.x - first.x, bomb.y - first.y);
+
+                assert.ok(off >= throne.spread / 2 - 1e-9 && off <= throne.spread + 1e-9, `${off.toFixed(2)} m off`);
+            }
+        }
+
+        // (Its blasts, its own and each other's, never throw it)
+        const blasts = events.filter(({ type, by }) => type === "blast" && by === "king");
+
+        assert.ok(blasts.length >= throne.volley && blasts.every(({ throws }) => !throws.some(({ id }) => id === "king")));
     });
 });
 

@@ -63,7 +63,8 @@ const PACK_EVERY = 2;
  * elite (`elite`: what leads them in their elite's place, ELITES; one that's an elite itself,
  * `king`, goes by its own name). How it fights besides its weapon (battle.js, the actor's `wild`:
  * traitsOf): too heavy to be thrown by a blast, or not solid enough (`steady`); keeping `keep`
- * metres off whoever it's after; a bomb it lobs now and then (`bomb`).
+ * metres off whoever it's after; a bomb it lobs now and then (`bomb`), and as a dungeon's boss
+ * (`boss`: what of `bomb` it does otherwise, its throne room's: the caves' Goblin King).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -85,9 +86,10 @@ export const CREATURES = Object.freeze({
     goblin: { name: "Goblin raider", hp: 26, hands: true, weapon: "cleaver", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [2, 5], tiers: [3, 8], biomes: ["heath", "mountain", "badlands", "woods"], blood: "red", band: { goblinBomber: 0.3 }, elite: "goblinKing" },
     // (The goblins' own, never met on their own: a bomber among a raiding party, keeping off and
     // lobbing lit bombs; and the Goblin King leading a war band, their elite, a great cleaver up
-    // close and a bigger bomb now and then at whoever keeps off: BANDS, ELITES)
+    // close and a bigger bomb now and then at whoever keeps off: BANDS, ELITES; the caves' boss,
+    // harder still, three at a time and oftener: dungeons/themes.js)
     goblinBomber: { name: "Goblin bomber", hp: 22, hands: true, weapon: "goblinBomber", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: [], blood: "red", keep: 4 },
-    goblinKing: { name: "Goblin King", hp: 34, hands: true, weapon: "cleaver", speed: 1.3, chase: 2.5, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: [], blood: "red", armor: 0.1, king: true, bomb: { kind: "bigBomb", damage: [8, 15], every: 7000, beyond: 3.5, reach: 11 } },
+    goblinKing: { name: "Goblin King", hp: 34, hands: true, weapon: "cleaver", speed: 1.3, chase: 2.5, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: [], blood: "red", armor: 0.1, king: true, bomb: { kind: "bigBomb", damage: [8, 15], every: 7000, beyond: 3.5, reach: 11 }, boss: { bomb: { every: 4500, volley: 3, spread: 3 } } },
     skeleton: { name: "Skeleton", hp: 34, hands: true, weapon: "skeleton", speed: 1, chase: 2, temper: "aggressive", roam: 6, leash: 16, pack: [1, 3], tiers: [3, 9], biomes: ["marsh", "heath", "tundra"], blood: "none", armor: 0.1, night: "only", darkSight: true },
     cultist: { name: "Cultist", hp: 28, hands: true, weapon: "wand", speed: 1.2, chase: 2.2, temper: "aggressive", roam: 8, leash: 20, pack: [1, 3], tiers: [3, 8], biomes: ["marsh", "jungle", "darkwood", "volcanic"], blood: "red", night: "more" },
     // The far wilds
@@ -260,11 +262,14 @@ export function memberOf(creature, k, chance) {
     return creature;
 }
 
-/** How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep` and `bomb` (CREATURES). */
-export function traitsOf(creature) {
-    const { steady = false, keep = null, bomb = null } = CREATURES[creature] ?? {};
+/**
+ * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep` and
+ * `bomb` (CREATURES); as a dungeon's boss (`boss`), its bomb as its `boss` has it.
+ */
+export function traitsOf(creature, { boss = false } = {}) {
+    const { steady = false, keep = null, bomb = null, boss: asBoss = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage] } : null };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

@@ -184,12 +184,20 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   theme (`wild.champion`, `wild.regalia`), and it's drawn bigger than its kind (a boss 1.22 times,
   a mini-boss 1.1 times, but no taller than 3.3 m for it, `CHAMPION_HEIGHT`, so a hideout's
   tunnels have room: a troll or an ogre, already big, only 5% bigger), what glows on it brighter (its eyes, a wraith's light), and each its own
-  way (`REGALIA`): the Troll King, the Goblin King and the Outlaw King crowned, the Frost Troll in
+  way (`REGALIA`): the Troll King and the Outlaw King crowned (the Goblin King in its own crown
+  and cape, 15% bigger again), the Frost Troll in
   a silver circlet, the ogres in horned helms, the outlaw lieutenant in a soldier's helm, the
   priests hooded in black; the Broodmother vast and blood-marked, the cave bear and the old tusker
   grizzled, the tomb champion's bones gilded, the Tomb Lord's eyes and the Dread Wraith's light
   burning brighter. What's worn takes the place of whatever was in its slot. The rules know
   nothing of it.
+- **The caves' Goblin King** is the goblins' elite (docs/WILDS.md *Goblins*) on its throne, and
+  harder than met in the wild: as a boss, four times its kind's hit points (an elite three) and
+  blows 1.3 times as hard (an elite 1.25), two tiers over its level; its big bombs three at a time
+  (the others half to all of 3 metres about whoever it's after) every 4.5 seconds (the wild's one
+  every 7: creatures.js `boss`); its own war band about it, raiders and bombers in turn (a boss's
+  `guard` in its theme, in place of one of the theme's packs); and never thrown by a blast, as no
+  dungeon's boss is.
 - **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
   however often a level's woken and let go.
 

@@ -87,8 +87,8 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats, bears, trolls, ogres, wyverns, wisps,
 treants, crocodiles, rock tuskers, dragons, ghosts, wraiths, frost trolls: creatures.js
-`steady`), the perilous places' own, an elite, a fortification, a palisade or a wagon. The
-thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
+`steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
+a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
 The goblins' elite (*Elites*, below) is the **Goblin King**, not an "Elite Goblin raider":
 bigger than any of them (as tall as a man), broad, crowned and caped in red edged with gold,
@@ -97,7 +97,8 @@ seconds, at whoever keeps more than 3.5 metres off (as far as 11), a bigger bomb
 8–15 at its heart, 3.5 metres round, throwing them 1.4 times as far, its wick 1.8 seconds),
 never itself thrown. It leaves the elite's prize, nearly always 3 to 5 Goblin Bombs, and a much
 better chance of the Explosion spell's tome (docs/MAGIC.md): about two in five, where any other
-that carries a tome seldom has this one.
+that carries a tome seldom has this one. On the caves' throne it's harder still: docs/DUNGEONS.md
+*Who's in it*.
 
 A bomber leaves 1 to 3 **Goblin Bombs** three times in four, a raider one now and then (spoils.js).
 A Goblin Bomb (progress.js `ITEMS.goblinBomb`; never sold) is thrown from the pack ("Throw") or

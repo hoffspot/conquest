@@ -284,7 +284,7 @@ export function fillLevel(dug, rooms, links, plan) {
 
         level.reserve(...lord);
 
-        const guard = chooseFoe(seed, slot("boss-guard"), theme.packs, plan.tier, 1);
+        const guard = boss.guard ? { creatures: boss.guard } : chooseFoe(seed, slot("boss-guard"), theme.packs, plan.tier, 1);
         const escorts = spotsIn(level, arena, random.int(2, 3), { near: lord, doors: 3, fromDoors, ways: ways() });
 
         for (const at of escorts) {

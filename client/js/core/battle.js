@@ -213,7 +213,7 @@ export const BOMBS = Object.freeze({
  * `per` ms more a metre, `up` metres high and `upPer` more a metre; down, and getting up, `down`
  * ms in all (they can't move, fight, cast or use anything till then); and not thrown again for
  * `spared` ms after. Never one too heavy to throw or not solid enough to (creatures.js `steady`),
- * the perilous places' own, an elite, a fortification, a palisade or a wagon.
+ * the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or a wagon.
  */
 export const TOSS = Object.freeze({ far: 3, flight: 550, per: 90, up: 1.1, upPer: 0.25, down: 2600, spared: 4000 });
 
@@ -2609,11 +2609,12 @@ export class Battle {
         return actor.backing;
     }
 
-    // A bomb lobbed (`wild.bomb`: { kind, damage, every, beyond, reach }) at whoever it's after,
-    // now and then (every `every` ms), while they keep `beyond` metres off and within its `reach`,
-    // in sight: whether it's thrown
+    // A bomb lobbed (`wild.bomb`: { kind, damage, every, beyond, reach, volley, spread }) at
+    // whoever it's after, now and then (every `every` ms), while they keep `beyond` metres off and
+    // within its `reach`, in sight (and `volley` at a time, the others about them, `spread` metres
+    // off at most: the caves' Goblin King): whether it's thrown
     #lobs(actor, target) {
-        const { kind, damage, every, beyond, reach } = actor.wild.bomb;
+        const { kind, damage, every, beyond, reach, volley = 1, spread = 0 } = actor.wild.bomb;
         const far = hypot(target.x - actor.x, target.y - actor.y);
 
         if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed || target.map !== actor.map || far < beyond || far > reach || !this.canSee(actor, target, Math.max(SIGHT, reach))) {
@@ -2622,7 +2623,7 @@ export class Battle {
 
         actor.bombAt = this.time + every;
         actor.path = [];
-        this.#throwAt(actor, target, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind });
+        this.#throwAt(actor, target, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread });
 
         return true;
     }
@@ -4014,7 +4015,22 @@ export class Battle {
             return;
         }
 
-        this.#throwBomb(actor, [target.x, target.y], attack.bomb, attack.given ?? attack.damage, attack.given ? 1 : (actor.power?.ranged ?? 1));
+        const damage = attack.given ?? attack.damage;
+        const power = attack.given ? 1 : (actor.power?.ranged ?? 1);
+
+        this.#throwBomb(actor, [target.x, target.y], attack.bomb, damage, power);
+
+        // (A volley: the others about them, half to all of `spread` metres off, each where there's
+        // ground clear enough to stand on)
+        for (let k = 1; k < (attack.volley ?? 1); k++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const off = attack.spread * (0.5 + 0.5 * this.random.next());
+            const at = [target.x + cos(angle) * off, target.y + sin(angle) * off];
+
+            if (this.#clear(target.map, at)) {
+                this.#throwBomb(actor, at, attack.bomb, damage, power);
+            }
+        }
     }
 
     // A bomb in the air (BOMBS), from where `by` stands to (x, y): landing a moment later, and
@@ -4076,10 +4092,10 @@ export class Battle {
     }
 
     // Can someone be thrown by a blast (TOSS)? Not too heavy or not solid (`steady`), one of the
-    // perilous places' own, an elite, what stands over more than its square, a wagon; nor one
-    // thrown lately
+    // perilous places' own, an elite or a dungeon's boss, what stands over more than its square, a
+    // wagon; nor one thrown lately
     #throwable(actor) {
-        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
