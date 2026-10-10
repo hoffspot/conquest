@@ -445,7 +445,10 @@ never asked). In a party, you're never enemies, whatever your peoples; what any 
 within 40 metres of the others counts for you all (each finds their own loot on it, and a guild's
 request for it counts for each); and each other's icons head your party down the left, the
 leader's crowned. Anyone in it can ask others; its leader can put one out or make another
-leader, and when they leave, the one longest in it leads. Games play together through the relay on the game's server
+leader, and when they leave, the one longest in it leads. The party menu's **Chat** tab is the
+party's own talk (no one outside it sees a word): type a line, or tap a quick phrase ("On my
+way!", "Help!"); Enter opens it ready to type. A chime and a red count on the Party button say
+how many lines you haven't seen. Games play together through the relay on the game's server
 (`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
 See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 

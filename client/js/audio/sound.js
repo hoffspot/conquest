@@ -423,6 +423,7 @@ function itemsRecorded() {
         coinPickup: at(0.25, "coins"),
         pageTurn: at(0.25),
         pinSet: at(0.25),
+        chatHeard: at(0.25),
         quill: at(0.25),
         pickup: at(0.3),
         buyDenied: at(0.3, "denied"),

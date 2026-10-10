@@ -1441,7 +1441,18 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options
   (`refuseInvites`, saved), nothing at all. What becomes of the party is said in the banner ("Bryn
   joins the party.", "You lead the party now.", "The party's no more: no one's left in it with
-  you.").
+  you."). Playing together, the menu has two tabs (`PartyPanel showTab`): **Party** (all that) and
+  **Chat**, the party's own talk (core/netplay.js: sent to those in it alone; docs/WAR.md
+  *Parties*): what's been said, the newest at the foot, the player's own lines as "You" in green,
+  others' by name in gold, and the party's comings and goings among them in grey; eight quick
+  phrases (`QUICK_PHRASES`: "On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.",
+  "Thanks!", "Well fought!", "Back to town.") said with a tap; and a line to type, sent with Enter
+  or Send (none of the game's keys while typing in it). In no party of players, there's no one to
+  hear, so it's greyed. Another's line plays a chime ("chatHeard": two glockenspiel notes) and, not
+  seen at once, counts on the Party button (hud.js `partyUnread`: a red badge, "1" to "9+") and on
+  the Chat tab, till it's seen; the menu opened then opens on the chat. Enter, with nothing else
+  to press, opens the chat ready to type. The last 50 lines are kept (`CHAT.kept`), with the game
+  only.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
@@ -4576,7 +4587,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   told and no party; four at most, its leader putting one out and making another leader, the one
   longest in it leading when the leader leaves, and none left with one in it; what one brings
   down counting for another of the party near it (as much the stronger, their own loot), not for
-  one 60 metres off; and parties and who's asked kept in the snapshot, as they were.
+  one 60 metres off; and parties and who's asked kept in the snapshot, as they were. And
+  (test/netplay.test.js) what's said in a party: heard by each in it, the sayer too, and never
+  sent to a player outside it; tidied, held to 200 characters, the sixth line in 10 seconds held
+  back, none said out of a party, nothing said not sent; and every copy of the world the same
+  after.
 - `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
   foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
   just as it was.

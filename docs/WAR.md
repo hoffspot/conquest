@@ -2278,6 +2278,16 @@ party*). Players play together as a party of up to four (`PARTY.most`):
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
   changed (`NET_VERSION` 100).
+- **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
+  What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
+  command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host
+  sends it on, by the relay's `to PEER`, to each of the sayer's party (the sayer too, so all hear
+  it in the same order), telling its own player itself; no one else's game is ever sent it. Each
+  line is tidied (`chatLine`: control characters and runs of spaces made one space, trimmed, 200
+  characters at most, an emoji never halved), and one who says more than 5 lines in 10 seconds of
+  the world's time is held back ("Not so fast"); one in no party, or with nothing to say, isn't
+  heard (`{ kind: "unsaid", reason }`). Nothing's kept with the world: each game keeps the last
+  50 lines it's heard (`CHAT.kept`). What two games say to each other changed (`NET_VERSION` 101).
 
 **When the link falters** (`app/together.js` `RelayLink`, `LINK_TIMING`). A phone moving from Wi-Fi
 to its mobile network, or losing its signal a moment, needn't end the game:

@@ -16,6 +16,7 @@
 // help glowing; tapped or held, the game's told.
 
 import { ICONS, useDefs } from "./icons.js";
+import { unreadLabel } from "./partypanel.js";
 
 // How far a message is kept from the buttons along the top and the quick actions (pixels); and
 // with no quick actions up, how far from the bottom it can come
@@ -436,6 +437,23 @@ export class Hud {
         if (plate) {
             this.#setStamina(plate, stamina, maxStamina);
         }
+    }
+
+    /**
+     * How many lines said in the player's party they haven't seen (partypanel.js unreadLabel), as
+     * a badge on the Party button: none, no badge.
+     */
+    partyUnread(count) {
+        const badge = this.partyButton?.querySelector("#partyunread");
+        const label = unreadLabel(count);
+
+        if (!badge || badge.textContent === label) {
+            return;
+        }
+
+        badge.textContent = label;
+        badge.hidden = !label;
+        this.partyButton.setAttribute("aria-label", label ? `Party, ${count} unread message${count === 1 ? "" : "s"}` : "Party");
     }
 
     /** Mark another character as one of the player's party (its name in green), or not. */

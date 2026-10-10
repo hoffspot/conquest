@@ -351,7 +351,7 @@ export const CATALOG = Object.freeze({
     wheel: { group: "The interface", label: "Action wheel", about: "A soft wooden tok: a woodblock (the Versilian Community Sample Library's), near F above the treble.", plays: "The action wheel opening (on someone, or on one of the party's icons), and turned to its other side." },
     wheelSelect: { group: "The interface", label: "Chosen on the wheel", about: "A fuller wooden tick, small things in a wooden box (Vrymaa's).", plays: "An action chosen on the wheel." },
     quickAction: { group: "The interface", label: "Quick action", about: "An arrow grabbed from a leather quiver: a quick rattle (Jan Schupke's).", plays: "A quick action used (its button, or keys 1 to 4)." },
-    tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away; one of the party chosen to help, or let go; a party order done (another player asked, put out, made leader; leaving)." },
+    tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away; one of the party chosen to help, or let go; a party order done (another player asked, put out, made leader; leaving); something said in the party's chat." },
     talk: { group: "The interface", label: "Talk", about: "A card slid over felt: a soft, papery swish (Kenney's).", plays: "A talk begun." },
     denied: { group: "The interface", label: "Refused", about: "Two dull wooden knocks, the second softer: \"tok-tok, no\" (Kenney's).", plays: "A slice of the wheel that can't be used; anything refused but for gold (too far, on cooldown, no room); a request failed." },
     lock: { group: "The interface", label: "Target", about: "A key turning in a lock: one soft metallic click (Jan Schupke's).", plays: "An enemy chosen to fight." },
@@ -364,6 +364,7 @@ export const CATALOG = Object.freeze({
     questDone: { group: "Cues", label: "A quest done", about: "A folk harp's run from D, then two hand chimes ringing.", plays: "A request handed in and done." },
     newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a fortification razed or fallen, an envoy arrived or struck down, a convoy fallen on, a supply wagon taken, a seat's ruler making their last stand; a camp's palisade breached, the camp held or carried, or an army or reserve routed, near the player (or their people's); and, from a Knight up, their people's army's supplies not getting through." },
     pinSet: { group: "Cues", label: "A pin set", about: "One soft glockenspiel note.", plays: "A pin put on the world map." },
+    chatHeard: { group: "Cues", label: "Said in the party", about: "Two soft glockenspiel notes a fourth apart, the lower first, as a message chimes.", plays: "Another player in the party saying something in its chat." },
     breath: { group: "Cues", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
 });
 

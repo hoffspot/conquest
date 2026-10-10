@@ -10,13 +10,28 @@
 // twice), and anyone can leave it; and below, the other players in the world, each to be asked to
 // it ("Invite"), or said to be asked already.
 //
+// Playing together, it has two tabs: the party (all that, above) and its chat: what's been said
+// in the party (core/netplay.js: sent to those in it alone), its newest at the foot, with the
+// party's comings and goings among it; quick phrases to say with a tap, and a line to type and
+// send. The Chat tab says how many lines haven't been seen (as the Party button does: hud.js).
+//
 // It only shows and asks: what's done is the host's (core/host.js "order" and "party" commands),
 // through the game.
+
+import { CHAT } from "../core/netplay.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
 /** How long a Dismiss button waits to be pressed again, to be sure (ms). */
 export const DISMISS_SURE_MS = 3000;
+
+/** What can be said to the party with a tap (the chat's quick phrases). */
+export const QUICK_PHRASES = Object.freeze(["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town."]);
+
+/** How many lines haven't been seen, as a badge shows it: none, "1" to "9", or "9+". */
+export function unreadLabel(count) {
+    return count > 9 ? "9+" : count > 0 ? String(count) : "";
+}
 
 /** How long's left of something (ms), as minutes and seconds: "4:05". */
 export function timeLeft(ms) {
@@ -68,6 +83,18 @@ export class PartyPanel {
         this.close.addEventListener("click", () => this.onClose());
         header.append(this.title, this.count, this.close);
 
+        // (Playing together: the party, or its chat)
+        this.tabs = element("div", "party-tabs");
+        this.tabs.setAttribute("role", "tablist");
+        this.tabs.hidden = true;
+        this.partyTab = this.#tab("Party", "party");
+        this.chatTab = this.#tab("Chat", "chat");
+        this.chatBadge = element("span", "party-tab-badge");
+        this.chatBadge.hidden = true;
+        this.chatTab.append(this.chatBadge);
+        this.tabs.append(this.partyTab, this.chatTab);
+        this.tab = "party";
+
         this.body = element("div", "journal-body");
 
         // (Playing together: the party's players, and the others to ask; each shown only then)
@@ -80,7 +107,44 @@ export class PartyPanel {
         this.empty = element("p", "journal-note party-empty");
         this.body.append(this.playersHeading, this.players, this.othersHeading, this.others, this.unitsHeading, this.list, this.empty);
         this.together = null;
-        this.panel.append(header, this.body);
+
+        // The chat: what's been said, the quick phrases, and a line to send
+        this.chatBody = element("div", "journal-body party-chat");
+        this.chatBody.hidden = true;
+        this.chatLog = element("ol", "chat-log");
+        this.chatLog.setAttribute("aria-live", "polite");
+        this.chatLog.setAttribute("aria-label", "What's been said in your party");
+        this.chatNote = element("p", "journal-note chat-note");
+        this.quick = element("div", "chat-quick");
+
+        for (const phrase of QUICK_PHRASES) {
+            const button = element("button", "chat-phrase", phrase);
+
+            button.type = "button";
+            button.addEventListener("click", () => this.onSay(phrase));
+            this.quick.append(button);
+        }
+
+        this.form = element("form", "chat-form");
+        this.input = element("input", "chat-input");
+        Object.assign(this.input, { type: "text", maxLength: CHAT.most, autocomplete: "off", placeholder: "Say something to your party" });
+        this.input.setAttribute("enterkeyhint", "send");
+        this.input.setAttribute("aria-label", "Something to say to your party");
+        this.sendButton = element("button", "journal-button chat-send", "Send");
+        this.sendButton.type = "submit";
+        this.form.append(this.input, this.sendButton);
+        this.form.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            if (this.input.value.trim()) {
+                this.onSay(this.input.value);
+                this.input.value = "";
+            }
+        });
+        this.chatBody.append(this.chatLog, this.chatNote, this.quick, this.form);
+        this.shownLine = null;
+
+        this.panel.append(header, this.tabs, this.body, this.chatBody);
         root.append(this.panel);
 
         // Each member's row, kept from one showing to the next (by id): { root, canvas, kind,
@@ -96,6 +160,10 @@ export class PartyPanel {
         this.onChoose = () => {};
         this.onParty = () => {};
         this.onClose = () => {};
+
+        /** Something said to the party (a line typed, or a quick phrase), and a tab chosen ("party", "chat"). */
+        this.onSay = () => {};
+        this.onTab = () => {};
     }
 
     get open() {
@@ -109,10 +177,19 @@ export class PartyPanel {
      * adventurers they can lead); playing together, `players` (those in their party, they among
      * them, the longest in it first: [{ id, name, leader, me, away, with: [names] }]), `others`
      * (the other players in the world not in it: [{ id, name, asked }]), `leads` (whether they
-     * lead it) and `full` (whether it's as many as it can be) }.
+     * lead it) and `full` (whether it's as many as it can be); and its chat: { lines: [{ id, name,
+     * text, mine, system }] (the oldest first), unread (how many haven't been seen), canSay (in a
+     * party of players, so there's someone to hear) } }.
      */
-    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false } = {}) {
+    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null } = {}) {
         this.#together({ players, others, leads, full, together });
+        this.tabs.hidden = !together;
+
+        if (!together && this.tab !== "party") {
+            this.showTab("party");
+        }
+
+        this.#chat(chat ?? { lines: [], unread: 0, canSay: false });
 
         const ids = new Set(members.map(({ id }) => id));
 
@@ -145,6 +222,82 @@ export class PartyPanel {
 
     hide() {
         this.panel.hidden = true;
+    }
+
+    /** Show one of its tabs ("party", or "chat": its newest line in view, ready to type). */
+    showTab(tab) {
+        this.tab = tab === "chat" ? "chat" : "party";
+        this.body.hidden = this.tab !== "party";
+        this.chatBody.hidden = this.tab !== "chat";
+        this.partyTab.setAttribute("aria-selected", String(this.tab === "party"));
+        this.chatTab.setAttribute("aria-selected", String(this.tab === "chat"));
+
+        if (this.tab === "chat") {
+            this.chatLog.scrollTop = this.chatLog.scrollHeight;
+        }
+    }
+
+    // One of the tabs
+    #tab(label, tab) {
+        const button = element("button", "party-tab", label);
+
+        button.type = "button";
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-selected", String(tab === "party"));
+        button.addEventListener("click", () => {
+            this.showTab(tab);
+            this.onTab(tab);
+        });
+
+        return button;
+    }
+
+    // The chat as it is: its lines made again only when there's a new one (the newest kept in view,
+    // if it was), how many haven't been seen on its tab, and whether there's anyone to say anything to
+    #chat({ lines, unread, canSay }) {
+        const unseen = unreadLabel(unread);
+
+        this.chatBadge.textContent = unseen;
+        this.chatBadge.hidden = !unseen;
+        this.chatTab.setAttribute("aria-label", unseen ? `Chat, ${unread} unread` : "Chat");
+        this.chatNote.textContent = canSay ? "" : "Ask another player to your party to talk with them here.";
+        this.chatNote.hidden = canSay;
+        this.input.disabled = !canSay;
+        this.sendButton.disabled = !canSay;
+
+        for (const button of this.quick.children) {
+            button.disabled = !canSay;
+        }
+
+        const newest = lines.at(-1)?.id ?? null;
+
+        if (newest === this.shownLine) {
+            return;
+        }
+
+        const log = this.chatLog;
+        const atFoot = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+
+        this.shownLine = newest;
+        log.replaceChildren(
+            ...(lines.length
+                ? lines.map(({ name, text, mine = false, system = false }) => {
+                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}`);
+
+                      if (!system) {
+                          line.append(element("span", "chat-name", name), ": ");
+                      }
+
+                      line.append(element("span", "chat-text", text));
+
+                      return line;
+                  })
+                : [element("li", "chat-line system", "Nothing's been said yet.")]),
+        );
+
+        if (atFoot || this.tab !== "chat") {
+            log.scrollTop = log.scrollHeight;
+        }
     }
 
     // The party's players and the others to ask, made again only when what's shown of them

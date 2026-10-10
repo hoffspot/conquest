@@ -305,6 +305,12 @@ export const SOUNDS = {
         { layers: [{ from: "vcsl-glock-medium-g4-01", cut: [0, 29280], fadeOut: 0, gain: 17.470135 }], cap: 28800 / RATE, fadeIn: 2, fadeOut: 300 },
         { layers: [{ from: "vcsl-glock-medium-c5-01", cut: [0, 29280], fadeOut: 0, gain: 17.807068 }], cap: 28800 / RATE, fadeIn: 2, fadeOut: 300 },
     ],
+    // (A line said in the party: the glockenspiel's two notes, the lower first, a tenth of a second
+    // apart, as a message chimes; the second time a tone higher)
+    chatHeard: [
+        { layers: [{ from: "vcsl-glock-medium-g4-01", cut: [0, 24000], fadeOut: 40, gain: 14.5 }, { from: "vcsl-glock-medium-c5-01", cut: [0, 29280], fadeOut: 0, gain: 14.8, at: 0.1 }], cap: 33600 / RATE, fadeIn: 2, fadeOut: 300 },
+        { layers: [{ from: "vcsl-glock-medium-g4-01", cut: [0, 24000], rate: 1.122462, fadeOut: 40, gain: 14.5 }, { from: "vcsl-glock-medium-c5-01", cut: [0, 29280], rate: 1.122462, fadeOut: 0, gain: 14.8, at: 0.1 }], cap: 33600 / RATE, fadeIn: 2, fadeOut: 300 },
+    ],
     buyDenied: [
         { layers: [{ from: "freesound-722038", cut: [52260, 69192], gain: -1.089611 }] },
         { layers: [{ from: "freesound-722038", cut: [154680, 167916], gain: 0.524607 }] },
