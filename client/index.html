@@ -136,7 +136,7 @@
             <canvas id="minimap" role="img" aria-label="Map of where you are" hidden></canvas>
             <!-- The minimap folded away into a compass in its corner, and opened again from it -->
             <button type="button" id="minimapfold" aria-label="Fold the map into a compass" title="Fold the map into a compass">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path class="needle-north" d="M12 4.6l2.3 7.4h-4.6z"/><path d="M12 19.4l2.3-7.4h-4.6z"/></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><g id="minimapneedle"><path class="needle-north" d="M12 4.6l2.3 7.4h-4.6z"/><path d="M12 19.4l2.3-7.4h-4.6z"/></g></svg>
             </button>
             <button type="button" id="compass" aria-label="Compass: open the map" title="Open the map">
                 <svg viewBox="0 0 64 64" aria-hidden="true">

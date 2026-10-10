@@ -3285,14 +3285,17 @@ floor, walls, furniture in its colours, the stairs' treads, round barrels, the h
 the doorway; only those on the same floor as the player are shown.
 
 **Folded into a compass.** A round button over the minimap's top left corner (`#minimapfold`, 30
-pixels, a compass needle on it) folds the minimap away: in its place, in the top left corner of the
+pixels) is a compass too: its needle (`#minimapneedle`, red to the north) turns with the camera as the
+folded compass's rose does (below), so its red end points the way north lies on the screen, whereas
+the minimap under it keeps north up (it stood still, north up, whichever way the camera looked).
+Tapped, it folds the minimap away: in its place, in the top left corner of the
 screen, a small compass (`#compass`, 52 pixels: `--compass-size`), the party's column moving up
 under it. Its rose (a ring, ticks every eighth of the way round, gold points and a red north
 needle, an N at its tip) turns with the camera, so its N points the way north lies on the screen:
 looking north, N straight up; looking east, N on the left; looking south, N at the bottom
 (minimap.js `compassTurn`, from which way the camera looks over the ground, as the minimap's wedge
-has it; game.js `#turnCompass`, each frame the minimap would be drawn, the rose's SVG transform set
-only once it's turned more than about a third of a degree). Tapped, the compass opens the minimap
+has it; game.js `#turnCompass`, each frame the minimap would be drawn, the rose's or the needle's
+SVG transform set only once it's turned more than about a third of a degree). Tapped, the compass opens the minimap
 again. Both are Game options' Minimap switch (`minimap`, remembered with the other settings), so
 folding it with the button turns the switch off, and opening it with the compass on (the fold
 playing the tap's sound, the opening the map's unfolding).
