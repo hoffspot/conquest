@@ -515,6 +515,11 @@ const PROGRESS = 0.3;
 const STUCK_MS = 1500;
 const SQUEEZE_MS = 2000;
 
+// How near where it's going (metres, from their middle) someone standing still is among those
+// gathered there, whom a character squeezing past (#bumps) doesn't go through: as near as a
+// character blocked by them stops (#blocked)
+const THRONG = 2 * BODY + 1;
+
 // How long the straight way ahead (an "ahead" order) is looked along (metres), and how near
 // where it was told to go a character's way can end before it's found again from there (a way
 // too long to find at once), at most how many times
@@ -686,6 +691,9 @@ export class Battle {
             square: [...square],
             path: [],
             offPath: false,
+            // Stepping aside round someone in its way, which way ({ id: theirs, side }: null on its
+            // way)
+            aside: null,
             // How near it's got to where it's going, and when ({ left, at }: null standing
             // still), and until when it's squeezing past others
             progress: null,
@@ -3421,10 +3429,24 @@ export class Battle {
             let along = true;
             const blocker = this.#bumps(actor, next);
 
+            // Someone standing where it's going: it's there, as near as it gets (not round them,
+            // or squeezing past, onto where they stand). Not one after someone: it stops once
+            // they're within reach, from another square than theirs (an orc and a guard closing
+            // on each other both stopped, on one square, and neither could strike)
+            if (blocker && !target && this.#standsAt(blocker, actor.path.at(-1))) {
+                actor.path = [];
+
+                return start - budget;
+            }
+
             // Someone in the way (or, off its way, a wall): round them, if there's room (a wagon
-            // keeps to its way, the wagon behind its ox in line: waiting, then squeezing past)
-            if (blocker || (actor.offPath && !this.#clear(actor.map, next, actor))) {
-                const aside = blocker && actor.kind !== "wagon" ? this.#aside(actor, [ux, uy], step, blocker) : null;
+            // keeps to its way, the wagon behind its ox in line: waiting, then squeezing past);
+            // off its way round someone, a wall in the way, its way found again (#blocked) or, just
+            // found, on round them (else, in a corner with the player in its way out, it turned
+            // back and forth between them and the wall)
+            if (blocker || (actor.offPath && !this.#clear(actor.map, next, actor, { walking: true }))) {
+                const round = blocker ?? (actor.aside && this.time - actor.lastPathAt < REPATH_MS ? this.actor(actor.aside.id) : null);
+                const aside = round && actor.kind !== "wagon" ? this.#aside(actor, [ux, uy], step, round) : null;
 
                 if (!aside) {
                     this.#blocked(actor, blocker);
@@ -3443,9 +3465,13 @@ export class Battle {
 
             if (!along) {
                 actor.offPath = true;
-            } else if (step === distance) {
-                actor.path.shift();
-                actor.offPath = false;
+            } else {
+                actor.aside = null;
+
+                if (step === distance) {
+                    actor.path.shift();
+                    actor.offPath = false;
+                }
             }
 
             const [sx, sy] = [Math.floor(actor.x), Math.floor(actor.y)];
@@ -3488,12 +3514,13 @@ export class Battle {
     }
 
     // Who's in the way of a character stepping to a point: anyone else on its map whose body
-    // that would overlap, coming nearer them (the nearest; null if no one, or it's squeezing past)
+    // that would overlap, coming nearer them (the nearest; null if no one). Squeezing past (#move),
+    // it goes through anyone but a player (unless it's one itself) and, unless it's after someone,
+    // whoever's standing still where it's going, or by it (THRONG): it squeezed in among the folk
+    // at a stall, or onto where the player stood, and stood there inside them
     #bumps(actor, [x, y]) {
-        if (this.time < actor.squeezeUntil) {
-            return null;
-        }
-
+        const squeezing = this.time < actor.squeezeUntil;
+        const end = squeezing && !this.#aim(actor) ? actor.path.at(-1) : null;
         let nearest = null;
         let best = Infinity;
 
@@ -3504,6 +3531,10 @@ export class Battle {
             const other = this.actors[k];
 
             if (other === actor || other.dead || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
+                continue;
+            }
+
+            if (squeezing && (other.kind !== "player" || actor.kind === "player") && !this.#standsAt(other, end, THRONG)) {
                 continue;
             }
 
@@ -3519,24 +3550,23 @@ export class Battle {
         return nearest;
     }
 
-    // Whether a character's body would be clear of every blocked square at a point; and, for one
-    // standing on its map's navigation mesh (`from`), still on it there: the mesh keeps walkers off
-    // what's drawn, a building's walls, a prop, a fence, where its squares don't reach, so a step
-    // aside, or back towards its way, never takes them into them; nor up onto an army's camp's
-    // walkway from the lane beside it, or down off it (#apart: the mesh is under them both)
-    #clear(mapId, [x, y], from = null) {
-        const squares = this.#squares(mapId);
+    // Whether someone is standing still (going nowhere, or held up) with their body over a point
+    // (or with their middle within `near` metres of it)
+    #standsAt(other, point, near = 2 * BODY) {
+        return Boolean(point) && (!other.path.length || other.blockedSince !== null) && hypot(other.x - point[0], other.y - point[1]) < near;
+    }
 
-        for (let sy = Math.floor(y - BODY); sy <= Math.floor(y + BODY); sy++) {
-            for (let sx = Math.floor(x - BODY); sx <= Math.floor(x + BODY); sx++) {
-                if (squares.blocked(sx, sy)) {
-                    const [nx, ny] = [Math.min(Math.max(x, sx), sx + 1), Math.min(Math.max(y, sy), sy + 1)];
-
-                    if (hypot(nx - x, ny - y) < BODY) {
-                        return false;
-                    }
-                }
-            }
+    // Whether a character's body would be clear of every blocked square at a point (or, `walking`
+    // there from where `from` stands, no nearer them than it is: the ways over the mesh run nearer
+    // a wall than its body's breadth, and from there no step aside was clear, so it squeezed through
+    // whoever was in its way); and, for one standing on its map's navigation mesh (`from`), still on
+    // it there: the mesh keeps walkers off what's drawn, a building's walls, a prop, a fence, where
+    // its squares don't reach, so a step aside, or back towards its way, never takes them into
+    // them; nor up onto an army's camp's walkway from the lane beside it, or down off it (#apart:
+    // the mesh is under them both)
+    #clear(mapId, [x, y], from = null, { walking = false } = {}) {
+        if (this.#room(mapId, [x, y]) < (walking ? Math.min(BODY, this.#room(mapId, [from.x, from.y])) : BODY)) {
+            return false;
         }
 
         if (from) {
@@ -3548,18 +3578,40 @@ export class Battle {
         return true;
     }
 
+    // How far a point is from the nearest blocked square, up to BODY (metres)
+    #room(mapId, [x, y]) {
+        const squares = this.#squares(mapId);
+        let room = BODY;
+
+        for (let sy = Math.floor(y - BODY); sy <= Math.floor(y + BODY); sy++) {
+            for (let sx = Math.floor(x - BODY); sx <= Math.floor(x + BODY); sx++) {
+                if (squares.blocked(sx, sy)) {
+                    const [nx, ny] = [Math.min(Math.max(x, sx), sx + 1), Math.min(Math.max(y, sy), sy + 1)];
+
+                    room = Math.min(room, hypot(nx - x, ny - y));
+                }
+            }
+        }
+
+        return room;
+    }
+
     // Where a character steps, turned aside (ASIDE) round someone in its way: away from them
     // first, then the other way; somewhere no one else is and its body's clear of walls, still
-    // going on its way. Null if there's nowhere.
+    // going on its way. Null if there's nowhere. Round the one it stepped round last, the way it
+    // went then: with them all but straight ahead, it turned one way and then back the other,
+    // rocking where it stood (a patrol behind a guard posted by a wall, till it squeezed through)
     #aside(actor, [ux, uy], step, blocker) {
-        const away = ux * (blocker.y - actor.y) - uy * (blocker.x - actor.x) > 0 ? -1 : 1;
+        const away = actor.aside?.id === blocker.id ? actor.aside.side : ux * (blocker.y - actor.y) - uy * (blocker.x - actor.x) > 0 ? -1 : 1;
 
         for (const side of [away, -away]) {
             for (const [c, s] of ASIDE) {
                 const [vx, vy] = [ux * c - uy * s * side, uy * c + ux * s * side];
                 const next = [actor.x + vx * step, actor.y + vy * step];
 
-                if (!this.#bumps(actor, next) && this.#clear(actor.map, next, actor)) {
+                if (!this.#bumps(actor, next) && this.#clear(actor.map, next, actor, { walking: true })) {
+                    actor.aside = { id: blocker.id, side };
+
                     return next;
                 }
             }
@@ -3585,7 +3637,7 @@ export class Battle {
 
         const end = actor.path.at(-1);
 
-        if (waited > BLOCKED_WAIT_MS && blocker && !blocker.path.length && hypot(end[0] - blocker.x, end[1] - blocker.y) < 2 * BODY + 1) {
+        if (waited > BLOCKED_WAIT_MS && blocker && this.#standsAt(blocker, end, THRONG)) {
             actor.path = [];
         } else if ((waited > BLOCKED_WAIT_MS || !blocker) && actor.pathGoal && this.time - actor.lastPathAt >= (blocker ? BLOCKED_REPATH_MS : REPATH_MS)) {
             const since = actor.blockedSince;

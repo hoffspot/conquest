@@ -648,7 +648,9 @@ stand on (`roomy`: clear of walls), facing what's there. Each townsperson goes r
 each kind its calling goes to (`order: "alternate"`, battle.js `#routine`: never the same kind
 twice running), lingering at each a while (`LINGER`: a few seconds at a way out, up to a quarter
 of a minute at the well or a house), so most of the time they're walking. Each comes out at an
-errand of theirs no player can see, if there's one.
+errand of theirs no player can see, if there's one. Two or three making for the same errand, or
+for the square the player's standing on, stop by whoever's there first rather than in them, and
+are there (*The battle*, *Moving*); none of them walks through the player.
 
 **What they do.** Walking, they swing their free arm, what they carry held as it's carried (a
 pannier, sack or firewood on the back; a jug as a tankard; a fork, broom or staff upright as a
@@ -735,15 +737,26 @@ hundreds has a fight, not a crowd, on them.
   water, kept to the centimetre. It walks straight from corner to corner, a fifth of a metre at
   a time, facing the way it's going, so it turns only at corners. It never walks into anyone:
   where someone's in the way it steps aside round them, turning 30°, 60°, 90° or 120° (away from
-  them first), wherever its body's clear of the blocked squares and, standing on the mesh, it's
-  still on the mesh (`#clear`: the mesh keeps off a house's walls, a prop, a fence, where the
-  squares don't reach; two of a patrol stepping round each other walked into a cottage's wall);
-  having stepped aside near a corner of its way, it heads on for the next, on the mesh too. Where there's no room it waits; after 0.4 s, with
-  whoever it's after within reach it stops to fight, with someone standing where it was going
-  it stops there, and now and then it finds its way again. Getting no nearer where it's going
-  for 1.5 s (two jostling in a narrow way), it squeezes past whoever's there for 2 s. Sent to
-  fight someone, it stops as soon as they're within reach (with a blow up close, once it's
-  within 1.2 metres of them). Everything else is still the squares': where it's put, what it
+  them first, and on round them the way it first went: with them all but straight ahead it
+  turned one way, then back the other, rocking where it stood), wherever its body's clear of
+  the blocked squares, or no nearer them than it is (its way can run nearer a wall than its
+  body's breadth), and, standing on the mesh, it's still on the mesh (`#clear`: the mesh keeps
+  off a house's walls, a prop, a fence, where the squares don't reach; two of a patrol stepping
+  round each other walked into a cottage's wall); having stepped aside near a corner of its
+  way, it heads on for the next, on the mesh too. Someone standing where it's going, it stops
+  by them as soon as they're in its way: it's there, as near as it gets (not one after someone,
+  which stops once they're within reach, from another square than theirs: an orc and a guard
+  closing on each other both stopped on one square, and neither could strike). Where there's no room
+  it waits; after 0.4 s, with whoever it's after within reach it stops to fight, with someone
+  standing still within 1.6 m of where it was going (`THRONG`) it stops there, and now and then
+  it finds its way again. Getting no nearer where it's going for 1.5 s (two jostling in a
+  narrow way), it squeezes past whoever's there for 2 s: but never a player (unless it's one),
+  nor, unless it's after someone, anyone standing still, or held up, within `THRONG` of where
+  it's going. Before, the
+  townsfolk making for an errand where someone stood (another of them, or the player standing
+  on its square) went round and round them, then squeezed through onto where they stood, and
+  stood there in them. Sent to fight someone, it stops as soon as they're within reach (with a
+  blow up close, once it's within 1.2 metres of them). Everything else is still the squares': where it's put, what it
   can see and reach, where it's going (`core/grid.js`: `blocked`, `opaque` and `ground` for any
   square, blocked off the map, whether kept in rows or in chunks). Out in the world, someone's
   put to stand only where there's room (`roomy`, `nearestFree`): a square whose middle is 0.45 m
