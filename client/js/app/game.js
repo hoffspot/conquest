@@ -54,7 +54,7 @@ import { brokenOf } from "../core/war/stockade.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -520,7 +520,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote", "party"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -766,6 +766,9 @@ export class Game {
 
         /** Whether another player's Summon is said no to at once, not asked (Game options). */
         this.resistSummons = false;
+
+        /** Whether another player asking this one to their party is let go unanswered, not asked (Game options). */
+        this.refuseInvites = false;
 
         /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
@@ -1323,6 +1326,7 @@ export class Game {
         this.partyPanel = new PartyPanel(this.hud.root);
         this.partyPanel.onOrder = (id, order) => this.#orderUnit(id, order);
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
+        this.partyPanel.onParty = (what, who) => this.#partyOrder(what, who);
         this.partyPanel.onClose = () => this.closeParty();
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
@@ -5210,17 +5214,114 @@ export class Game {
     #showParty() {
         this.partyShownAt = this.clock;
         this.partyPanel.show({
-            members: this.#party().map(({ id, kind, actor, waiting, left, picture }) => {
+            members: this.#party().filter(({ kind }) => kind !== "player").map(({ id, kind, actor, waiting, left, picture }) => {
                 const follower = this.host.followers.get(id);
                 const called = this.host.companions.get(id);
 
                 return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture };
             }),
             most: this.host.mostFollowers(this.me),
+            ...this.#partyPlayers(),
         });
     }
 
-    // Those with the player (core/host.js partyOf) still standing, in order: { id, kind, actor,
+    // Playing together, the party of players this one's in (core/host.js partyFor) and the
+    // others in the world, for the party menu: { together, players, others, leads, full }
+    #partyPlayers() {
+        const party = this.host.partyFor(this.me);
+        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "";
+        const me = this.battle.actor(this.me);
+
+        return {
+            together: this.host.players.size > 1,
+            players: (party?.members ?? []).map((id) => ({
+                id,
+                name: nameOf(id),
+                leader: party.leader === id,
+                me: id === this.me,
+                away: id !== this.me && this.battle.actor(id)?.map !== me?.map,
+                with: id === this.me ? [] : this.host.partyOf(id).map((one) => this.battle.actor(one.id)?.name ?? this.host.followers.get(one.id)?.name ?? "").filter(Boolean),
+            })),
+            others: [...this.host.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.host.invitation(id)) })),
+            leads: party?.leader === this.me,
+            full: (party?.members.length ?? 1) >= PARTY.most,
+        };
+    }
+
+    // What the player does about their party of players, from the party menu (a "party" command:
+    // core/host.js); said why not, if not
+    #partyOrder(what, who) {
+        this.#command({ type: "party", do: what, who }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            } else {
+                this.sound?.play("tap");
+            }
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
+        });
+    }
+
+    // Parties of players (core/host.js PARTY): asked to one (Accept, Decline, or Ignore: let go
+    // unanswered, the one asking not told; with Refuse party invites on, not even asked), and what
+    // comes of asking, and of the party: who joins, leaves, is put out or leads, or that it's no more
+    #partyEvent(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const name = event.name || this.host.players.get(event.who)?.hero.name || "They";
+        const mine = event.who === this.me;
+        const leader = this.host.players.get(this.host.partyFor(this.me)?.leader)?.hero.name ?? "their";
+        const said = {
+            sent: `You ask ${name} to join your party.`,
+            declined: `${name} says no to your party.`,
+            unanswered: `${name} doesn't answer.`,
+            joined: mine ? `You join ${leader}'s party.` : `${name} joins the party.`,
+            left: mine ? "You leave the party." : `${name} leaves the party.`,
+            removed: mine ? "You're put out of the party." : `${name} is put out of the party.`,
+            leader: mine ? "You lead the party now." : `${name} leads the party now.`,
+            disbanded: "The party's no more: no one's left in it with you.",
+        }[event.change];
+
+        if (event.change === "invited" && !this.refuseInvites) {
+            this.sound?.play("wake");
+            this.invitePrompt = this.hud.choose(
+                `${event.name} asks you to join their party.`,
+                [
+                    { label: "Accept", value: "accept" },
+                    { label: "Decline", value: "decline" },
+                ],
+                (answer) => {
+                    this.invitePrompt = null;
+
+                    // (Ignored: let go, unanswered, as if never seen)
+                    if (answer) {
+                        this.#partyOrder(answer);
+                    }
+                },
+                { cancel: "Ignore", seconds: Math.max(1, (event.until - this.battle.time) / 1000) },
+            );
+        } else if (event.change === "lapsed") {
+            this.invitePrompt?.withdraw();
+        } else if (said) {
+            this.hud.message(said, 3);
+
+            if (event.change === "joined") {
+                this.sound?.play("wake");
+            }
+        }
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
+    // Those with the player still standing, in order: the other players in their party (core/
+    // host.js fellows, the longest in it first), then their own (partyOf): { id, kind, actor,
     // waiting, left: a called creature's time left ({ ms, share }) or null, picture: their
     // likeness (an ImageData), or null till it's drawn }
     #party() {
@@ -5230,7 +5331,9 @@ export class Game {
             return [];
         }
 
-        return this.host.partyOf(this.me).flatMap(({ id, kind }) => {
+        const fellows = this.host.fellows(this.me).map((id) => ({ id, kind: "player" }));
+
+        return [...fellows, ...this.host.partyOf(this.me)].flatMap(({ id, kind }) => {
             const actor = this.battle.actor(id);
             const called = this.host.companions.get(id);
 
@@ -5259,13 +5362,21 @@ export class Game {
             }
         }
 
+        // (Their names and dots in green: theirs, and the other players' in their party and
+        // theirs, who have no icon)
+        const allied = new Set([...ids, ...this.host.fellows(this.me).flatMap((id) => this.host.partyOf(id).map((one) => one.id))]);
+
         for (const id of this.allied ?? []) {
-            if (!ids.has(id)) {
+            if (!allied.has(id)) {
                 this.hud.setAlly(id, false);
             }
         }
 
-        this.allied = ids;
+        this.allied = allied;
+
+        for (const id of allied) {
+            this.hud.setAlly(id, true);
+        }
 
         if (this.allyTarget && !ids.has(this.allyTarget)) {
             this.allyTarget = null;
@@ -5274,7 +5385,6 @@ export class Game {
         const player = this.battle.actor(this.me);
 
         for (const { id } of party) {
-            this.hud.setAlly(id, true);
             this.#likeness(this.partyLikenesses, id);
         }
 
@@ -5287,7 +5397,7 @@ export class Game {
 
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id }))
                 : [],
         );
 
@@ -5328,6 +5438,11 @@ export class Game {
                 cache.set(id, picture);
             }
         });
+    }
+
+    // Whether someone's one of the player's own: a follower of theirs, or a creature they've called or raised
+    #ownUnit(id) {
+        return [this.host.followers.get(id), this.host.companions.get(id)].some((one) => one?.leader === this.me);
     }
 
     // The one of their party the player's chosen to help (and still can: standing, where they
@@ -5414,7 +5529,7 @@ export class Game {
             return;
         }
 
-        const own = [this.host.followers.get(id), this.host.companions.get(id)].some((one) => one?.leader === this.me);
+        const own = this.#ownUnit(id);
         const pointer = { x, y, wheel: { originX: x, originY: y, target: id, kind: own ? "unit" : "ally", side: 0, refused: null, done: false } };
         const mine = (event) => event.pointerId === pointerId;
         const move = (event) => {
@@ -7219,6 +7334,9 @@ export class Game {
             case "summons":
                 this.#summons(event);
                 break;
+            case "party":
+                this.#partyEvent(event);
+                break;
             case "carried": {
                 // (Gone with a pop from where they were, and come with one where they come to,
                 // each if it's heard here; the player's own heard wherever they go)
@@ -8555,7 +8673,7 @@ export class Game {
 
                 // (Enemies first, where they and the player overlap)
                 if (distance < bestDistance - (mine ? 6 : 0)) {
-                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? (this.allied?.has(actor.id) ? "unit" : "ally") : "talk" };
+                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? (this.#ownUnit(actor.id) ? "unit" : "ally") : "talk" };
                     bestDistance = distance;
                 }
             }

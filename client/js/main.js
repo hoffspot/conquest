@@ -363,6 +363,7 @@ $("#stickswitch").checked = settings.stick;
 $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
+$("#refuseswitch").checked = settings.refuseInvites;
 $("#followswitch").checked = settings.cameraFollows;
 $("#battlecamswitch").checked = settings.battleCam;
 $("#invertswitch").checked = settings.invertTilt;
@@ -553,6 +554,7 @@ async function playing(save) {
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
+    game.refuseInvites = settings.refuseInvites;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -1380,6 +1382,7 @@ async function playingJoined(save, welcome, joining) {
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
+    game.refuseInvites = settings.refuseInvites;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -1442,6 +1445,7 @@ $("#stickswitch").addEventListener("change", (event) => applySetting("stick", ev
 $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloats", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
+$("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
@@ -1594,9 +1598,9 @@ function applySetting(key, value) {
         floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
-    } else if (key === "resistSummons") {
+    } else if (key === "resistSummons" || key === "refuseInvites") {
         if (state.game) {
-            state.game.resistSummons = value;
+            state.game[key] = value;
         }
     } else if (CAMERA_SETTINGS.includes(key)) {
         applyCamera();

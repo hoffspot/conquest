@@ -1429,6 +1429,19 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   4:05 left": `memberKind`), their health, whether they follow or wait, and Follow or Wait and
   Dismiss (asked twice: "Dismiss?" for three seconds, `DISMISS_SURE_MS`); with no one, how to
   come by some. On a narrow screen a panel open hides the column, which would cover its edge.
+  **Playing together** (docs/WAR.md *Parties*), the other players in the player's party head the
+  column, the longest in it first (`host.fellows`), before the player's own: gold-framed (`.member
+  .player`), the one leading it crowned (`.member.leader`: "leading your party"), their own units
+  not shown there but named in the menu ("With them: ..."). The menu then has the party's
+  **Players** (the leader crowned: "♛"; Leave party for the player, asked twice; and, for its
+  leader, Make leader and Remove, asked twice, for each other), and the others in the world to
+  **Ask to your party** (Invite; "Asked" while they're asked; none while it's full), made again
+  only when what it shows of them changes (`PartyPanel #together`). Asked, the player's shown the
+  asker's name and **Accept**, **Decline** or **Ignore** (`hud.choose`, gone when it lapses,
+  `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options
+  (`refuseInvites`, saved), nothing at all. What becomes of the party is said in the banner ("Bryn
+  joins the party.", "You lead the party now.", "The party's no more: no one's left in it with
+  you.").
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
@@ -4558,6 +4571,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   called creature alike, and refused for anyone not theirs; one set on whoever the player's set
   on (`assist`), after them till they're down and then following again, refused with no one set
   on; and what a creature at their side brings down counting for the player, its loot theirs.
+  Parties of players (`PARTY`, the `party` command): asked and said yes to, a party the asker
+  leads, the two allied though their peoples are at war; said no to, or let lapse, the asker
+  told and no party; four at most, its leader putting one out and making another leader, the one
+  longest in it leading when the leader leaves, and none left with one in it; what one brings
+  down counting for another of the party near it (as much the stronger, their own loot), not for
+  one 60 metres off; and parties and who's asked kept in the snapshot, as they were.
 - `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
   foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
   just as it was.
