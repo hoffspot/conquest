@@ -8738,6 +8738,51 @@ test("magic: the spellbook shows every school and the tomes; an element opened b
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+    test("turned on its side and back, the world's drawn the shape of the screen, never stretched: even told it's resized while it's still turning, as Chrome on Android tells it", async ({ page }) => {
+        await playing(page, "/?play&seed=1");
+
+        // How the world's drawn against the canvas it's drawn on: the drawing's shape and the
+        // camera's, and the canvas's on the page
+        const shape = () => page.evaluate(() => {
+            const { view } = window.pellagos.session;
+            const canvas = view.canvas;
+
+            return { page: canvas.clientWidth / canvas.clientHeight, drawing: canvas.width / canvas.height, camera: view.camera.aspect };
+        });
+        const drawnTrue = async (what) => {
+            // (Two frames: the browser's told the page its canvas changed by then)
+            await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+            const { page: wanted, drawing, camera } = await shape();
+
+            expect(Math.abs(drawing - wanted), `${what}: drawn ${drawing.toFixed(3)} for ${wanted.toFixed(3)}`).toBeLessThan(0.01);
+            expect(Math.abs(camera - wanted), `${what}: camera ${camera.toFixed(3)} for ${wanted.toFixed(3)}`).toBeLessThan(0.01);
+        };
+
+        await drawnTrue("upright");
+
+        // On its side, and upright again
+        await page.setViewportSize({ width: 844, height: 390 });
+        await drawnTrue("on its side");
+        expect((await shape()).page).toBeGreaterThan(1);
+        await page.setViewportSize({ width: 390, height: 844 });
+        await drawnTrue("upright again");
+
+        // Told it's resized halfway through turning (the page laid out half way), and then not
+        // again once it's done: still drawn the shape it ends up
+        await page.evaluate(() => {
+            const canvas = window.pellagos.session.view.canvas;
+
+            canvas.style.height = "45%";
+            window.dispatchEvent(new Event("resize"));
+        });
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+        await page.evaluate(() => {
+            window.pellagos.session.view.canvas.style.height = "";
+        });
+        await drawnTrue("done turning, untold");
+    });
+
     test("a quick action tapped is used once: a draught tapped drinks one, Vigor tapped heals without being refused as cooling down", async ({ page }) => {
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
