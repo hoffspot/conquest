@@ -7659,14 +7659,27 @@ export class Game {
 
     /**
      * A tap or click at a point on the screen (client pixels), at `time` (ms, as performance.now()):
-     * fight who's there, go through the door or up or down the stairs there, or walk there.
-     * Tapped twice in quick succession (or with `run`: shift-clicked), run there.
+     * set on the enemy there (where the player stands: tapped twice in quick succession, or
+     * shift-clicked, running up to them), go through the door or up or down the stairs there, or
+     * walk there (tapped twice, or with `run`, run there). On the player themselves, going
+     * somewhere, they stop.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
         this.#wake();
 
-        const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
+        let who = this.#whoIsAt(clientX, clientY, { player: true, folk: true })?.actor ?? null;
         const me = this.battle.actor(this.me);
+
+        // The player themselves: going somewhere, they stop (set on someone, still set on them)
+        if (who && who === me) {
+            who = null;
+
+            if (this.#halt()) {
+                this.lastTap = { time, x: clientX, y: clientY, from: "view" };
+
+                return;
+            }
+        }
 
         // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them; another
         // player (not an enemy): trade with them
@@ -8437,6 +8450,23 @@ export class Game {
         this.#order({ enemy, ground: enemy ? null : [x, z] }, { clientX, clientY, run, time, from: "map" });
     }
 
+    // The player going somewhere (walking or running: after someone, to a place, through a door),
+    // stopped: still set on whoever they were after, where they stand. Whether they were
+    #halt() {
+        const player = this.battle.actor(this.me);
+        const order = player?.order;
+
+        if (!player || player.dead || !order || (order.type === "engage" && order.stand)) {
+            return false;
+        }
+
+        this.#endTalk();
+        this.approaching = null;
+        this.#command(order.type === "engage" ? { type: "engage", target: order.target, stand: true } : { type: "stop" });
+
+        return true;
+    }
+
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
@@ -8456,10 +8486,13 @@ export class Game {
 
         run ||= last !== null && last.from === from && time - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.x, clientY - last.y) <= DOUBLE_TAP_SLOP[from];
 
+        // An enemy: set on them where the player stands (whoever they were set on, or going up to,
+        // they stop: tapped on whoever they're set on, they stop going after them); tapped twice
+        // in quick succession, running up to them, into reach of what's in hand
         if (enemy) {
             const chosen = player.order?.type === "engage" && player.order.target === enemy.id;
 
-            this.#command({ type: "engage", target: enemy.id, run });
+            this.#command(run ? { type: "engage", target: enemy.id, run } : { type: "engage", target: enemy.id, stand: true });
 
             if (!chosen) {
                 this.sound?.play("lock");

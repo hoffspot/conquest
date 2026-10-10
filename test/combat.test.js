@@ -450,6 +450,53 @@ describe("the battle (battle.js)", () => {
         assert.ok(Math.max(Math.abs(player.square[0] - 15), Math.abs(player.square[1] - 2)) === 1, `stops next to it, at ${player.square}`);
     });
 
+    it("set on an enemy where it stands (a tap on them), doesn't go after it: strikes it once it's in reach, a bow's shot from where it stands; told to on the way, stops", () => {
+        const battle = new Battle(open(20, 5), { seed: 2 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+        const dummy = battle.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [15, 2] });
+
+        Object.assign(dummy, { stunnedUntil: Infinity });
+        battle.command("player", { type: "engage", target: "dummy", stand: true });
+        assert.deepEqual(player.order, { type: "engage", target: "dummy", run: false, stand: true });
+
+        let events = run(battle, 3000);
+
+        assert.deepEqual(player.square, [1, 2], "stays where it is");
+        assert.ok(!events.some((event) => event.type === "attack" && event.id === "player"), "out of reach: no blow");
+
+        // (Come up to it: struck)
+        Object.assign(dummy, { square: [2, 2], x: 2.5, y: 2.5 });
+        events = run(battle, 3000);
+        assert.ok(events.some((event) => event.type === "attack" && event.id === "player" && event.target === "dummy"), "in reach: struck");
+        assert.deepEqual(player.square, [1, 2]);
+
+        // Going after it, then told to stand: stops where it's got to
+        const walking = new Battle(open(20, 5), { seed: 2 });
+        const walker = walking.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+
+        walking.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [15, 2] }).stunnedUntil = Infinity;
+        walking.command("player", { type: "engage", target: "dummy" });
+        run(walking, 1000);
+
+        const [x] = walker.square;
+
+        assert.ok(x > 2, `on the way, at ${walker.square}`);
+        walking.command("player", { type: "engage", target: "dummy", stand: true });
+        run(walking, 2000);
+        assert.ok(Math.abs(walker.square[0] - x) <= 1, `stopped there, at ${walker.square}`);
+        assert.equal(walker.path.length, 0);
+
+        // (A bow, 10 m off: shot from where it stands)
+        const archery = new Battle(open(20, 5), { seed: 5 });
+        const archer = archery.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 2] });
+
+        archery.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [12, 2] }).stunnedUntil = Infinity;
+        archery.command("player", { type: "engage", target: "dummy", stand: true });
+        events = run(archery, 3000);
+        assert.ok(events.some((event) => event.type === "projectile"), "shoots");
+        assert.deepEqual(archer.square, [2, 2]);
+    });
+
     it("shoots with a bow from range, the arrow flying to its target before it hits", () => {
         const battle = new Battle(open(20, 5), { seed: 5 });
 

@@ -1104,9 +1104,10 @@ export class Host {
 
     /**
      * Do what a player asks, if it can be done. A command is one of:
-     *  - { type: "move", to: [x, y] }, { type: "ahead", facing }, { type: "engage", target },
-     *    { type: "approach", target }, { type: "enter", link }, { type: "stop" }: orders for
-     *    their character in the battle (battle.js command), with run: true to run;
+     *  - { type: "move", to: [x, y] }, { type: "ahead", facing }, { type: "engage", target }
+     *    (stand: true, set on them where they stand), { type: "approach", target },
+     *    { type: "enter", link }, { type: "stop" }: orders for their character in the battle
+     *    (battle.js command), with run: true to run;
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
@@ -1210,7 +1211,7 @@ export class Host {
                     actor.foes[target.id] = this.battle.time + FOE_MS;
                 }
 
-                return this.#order(actor, { type: command.type, target: target.id, run });
+                return this.#order(actor, { type: command.type, target: target.id, run, ...(command.type === "engage" && command.stand ? { stand: true } : {}) });
             }
             case "enter": {
                 const link = this.battle.links.find(({ id }) => id === command.link);

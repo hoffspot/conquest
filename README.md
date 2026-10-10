@@ -311,8 +311,9 @@ and flick towards a slice to do what's in it; let go in the middle to change you
 down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
 What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
 Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
-(each showing how many you have). You start with **Vigor** on yourself (a little healing) and
-**Stun** on an enemy. Each element's school opens with its first spell's tome, 25 gold at any
+(each showing how many you have). You start with **Vigor** on yourself (a little healing), and
+**Attack** at the top of an enemy's (walking up to them, into reach of what's in your hands, to
+fight them) with **Stun** beside it. Each element's school opens with its first spell's tome, 25 gold at any
 adventurers' guild: **Burn**, **Rumble**, **Hurt** and **Blister** (fire, earth, air and water),
 waiting greyed on your enemy wheel until you've read them. Each spell has its own
 cooldown: while it runs, its slice is greyed over, and the grey sweeps back as it passes. A flick
@@ -397,7 +398,8 @@ remembered.
 | --- | --- | --- |
 | Walk | Tap the ground | Click the ground |
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
-| Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
+| Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
+| Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |

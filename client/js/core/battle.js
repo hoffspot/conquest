@@ -1045,7 +1045,8 @@ export class Battle {
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
      * near as can be), { type: "ahead", facing } (turned the way `facing` points, radians, and
-     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and fight it),
+     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and
+     * fight it; with stand: true, set on it where they stand, striking only while it's in reach),
      * { type: "enter", link: id } (walk to the link's end on its map and go through),
      * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
      * { type: "stop" }. Moving, engaging, entering and approaching, run: true runs there (while
@@ -1109,8 +1110,14 @@ export class Battle {
                     break;
                 }
 
-                actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
+                actor.order = { type: "engage", target: order.target, run: Boolean(order.run), ...(order.stand ? { stand: true } : {}) };
                 actor.pathGoal = null;
+
+                // (Set on it where they stand: wherever they were going, they stop)
+                if (order.stand) {
+                    actor.path = [];
+                }
+
                 break;
             }
             case "approach":
@@ -2142,6 +2149,16 @@ export class Battle {
                 }
 
                 actor.order = null;
+            } else if (order.stand) {
+                // (Set on it where they stand: struck at while it's in reach, not gone after; out
+                // of reach, whoever is in reach struck at, as standing)
+                actor.path = [];
+
+                if (this.#reachable(actor, target)) {
+                    this.#attack(actor, target);
+
+                    return;
+                }
             } else {
                 this.#pursue(actor, target);
 
