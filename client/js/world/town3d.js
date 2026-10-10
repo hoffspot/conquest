@@ -97,8 +97,9 @@ export function heightMap([x0, z0, width, height]) {
 /**
  * Build the town and the trees in its fields: { object: a Group (in metres) of merged meshes,
  * heights: the height of whatever stands on each of its squares that could hide the player (what's
- * built and the trees, not the props: heightMap's), and buildings: the same for what's built alone
- * (BUILT) }. The town's corner is at `world.origin` ([x, z] or
+ * built and the trees, not the props: heightMap's), buildings: the same for what's built alone
+ * (BUILT), and props: the same for the props (a well's roof, a stall, a cart: what the battle cam
+ * looks past too, game.js) }. The town's corner is at `world.origin` ([x, z] or
  * a number for both), and its squares are `world.stamp`'s (where it's set in the world: [x, z]
  * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
  * is built; `landAt(x, z)` says what land (BIOMES id) a tree stands in, its leaves coloured as
@@ -113,6 +114,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     const area = world.stamp ? [...world.stamp.at, world.stamp.width, world.stamp.height] : [0, 0, world.width, world.height];
     const heights = heightMap(area);
     const buildings = heightMap(area);
+    const props = heightMap(area);
     let done = 0;
 
     art.scale.setScalar(PIXEL);
@@ -210,8 +212,8 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     const lit = lightsMesh(lights);
 
     // How high everything stands on each square
-    const stand = (box, built) => {
-        for (const map of built ? [heights, buildings] : [heights]) {
+    const stand = (box, built, maps = built ? [heights, buildings] : [heights]) => {
+        for (const map of maps) {
             for (let z = Math.max(map.z0, Math.floor(box.min.z)); z < Math.min(map.z0 + map.height, Math.ceil(box.max.z)); z++) {
                 const row = map.rows[z - map.z0];
 
@@ -244,6 +246,11 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     }
 
     trees.boxes.forEach((box) => stand(box, false));
+
+    // (And the props, on a map of their own)
+    for (const object of art.children.filter(({ userData }) => userData.piece.kind === "prop")) {
+        stand(new THREE.Box3().setFromObject(object), false, [props]);
+    }
 
     // Merged a block at a time (by where each piece's middle is), into the art's one material
     const object = new THREE.Group();
@@ -294,7 +301,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         }
     }
 
-    return { object, heights, buildings, lights };
+    return { object, heights, buildings, props, lights };
 }
 
 /**

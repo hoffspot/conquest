@@ -66,10 +66,15 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
-    // walk; how far a drag turns and tilts it (1, as it's always been: half round across the
-    // screen, 60 degrees up or down it); whether dragging up looks down; whether the greater
-    // spells shake it
-    cameraFollows: true,
+    // walk (off: it stays turned the way it's left); whether in a fight it frames it, three-
+    // quarters on and clear of what stands round (the battle cam); how far a drag turns and tilts
+    // it (1, as it's always been: half round across the screen, 60 degrees up or down it); whether
+    // dragging up looks down; whether the greater spells shake it. And which camera defaults they
+    // were saved under: following saved under the first (when it was on by default) is forgotten,
+    // for today's
+    cameraFollows: false,
+    battleCam: true,
+    cameraDefaults: 2,
     dragSpeed: 1,
     invertTilt: false,
     shake: true,
@@ -511,6 +516,11 @@ export function loadSettings() {
         for (const key of [...VOLUMES, "volumeScale"]) {
             delete saved[key];
         }
+    }
+
+    if (saved.cameraDefaults !== SETTINGS_DEFAULTS.cameraDefaults) {
+        delete saved.cameraFollows;
+        delete saved.cameraDefaults;
     }
 
     return { ...SETTINGS_DEFAULTS, ...saved };

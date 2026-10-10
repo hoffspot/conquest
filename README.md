@@ -145,20 +145,24 @@ you tap an enemy to fight it:
 It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
 or after you, you put it away again. The orc does the same, on its patrol.
 
-**The camera** follows you from your first step. Walking away from it or across its view, it
-swings round smoothly (over about a second) to look from behind you the way you're going; walking
-back towards it, it backs away rather than turning round, coming round only as you go by it.
-**Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it; it
-stays where you leave it while you stand, and once you've walked a moment it swings back round
-behind you. Pinch or scroll to zoom. In the town, when a building would stand between you and the
-camera, it comes in closer than the building, or rises over it. Holding a phone upright, it looks
-down more steeply from further back, so you see more round you. Game options can turn its
-following off, change how far a drag turns it, invert its tilt, and stop spells shaking it.
-Pushed right up to you by a wall or a building, it sees through you rather than into you.
-**In a fight** it keeps you and your foe both in view by itself, turning no more than it must,
-drawing back for a dragon or a foe far off, and cutting through trees or walls in the way of
-either of you; anyone attacking you from out of view has a red arrow at the screen's edge pointing
-to them.
+**The camera** keeps up with you from your first step, staying turned the way you leave it.
+**Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it. Pinch
+or scroll to zoom. In the town, when a building would stand between you and the camera, it comes
+in closer than the building, or rises over it. Holding a phone upright, it looks down more steeply
+from further back, so you see more round you. Turn **Camera follows** on in Game options and,
+walking away from it or across its view, it swings round smoothly (over about a second) to look
+from behind you the way you're going; walking back towards it, it backs away rather than turning
+round, coming round only as you go by it; dragged, it stays where you leave it while you stand,
+and once you've walked a moment it swings back round behind you. Game options can also change how
+far a drag turns it, invert its tilt, and stop spells shaking it. Pushed right up to you by a wall
+or a building, it sees through you rather than into you.
+**In a fight** the **battle cam** (on to start with; Game options) swings round to see you and
+your foe from the side, three-quarters on, from whichever side no building, tree, well or stall
+stands between you and it, and keeps to that side as you fight; a drag still turns it, and a
+second after you let go it frames the fight again. With the battle cam off, it keeps you and your
+foe both in view by itself, turning no more than it must. Either way it draws back for a dragon or
+a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
+from out of view has a red arrow at the screen's edge pointing to them.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left

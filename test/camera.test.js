@@ -361,6 +361,101 @@ describe("the camera in a fight (camera.js keep)", () => {
     });
 });
 
+describe("the battle cam (camera.js battle)", () => {
+    const offView = (camera, point, away) => {
+        const [cx, cz] = [camera.focus.x + Math.sin(camera.yaw) * away, camera.focus.z + Math.cos(camera.yaw) * away];
+        const [dx, dz] = [point.x - cx, point.z - cz];
+
+        return Math.abs(Math.atan2(dx * Math.cos(camera.yaw) - dz * Math.sin(camera.yaw), -dx * Math.sin(camera.yaw) - dz * Math.cos(camera.yaw)));
+    };
+    // (The player stood at the middle, fighting a foe, the camera 10 m off: `blocked`, how many of
+    // them what stands round hides looking from a way)
+    const fight = (camera, foe, seconds, blocked = () => 0) => {
+        for (let t = 0; t < seconds; t += FRAME) {
+            camera.update(FRAME, { player: { x: 0, z: 0, vx: 0, vz: 0 }, away: 10, keep: foe, half: 0.4, blocked });
+        }
+    };
+    const battleCam = (follows = false) => Object.assign(new CameraFollow({ x: 0, z: 0 }), { battle: true, follows });
+
+    it("in a fight, swings round to see them both three-quarters on, 60 degrees from behind the player, following turned off or on", () => {
+        for (const follows of [false, true]) {
+            const camera = battleCam(follows);
+            const foe = { x: 0, z: -3 };
+
+            fight(camera, foe, 2);
+            assert.ok(Math.abs(Math.abs(wrap(camera.yaw)) - Math.PI / 3) < 0.03, `yaw ${camera.yaw.toFixed(2)}`);
+            assert.ok(offView(camera, foe, 10) <= 0.4, "the foe in view");
+        }
+    });
+
+    it("goes round the other way, or nearer behind or further round, where what stands there would hide them", () => {
+        const camera = battleCam();
+
+        // (Anything round the east hides them)
+        fight(camera, { x: 0, z: -3 }, 2, (yaw) => (Math.sin(yaw) > 0.1 ? 1 : 0));
+        assert.ok(Math.abs(wrap(camera.yaw + Math.PI / 3)) < 0.03, `yaw ${camera.yaw.toFixed(2)}`);
+
+        // (Both sides hidden at 60 degrees, but not at 45)
+        const nearer = battleCam();
+
+        fight(nearer, { x: 0, z: -3 }, 2, (yaw) => (Math.abs(Math.abs(wrap(yaw)) - Math.PI / 3) < 0.01 ? 2 : 0));
+        assert.ok(Math.abs(Math.abs(wrap(nearer.yaw)) - Math.PI / 4) < 0.03, `yaw ${nearer.yaw.toFixed(2)}`);
+    });
+
+    it("comes nearer behind the player to keep a foe far off in view too (a bow's shot away)", () => {
+        const camera = battleCam();
+        const foe = { x: 0, z: -15 };
+
+        fight(camera, foe, 2.5);
+        assert.ok(Math.abs(wrap(camera.yaw)) < Math.PI / 3 - 0.1, `yaw ${camera.yaw.toFixed(2)}`);
+        assert.ok(offView(camera, foe, 10) <= 0.42 && offView(camera, { x: 0, z: 0 }, 10) <= 0.42, "both in view");
+    });
+
+    it("keeps to the side it's on, turned a little towards the other", () => {
+        const camera = battleCam();
+        const foe = { x: 0, z: -3 };
+
+        fight(camera, foe, 2);
+        assert.ok(camera.yaw > 0, `yaw ${camera.yaw.toFixed(2)}`);
+
+        // (Turned by a drag just past straight behind the player, towards the other side: let go,
+        // back round to the side it was on)
+        camera.grab();
+        camera.turn(-0.1 - camera.yaw);
+        camera.release();
+        fight(camera, foe, 3);
+        assert.ok(Math.abs(wrap(camera.yaw - Math.PI / 3)) < 0.03, `yaw ${camera.yaw.toFixed(2)}`);
+    });
+
+    it("held by a drag, holds where it's turned, and a moment after it's let go, frames the fight again", () => {
+        const camera = battleCam();
+        const foe = { x: 0, z: -3 };
+
+        camera.grab();
+        camera.turn(Math.PI);
+        fight(camera, foe, 1);
+        assert.equal(camera.yaw, Math.PI, "held");
+
+        camera.release();
+        fight(camera, foe, 0.9);
+        assert.ok(Math.abs(wrap(camera.yaw - Math.PI)) < 1e-9, "still where it was let go");
+        fight(camera, foe, 2.5);
+        assert.ok(Math.abs(Math.abs(wrap(camera.yaw)) - Math.PI / 3) < 0.03, `yaw ${camera.yaw.toFixed(2)}`);
+    });
+
+    it("turned off, following or not, turns only as far as keeps the foe in view; in view already, not at all", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        camera.follows = false;
+        fight(camera, { x: 0, z: -3 }, 2);
+        assert.equal(camera.yaw, 0);
+
+        // (Behind the camera: turned till they're in view, and no further)
+        fight(camera, { x: -2, z: 14 }, 3);
+        assert.ok(offView(camera, { x: -2, z: 14 }, 10) <= 0.42 && offView(camera, { x: -2, z: 14 }, 10) > 0.3, `yaw ${camera.yaw.toFixed(2)}`);
+    });
+});
+
 describe("drawing back in a fight (world/view.js backFor)", () => {
     it("draws back for a foe much taller than the player, or far from them, half as far again at most", () => {
         assert.equal(backFor(1.8, 2), 1, "a man close by: not at all");
