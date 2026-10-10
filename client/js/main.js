@@ -364,6 +364,7 @@ $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
 $("#followswitch").checked = settings.cameraFollows;
+$("#battlecamswitch").checked = settings.battleCam;
 $("#invertswitch").checked = settings.invertTilt;
 $("#shakeswitch").checked = settings.shake;
 $("#dragslider").value = Math.round(settings.dragSpeed * 100);
@@ -1442,6 +1443,7 @@ $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloat
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
+$("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
 $("#dragslider").addEventListener("input", (event) => ($("#dragname").textContent = `${event.target.value}%`));
@@ -1607,11 +1609,11 @@ function applySetting(key, value) {
 }
 
 // The camera's settings (Game options), as the game takes them (app/game.js cameraSettings)
-const CAMERA_SETTINGS = ["cameraFollows", "dragSpeed", "invertTilt", "shake"];
+const CAMERA_SETTINGS = ["cameraFollows", "battleCam", "dragSpeed", "invertTilt", "shake"];
 
 function applyCamera() {
     if (state.game) {
-        state.game.cameraSettings = { follows: settings.cameraFollows, shake: settings.shake, drag: settings.dragSpeed, invert: settings.invertTilt };
+        state.game.cameraSettings = { follows: settings.cameraFollows, battle: settings.battleCam, shake: settings.shake, drag: settings.dragSpeed, invert: settings.invertTilt };
     }
 }
 

@@ -207,7 +207,8 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadSettings(), SETTINGS_DEFAULTS);
         assert.equal(SETTINGS_DEFAULTS.minimap, true, "the minimap starts on");
         assert.equal(SETTINGS_DEFAULTS.sound, true, "and so does the sound");
-        assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [true, 1, false, true], "and the camera as it's always been");
+        assert.deepEqual([SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [1, false, true], "and the camera's turning as it's always been");
+        assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.battleCam], [false, true], "not following round behind the player, but framing fights");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
@@ -231,6 +232,20 @@ describe("saving (save.js)", () => {
         // Set again, they're remembered
         saveSettings({ effectsVolume: 0.3 });
         assert.equal(loadSettings().effectsVolume, 0.3);
+    });
+
+    it("forgets following saved when the camera followed by default, for today's default (not following), keeping it once it's set again", () => {
+        const items = useStorage();
+
+        items.set("pellagos.settings", JSON.stringify({ minimap: false, cameraFollows: true, effectsVolume: 0.3, volumeScale: 2 }));
+
+        const settings = loadSettings();
+
+        assert.equal(settings.cameraFollows, false);
+        assert.deepEqual([settings.minimap, settings.effectsVolume, settings.battleCam], [false, 0.3, true]);
+
+        saveSettings({ cameraFollows: true });
+        assert.equal(loadSettings().cameraFollows, true);
     });
 
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {

@@ -281,6 +281,8 @@ const REACH_ROUND = 1;
 const _point = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _toCamera = new THREE.Vector3();
+const _eye = new THREE.Vector3();
+const _knee = new THREE.Vector3();
 const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
@@ -778,13 +780,15 @@ export class View {
     }
 
     /**
-     * The height maps ({ heights, buildings }, each with `at(x, z)`: how high what stands on a
-     * square is, metres: town3d.js heightMap's), for seeing when anything hides the player, and
-     * coming in closer than buildings; null for none (indoors).
+     * The height maps ({ heights, buildings, props }, each with `at(x, z)`: how high what stands
+     * on a square is, metres: town3d.js heightMap's), for seeing when anything hides the player,
+     * coming in closer than buildings, and (with the props too) where to look at a fight from;
+     * null for none (indoors).
      */
     setOccluders(town) {
         this.occluders = town?.heights ?? null;
         this.buildings = town?.buildings ?? null;
+        this.props = town?.props ?? null;
         this.pulled = 0;
         this.lifted = 0;
     }
@@ -1483,15 +1487,16 @@ export class View {
         }
     }
 
-    /** Is anything on the height map between the camera and a point? */
-    hidden(point) {
-        const heights = this.occluders;
-
+    /**
+     * Is anything on the height map (or `heights`, with `at(x, z)`) between the camera (or an `eye`:
+     * a Vector3) and a point?
+     */
+    hidden(point, eye = this.camera.position, heights = this.occluders) {
         if (!heights) {
             return false;
         }
 
-        _toCamera.copy(this.camera.position).sub(point);
+        _toCamera.copy(eye).sub(point);
 
         const away = Math.min(40, _toCamera.length());
 
@@ -1514,6 +1519,29 @@ export class View {
         }
 
         return false;
+    }
+
+    /**
+     * How many of some points (Vector3s: those fighting's chests) anything on the height map would
+     * hide from the camera looking from `yaw` (radians, as `this.yaw`) at where it looks now, as
+     * far off and as far down as asked (0 indoors): what the battle cam keeps clear of (camera.js).
+     */
+    hiddenFrom(yaw, points) {
+        if (!this.occluders) {
+            return 0;
+        }
+
+        const { pitch, distance } = this.#framed();
+        const tilt = (Math.max(0, pitch) * Math.PI) / 180;
+        const across = Math.cos(tilt) * distance;
+
+        const { occluders, props } = this;
+        const heights = props ? { at: (x, z) => Math.max(occluders.at(x, z), props.at(x, z)) } : occluders;
+
+        _eye.set(this.focus.x + Math.sin(yaw) * across, this.focus.y + LOOK_UP + Math.sin(tilt) * distance, this.focus.z + Math.cos(yaw) * across);
+
+        // (Each seen at its knees as well as its chest: a prop hides the one, a building both)
+        return points.filter((point) => this.hidden(point, _eye, heights) || this.hidden(_knee.copy(point).setY(point.y - 0.6), _eye, heights)).length;
     }
 
     // Open a hole through whatever hides the player (or close it when nothing does)

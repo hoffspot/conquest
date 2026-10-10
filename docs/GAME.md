@@ -1334,7 +1334,9 @@ change) greyed the lamplit taproom and dulled the painted colours, and Khronos N
 taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
-with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
+with them, and with **Camera follows** turned on (Game options; off to start with, below) swings
+round behind them as follows. Turned off, it keeps the way it's turned and its tilt as they walk,
+only keeping up with them (and in a fight, framing it as below). Following, it keeps up with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
 keeping them in view at its distance (the camera study's recommendation 2, as Cinemachine's lazy
 follow does). Walking across its view, it swings round after them; walking towards it, it backs
 away rather than turning round, coming round only as they go by it. Walking away from it or
@@ -1351,11 +1353,22 @@ camera looks turns on it.
 touch suits, not a lock the player turns on). Whoever the player's fighting (the one they're set
 on, or else the nearest coming for them; and the last of those for 2 seconds after, through a
 lull: game.js `#kept`, `FIGHT_VIEW`):
-- **The camera doesn't swing round behind the player** as they move about, but turns only as far
-  as keeps both of them within 60% of the way from the middle of the view to its side (camera.js
-  `keep`: the least turn, 5 degrees at a time, either way round; if none does, the one that keeps
-  them nearest it). A drag holds it, as ever, and a second after it's let go, it brings the foe
-  back into view.
+- **The battle cam** (Game options, on to start with; following or not: camera.js `battle`,
+  `#framing`) swings round to look at the fight three-quarters on: 60 degrees round from straight
+  behind the player looking at their foe, either side. Of the two, and of those a step (15 degrees)
+  or two nearer behind them or further round, it takes the one that leaves the fewest of them
+  hidden (the line from each one's chest and knees to where the camera would be, over the town's
+  buildings, trees and props too, a well's roof or a stall, and the world's trees: view.js
+  `hiddenFrom`, town3d.js `props`) or out of the view (as below: a foe far off, a bow's shot away,
+  brings it nearer behind them); of those as clear, the one it turns least to, each step off
+  counting as 30 degrees more turning and the side it's on 45 less, so it keeps to its side as
+  the foe steps about rather than swapping round. A drag holds it, and a second after it's let
+  go, it frames the fight again.
+- **With the battle cam off, it doesn't swing round behind the player** as they move about, but
+  turns only as far as keeps both of them within 60% of the way from the middle of the view to
+  its side (camera.js `keep`: the least turn, 5 degrees at a time, either way round; if none does,
+  the one that keeps them nearest it), following or not. A drag holds it, as ever, and a second
+  after it's let go, it brings the foe back into view.
 - **It leans towards the foe:** 40% of the way, up to 4.5 metres, and no more than a quarter of
   the camera's distance across the ground (`LEAN`), so a foe far off doesn't lean the player out
   of the bottom of the picture.
@@ -1379,8 +1392,10 @@ once (by its shader: the fragment's own depth, so no transparency, nothing drawn
 their shadows whole), as they're put on.
 
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
-follows** (on): off, it keeps the way it's turned and its tilt as the player walks, only keeping
-up with them; **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
+follows** (off): on, it swings round behind the player as they walk (above); off, it keeps the
+way it's turned and its tilt as they walk, only keeping up with them (following saved before it
+was off to start with is forgotten once, for the new default: save.js `cameraDefaults`);
+**Battle cam** (on): in a fight, it frames it three-quarters on (above); **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
 **Invert tilt** (off): dragging up looks down; **Screen shake** (on): off, the greater spells
 don't shake it.
 
@@ -4432,7 +4447,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   not turning itself while held even as they walk, and swinging back behind them once let go and
   walking; starting 35 degrees down and looking up to 45 degrees over the horizon at most, easing
   back down once they walk if it was looking up; catching up without turning when the player
-  comes back to life elsewhere, and leaning towards a foe.
+  comes back to life elsewhere, and leaning towards a foe. With the battle cam, in a fight
+  (following turned off or on), swinging round to see them both 60 degrees from behind the
+  player; round the other way, or nearer behind them or further round, where what stands there
+  would hide them; nearer behind them for a foe a bow's shot away, keeping both in view; keeping
+  to the side it's on; held by a drag and framing the fight again a moment after it's let go;
+  and turned off, keeping the foe in view by the least turn, following or not.
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
@@ -4464,7 +4484,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving
   (and what's been said in talks, and what's been found of the world, for the saved character
   only),
-  heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
+  heroes (and forgetting volumes saved on the old scale, and camera following saved when it was
+  on to start with), the minimap's colours (in the town and
   inside) and its patches of the world (painted the same a step at a time as at once; the next
   painted ahead of the player while they're well inside this one, and shown before its edge would
   show), the action wheels (which of eight slices a flick is in, its shapes, its

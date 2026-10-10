@@ -515,6 +515,7 @@ const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 const _focus = new THREE.Vector3();
 const _gazeAt = new THREE.Vector3();
 const _lean = new THREE.Vector3();
+const _foeChest = new THREE.Vector3();
 const _looking = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
@@ -728,7 +729,7 @@ export class Game {
          * how far a drag turns and tilts it (times DRAG_TURN and DRAG_TILT), and whether dragging
          * up tilts it down rather than up.
          */
-        this.cameraSettings = { follows: true, shake: true, drag: 1, invert: false };
+        this.cameraSettings = { follows: false, battle: true, shake: true, drag: 1, invert: false };
 
         // (Who the camera's kept in view in a fight, and till when after: #kept)
         this.fightView = null;
@@ -1139,6 +1140,7 @@ export class Game {
         this.occluders = {
             heights: { at: (x, z) => Math.max(this.town.heights.at(x, z), this.chunks?.heightAt(x, z) ?? 0) },
             buildings: this.town.buildings,
+            props: this.town.props,
         };
         view.setOccluders(this.occluders);
         view.setGround(this.groundOf("town"));
@@ -2897,12 +2899,16 @@ export class Game {
         }
 
         this.cameraFollow.follows = this.cameraSettings.follows;
+        this.cameraFollow.battle = this.cameraSettings.battle;
 
         // (In a fight, whoever it is kept in view: within so much of the way from the middle of the
-        // view to its side, as wide as the screen is)
+        // view to its side, as wide as the screen is; with the battle cam, them and the player
+        // seen clear of what stands round, where they can be)
         const [ox, oz] = foe ? this.originOf(foe.map) : [0, 0];
         const lens = this.view.camera;
         const across = 2 * Math.atan(Math.tan((lens.fov * Math.PI) / 360) * lens.aspect);
+        const seen = foe && this.avatars.get(foe.id);
+        const foeChest = seen ? seen.point(0.55, _foeChest) : null;
         const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
@@ -2910,10 +2916,10 @@ export class Game {
             away,
             keep: foe ? { x: ox + foe.x, z: oz + foe.y } : null,
             half: (across / 2) * FIGHT_VIEW.margin,
+            blocked: foeChest ? (way) => this.view.hiddenFrom(way, [chest, foeChest]) : undefined,
         });
-        const seen = foe && this.avatars.get(foe.id);
 
-        this.view.setFoe(seen ? seen.point(0.55) : null, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
+        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
         this.#threats();
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
