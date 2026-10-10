@@ -980,6 +980,7 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(timeLeft(245000), "4:05");
         assert.equal(timeLeft(400), "0:01", "(rounded up: not 0:00 while it's there)");
         assert.equal(timeLeft(-5), "0:00");
+        assert.equal(timeLeft(3600000), "60:00", "(an hour, the whole of Summon's or Zombify's, in minutes)");
         assert.equal(memberKind({ kind: "adventurer", calling: "warrior" }), "Hired warrior");
         assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
         assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");
