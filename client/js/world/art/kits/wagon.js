@@ -6,7 +6,10 @@
 // empty, going back for more. Its wheels turn as it goes.
 //
 // Built as the kits are, in world pixels (a metre is five), then drawn at a metre's scale: the
-// wagon behind the ox, both facing +z (as a creature does, beasts/beast.js).
+// wagon behind the ox, both facing +z (as a creature does, beasts/beast.js). Drawn along the way
+// the ox has gone (trail), as a wagon follows its team round a corner, not turned with the ox: its
+// tail, four metres behind the ox, would swing out into whatever's beside its way (a gate's side,
+// the ox turning off as it's through).
 
 import * as THREE from "three";
 import { createRandom } from "../../../core/random.js";
@@ -29,20 +32,65 @@ export const WAGON = Object.freeze({ long: 2.5, wide: 1.25, floor: 0.88, sides: 
 /** What a wagon can be laden with (core/war/war.js RESOURCES, or an army's supplies), or null: empty. */
 export const LADEN = Object.freeze(["wood", "stone", "metal", "supplies"]);
 
+/** How far apart the points of an ox's track are kept (metres): the way its wagon's drawn along. */
+const TRACK = 0.2;
+
+/** How far an ox goes from one frame to the next (metres) that's taken to be put there, not walked. */
+const PUT = 2;
+
+/**
+ * Where a wagon's drawn behind its ox, along the way the ox has gone: the middle of its bed's front
+ * `front` metres back along `track` (where the ox has been, newest first, [x, z] metres) from where
+ * it is (`at`), its tail `long` metres further back along it; straight back from the track's end,
+ * the way the ox faces (`facing`: radians from +z towards +x), where the track's shorter. Returns
+ * { at ([x, z]: the middle of its bed's front), facing (the way the bed faces, as the ox's) }.
+ */
+export function trail(track, at, facing, front, long = WAGON.long) {
+    const back = (metres) => {
+        let [x, z] = at;
+        let left = metres;
+
+        for (const [px, pz] of track) {
+            const d = Math.hypot(px - x, pz - z);
+
+            if (d >= left && d > 1e-9) {
+                return [x + ((px - x) / d) * left, z + ((pz - z) / d) * left];
+            }
+
+            [x, z, left] = [px, pz, left - d];
+        }
+
+        return [x - Math.sin(facing) * left, z - Math.cos(facing) * left];
+    };
+    const [head, tail] = [back(front), back(front + long)];
+
+    return { at: head, facing: Math.atan2(head[0] - tail[0], head[1] - tail[1]) };
+}
+
 /**
  * A wagon drawn behind an ox of `ox`'s measures (metres, as drawn: its body's `length`, how high
  * it stands at the shoulder, `height`, and how wide its chest, `width`), laden with `load`, in
- * its `people`'s timber. Returns { object (in metres), wheels (each turned about its axle, x),
- * setLoad(load), dispose() }.
+ * its `people`'s timber. Returns { object (in metres: the ox's shafts and yoke, and the bed),
+ * bed (the wagon itself: its bed, wheels and load, about the middle of its bed's front, `front`
+ * metres behind the ox's middle), front, wheels (each turned about its axle, x), setLoad(load),
+ * dispose() }.
  */
 export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
     const stuff = WORKS_STUFF[people] ?? WORKS_STUFF.human;
     const object = new THREE.Group();
+    const bed = new THREE.Group();
+    const onBed = new THREE.Group();
     const front = ox.length * 0.55 + WAGON.gap;
     const back = front + WAGON.long;
     const solid = new Solid();
+    const shafts = new Solid();
 
     object.name = "wagon";
+    bed.name = "bed";
+    bed.position.z = -front;
+    onBed.position.z = front;
+    bed.add(onBed);
+    object.add(bed);
 
     // The bed: its floor on two beams along it, boards along its sides and across its ends, a
     // stake at each corner and two along each side
@@ -93,14 +141,15 @@ export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
     const [low, high] = [ox.height * 0.7, ox.height * 0.96];
 
     for (const side of [-1, 1]) {
-        solid.beam([m(side * (WAGON.wide / 2 - 0.12)), m(floor - 0.06), m(z1 + 0.3)], [m(side * spread), m(low), m(z1 + 0.02)], m(0.08), m(0.08), timber);
-        solid.beam([m(side * spread), m(low), m(z1 + 0.02)], [m(side * spread), m(low + 0.04), m(neck + 0.1)], m(0.08), m(0.08), timber);
-        solid.beam([m(side * spread), m(low + 0.02), m(neck)], [m(side * ox.width * 0.6), m(high), m(neck)], m(0.09), m(0.09), timber);
+        shafts.beam([m(side * (WAGON.wide / 2 - 0.12)), m(floor - 0.06), m(z1 + 0.3)], [m(side * spread), m(low), m(z1 + 0.02)], m(0.08), m(0.08), timber);
+        shafts.beam([m(side * spread), m(low), m(z1 + 0.02)], [m(side * spread), m(low + 0.04), m(neck + 0.1)], m(0.08), m(0.08), timber);
+        shafts.beam([m(side * spread), m(low + 0.02), m(neck)], [m(side * ox.width * 0.6), m(high), m(neck)], m(0.09), m(0.09), timber);
     }
 
-    solid.beam([m(-ox.width * 0.62), m(high), m(neck)], [m(ox.width * 0.62), m(high), m(neck)], m(0.14), m(0.1), timber);
+    shafts.beam([m(-ox.width * 0.62), m(high), m(neck)], [m(ox.width * 0.62), m(high), m(neck)], m(0.14), m(0.1), timber);
 
-    object.add(scaled(solid.toObject()));
+    object.add(scaled(shafts.toObject()));
+    onBed.add(scaled(solid.toObject()));
 
     // Its wheels: a rim of felloes, spokes to a hub; each turned about its own axle as it goes
     const wheels = [];
@@ -111,7 +160,7 @@ export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
 
             pivot.position.set(side * (WAGON.wide / 2 + 0.16), WAGON.wheel, z);
             pivot.add(scaled(wheelOf(stuff)));
-            object.add(pivot);
+            onBed.add(pivot);
             wheels.push(pivot);
         }
     }
@@ -126,7 +175,7 @@ export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
 
         if (laden) {
             laden.position.set(0, floor + 0.04, (z0 + z1) / 2);
-            object.add(laden);
+            onBed.add(laden);
         }
     };
 
@@ -134,6 +183,8 @@ export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
 
     return {
         object,
+        bed,
+        front,
         wheels,
         setLoad,
         dispose: () => dispose(object),
@@ -142,19 +193,52 @@ export function wagonOf(ox, { load = null, people = "human", seed = 1 } = {}) {
 
 /**
  * An ox (a BeastAvatar of beasts/looks.js ox) put in a wagon's shafts: the wagon behind it, laden
- * with `load`; its wheels turning as far as the ox goes. The ox's avatar's `wagon` is the wagon
- * (wagonOf's), to lade or empty.
+ * with `load`, drawn along the way the ox has gone (trail); its wheels turning as far as the ox
+ * goes. The ox's avatar's `wagon` is the wagon (wagonOf's), to lade or empty.
  */
 export function hitch(avatar, look, { load = null, people = "human", seed = 1 } = {}) {
     const scale = avatar.scale ?? 1;
     const wagon = wagonOf({ length: look.length * scale, height: look.height * scale, width: look.width * look.chest * scale }, { load, people, seed });
     const update = avatar.update.bind(avatar);
     const dispose = avatar.character.dispose;
+    // (Where the ox has been, newest first, as far back as its wagon reaches)
+    const track = [];
+    const reach = wagon.front + WAGON.long + TRACK;
 
     avatar.object.add(wagon.object);
     avatar.wagon = wagon;
     avatar.update = (dt, ...rest) => {
         update(dt, ...rest);
+
+        const { position, rotation } = avatar.object;
+        const at = [position.x, position.z];
+        const moved = track.length ? Math.hypot(at[0] - track[0][0], at[1] - track[0][1]) : Infinity;
+
+        // (Put somewhere, not walked there: its track begun again)
+        if (moved > PUT) {
+            track.length = 0;
+        }
+
+        if (moved >= TRACK) {
+            track.unshift(at);
+
+            for (let k = 1, length = 0; k < track.length; k++) {
+                length += Math.hypot(track[k][0] - track[k - 1][0], track[k][1] - track[k - 1][1]);
+
+                if (length > reach) {
+                    track.length = k + 1;
+                    break;
+                }
+            }
+        }
+
+        // (The bed where it's drawn along the track, in the ox's own frame)
+        const drawn = trail(track, at, rotation.y, wagon.front);
+        const [dx, dz] = [drawn.at[0] - at[0], drawn.at[1] - at[1]];
+        const [c, s] = [Math.cos(rotation.y), Math.sin(rotation.y)];
+
+        wagon.bed.position.set(dx * c - dz * s, 0, dx * s + dz * c);
+        wagon.bed.rotation.y = drawn.facing - rotation.y;
 
         const turned = (avatar.speed * dt) / WAGON.wheel;
 
