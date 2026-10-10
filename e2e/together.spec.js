@@ -297,6 +297,156 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await guestContext.close();
 });
 
+// Two players make a party (core/host.js PARTY, the "party" command): asked from the party menu,
+// said no to, asked again and said yes to; each has the other's icon at the top of their party,
+// the leader crowned; allied in both worlds; they talk in its chat (core/netplay.js: sent to
+// those in it alone), the Party button counting what's unseen; one leaves, and with one left,
+// it's no more
+test("two players make a party: one asks from the party menu, the other says no, then yes; each has the other's icon at the top of their party, the leader crowned, allied in both worlds; they talk in its chat, unread lines on the Party button; one leaves, and the party's no more", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // The host asks Bryn from the party menu; Bryn says no, and the host's told
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const asking = menu.locator('.party-others .party-player[data-id="guest-1"] .party-invite');
+    const asked = guest.getByRole("dialog", { name: `${ada} asks you to join their party.` });
+
+    await host.locator("#partybutton").click();
+    await expect(menu).toBeVisible();
+    await expect(asking).toHaveText("Invite");
+    await asking.click();
+    await expect(asking).toHaveText("Asked", { timeout: 30000 });
+    await expect(asking).toBeDisabled();
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Decline" }).click();
+    await expect(host.locator("#banner")).toContainText("Bryn says no to your party.", { timeout: 30000 });
+    await expect(asking).toHaveText("Invite", { timeout: 30000 });
+
+    // Asked again, Bryn says yes: a party of two, the host leading it
+    await asking.click();
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Accept" }).click();
+    await expect(host.locator("#banner")).toContainText("Bryn joins the party.", { timeout: 30000 });
+    await expect(guest.locator("#banner")).toContainText(`You join ${ada}'s party.`, { timeout: 30000 });
+    await expect(menu.locator('.party-players .party-player[data-id="player"] .party-name')).toHaveText(`♛ ${ada} (you)`, { timeout: 30000 });
+    await expect(menu.locator('.party-players .party-player[data-id="guest-1"]').getByRole("button", { name: "Make leader" })).toBeVisible();
+    await menu.getByRole("button", { name: "Close" }).click();
+
+    // Each has the other's icon at the top of their party, gold-framed; the leader crowned
+    await expect(host.locator("#party .member").first()).toHaveAttribute("data-id", "guest-1", { timeout: 30000 });
+    await expect(host.locator('#party .member[data-id="guest-1"]')).toHaveClass(/\bplayer\b/);
+    await expect(host.locator('#party .member[data-id="guest-1"]')).not.toHaveClass(/\bleader\b/);
+    await expect(guest.locator("#party .member").first()).toHaveAttribute("data-id", "player", { timeout: 30000 });
+    await expect(guest.locator('#party .member[data-id="player"]')).toHaveClass(/\bleader\b/);
+    await expect(guest.locator('#party .member[data-id="player"]')).toHaveAttribute("aria-label", `${ada}, leading your party`);
+
+    // Both worlds alike: the same party, and the two allied, whatever their peoples
+    for (const page of [host, guest]) {
+        const party = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const [ada, bryn] = [game.battle.actor("player"), game.battle.actor("guest-1")];
+            const { leader, members } = game.host.partyFor("guest-1");
+
+            return { leader, members, allied: game.battle.allied(ada, bryn), hostile: game.battle.hostile(ada, bryn) };
+        });
+
+        expect(party).toEqual({ leader: "player", members: ["player", "guest-1"], allied: true, hostile: false });
+    }
+
+    // Bryn says something in the party's chat: the host's Party button counts it, and the menu
+    // opens on the chat, the line in it, and counts it seen
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const badge = host.locator("#partyunread");
+
+    await guest.locator("#partybutton").click();
+    await expect(theirs).toBeVisible();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await theirs.getByRole("textbox", { name: "Something to say to your party" }).fill("Over here!");
+    await theirs.getByRole("textbox", { name: "Something to say to your party" }).press("Enter");
+    await expect(theirs.locator(".chat-line.mine").last()).toHaveText("You: Over here!", { timeout: 30000 });
+    await expect(badge).toHaveText("1", { timeout: 30000 });
+    await expect(host.locator("#partybutton")).toHaveAttribute("aria-label", "Party, 1 unread message");
+    await host.locator("#partybutton").click();
+    await expect(menu.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+    await expect(menu.locator(".chat-line:not(.system)").last()).toHaveText("Bryn: Over here!");
+    await expect(menu.locator(".chat-line.system").first()).toHaveText("Bryn joins the party.");
+    await expect(badge).toBeHidden();
+
+    // The host answers with a quick phrase: Bryn, on the chat already, sees it there (not counted)
+    await menu.getByRole("button", { name: "On my way!" }).click();
+    await expect(theirs.locator(".chat-line:not(.system)").last()).toHaveText(`${ada}: On my way!`, { timeout: 30000 });
+    await expect(menu.locator(".chat-line.mine").last()).toHaveText("You: On my way!");
+    await expect(guest.locator("#partyunread")).toBeHidden();
+    await menu.getByRole("button", { name: "Close" }).click();
+
+    // Bryn leaves (pressed twice, to be sure): the party's no more, in both worlds
+    const leave = theirs.locator('.party-players .party-player[data-id="guest-1"] .party-sure');
+
+    await theirs.getByRole("tab", { name: "Party" }).click();
+    await expect(leave).toHaveText("Leave party");
+
+    // (Both presses at once: two worlds drawn in software can starve a page of frames for longer
+    // than the second press is waited for, DISMISS_SURE_MS, between two of Playwright's clicks)
+    expect(await leave.evaluate((button) => {
+        button.click();
+
+        const asked = button.textContent;
+
+        button.click();
+
+        return asked;
+    })).toBe("Leave?");
+    await expect(guest.locator("#banner")).toContainText("You leave the party.", { timeout: 30000 });
+    await expect(host.locator("#banner")).toContainText("The party's no more", { timeout: 30000 });
+    await expect(host.locator('#party .member[data-id="guest-1"]')).toHaveCount(0, { timeout: 30000 });
+    await expect(guest.locator('#party .member[data-id="player"]')).toHaveCount(0, { timeout: 30000 });
+
+    for (const page of [host, guest]) {
+        expect(await page.evaluate(() => window.pellagos.game.host.partyFor("guest-1"))).toBe(null);
+    }
+
+    // (Its comings and goings in the chat too; and there's no one to talk to now)
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await expect(menu.locator(".chat-line.system").last()).toHaveText("The party's no more: no one's left in it with you.");
+    await expect(menu.getByRole("textbox", { name: "Something to say to your party" })).toBeDisabled();
+
+    expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

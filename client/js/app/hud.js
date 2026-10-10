@@ -16,6 +16,7 @@
 // help glowing; tapped or held, the game's told.
 
 import { ICONS, useDefs } from "./icons.js";
+import { unreadLabel } from "./partypanel.js";
 
 // How far a message is kept from the buttons along the top and the quick actions (pixels); and
 // with no quick actions up, how far from the bottom it can come
@@ -113,7 +114,7 @@ function pressable(root, onPress) {
 }
 
 // What each kind of the party's called, said with their name
-const PARTY_KINDS = { player: "player", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", unit: "with you" };
+const PARTY_KINDS = { player: "in your party", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", unit: "with you" };
 
 /**
  * How big a bar's drawn (a share of its full size, and as faint: 0, not at all) over a character
@@ -438,6 +439,23 @@ export class Hud {
         }
     }
 
+    /**
+     * How many lines said in the player's party they haven't seen (partypanel.js unreadLabel), as
+     * a badge on the Party button: none, no badge.
+     */
+    partyUnread(count) {
+        const badge = this.partyButton?.querySelector("#partyunread");
+        const label = unreadLabel(count);
+
+        if (!badge || badge.textContent === label) {
+            return;
+        }
+
+        badge.textContent = label;
+        badge.hidden = !label;
+        this.partyButton.setAttribute("aria-label", label ? `Party, ${count} unread message${count === 1 ? "" : "s"}` : "Party");
+    }
+
     /** Mark another character as one of the player's party (its name in green), or not. */
     setAlly(id, ally) {
         this.tracked.get(id)?.classList.toggle("ally", ally);
@@ -683,7 +701,8 @@ export class Hud {
     /**
      * The icons down the left side of the screen, under the minimap and the Party button (over the
      * thumb stick, if it's shown), for the player's party, in order (none: gone): [{ id, name, hp, maxHp, kind, ally,
-     * waiting, away, left, picture }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
+     * waiting, away, left, picture, leader }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
+     * `leader`: a player leading the party, crowned;
      * `ally`: the one the player's chosen to help, its frame glowing green; `waiting`: told to wait
      * where they are; `away`: not where the player is; `left`: a called creature's time, the share
      * of it left, or null; `picture` as attackers'). As many as fit (partyFit), shrunk to, then a
@@ -716,10 +735,10 @@ export class Hud {
             column.style.setProperty("--member-size", `${size}px`);
         }
 
-        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null }, k) => {
+        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false }, k) => {
             const icon = this.partyIcons.get(id) ?? this.#memberIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
-            const look = `${kind}|${ally}|${waiting}|${away}|${name}`;
+            const look = `${kind}|${ally}|${waiting}|${away}|${name}|${leader}`;
 
             // (Under the Party button)
             if (column.children[k + 1] !== icon.root) {
@@ -729,9 +748,9 @@ export class Hud {
             // (What doesn't change from frame to frame, set only when it does)
             if (icon.look !== look) {
                 icon.look = look;
-                icon.root.className = `member ${kind}${ally ? " ally" : ""}${waiting ? " waiting" : ""}${away ? " away" : ""}${icon.painted ? " painted" : ""}`;
+                icon.root.className = `member ${kind}${ally ? " ally" : ""}${waiting ? " waiting" : ""}${away ? " away" : ""}${leader ? " leader" : ""}${icon.painted ? " painted" : ""}`;
                 icon.initial.textContent = name.slice(0, 1).toUpperCase();
-                icon.root.setAttribute("aria-label", `${name}, ${PARTY_KINDS[kind] ?? PARTY_KINDS.unit}${waiting ? ", waiting" : ""}${ally ? ", chosen to help" : ""}`);
+                icon.root.setAttribute("aria-label", `${name}, ${leader ? "leading your party" : (PARTY_KINDS[kind] ?? PARTY_KINDS.unit)}${waiting ? ", waiting" : ""}${ally ? ", chosen to help" : ""}`);
                 icon.root.setAttribute("aria-pressed", String(ally));
             }
 

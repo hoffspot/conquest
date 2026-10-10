@@ -1477,6 +1477,10 @@ export const RECORDED = Object.freeze({
         { file: "pin-set-1.a08d71de.mp3", from: ["vcsl-glock-medium-g4-01"] },
         { file: "pin-set-2.26d90eee.mp3", from: ["vcsl-glock-medium-c5-01"] },
     ],
+    chatHeard: [
+        { file: "chat-heard-1.b330565d.mp3", from: ["vcsl-glock-medium-g4-01","vcsl-glock-medium-c5-01"] },
+        { file: "chat-heard-2.7266dccb.mp3", from: ["vcsl-glock-medium-g4-01","vcsl-glock-medium-c5-01"] },
+    ],
     buyDenied: [
         { file: "buy-denied-1.2d5d7aa3.mp3", from: ["freesound-722038"] },
         { file: "buy-denied-2.bb08ba38.mp3", from: ["freesound-722038"] },

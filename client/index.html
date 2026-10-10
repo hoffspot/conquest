@@ -137,6 +137,7 @@
             <div id="party" role="group" aria-label="Your party">
                 <button type="button" id="partybutton" class="hud-button" aria-label="Party" title="Party (P)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 19.5c0-3.4 2.7-5.6 6-5.6s6 2.2 6 5.6M15.5 5.3a3 3 0 0 1 0 5.9M17.5 14.2c2.1.6 3.5 2.5 3.5 5.3"/></svg>
+                    <span id="partyunread" class="party-badge" aria-hidden="true" hidden></span>
                 </button>
             </div>
             <div id="banner" role="status" hidden></div>
@@ -347,6 +348,11 @@
                     <label class="switch option">
                         <span class="text">Resist all summons<small>Another player's Summon: said no to, without asking</small></span>
                         <input type="checkbox" id="resistswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Refuse party invites<small>Another player asking you to their party: let go unanswered, without asking</small></span>
+                        <input type="checkbox" id="refuseswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="level" id="qualityoption">

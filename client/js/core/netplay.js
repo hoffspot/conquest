@@ -26,12 +26,17 @@
 // the host found them, and taken by a joined copy rather than found again: what each copy has of
 // the meshes (made as each has needed them) doesn't matter.
 //
+// What's said in a party (party chat) isn't done to the world, and isn't for everyone in it: a
+// line goes to the host, which sends it on to those in the sayer's party alone (Hosting.chat),
+// so no one else's game ever has it.
+//
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
 //   joiner -> host   { kind: "hello", version, character }   (character: as Host.join takes it)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again)
 //                    { kind: "ping", t }                       (t: the joiner's clock, ms)
+//                    { kind: "chat", text }                    (a line to their party)
 //   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot }
 //                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
 //                    { kind: "motion", step, units }           (base64: core/motion.js)
@@ -39,18 +44,20 @@
 //                    { kind: "state", snapshot }               (the world again)
 //                    { kind: "paused", paused }                (the host's world stopped, or going again)
 //                    { kind: "refused", reason }
+//                    { kind: "chat", from, name, text }        (a line said in their party)
+//                    { kind: "unsaid", reason }                (one of theirs not said: CHAT_REFUSED)
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
 import { STEP_MS } from "./battle.js";
-import { HIRES } from "./host.js";
+import { HIRES, HOST_PLAYER } from "./host.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 100;
+export const NET_VERSION = 102;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -82,6 +89,28 @@ export const NET_REFUSALS = Object.freeze({
     full: "That world's full.",
     character: "Your character couldn't be brought into that world.",
 });
+
+/**
+ * Party chat: the longest line (characters), how many lines one player can say in a while (`burst`
+ * in `burstMs` of the world's time: more is held back), and how many lines a game keeps to show.
+ */
+export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 50 });
+
+/** Why a line wasn't said (as host.js REFUSALS names them). */
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty"]);
+
+/**
+ * A line as it's said: whatever's not to be seen (control characters) and runs of spaces made one
+ * space, trimmed, and CHAT.most characters at most (whole characters: an emoji's never halved).
+ * Nothing to say: "".
+ */
+export function chatLine(text) {
+    if (typeof text !== "string") {
+        return "";
+    }
+
+    return [...text.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim()].slice(0, CHAT.most).join("").trim();
+}
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -156,6 +185,12 @@ export class Hosting {
         /** Told when a player comes (id, peer) or goes (id, peer, their character as it's to be kept). */
         this.onJoin = () => {};
         this.onLeave = () => {};
+
+        /** Told each line said in the host's own player's party: { from, name, text }. */
+        this.onChat = () => {};
+
+        // When each player's lines were said lately (the world's time), to hold back one who says too much
+        this.said = new Map();
 
         host.recorder = (op) => this.#record(op);
     }
@@ -252,9 +287,71 @@ export class Hosting {
                 }
 
                 break;
+            case "chat": {
+                const id = this.players.get(peer);
+                const said = id ? this.#say(id, message.text) : null;
+
+                if (said && !said.ok) {
+                    this.#send(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason }));
+                }
+
+                break;
+            }
             default:
                 break;
         }
+    }
+
+    /**
+     * A line the host's own player says to their party, sent to those in it alone. Returns
+     * { ok: true }, or { ok: false, reason } (CHAT_REFUSED: nothing to say, in no party, or too
+     * many lines too quickly).
+     */
+    chat(text) {
+        return this.#say(HOST_PLAYER, text);
+    }
+
+    // A line said by a player to their party: to each in it (the host's own player told here, the
+    // others sent it, the sayer too), and to no one else
+    #say(id, said) {
+        const text = chatLine(said);
+        const party = this.host.partyFor(id);
+
+        if (!text) {
+            return { ok: false, reason: "empty" };
+        }
+
+        if (!party) {
+            return { ok: false, reason: "unpartied" };
+        }
+
+        const now = this.host.battle.time;
+        const lately = (this.said.get(id) ?? []).filter((at) => at > now - CHAT.burstMs);
+
+        if (lately.length >= CHAT.burst) {
+            this.said.set(id, lately);
+
+            return { ok: false, reason: "chatty" };
+        }
+
+        this.said.set(id, [...lately, now]);
+
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text };
+        const sent = encode({ kind: "chat", ...line });
+
+        for (const member of party.members) {
+            if (member === HOST_PLAYER) {
+                this.onChat(line);
+            } else {
+                const peer = [...this.players].find(([, player]) => player === member)?.[0];
+
+                if (peer !== undefined) {
+                    this.#send(peer, "chat", sent);
+                }
+            }
+        }
+
+        return { ok: true };
     }
 
     // Someone joining, with their character: into the world (by their people's town, if it isn't
@@ -385,6 +482,7 @@ export class Hosting {
         }
 
         this.players.delete(peer);
+        this.said.delete(id);
 
         const character = this.host.leave(id);
 
@@ -463,6 +561,10 @@ export class Joining {
 
         /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
         this.onPong = () => {};
+
+        /** Told each line said in its player's party ({ from, name, text }), and why one of theirs wasn't said (CHAT_REFUSED). */
+        this.onChat = () => {};
+        this.onUnsaid = () => {};
     }
 
     /** Ask to join, as a character (as Host.join takes it). */
@@ -537,9 +639,41 @@ export class Joining {
             case "refused":
                 this.onRefused(message.reason);
                 break;
+            case "chat": {
+                const text = chatLine(message.text);
+
+                if (text && typeof message.from === "string") {
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text });
+                }
+
+                break;
+            }
+            case "unsaid":
+                if (CHAT_REFUSED.includes(message.reason)) {
+                    this.onUnsaid(message.reason);
+                }
+
+                break;
             default:
                 break;
         }
+    }
+
+    /**
+     * A line its player says to their party: to the host, which sends it on to those in it (this
+     * game too, so it's heard back as everyone hears it). Returns { ok: true, pending: true }, or,
+     * with nothing to say, { ok: false, reason: "empty" }.
+     */
+    chat(text) {
+        const line = chatLine(text);
+
+        if (!line) {
+            return { ok: false, reason: "empty" };
+        }
+
+        this.send(encode({ kind: "chat", text: line }));
+
+        return { ok: true, pending: true };
     }
 
     /**

@@ -561,10 +561,13 @@ export class Battle {
      * @param {number} [options.seed] - Seeds the damage rolls.
      * @param {Function} [options.relations] - Whether two characters on different teams are
      *     enemies (the host's: how their peoples stand in the war); else they always are.
+     * @param {Function} [options.allied] - Whether two characters are never enemies, whatever
+     *     their peoples or what's passed between them (the host's: in one party).
      */
-    constructor(world, { seed = 1, relations = null } = {}) {
+    constructor(world, { seed = 1, relations = null, allied = null } = {}) {
         this.world = world;
         this.relations = relations;
+        this.allied = allied;
 
         // The maps (the world itself if it has only the one) and the links between them
         this.maps = world.maps ?? { town: world };
@@ -923,12 +926,18 @@ export class Battle {
     }
 
     /**
-     * Are two characters enemies? Never one of the folk (no one fights them), or itself; always
+     * Are two characters enemies? Never one of the folk (no one fights them), or itself, or one in
+     * the same party (`allied`); always
      * if either's lately struck the other or one of its own (FOE_MS); never on the same team;
      * otherwise as their teams stand (`relations`: the peoples' war), or always, without that.
      */
     hostile(a, b) {
         if (a === b || a.neutral || b.neutral) {
+            return false;
+        }
+
+        // (In one party, the host says: never, whatever their peoples)
+        if (this.allied?.(a, b)) {
             return false;
         }
 
@@ -991,8 +1000,8 @@ export class Battle {
     }
 
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
-    static restore(world, snapshot, { relations = null } = {}) {
-        const battle = new Battle(world, { seed: snapshot.seed, relations });
+    static restore(world, snapshot, { relations = null, allied = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations, allied });
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;

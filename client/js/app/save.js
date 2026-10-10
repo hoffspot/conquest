@@ -65,6 +65,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     zoom: false,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
+    // (Asked to another player's party: let go unanswered, not asked)
+    refuseInvites: false,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
     // walk (off: it stays turned the way it's left); whether in a fight it frames it, three-
     // quarters on and clear of what stands round (the battle cam); how far a drag turns and tilts

@@ -438,7 +438,17 @@ yours, the one who opened it: what others do is done in it, and when you close i
 leave), they're told, and go back to their title screen. A link that drops a moment (a phone
 moving from Wi-Fi to its mobile network) comes back by itself, and everyone's shown what's
 happening meanwhile: reconnecting, the host paused, or waiting for the host. What their
-characters grow into, carry and earn goes with them. Games play together through the relay on the game's server
+characters grow into, carry and earn goes with them. Up to four can play as a **party**: ask
+another from the party menu (**Invite**), and they're asked to Accept, Decline (you're told), or
+Ignore it (let go unanswered after 30 seconds; with **Refuse party invites** in Game options you're
+never asked). In a party, you're never enemies, whatever your peoples; what any of you brings down
+within 40 metres of the others counts for you all (each finds their own loot on it, and a guild's
+request for it counts for each); and each other's icons head your party down the left, the
+leader's crowned. Anyone in it can ask others; its leader can put one out or make another
+leader, and when they leave, the one longest in it leads. The party menu's **Chat** tab is the
+party's own talk (no one outside it sees a word): type a line, or tap a quick phrase ("On my
+way!", "Help!"); Enter opens it ready to type. A chime and a red count on the Party button say
+how many lines you haven't seen. Games play together through the relay on the game's server
 (`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
 See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 

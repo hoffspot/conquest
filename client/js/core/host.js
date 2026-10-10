@@ -291,6 +291,14 @@ export const COMPANION = Object.freeze({ behind: 2 });
 /** How long a player being summoned by another has to come (ms): no answer, and they've resisted. */
 export const SUMMONING_MS = 30000;
 
+/**
+ * Parties of players (docs/GAME.md *Playing in a party*): at most `most` players in one (their
+ * followers and companions besides); how near a foe's fall a member is (`reach`, metres) to
+ * share in it (what's on it, their requests, and as much skill as the foe had hit points: the
+ * Diablo IV way, each their own); how long an invite waits for an answer (`askMs`).
+ */
+export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
+
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
 const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel"]);
@@ -443,7 +451,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 24;
+export const SNAPSHOT_VERSION = 25;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -564,6 +572,15 @@ export const REFUSALS = Object.freeze({
     depot: "A depot can be built only in another people's lands, if we can pay for it, two at most.",
     orders: "Those orders can't be carried out.",
     unsummoned: "No one's calling you.",
+    partied: "They're in a party already.",
+    partyFull: "The party's full: four at most.",
+    asked: "They've been asked already.",
+    uninvited: "No one's asked you to a party.",
+    unpartied: "You're not in a party.",
+    chatty: "Not so fast: give it a moment before saying more.",
+    leader: "Only the party's leader can do that.",
+    member: "They're not in your party.",
+    invitee: "Not someone to ask.",
     outdoors: "There's nowhere to camp in here.",
     settlement: "No camping in town: find an inn.",
     howLong: "Camp for an hour to a day, or till sundown or the morning.",
@@ -645,7 +662,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b) });
         this.#wire();
 
         /**
@@ -853,6 +870,17 @@ export class Host {
 
         /** Players being summoned by another (by id): { by (who), until (when it's taken they've resisted) }. */
         this.summonings = new Map();
+
+        /**
+         * The players' parties, by id: { id, leader (a player's id), members (their ids, the
+         * longest in it first) }; which each player's in (`partyIds`: player id to party id); and
+         * those asked to join one (`invites`, by who's asked: { from (who asked), until (when it
+         * lapses unanswered) }).
+         */
+        this.parties = new Map();
+        this.partyIds = new Map();
+        this.invites = new Map();
+        this.nextParty = 1;
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -1078,6 +1106,15 @@ export class Host {
             this.followers.delete(follower);
         }
 
+        // (Out of their party, and their asking, or being asked, forgotten)
+        this.#quit(id, "left");
+
+        for (const [asked, invite] of [...this.invites]) {
+            if (asked === id || invite.from === id) {
+                this.invites.delete(asked);
+            }
+        }
+
         this.battle.remove(id);
         this.players.delete(id);
         this.#event("leave", { id, name: player.hero.name });
@@ -1267,6 +1304,8 @@ export class Host {
             }
             case "summoned":
                 return this.#answer(player, Boolean(command.come));
+            case "party":
+                return this.#partyCommand(player, command);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -1389,6 +1428,15 @@ export class Host {
         }
 
         this.#keepUp();
+
+        // (Asked to a party, and no answer in time: lapsed, the one who asked told)
+        for (const [id, asked] of [...this.invites]) {
+            if (asked.until <= this.battle.time) {
+                this.invites.delete(id);
+                this.#event("party", { id: asked.from, change: "unanswered", who: id, name: this.players.get(id)?.hero.name ?? "" });
+                this.#event("party", { id, change: "lapsed", from: asked.from });
+            }
+        }
 
         // (Summoned, and no answer in time: resisted)
         for (const [id, asked] of [...this.summonings]) {
@@ -1787,6 +1835,9 @@ export class Host {
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
+            parties: structuredClone([...this.parties.values()]),
+            invites: structuredClone([...this.invites.entries()]),
+            nextParty: this.nextParty,
             hired: [...this.hired],
             wild: [...this.wild.entries()],
             cleared: structuredClone(this.cleared),
@@ -1881,7 +1932,7 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b) });
         host.#wire();
         host.lookAt = snapshot.lookAt;
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
@@ -1909,6 +1960,10 @@ export class Host {
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
+        host.parties = new Map((snapshot.parties ?? []).map((party) => [party.id, structuredClone(party)]));
+        host.partyIds = new Map([...host.parties.values()].flatMap(({ id, members }) => members.map((member) => [member, id])));
+        host.invites = new Map(structuredClone(snapshot.invites ?? []));
+        host.nextParty = snapshot.nextParty ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
         host.cleared = structuredClone(snapshot.cleared ?? []);
@@ -2059,8 +2114,7 @@ export class Host {
                 const fallen = this.battle.actor(event.id);
 
                 if (leader && fallen && !this.players.has(fallen.id) && fallen.kind !== "follower") {
-                    this.#loot(leader, fallen);
-                    this.#felled(leader, fallen);
+                    this.#credit(leader, fallen);
                 }
             }
 
@@ -2076,8 +2130,7 @@ export class Host {
             const fallen = event.type === "death" ? this.battle.actor(event.id) : null;
 
             if (leader && fallen && !this.players.has(fallen.id) && fallen.kind !== "follower" && !this.companions.has(fallen.id)) {
-                this.#loot(leader, fallen);
-                this.#felled(leader, fallen);
+                this.#credit(leader, fallen);
             }
 
             return;
@@ -2139,14 +2192,35 @@ export class Host {
                 const fallen = this.battle.actor(event.id);
 
                 if (by && fallen && !this.players.has(fallen.id)) {
-                    this.#loot(by, fallen);
-                    this.#felled(by, fallen);
+                    this.#credit(by, fallen);
                 }
 
                 break;
             }
             default:
                 break;
+        }
+    }
+
+    // A foe a player (or one of theirs) has felled: what's on it theirs, and it counts for their
+    // requests; and the same for each of their party near it (PARTY.reach, on its map, standing),
+    // each finding their own on it, and each as much the stronger for it as it had hit points (in
+    // their own weapon's skill: a bow's marksman, anything else's blade)
+    #credit(player, fallen) {
+        this.#loot(player, fallen);
+        this.#felled(player, fallen);
+
+        for (const id of this.fellows(player.id)) {
+            const fellow = this.players.get(id);
+            const actor = this.battle.actor(id);
+
+            if (!fellow || !actor || actor.dead || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > PARTY.reach) {
+                continue;
+            }
+
+            this.#loot(fellow, fallen);
+            this.#felled(fellow, fallen);
+            this.#gain(fellow, WEAPONS[actor.weapon]?.attacks.some(({ kind }) => kind === "ranged") ? "marksman" : "blade", fallen.maxHp ?? 0);
         }
     }
 
@@ -6671,6 +6745,194 @@ export class Host {
     /** Whether one with a player (a follower, or a companion) was told to wait where they stood. */
     waiting(id) {
         return Boolean((this.followers.get(id) ?? this.companions.get(id))?.waiting);
+    }
+
+    // --- Parties of players (PARTY) ---
+
+    /** The party a player's in ({ id, leader, members }: the longest in it first), or null. */
+    partyFor(playerId) {
+        return this.parties.get(this.partyIds.get(playerId)) ?? null;
+    }
+
+    /** The other players in a player's party, the longest in it first (none, in none). */
+    fellows(playerId) {
+        return (this.partyFor(playerId)?.members ?? []).filter((id) => id !== playerId);
+    }
+
+    /** Who's asked a player to their party, and till when ({ from, until }), or null. */
+    invitation(playerId) {
+        return this.invites.get(playerId) ?? null;
+    }
+
+    // Two characters who are never enemies (battle.js hostile asks): two players in one party, or
+    // one's and another's (their followers, their creatures), whatever their peoples
+    #allied(a, b) {
+        if (!this.parties.size) {
+            return false;
+        }
+
+        const [oa, ob] = [this.#ownerOf(a), this.#ownerOf(b)];
+
+        return Boolean(oa && ob && oa !== ob && this.partyIds.get(oa) !== undefined && this.partyIds.get(oa) === this.partyIds.get(ob));
+    }
+
+    // The player someone is, or follows (a follower, a creature called or raised), or null
+    #ownerOf(actor) {
+        return actor.kind === "player" ? actor.id : (actor.leader ?? null);
+    }
+
+    // What a player does about parties (a "party" command, `do`): ask another to theirs (`who`:
+    // a player not in one, nor asked already; theirs not full), say yes to being asked (joining
+    // the asker's, or making one with them), say no (the asker told), leave theirs; or, its
+    // leader, put someone out of it or make them its leader
+    #partyCommand(player, { do: what, who = null }) {
+        const party = this.partyFor(player.id);
+
+        switch (what) {
+            case "invite": {
+                const other = this.players.get(who);
+
+                if (!other || who === player.id) {
+                    return refuse("invitee");
+                }
+
+                if (this.partyIds.has(who)) {
+                    return refuse(party && this.partyIds.get(who) === party.id ? "member" : "partied");
+                }
+
+                if (party && party.members.length >= PARTY.most) {
+                    return refuse("partyFull");
+                }
+
+                if (this.invites.has(who)) {
+                    return refuse("asked");
+                }
+
+                const until = this.battle.time + PARTY.askMs;
+
+                this.invites.set(who, { from: player.id, until });
+                this.#event("party", { id: who, change: "invited", from: player.id, name: player.hero.name, until });
+                this.#event("party", { id: player.id, change: "sent", who, name: other.hero.name });
+
+                return OK;
+            }
+            case "accept": {
+                const asked = this.invites.get(player.id);
+                const asker = asked && this.players.get(asked.from);
+
+                if (!asker) {
+                    return refuse("uninvited");
+                }
+
+                if (party) {
+                    return refuse("partied");
+                }
+
+                const theirs = this.partyFor(asker.id);
+
+                if (theirs && theirs.members.length >= PARTY.most) {
+                    return refuse("partyFull");
+                }
+
+                this.invites.delete(player.id);
+
+                // (Into the asker's party; or, in none, a new one, theirs to lead)
+                const joined = theirs ?? { id: `party-${this.nextParty++}`, leader: asker.id, members: [asker.id] };
+
+                if (!theirs) {
+                    this.parties.set(joined.id, joined);
+                    this.partyIds.set(asker.id, joined.id);
+                }
+
+                joined.members.push(player.id);
+                this.partyIds.set(player.id, joined.id);
+                this.#tellParty(joined, { change: "joined", who: player.id, name: player.hero.name });
+
+                return OK;
+            }
+            case "decline": {
+                const asked = this.invites.get(player.id);
+
+                if (!asked) {
+                    return refuse("uninvited");
+                }
+
+                this.invites.delete(player.id);
+                this.#event("party", { id: asked.from, change: "declined", who: player.id, name: player.hero.name });
+
+                return OK;
+            }
+            case "leave":
+                if (!party) {
+                    return refuse("unpartied");
+                }
+
+                this.#quit(player.id, "left");
+
+                return OK;
+            case "remove":
+            case "promote": {
+                if (!party) {
+                    return refuse("unpartied");
+                }
+
+                if (party.leader !== player.id) {
+                    return refuse("leader");
+                }
+
+                if (!party.members.includes(who) || who === player.id) {
+                    return refuse("member");
+                }
+
+                if (what === "remove") {
+                    this.#quit(who, "removed");
+                } else {
+                    party.leader = who;
+                    this.#tellParty(party, { change: "leader", who, name: this.players.get(who)?.hero.name ?? "" });
+                }
+
+                return OK;
+            }
+            default:
+                return refuse("command");
+        }
+    }
+
+    // A player out of their party (`why`: "left", or "removed" by its leader), all of it told: led
+    // by the longest in it after them if they led it; and no party left with one in it
+    #quit(playerId, why) {
+        const party = this.partyFor(playerId);
+
+        if (!party) {
+            return;
+        }
+
+        this.#tellParty(party, { change: why, who: playerId, name: this.players.get(playerId)?.hero.name ?? "" });
+        party.members = party.members.filter((id) => id !== playerId);
+        this.partyIds.delete(playerId);
+
+        if (party.members.length < 2) {
+            for (const id of party.members) {
+                this.partyIds.delete(id);
+                this.#event("party", { id, change: "disbanded" });
+            }
+
+            this.parties.delete(party.id);
+
+            return;
+        }
+
+        if (party.leader === playerId) {
+            party.leader = party.members[0];
+            this.#tellParty(party, { change: "leader", who: party.leader, name: this.players.get(party.leader)?.hero.name ?? "" });
+        }
+    }
+
+    // Something about a party told to each in it (by their id)
+    #tellParty(party, what) {
+        for (const id of party.members) {
+            this.#event("party", { id, party: party.id, ...what });
+        }
     }
 
     // One of a player's party (a follower, or a companion: #companion) told what to do by them:

@@ -2248,7 +2248,7 @@ made first).
   character as they play; the world isn't theirs to keep.
 - **What's shared:** the world and its creatures, fought together; what a creature leaves each
   finds for themselves, seen by them alone. The one way anything passes between players is
-  trading face to face (docs/WILDS.md).
+  trading face to face (docs/WILDS.md); in a party (below), what's brought down counts for each.
 - **Refused:** a game of another version, a character that isn't one, or a world with 8 in it
   already (`NET_REFUSALS`).
 
@@ -2256,6 +2256,40 @@ made first).
 can leave, and the world goes on. When the host closes the world to others (or leaves), those
 still in it go back to their title screen and are told. Menus and the world map don't pause the
 world while anyone else is in it (rule 6, M0).
+
+**Parties** (core/host.js `PARTY`, the `party` command; the party menu, docs/GAME.md *The
+party*). Players play together as a party of up to four (`PARTY.most`):
+- **Asked.** Anyone in a party, or in none, asks another player who's in none (`invite`). The one
+  asked is asked to Accept, Decline (the one who asked is told: "Bryn says no to your party."), or
+  Ignore: let go, and after 30 seconds (`PARTY.askMs`) it lapses, the one who asked told they
+  didn't answer. With **Refuse party invites** in Game options (`refuseInvites`) they're never
+  shown it, and it lapses the same. One asked can't be asked again till they've answered or it's
+  lapsed. Said yes to (`accept`), they're in the asker's party; or, with the asker in none, a new
+  one, the asker leading it. Each in it is told who's come.
+- **Led.** The one leading it is crowned (in the party menu and on their icon); they can put one
+  out (`remove`) or make another leader (`promote`). Anyone can leave (`leave`). When the leader
+  leaves, the one longest in it leads; when one's left in it, it's no more.
+- **Allies.** Those in a party are never enemies (core/battle.js `hostile`: `allied`), whatever
+  their peoples, nor are their followers, called creatures and raised dead (each by whose they
+  are: a unit's `leader`); so they can't strike each other, and are struck by neither.
+- **Shared.** Whatever one of them (or one of theirs) brings down counts for each of the party on
+  the same map within 40 metres of it (`PARTY.reach`), and on their feet: each finds their own
+  loot on it, a guild's request for it counts for each, and each grows as much the stronger for
+  it as it had hit points, in the skill of what's in their own hand (a bow's marksman, anything
+  else's blade: `#credit`).
+- **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
+  24) and done by commands like anything else, so every copy has them alike; what two games share
+  changed (`NET_VERSION` 100).
+- **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
+  What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
+  command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host
+  sends it on, by the relay's `to PEER`, to each of the sayer's party (the sayer too, so all hear
+  it in the same order), telling its own player itself; no one else's game is ever sent it. Each
+  line is tidied (`chatLine`: control characters and runs of spaces made one space, trimmed, 200
+  characters at most, an emoji never halved), and one who says more than 5 lines in 10 seconds of
+  the world's time is held back ("Not so fast"); one in no party, or with nothing to say, isn't
+  heard (`{ kind: "unsaid", reason }`). Nothing's kept with the world: each game keeps the last
+  50 lines it's heard (`CHAT.kept`). What two games say to each other changed (`NET_VERSION` 101).
 
 **When the link falters** (`app/together.js` `RelayLink`, `LINK_TIMING`). A phone moving from Wi-Fi
 to its mobile network, or losing its signal a moment, needn't end the game:
