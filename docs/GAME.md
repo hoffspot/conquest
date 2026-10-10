@@ -648,7 +648,9 @@ stand on (`roomy`: clear of walls), facing what's there. Each townsperson goes r
 each kind its calling goes to (`order: "alternate"`, battle.js `#routine`: never the same kind
 twice running), lingering at each a while (`LINGER`: a few seconds at a way out, up to a quarter
 of a minute at the well or a house), so most of the time they're walking. Each comes out at an
-errand of theirs no player can see, if there's one.
+errand of theirs no player can see, if there's one. Two or three making for the same errand, or
+for the square the player's standing on, stop by whoever's there first rather than in them, and
+are there (*The battle*, *Moving*); none of them walks through the player.
 
 **What they do.** Walking, they swing their free arm, what they carry held as it's carried (a
 pannier, sack or firewood on the back; a jug as a tankard; a fork, broom or staff upright as a
@@ -735,15 +737,26 @@ hundreds has a fight, not a crowd, on them.
   water, kept to the centimetre. It walks straight from corner to corner, a fifth of a metre at
   a time, facing the way it's going, so it turns only at corners. It never walks into anyone:
   where someone's in the way it steps aside round them, turning 30°, 60°, 90° or 120° (away from
-  them first), wherever its body's clear of the blocked squares and, standing on the mesh, it's
-  still on the mesh (`#clear`: the mesh keeps off a house's walls, a prop, a fence, where the
-  squares don't reach; two of a patrol stepping round each other walked into a cottage's wall);
-  having stepped aside near a corner of its way, it heads on for the next, on the mesh too. Where there's no room it waits; after 0.4 s, with
-  whoever it's after within reach it stops to fight, with someone standing where it was going
-  it stops there, and now and then it finds its way again. Getting no nearer where it's going
-  for 1.5 s (two jostling in a narrow way), it squeezes past whoever's there for 2 s. Sent to
-  fight someone, it stops as soon as they're within reach (with a blow up close, once it's
-  within 1.2 metres of them). Everything else is still the squares': where it's put, what it
+  them first, and on round them the way it first went: with them all but straight ahead it
+  turned one way, then back the other, rocking where it stood), wherever its body's clear of
+  the blocked squares, or no nearer them than it is (its way can run nearer a wall than its
+  body's breadth), and, standing on the mesh, it's still on the mesh (`#clear`: the mesh keeps
+  off a house's walls, a prop, a fence, where the squares don't reach; two of a patrol stepping
+  round each other walked into a cottage's wall); having stepped aside near a corner of its
+  way, it heads on for the next, on the mesh too. Someone standing where it's going, it stops
+  by them as soon as they're in its way: it's there, as near as it gets (not one after someone,
+  which stops once they're within reach, from another square than theirs: an orc and a guard
+  closing on each other both stopped on one square, and neither could strike). Where there's no room
+  it waits; after 0.4 s, with whoever it's after within reach it stops to fight, with someone
+  standing still within 1.6 m of where it was going (`THRONG`) it stops there, and now and then
+  it finds its way again. Getting no nearer where it's going for 1.5 s (two jostling in a
+  narrow way), it squeezes past whoever's there for 2 s: but never a player (unless it's one),
+  nor, unless it's after someone, anyone standing still, or held up, within `THRONG` of where
+  it's going. Before, the
+  townsfolk making for an errand where someone stood (another of them, or the player standing
+  on its square) went round and round them, then squeezed through onto where they stood, and
+  stood there in them. Sent to fight someone, it stops as soon as they're within reach (with a
+  blow up close, once it's within 1.2 metres of them). Everything else is still the squares': where it's put, what it
   can see and reach, where it's going (`core/grid.js`: `blocked`, `opaque` and `ground` for any
   square, blocked off the map, whether kept in rows or in chunks). Out in the world, someone's
   put to stand only where there's room (`roomy`, `nearestFree`): a square whose middle is 0.45 m
@@ -3272,14 +3285,17 @@ floor, walls, furniture in its colours, the stairs' treads, round barrels, the h
 the doorway; only those on the same floor as the player are shown.
 
 **Folded into a compass.** A round button over the minimap's top left corner (`#minimapfold`, 30
-pixels, a compass needle on it) folds the minimap away: in its place, in the top left corner of the
+pixels) is a compass too: its needle (`#minimapneedle`, red to the north) turns with the camera as the
+folded compass's rose does (below), so its red end points the way north lies on the screen, whereas
+the minimap under it keeps north up (it stood still, north up, whichever way the camera looked).
+Tapped, it folds the minimap away: in its place, in the top left corner of the
 screen, a small compass (`#compass`, 52 pixels: `--compass-size`), the party's column moving up
 under it. Its rose (a ring, ticks every eighth of the way round, gold points and a red north
 needle, an N at its tip) turns with the camera, so its N points the way north lies on the screen:
 looking north, N straight up; looking east, N on the left; looking south, N at the bottom
 (minimap.js `compassTurn`, from which way the camera looks over the ground, as the minimap's wedge
-has it; game.js `#turnCompass`, each frame the minimap would be drawn, the rose's SVG transform set
-only once it's turned more than about a third of a degree). Tapped, the compass opens the minimap
+has it; game.js `#turnCompass`, each frame the minimap would be drawn, the rose's or the needle's
+SVG transform set only once it's turned more than about a third of a degree). Tapped, the compass opens the minimap
 again. Both are Game options' Minimap switch (`minimap`, remembered with the other settings), so
 folding it with the button turns the switch off, and opening it with the compass on (the fold
 playing the tap's sound, the opening the map's unfolding).
@@ -4334,8 +4350,11 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   memory;
 - the battle: its time, how many steps each frame ran, projectiles in flight, how strong the
   player's side is as the wild weighs it (its strength S, the opposition F set against it, and how
-  many players and allies are counted: docs/WILDS.md *A side's strength*), and each character's
-  place, hit points, stamina and what it's doing (with its speed, running);
+  many players and allies are counted: docs/WILDS.md *A side's strength*), how many characters
+  and creatures were drawn that frame, how many of them were posed in it and how many cast a
+  shadow, and how many soldiers in their crowds ("Bodies 38 drawn  12 posed  9 shadows  0 in
+  crowds"); and each character's place, hit points, stamina and what it's doing (with its speed,
+  running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build;
 - the downloader (app/fetcher.js, which fetches the models the game downloads only as they're
