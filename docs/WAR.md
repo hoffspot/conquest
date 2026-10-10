@@ -1035,7 +1035,18 @@ seat, or its wagons going back for more) is met once a player's within 150 metre
 - they go along its road at the wagons' pace (1.1 metres a second), making for a point 24 metres
   on at a time. While it's met the war doesn't move it on itself or fall on it: it's told where
   the first wagon's got to (`war.move`), and takes its goods in at the road's end. Then its
-  wagons are emptied, and they turn for home.
+  wagons are emptied, and they turn for home;
+- **through a town's gate** a wagon goes along the middle of its way through, from 5 metres before
+  the gatehouse to 5 past it (battle.js `wagonWay`, `GATE_RUN`; the gates from the map's
+  `gatesNear`), rather than wherever there's room for someone on foot: the street through a gate
+  is wider than the gate as drawn (a cat folk's arch 3 metres across, a lizard folk's way 2.6), and
+  a wagon, 1.7 metres across behind an ox 4 metres ahead of its tail, went through at a slant and
+  into the gatehouse's sides. Its way bends round corners 0.6 metres wider than someone's on foot
+  (`WAGON_ROOM`), where there's room, and it keeps to its way rather than stepping round whoever's
+  in it: it waits, then squeezes past;
+- **drawn,** each wagon follows the way its ox has gone (art/kits/wagon.js `trail`), as a wagon
+  follows its team round a corner, rather than turning with the ox: its tail swung four metres out
+  into whatever was beside its way.
 
 **Fallen on.** Once every one of its guard is down, its goods are carried off (`war.plundered`):
 - half of them go into the stores of the people of whoever felled the last (a player's, their
@@ -1052,6 +1063,7 @@ it).
 of its works held by others; a Knight to fall on an enemy's convoy, or take an enemy's works.
 
 **Kept.** The convoys met and their wagons are in the host's snapshot (`SNAPSHOT_VERSION` 10).
+What two games share changed with the wagons' ways through the gates (`NET_VERSION` 95).
 
 ### Fortifications (M14)
 
