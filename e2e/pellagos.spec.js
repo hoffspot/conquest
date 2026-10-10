@@ -7981,7 +7981,7 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(ran.done).toBe(true);
 });
 
-test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered; off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button folds it away into the compass", async ({ page }) => {
+test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered; off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button, its needle turned so too, folds it away into the compass", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -8061,21 +8061,21 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 
     // (Turned a frame after the camera: waited for, a frame drawn in software being slow)
     // (How far it's turned from `degrees`, either way round)
-    const turnedFrom = (degrees) => async () => {
-        const turned = Number(((await page.locator("#compassrose").getAttribute("transform")) ?? "rotate(NaN").match(/rotate\(([-\d.eN]+)/)[1]);
+    const turnedFrom = (degrees, turning = "#compassrose") => async () => {
+        const turned = Number(((await page.locator(turning).getAttribute("transform")) ?? "rotate(NaN").match(/rotate\(([-\d.eN]+)/)[1]);
         const off = (((turned - degrees) % 360) + 360) % 360;
 
         return Math.min(off, 360 - off);
     };
+    const look = (yaw) =>
+        page.evaluate((yaw) => {
+            window.pellagos.game.cameraFollow.yaw = yaw;
+        }, yaw);
 
     // Looking north, N up; looking west, N on the right
-    await page.evaluate(() => {
-        window.pellagos.game.cameraFollow.yaw = 0;
-    });
+    await look(0);
     await expect.poll(turnedFrom(0), { timeout: 30000 }).toBeLessThan(1);
-    await page.evaluate(() => {
-        window.pellagos.game.cameraFollow.yaw = Math.PI / 2;
-    });
+    await look(Math.PI / 2);
     await expect.poll(turnedFrom(90), { timeout: 30000 }).toBeLessThan(1);
 
     // Tapped: the map's back, and kept; its corner's button folds it away again
@@ -8084,6 +8084,14 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(compass).toBeHidden();
     await expect(fold).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).minimap)).toBe(true);
+
+    // That button's a compass too: its needle turned as the camera turns, its red end north (looking
+    // west, on the right; north, up; south-east, down and to the left)
+    await expect.poll(turnedFrom(90, "#minimapneedle"), { timeout: 30000 }).toBeLessThan(1);
+    await look(0);
+    await expect.poll(turnedFrom(0, "#minimapneedle"), { timeout: 30000 }).toBeLessThan(1);
+    await look((-3 * Math.PI) / 4);
+    await expect.poll(turnedFrom(225, "#minimapneedle"), { timeout: 30000 }).toBeLessThan(1);
     await fold.click();
     await expect(minimap).toBeHidden();
     await expect(compass).toBeVisible();

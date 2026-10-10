@@ -1927,12 +1927,18 @@ export class Game {
     }
 
     // The compass turned for its N to point north as the camera sees it (minimap.js compassTurn),
-    // only when that's changed (looking straight down, as it was)
+    // only when that's changed (looking straight down, as it was): the minimap shown, the needle on
+    // the button over its corner that folds it away (index.html #minimapneedle: drawn pointing up
+    // whichever way the camera looked); folded away, the compass in its place (#compassrose)
     #turnCompass() {
-        const rose = (this.compassRose ??= this.hud.root.querySelector("#compassrose"));
+        const [id, middle] = this.minimapShown === false ? ["#compassrose", 32] : ["#minimapneedle", 12];
+        const turning = (this.compassTurning ??= new Map());
+        const turned = turning.get(id) ?? this.hud.root.querySelector(id);
         const looking = this.view.camera.getWorldDirection(_looking);
 
-        if (!rose || Math.hypot(looking.x, looking.z) <= 1e-3) {
+        turning.set(id, turned);
+
+        if (!turned || Math.hypot(looking.x, looking.z) <= 1e-3) {
             return;
         }
 
@@ -1943,7 +1949,7 @@ export class Game {
         }
 
         this.compassTurned = turn;
-        rose.setAttribute("transform", `rotate(${(turn * 180) / Math.PI} 32 32)`);
+        turned.setAttribute("transform", `rotate(${(turn * 180) / Math.PI} ${middle} ${middle})`);
     }
 
     /**
@@ -3254,14 +3260,13 @@ export class Game {
         this.washing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: seconds * 1000, easing: "ease-in" });
     }
 
-    // The minimap: everyone on it, where the player is going and what the camera sees; folded
-    // away (main.js), the compass in its place turned as the camera turns
+    // The minimap: everyone on it, where the player is going and what the camera sees, the needle
+    // on its corner's button turned as the camera turns; folded away (main.js), the compass in its
+    // place turned so
     #drawMinimap(target) {
         const minimap = this.minimap;
 
-        if (this.minimapShown === false) {
-            this.#turnCompass();
-        }
+        this.#turnCompass();
 
         if (!minimap?.due()) {
             return;
