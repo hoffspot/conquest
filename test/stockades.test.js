@@ -441,6 +441,34 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         assert.ok(!struck.some(({ id }) => id === "below"));
     });
 
+    it("covers one hacking at its stakes, hard against them, from shots down from its walkway as often as not; no one else there", () => {
+        const { world, square } = pitched();
+        const { half, walk } = STOCKADE;
+        // (Shot at from its walkway for a minute: how many of the shots its stakes took)
+        const shotAt = (seed, siege) => {
+            const battle = new Battle(world, { seed });
+
+            battle.add({ id: "up", kind: "soldier", team: "orc", square: square(half - walk, -10), weapon: "bow", ai: "fort", armed: true, hp: 1e6 });
+            battle.add({ id: "below", kind: "soldier", team: "human", square: square(half + 1, -10), weapon: "sword", ai: "fort", armed: true, hp: 1e6 });
+            battle.actor("below").siege = siege;
+
+            const events = [];
+
+            for (let t = 0; t < 60000; t += STEP_MS) {
+                events.push(...battle.advance(STEP_MS).filter(({ id }) => id === "below"));
+            }
+
+            return { covered: events.filter(({ type }) => type === "covered").length, hit: events.filter(({ type }) => type === "hit").length };
+        };
+        const hacking = shotAt(7, "camp-x/stakes-0");
+        const standing = shotAt(7, null);
+
+        assert.ok(hacking.covered > 5 && hacking.hit > 5, `(covered ${hacking.covered}, hit ${hacking.hit})`);
+        assert.ok(hacking.covered / (hacking.covered + hacking.hit) > 0.3 && hacking.covered / (hacking.covered + hacking.hit) < 0.7);
+        assert.equal(standing.covered, 0);
+        assert.ok(standing.hit > 5);
+    });
+
     it("stands an army met at its camp on its parade ground, facing out of its front gate", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 

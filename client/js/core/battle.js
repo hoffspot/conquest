@@ -127,7 +127,7 @@ export const KINDS = Object.freeze({
     // (A section of a camp's palisade under assault (host.js #storms): standing over its
     // `footprint` of wall, doing nothing; no one's set on it but those sent to hack it down (a
     // `siege`, or a player told to), and felled it's broken open)
-    stakes: { hp: 900, speed: 0, chase: 0, respawn: Infinity },
+    stakes: { hp: 300, speed: 0, chase: 0, respawn: Infinity },
 });
 
 /**
@@ -1464,11 +1464,25 @@ export class Battle {
     }
 
     // Whether `target` is behind what's low from `attacker`: up on a raised deck (overworld.js
-    // RAISED: an army's camp's walkway), `attacker` not, something low (LOW: its stakes) between
+    // RAISED: an army's camp's walkway), `attacker` not, something low (LOW: its stakes) between;
+    // or the other way about, `target` one hacking at the stakes (its `siege`) hard against them
+    // (one of the squares round it low), to be shot at from up there only leaning out over them
     #covered(attacker, target) {
         const squares = this.#squares(target.map);
 
-        return Boolean(squares.raised?.(...target.square)) && !squares.raised(...attacker.square) && this.#between(squares.low, attacker.square, target.square);
+        if (!squares.raised) {
+            return false;
+        }
+
+        const up = squares.raised(...target.square);
+
+        if (up === squares.raised(...attacker.square) || !this.#between(squares.low, attacker.square, target.square)) {
+            return false;
+        }
+
+        const [x, y] = target.square;
+
+        return up || (Boolean(target.siege) && [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => squares.low(x + dx, y + dy))));
     }
 
     // Whether two points on a map (metres) are too far one over the other for a blow up close
@@ -2169,11 +2183,12 @@ export class Battle {
         let seen = null;
 
         // (Sent to hack down a section of a palisade, its `siege`: at it, unless an enemy's on it up
-        // close: SIEGE_GUARD)
+        // close (SIEGE_GUARD) where it can be struck: not one up on the walkway over it, shooting
+        // down at it, out of its reach)
         const siege = broken || !actor.siege ? null : this.actor(actor.siege);
 
         if (siege && !siege.dead && siege.map === actor.map) {
-            seen = this.#nearestSeen(actor, (enemy) => distanceBetween(actor.square, enemy.square) <= SIEGE_GUARD && this.#roomOn(actor, enemy)) ?? siege;
+            seen = this.#nearestSeen(actor, (enemy) => distanceBetween(actor.square, enemy.square) <= SIEGE_GUARD && !this.#apart(actor.map, [actor.x, actor.y], [enemy.x, enemy.y]) && this.#roomOn(actor, enemy)) ?? siege;
         }
 
         if (!broken && !seen && !thinking && actor.target !== null) {
@@ -4033,6 +4048,12 @@ export class Battle {
     // player only if there's room for one more on them (AGGRO), or it fights on as it was
     #turnOn(actor, attacker, lastSeen) {
         if ((actor.ai !== "patrol" && actor.ai !== "wild") || !this.#roomOn(actor, attacker)) {
+            return;
+        }
+
+        // (One hacking at a palisade, its `siege`, keeps at it, struck from up on the walkway over
+        // it, out of its reach)
+        if (actor.siege && this.#apart(actor.map, [actor.x, actor.y], [attacker.x, attacker.y])) {
             return;
         }
 

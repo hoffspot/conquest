@@ -4128,23 +4128,46 @@ export class Host {
         }
     }
 
-    // As many of an army or reserve met stood up as the war has of it now: the rearmost let go if
-    // it's lost some elsewhere, more stood up behind its line (in its people's mix) if some have
-    // joined it, up to ARMY_NEAR.most
+    // As many of an army or reserve met stood up as the war has of it now: some let go if it's
+    // lost some elsewhere (of whichever of its roles it has most more of than its people's mix
+    // would, the rearmost of them: not all its archers and healers, at the back of its line),
+    // more stood up behind its line (in its people's mix) if some have joined it, up to
+    // ARMY_NEAR.most
     #keepUpArmy(force, met) {
         const alive = met.ids.filter((each) => this.battle.actor(each) && !this.battle.actor(each).dead);
         const want = Math.min(force.size, ARMY_NEAR.most);
 
         if (alive.length > want) {
-            const rearmost = alive.map((each) => this.battle.actor(each)).sort((a, b) => b.formation.slot[1] - a.formation.slot[1] || (a.id < b.id ? -1 : 1));
+            const left = alive.map((each) => this.battle.actor(each)).sort((a, b) => b.formation.slot[1] - a.formation.slot[1] || (a.id < b.id ? -1 : 1));
+            const mix = {};
+            const gone = [];
 
-            for (const actor of rearmost.slice(0, alive.length - want)) {
+            for (const role of rolesOf(want, DOCTRINES[force.realm])) {
+                mix[role] = (mix[role] ?? 0) + 1;
+            }
+
+            while (left.length > want) {
+                const have = {};
+
+                for (const actor of left) {
+                    have[actor.formation.role] = (have[actor.formation.role] ?? 0) + 1;
+                }
+
+                // (Of the roles most over the mix, the rearmost one: `left` is rearmost first)
+                const over = Math.max(...Object.keys(have).map((role) => have[role] - (mix[role] ?? 0)));
+                const actor = left.find(({ formation }) => have[formation.role] - (mix[formation.role] ?? 0) === over);
+
+                left.splice(left.indexOf(actor), 1);
+                gone.push(actor);
+            }
+
+            for (const actor of gone) {
                 this.battle.remove(actor.id);
                 this.soldiers.delete(actor.id);
                 met.ids.splice(met.ids.indexOf(actor.id), 1);
             }
 
-            this.#event("parted", { army: force.id, ids: rearmost.slice(0, alive.length - want).map(({ id }) => id) });
+            this.#event("parted", { army: force.id, ids: gone.map(({ id }) => id) });
         } else if (alive.length < want) {
             const have = {};
             const formation = this.battle.formations[met.formation];
