@@ -7541,9 +7541,12 @@ export class Game {
 
                 break;
             case "grown":
-                // (A spell that grows with use grown: Vampirism, Dodge, Poison)
+                // (A spell that grows with use grown: Vampirism, Dodge, Poison; Summon and Zombify,
+                // more at once)
                 if (event.id === this.me) {
-                    this.hud.message(`${SPELLS[event.spell].label} grows stronger (${event.level} of 5).`, 3);
+                    const { label, company } = SPELLS[event.spell];
+
+                    this.hud.message(company ? `${label} grows (${event.level} of 5): up to ${company[event.level - 1]} at your side at once.` : `${label} grows stronger (${event.level} of 5).`, 3);
                     this.sound?.play("levelUp");
                     this.onProgress(this.progress);
                 }
@@ -7932,8 +7935,8 @@ export class Game {
         const [ox, oz] = this.originOf(this.mapId);
         const at = avatar?.object.visible ? avatar.object.position.clone() : one?.map === this.mapId ? new THREE.Vector3(ox + one.x, this.#groundOn(one.map, ox + one.x, oz + one.y), oz + one.y) : null;
 
-        if (at && ["risen", "called", "over", "lost", "dismissed"].includes(change)) {
-            this.spellFx.appear(at, change === "dismissed" ? "over" : change);
+        if (at && ["risen", "called", "over", "lost", "dismissed", "replaced"].includes(change)) {
+            this.spellFx.appear(at, ["dismissed", "replaced"].includes(change) ? "over" : change);
         }
 
         if (id !== this.me) {
@@ -7941,7 +7944,7 @@ export class Game {
         }
 
         const name = CREATURES[creature]?.name.toLowerCase() ?? "creature";
-        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.` }[change];
+        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.`, replaced: `Your ${name} goes, to make room for another.` }[change];
 
         if (said) {
             this.hud.message(said, 3);

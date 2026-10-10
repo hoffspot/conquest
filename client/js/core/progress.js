@@ -638,7 +638,7 @@ export class Progress {
         /** The spells learnt from tomes (spells.js SPELLS ids). */
         this.spells = [...new Set((Array.isArray(spells) ? spells : []).filter((id) => SPELLS[id]))];
 
-        /** Each spell that grows as it's used's experience (spells.js `grows`: Vampirism, Dodge, Poison). */
+        /** Each spell that grows as it's used's experience (spells.js `grows`: Vampirism, Dodge, Poison, Summon, Zombify). */
         this.spellXp = Object.fromEntries(Object.entries(spellXp ?? {}).filter(([id, xp]) => SPELLS[id]?.grows && Number(xp) > 0).map(([id, xp]) => [id, Number(xp)]));
         this.gold = Math.max(0, Math.floor(Number(gold) || 0));
 

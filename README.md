@@ -357,7 +357,9 @@ six of a people's pieces for their set's bonuses, and their helm, chest and cloa
 pass for one of their soldiers (till one sees through it, or you strike one of them).
 
 **Your party.** Those with you are your party: the adventurers you've hired, the creatures you've
-called to your side with Summon, and the dead you've raised with Zombify. Each has an icon down
+called to your side with Summon, and the dead you've raised with Zombify. Called and raised
+creatures stay an hour; Summon and Zombify grow as you use them, from one at your side at a time
+to five of each (ten together), a new one taking the place of your oldest. Each has an icon down
 the left side, under the minimap (and over the thumb stick), in that order, with their likeness
 in a green frame (violet for a creature called, bone for one raised), their health along its foot
 and a creature's time left along its head; they shrink to fit, and past that a "+N" chip opens

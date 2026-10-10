@@ -10,7 +10,7 @@ import { Battle, FEAR_MEMORY, FOLLOW, SEE_THROUGH, STAMINA_DRAIN, STEP_MS } from
 import { HOST_PLAYER, Host, SUMMONING_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
-import { SPELL_XP, SPELLS, WARD } from "../client/js/core/spells.js";
+import { GROWTH_XP, SPELL_XP, SPELLS, WARD } from "../client/js/core/spells.js";
 import { parseGrid } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -465,7 +465,7 @@ describe("the tomes' wonders (host.js)", () => {
         return steps(host, SPELLS[spell].castTime + STEP_MS * 2);
     };
 
-    it("raises one of the wild's creatures fallen lately to follow the player five minutes (a grimoire in hand), brought along if it falls behind", () => {
+    it("raises one of the wild's creatures fallen lately to follow the player an hour (a grimoire in hand), brought along if it falls behind", () => {
         const host = hosted(["zombify"], { weapon: "grimoire" });
         const me = host.battle.actor(HOST_PLAYER);
         const [wolf] = wildOut(host, "wolf", 3, [me.square[0] + 3, me.square[1]]);
@@ -497,12 +497,82 @@ describe("the tomes' wonders (host.js)", () => {
         steps(host, STEP_MS * 2);
         assert.ok(Math.hypot(risen.x - me.x, risen.y - me.y) < FOLLOW.lost);
 
-        // (Five minutes, then gone)
+        // (An hour, then gone)
+        assert.equal(SPELLS.zombify.lasts, 3600000);
         assert.ok(host.companions.get(id).until - host.battle.time > SPELLS.zombify.lasts - 1000);
         host.companions.get(id).until = host.battle.time + 100;
         steps(host, 200);
         assert.equal(host.companions.size, 0);
         assert.equal(host.battle.actor(id), null);
+    });
+
+    it("keeps as many called and as many risen at once as Summon's and Zombify's levels (one to five, growing with use), the oldest let go for a new one; ten at most", () => {
+        const host = hosted(["summon", "zombify"], { weapon: "grimoire" });
+        const me = host.battle.actor(HOST_PLAYER);
+        const { progress } = host.players.get(HOST_PLAYER);
+        const mine = (risen) => [...host.companions].filter(([, one]) => one.risen === risen).map(([id]) => id);
+
+        assert.deepEqual(["summon", "zombify"].map((spell) => [SPELLS[spell].grows, SPELLS[spell].company, SPELLS[spell].lasts]), [
+            [true, [1, 2, 3, 4, 5], 3600000],
+            [true, [1, 2, 3, 4, 5], 3600000],
+        ]);
+
+        // (Level 1: one at a time, a new one in the first's place; each cast growing the spell)
+        castHere(host, "summon");
+
+        const [first] = mine(false);
+        const events = castHere(host, "summon");
+
+        assert.equal(progress.spellXp.summon, SPELL_XP * 2);
+        assert.deepEqual(mine(false).length, 1);
+        assert.notEqual(mine(false)[0], first);
+        assert.ok(events.some(({ type, companion, change }) => type === "companion" && companion === first && change === "replaced"));
+        assert.equal(host.battle.actor(first), null);
+
+        // (Level 3, from use: three at once, then the oldest goes for the fourth)
+        progress.spellXp.summon = GROWTH_XP[2];
+        assert.equal(progress.levelOf("summon"), 3);
+
+        for (let k = 0; k < 2; k++) {
+            castHere(host, "summon");
+        }
+
+        const three = mine(false);
+
+        assert.equal(three.length, 3);
+        castHere(host, "summon");
+        assert.deepEqual(mine(false).slice(0, 2), three.slice(1), "(the oldest let go)");
+        assert.equal(mine(false).length, 3);
+
+        // (Level 5 of each: five called and five risen, ten together; the risen kept apart from the called)
+        progress.spellXp.summon = GROWTH_XP[4];
+        progress.spellXp.zombify = GROWTH_XP[4];
+
+        for (let k = 0; k < 3; k++) {
+            castHere(host, "summon");
+        }
+
+        const wolves = Array.from({ length: 6 }, (_, k) => {
+            const id = `test-wolf-${k}`;
+
+            host.wild.set(id, { creature: "wolf", tier: 2, pack: id, camp: null, lair: null, master: false });
+            host.battle.add({ id, kind: "beast", name: "Wolf", weapon: CREATURES.wolf.weapon, team: "beasts", square: [me.square[0] + 2 + (k % 3), me.square[1] + Math.floor(k / 3) + 2], ai: null, hp: 1, wild: { creature: "wolf", tier: 2, temper: "aggressive", guard: 0, roam: 0, leash: 30, pack: id, leader: null, menace: true, unique: false } });
+            host.battle.afflict(id, "bleed", { power: 1000 });
+
+            return id;
+        });
+
+        steps(host, 2500);
+        assert.ok(wolves.every((id) => host.battle.actor(id)?.dead));
+
+        for (let k = 0; k < 6; k++) {
+            castHere(host, "zombify");
+        }
+
+        assert.equal(mine(false).length, 5);
+        assert.equal(mine(true).length, 5, "(the sixth risen in the first's place)");
+        assert.equal(host.partyOf(HOST_PLAYER).length, 10);
+        assert.ok([...host.companions.values()].every(({ until }) => until - host.battle.time > 3600000 - 60000));
     });
 
     it("calls a creature of these parts to the player's side with Summon; draws one hostile out of the smoke with Attraction", () => {
