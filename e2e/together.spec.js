@@ -388,9 +388,18 @@ test("two players make a party: one asks from the party menu, the other says no,
     await guest.locator("#partybutton").click();
     await expect(theirs).toBeVisible();
     await expect(leave).toHaveText("Leave party");
-    await leave.click();
-    await expect(leave).toHaveText("Leave?");
-    await leave.click();
+
+    // (Both presses at once: two worlds drawn in software can starve a page of frames for longer
+    // than the second press is waited for, DISMISS_SURE_MS, between two of Playwright's clicks)
+    expect(await leave.evaluate((button) => {
+        button.click();
+
+        const asked = button.textContent;
+
+        button.click();
+
+        return asked;
+    })).toBe("Leave?");
     await expect(guest.locator("#banner")).toContainText("You leave the party.", { timeout: 30000 });
     await expect(host.locator("#banner")).toContainText("The party's no more", { timeout: 30000 });
     await expect(host.locator('#party .member[data-id="guest-1"]')).toHaveCount(0, { timeout: 30000 });
