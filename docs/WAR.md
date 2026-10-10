@@ -1411,14 +1411,16 @@ ground). So:
   enemy's reserve or army storms it with its army at it (*The palisade*, below); or, in the world,
   its sentries all brought down with no army of theirs by it (`war.loss`).
 - **Its palisade** (`PALISADE`). Its guard fights behind it, and its army too while it's at it
-  (within 120 m): as a town's garrison behind its walls, 1.2 (a town's are 1.15 to 1.6), less 0.05
-  for each breach in it, as far as open ground at 4.
+  (within 120 m): as a town's garrison behind its walls, 1.05 (a town's are 1.15 to 1.6), less
+  0.0125 for each breach in it, as far as open ground at 4 (as its stockade's storms in the world
+  have it: *Tuned against the world*, M22).
   - **Stormed:** an army fallen on at its camp, by an enemy's reserve or army, stands there with
     the camp's guard beside it, the fallen of it and of the guard alike. Carried, the camp's
     razed, and the army goes home, beaten, its orders done with (and let go: *The reserve*,
     below); brought to nothing, it's gone. Beaten off, those who fell on it are beaten.
   - **Breached:** any assault on a camp beaten off (a storm, an army's attack, a reserve or army
-    upon its guard) leaves a breach for each 15% of those holding it it brought down, as far as 4.
+    upon its guard) leaves a breach for each 30% of those holding it it brought down, as far as 4:
+    a hold that cost it dear.
   - **Mended** once no enemy's army, reserve or expedition has been within its reach (300 m) for 2
     turns: a breach a turn by its guard, two with its army there, each for 4 wood from its
     people's stores, as far as they go. None while there's none.
@@ -1986,7 +1988,7 @@ that (*A storm near a player*).
 
 **What changed** (each in the rules above, M18 *Camps*, *The fighting*, *The reserve*):
 - **The rout:** either side in the field breaks at 35% of what it went in with, outnumbered.
-- **The palisade:** an army at its camp fights behind it with the camp's guard, walls 1.2. Stormed
+- **The palisade:** an army at its camp fights behind it with the camp's guard, walls 1.05. Stormed
   and carried, the camp's razed and the army goes home; the reserve lets it go.
 - **Breached and mended:** an assault beaten off breaches it; quiet, its guard mends it from the
   stores' wood.
@@ -2153,18 +2155,22 @@ In storms near a player (the world of seed 2; an army at its camp, met by a rese
 against 30 to 50), its archers and casters on its walkway landed 60 to 110 hits a storm, the stakes
 taking a fifth of what was shot and cast up at them; even numbers held it with more left standing
 (17 and 23 of 30 and 40, from 11 and 15), but against half as many again it fell sooner, its
-archers picked off by the enemy's casters. (How the war reckons a storm it doesn't see against
-this is next: #460c.)
+archers picked off by the enemy's casters. (Those numbers were before the fixes under *Tuned
+against the world*, below.)
 
 **Stormed** by those that come within 60 m of it (`#storming`): their archers and casters before
 the opening nearest them, 14 m out, facing in; the rest making for its parade ground, by its gates
 or breaches, and fighting whoever stands in the way, within 40 m of it.
 
 **Hacked at** (`#hack`): the section of its wall nearest them, 8 m or more clear of its openings,
-stood up in the battle as its stakes (`KINDS.stakes`: 900 hit points, standing over the section's
+stood up in the battle as its stakes (`KINDS.stakes`: 300 hit points, standing over the section's
 squares), and a fifth of their shield line and two-handers (2 to 6) set at it from 1.5 m outside
 (all fallen, under the arrows from its walkway, as many again of the rest, unannounced).
-None set on a palisade of their own accord, nor come to the help of those hacking at one. Felled,
+They keep at it: struck from up on the walkway over them, out of their reach, they don't turn on
+whoever did it, nor go after anyone up there close by (only someone they can strike, within 2.5
+m: `SIEGE_GUARD`); and hard against its stakes, a shot or spell down at them from the walkway is
+taken by the stakes as often as not, as one up at the walkway is (`COVER`, above). None set on a
+palisade of their own accord, nor come to the help of those hacking at one. Felled,
 it's broken open in the war (`war.breach`: that section, one more breach) and so in the world, a
 way in; another's hacked at 45 s on. **In the game** the stakes stand in as a fortification does,
 a bar over them; each blow on them chops into the wood (*Chop*), splinters flying; felled, the
@@ -2191,12 +2197,37 @@ carried, a force broken and running; with the news's bell for those that matter 
 war's reckoning does, so its guard sets to mending it only once it's been quiet, from the stores'
 wood.
 
+**Tuned against the world** (#460c). The war's palisade (`PALISADE`: *Standing armies*) set from
+storms played out near a player: an army at its camp met by a reserve, 8 storms each of 8 sizes
+(15 to 40 holding it against 20 to 50), against the same forces met in the open field
+(in Node, the host and the battle as the game has them, the world of seed 2):
+- **What the world had wrong, put right first:**
+  - those hacking at the wall went after the archers up on the walkway over them, out of their
+    reach, and left the stakes untouched (no breach in 64 storms): now they keep at it, covered
+    from the walkway hard against the stakes (above);
+  - an army met near a player that the war has fewer of (its guard left at its camp, say) let go
+    of its rearmost first, its archers, casters and healers, so a camp was held by its shield line
+    alone: now of whichever roles it has most more of than its people's mix would (`#keepUpArmy`).
+- **The stockade in the world** is worth little more than open ground: holding it, even numbers
+  hold it a quarter to a third of the time (30 and 40 against as many; in the open field, never),
+  the enemy keeping 44 to 47% of its men (50 to 57% in the field); outnumbered, it's no help. So
+  `walls` 1.05 (from 1.2: the value whose odds and losses against open ground match the
+  world's best), less 0.0125 a breach (as far as open ground at 4, as before).
+- **Breaches:** a storm held in the world leaves its stakes a fifth hacked through (60 of their 300
+  hit points) and seldom broken; a storm carried, more often. So an assault beaten off breaches
+  the palisade once for each 30% of its holders it brought down (`press`, from 15%): once for a
+  hold that cost it dear, rather than two to four times.
+- **Left as it is:** that a stockade's no stronger in the world than that: its defenders hold its
+  openings in ranks, only the foremost fighting, and the enemy's archers and casters shoot in at
+  the rest. (Fighting at the gates better is for another day.)
+
 **Kept.** Which sections of each camp's palisade are broken open (`broken`) are in the war's
 snapshot (`WAR_VERSION` 9; a war kept before has the first of its stockade's order broken, as many
 as its breaches). The storms under way are in the host's. What two games share changed
 (`NET_VERSION` 94): the storms, and those hacking at a palisade left to it; and again (`NET_VERSION`
 96): its walkway and stairs raised, walked and fought from (the world's squares, the navigation
-mesh, sight, blows and cover).
+mesh, sight, blows and cover); and again (`NET_VERSION` 97): those hacking at it keeping at it,
+covered, the stakes' 300 hit points, and an army met keeping its mix as it's fewer.
 
 ### Playing together (M11)
 

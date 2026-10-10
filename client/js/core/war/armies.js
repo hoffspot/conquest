@@ -36,9 +36,11 @@ export const CAMP = Object.freeze({ reach: 300, build: 2, cost: 20, guard: 6, sc
  * it, as far as open ground (`most` breaches). An assault beaten off leaves a breach for each
  * `press` of those holding it it brought down. Once no enemy's been within the camp's reach for
  * `quiet` turns, its guard mends `mend` a turn (`army` with its army there), each for `stakes` from
- * its people's stores.
+ * its people's stores. (`walls` and `press` as storms of its stockade played out near a player
+ * have them, measured against the same forces met in the field: docs/WAR.md *Tuned against the
+ * world*)
  */
-export const PALISADE = Object.freeze({ within: 120, walls: 1.2, breach: 0.05, most: 4, press: 0.15, quiet: 2, mend: 1, army: 2, stakes: Object.freeze({ wood: 4 }) });
+export const PALISADE = Object.freeze({ within: 120, walls: 1.05, breach: 0.0125, most: 4, press: 0.3, quiet: 2, mend: 1, army: 2, stakes: Object.freeze({ wood: 4 }) });
 
 /**
  * How far each sees (metres, for the war table's map: docs/WAR.md *The war table*; war.js sight): a

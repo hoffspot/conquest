@@ -68,7 +68,7 @@ export const CATALOG = Object.freeze({
     chop: { group: "Hits", label: "Chop", about: "An axe's broad blade driven in: deeper than a hack, more thud than ring.", plays: "A battle axe's blow landing; and any weapon's blow on a camp's stakes as they're hacked at in a storm." },
     strike: { group: "Hits", label: "Strike", about: "A wooden staff cracking on a body.", plays: "A staff's blow landing." },
     crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep, meaty thud.", plays: "A war hammer's blow landing." },
-    block: { group: "Hits", label: "Block", about: "A blow caught on wood: a hard knock (a blade on an ash spear shaft).", plays: "A blow taken on a shield (a blade's rings on it instead: Clash); and a shot taken by a camp's stakes before someone up on its walkway." },
+    block: { group: "Hits", label: "Block", about: "A blow caught on wood: a hard knock (a blade on an ash spear shaft).", plays: "A blow taken on a shield (a blade's rings on it instead: Clash); and a shot taken by a camp's stakes before someone up on its walkway, or before someone below hacking at them." },
     clash: { group: "Hits", label: "Clash", about: "Steel ringing on steel (a sabre on a sword).", plays: "A sword's or a cleaver's blow, or a skeleton's rusty sword, caught on a shield's iron." },
     pierce: { group: "Hits", label: "Pierce", about: "An arrow thunking into a body.", plays: "An arrow striking anyone." },
     punch: { group: "Hits", label: "Punch", about: "A fist landing: a meaty thud (fists on a punching bag).", plays: "A punch landing." },

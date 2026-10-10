@@ -116,7 +116,7 @@ describe("pressing the advantage (war.js, armies.js)", () => {
 
     it("storms a camp only at its strength behind the palisade (DEFEND.camp)", () => {
         const war = warOf();
-        const { camp, army, reserve } = atCamp(war, { army: 40, reserve: 50 });
+        const { camp, army, reserve } = atCamp(war, { army: 40, reserve: 45 });
         const behind = (army.size + camp.guard) * PALISADE.walls;
 
         // (Too few for it: not stormed)
@@ -136,9 +136,9 @@ describe("pressing the advantage (war.js, armies.js)", () => {
     it("breaches the palisade of a camp whose assault's beaten off, as hard as it was pressed", () => {
         const war = warOf();
         const { camp, army, reserve } = atCamp(war, { army: 20, reserve: 0 });
-        const theirs = { id: "force-orc", realm: "orc", kind: "army", size: 3, at: [camp.at[0] + 50, camp.at[1]], path: [[camp.at[0] + 50, camp.at[1]]], leg: 0, target: null, home: war.realm("orc").seat, mission: "camp", about: null, camp: null, orders: null, went: 3, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 };
+        const theirs = { id: "force-orc", realm: "orc", kind: "army", size: 9, at: [camp.at[0] + 50, camp.at[1]], path: [[camp.at[0] + 50, camp.at[1]]], leg: 0, target: null, home: war.realm("orc").seat, mission: "camp", about: null, camp: null, orders: null, went: 9, arrived: null, supply: { due: 1e6, missed: 0 }, since: 0 };
 
-        // (Its army away: the orcs' few upon its guard behind the palisade)
+        // (Its army away: the orcs' few upon its guard behind the palisade, pressing it hard)
         war.forces.splice(war.forces.indexOf(army), 1);
         war.forces = war.forces.filter((force) => !(force.kind === "army" && force.realm === "orc"));
         war.forces.push(theirs);
