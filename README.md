@@ -460,8 +460,9 @@ See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
 is running: frame rate and a graph of frame times, how long updating and drawing take, what's
-drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle, and how
-long each part took to download and build. Its controls change the drawing quality, render
+drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle (and how
+strong the player's side is, as the wild weighs it), and how long each part took to download and
+build. Its controls change the drawing quality, render
 scale and shadows, and show the squares characters walk on and their paths. See
 [docs/GAME.md](docs/GAME.md#debug-mode).
 
@@ -682,6 +683,9 @@ client/                 The game (static files served to the browser)
                         place.js what's put in; play.js its champions and chests in play;
                         graph.js, grid.js and seeds.js what they share
     spoils.js           What they leave: their parts, and what the guild pays for them
+    strength.js         How strong a side is, as the wild weighs it: each one's fighting value,
+                        the side's strength over its strongest player's, the opposition set
+                        against it, and players near one another as one group
     afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
                         shops, loot, gold and the pack; and from them, might

@@ -308,6 +308,53 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         assert.ok(cache.ids.every((id) => !host.wild.has(id) && !host.battle.actor(id)));
     });
 
+    it("puts out one for players crossing the wilds together, the way each of them has come counted afresh from it; one each for players far apart", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const [sx, sy] = world.start.at;
+
+        host.join({ id: "guest", hero: { ...HERO, name: "Bram" } });
+
+        const guest = host.battle.actor("guest");
+
+        Object.assign(guest, { hp: 1e6, maxHp: 1e6 });
+
+        // Side by side, two metres apart: one between them, both counted afresh
+        for (let d = 0; d <= 1200 && !host.caches.size; d += 8) {
+            const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
+
+            put(me, at);
+            put(guest, [at[0] + 2, at[1]]);
+            run(host, 500);
+        }
+
+        assert.equal(host.caches.size, 1);
+        assert.equal(host.travel.get(HOST_PLAYER).walked, 0);
+        assert.equal(host.travel.get(HOST_PLAYER).next, null);
+        assert.ok(host.travel.get("guest").walked <= 8, `the guest's come ${host.travel.get("guest").walked} m since`);
+        assert.equal(host.travel.get("guest").next, null);
+
+        // Far apart (further than STRENGTH.apart): each their own, as before
+        const apart = hosted();
+
+        apart.host.join({ id: "guest", hero: { ...HERO, name: "Bram" } });
+
+        const other = apart.host.battle.actor("guest");
+
+        Object.assign(other, { hp: 1e6, maxHp: 1e6 });
+
+        for (let d = 0; d <= 1200 && !apart.host.caches.size; d += 8) {
+            const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
+
+            put(apart.me, at);
+            put(other, [at[0] + 150, at[1] - 150]);
+            run(apart.host, 500);
+        }
+
+        assert.ok(apart.host.caches.size >= 1);
+        assert.ok([HOST_PLAYER, "guest"].some((id) => apart.host.travel.get(id).walked > 100), "the other's way still counted");
+    });
+
     it("counts only the wilds crossed on foot: not ground crossed in a settlement, nor a leap (carried by magic)", () => {
         const context = hosted();
         const { host, world, me } = context;

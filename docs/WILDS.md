@@ -136,8 +136,14 @@ near them, as strong as the camp's distance from that player's home (`CAMP_FOLK`
 
 ## Kept about the players
 
-The host keeps about four creatures (`WILDS.count`; five after dark) within 60 m of each player
-out in the world, put out 30 to 44 m away (out of sight), 60 m or more clear of every settlement
+Players together are taken as one group (core/strength.js `groupsOf`): those on one map within 60
+m of one another (`STRENGTH.apart`), one after another, so three walking in a line 50 m apart are
+one group. A player on their own is a group of one.
+
+The host keeps about four creatures (`WILDS.count`; five after dark) within 60 m of each group
+out in the world (of any of its players), put out about its leader (their party's leader, if
+they're with them, or else the first of them into the world), as strong as the land is from that
+leader's home, 30 to 44 m away (out of sight), 60 m or more clear of every settlement
 (`WILDS.clear`, so they don't gather at a town's edge) and 10 m or more from every road, track and
 trail (`WILDS.road`; they may wander onto one after), and lets them go once every player's 90 m away
 (never one that's fighting). Ground cleared of them stays clear a while: each one killed out in the
@@ -150,6 +156,35 @@ always something about, and never more than a player can see: the creatures are 
 playing (whoever's near sees the same ones and can fight them together), and each is kept, moved
 and fought by the host like anyone else, so it plays out the same on every machine.
 
+## A side's strength
+
+How strong the players' side is, as the wild weighs it (core/strength.js, the host's `#side` and
+`strengthOf`): each group's players, and everyone with any of them within 60 m (`STRENGTH.reach`),
+their hired adventurers and the creatures they've called or raised.
+
+- **Each one's fighting value** is how long they'd last and how fast they harm, met in the middle:
+  √(toughness × harm), from what they are now.
+  - *Toughness* is their health over the share of each blow that gets through: their armour, their
+    knack for slipping blows (Evasion) and their shield (half of what it catches, as only blows
+    from in front land on it), each taking off at most 90% (`STRENGTH.most`).
+  - *Harm* is hit points a second: their best attack's blow on average, as strong as their power
+    for it, over the time from one to the next (kicks mixed in with a weapon's blows, the two on
+    average). A caster's spells are cast the hardest-hitting for the time they take first, each
+    as often as it's ready (a cast holds the next for a second, or as long as it takes to cast),
+    till there's no more time to cast in; their weapon in the time that's left.
+  - So gear, skills, spells and a creature's tier all count. A new adventurer and a newly hired
+    one are about alike; as the player grows, their hire is less beside them.
+- **The side's strength (S)** is its members' values summed, over its strongest player's: a
+  player alone is 1, two alike 2, a new player and a new hire about 2, a mighty player and that
+  same hire about 1.3. Never less than 1.
+- **The opposition (F)** the wild sets against it is a little less than it, S^0.8
+  (`OPPOSITION.answer`): 1 alone, about 1.7 for two alike, about 3 for four. So each of a group
+  finds it a little easier than alone, and every ally is still worth having.
+
+The debug overlay shows it for the player's side ("Side S 2.00  F 1.74  (2 players, 0 allies)").
+That the players together are one group, one roll for an elite and one cache between them changed
+the rules every game plays by (`NET_VERSION` 104).
+
 ## Elites
 
 Now and then, out past the land nearest home, a pack's led by an elite of its kind: an "Elite
@@ -158,15 +193,18 @@ Wolf" at the head of the wolves, an "Elite Brown bear" alone (`creatures.js` `EL
 goblins' is the Goblin King, called by its own name (*Goblins*, above). (Not the dungeons' packs'
 stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
 
-- **Where, and how often.** Each time a pack's put out about a player in land of the second tier
-  or further (`ELITES.least`), about one time in twelve (`ELITES.chance`) it's an elite's instead.
+- **Where, and how often.** Each time a pack's put out about a group (*Kept about the players*,
+  above) in land of the second tier or further (`ELITES.least`, from its leader's home), about one
+  time in twelve (`ELITES.chance`) it's an elite's instead: one roll for the group, not one for
+  each of them.
   It's put out 80 to 100 m off (further than the rest, to be seen coming), with the same clearances
   from the settlements, roads and cleared ground, on dry land all round its round. None of the
   perilous kinds (a frost troll, say) is ever one.
 - **How many.** Never two within 400 m of each other (`ELITES.apart`), so never more than one
-  about a player; and a player one's been put out near has no other for ten minutes
-  (`ELITES.rest`, the host's `eliteRest`, kept in a snapshot). So out in the wilds a player meets
-  one now and then, about one each ten or so minutes' going at the most.
+  about a player; and none of a group one's been put out for has another for ten minutes
+  (`ELITES.rest`, the host's `eliteRest`, kept in a snapshot), nor is one put out for a group while
+  any of them is still resting from their last. So out in the wilds players meet one now and then,
+  about one each ten or so minutes' going at the most, however many of them there are together.
 - **How strong.** Three times the hit points and a quarter harder blows than one of its kind
   (`ELITES.hp`, `ELITES.power`), and a tier up on the land's on top of that (`ELITES.up`): an
   Elite Wolf where wolves are of the second tier has the hit points of about four of them, and
@@ -209,7 +247,9 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
   round: `openAround`), at least 25 m from every road, track and trail with its guards' round and
   all (32 m from the cache), 80 m clear of every settlement, 90 m from the places worth finding and
   the wild camps, and 150 m from any other cache (`cacheClear`). Nowhere like that ahead, it's
-  tried for again on the next look, and it may then turn up any way about them.
+  tried for again on the next look, and it may then turn up any way about them. Players crossing
+  the wilds together (one group) find one between them, not one each: once one's put out ahead of
+  any of them, how far each of them has crossed is counted afresh from there.
 - **Who keeps it** (`CACHE_BANDS`), brigands of that land, all with hands:
   - outlaws under a bandit chief in the farmland, meadows, woods, elfwood, heath and on the beaches;
   - goblin raiders under an ogre in the badlands, the savannah and on the heath;
