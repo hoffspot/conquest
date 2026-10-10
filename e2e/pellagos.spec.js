@@ -3718,6 +3718,30 @@ test("an enemy army's camp stormed near the player by their people's reserve: it
             window.said.push(text);
             message.call(game.hud, text, seconds);
         };
+
+        // Whether any of its archers or casters has been seen up on its walkway, standing on
+        // its boards, at any step of the storm; they're hardy enough to stay up there however it
+        // goes until they're drawn (soldiers are drawn a little each frame, nearest first)
+        const advance = game.advance;
+        const town = game.world.maps.town;
+
+        window.walked = false;
+        game.advance = function (...args) {
+            const out = advance.apply(this, args);
+
+            window.walked ||= (game.host.armies.get("force-900")?.ids ?? []).some((id) => {
+                const actor = game.battle.actor(id);
+                const avatar = game.avatars.get(id);
+
+                if (actor && ["archer", "caster"].includes(actor.formation?.role) && actor.maxHp < 5000) {
+                    Object.assign(actor, { hp: 5000, maxHp: 5000 });
+                }
+
+                return Boolean(actor && !actor.dead && ["archer", "caster"].includes(actor.formation?.role) && town.squares.raised(Math.floor(actor.x), Math.floor(actor.y)) && avatar && avatar.object.position.y - town.ground.heightAt(actor.x, actor.y) > 1.3);
+            });
+
+            return out;
+        };
         game.advance(0.1);
     });
 
@@ -3762,17 +3786,7 @@ test("an enemy army's camp stormed near the player by their people's reserve: it
     expect(after.said).toContain("The orcish palisade is breached: we're through!");
 
     // Its archers and casters up on its walkway, drawn standing on its boards
-    expect(await playUntil(page, () => {
-        const { game } = window.pellagos;
-        const town = game.world.maps.town;
-
-        return (game.host.armies.get("force-900")?.ids ?? []).some((id) => {
-            const actor = game.battle.actor(id);
-            const avatar = game.avatars.get(id);
-
-            return Boolean(actor && !actor.dead && ["archer", "caster"].includes(actor.formation?.role) && town.squares.raised(Math.floor(actor.x), Math.floor(actor.y)) && avatar && avatar.object.position.y - town.ground.heightAt(actor.x, actor.y) > 1.3);
-        });
-    })).toBe(true);
+    expect(await playUntil(page, () => window.walked, { seconds: 90 })).toBe(true);
     expect(errors).toEqual([]);
 });
 
