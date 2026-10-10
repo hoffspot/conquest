@@ -2481,20 +2481,20 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
     await page.mouse.click(ahead.x, ahead.y);
     await page.keyboard.up("Shift");
     expect(await moves()).toEqual([false, true]);
-    await page.evaluate(() => {
-        window.unwatch();
-        window.pellagos.game.battle.command("player", { type: "stop" });
-    });
+    await page.evaluate(() => window.pellagos.game.battle.command("player", { type: "stop" }));
+    await page.waitForTimeout(500);
 
-    // A spot a few metres north of the player, double-clicked
-    await doubleTap(page, spot);
+    // A spot a few metres north of where the player is now, double-clicked (the first spot's
+    // behind them or under them by now, how far depending on how fast the machine is)
+    await doubleTap(page, await spotNorth(page, 5));
+    await expect.poll(moves).toEqual([false, true, false, true]);
 
     const ran = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
-        const order = { ...player.order };
         let fastest = 0;
 
+        window.unwatch();
         game.stop();
 
         for (let k = 0; k < 20; k++) {
@@ -2502,10 +2502,9 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
             fastest = Math.max(fastest, player.pace);
         }
 
-        return { order, fastest, walk: player.speed, stamina: player.stamina, maxStamina: player.maxStamina };
+        return { fastest, walk: player.speed, stamina: player.stamina, maxStamina: player.maxStamina };
     });
 
-    expect(ran.order.run).toBe(true);
     expect(ran.fastest).toBeGreaterThan(ran.walk * 2);
     expect(ran.stamina).toBeLessThan(ran.maxStamina);
     await expect(bar).toBeVisible();
