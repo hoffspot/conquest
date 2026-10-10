@@ -829,7 +829,12 @@ cloth round the body:
   as the legs are apart at their height: standing, it hangs as wide as it's meant to.
 - **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
   under it: over a skirt, as far out as the skirt flares at each height, pleats and all (`under`:
-  the skirts worn with it), so the skirt never comes through it at its hem.
+  the skirts worn with it), so the skirt never comes through it at its hem. Over a skirt it goes
+  just as the skirt does (`skirtUnder`: the longest worn all the way round): it hangs from the
+  skirt's own bones (below), and is as far onto the shins below the knees at each height as the
+  skirt is there. From bones of its own, swung for where it hangs, further out and shorter, it
+  swung less than the skirt as a leg strode out, and the skirt came out through it walking (0.6
+  to 0.9 cm a kirtle, 1.4 to 2 cm a wool skirt under a leather apron); now not at all.
 - **A cloak** (`cape`) hangs from the base of the neck over the shoulders and down the back,
   behind the arms. It's measured round what's worn under it (`worn`: how far out the garments
   reach at each of the body's vertices, along its normals), not the skin: put out from the skin
@@ -2240,6 +2245,14 @@ unwanted let go. The rest (the terrain plan's M8):
   made once for everyone with the same triangles of it (`keyOf`: its name and a hash of its
   triangles), whatever shape it's fitted to. A courtesan's lace, stockings and corset were 20,600
   triangles from afar, drawn twice (see-through, both sides); now about 5,200.
+- **An apron and the skirt under it**: the apron's own (`drapes.js` `APRON_STEPS`), every ring of
+  it kept and every second (middle) or fourth (far) of its columns round, 280 and 140 triangles of
+  its 532; the skirt's from its triangles that show (`shown`: what the apron hides, from an
+  eighth of a radian in from its sides, about one of the skirt's columns, and 5 cm up from its
+  hem, left out), a fifth fewer. Each
+  lowered by the simplifier on its own, the apron's rings were taken off, leaving it straight
+  across the knees where the skirt under it bends, and the skirt came 1.3 to 2.8 cm out through
+  it walking, far off (red patches through a white apron); now not at all, at every level.
 - What's carried is drawn as it is (a helm and shield, 3,000 triangles at most: each is drawn
   faceted, its triangles not sharing corners, so there's nothing to simplify without rebuilding it).
 

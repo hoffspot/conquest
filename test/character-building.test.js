@@ -403,6 +403,30 @@ describe("characters built a step at a time (Character.building)", () => {
         }
     });
 
+    it("hangs an apron from the bones of the skirt under it, and draws them smaller so the skirt never comes through: the skirt without what the apron hides, the apron with all its rings", async () => {
+        const lods = new Lods();
+        const skirts = ["kirtle", "skirt", "blueKirtle", "brownSkirt"];
+        const look = { ...wench, equipment: [...wench.equipment.filter((id) => !skirts.includes(id) && id !== "apron"), "apron", "kirtle"] };
+        const character = new Character(kitOf(), options(look));
+        const [kirtle, apron] = ["kirtle", "apron"].map((id) => character.garments.find(({ name }) => name === id));
+
+        assert.ok(kirtle && apron, character.garments.map(({ name }) => name).join(", "));
+        assert.equal(apron.skeleton, kirtle.skeleton, "the kirtle's own bones");
+        assert.notEqual(kirtle.skeleton, character.rig.skeleton);
+
+        character.lowerDetail(lods);
+        await Promise.all(lods.made.values());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The apron's own, every one of its rings; the kirtle's fewer than lowered from all of it
+        const index = (mesh, { start, count }) => Array.from(mesh.geometry.index.array.slice(start, start + count));
+
+        apron.userData.detail.slice(1).forEach((range, k) => assert.deepEqual(index(apron, range), apron.userData.levels[k]));
+        assert.ok(kirtle.userData.shown.length < kirtle.userData.detail[0].count);
+        assert.ok(kirtle.userData.detail.slice(1).every(({ count }) => count < kirtle.userData.shown.length));
+        character.dispose();
+    });
+
     it("simplifies a mesh to about a quarter of its triangles, keeping its vertices", async () => {
         const indices = human.renderIndices("body");
         const { positions } = human.shape({});
