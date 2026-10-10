@@ -8,13 +8,14 @@ import { before, describe, it } from "node:test";
 import { ICON_KINDS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { CACHE_BANDS, CACHE_GEAR, CACHE_LOOT, CACHE_MAKES, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, rollCache, roundOf, startsOf } from "../client/js/core/caches.js";
-import { CREATURES, tierAt, TIERS } from "../client/js/core/creatures.js";
+import { CREATURES, tierAt, tierPower, TIERS } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD, placesOf } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
+import { scalingOf } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { BIOMES } from "../client/js/core/worldplan/races.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
@@ -333,6 +334,18 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         assert.equal(host.travel.get(HOST_PLAYER).next, null);
         assert.ok(host.travel.get("guest").walked <= 8, `the guest's come ${host.travel.get("guest").walked} m since`);
         assert.equal(host.travel.get("guest").next, null);
+
+        // Its band against the two of them (alike: a side of 2), more of them than for one and
+        // each tougher, their leader tougher still (strength.js)
+        const [cache] = host.caches.values();
+        const [leader, ...guards] = cache.ids.map((id) => host.battle.actor(id));
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+        const band = CACHE_BANDS[cache.band];
+
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 2);
+        assert.equal(leader.maxHp, Math.round(CREATURES[band.leader].hp * tierPower(Math.min(TIERS, cache.tier + CACHES.lead)) * scale.leader));
+        assert.ok(guards.length >= Math.floor((CACHES.count[0] - 1) * scale.count), `${guards.length} keeping it`);
+        assert.ok(guards.every((one) => one.maxHp === Math.round(CREATURES[band.folk].hp * tierPower(cache.tier) * scale.health)));
 
         // Far apart (further than STRENGTH.apart): each their own, as before
         const apart = hosted();

@@ -17,6 +17,7 @@ import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, elit
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { scalingOf } from "../client/js/core/strength.js";
 import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { ELITE_SPOILS, PARTS, rollSpoils, SPOILS, TOME_DROP } from "../client/js/core/spoils.js";
@@ -761,6 +762,69 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(together(120), true, "one put out");
         assert.equal(elitesOf(host).length, 1);
         assert.ok(host.eliteRest.get(HOST_PLAYER) > host.battle.time && host.eliteRest.get("guest") === host.eliteRest.get(HOST_PLAYER));
+
+        // Against the two of them (alike: a side of 2), tougher than it'd be against one, and
+        // more of its kind with it (a lone kind still alone), each of them tougher too
+        const [elite] = elitesOf(host);
+        const leader = host.battle.actor(elite);
+        const { creature, pack } = host.wild.get(elite);
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+        const spec = CREATURES[creature];
+        const land = leader.wild.tier - ELITES.up;
+        const escorts = [...host.wild].filter(([id, one]) => one.pack === pack && id !== elite).map(([id]) => host.battle.actor(id));
+        const alone = packOf(creature, land) - 1;
+
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 2);
+        assert.equal(leader.maxHp, Math.round(spec.hp * tierPower(leader.wild.tier) * ELITES.hp * scale.leader));
+        assert.ok(escorts.length >= Math.floor(alone * scale.count) && escorts.length <= Math.ceil(alone * scale.count), `${escorts.length} with it, ${alone} alone`);
+        assert.ok(escorts.every((one) => one.maxHp === Math.round(CREATURES[one.wild.creature].hp * tierPower(land) * scale.health)));
+    });
+
+    it("keeps more about players together than about one, as many more as the opposition against their side has it, each a little tougher (strength.js)", () => {
+        const context = outside(hosted());
+        const { host, me } = context;
+
+        host.join({ id: "guest", hero: { ...HERO, name: "Bea" } });
+
+        const guest = host.battle.actor("guest");
+
+        Object.assign(guest, { hp: 5000, maxHp: 5000 });
+        put(guest, [me.square[0] + 2, me.square[1]]);
+
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+        let most = 0;
+        let packs = 0;
+
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 2);
+
+        for (let s = 0; s < 40; s++) {
+            const events = run(host, 1000);
+
+            Object.assign(me, { hp: me.maxHp });
+            Object.assign(guest, { hp: guest.maxHp });
+
+            // (Each roaming one put out as tough as its kind at its tier, a little more)
+            for (const { ids } of events.filter(({ type }) => type === "roused")) {
+                for (const id of ids) {
+                    const one = host.wild.get(id);
+                    const actor = host.battle.actor(id);
+
+                    if (one && !one.elite && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon) {
+                        assert.equal(actor.maxHp, Math.round(CREATURES[one.creature].hp * tierPower(one.tier) * scale.health), `${one.creature} at tier ${one.tier}`);
+                        packs++;
+                    }
+                }
+            }
+
+            const roaming = about(host).filter((actor) => !actor.dead && !host.wild.get(actor.id)?.elite && Math.hypot(actor.x - me.x, actor.y - me.y) < WILDS.about);
+
+            most = Math.max(most, roaming.length);
+        }
+
+        // (More about them than about one, and no more than the opposition has room for)
+        assert.ok(packs > 0);
+        assert.ok(most > WILDS.count + WILDS.night, `at most ${most} about them`);
+        assert.ok(most <= Math.round((WILDS.count + WILDS.night) * scale.count), `at most ${most} about them`);
     });
 
     it("carries on exactly from a snapshot, the creatures and all", () => {

@@ -10,7 +10,8 @@ import { CREATURES, tierPower } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
-import { fightingValue, groupsOf, harm, opposition, OPPOSITION, sideStrength, spellHarm, STRENGTH, toughness, weaponHarm } from "../client/js/core/strength.js";
+import { BODIES, fightingValue, groupsOf, harm, opposition, OPPOSITION, SCALING, scalingOf, sideStrength, spellHarm, STRENGTH, toughness, weaponHarm, wholeOf, withinBudget } from "../client/js/core/strength.js";
+import { createRandom } from "../client/js/core/random.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -107,6 +108,39 @@ describe("a side's strength (strength.js)", () => {
         assert.ok(opposition(4) > 2.9 && opposition(4) < 3.1, "about three for four alike");
         assert.ok(opposition(2) / 2 < 1 && opposition(4) / 4 < opposition(2) / 2, "each of more finds it a little easier");
         assert.equal(opposition(0.5), 1);
+    });
+
+    it("spends an opposition on more of a pack, each a little tougher, and its leader tougher still; nothing more against one alone", () => {
+        assert.deepEqual(scalingOf(1), { count: 1, health: 1, leader: 1 });
+
+        const four = scalingOf(opposition(4));
+
+        assert.ok(Math.abs(four.count - Math.pow(opposition(4), SCALING.count)) < 1e-9);
+        assert.ok(four.count > 2.2 && four.count < 2.4, `${four.count} as many`);
+        assert.ok(four.health > 1.25 && four.health < 1.4, `${four.health} as tough`);
+        assert.ok(four.leader > 2.3 && four.leader < 2.5, `a leader ${four.leader} as tough`);
+    });
+
+    it("makes so many whole with the world's dice: a whole number as it is, no dice thrown; a half as often one way as the other", () => {
+        const none = { next: () => assert.fail("no dice for a whole number") };
+
+        assert.equal(wholeOf(4, none), 4);
+        assert.equal(wholeOf(0, none), 0);
+
+        const random = createRandom(7);
+        const rolls = Array.from({ length: 2000 }, () => wholeOf(4.5, random));
+
+        assert.ok(rolls.every((each) => each === 4 || each === 5));
+        assert.ok(Math.abs(rolls.filter((each) => each === 5).length / rolls.length - 0.5) < 0.05);
+        assert.ok(Math.abs(Array.from({ length: 2000 }, () => wholeOf(2.25, random)).reduce((sum, each) => sum + each, 0) / 2000 - 2.25) < 0.05);
+    });
+
+    it("holds a pack to the body budget near a fight: never fewer than alone, what's over it in their hit points", () => {
+        assert.deepEqual(withinBudget(9, 4, 30), { count: 9, health: 1 }, "room for them all");
+        assert.deepEqual(withinBudget(9, 4, 6), { count: 6, health: 1.5 }, "six there, as tough as nine");
+        assert.deepEqual(withinBudget(9, 4, 0), { count: 4, health: 2.25 }, "never fewer than alone");
+        assert.deepEqual(withinBudget(3, 4, 0), { count: 3, health: 1 }, "never more than wanted");
+        assert.equal(BODIES.most, 40);
     });
 
     it("takes players on one map near one another, one after another, as one group; those apart or elsewhere their own", () => {
@@ -219,6 +253,40 @@ describe("a side's strength in play (host.js strengthOf)", () => {
 
         called.dead = true;
         assert.equal(host.strengthOf(HOST_PLAYER).allies, 0);
+    });
+
+    it("lets go a player's oldest creature for a new one called where the body budget's full, short of what their level allows", () => {
+        const host = hosted();
+        const me = host.battle.actor(HOST_PLAYER);
+        const progress = host.players.get(HOST_PLAYER).progress;
+        const call = () => {
+            Object.assign(me, { spellReadyAt: 0, spellsReadyAt: {} });
+            host.command(HOST_PLAYER, { type: "cast", spell: "summon" });
+            run(host, 3000);
+        };
+
+        progress.learn("summon");
+        progress.spellXp.summon = 500;
+        call();
+
+        const [[first]] = [...host.companions];
+
+        // (So many about them that there's no room for another)
+        for (let k = 0; k < BODIES.most; k++) {
+            host.battle.add({ id: `crowd-${k}`, kind: "follower", name: "Crowd", weapon: "sword", team: me.team, square: [me.square[0] + (k % 8) - 4, me.square[1] + 6 + Math.floor(k / 8)], map: me.map });
+        }
+
+        call();
+        assert.equal(host.companions.size, 1, "one at their side, though their level has room for more");
+        assert.ok(!host.companions.has(first), "the oldest let go for it");
+
+        // (Room again: as many as their level allows)
+        for (let k = 0; k < BODIES.most; k++) {
+            host.battle.remove(`crowd-${k}`);
+        }
+
+        call();
+        assert.equal(host.companions.size, 2);
     });
 
     it("shows in the debug overlay: S, F and who's counted", () => {

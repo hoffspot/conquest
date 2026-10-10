@@ -140,8 +140,9 @@ Players together are taken as one group (core/strength.js `groupsOf`): those on 
 m of one another (`STRENGTH.apart`), one after another, so three walking in a line 50 m apart are
 one group. A player on their own is a group of one.
 
-The host keeps about four creatures (`WILDS.count`; five after dark) within 60 m of each group
-out in the world (of any of its players), put out about its leader (their party's leader, if
+The host keeps about four creatures (`WILDS.count`; five after dark; against a stronger side, as
+many more as *How the wild answers* has it: nine for four alike) within 60 m of each group out in
+the world (of any of its players), each pack as big and as tough as their side has it, put out about its leader (their party's leader, if
 they're with them, or else the first of them into the world), as strong as the land is from that
 leader's home, 30 to 44 m away (out of sight), 60 m or more clear of every settlement
 (`WILDS.clear`, so they don't gather at a town's edge) and 10 m or more from every road, track and
@@ -182,8 +183,46 @@ their hired adventurers and the creatures they've called or raised.
   finds it a little easier than alone, and every ally is still worth having.
 
 The debug overlay shows it for the player's side ("Side S 2.00  F 1.74  (2 players, 0 allies)").
-That the players together are one group, one roll for an elite and one cache between them changed
-the rules every game plays by (`NET_VERSION` 104).
+
+### How the wild answers
+
+The opposition's spent as most games played together spend theirs (`SCALING`, worked out when
+the foes are put out, never after):
+
+- **An ordinary one of a pack:** more of them (how many × F^0.75), each a little tougher (hit
+  points × F^0.25).
+- **A pack's leader** (an elite, a cache's chief): tougher still (hit points × F^0.8), the escort
+  with it more and each a little tougher, as ordinary ones are.
+- **Their blows are as hard as ever,** so defences that hold alone hold together.
+- A number of them that comes out in between is made whole with the world's own dice (4.5 is as
+  often 4 as 5), so every machine in a game puts out the same; alone, none are thrown.
+
+| Their side | S | How many | Each one's hit points | A leader's |
+| --- | --- | --- | --- | --- |
+| Alone | 1 | ×1 | ×1 | ×1 |
+| Two alike | 2 | ×1.5 | ×1.15 | ×1.6 |
+| Four alike | 4 | ×2.3 | ×1.3 | ×2.4 |
+| A new adventurer and a new hire | about 2 | ×1.5 | ×1.15 | ×1.6 |
+
+So a tier-4 wolf pack is three wolves of 39 hit points against one player, four or five of 45
+against two, about seven of 52 against four. It's where they're put out (*Kept about the players*,
+*Elites* and *Adventurers' caches*, below) that it applies.
+
+### A ceiling
+
+Every machine in a game draws everyone near a fight, so there's a body budget there
+(`BODIES`): forty at most of the side's and the wild's within 80 m of where foes are put out.
+
+- **Foes give way first.** Past it, what more of a pack there'd have been goes into the hit
+  points of those there are instead (six there for nine wanted, each half as tough again), never
+  fewer of them than against one alone. The opposition still matches the side, with fewer bodies.
+- **Allies keep their rules.** Hirelings follow Command, and the creatures called and raised the
+  spells' levels (docs/MAGIC.md); but where the budget's full about a player who calls or raises
+  another, the oldest of theirs goes for it.
+
+That the players together are one group, one roll for an elite and one cache between them, and
+the wild answering their side's strength, changed the rules every game plays by (`NET_VERSION`
+105).
 
 ## Elites
 
@@ -211,7 +250,8 @@ stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
   bites like one of the third and a quarter more.
 - **Its kind with it.** It leads as many of its kind as a pack of theirs there would be, ordinary
   ones at the land's tier, keeping with it; one of a kind that goes alone (a bear, an adder) is
-  alone.
+  alone. Against a stronger side (*How the wild answers*), it's tougher still (its hit points ×
+  F^0.8), and its kind with it more and each a little tougher.
 - **Its round.** It walks a round of six stops 10 m about where it was put out (`ELITES.loop`,
   `ELITES.stops`), resting a moment at each, its kind keeping with it.
 - **Avoiding it.** It sees 18 squares (`ELITES.sight`; the rest see 12), so it notices from
@@ -262,7 +302,9 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
   (their might, 0 to 8, a tier above it: `cacheTier`), whichever's the more. So it's never weaker
   than what lives there, and a strong player meets a band to match them anywhere. Three keep it
   near home, up to four from the third tier and up to five from the fifth (`cacheCount`, their
-  leader too), their leader two tiers above the rest (`CACHES.lead`). Hard to beat alone.
+  leader too), their leader two tiers above the rest (`CACHES.lead`). Hard to beat alone. Against
+  the side of those it's put out for (*How the wild answers*), more of the band and each tougher,
+  their leader tougher still.
 - **How they keep it.** Their leader stands by the cache; the rest walk a round seven metres about
   it, six stops spread round it (`roundOf`), each starting at its own and standing a moment (1.5 to
   3.5 s) at each before walking on to the next (`wild.round`, battle.js `#wild`). Each goes for
