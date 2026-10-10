@@ -7885,7 +7885,7 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(ran.done).toBe(true);
 });
 
-test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
+test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered; off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button folds it away into the compass", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -7947,6 +7947,51 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(minimap).toBeHidden();
     expect(await page.evaluate(() => ({ enabled: window.pellagos.session.sound.enabled, music: window.pellagos.session.sound.volumes.music }))).toEqual({ enabled: false, music: 0.6 });
     await expect(page.locator("#musicvolume")).toHaveValue("60");
+
+    // Off, a compass in its corner, the party's column under it; turned as the camera turns (a
+    // quarter turn of the camera, a quarter turn of the compass), its N north
+    const compass = page.getByRole("button", { name: "Compass: open the map" });
+    const fold = page.getByRole("button", { name: "Fold the map into a compass" });
+
+    await expect(compass).toBeVisible();
+    await expect(fold).toBeHidden();
+
+    const corner = await compass.boundingBox();
+    const column = await page.locator("#partybutton").boundingBox();
+
+    expect(corner.x).toBeLessThan(20);
+    expect(corner.y).toBeLessThan(20);
+    expect(column.y).toBeGreaterThan(corner.y + corner.height);
+
+    // (Turned a frame after the camera: waited for, a frame drawn in software being slow)
+    // (How far it's turned from `degrees`, either way round)
+    const turnedFrom = (degrees) => async () => {
+        const turned = Number(((await page.locator("#compassrose").getAttribute("transform")) ?? "rotate(NaN").match(/rotate\(([-\d.eN]+)/)[1]);
+        const off = (((turned - degrees) % 360) + 360) % 360;
+
+        return Math.min(off, 360 - off);
+    };
+
+    // Looking north, N up; looking west, N on the right
+    await page.evaluate(() => {
+        window.pellagos.game.cameraFollow.yaw = 0;
+    });
+    await expect.poll(turnedFrom(0), { timeout: 30000 }).toBeLessThan(1);
+    await page.evaluate(() => {
+        window.pellagos.game.cameraFollow.yaw = Math.PI / 2;
+    });
+    await expect.poll(turnedFrom(90), { timeout: 30000 }).toBeLessThan(1);
+
+    // Tapped: the map's back, and kept; its corner's button folds it away again
+    await compass.click();
+    await expect(minimap).toBeVisible();
+    await expect(compass).toBeHidden();
+    await expect(fold).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).minimap)).toBe(true);
+    await fold.click();
+    await expect(minimap).toBeHidden();
+    await expect(compass).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).minimap)).toBe(false);
 });
 
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {

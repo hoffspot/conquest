@@ -291,7 +291,10 @@ whole floor, its walls, furniture and stairs. On it are a pale wedge the way you
 you're going, and the orc when it's where you are (red; ringed when it's your target). Every
 tavern, smithy, temple and guild you've been inside has an icon over it: a foaming tankard, an
 anvil, a temple's columns, crossed swords and a shield. Tap it to walk there, or tap the orc on it
-to go and fight it; double-tap to run.
+to go and fight it; double-tap to run. The little compass button on its top left corner folds it
+away into a small compass in the corner of the screen, turning as you turn the camera so its N
+always points north; tap the compass and the minimap's back. (Game options' Minimap switch does
+the same, and either way it's remembered.)
 
 **The world map.** Hold your finger (or the mouse) on the minimap, or press M, and the whole
 world opens full screen, the game paused under it. A fog lies over every 64-metre patch of the
@@ -406,7 +409,7 @@ The effects and the town's sounds are made in code as the game starts (in a work
 waits for them); the music's recordings (about 1.1 megabytes) are downloaded meanwhile. Effects and
 the town are heard from where you stand: quieter further away, and to the left or right.
 
-**Game options**, in the menu: turn the minimap on or off, turn all the sound on or off, and set
+**Game options**, in the menu: turn the minimap on or off (off, the compass in its place), turn all the sound on or off, and set
 how loud the effects (50% to start with), the environment (40%) and the music (35%) are. The
 defaults suit a phone at about 40% volume, with plenty of room to turn each up. They're
 remembered.
@@ -424,6 +427,7 @@ remembered.
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
+| Fold the minimap into a compass, and back | Tap the compass button on its top left corner; tap the compass to open it again | Click them |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
 | Quick action (in a fight) | Tap one of the four along the bottom; hold one to change it | Click one, or press 1 to 4 |
 | Pause, Game options | The menu button | The menu button or Escape |
@@ -612,7 +616,8 @@ client/                 The game (static files served to the browser)
     quickbar.js         The quick actions: four slots up from the bottom in a fight, tapped to
                         use on the foe or the player; quicksetup.js sets what's in them
     minimap.js          The minimap: the map the player is on from above (out in the world, the
-                        patch round them), with everyone on it; mapicons.js the buildings' icons
+                        patch round them), with everyone on it, and how far round to turn the
+                        compass it folds into; mapicons.js the buildings' icons
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from

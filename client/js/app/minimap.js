@@ -282,6 +282,18 @@ export function mapColours(world) {
     return data;
 }
 
+/**
+ * How far round to turn the compass (the minimap folded away: index.html #compass), clockwise
+ * (radians, 0 to 2π), for its N to point north as the camera sees it: `look` the way the camera
+ * looks over the ground (as Minimap.draw has it: 0 south, towards +z). Looking north, 0 (N up);
+ * looking east, three quarters round (N on the left); looking south, half round (N down).
+ */
+export function compassTurn(look) {
+    const turn = (look + Math.PI) % (Math.PI * 2);
+
+    return turn < 0 ? turn + Math.PI * 2 : turn;
+}
+
 export class Minimap {
     /**
      * @param {HTMLCanvasElement} canvas - Where to draw it (sized by the page's styles).
