@@ -22,12 +22,13 @@
 //    each an outline, half a voxel wider (Recast takes in a voxel whose middle's inside it), whose
 //    ground the tile marks walked by no one (bake.js), so walkers are kept their radius from it.
 //    (As a box, a prop as wide as a well would be hollow: the ground inside walked, as an island.)
-//  - Bridges: their decks, a strip of quads along each, at its height; and the plank walks over
-//    the lizard folk's lagoons, at their planks' (the town's ground round the lagoon, its bed dug
-//    down below them), the lagoon's water walked nowhere but on them.
+//  - Bridges: their decks, a strip of quads along each, at its height (and a citadel's decks, and
+//    an army's camp's walkway and the stairs up to it: overworld.js bridgesNear); and the plank
+//    walks over the lizard folk's lagoons, at their planks' (the town's ground round the lagoon,
+//    its bed dug down below them), the lagoon's water walked nowhere but on them.
 
 import { hypot } from "../exact.js";
-import { WET } from "../overworld.js";
+import { RAISED, WET } from "../overworld.js";
 import { GROUND } from "../setpieces/pieces.js";
 import { CHUNK, CHUNKS, WORLD_SIZE } from "../worldplan/plan.js";
 import { AREA, BORDER, CELL, FORD, TILE } from "./settings.js";
@@ -104,8 +105,9 @@ export function tileInput(world, tx, ty) {
             let kind = PAVED.has(chunk.ground[k]) ? AREA.road : AREA.ground;
 
             // (Under a citadel's deck well over it, a stair's flight or its landing: the stair's
-            // masonry, not walked under)
-            if (world.sites?.deckAt?.(sx, sy) && world.heightAt(sx + 0.5, sy + 0.5) > Math.max(heights[a], heights[b], heights[c], heights[d]) + 1) {
+            // masonry, not walked under; or an army's camp's walkway, or a stair up to it: its
+            // posts and boards)
+            if ((world.sites?.deckAt?.(sx, sy) || chunk.bridge?.[k] === RAISED) && world.heightAt(sx + 0.5, sy + 0.5) > Math.max(heights[a], heights[b], heights[c], heights[d]) + 1) {
                 kind = 0;
             } else if (chunk.solid[k]) {
                 // (Under a building, a wall or a feature: inside what stands there, never walked,

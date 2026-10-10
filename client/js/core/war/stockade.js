@@ -1,6 +1,7 @@
 // An army's camp as it stands in the world (docs/WAR.md M22, *The stockade*): a square palisade of
 // stakes round it, a gate in its front (towards what it's pitched against) and one in its back, a
-// walkway along the inside of its wall to fight from, a lane inside that, and the camp within: its
+// walkway along the inside of its wall to fight from (raised, its stakes chest high to whoever's
+// on it, a stair up to it either side of each gate), a lane inside that, and the camp within: its
 // fire in the middle, its tents in rows either side of the street from gate to gate behind it, and
 // its parade ground before it, where its army stands. Each of its walls is in sections, any of them
 // broken open (war.js `broken`): by an assault beaten off where it was pressed (#pressed), in an
@@ -21,9 +22,11 @@ import { WATER } from "../worldplan/terrain.js";
  * (`gate`: 3 squares wide); its walkway (`walk`, squares in from the wall) and the lane inside
  * it (`lane`, squares wide); how many squares each section of wall is (`section`); how far round
  * its wall the ground's cleared (`clear`, metres: no trees, no crops); how far out from the
- * fire towards the front gate its army stands (`parade`).
+ * fire towards the front gate its army stands (`parade`); how high its walkway's boards stand
+ * over the ground (`high`, metres: its stakes' tops chest high to whoever's on it, seen over
+ * from there); and how far its stairs up to it run along the lane (`stair`, squares).
  */
-export const STOCKADE = Object.freeze({ half: 22, gate: 1, walk: 1, lane: 3, section: 4, clear: 6, parade: 8 });
+export const STOCKADE = Object.freeze({ half: 22, gate: 1, walk: 1, lane: 3, section: 4, clear: 6, parade: 8, high: 1.45, stair: 4 });
 
 /**
  * The ground its people tread bare, in squares out from its middle: its street from gate to gate
@@ -83,7 +86,10 @@ export function standsAt(plan, at, places = plan.places) {
  * inclusive); its two `gates` ({ side, squares, at, facing }: at, the middle of the gap in its
  * wall, facing out); its `sections` of wall, in the order they break open (each { side, wall,
  * walk: its squares of wall and of walkway behind them, at: its middle, along: the way its wall
- * runs }); the squares of its `corners` and of the walkway's (`corners`: { wall, walk }); and the
+ * runs }); the squares of its `corners` and of the walkway's (`corners`: { wall, walk }); its
+ * `stairs` up to the walkway (either side of each gate, along the lane by the walkway, rising
+ * away from the gate: { side, squares, foot, top ([x, y] metres: the middles of its ends), onto
+ * (the walkway's squares beside its upper half, which it comes up onto) }); and the
  * camp within, in metres: its `fire`, its `tents` ({ at, facing }: each facing the street), its
  * sentries' `posts` ({ at, facing }: by each gate first, facing out), and where its army stands
  * (`parade`: { at, facing }, facing the front gate); and the ground trodden bare (`trodden`:
@@ -106,6 +112,7 @@ export function stockadeOf({ id, at, front = 0 }) {
     const along = ({ su, sv }, t, out) => (su ? square(su * out, t) : square(t, sv * out));
     const sections = [];
     const gates = [];
+    const stairs = [];
 
     for (const side of sides) {
         const runs = side.gated ? [[-(half - 1), -(gate + 1)], [gate + 1, half - 1]] : [[-(half - 1), -(gate + 1)], [-gate, gate], [gate + 1, half - 1]];
@@ -132,6 +139,22 @@ export function stockadeOf({ id, at, front = 0 }) {
             const ts = Array.from({ length: gate * 2 + 1 }, (_, k) => k - gate);
 
             gates.push({ side: sideOf(side), squares: ts.map((t) => along(side, t, half)), at: point(side.su * half, 0), facing: facingAlong(side.su * fx, side.su * fy) });
+
+            // (Its stairs: on the lane's row by the walkway, from beside the gate's post away
+            // along the wall, coming up onto the walkway beside their upper half)
+            const row = side.su * (half - walk - 1);
+
+            for (const v of [-1, 1]) {
+                const ts = Array.from({ length: STOCKADE.stair }, (_, k) => v * (gate + 2 + k));
+
+                stairs.push({
+                    side: sideOf(side),
+                    squares: ts.map((t) => square(row, t)),
+                    foot: point(row, v * (gate + 1.5)),
+                    top: point(row, v * (gate + 1.5 + STOCKADE.stair)),
+                    onto: ts.slice(STOCKADE.stair / 2).map((t) => square(side.su * (half - walk), t)),
+                });
+            }
         }
     }
 
@@ -183,6 +206,7 @@ export function stockadeOf({ id, at, front = 0 }) {
         gates,
         sections,
         corners,
+        stairs,
         fire: point(0, 0),
         tents,
         posts,
@@ -243,4 +267,51 @@ export function squaresOf(stockade, broken = []) {
         wall: [...stockade.corners.wall, ...standing.flatMap(({ wall }) => wall)],
         walk: [...stockade.corners.walk, ...standing.flatMap(({ walk }) => walk)],
     };
+}
+
+/**
+ * The walkway standing behind a stockade's wall with those of its sections `broken` open
+ * (indices: brokenOf), in runs, each of squares joined side to side (round its corners: a gate or
+ * a breach parts them): [{ squares ([{ square ([x, y]), at ([x, y] metres: its middle), facing
+ * (out over the wall; at a corner, out over its corner) }]), reached (whether a stair comes up
+ * onto it) }], in its stockade's order.
+ */
+export function walkwayOf(stockade, broken = []) {
+    const { walk } = squaresOf(stockade, broken);
+    const [mx, my] = stockade.middle;
+    const left = new Map(walk.map((square) => [`${square[0]},${square[1]}`, square]));
+    const onto = new Set(stockade.stairs.flatMap(({ onto: squares }) => squares.map(([x, y]) => `${x},${y}`)));
+    const runs = [];
+
+    for (const start of walk) {
+        if (!left.has(`${start[0]},${start[1]}`)) {
+            continue;
+        }
+
+        const run = [];
+        const next = [start];
+
+        left.delete(`${start[0]},${start[1]}`);
+
+        while (next.length) {
+            const [x, y] = next.shift();
+            const [dx, dy] = [x - mx, y - my];
+            const out = Math.abs(dx) === Math.abs(dy) ? [Math.sign(dx), Math.sign(dy)] : Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+
+            run.push({ square: [x, y], at: [x + 0.5, y + 0.5], facing: facingAlong(...out) });
+
+            for (const [sx, sy] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+                const key = `${sx},${sy}`;
+
+                if (left.has(key)) {
+                    next.push(left.get(key));
+                    left.delete(key);
+                }
+            }
+        }
+
+        runs.push({ squares: run, reached: run.some(({ square: [x, y] }) => onto.has(`${x},${y}`)) });
+    }
+
+    return runs;
 }

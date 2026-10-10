@@ -70,6 +70,7 @@ import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.
 import { nearestFree, squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
+import { RAISED } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
@@ -992,18 +993,21 @@ export class Game {
      * The ground's height on a map at a point in the world (metres), as a function (x, z), or null
      * where it's flat at 0 (indoors, or a town on its own).
      */
-    groundOf(mapId) {
+    groundOf(mapId, { bare = false } = {}) {
         this.groundsOf ??= new Map();
 
-        if (!this.groundsOf.has(mapId)) {
+        const key = `${mapId}${bare ? ":bare" : ""}`;
+
+        if (!this.groundsOf.has(key)) {
             const map = this.world.maps?.[mapId];
             const [ox, oz] = this.originOf(mapId);
             const most = map?.width - 0.01;
+            const heightAt = bare && map?.ground?.heightAt ? (x, y) => map.ground.heightAt(x, y) : map?.heightAt && ((x, y) => map.heightAt(x, y));
 
-            this.groundsOf.set(mapId, map?.heightAt ? (x, z) => map.heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
+            this.groundsOf.set(key, heightAt ? (x, z) => heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
         }
 
-        return this.groundsOf.get(mapId);
+        return this.groundsOf.get(key);
     }
 
     // How high the ground is on a map at a point in the world (metres: 0 where it's flat)
@@ -1173,7 +1177,8 @@ export class Game {
         this.banners.setGround(this.groundOf("town"));
         this.camps.setGround(this.groundOf("town"));
         this.forts3d.setGround(this.groundOf("town"));
-        this.stockades.setGround(this.groundOf("town"));
+        // (A stockade on the ground under it, not its walkway's deck: core/overworld.js RAISED)
+        this.stockades.setGround(this.groundOf("town", { bare: true }));
 
         // What flies over the world outside: birds of each land, and the wyverns and the dragon
         // near their lairs (flyers3d.js)
@@ -4182,7 +4187,8 @@ export class Game {
         const chunk = map.chunkAt?.(sx, sz);
         const k = chunk ? (sz - chunk.y0) * CHUNK + (sx - chunk.x0) : -1;
 
-        return footing(ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
+        // (On an army's camp's walkway, or a stair up to it: its boards)
+        return footing(k >= 0 && chunk.bridge[k] === RAISED ? GROUND.planks : ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
     }
 
     // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
@@ -6169,6 +6175,22 @@ export class Game {
                     effects.burst("dust", avatar.point(0.1));
                     // (Slipping it: aside, away from where it came from, or back)
                     avatar.actions.dodge?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
+                    break;
+                }
+                case "covered": {
+                    // (A shot taken by the stakes before someone up on a camp's walkway: splinters
+                    // off them between whoever shot and them, a knock on wood)
+                    const by = event.by ? this.avatars.get(event.by) : null;
+                    const at = avatar.point(0.6);
+                    const direction = by ? at.clone().sub(by.point(0.7)).setY(0).normalize() : null;
+
+                    if (direction) {
+                        at.addScaledVector(direction, -1);
+                    }
+
+                    hud.damage(this.#screenAbove(event.id), "Cover", { kind: "stun" });
+                    effects.burst("woodChips", at, direction);
+                    this.sound?.play("block", { at });
                     break;
                 }
                 case "blocked": {

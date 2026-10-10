@@ -2077,8 +2077,10 @@ The second of the palisades' parts: an army's camp as it stands in the world (`w
 - **its gates,** each 3 m wide, in the middle of its front wall (the side towards what it's pitched
   against: `camp.front`) and of its back wall: between tall posts under a lintel, their leaves
   swung open inside;
-- **its walkway** along the inside of its wall, 1.45 m up on posts, and a ladder up to it either
-  side of each gate; **its lane** inside that, 3 m wide, kept clear;
+- **its walkway** along the inside of its wall, 1.45 m up on posts, its stakes breast high to
+  whoever's on it, and a stair up to it either side of each gate (`stairs`: on the lane's row by
+  the walkway, from beside the gate's post 4 m away along the wall, coming up onto the walkway
+  beside its upper half); **its lane** inside that, 3 m wide, kept clear;
 - **the camp within:** its fire in the middle; its tents in rows either side of the street from
   gate to gate behind it; its parade ground before it; its sentries by its gates and on its lane.
   The street and the parade ground are trodden bare, and the ground within and 6 m round it
@@ -2095,9 +2097,11 @@ destroyed.
 
 **In the world,** once its camp's built, wherever it is (its tents and sentries only near a
 player, as before):
-- its wall's squares are blocked, solid and not seen through, its walkway's blocked and solid, its
-  gates and breaches open; the navigation mesh round it is made again (`dropTiles`), so the way in
-  is by its gates or its breaches;
+- its wall's squares are blocked, solid and not seen through but from its walkway (`LOW`); its
+  walkway's and its stairs' are decks raised over the ground (`RAISED`: walked on at their height,
+  the ground under them by no one), the way up onto the walkway by its stairs; its gates and
+  breaches open; the navigation mesh round it is made again (`dropTiles`), so the way in is by its
+  gates or its breaches;
 - it's drawn within 220 m of a player (`STOCKADES_VIEW`);
 - **its army at its camp** stands on its parade ground, facing its front gate, not among its tents.
 
@@ -2125,9 +2129,32 @@ near for 20 s (`#holdStockade`):
 - its army's shield line and two-handers in ranks across its openings (its gates, and its breaches),
   1.2 m inside them, ranks 1.6 m apart, each kept within 3 m of its place; each opening's share as
   near it is to the enemy (weighed by 1 / (10 + metres)³, the nearest the most);
-- its archers and casters 7 m inside behind them;
+- its archers and casters up on its walkway (below);
 - any enemy within the stockade theirs to go after, as far as it takes;
 - posted again only as its openings, their shares or its numbers change.
+
+**From its walkway** (`walkwayOf`): its archers and casters stand on its squares nearest the enemy,
+of what a stair comes up onto (a run of it cut off by breaches, none), 2 squares apart each way,
+facing out over the wall, each the one of them nearest its place; going after no one outside
+further than they reach (any more than there's room for 7 m inside its openings, behind its line):
+- **seen over its stakes** from up there, and up at whoever's on it, both ways
+  (`battle.js` `#sees`: the stakes `LOW`, the walkway `RAISED`); from the ground either side of
+  them, as before, nothing;
+- **out of reach of blows** from the lane under it, and it of theirs (`#apart`: more than 0.75 m
+  one over the other); the way at whoever's up there is up a stair, and none steps up onto it, or
+  down off it, but by one (`#clear`);
+- **behind the stakes:** a shot or a spell from below at whoever's on it, over them, is taken by
+  them as often as not (`COVER`: not fire left burning on the ground). **In the game,** *Cover*
+  over them, splinters off the stakes between, and a knock on wood (*Block*);
+- **drawn** on its boards (the ground they're drawn on is a stockade's own, not its decks'), its
+  stairs a flight of treads on stringers (once ladders); and the boards heard underfoot.
+
+In storms near a player (the world of seed 2; an army at its camp, met by a reserve: 20, 30 and 40
+against 30 to 50), its archers and casters on its walkway landed 60 to 110 hits a storm, the stakes
+taking a fifth of what was shot and cast up at them; even numbers held it with more left standing
+(17 and 23 of 30 and 40, from 11 and 15), but against half as many again it fell sooner, its
+archers picked off by the enemy's casters. (How the war reckons a storm it doesn't see against
+this is next: #460c.)
 
 **Stormed** by those that come within 60 m of it (`#storming`): their archers and casters before
 the opening nearest them, 14 m out, facing in; the rest making for its parade ground, by its gates
@@ -2135,7 +2162,8 @@ or breaches, and fighting whoever stands in the way, within 40 m of it.
 
 **Hacked at** (`#hack`): the section of its wall nearest them, 8 m or more clear of its openings,
 stood up in the battle as its stakes (`KINDS.stakes`: 900 hit points, standing over the section's
-squares), and a fifth of their shield line and two-handers (2 to 6) set at it from 1.5 m outside.
+squares), and a fifth of their shield line and two-handers (2 to 6) set at it from 1.5 m outside
+(all fallen, under the arrows from its walkway, as many again of the rest, unannounced).
 None set on a palisade of their own accord, nor come to the help of those hacking at one. Felled,
 it's broken open in the war (`war.breach`: that section, one more breach) and so in the world, a
 way in; another's hacked at 45 s on. **In the game** the stakes stand in as a fortification does,
@@ -2166,7 +2194,9 @@ wood.
 **Kept.** Which sections of each camp's palisade are broken open (`broken`) are in the war's
 snapshot (`WAR_VERSION` 9; a war kept before has the first of its stockade's order broken, as many
 as its breaches). The storms under way are in the host's. What two games share changed
-(`NET_VERSION` 94): the storms, and those hacking at a palisade left to it.
+(`NET_VERSION` 94): the storms, and those hacking at a palisade left to it; and again (`NET_VERSION`
+96): its walkway and stairs raised, walked and fought from (the world's squares, the navigation
+mesh, sight, blows and cover).
 
 ### Playing together (M11)
 

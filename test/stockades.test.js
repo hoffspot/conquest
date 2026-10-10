@@ -2,15 +2,18 @@
 // core/overworld.js and core/host.js; docs/WAR.md *The stockade*): laid out square to the world,
 // its front gate towards what it's pitched against; its sections broken open in its own order;
 // pitched only where it stands clear; the world's squares under it, its wall not seen through, its
-// gates and breaches open, the ground within cleared and trodden; and the host telling the world
+// gates and breaches open, the ground within cleared and trodden; its walkway raised behind its
+// wall, a stair up to it either side of each gate, fought from over its stakes; and the host
+// telling the world
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { navigatorOf } from "../client/js/core/navigation.js";
+import { buildWorld, LOW, RAISED } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
-import { brokenOf, frontOf, nextBreak, SIDES, squaresOf, STOCKADE, stockadeOf, standsAt } from "../client/js/core/war/stockade.js";
+import { brokenOf, frontOf, nextBreak, SIDES, squaresOf, STOCKADE, stockadeOf, standsAt, walkwayOf } from "../client/js/core/war/stockade.js";
 import { STAGES, TURN_MS, War, WAR_VERSION } from "../client/js/core/war/war.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
 
@@ -23,12 +26,27 @@ before(() => {
     plan = planWorld(3);
 });
 
-// A square's own, in the world's chunks: { blocked, solid, opaque, ground }
+// A square's own, in the world's chunks: { blocked, solid, opaque, ground, bridge }
 function squareOf(world, [x, y]) {
     const chunk = world.chunkAt(x, y);
     const k = (y - chunk.y0) * 64 + (x - chunk.x0);
 
-    return { blocked: chunk.blocked[k], solid: chunk.solid[k], opaque: chunk.opaque[k], ground: chunk.ground[k] };
+    return { blocked: chunk.blocked[k], solid: chunk.solid[k], opaque: chunk.opaque[k], ground: chunk.ground[k], bridge: chunk.bridge[k] };
+}
+
+// A stockade set in the world of seed 2, clear of its start town (facing west, its front gate
+// that way): the world, the stockade, and a square of it from steps out of its middle along its
+// front and across it
+function pitched() {
+    const world = buildWorld({ seed: 2 });
+    const town = world.maps.town;
+    const at = [town.stamp.middle[0] + SETTLEMENT_KINDS[town.start.kind].radius + 120, town.stamp.middle[1] + 5];
+    const stockade = stockadeOf({ id: "camp-900", at, front: 3 });
+    const [fx, fy] = SIDES[3];
+
+    town.setStockades([{ stockade, broken: [] }]);
+
+    return { world, town, stockade, square: (u, v) => [stockade.middle[0] + u * fx + v * fy, stockade.middle[1] + u * fy - v * fx] };
 }
 
 function run(host, ms) {
@@ -42,7 +60,7 @@ function run(host, ms) {
 }
 
 describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.js)", () => {
-    it("lays a stockade out square to the world: a gate front and back, its walkway inside its wall, the camp within", () => {
+    it("lays a stockade out square to the world: a gate front and back, its walkway inside its wall and stairs up to it, the camp within", () => {
         for (const front of [0, 1, 2, 3]) {
             const stockade = stockadeOf({ id: "camp-7", at: [1000.4, 2000.7], front });
             const { half, gate, walk, lane } = STOCKADE;
@@ -76,6 +94,23 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
             assert.ok(wall.every((square) => Math.max(...local(square).map(Math.abs)) === half));
             assert.ok(squaresOf(stockade).walk.every((square) => Math.max(...local(square).map(Math.abs)) === half - walk));
             assert.deepEqual(stockade.sections.map(({ wall: squares }) => squares.length).sort(), [...Array(40).fill(4), 3, 3].sort());
+
+            // Its stairs: either side of each gate, on the lane's row by the walkway, rising away
+            // from the gate; coming up onto the walkway beside their upper half
+            const walkway = new Set(squaresOf(stockade).walk.map(key));
+            const sentries = new Set(stockade.posts.map(({ at }) => key([at[0] - 0.5, at[1] - 0.5])));
+
+            assert.equal(stockade.stairs.length, 4);
+
+            for (const { squares, foot, top, onto } of stockade.stairs) {
+                const across = squares.map((square) => Math.abs(local(square)[1]));
+
+                assert.ok(squares.every((square) => Math.abs(local(square)[0]) === half - walk - 1));
+                assert.deepEqual(across, [gate + 2, gate + 3, gate + 4, gate + 5]);
+                assert.ok(Math.abs(local([top[0] - 0.5, top[1] - 0.5])[1]) - Math.abs(local([foot[0] - 0.5, foot[1] - 0.5])[1]) === STOCKADE.stair, "(rising away from its gate)");
+                assert.ok(onto.every((square) => walkway.has(key(square))) && onto.length === 2);
+                assert.ok(squares.every((square) => !sentries.has(key(square))), "(clear of the sentries by the gate)");
+            }
 
             // The camp within: its tents and its sentries inside its lane, its army facing its front gate
             for (const { at } of [...stockade.tents, ...stockade.posts]) {
@@ -214,7 +249,7 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         assert.equal(War.restore(plan, older).camp(camp.id).front, camp.front);
     });
 
-    it("stands over the world's squares: its wall blocked and not seen through, its walkway blocked, its gates open, the ground within cleared and trodden", () => {
+    it("stands over the world's squares: its wall blocked and not seen through but from its walkway, its walkway and stairs raised, its gates open, the ground within cleared and trodden", () => {
         const world = buildWorld({ seed: 2 }).maps.town;
         const at = [world.start ? 0 : 0, 0].map((_, k) => world.stamp.middle[k] + (k ? 5 : SETTLEMENT_KINDS[world.start.kind].radius + 120));
         const stockade = stockadeOf({ id: "camp-900", at, front: 3 });
@@ -235,11 +270,30 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         const { wall, walk } = squaresOf(stockade);
 
         for (const square of wall) {
-            assert.deepEqual([squareOf(world, square).blocked, squareOf(world, square).solid, squareOf(world, square).opaque], [1, 1, 1]);
+            assert.deepEqual([squareOf(world, square).blocked, squareOf(world, square).solid, squareOf(world, square).opaque], [1, 1, LOW]);
+            assert.ok(world.squares.opaque(...square) && world.squares.low(...square));
         }
 
+        // (Its walkway's boards STOCKADE.high over the ground, walked on there; its stairs from
+        // the ground up to them)
         for (const square of walk) {
-            assert.deepEqual([squareOf(world, square).blocked, squareOf(world, square).solid], [1, 1]);
+            const [x, y] = [square[0] + 0.5, square[1] + 0.5];
+
+            assert.deepEqual([squareOf(world, square).blocked, squareOf(world, square).solid, squareOf(world, square).bridge], [0, 0, RAISED]);
+            assert.ok(Math.abs(world.heightAt(x, y) - world.ground.heightAt(x, y) - STOCKADE.high) < 1e-9);
+        }
+
+        for (const { squares, foot, top, onto } of stockade.stairs) {
+            assert.ok(squares.every((square) => squareOf(world, square).bridge === RAISED && world.squares.raised(...square)));
+
+            // (Just inside its ends: past them, the lane's ground; at its top, as high as the
+            // walkway beside it)
+            const along = [0.02, 0.25, 0.5, 0.75, 0.98].map((t) => [foot[0] + (top[0] - foot[0]) * t, foot[1] + (top[1] - foot[1]) * t]);
+            const rise = along.map(([x, y]) => world.heightAt(x, y) - world.ground.heightAt(x, y));
+            const [wx, wy] = onto.at(-1);
+
+            assert.ok(Math.abs(rise[0]) < 0.05 && Math.abs(world.heightAt(...along[4]) - world.heightAt(wx + 0.5, wy + 0.5)) < 0.06, `(from the ground up to the walkway: ${rise})`);
+            assert.ok(rise.every((each, k) => !k || each > rise[k - 1]));
         }
 
         for (const square of stockade.gates.flatMap(({ squares }) => squares)) {
@@ -263,7 +317,7 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         assert.equal(world.setStockades([{ stockade, broken: [3] }]).length, 1);
 
         for (const square of [...stockade.sections[3].wall, ...stockade.sections[3].walk]) {
-            assert.equal(squareOf(world, square).solid, 0);
+            assert.deepEqual([squareOf(world, square).solid, squareOf(world, square).opaque, squareOf(world, square).bridge], [0, 0, 0]);
         }
 
         assert.equal(squareOf(world, stockade.sections[0].wall[0]).solid, 1);
@@ -271,6 +325,120 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         // Gone: its squares as they were
         assert.equal(world.setStockades([]).length, 1);
         assert.ok(wall.every((square) => !squareOf(world, square).solid || !squareOf(world, square).opaque));
+    });
+
+    it("has its walkway in runs, each from a gate or a breach round to the next, a stair up onto those by a gate", () => {
+        const stockade = stockadeOf({ id: "camp-7", at: [1000, 2000], front: 0 });
+        const whole = walkwayOf(stockade);
+        const walk = squaresOf(stockade).walk;
+
+        // Whole: either side of its gates, round its corners, a stair up onto each
+        assert.equal(whole.length, 2);
+        assert.ok(whole.every(({ reached }) => reached));
+        assert.equal(whole.reduce((sum, { squares }) => sum + squares.length, 0), walk.length);
+
+        // (Each square facing out over its wall, a corner's over its corner)
+        for (const { square, at, facing } of whole.flatMap(({ squares }) => squares)) {
+            const [dx, dy] = [square[0] - 1000, square[1] - 2000];
+
+            assert.deepEqual(at, [square[0] + 0.5, square[1] + 0.5]);
+            assert.ok(Math.sin(facing) * dx + Math.cos(facing) * dy > 0);
+        }
+
+        // Breached twice along a side with no gate: its middle a run of its own, no stair up onto
+        // it; the rest of that side's run either side, each still with its stair
+        const side = (k) => stockade.sections.filter((section) => section.side === k);
+        const [left] = side(1).filter(({ walk: squares }) => squares.length && squares.every(([, y]) => y < 2000));
+        const [right] = side(1).filter(({ walk: squares }) => squares.length && squares.every(([, y]) => y > 2000));
+        const runs = walkwayOf(stockade, [stockade.sections.indexOf(left), stockade.sections.indexOf(right)]);
+
+        assert.equal(runs.length, 4);
+        assert.deepEqual(runs.map(({ reached }) => reached).sort(), [false, true, true, true]);
+        assert.ok(runs.find(({ reached }) => !reached).squares.every(({ square: [x] }) => x === 1000 + STOCKADE.half - STOCKADE.walk));
+    });
+
+    it("is walked up its stairs onto its walkway, not climbed up from the lane beside it", () => {
+        const { town, stockade, square } = pitched();
+        const navigation = navigatorOf(town);
+        const stairs = new Set(stockade.stairs.flatMap(({ squares }) => squares.map(key)));
+        const on = (path) => path.slice(1).some(([x, y], k) => [0.25, 0.5, 0.75].some((t) => stairs.has(key([Math.floor(path[k][0] + (x - path[k][0]) * t), Math.floor(path[k][1] + (y - path[k][1]) * t)]))));
+
+        // From its parade ground up onto its walkway (beside a stair's top, and half way along a
+        // side): up a stair, ending on its boards
+        for (const [u, v] of [[STOCKADE.half - STOCKADE.walk, -(STOCKADE.gate + 5)], [0, -(STOCKADE.half - STOCKADE.walk)]]) {
+            const [x, y] = square(u, v);
+            const path = navigation.path(stockade.parade.at, [x + 0.5, y + 0.5]);
+            const [ex, ey] = path.at(-1);
+
+            assert.ok(Math.hypot(ex - x - 0.5, ey - y - 0.5) < 0.3, `(gets there: ${path.at(-1)})`);
+            assert.ok(on(path), "(up a stair)");
+            assert.ok(Math.abs(town.heightAt(ex, ey) - town.ground.heightAt(ex, ey) - STOCKADE.high) < 1e-9);
+        }
+
+        // From the lane under it: round by a stair, not straight up
+        const [lx, ly] = square(STOCKADE.half - STOCKADE.walk - 1, -12);
+        const [wx, wy] = square(STOCKADE.half - STOCKADE.walk, -12);
+        const path = navigation.path([lx + 0.5, ly + 0.5], [wx + 0.5, wy + 0.5]);
+
+        assert.ok(on(path) && path.length > 2);
+        assert.ok(navigation.walkable(wx + 0.5, wy + 0.5) && !navigation.walkable(wx + 0.05, wy + 0.5));
+    });
+
+    it("is fought from on its walkway: seen over its stakes from there, out of reach of blows from under it, the stakes taking shots and spells at whoever's on it as often as not", () => {
+        const { world, town, square } = pitched();
+        const battle = new Battle(world, { seed: 5 });
+        const { half, walk } = STOCKADE;
+        const add = (id, team, [u, v], weapon) => battle.add({ id, kind: "soldier", team, square: square(u, v), weapon, ai: "fort", armed: true, hp: 1e6 });
+        const up = add("up", "orc", [half - walk, -10], "bow");
+        const under = add("under", "orc", [half - walk - 2, -10], "bow");
+        const out = add("out", "human", [half + 6, -10], "bow");
+
+        assert.ok(town.squares.raised(...up.square) && !town.squares.raised(...under.square));
+
+        // Seen over its stakes from its walkway, and up on it from outside; not from the ground
+        // either side of them
+        assert.ok(battle.canSee(out, up) && battle.canSee(up, out));
+        assert.ok(!battle.canSee(out, under) && !battle.canSee(under, out));
+
+        // Shots at whoever's on it, as often as not taken by its stakes; none at whoever's outside
+        battle.remove("under");
+
+        const events = [];
+
+        for (let t = 0; t < 60000; t += STEP_MS) {
+            events.push(...battle.advance(STEP_MS));
+        }
+
+        const at = (id, type) => events.filter((event) => event.type === type && event.id === id).length;
+
+        assert.ok(at("up", "covered") > 5 && at("up", "hit") > 5, `(covered ${at("up", "covered")}, hit ${at("up", "hit")})`);
+        assert.ok(at("up", "covered") / (at("up", "covered") + at("up", "hit")) > 0.3 && at("up", "covered") / (at("up", "covered") + at("up", "hit")) < 0.7);
+        assert.equal(at("out", "covered"), 0);
+        assert.ok(at("out", "hit") > 5);
+
+        // Out of reach of a blow from the lane under it; not from beside it on it
+        const blows = new Battle(world, { seed: 6 });
+        const swords = (id, team, at) => blows.add({ id, kind: "soldier", team, square: square(...at), weapon: "sword", ai: "fort", armed: true, hp: 1e6 });
+
+        swords("on", "orc", [half - walk, -10]);
+        swords("below", "human", [half - walk - 1, -10]);
+
+        const struck = [];
+
+        for (let t = 0; t < 3000; t += STEP_MS) {
+            struck.push(...blows.advance(STEP_MS).filter(({ type }) => type === "attack"));
+        }
+
+        assert.equal(struck.length, 0, "(none from under it)");
+
+        swords("beside", "human", [half - walk, -11]);
+
+        for (let t = 0; t < 3000; t += STEP_MS) {
+            struck.push(...blows.advance(STEP_MS).filter(({ type }) => type === "attack"));
+        }
+
+        assert.ok(struck.some(({ id }) => id === "beside") && struck.some(({ id, target }) => id === "on" && target === "beside"));
+        assert.ok(!struck.some(({ id }) => id === "below"));
     });
 
     it("stands an army met at its camp on its parade ground, facing out of its front gate", () => {
@@ -336,7 +504,7 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
 
         assert.ok(built.some(({ type }) => type === "stockades"));
         assert.equal(squareOf(world, square).solid, 1);
-        assert.equal(squareOf(world, square).opaque, 1);
+        assert.equal(squareOf(world, square).opaque, LOW);
 
         // Breached
         Object.assign(camp, { breaches: 1, broken: [0] });

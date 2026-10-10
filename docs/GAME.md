@@ -777,7 +777,10 @@ hundreds has a fight, not a crowd, on them.
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
   no opaque square (a wall or a house hides a target; a table or barrels don't). The line is
-  looked along four points a metre, each square it crosses asked about once.
+  looked along four points a metre, each square it crosses asked about once. From a deck raised
+  over the ground, or at someone on one, it's looked over what's low (an army's camp's stakes from
+  its walkway: `RAISED`, `LOW`, docs/WAR.md *A storm near a player*); and no blow's struck
+  between two more than 0.75 m one over the other there (the walkway and the lane under it).
 - **Looking for enemies.** Every step, each armed character asks whether it's in a fight, and
   each on patrol, in the wild or following someone which enemy it can see is nearest: each of
   them about everyone else. How two peoples stand in the war takes the longest to ask (the war's
