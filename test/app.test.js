@@ -5,7 +5,7 @@ import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, random
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
-import { PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
+import { messagePlace, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -207,7 +207,8 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadSettings(), SETTINGS_DEFAULTS);
         assert.equal(SETTINGS_DEFAULTS.minimap, true, "the minimap starts on");
         assert.equal(SETTINGS_DEFAULTS.sound, true, "and so does the sound");
-        assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [true, 1, false, true], "and the camera as it's always been");
+        assert.deepEqual([SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [1, false, true], "and the camera's turning as it's always been");
+        assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.battleCam], [false, true], "not following round behind the player, but framing fights");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
@@ -231,6 +232,20 @@ describe("saving (save.js)", () => {
         // Set again, they're remembered
         saveSettings({ effectsVolume: 0.3 });
         assert.equal(loadSettings().effectsVolume, 0.3);
+    });
+
+    it("forgets following saved when the camera followed by default, for today's default (not following), keeping it once it's set again", () => {
+        const items = useStorage();
+
+        items.set("pellagos.settings", JSON.stringify({ minimap: false, cameraFollows: true, effectsVolume: 0.3, volumeScale: 2 }));
+
+        const settings = loadSettings();
+
+        assert.equal(settings.cameraFollows, false);
+        assert.deepEqual([settings.minimap, settings.effectsVolume, settings.battleCam], [false, 0.3, true]);
+
+        saveSettings({ cameraFollows: true });
+        assert.equal(loadSettings().cameraFollows, true);
     });
 
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {
@@ -340,7 +355,7 @@ describe("saving (save.js)", () => {
         useStorage();
 
         const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
-        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], quick: ["stun", null, "item:ale", "vigor"] };
+        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], quick: ["stun", null, "item:ale", "vigor"], version: 2 };
 
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
@@ -752,12 +767,13 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("starts with Vigor at the top of the player's own wheel (Make camp on its other side, with a wave, a bow, a nod and a cheer), the elements' first spells and Stun on an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
-        const enemy = { n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" };
+    it("starts with Vigor at the top of the player's own wheel (Make camp on its other side, with a wave, a bow, a nod and a cheer), Attack at the top of an enemy's with the elements' first spells and Stun round it, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
+        const enemy = { n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" };
         const self = [{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" }];
 
         assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"] });
+        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"], version: 2 });
+        assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
             assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order) || EMOTES[action.emote], id);
@@ -826,17 +842,34 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         assert.deepEqual(assignable("self"), ["camp", ...emotes], "nothing not known, but making camp and the emotes");
         assert.deepEqual(assignable("self", { learnt: starting }), ["vigor", "camp", ...emotes]);
-        assert.deepEqual(assignable("enemy", { learnt: starting }), ["vigor", "burn", "rumble", "hurt", "blister", "stun"]);
+        assert.deepEqual(assignable("enemy", { learnt: starting }), ["vigor", "burn", "rumble", "hurt", "blister", "stun", "attack"]);
         assert.deepEqual(assignable("self", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["vigor", "mendWounds", "camp", ...emotes, "item:potion", "item:ale"]);
-        assert.deepEqual(assignable("enemy", { learnt: ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"]);
+        assert.deepEqual(assignable("enemy", { learnt: ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot", "attack"]);
     });
 
     it("reads the wheels as kept, keeping only what goes on each wheel, in its seven slices, on two sides", () => {
         const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
 
         // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
-        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }, {}], quick: [...QUICK] });
-        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], quick: [] }), { self: [{}, {}], enemy: [{}, {}], quick: [null, null, null, null] });
+        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], quick: [...QUICK], version: 2 });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], quick: [null, null, null, null], version: 2 });
+    });
+
+    it("puts Attack at the top of an enemy's wheel kept from before it was, what was there moved to the first empty slice; once: taken off after, it stays off", () => {
+        // (The enemy's wheel as it started then: Burn at the top, moved round to SE)
+        const before = { self: [{ n: "vigor" }, {}], enemy: [{ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }, {}], quick: [...QUICK] };
+
+        assert.deepEqual(readWheels(before).enemy, [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}]);
+
+        // (Its first side full: onto the other; on it already, left where it is; nothing at the top: just put there)
+        const full = { n: "burn", ne: "hurt", e: "blister", se: "stun", sw: "vigor", w: "rumble", nw: "fireball" };
+
+        assert.deepEqual(readWheels({ enemy: [full, { n: "hold" }] }).enemy, [{ ...full, n: "attack" }, { n: "hold", ne: "burn" }]);
+        assert.deepEqual(readWheels({ enemy: [{ n: "stun" }, { e: "attack" }] }).enemy, [{ n: "stun" }, { e: "attack" }]);
+        assert.deepEqual(readWheels({ enemy: [{}, {}] }).enemy, [{ n: "attack" }, {}]);
+
+        // (Kept since, without it: as kept)
+        assert.deepEqual(readWheels({ enemy: [{ n: "stun" }, {}], version: 2 }).enemy, [{ n: "stun" }, {}]);
     });
 
     it("starts the quick actions with Vigor, Stun, Burn and a draught; reads them as kept, four, each something either wheel can hold", () => {
@@ -869,8 +902,8 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const learnt = ["vigor", "stun", "burn", "mendWounds", "powerStrike"];
         const emotes = Object.keys(EMOTES).map((name) => `emote:${name}`);
 
-        assert.deepEqual(assignable("quick", { learnt, carries: ["potion", "sword", "potion"] }), ["vigor", "mendWounds", "camp", ...emotes, "item:potion", "burn", "stun", "powerStrike"]);
-        assert.deepEqual(assignable("quick"), ["camp", ...emotes]);
+        assert.deepEqual(assignable("quick", { learnt, carries: ["potion", "sword", "potion"] }), ["vigor", "mendWounds", "camp", ...emotes, "item:potion", "burn", "stun", "powerStrike", "attack"]);
+        assert.deepEqual(assignable("quick"), ["camp", ...emotes, "attack"]);
     });
 
     it("draws a side: its slices, what's in each with a count for things to use, and S to turn it over", () => {
@@ -887,6 +920,38 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 });
 
 describe("the bars over the others (hud.js)", () => {
+    it("puts a message where it goes as a rule if that's clear of those fighting, else the first place that is, staying where it is while that's clear; if none is, over the least of them", () => {
+        // (A message 300 by 50 on a screen 1000 wide: its places 28% down, under the buttons, over
+        // the quick actions, and at the left and right a little up from half way)
+        const places = [
+            { x: 500, top: 170 },
+            { x: 500, top: 70 },
+            { x: 500, top: 420 },
+            { x: 160, top: 245 },
+            { x: 840, top: 245 },
+        ];
+        const size = { width: 300, height: 50 };
+        const foe = { left: 470, top: 150, right: 530, bottom: 300 };
+        const player = { left: 470, top: 300, right: 530, bottom: 480 };
+
+        assert.equal(messagePlace(places, [], size), 0, "no one fighting: where it goes as a rule");
+        assert.equal(messagePlace(places, [{ left: 100, top: 150, right: 160, bottom: 300 }], size), 0, "off to the side, clear of it");
+        assert.equal(messagePlace(places, [foe], size), 1, "over the foe: up under the buttons");
+        assert.equal(messagePlace(places, [foe, { left: 450, top: 40, right: 520, bottom: 140 }], size), 2, "and someone there too: down over the quick actions");
+        assert.equal(messagePlace(places, [{ left: 470, top: 40, right: 530, bottom: 300 }, player], size), 3, "the foe and the player one over the other down the middle: off to the left");
+        assert.equal(messagePlace(places, [], size, 2), 2, "where it is while that's clear, not back and forth");
+        assert.equal(messagePlace(places, [{ left: 450, top: 400, right: 520, bottom: 480 }], size, 2), 0, "and not once it isn't");
+
+        // (Everywhere covered: over the least of them)
+        const crowd = [
+            { left: 300, top: 40, right: 700, bottom: 480 },
+            { left: 0, top: 240, right: 320, bottom: 300 },
+            { left: 820, top: 240, right: 1000, bottom: 300 },
+        ];
+
+        assert.equal(messagePlace(places, crowd, size), 4);
+    });
+
     it("draws a bar full size near the player's character, then smaller and fainter evenly with the distance, gone at the edge of sight", () => {
         const near = (a, b) => Math.abs(a - b) < 1e-9;
 

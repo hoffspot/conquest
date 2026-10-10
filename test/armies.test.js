@@ -281,7 +281,7 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
         assert.equal(theirs.size, Math.max(0, 20 - stormed.killed));
     });
 
-    it("raises an army at its seat, of none at first, made up over time; marches once it's made up enough, builds a camp, and attacks from it", () => {
+    it("raises an army at its seat, of none at first, made up over time; marches once it's made up enough, builds a camp, and attacks from it (a town, or a works of theirs)", () => {
         const war = warOf();
 
         // (Its rulers raise it, once at war in the border wars or later)
@@ -305,14 +305,16 @@ describe("standing armies and reserves (war.js, armies.js)", () => {
 
         const marched = later.find(({ type, realm }) => type === "marched" && realm === "human");
         const camped = later.find(({ type, realm }) => type === "camped" && realm === "human");
-        const assault = later.find(({ type, realm }) => type === "assault" && realm === "human");
+        // (Its first attack from a camp: on a town, or on a works of theirs on its way to one)
+        const assault = later.find(({ type, realm, works, army: id }) => realm === "human" && (type === "assault" || (type === "battle" && works && id === army.id)));
         // (The camp it went at it from: its first may have been stormed, the army sent home)
         const from = later.filter(({ type, realm, turn }) => type === "camped" && realm === "human" && turn <= assault?.turn).at(-1);
+        const reach = assault?.town ? apart(from.at, war.town(assault.town).at) - edgeOf(assault.town) : apart(from.at, assault.at);
 
         assert.ok(marched && marched.size >= Math.floor(war.fullOf("human") * ARMY.ready), `marched ${marched?.size} strong`);
         assert.ok(camped && camped.turn >= marched.turn + CAMP.build, "a camp built, taking its time");
         assert.ok(assault && assault.turn >= camped.turn);
-        assert.ok(apart(from.at, war.town(assault.town).at) - edgeOf(assault.town) <= CAMP.reach, "from a camp in reach of it");
+        assert.ok(reach <= CAMP.reach, "from a camp in reach of it");
         assert.match(tell(marched, war), /^The Humans' army marches on .+, \d+ strong\.$/);
         assert.match(tell(camped, war), /^The Humans have made camp within a march of .+\.$/);
     });

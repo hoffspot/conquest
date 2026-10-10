@@ -127,7 +127,7 @@ export const KINDS = Object.freeze({
     // (A section of a camp's palisade under assault (host.js #storms): standing over its
     // `footprint` of wall, doing nothing; no one's set on it but those sent to hack it down (a
     // `siege`, or a player told to), and felled it's broken open)
-    stakes: { hp: 900, speed: 0, chase: 0, respawn: Infinity },
+    stakes: { hp: 300, speed: 0, chase: 0, respawn: Infinity },
 });
 
 /**
@@ -446,6 +446,20 @@ const STRIDE = 0.2;
 // How near (metres, middle to middle) a character closes on whoever it's after with a blow up
 // close before it stops to strike
 const MELEE_SPACING = 1.2;
+
+// How far one character can stand above another (metres) and still strike them up close, or step
+// aside to where they'd stand: a step up (navigation/settings.js AGENT's climb), not from an army's
+// camp's walkway to the lane under it (overworld.js RAISED)
+const REACH_RISE = 0.75;
+
+// What isn't seen through from a deck raised over the ground, or up at one (overworld.js RAISED),
+// by a map's squares: what isn't from the ground, but what's low (LOW: a camp's stakes)
+const OVER_LOW = new WeakMap();
+
+// How often a shot or a spell from below at someone on a raised deck, over what's low (an army's
+// camp's walkway, over its stakes), strikes the stakes instead: they're breast high to whoever's
+// on it
+const COVER = 0.5;
 
 // How sharply it turns aside round someone in its way (radians: 30°, 60°, 90° and 120°, the last
 // two to slip past someone it's run up against face to face), first away from them, then the
@@ -1031,7 +1045,8 @@ export class Battle {
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
      * near as can be), { type: "ahead", facing } (turned the way `facing` points, radians, and
-     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and fight it),
+     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and
+     * fight it; with stand: true, set on it where they stand, striking only while it's in reach),
      * { type: "enter", link: id } (walk to the link's end on its map and go through),
      * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
      * { type: "stop" }. Moving, engaging, entering and approaching, run: true runs there (while
@@ -1095,8 +1110,14 @@ export class Battle {
                     break;
                 }
 
-                actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
+                actor.order = { type: "engage", target: order.target, run: Boolean(order.run), ...(order.stand ? { stand: true } : {}) };
                 actor.pathGoal = null;
+
+                // (Set on it where they stand: wherever they were going, they stop)
+                if (order.stand) {
+                    actor.path = [];
+                }
+
                 break;
             }
             case "approach":
@@ -1427,7 +1448,8 @@ export class Battle {
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque
-    // between (along the line between their middles)?
+    // between (along the line between their middles; over what's low, from a raised deck or up at
+    // one: an army's camp's walkway over its stakes, overworld.js RAISED)?
     #sees(mapId, from, to, range = SIGHT) {
         const distance = distanceBetween(from, to);
 
@@ -1435,7 +1457,54 @@ export class Battle {
             return false;
         }
 
-        return !this.#between(this.#squares(mapId).opaque, from, to, distance);
+        const squares = this.#squares(mapId);
+
+        if (squares.raised && (squares.raised(from[0], from[1]) || squares.raised(to[0], to[1]))) {
+            if (!OVER_LOW.has(squares)) {
+                OVER_LOW.set(squares, (x, y) => squares.opaque(x, y) && !squares.low(x, y));
+            }
+
+            return !this.#between(OVER_LOW.get(squares), from, to, distance);
+        }
+
+        return !this.#between(squares.opaque, from, to, distance);
+    }
+
+    // Whether `target` is behind what's low from `attacker`: up on a raised deck (overworld.js
+    // RAISED: an army's camp's walkway), `attacker` not, something low (LOW: its stakes) between;
+    // or the other way about, `target` one hacking at the stakes (its `siege`) hard against them
+    // (one of the squares round it low), to be shot at from up there only leaning out over them
+    #covered(attacker, target) {
+        const squares = this.#squares(target.map);
+
+        if (!squares.raised) {
+            return false;
+        }
+
+        const up = squares.raised(...target.square);
+
+        if (up === squares.raised(...attacker.square) || !this.#between(squares.low, attacker.square, target.square)) {
+            return false;
+        }
+
+        const [x, y] = target.square;
+
+        return up || (Boolean(target.siege) && [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => squares.low(x + dx, y + dy))));
+    }
+
+    // Whether two points on a map (metres) are too far one over the other for a blow up close
+    // between them, or a step (REACH_RISE): only where either's on a raised deck (overworld.js
+    // RAISED: an army's camp's walkway, or a stair up to it)
+    #apart(mapId, [ax, ay], [bx, by]) {
+        const squares = this.#squares(mapId);
+
+        if (!squares.raised || !(squares.raised(Math.floor(ax), Math.floor(ay)) || squares.raised(Math.floor(bx), Math.floor(by)))) {
+            return false;
+        }
+
+        const map = this.maps[mapId];
+
+        return Math.abs(map.heightAt(ax, ay) - map.heightAt(bx, by)) > REACH_RISE;
     }
 
     // Is any square `marked` (x, y) on the way between two squares (not counting them)? (Four
@@ -2080,6 +2149,16 @@ export class Battle {
                 }
 
                 actor.order = null;
+            } else if (order.stand) {
+                // (Set on it where they stand: struck at while it's in reach, not gone after; out
+                // of reach, whoever is in reach struck at, as standing)
+                actor.path = [];
+
+                if (this.#reachable(actor, target)) {
+                    this.#attack(actor, target);
+
+                    return;
+                }
             } else {
                 this.#pursue(actor, target);
 
@@ -2121,11 +2200,12 @@ export class Battle {
         let seen = null;
 
         // (Sent to hack down a section of a palisade, its `siege`: at it, unless an enemy's on it up
-        // close: SIEGE_GUARD)
+        // close (SIEGE_GUARD) where it can be struck: not one up on the walkway over it, shooting
+        // down at it, out of its reach)
         const siege = broken || !actor.siege ? null : this.actor(actor.siege);
 
         if (siege && !siege.dead && siege.map === actor.map) {
-            seen = this.#nearestSeen(actor, (enemy) => distanceBetween(actor.square, enemy.square) <= SIEGE_GUARD && this.#roomOn(actor, enemy)) ?? siege;
+            seen = this.#nearestSeen(actor, (enemy) => distanceBetween(actor.square, enemy.square) <= SIEGE_GUARD && !this.#apart(actor.map, [actor.x, actor.y], [enemy.x, enemy.y]) && this.#roomOn(actor, enemy)) ?? siege;
         }
 
         if (!broken && !seen && !thinking && actor.target !== null) {
@@ -2396,7 +2476,8 @@ export class Battle {
 
     /**
      * Can `actor` attack `target` from where they stand (on the same map, within reach, and seen
-     * for ranged: looked for as far as the shot reaches, a bow's past where anyone looks round)?
+     * for ranged: looked for as far as the shot reaches, a bow's past where anyone looks round; up
+     * close, not one on an army's camp's walkway from the lane under it, nor down: #apart)?
      */
     #reachable(actor, target) {
         if (actor.map !== target.map) {
@@ -2405,7 +2486,11 @@ export class Battle {
 
         const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square));
 
-        return attack !== null && (attack.kind === "melee" || this.canSee(actor, target, Math.max(SIGHT, attack.reach)));
+        if (attack?.kind === "melee") {
+            return !this.#apart(actor.map, [actor.x, actor.y], [target.x, target.y]);
+        }
+
+        return attack !== null && this.canSee(actor, target, Math.max(SIGHT, attack.reach));
     }
 
     // Where `actor` aims at `target` from `from` (squares): its own square; or, standing over more
@@ -3272,7 +3357,8 @@ export class Battle {
     // Whether a character's body would be clear of every blocked square at a point; and, for one
     // standing on its map's navigation mesh (`from`), still on it there: the mesh keeps walkers off
     // what's drawn, a building's walls, a prop, a fence, where its squares don't reach, so a step
-    // aside, or back towards its way, never takes them into them
+    // aside, or back towards its way, never takes them into them; nor up onto an army's camp's
+    // walkway from the lane beside it, or down off it (#apart: the mesh is under them both)
     #clear(mapId, [x, y], from = null) {
         const squares = this.#squares(mapId);
 
@@ -3291,7 +3377,7 @@ export class Battle {
         if (from) {
             const navigation = navigatorOf(this.maps[mapId]);
 
-            return !navigation.walkable(from.x, from.y) || navigation.walkable(x, y);
+            return !this.#apart(mapId, [from.x, from.y], [x, y]) && (!navigation.walkable(from.x, from.y) || navigation.walkable(x, y));
         }
 
         return true;
@@ -3852,6 +3938,16 @@ export class Battle {
     #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null, ground = false } = {}) {
         const magic = magicOf(attack, spell);
 
+        // Behind the stakes: a shot or a spell from below at someone up on an army's camp's
+        // walkway, over its stakes, as often as not taken by them (COVER: not fire left burning
+        // on the ground); they know they were set on
+        if (!ground && attacker && (attack.kind === "ranged" || spell) && this.#covered(attacker, target) && this.random.chance(COVER)) {
+            this.#emit("covered", { id: target.id, by: attacker.id, attack: attack.id, spell, projectile });
+            this.#provoke(attacker, target);
+
+            return 0;
+        }
+
         // Slipped: by a player's own knack for it (Evasion: blows and shots, not magic) and the
         // Dodge spell's (anything) on top of it, added; nothing, but they know they were set on
         const spelled = this.buffOf(target, "dodge");
@@ -3969,6 +4065,12 @@ export class Battle {
     // player only if there's room for one more on them (AGGRO), or it fights on as it was
     #turnOn(actor, attacker, lastSeen) {
         if ((actor.ai !== "patrol" && actor.ai !== "wild") || !this.#roomOn(actor, attacker)) {
+            return;
+        }
+
+        // (One hacking at a palisade, its `siege`, keeps at it, struck from up on the walkway over
+        // it, out of its reach)
+        if (actor.siege && this.#apart(actor.map, [actor.x, actor.y], [attacker.x, attacker.y])) {
             return;
         }
 

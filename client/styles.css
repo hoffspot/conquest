@@ -1166,6 +1166,114 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     pointer-events: none;
 }
 
+/* Those attacking the player: an icon each down the right side, a likeness in a red frame, a thin
+line of health along its foot; whoever the player's set on glowing and pulsing (app/hud.js attackers) */
+#attackers {
+    position: absolute;
+    z-index: 14;
+    right: calc(var(--safe-right) + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+#attackers[hidden] {
+    display: none;
+}
+
+.attacker {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid var(--hostile);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #221c16;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+.attacker-initial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--hostile);
+    font: 600 20px/1 var(--font-ui);
+}
+
+.attacker-likeness {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.attacker.painted .attacker-likeness {
+    opacity: 1;
+}
+
+.attacker-health {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+}
+
+.attacker-health-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--hostile);
+    transform-origin: 0 50%;
+}
+
+.attacker.target {
+    border-color: #ff5a4a;
+    animation: attacker-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes attacker-pulse {
+    from {
+        box-shadow:
+            0 0 4px 1px rgba(255, 70, 50, 0.55),
+            0 1px 4px rgba(0, 0, 0, 0.6);
+    }
+
+    to {
+        box-shadow:
+            0 0 14px 5px rgba(255, 70, 50, 0.9),
+            0 1px 4px rgba(0, 0, 0, 0.6);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .attacker.target {
+        animation: none;
+        box-shadow: 0 0 10px 3px rgba(255, 70, 50, 0.85);
+    }
+}
+
+@media (max-height: 420px) {
+    .attacker {
+        width: 40px;
+        height: 40px;
+    }
+}
+
 /* Arrows at the screen's edge pointing the way to those attacking the player out of view
    (app/hud.js threats), over the buttons and quick actions (under dialogs), pulsing (still, asked for less
    motion) */
@@ -3361,6 +3469,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     text-align: center;
     color: var(--gold-bright);
     animation: appear 0.3s ease-out;
+    /* (Taps go through it to whoever's under it, but for its button; in a fight it's moved clear
+    of those fighting: hud.js keepClear) */
+    pointer-events: none;
+    transition: translate 0.2s ease-out;
 }
 
 @keyframes appear {

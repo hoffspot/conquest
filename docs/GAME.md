@@ -777,7 +777,10 @@ hundreds has a fight, not a crowd, on them.
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
   no opaque square (a wall or a house hides a target; a table or barrels don't). The line is
-  looked along four points a metre, each square it crosses asked about once.
+  looked along four points a metre, each square it crosses asked about once. From a deck raised
+  over the ground, or at someone on one, it's looked over what's low (an army's camp's stakes from
+  its walkway: `RAISED`, `LOW`, docs/WAR.md *A storm near a player*); and no blow's struck
+  between two more than 0.75 m one over the other there (the walkway and the lane under it).
 - **Looking for enemies.** Every step, each armed character asks whether it's in a fight, and
   each on patrol, in the wild or following someone which enemy it can see is nearest: each of
   them about everyone else. How two peoples stand in the war takes the longest to ask (the war's
@@ -1331,7 +1334,9 @@ change) greyed the lamplit taproom and dulled the painted colours, and Khronos N
 taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
-with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
+with them, and with **Camera follows** turned on (Game options; off to start with, below) swings
+round behind them as follows. Turned off, it keeps the way it's turned and its tilt as they walk,
+only keeping up with them (and in a fight, framing it as below). Following, it keeps up with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
 keeping them in view at its distance (the camera study's recommendation 2, as Cinemachine's lazy
 follow does). Walking across its view, it swings round after them; walking towards it, it backs
 away rather than turning round, coming round only as they go by it. Walking away from it or
@@ -1348,11 +1353,22 @@ camera looks turns on it.
 touch suits, not a lock the player turns on). Whoever the player's fighting (the one they're set
 on, or else the nearest coming for them; and the last of those for 2 seconds after, through a
 lull: game.js `#kept`, `FIGHT_VIEW`):
-- **The camera doesn't swing round behind the player** as they move about, but turns only as far
-  as keeps both of them within 60% of the way from the middle of the view to its side (camera.js
-  `keep`: the least turn, 5 degrees at a time, either way round; if none does, the one that keeps
-  them nearest it). A drag holds it, as ever, and a second after it's let go, it brings the foe
-  back into view.
+- **The battle cam** (Game options, on to start with; following or not: camera.js `battle`,
+  `#framing`) swings round to look at the fight three-quarters on: 60 degrees round from straight
+  behind the player looking at their foe, either side. Of the two, and of those a step (15 degrees)
+  or two nearer behind them or further round, it takes the one that leaves the fewest of them
+  hidden (the line from each one's chest and knees to where the camera would be, over the town's
+  buildings, trees and props too, a well's roof or a stall, and the world's trees: view.js
+  `hiddenFrom`, town3d.js `props`) or out of the view (as below: a foe far off, a bow's shot away,
+  brings it nearer behind them); of those as clear, the one it turns least to, each step off
+  counting as 30 degrees more turning and the side it's on 45 less, so it keeps to its side as
+  the foe steps about rather than swapping round. A drag holds it, and a second after it's let
+  go, it frames the fight again.
+- **With the battle cam off, it doesn't swing round behind the player** as they move about, but
+  turns only as far as keeps both of them within 60% of the way from the middle of the view to
+  its side (camera.js `keep`: the least turn, 5 degrees at a time, either way round; if none does,
+  the one that keeps them nearest it), following or not. A drag holds it, as ever, and a second
+  after it's let go, it brings the foe back into view.
 - **It leans towards the foe:** 40% of the way, up to 4.5 metres, and no more than a quarter of
   the camera's distance across the ground (`LEAN`), so a foe far off doesn't lean the player out
   of the bottom of the picture.
@@ -1366,6 +1382,20 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
   `threats`).
+- **Those attacking the player** (and whoever they're set on) each have an icon down the right
+  side of the screen, the first six in the order they came to it (game.js `#attackers`,
+  `ATTACKERS`; hud.js `attackers`): their likeness in a red frame (`--hostile`), a thin line of
+  their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
+  less motion). The likeness is drawn once, head and shoulders from in front of them (a creature
+  not shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
+  in a picture of its own and read back without stalling (view.js `portrait`, `LIKENESS`:
+  three.js leaves such a picture untoned, so it's toned as the screen is, `toneOf`, a little
+  brighter to read so small); one of a
+  crowd shows their name's first letter till they're drawn in full. Tapped, an icon sets the
+  player on them where they stand (an `engage` order with `stand`, as tapping them does);
+  tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
+  (`DOUBLE_TAP_MS`), they run up to them; held (`HOLD_MS`), they walk up to them, into reach of
+  what's in hand (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a tap.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
@@ -1376,8 +1406,10 @@ once (by its shader: the fragment's own depth, so no transparency, nothing drawn
 their shadows whole), as they're put on.
 
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
-follows** (on): off, it keeps the way it's turned and its tilt as the player walks, only keeping
-up with them; **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
+follows** (off): on, it swings round behind the player as they walk (above); off, it keeps the
+way it's turned and its tilt as they walk, only keeping up with them (following saved before it
+was off to start with is forgotten once, for the new default: save.js `cameraDefaults`);
+**Battle cam** (on): in a fight, it frames it three-quarters on (above); **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
 **Invert tilt** (off): dragging up looks down; **Screen shake** (on): off, the greater spells
 don't shake it.
 
@@ -3934,9 +3966,13 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   (docs/MAGIC.md), things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
   there are, and greyed out once none are left, and the emotes (`emote:wave`...: *Emotes*,
   under *Characters in the world*).
-- **An enemy's**: the elements' spells, Stun, and once learnt Hold and the tomes' spells cast at
-  enemies, a power strike and an aimed shot (a blow for another kind of weapon than the one in
-  hand is greyed out).
+- **An enemy's**: Attack (`attack`, at the top to start with: walking up to them, into reach of
+  what's in hand, and fighting them, as a tap on them did before a tap set on them where the
+  player stands: *Tapping*), the elements' spells, Stun, and once learnt Hold and the tomes'
+  spells cast at enemies, a power strike and an aimed shot (a blow for another kind of weapon
+  than the one in hand is greyed out). Wheels kept from before Attack was have it put at the top
+  of their first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty
+  slice.
 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
 (picking a fight with them), and no other side.
@@ -4077,8 +4113,16 @@ it.
    `?play` to playing: the page's own work 11.7 to 13.5 s before, 9.7 to 10.4 s now; building the
    world (`Game.build`) 7.4 s of it before, 4.2 to 4.7 s now. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
-   a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
-   starts on the player (40 pixels up within 600 ms, mostly up)
+   a Shift-click. **Tapping an enemy** sets the player on them where they stand (an `engage`
+   order with `stand`, `NET_VERSION` 98: battle.js strikes them while they're in reach, a bow's
+   shot or a blow's, and doesn't go after them; out of reach, whoever is in reach is struck, as
+   standing), ringed as their target; tapped twice, the player runs up to them, into reach of
+   what's in hand; Attack, at the top of an enemy's wheel, walks up to them. Tapping whoever the
+   player's going after, or the player themselves, while they're walking or running anywhere,
+   stops them where they are (game.js `#halt`: still set on whoever they were after, where they
+   stand). The attackers' icons down the right side do the same for whoever each is, held
+   walking up to them (*Those attacking the player*). A drag turns the camera round the player
+   (and tilts it). A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
    turns them the way the camera looks (over the ground) and sends them straight ahead that way,
    running while their stamina lasts and then walking (an `ahead` order, which turns them as
    well as setting them off), with the ring where they'll stop; blocked straight away, it's
@@ -4118,7 +4162,16 @@ it.
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
    the nearer the camera are drawn over the farther, and all of them under the buttons. Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
-  requests, loot, spells learnt, standing and rank). The last ten are kept for the journal
+  requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
+  (but for an Undo's button) to whoever's under them. In a fight they're kept clear of those
+  fighting, the player, who they're fighting and whoever's after them, each where they are on
+  the screen with their name and bar over them (game.js `#clearOfFight`, `MESSAGE_CLEAR`): where
+  a message would cover one of them, it's moved up under the buttons along the top (and the
+  minimap, on a screen so narrow it would reach under it), or else down over the quick actions,
+  or else to the left of the screen or its right, a little up from half way (the player and
+  their foe one over the other down the middle; left of the attackers' icons), whichever is
+  clear of them and the icons (or covers least of them), staying there while that's clear, eased there (moved as it is, its width kept), and back once
+  the fight's over (hud.js `keepClear`, `messagePlace`). The last ten are kept for the journal
   (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages button, at its top, shows them, the
   newest first, each with how long ago it was told, and the same message told again running
   counted ("2 times, last 5 min ago"); the button, now Journal, goes back. Refusals and the like,
@@ -4429,7 +4482,14 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   not turning itself while held even as they walk, and swinging back behind them once let go and
   walking; starting 35 degrees down and looking up to 45 degrees over the horizon at most, easing
   back down once they walk if it was looking up; catching up without turning when the player
-  comes back to life elsewhere, and leaning towards a foe.
+  comes back to life elsewhere, and leaning towards a foe. With the battle cam, in a fight
+  (following turned off or on), swinging round to see them both 60 degrees from behind the
+  player; round the other way, or nearer behind them or further round, where what stands there
+  would hide them; nearer behind them for a foe a bow's shot away, keeping both in view; keeping
+  to the side it's on; held by a drag and framing the fight again a moment after it's let go;
+  and turned off, keeping the foe in view by the least turn, following or not. An attacker's
+  likeness toned as the screen is (view.js `toneOf`: black black, mid-grey half way, the
+  brightest white, more exposure brighter, a red still red).
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
@@ -4461,8 +4521,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving
   (and what's been said in talks, and what's been found of the world, for the saved character
   only),
-  heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
-  inside) and its patches of the world (painted the same a step at a time as at once; the next
+  heroes (and forgetting volumes saved on the old scale, and camera following saved when it was
+  on to start with), where a message goes in a fight (clear of those fighting, staying where it
+  is while that's clear), the minimap's colours (in the town and inside) and its patches of the world (painted the same a step at a time as at once; the next
   painted ahead of the player while they're well inside this one, and shown before its edge would
   show), the action wheels (which of eight slices a flick is in, its shapes, its
   actions and icons, every item's icon, what goes on each wheel, and reading them back), the

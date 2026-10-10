@@ -8,9 +8,10 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { DOCTRINES, rolesOf } from "../client/js/core/formation.js";
 import { HOST_PLAYER, Host, STORM } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { brokenOf } from "../client/js/core/war/stockade.js";
+import { brokenOf, walkwayOf } from "../client/js/core/war/stockade.js";
 import { STAGES, War, WAR_VERSION } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -159,6 +160,57 @@ describe("the storms of the camps near a player (host.js STORM, war.js)", () => 
         assert.ok(war.fleeing(reserve.id));
         assert.ok(!host.storms.has(camp.id));
         assert.ok(met(host, army.id).every((actor) => !actor.formation.post && !actor.holds && !actor.siege), "stood down");
+    });
+
+    it("keeps those hacking at its wall at it, though its archers up on the walkway over them shoot down at them", () => {
+        const { host, war, camp, army } = stormed();
+        const hacking = until(host, 120000, (events) => events.find(({ type }) => type === "hacking"));
+
+        assert.ok(hacking.hit, "hacking");
+
+        const stakes = host.battle.actor(hacking.hit.stakes);
+        const [x0, y0, x1, y1] = stakes.footprint;
+        const off = (actor) => Math.max(x0 - actor.x, actor.x - x1 - 1, y0 - actor.y, actor.y - y1 - 1, 0);
+        const at = until(host, 60000, () => hacking.hit.ids.map((id) => host.battle.actor(id)).find((actor) => actor && !actor.dead && off(actor) < 1.5));
+
+        assert.ok(at.hit, "one of them at its wall");
+
+        // (One of its archers put up on the walkway nearest them, right over them, within reach of
+        // their eye but not their blows)
+        const hacker = at.hit;
+        const archer = met(host, army.id).find((actor) => actor.formation.role === "archer");
+        const squares = walkwayOf(war.stockade(camp.id)).flatMap((run) => run.squares.map(({ square }) => square));
+        const over = squares.reduce((best, square) => (Math.hypot(square[0] - hacker.square[0], square[1] - hacker.square[1]) < Math.hypot(best[0] - hacker.square[0], best[1] - hacker.square[1]) ? square : best));
+
+        const close = [hacker.square[0] + Math.sign(over[0] - hacker.square[0]), hacker.square[1] + Math.sign(over[1] - hacker.square[1])];
+
+        assert.ok(!inside(close, [x0, y0, x1 + 1, y1 + 1]) && Math.hypot(over[0] - close[0], over[1] - close[1]) <= 2.5, "right over them, against the wall");
+        put(hacker, close);
+        put(archer, over);
+        Object.assign(archer, { hp: 1e6, maxHp: 1e6 });
+
+        for (let t = 0; t < 3000 && !hacker.dead; t += STEP_MS) {
+            host.advance(STEP_MS);
+            assert.notEqual(hacker.target, archer.id, "not drawn off it after one out of its reach");
+        }
+
+        assert.ok(hacker.dead || hacker.target === stakes.id, "still at it");
+    });
+
+    it("keeps an army met there mixed as its people's are as it's fewer: not its archers and healers first, at the back of its line", () => {
+        const { host, army } = stormed({ army: 20 });
+
+        assert.ok(until(host, 30000, () => met(host, army.id).length === 20).hit, "met");
+
+        const count = (roles) => roles.reduce((counts, role) => ({ ...counts, [role]: (counts[role] ?? 0) + 1 }), {});
+        const before = count(met(host, army.id).map(({ formation }) => formation.role));
+
+        assert.ok(before.archer > 0 && before.healer > 0);
+
+        army.size = 12;
+
+        assert.ok(until(host, 5000, () => met(host, army.id).length === 12).hit, "fewer");
+        assert.deepEqual(count(met(host, army.id).map(({ formation }) => formation.role)), count(rolesOf(12, DOCTRINES.orc)));
     });
 
     it("has it carried once those holding it are broken: razed, in the war and the world", () => {

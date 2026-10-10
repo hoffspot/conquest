@@ -39,12 +39,12 @@ import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
-import { brokenOf, SIDES, STOCKADE } from "./war/stockade.js";
+import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
-import { distanceBetween, WEAPONS } from "./weapons.js";
+import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
@@ -166,19 +166,23 @@ export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close:
  *   nearer it is to their foes (as 1 / (`spread` + metres)³): its shield line and two-handers in
  *   ranks across it, the first just within its wall and the rest `depth` metres behind, going no
  *   further than `hold` metres after anyone outside it (any within it, as far as it takes); its
- *   archers and casters `back` metres within it, across it; its healers where they stood.
+ *   archers and casters up on its walkway (stockade.js walkwayOf: what of it a stair comes up
+ *   onto), on its squares nearest their foes, `loose` squares apart each way, facing out over its
+ *   wall and going after no one outside it further than they reach (any more than there's room
+ *   for `back` metres within its openings, across them); its healers where they stood.
  * - Those storming it make for `muster` metres out from the opening nearest them, their archers
  *   and casters standing there; the rest make for its parade ground, after anyone within `reach`
  *   metres of it on the way. A share of their shield line and two-handers (`party`, `least` to
  *   `most` of them) hack down the section of its wall nearest them that's no nearer an opening
- *   than `clear` metres (its stakes, KINDS.stakes); another `again` ms after one falls.
+ *   than `clear` metres (its stakes, KINDS.stakes), as many again of the rest sent at it should
+ *   they all fall; another `again` ms after one falls.
  * - Either side's beaten, and the storm's over, once it's down to ARMY.rout of those it went in
  *   with and outnumbered, in the war's numbers (and a force met in the field, likewise); or those
  *   storming it beaten off once it's come to nothing, none on either side falling and no stakes
  *   hacked at for `stall` ms. Beaten, a line runs (`run` metres a second) while it's getting away
  *   (war.js fleeing).
  */
-export const STORM = Object.freeze({ near: 60, calm: 20000, spread: 10, depth: 1.6, hold: 3, back: 7, muster: 14, reach: 40, party: 0.2, least: 2, most: 6, clear: 8, again: 45000, run: 3, stall: 60000 });
+export const STORM = Object.freeze({ near: 60, calm: 20000, spread: 10, depth: 1.6, hold: 3, back: 7, loose: 2, muster: 14, reach: 40, party: 0.2, least: 2, most: 6, clear: 8, again: 45000, run: 3, stall: 60000 });
 
 // The forces that fight out in the field (and storm camps): the armies and reserves
 const FIELDED = Object.freeze(["army", "reserve"]);
@@ -1100,9 +1104,10 @@ export class Host {
 
     /**
      * Do what a player asks, if it can be done. A command is one of:
-     *  - { type: "move", to: [x, y] }, { type: "ahead", facing }, { type: "engage", target },
-     *    { type: "approach", target }, { type: "enter", link }, { type: "stop" }: orders for
-     *    their character in the battle (battle.js command), with run: true to run;
+     *  - { type: "move", to: [x, y] }, { type: "ahead", facing }, { type: "engage", target }
+     *    (stand: true, set on them where they stand), { type: "approach", target },
+     *    { type: "enter", link }, { type: "stop" }: orders for their character in the battle
+     *    (battle.js command), with run: true to run;
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
@@ -1206,7 +1211,7 @@ export class Host {
                     actor.foes[target.id] = this.battle.time + FOE_MS;
                 }
 
-                return this.#order(actor, { type: command.type, target: target.id, run });
+                return this.#order(actor, { type: command.type, target: target.id, run, ...(command.type === "engage" && command.stand ? { stand: true } : {}) });
             }
             case "enter": {
                 const link = this.battle.links.find(({ id }) => id === command.link);
@@ -3824,9 +3829,10 @@ export class Host {
     }
 
     // A camp's army met there manning its stockade against an enemy near `toward` ([x, y] metres):
-    // its shield line and two-handers in ranks across its openings, its archers and casters behind
-    // them (STORM), each opening's share as near as it is; posted again only as its openings, the
-    // one nearest the enemy or its numbers change
+    // its shield line and two-handers in ranks across its openings, each opening's share as near as
+    // it is, its archers and casters up on its walkway nearest the enemy (any more behind its
+    // openings: STORM); posted again only as its openings, the one nearest the enemy or its numbers
+    // change
     #holdStockade(camp, storm, toward) {
         const met = storm.army && this.armies.get(storm.army);
 
@@ -3867,11 +3873,38 @@ export class Host {
             actor.leash = leash;
         };
 
+        // (Its archers and casters on its walkway: its squares nearest the enemy, of what a stair
+        // comes up onto, STORM.loose apart; to each the nearest of them still to be posted)
+        const shooters = soldiers.filter((actor) => ["archer", "caster"].includes(actor.formation.role));
+        const spots = [];
+
+        for (const spot of walkwayOf(this.war.stockade(camp.id), brokenOf(camp))
+            .filter(({ reached }) => reached)
+            .flatMap(({ squares }) => squares)
+            .sort((a, b) => hypot(a.at[0] - toward[0], a.at[1] - toward[1]) - hypot(b.at[0] - toward[0], b.at[1] - toward[1]))) {
+            if (spots.length >= shooters.length) {
+                break;
+            }
+
+            if (spots.every(({ square }) => Math.max(Math.abs(square[0] - spot.square[0]), Math.abs(square[1] - spot.square[1])) >= STORM.loose)) {
+                spots.push(spot);
+            }
+        }
+
+        for (const spot of spots) {
+            const distance = (actor) => hypot(actor.x - spot.at[0], actor.y - spot.at[1]);
+            const nearest = shooters.reduce((best, actor) => (distance(actor) < distance(best) || (distance(actor) === distance(best) && actor.id < best.id) ? actor : best));
+
+            shooters.splice(shooters.indexOf(nearest), 1);
+            Object.assign(nearest.formation, { post: [...spot.at], facing: spot.facing });
+            nearest.leash = longestReach(nearest.arms);
+        }
+
         for (const [roles, place] of [
             [["front", "heavy"], (actor, opening, k) => post(actor, opening, 1.2 + Math.floor(k / opening.width) * STORM.depth, (k % opening.width) - (opening.width - 1) / 2, STORM.hold)],
             [["archer", "caster"], (actor, opening, k, count) => post(actor, opening, STORM.back, (k - (count - 1) / 2) * 1.5, ROLES[actor.formation.role].leash)],
         ]) {
-            const left = soldiers.filter((actor) => roles.includes(actor.formation.role));
+            const left = roles.includes("archer") ? shooters : soldiers.filter((actor) => roles.includes(actor.formation.role));
             const counts = shares(left.length, weights);
 
             for (const k of order) {
@@ -3927,17 +3960,33 @@ export class Host {
 
     // A camp's wall hacked at by those storming it: the section of it nearest them that's clear of
     // its openings stood up in the battle (its stakes: KINDS.stakes, over its squares of wall), and
-    // a share of their shield line and two-handers (STORM.party) sent at it, from outside it
+    // a share of their shield line and two-handers (STORM.party) sent at it, from outside it; and
+    // more sent at it as those hacking at it fall (from its walkway, as like as not)
     #hack(camp, storm) {
         const section = storm.section && this.battle.actor(storm.section.id);
 
-        if ((section && !section.dead) || !storm.attackers.length || this.battle.time < storm.next) {
+        if (!storm.attackers.length || this.battle.time < storm.next) {
             return;
         }
 
         const stockade = this.war.stockade(camp.id);
-        const openings = this.#openings(camp);
         const met = this.armies.get(storm.attackers[0]);
+        // (Of those outside it: from within, its wall's out of reach behind its walkway)
+        const [x0, y0, x1, y1] = stockade.box;
+        const melee = met.ids
+            .map((each) => this.battle.actor(each))
+            .filter((actor) => actor && !actor.dead && ["front", "heavy"].includes(actor.formation?.role) && (actor.siege || actor.square[0] < x0 || actor.square[1] < y0 || actor.square[0] > x1 || actor.square[1] > y1));
+
+        if (section && !section.dead) {
+            // (Those hacking at it all fallen: as many again of the rest outside it, unannounced)
+            if (!melee.some((actor) => actor.siege === section.id)) {
+                this.#hackers(met, melee, stockade.sections[storm.section.index], section.id, storm);
+            }
+
+            return;
+        }
+
+        const openings = this.#openings(camp);
         const from = this.battle.formations[met.formation]?.anchor ?? met.at;
         const broken = brokenOf(camp);
         const index = stockade.sections
@@ -3949,18 +3998,14 @@ export class Host {
             return;
         }
 
-        const { wall, at, side } = stockade.sections[index];
+        const { wall, at } = stockade.sections[index];
         const id = `${camp.id}/stakes-${index}`;
         const xs = wall.map(([x]) => x);
         const ys = wall.map(([, y]) => y);
 
-        // (Its hackers: those of their shield line and two-handers nearest it; with none left, none
-        // hacked at, for a while)
-        const melee = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && ["front", "heavy"].includes(actor.formation?.role));
-        const count = Math.min(melee.length, STORM.most, Math.max(STORM.least, Math.round(melee.length * STORM.party)));
-        const hackers = melee.sort((a, b) => hypot(a.x - at[0], a.y - at[1]) - hypot(b.x - at[0], b.y - at[1]) || (a.id < b.id ? -1 : 1)).slice(0, count);
-
-        if (!hackers.length) {
+        // (With none of their shield line and two-handers left to hack at it, none hacked at, for a
+        // while)
+        if (!melee.length) {
             storm.next = this.battle.time + STORM.again;
 
             return;
@@ -3969,7 +4014,23 @@ export class Host {
         this.battle.add({ id, kind: "stakes", name: `${ADJECTIVES[camp.realm] ?? camp.realm} palisade`, team: camp.realm, square: [...wall[Math.floor(wall.length / 2)]], footprint: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], armed: false });
         storm.section = { id, index };
 
+        const hackers = this.#hackers(met, melee, stockade.sections[index], id, storm);
+
+        this.#event("hacking", { camp: camp.id, people: camp.realm, section: index, stakes: id, at: [...at], by: this.war.force(storm.attackers[0])?.realm ?? null, force: storm.attackers[0], ids: hackers.map(({ id: each }) => each) });
+    }
+
+    // Those of a force's shield line and two-handers (`melee`) set at a section of a camp's wall
+    // (its stakes, `id`): its share of them (STORM.party), those nearest it, 1.5 m outside it,
+    // facing it; the rest of its line posted again. Returns them; with none to send, none hacked
+    // at for a while (STORM.again)
+    #hackers(met, melee, { at, side }, id, storm) {
+        const count = Math.min(melee.length, STORM.most, Math.max(STORM.least, Math.round(melee.length * STORM.party)));
+        const hackers = melee.sort((a, b) => hypot(a.x - at[0], a.y - at[1]) - hypot(b.x - at[0], b.y - at[1]) || (a.id < b.id ? -1 : 1)).slice(0, count);
         const out = SIDES[side];
+
+        if (!hackers.length) {
+            storm.next = this.battle.time + STORM.again;
+        }
 
         hackers.forEach((actor, k) => {
             const across = (k - (hackers.length - 1) / 2) * 1.2;
@@ -3980,7 +4041,8 @@ export class Host {
         });
 
         met.storming = null;
-        this.#event("hacking", { camp: camp.id, people: camp.realm, section: index, stakes: id, at: [...at], by: this.war.force(storm.attackers[0])?.realm ?? null, force: storm.attackers[0], ids: hackers.map(({ id: each }) => each) });
+
+        return hackers;
     }
 
     // A section of a camp's palisade hacked down (its stakes felled, by `by`): broken open in the
@@ -4067,23 +4129,46 @@ export class Host {
         }
     }
 
-    // As many of an army or reserve met stood up as the war has of it now: the rearmost let go if
-    // it's lost some elsewhere, more stood up behind its line (in its people's mix) if some have
-    // joined it, up to ARMY_NEAR.most
+    // As many of an army or reserve met stood up as the war has of it now: some let go if it's
+    // lost some elsewhere (of whichever of its roles it has most more of than its people's mix
+    // would, the rearmost of them: not all its archers and healers, at the back of its line),
+    // more stood up behind its line (in its people's mix) if some have joined it, up to
+    // ARMY_NEAR.most
     #keepUpArmy(force, met) {
         const alive = met.ids.filter((each) => this.battle.actor(each) && !this.battle.actor(each).dead);
         const want = Math.min(force.size, ARMY_NEAR.most);
 
         if (alive.length > want) {
-            const rearmost = alive.map((each) => this.battle.actor(each)).sort((a, b) => b.formation.slot[1] - a.formation.slot[1] || (a.id < b.id ? -1 : 1));
+            const left = alive.map((each) => this.battle.actor(each)).sort((a, b) => b.formation.slot[1] - a.formation.slot[1] || (a.id < b.id ? -1 : 1));
+            const mix = {};
+            const gone = [];
 
-            for (const actor of rearmost.slice(0, alive.length - want)) {
+            for (const role of rolesOf(want, DOCTRINES[force.realm])) {
+                mix[role] = (mix[role] ?? 0) + 1;
+            }
+
+            while (left.length > want) {
+                const have = {};
+
+                for (const actor of left) {
+                    have[actor.formation.role] = (have[actor.formation.role] ?? 0) + 1;
+                }
+
+                // (Of the roles most over the mix, the rearmost one: `left` is rearmost first)
+                const over = Math.max(...Object.keys(have).map((role) => have[role] - (mix[role] ?? 0)));
+                const actor = left.find(({ formation }) => have[formation.role] - (mix[formation.role] ?? 0) === over);
+
+                left.splice(left.indexOf(actor), 1);
+                gone.push(actor);
+            }
+
+            for (const actor of gone) {
                 this.battle.remove(actor.id);
                 this.soldiers.delete(actor.id);
                 met.ids.splice(met.ids.indexOf(actor.id), 1);
             }
 
-            this.#event("parted", { army: force.id, ids: rearmost.slice(0, alive.length - want).map(({ id }) => id) });
+            this.#event("parted", { army: force.id, ids: gone.map(({ id }) => id) });
         } else if (alive.length < want) {
             const have = {};
             const formation = this.battle.formations[met.formation];

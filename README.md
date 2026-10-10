@@ -145,20 +145,29 @@ you tap an enemy to fight it:
 It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
 or after you, you put it away again. The orc does the same, on its patrol.
 
-**The camera** follows you from your first step. Walking away from it or across its view, it
-swings round smoothly (over about a second) to look from behind you the way you're going; walking
-back towards it, it backs away rather than turning round, coming round only as you go by it.
-**Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it; it
-stays where you leave it while you stand, and once you've walked a moment it swings back round
-behind you. Pinch or scroll to zoom. In the town, when a building would stand between you and the
-camera, it comes in closer than the building, or rises over it. Holding a phone upright, it looks
-down more steeply from further back, so you see more round you. Game options can turn its
-following off, change how far a drag turns it, invert its tilt, and stop spells shaking it.
-Pushed right up to you by a wall or a building, it sees through you rather than into you.
-**In a fight** it keeps you and your foe both in view by itself, turning no more than it must,
-drawing back for a dragon or a foe far off, and cutting through trees or walls in the way of
-either of you; anyone attacking you from out of view has a red arrow at the screen's edge pointing
-to them.
+**The camera** keeps up with you from your first step, staying turned the way you leave it.
+**Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it. Pinch
+or scroll to zoom. In the town, when a building would stand between you and the camera, it comes
+in closer than the building, or rises over it. Holding a phone upright, it looks down more steeply
+from further back, so you see more round you. Turn **Camera follows** on in Game options and,
+walking away from it or across its view, it swings round smoothly (over about a second) to look
+from behind you the way you're going; walking back towards it, it backs away rather than turning
+round, coming round only as you go by it; dragged, it stays where you leave it while you stand,
+and once you've walked a moment it swings back round behind you. Game options can also change how
+far a drag turns it, invert its tilt, and stop spells shaking it. Pushed right up to you by a wall
+or a building, it sees through you rather than into you.
+**In a fight** the **battle cam** (on to start with; Game options) swings round to see you and
+your foe from the side, three-quarters on, from whichever side no building, tree, well or stall
+stands between you and it, and keeps to that side as you fight; a drag still turns it, and a
+second after you let go it frames the fight again. With the battle cam off, it keeps you and your
+foe both in view by itself, turning no more than it must. Either way it draws back for a dragon or
+a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
+from out of view has a red arrow at the screen's edge pointing to them. Messages told in a fight
+move up under the buttons, down over the quick actions, or off to the side rather than cover
+anyone fighting, and taps go through them. **Down the right side** of the screen everyone
+attacking you has an icon: their likeness in a red frame with a thin line of their health along
+its foot, the one you're set on glowing and pulsing. Tap one to set on them where you stand (tap
+the glowing one to stop going after them), double-tap to run at them, or hold to walk up to them.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left
@@ -305,8 +314,9 @@ and flick towards a slice to do what's in it; let go in the middle to change you
 down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
 What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
 Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
-(each showing how many you have). You start with **Vigor** on yourself (a little healing) and
-**Stun** on an enemy. Each element's school opens with its first spell's tome, 25 gold at any
+(each showing how many you have). You start with **Vigor** on yourself (a little healing), and
+**Attack** at the top of an enemy's (walking up to them, into reach of what's in your hands, to
+fight them) with **Stun** beside it. Each element's school opens with its first spell's tome, 25 gold at any
 adventurers' guild: **Burn**, **Rumble**, **Hurt** and **Blister** (fire, earth, air and water),
 waiting greyed on your enemy wheel until you've read them. Each spell has its own
 cooldown: while it runs, its slice is greyed over, and the grey sweeps back as it passes. A flick
@@ -391,7 +401,9 @@ remembered.
 | --- | --- | --- |
 | Walk | Tap the ground | Click the ground |
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
-| Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
+| Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
+| Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
+| Fight from the icons down the right | Tap an attacker's icon to set on them where you stand (the glowing one: stop going after them); double-tap to run at them; hold to walk up to them | Click (double-click to run at them; hold to walk up to them) |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |

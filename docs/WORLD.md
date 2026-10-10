@@ -900,6 +900,11 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
     the ground, on the squares next to those under its middle too (a stone bridge's ramp up over
     a bank reaches over the corners of squares whose middles it doesn't), as the mesh has it and
     walkers are drawn on it;
+  - an army's camp's walkway and the stairs up to it (`war/stockade.js`; `setStockades`), decks on
+    their own squares (`RAISED`: no further), the walkway's a square at a time, level at 1.45 m over
+    the ground at its middle, each stair's from the ground at its foot up to the walkway beside
+    its top; `heightAt` gives their height on their squares alone, the ground under them walked
+    by no one;
   - the plank walks over the lizard folk's lagoons, as decks at their planks' height, 0.16 m over
     their decks, as high as the town's ground (`WALK_TOP`, `level`; before, they were only the
     ground under them, walked as a ford or not at all), the squares across their bends with

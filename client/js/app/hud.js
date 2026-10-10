@@ -1,15 +1,23 @@
-// The game's heads-up display, drawn with the page (not in 3D): the player's name and health,
-// a name and health bar over every other character, numbers for the damage each blow does, and
-// messages across the middle of the screen. Under a health bar, an orange bar shows stamina
-// while it isn't full; under that, an icon for each thing lingering on them (poison, a web...) on
-// a blood-red disc, then each spell lasting on them (a ward, Reflect...) and each boon (a
-// blessing) on a sapphire tile, darkening round as it wears off: in one row as wide as the bars,
-// the last that won't fit an ellipsis, all of them shown while the player's card is held. A choice
-// to be made (who to summon; whether to go to someone summoning them) asked in a small panel.
-// Once they've registered with the adventurers' guilds, their rank shows on their card by their
-// name, a chip of its metal (Copper to Mithril).
+// The game's heads-up display, drawn with the page (not in 3D): the player's name and health, a
+// name and health bar over every other character, numbers for the damage each blow does, and
+// messages across the middle of the screen (in a fight, moved up under the buttons or down over the
+// quick actions where they'd cover those fighting). Down the right side, an icon for each of those
+// attacking the player: a likeness of them in a red frame, a thin line of their health along its
+// foot, whoever the player's set on glowing and pulsing; tapped or held, the game's told. Under a
+// health bar, an orange bar shows stamina while it isn't full; under that, an icon for each thing
+// lingering on them (poison, a web...) on a blood-red disc, then each spell lasting on them (a
+// ward, Reflect...) and each boon (a blessing) on a sapphire tile, darkening round as it wears off:
+// in one row as wide as the bars, the last that won't fit an ellipsis, all of them shown while the
+// player's card is held. A choice to be made (who to summon; whether to go to someone summoning
+// them) asked in a small panel. Once they've registered with the adventurers' guilds, their rank
+// shows on their card by their name, a chip of its metal (Copper to Mithril).
 
 import { ICONS, useDefs } from "./icons.js";
+
+// How far a message is kept from the buttons along the top and the quick actions (pixels); and
+// with no quick actions up, how far from the bottom it can come
+const MESSAGE_GAP = 10;
+const MESSAGE_LOW = 150;
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -41,6 +49,38 @@ export function plateScale(distance, sight = 1) {
     return distance >= far ? 0 : (far - distance) / (far - near);
 }
 
+/**
+ * Where a message goes to keep clear of those fighting (`rects`: { left, top, right, bottom }
+ * each, pixels), as big as it is (`size`: { width, height }): of the places it can go (`places`:
+ * { x, top } each, pixels, `x` its middle across; the first where it goes as a rule), the one
+ * it's at (`now`: an index) while that's clear of them all, else the first that is, else the one
+ * over least of them. Returns an index into `places`.
+ */
+export function messagePlace(places, rects, { width, height }, now = null) {
+    const over = ({ x, top }) => rects.reduce((sum, rect) => sum + Math.max(0, Math.min(x + width / 2, rect.right) - Math.max(x - width / 2, rect.left)) * Math.max(0, Math.min(top + height, rect.bottom) - Math.max(top, rect.top)), 0);
+
+    if (now !== null && now < places.length && over(places[now]) === 0) {
+        return now;
+    }
+
+    let best = 0;
+    let least = Infinity;
+
+    for (const [k, place] of places.entries()) {
+        const covered = over(place);
+
+        if (covered === 0) {
+            return k;
+        }
+
+        if (covered < least - 1e-6) {
+            [best, least] = [k, covered];
+        }
+    }
+
+    return best;
+}
+
 export class Hud {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
     constructor(root) {
@@ -48,6 +88,11 @@ export class Hud {
         this.plate = root.querySelector("#playerplate");
         this.floaters = root.querySelector("#floaters");
         this.banner = root.querySelector("#banner");
+        this.top = root.querySelector(".hud-top");
+        this.quick = root.querySelector(".quickbar");
+
+        // (Which of the places a message can go it's at in a fight, or null: where it goes as a rule)
+        this.bannerAt = null;
         this.netStatus = root.querySelector("#netstatus");
 
         /** The minimap's canvas (app/minimap.js draws it). */
@@ -61,6 +106,12 @@ export class Hud {
 
         /** Hears each message told across the screen (text, seconds): the game's, to keep the last (journal.js). */
         this.onMessage = () => {};
+
+        /**
+         * Hears an attacker's icon (attackers) tapped or held: (id, "tap" or "hold", when: ms, as
+         * performance.now()).
+         */
+        this.onAttacker = () => {};
 
         // Held, the player's card grows to show all that's on them (not one row of it, the rest
         // an ellipsis); a tap, or held again, and it's back
@@ -405,6 +456,164 @@ export class Hud {
         }
     }
 
+    /**
+     * Keep a message clear of those fighting (`rects`: where each is on the page, { left, top,
+     * right, bottom }, pixels, their name and bar over them too): where it goes as a rule (28% of
+     * the way down) if that's clear of them, else just under the buttons along the top (and the
+     * minimap, on a screen so narrow it would reach under it), else just over the quick actions
+     * (or the bottom), else at the left of the screen or its right (left of the attackers' icons),
+     * a little up from half way; the one over least of them if none is, never over the icons where
+     * it can help it. None fighting, back where it goes as a rule.
+     */
+    keepClear(rects) {
+        if (this.banner.hidden || !rects.length) {
+            if (this.bannerAt !== null) {
+                this.bannerAt = null;
+                this.banner.style.translate = "";
+            }
+
+            return;
+        }
+
+        const screen = this.root.getBoundingClientRect();
+        const { offsetWidth: width, offsetHeight: height } = this.banner;
+        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
+        const map = !this.map.hidden && this.map.getBoundingClientRect();
+        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
+        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
+        const quick = this.quick?.classList.contains("up") ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
+        // (Clear of the attackers' icons down the right side, too)
+        const icons = this.attackerColumn && !this.attackerColumn.hidden ? this.attackerColumn.getBoundingClientRect() : null;
+        const [middle, usual, aside, low] = [screen.width / 2, screen.height * 0.28, MESSAGE_GAP + width / 2, screen.height * 0.45 - height / 2];
+        const places = [
+            { x: middle, top: usual },
+            { x: middle, top: under },
+            { x: middle, top: quick - screen.top - MESSAGE_GAP - height },
+            { x: Math.min(middle, aside), top: low },
+            { x: Math.max(middle, (icons ? icons.left - screen.left : screen.width) - aside), top: low },
+        ];
+        const at = messagePlace(
+            places,
+            [...rects, ...(icons ? [icons] : [])].map(({ left, top, right, bottom }) => ({ left: left - screen.left, top: top - screen.top, right: right - screen.left, bottom: bottom - screen.top })),
+            { width, height },
+            this.bannerAt,
+        );
+
+        if (at !== this.bannerAt) {
+            this.bannerAt = at;
+            // (Moved from where it goes as a rule, as wide as it is there)
+            this.banner.style.translate = `${(places[at].x - middle).toFixed(0)}px ${(places[at].top - usual).toFixed(0)}px`;
+        }
+    }
+
+    /**
+     * The icons down the right side of the screen for those attacking the player, in order (none:
+     * gone): [{ id, name, hp, maxHp, target, picture }] (`target`: whoever the player's set on, its
+     * frame glowing and pulsing; `picture`: an ImageData, their likeness, or null till it's drawn,
+     * their name's first letter shown till then).
+     * Tapped, or held (HOLD_MS, not moving off it), each tells onAttacker.
+     */
+    attackers(list) {
+        if (!this.attackerColumn) {
+            this.attackerColumn = element("div", "");
+            this.attackerColumn.id = "attackers";
+            this.attackerColumn.setAttribute("role", "group");
+            this.attackerColumn.setAttribute("aria-label", "Attacking you");
+            this.root.append(this.attackerColumn);
+            this.attackerIcons = new Map();
+        }
+
+        const shown = new Set(list.map(({ id }) => id));
+
+        for (const [id, icon] of this.attackerIcons) {
+            if (!shown.has(id)) {
+                icon.root.remove();
+                this.attackerIcons.delete(id);
+            }
+        }
+
+        list.forEach(({ id, name, hp, maxHp, target, picture }, k) => {
+            const icon = this.attackerIcons.get(id) ?? this.#attackerIcon(id);
+            const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+
+            if (this.attackerColumn.children[k] !== icon.root) {
+                this.attackerColumn.insertBefore(icon.root, this.attackerColumn.children[k] ?? null);
+            }
+
+            icon.initial.textContent = name.slice(0, 1).toUpperCase();
+            icon.root.classList.toggle("target", Boolean(target));
+            icon.root.setAttribute("aria-label", target ? `${name}, set on` : name);
+            icon.root.setAttribute("aria-pressed", String(Boolean(target)));
+            icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
+
+            if (picture && !icon.painted) {
+                icon.canvas.width = picture.width;
+                icon.canvas.height = picture.height;
+                icon.canvas.getContext("2d").putImageData(picture, 0, 0);
+                icon.painted = true;
+                icon.root.classList.add("painted");
+            }
+        });
+
+        this.attackerColumn.hidden = list.length === 0;
+    }
+
+    // An attacker's icon (attackers): a button with their likeness and a line of their health; a
+    // tap or a hold on it heard
+    #attackerIcon(id) {
+        const root = element("button", "attacker");
+        const canvas = element("canvas", "attacker-likeness");
+        const initial = element("span", "attacker-initial");
+        const line = element("span", "attacker-health");
+        const health = element("span", "attacker-health-fill");
+        let held = null;
+        const letGo = () => {
+            clearTimeout(held?.timer);
+            held = null;
+        };
+
+        root.type = "button";
+        root.dataset.id = id;
+        line.append(health);
+        initial.setAttribute("aria-hidden", "true");
+        root.append(initial, canvas, line);
+        root.addEventListener("pointerdown", (event) => {
+            letGo();
+            held = { x: event.clientX, y: event.clientY, done: false };
+            held.timer = setTimeout(() => {
+                held.done = true;
+                this.onAttacker(id, "hold", performance.now());
+            }, HOLD_MS);
+        });
+        root.addEventListener("pointermove", (event) => {
+            if (held && !held.done && Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+                letGo();
+            }
+        });
+        root.addEventListener("pointerup", (event) => {
+            if (held && !held.done) {
+                this.onAttacker(id, "tap", event.timeStamp);
+            }
+
+            letGo();
+        });
+        root.addEventListener("pointercancel", letGo);
+        root.addEventListener("contextmenu", (event) => event.preventDefault());
+
+        // (Pressed from the keyboard, as a tap)
+        root.addEventListener("click", (event) => {
+            if (event.detail === 0) {
+                this.onAttacker(id, "tap", performance.now());
+            }
+        });
+
+        const icon = { root, canvas, initial, health, painted: false };
+
+        this.attackerIcons.set(id, icon);
+
+        return icon;
+    }
+
     /** How playing together's going, while it isn't as it should (text), or nothing (null). */
     status(text) {
         this.netStatus.textContent = text ?? "";
@@ -543,6 +752,10 @@ export class Hud {
         this.targeted = null;
         this.message("");
         this.choice?.withdraw();
+
+        if (this.attackerColumn) {
+            this.attackers([]);
+        }
     }
 
     #plateOf(id) {

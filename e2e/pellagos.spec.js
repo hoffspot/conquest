@@ -1176,7 +1176,7 @@ test("the thumb stick, off until Game options asks for it, walks the player the 
     expect((await told(page)).order).toBe(null);
 });
 
-test("the camera follows from the first step, swinging round behind the player", async ({ page }) => {
+test("with following turned on (Game options), the camera follows from the first step, swinging round behind the player", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const camera = await page.evaluate(() => {
@@ -1187,6 +1187,7 @@ test("the camera follows from the first step, swinging round behind the player",
         const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
         game.stop();
+        game.cameraSettings = { ...game.cameraSettings, follows: true };
 
         const start = { x: view.focus.x, yaw: view.yaw, pitch: view.pitch };
 
@@ -1224,7 +1225,7 @@ test("the camera follows from the first step, swinging round behind the player",
     expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.3);
 });
 
-test("in a fight the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view", async ({ page }) => {
+test("in a fight, the battle cam turned off, the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // The orc on the player from behind the camera (which looks south: the orc north of them, past
@@ -1239,6 +1240,7 @@ test("in a fight the camera keeps the foe in view, turning as little as it must;
         const [x, y] = [0, 1, -1, 2, -2, 3, -3].map((dx) => [px + dx, py - 12]).find(([sx, sy]) => !squares.blocked(sx, sy));
 
         game.stop();
+        game.cameraSettings = { ...game.cameraSettings, battle: false };
         Object.assign(orc, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
         game.avatars.get("orc").place(x + 0.5, y + 0.5, 0);
         game.previous.set("orc", { x: orc.x, y: orc.y });
@@ -1288,12 +1290,314 @@ test("in a fight the camera keeps the foe in view, turning as little as it must;
     expect(after.turned).toBeLessThan(Math.PI - 0.3);
 });
 
-test("dragging turns the camera round the player and tilts it; it holds while they stand, and swings back behind them once they walk", async ({ page }) => {
+test("in a fight, a message is moved clear of those fighting, taps going through it; the fight over, it's back where it goes as a rule", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const placed = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const { view } = session;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const banner = document.querySelector("#banner");
+        const screen = document.querySelector("#hud").getBoundingClientRect();
+        const box = (id) => {
+            const avatar = game.avatars.get(id);
+            const [feet, head] = [view.toScreen(avatar.object.position), view.toScreen(avatar.point(1))];
+
+            return { left: feet.x - (feet.y - head.y) * 0.3, right: feet.x + (feet.y - head.y) * 0.3, top: head.y, bottom: feet.y };
+        };
+        const meet = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+        // (The camera looking north from behind the player, not swinging round; a message up)
+        game.stop();
+        game.cameraSettings = { ...game.cameraSettings, battle: false };
+        game.cameraFollow.yaw = 0;
+        game.hud.message("The orc is coming for you!", 60);
+
+        // The orc set on the player, stunned, as far north of them as puts it where a message goes
+        // as a rule (28% of the way down the screen)
+        const [px, py] = player.square;
+        let at = null;
+
+        for (let d = 3; d <= 16 && !at; d++) {
+            const square = [px, py - d];
+
+            if (squares.blocked(...square)) {
+                continue;
+            }
+
+            Object.assign(orc, { x: square[0] + 0.5, y: square[1] + 0.5, square, path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
+            game.avatars.get("orc").place(orc.x, orc.y, 0);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+            game.advance(0.1);
+
+            const usual = { left: screen.left + (screen.width - banner.offsetWidth) / 2, right: screen.left + (screen.width + banner.offsetWidth) / 2, top: screen.top + screen.height * 0.28, bottom: screen.top + screen.height * 0.28 + banner.offsetHeight };
+
+            at = meet(usual, box("orc")) ? d : null;
+        }
+
+        game.advance(0.5);
+        window.boxes = [box("player"), box("orc")];
+
+        return { at, moved: banner.style.translate, taps: getComputedStyle(banner).pointerEvents, shown: !banner.hidden };
+    });
+
+    // (Once it's eased there: the page's animations don't run on while the game's stopped)
+    placed.clear = await page.evaluate(() => {
+        const banner = document.querySelector("#banner");
+
+        banner.getAnimations().forEach((animation) => animation.finish());
+
+        const moved = banner.getBoundingClientRect();
+
+        return window.boxes.every((rect) => !(moved.left < rect.right && rect.left < moved.right && moved.top < rect.bottom && rect.top < moved.bottom));
+    });
+
+    // The orc gone: back where a message goes as a rule
+    placed.after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity, target: null });
+        game.fightView = null;
+        game.advance(0.5);
+
+        return document.querySelector("#banner").style.translate;
+    });
+
+    expect(placed.at).not.toBe(null);
+    expect(placed.shown).toBe(true);
+    expect(placed.moved).not.toBe("");
+    expect(placed.clear).toBe(true);
+    expect(placed.taps).toBe("none");
+    expect(placed.after).toBe("");
+});
+
+test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The orc 8 squares north of the player and a slime 8 south, each stunned where it stands, after them
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const free = (dy) => [0, 1, -1, 2, -2, 3, -3].map((dx) => [px + dx, py + dy]).find(([x, y]) => !squares.blocked(x, y));
+        const [ox, oy] = free(-8);
+        const [sx, sy] = free(8);
+
+        game.stop();
+        Object.assign(orc, { x: ox + 0.5, y: oy + 0.5, square: [ox, oy], to: null, path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 600000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.add({ id: "slime", kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [sx, sy], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: "slimes", leader: null, menace: false } });
+        Object.assign(battle.actor("slime"), { x: sx + 0.5, y: sy + 0.5, target: "player", stunnedUntil: battle.time + 600000 });
+        game.enlisting.push("slime");
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("slime"))).toBe(true);
+
+    // Each with their likeness, once it's drawn: the orc first (they came to it in that order)
+    await page.waitForFunction(
+        () => {
+            window.pellagos.game.advance(0.02);
+
+            return document.querySelectorAll("#attackers .attacker.painted").length === 2;
+        },
+        null,
+        { timeout: 20000 },
+    );
+
+    const icons = await page.evaluate(() => {
+        const column = document.querySelector("#attackers");
+        const screen = document.querySelector("#hud").getBoundingClientRect();
+
+        return {
+            right: screen.right - column.getBoundingClientRect().right,
+            each: [...column.querySelectorAll(".attacker")].map((icon) => {
+                const canvas = icon.querySelector("canvas");
+                const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+                const shades = new Set();
+
+                for (let k = 0; k < data.length; k += 4) {
+                    shades.add((data[k] >> 3) * 1024 + (data[k + 1] >> 3) * 32 + (data[k + 2] >> 3));
+                }
+
+                return { id: icon.dataset.id, label: icon.getAttribute("aria-label"), border: getComputedStyle(icon).borderTopColor, health: icon.querySelector(".attacker-health-fill").style.transform, size: canvas.width, shades: shades.size, target: icon.classList.contains("target") };
+            }),
+        };
+    });
+
+    expect(icons.each.map(({ id }) => id)).toEqual(["orc", "slime"]);
+    expect(icons.right).toBeGreaterThanOrEqual(12);
+    expect(icons.right).toBeLessThan(40);
+
+    for (const icon of icons.each) {
+        expect(icon.border).toBe("rgb(212, 83, 59)");
+        expect(Number(icon.health.match(/scaleX\(([\d.]+)\)/)[1])).toBe(1);
+        expect(icon.size).toBe(96);
+        expect(icon.shades, `${icon.id}'s likeness`).toBeGreaterThan(40);
+        expect(icon.target).toBe(false);
+    }
+
+    expect(icons.each[1].label).toBe("Green slime");
+
+    // (Where the player is and what they're doing a moment after a tap, a double tap or a hold)
+    const state = (seconds) =>
+        page.evaluate((seconds) => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            game.advance(seconds);
+
+            const target = document.querySelector("#attackers .attacker.target");
+
+            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target).animationName : null };
+        }, seconds);
+    const orcIcon = page.locator('#attackers .attacker[data-id="orc"]');
+    const slimeIcon = page.locator('#attackers .attacker[data-id="slime"]');
+    const start = await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square]);
+
+    // Tapped: set on the orc where the player stands, its icon glowing; then on the slime
+    await orcIcon.click();
+
+    const tapped = await state(0.5);
+
+    await page.waitForTimeout(400);
+    await slimeIcon.click();
+
+    const swapped = await state(0.5);
+
+    expect(tapped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(tapped.walking).toBe(false);
+    expect(tapped.target).toBe("orc");
+    expect(tapped.pulsing).toBe("attacker-pulse");
+    expect(swapped.order).toEqual({ type: "engage", target: "slime", run: false, stand: true });
+    expect(swapped.target).toBe("slime");
+    expect(await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square])).toEqual(start);
+
+    // Tapped twice in quick succession: running up to the orc; tapped again on the way, stopped
+    await page.waitForTimeout(400);
+    await orcIcon.dblclick();
+
+    const doubled = await state(0.4);
+
+    await page.waitForTimeout(400);
+    await orcIcon.click();
+
+    const stopped = await state(0.4);
+
+    expect(doubled.order).toMatchObject({ type: "engage", target: "orc", run: true });
+    expect(doubled.walking).toBe(true);
+    expect(doubled.running).toBe(true);
+    expect(doubled.target).toBe("orc");
+    expect(stopped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(stopped.walking).toBe(false);
+
+    // Held on the slime: walking up to it
+    const box = await slimeIcon.boundingBox();
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+
+    const held = await state(0.4);
+
+    expect(held.order).toEqual({ type: "engage", target: "slime", run: false });
+    expect(held.walking).toBe(true);
+    expect(held.running).toBe(false);
+    expect(held.target).toBe("slime");
+
+    // Its health line as it's hurt; gone once it's dead
+    const hurt = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const slime = game.battle.actor("slime");
+
+        slime.hp = Math.round(slime.maxHp / 2);
+        game.advance(0.05);
+
+        const line = document.querySelector('#attackers .attacker[data-id="slime"] .attacker-health-fill').style.transform;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.05);
+
+        return { line, left: [...document.querySelectorAll("#attackers .attacker")].map((icon) => icon.dataset.id) };
+    });
+
+    expect(Number(hurt.line.match(/scaleX\(([\d.]+)\)/)[1])).toBeCloseTo(0.5, 1);
+    expect(hurt.left).toEqual(["slime"]);
+});
+
+test("in a fight, the battle cam swings round to see the player and their foe from the side, both on the screen and neither hidden; leaving it be once the fight's over", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const fight = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const { view } = session;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const [x, y] = [0, 1, -1].map((dx) => [px + dx, py - 3]).find(([sx, sy]) => !squares.blocked(sx, sy));
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+        // (The orc a few steps north of the player, stunned where it stands, set on them; the
+        // camera looking north from behind them)
+        game.stop();
+        Object.assign(orc, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
+        game.avatars.get("orc").place(x + 0.5, y + 0.5, 0);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.cameraFollow.yaw = 0;
+        game.advance(3);
+
+        const me = game.avatars.get("player");
+        const it = game.avatars.get("orc");
+        const behind = Math.atan2(me.object.position.x - it.object.position.x, me.object.position.z - it.object.position.z);
+        const rect = view.canvas.getBoundingClientRect();
+        const onScreen = (point) => {
+            const spot = view.toScreen(point);
+
+            return Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom;
+        };
+        const framed = {
+            settings: game.cameraSettings,
+            round: Math.abs(wrap(view.yaw - behind)),
+            seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))],
+            hidden: [view.hidden(me.point(0.55)), view.hidden(it.point(0.55))],
+        };
+
+        // The orc gone: the camera left where it's turned as the player stands
+        Object.assign(orc, { dead: true, respawnAt: Infinity, target: null });
+        game.fightView = null;
+        game.advance(0.5);
+
+        const yaw = game.cameraFollow.yaw;
+
+        game.advance(2);
+
+        return { ...framed, after: Math.abs(wrap(game.cameraFollow.yaw - yaw)) };
+    });
+
+    expect(fight.settings).toMatchObject({ follows: false, battle: true });
+    expect(fight.round).toBeGreaterThan(Math.PI / 6 - 0.15);
+    expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
+    expect(fight.seen).toEqual([true, true]);
+    expect(fight.hidden).toEqual([false, false]);
+    expect(fight.after).toBeLessThan(0.01);
+});
+
+test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const before = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const player = game.battle.actor("player");
+
+        game.cameraSettings = { ...game.cameraSettings, follows: true };
 
         return { yaw: session.view.yaw, pitch: session.view.pitch, square: [...player.square], width: session.view.canvas.clientWidth, height: session.view.canvas.clientHeight };
     });
@@ -1350,7 +1654,7 @@ test("dragging turns the camera round the player and tilts it; it holds while th
     expect(walked.pitch).toBeCloseTo(dragged.pitch, 5);
 });
 
-test("dragged up, the camera looks up into the sky (clouds and the sun in it, birds flying by), and walking, it looks down again", async ({ page }) => {
+test("dragged up, the camera looks up into the sky (clouds and the sun in it, birds flying by), and following, walking, it looks down again", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const sky = await page.evaluate(() => {
@@ -1360,6 +1664,7 @@ test("dragged up, the camera looks up into the sky (clouds and the sun in it, bi
         const me = game.avatars.get(game.me).object.position;
 
         game.stop();
+        game.cameraSettings = { ...game.cameraSettings, follows: true };
 
         // (Tilted up as far as it goes)
         game.cameraFollow.turn(0, -120, view.lowestPitch());
@@ -2095,6 +2400,81 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.ringed).toEqual({ visible: true, off: expect.any(Number), plate: "orc" });
     expect(target.ringed.off).toBeLessThan(0.01);
     expect(target.after).toEqual({ visible: false, plate: null });
+});
+
+test("tapping an enemy sets the player on them where they stand; tapped twice, they run up to them; tapped again on the way, or the player tapped, they stop, still set on them; Attack at the top of an enemy's wheel walks up to them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const taps = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const square = [0, 1, -1, 2, -2].map((dx) => [px + dx, py - 8]).find(([x, y]) => !squares.blocked(x, y));
+        const at = (id) => session.view.toScreen(game.avatars.get(id).point(0.5));
+        const now = performance.now();
+        const state = () => ({ order: player.order && { ...player.order }, square: [...player.square], walking: player.path.length > 0 });
+
+        // The orc 8 squares off, stunned where it stands
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], order: null, attack: null, target: null, stunnedUntil: battle.time + 600000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.advance(0.1);
+
+        // Tapped: set on it where the player stands
+        let spot = at("orc");
+
+        game.tap(spot.x, spot.y, { time: now });
+        game.advance(1);
+
+        const tapped = state();
+
+        // Tapped twice in quick succession: running up to it
+        spot = at("orc");
+        game.tap(spot.x, spot.y, { time: now + 5000 });
+        game.tap(spot.x, spot.y, { time: now + 5150 });
+        game.advance(0.6);
+
+        const doubled = { ...state(), running: player.running };
+
+        // Tapped again on the way: stopped there, still set on it
+        spot = at("orc");
+        game.tap(spot.x, spot.y, { time: now + 10000 });
+        game.advance(0.5);
+
+        const stopped = state();
+
+        // Attack, at the top of an enemy's wheel: walking up to it; the player tapped, stopped
+        const top = game.wheels.enemy[0].n;
+
+        game.act(top, "orc");
+        game.advance(0.4);
+
+        const attacking = state();
+
+        spot = at("player");
+        game.tap(spot.x, spot.y, { time: now + 15000 });
+        game.advance(0.5);
+
+        return { start: [px, py], tapped, doubled, stopped, top, attacking, halted: state() };
+    });
+
+    expect(taps.tapped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.tapped.square).toEqual(taps.start);
+    expect(taps.doubled.order).toMatchObject({ type: "engage", target: "orc", run: true });
+    expect(taps.doubled.order.stand).toBeUndefined();
+    expect(taps.doubled.walking).toBe(true);
+    expect(taps.doubled.running).toBe(true);
+    expect(taps.stopped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.stopped.walking).toBe(false);
+    expect(taps.top).toBe("attack");
+    expect(taps.attacking.order).toEqual({ type: "engage", target: "orc", run: false });
+    expect(taps.attacking.walking).toBe(true);
+    expect(taps.halted.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(taps.halted.walking).toBe(false);
 });
 
 test("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
@@ -3686,7 +4066,7 @@ test("an enemy army's camp near the player is pitched within its stockade, tents
     expect(errors).toEqual([]);
 });
 
-test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
+test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its archers up on its walkway, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     const errors = [];
@@ -3717,6 +4097,30 @@ test("an enemy army's camp stormed near the player by their people's reserve: it
         game.hud.message = (text, seconds) => {
             window.said.push(text);
             message.call(game.hud, text, seconds);
+        };
+
+        // Whether any of its archers or casters has been seen up on its walkway, standing on
+        // its boards, at any step of the storm; they're hardy enough to stay up there however it
+        // goes until they're drawn (soldiers are drawn a little each frame, nearest first)
+        const advance = game.advance;
+        const town = game.world.maps.town;
+
+        window.walked = false;
+        game.advance = function (...args) {
+            const out = advance.apply(this, args);
+
+            window.walked ||= (game.host.armies.get("force-900")?.ids ?? []).some((id) => {
+                const actor = game.battle.actor(id);
+                const avatar = game.avatars.get(id);
+
+                if (actor && ["archer", "caster"].includes(actor.formation?.role) && actor.maxHp < 5000) {
+                    Object.assign(actor, { hp: 5000, maxHp: 5000 });
+                }
+
+                return Boolean(actor && !actor.dead && ["archer", "caster"].includes(actor.formation?.role) && town.squares.raised(Math.floor(actor.x), Math.floor(actor.y)) && avatar && avatar.object.position.y - town.ground.heightAt(actor.x, actor.y) > 1.3);
+            });
+
+            return out;
         };
         game.advance(0.1);
     });
@@ -3760,6 +4164,9 @@ test("an enemy army's camp stormed near the player by their people's reserve: it
     // (Their people's reserve storming it: the player's own, through it)
     expect(after.said).toContain("We're hacking at the orcish camp's palisade: break it open!");
     expect(after.said).toContain("The orcish palisade is breached: we're through!");
+
+    // Its archers and casters up on its walkway, drawn standing on its boards
+    expect(await playUntil(page, () => window.walked, { seconds: 90 })).toBe(true);
     expect(errors).toEqual([]);
 });
 
@@ -5575,6 +5982,10 @@ test("a people's castle's undercroft, down the stairs from its great hall: the c
         const { session } = window.pellagos;
 
         Object.assign(player, { x: quartermaster.square[0] + 0.5, y: 3.5, path: [], order: null, progress: null });
+
+        // (The camera turned to look past the player at them, as it doesn't follow round)
+        game.cameraFollow.yaw = Math.atan2(player.x - quartermaster.x, player.y - quartermaster.y);
+        game.cameraFollow.turning = 0;
 
         for (let k = 0; k < 20; k++) {
             game.advance(0.1);
@@ -7395,27 +7806,29 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(page.locator("#musicvolume")).toHaveValue("60");
 });
 
-test("Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
+test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
-    // As they've always been: following, a drag turning it as far as ever, shaking
+    // At first: not following, the battle cam on, a drag turning it as far as ever, shaking
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
 
     const follows = page.getByRole("switch", { name: /Camera follows/ });
+    const battleCam = page.getByRole("switch", { name: /Battle cam/ });
     const invert = page.getByRole("switch", { name: /Invert tilt/ });
     const shake = page.getByRole("switch", { name: /Screen shake/ });
 
-    await expect(follows).toBeChecked();
+    await expect(follows).not.toBeChecked();
+    await expect(battleCam).toBeChecked();
     await expect(invert).not.toBeChecked();
     await expect(shake).toBeChecked();
     await expect(page.locator("#dragslider")).toHaveValue("100");
     await expect(page.locator("#dragname")).toHaveText("100%");
 
-    // Following off, tilt inverted, no shaking, a drag turning it twice as far
-    await page.locator("label:has(#followswitch)").click();
+    // The battle cam off, tilt inverted, no shaking, a drag turning it twice as far
+    await page.locator("label:has(#battlecamswitch)").click();
     await page.locator("label:has(#invertswitch)").click();
     await page.locator("label:has(#shakeswitch)").click();
     await page.locator("#dragslider").fill("200");
@@ -7440,7 +7853,7 @@ test("Game options set the camera: following off, it keeps the way it's turned a
         return { settings: game.cameraSettings, before, after: { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch }, moved: player.square[0] - x, shaking: game.shaking };
     });
 
-    expect(walked.settings).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    expect(walked.settings).toEqual({ follows: false, battle: false, shake: false, drag: 2, invert: true });
     expect(walked.moved).toBeGreaterThan(0);
     expect(walked.after).toEqual(walked.before);
     expect(walked.shaking).toBe(0);
@@ -7464,9 +7877,15 @@ test("Game options set the camera: following off, it keeps the way it's turned a
     expect(turned).toBeCloseTo((-150 / box.width) * Math.PI * 2, 2);
     expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 2, 1);
 
-    // Remembered next time
+    // Following turned on; all remembered next time
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+    await page.locator("label:has(#followswitch)").click();
+    await expect(follows).toBeChecked();
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
     await playing(page, "/?play&seed=1");
-    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: false, shake: false, drag: 2, invert: true });
+    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, shake: false, drag: 2, invert: true });
     await expect(page.locator("#dragslider")).toHaveValue("200");
 });
 
@@ -7519,14 +7938,15 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
         game.start();
     }, seconds);
 
-    // Held on the orc: its wheel's eight slices, the four elements' first spells round the top
-    // (Burn at N), Stun at W, S to turn it over, and the rest empty
+    // Held on the orc: its wheel's eight slices, Attack at the top (N), the four elements' first
+    // spells round it, Stun at W, S to turn it over, and the rest empty
     await hold(orcAt);
-    await expect(up.locator(".label")).toHaveText("Burn");
+    await expect(up.locator(".label")).toHaveText("Attack");
     await expect(left.locator(".label")).toHaveText("Stun");
+    await expect(wheel.locator('.slice[data-direction="se"] .label')).toHaveText("Burn");
     await expect(wheel.locator(".slice")).toHaveCount(8);
     await expect(wheel.locator('.slice.flip[data-direction="s"] .label')).toHaveText("Wheel 2");
-    await expect(wheel.locator(".slice.empty")).toHaveCount(2);
+    await expect(wheel.locator(".slice.empty")).toHaveCount(1);
     await flickLeft(orcAt);
     await page.mouse.up();
     await playOn(0.6);
@@ -7860,11 +8280,11 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
     // What can go on it: nothing, the healing spells known, making camp, the emotes and the
-    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's) and Stun,
-    // and no draughts or emotes
+    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's), Stun and
+    // Attack, and no draughts or emotes
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun", "Attack"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
     // A draught at NE of wheel two, for the bow there (tapping S turns it over, as flicking it does)

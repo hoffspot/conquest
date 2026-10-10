@@ -3,7 +3,8 @@
 // (pale oak for the humans, silvered for the elves, charred black for the dark elves, ochre for the
 // cat folk, cane for the lizard folk, rough and dark for the orcs); its two gates, each between
 // tall posts under a lintel, their leaves swung open inside; the walkway along the inside of its
-// wall on its posts, and a ladder up to it beside each gate. A section broken open is stumps and
+// wall on its posts (STOCKADE.high: walked on there, core/overworld.js RAISED), and a stair up to
+// it either side of each gate, along the lane, rising away from the gate. A section broken open is stumps and
 // stakes fallen in, its walkway gone, a pile of fresh stakes lying ready by it while its people
 // have the wood to mend it; a section mended is fresh wood, its stakes rising out of the ground as
 // they're set. Kept while within STOCKADES_VIEW metres, let go further off.
@@ -26,8 +27,11 @@ export const STOCKADES_VIEW = 220;
  */
 const STAKE = Object.freeze({ high: 3.1, vary: 0.3, radius: 0.13, sunk: 0.35, tip: 0.4, per: 3, lean: 0.04 });
 
-/** Its walkway (metres): how high its boards are, and how thick; its posts' girth. */
-const WALK = Object.freeze({ high: 1.45, board: 0.07, post: 0.09 });
+/** Its walkway (metres): how thick its boards are (as high as STOCKADE.high); its posts' girth. */
+const WALK = Object.freeze({ board: 0.07, post: 0.09 });
+
+/** Its stairs (metres): how many treads, and how thick; their stringers' depth and girth. */
+const STAIR = Object.freeze({ treads: 8, tread: 0.06, stringer: 0.22, girth: 0.08 });
 
 /** Its gates (metres): their posts' height and girth, and each leaf's height. */
 const GATE = Object.freeze({ high: 4.2, post: 0.22, leaf: 2.8 });
@@ -268,20 +272,51 @@ export class Stockades {
             walked.add(at);
 
             const [x, z] = [square[0] + 0.5, square[1] + 0.5];
-            const y = ground(x, z) + WALK.high;
+            const y = ground(x, z) + STOCKADE.high;
             const [ix, iy] = inward(square);
 
-            lists.timbers.push({ matrix: matrix(x, y, z, { scale: [1, WALK.board, 1] }) });
+            // (Its top where it's walked on)
+            lists.timbers.push({ matrix: matrix(x, y - WALK.board / 2, z, { scale: [1, WALK.board, 1] }) });
 
             if ((square[0] + square[1]) % 2 === 0) {
                 const [px, pz] = [x + ix * 0.42, z + iy * 0.42];
 
-                lists.posts.push({ matrix: matrix(px, ground(px, pz) - 0.2, pz, { scale: [WALK.post, WALK.high + 0.15, WALK.post] }) });
+                lists.posts.push({ matrix: matrix(px, ground(px, pz) - 0.2, pz, { scale: [WALK.post, STOCKADE.high + 0.15 - WALK.board, WALK.post] }) });
             }
         }
 
-        // The gates: tall posts either side, a lintel over, the leaves swung open inside; and a
-        // ladder up to the walkway either side, inside
+        // Its stairs: from the ground at its foot up to the walkway's height beside its top (as
+        // they're walked: core/overworld.js), a tread a step, on a stringer either side, on posts
+        for (const { foot, top, onto } of stockade.stairs) {
+            const [wx, wz] = onto[onto.length - 1];
+            const [low, high] = [ground(...foot), ground(wx + 0.5, wz + 0.5) + STOCKADE.high];
+            const length = Math.hypot(top[0] - foot[0], top[1] - foot[1]);
+            const [ux, uz] = [(top[0] - foot[0]) / length, (top[1] - foot[1]) / length];
+            const [ax, az] = [uz, -ux];
+            const at = (t, side = 0) => [foot[0] + (top[0] - foot[0]) * t + ax * side, foot[1] + (top[1] - foot[1]) * t + az * side];
+
+            for (let k = 0; k < STAIR.treads; k++) {
+                const [[x0, z0], [x1, z1]] = [at(k / STAIR.treads), at((k + 1) / STAIR.treads)];
+                // (Its top as high as the stair's walked at its middle)
+                const y = low + (high - low) * ((k + 0.5) / STAIR.treads) - STAIR.tread / 2;
+
+                timber(lists.timbers, [x0, y, z0], [x1, y, z1], 0.94, STAIR.tread);
+            }
+
+            for (const side of [-0.47, 0.47]) {
+                const [[fx, fz], [tx, tz]] = [at(0, side), at(1, side)];
+
+                timber(lists.timbers, [fx, low - STAIR.stringer / 2, fz], [tx, high - STAIR.stringer / 2, tz], STAIR.girth, STAIR.stringer);
+
+                for (const t of [0.5, 1]) {
+                    const [px, pz] = at(t, side);
+
+                    lists.posts.push({ matrix: matrix(px, ground(px, pz) - 0.2, pz, { scale: [WALK.post, low + (high - low) * t - STAIR.stringer - ground(px, pz) + 0.2, WALK.post] }) });
+                }
+            }
+        }
+
+        // The gates: tall posts either side, a lintel over, the leaves swung open inside
         for (const gate of stockade.gates) {
             const [gx, gz] = gate.at;
             const [fx, fz] = [Math.sin(gate.facing), Math.cos(gate.facing)];
@@ -309,21 +344,6 @@ export class Stockades {
 
                 for (const at of [0.5, GATE.leaf - 0.5]) {
                     timber(lists.timbers, [hx - ax * side * 0.06, base + at, hz - az * side * 0.06], [ex - ax * side * 0.06, base + at, ez - az * side * 0.06], 0.05, 0.16);
-                }
-
-                // (Its ladder: up from the lane to the walkway beside the gate)
-                const [lx, lz] = [gx + ax * side * (width + 1.5) - fx * 3, gz + az * side * (width + 1.5) - fz * 3];
-                const [tx, tz] = [gx + ax * side * (width + 1.5) - fx * 1.4, gz + az * side * (width + 1.5) - fz * 1.4];
-                const [low, high] = [ground(lx, lz), ground(tx, tz) + WALK.high + 0.5];
-
-                for (const rail of [-0.22, 0.22]) {
-                    timber(lists.timbers, [lx + ax * rail, low, lz + az * rail], [tx + ax * rail, high, tz + az * rail], 0.07, 0.07);
-                }
-
-                for (let rung = 1; rung <= 5; rung++) {
-                    const t = rung / 6;
-
-                    timber(lists.timbers, [lx + (tx - lx) * t - ax * 0.24, low + (high - low) * t, lz + (tz - lz) * t - az * 0.24], [lx + (tx - lx) * t + ax * 0.24, low + (high - low) * t, lz + (tz - lz) * t + az * 0.24], 0.05, 0.05);
                 }
             }
 

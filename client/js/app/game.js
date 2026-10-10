@@ -70,6 +70,7 @@ import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.
 import { nearestFree, squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
+import { RAISED } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
@@ -263,10 +264,17 @@ const CREAKS = 1.4;
 // fighting (a moment's lull, a blow from another)
 const LEAN = { share: 0.4, most: 4.5, away: 0.25 };
 const FIGHT_VIEW = Object.freeze({ margin: 0.6, hold: 2 });
+// A message kept clear of those fighting (hud.js keepClear): each taken to be `wide` of their
+// height either side of their feet (no less than `least` pixels tall), with `over` pixels over
+// their head for their name and bar, and `under` under their feet
+const MESSAGE_CLEAR = Object.freeze({ wide: 0.35, least: 40, over: 34, under: 6 });
 // Arrows at the screen's edge for those attacking the player out of view: the nearest `most`, so
 // far in from its sides and top (pixels), and from its bottom, clear of the quick actions risen in
 // a fight
 const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
+// The icons down the right side for those attacking the player (hud.js attackers): the first
+// `most` to set on them, in the order they did
+const ATTACKERS = Object.freeze({ most: 6 });
 
 // The tavern's folk: how much hair they grow (at most: less than the player, as there are more
 // of them), and what each of their acts is: its animation's timing (s: core/roles.js ACT_TIMES)
@@ -514,6 +522,7 @@ const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 const _focus = new THREE.Vector3();
 const _gazeAt = new THREE.Vector3();
 const _lean = new THREE.Vector3();
+const _foeChest = new THREE.Vector3();
 const _looking = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
@@ -579,6 +588,14 @@ export class Game {
         this.messages = messages;
         this.onMessages = onMessages;
         hud.onMessage = (text, seconds) => this.#told(text, seconds);
+
+        // Those attacking the player, an icon each down the right side: since when each has been
+        // (the game's clock, s), their likenesses (an ImageData, or null while it's drawn), and
+        // the last of them tapped ({ id, time: ms })
+        this.attackerSince = new Map();
+        this.likenesses = new Map();
+        this.lastIconTap = null;
+        hud.onAttacker = (id, gesture, time) => this.#attackerPressed(id, gesture, time);
 
         // The world (the host's: made here, playing alone), this game's player in it (by id,
         // come in before the world's own people), and the battle as the host has it
@@ -727,7 +744,7 @@ export class Game {
          * how far a drag turns and tilts it (times DRAG_TURN and DRAG_TILT), and whether dragging
          * up tilts it down rather than up.
          */
-        this.cameraSettings = { follows: true, shake: true, drag: 1, invert: false };
+        this.cameraSettings = { follows: false, battle: true, shake: true, drag: 1, invert: false };
 
         // (Who the camera's kept in view in a fight, and till when after: #kept)
         this.fightView = null;
@@ -992,18 +1009,21 @@ export class Game {
      * The ground's height on a map at a point in the world (metres), as a function (x, z), or null
      * where it's flat at 0 (indoors, or a town on its own).
      */
-    groundOf(mapId) {
+    groundOf(mapId, { bare = false } = {}) {
         this.groundsOf ??= new Map();
 
-        if (!this.groundsOf.has(mapId)) {
+        const key = `${mapId}${bare ? ":bare" : ""}`;
+
+        if (!this.groundsOf.has(key)) {
             const map = this.world.maps?.[mapId];
             const [ox, oz] = this.originOf(mapId);
             const most = map?.width - 0.01;
+            const heightAt = bare && map?.ground?.heightAt ? (x, y) => map.ground.heightAt(x, y) : map?.heightAt && ((x, y) => map.heightAt(x, y));
 
-            this.groundsOf.set(mapId, map?.heightAt ? (x, z) => map.heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
+            this.groundsOf.set(key, heightAt ? (x, z) => heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
         }
 
-        return this.groundsOf.get(mapId);
+        return this.groundsOf.get(key);
     }
 
     // How high the ground is on a map at a point in the world (metres: 0 where it's flat)
@@ -1135,6 +1155,7 @@ export class Game {
         this.occluders = {
             heights: { at: (x, z) => Math.max(this.town.heights.at(x, z), this.chunks?.heightAt(x, z) ?? 0) },
             buildings: this.town.buildings,
+            props: this.town.props,
         };
         view.setOccluders(this.occluders);
         view.setGround(this.groundOf("town"));
@@ -1173,7 +1194,8 @@ export class Game {
         this.banners.setGround(this.groundOf("town"));
         this.camps.setGround(this.groundOf("town"));
         this.forts3d.setGround(this.groundOf("town"));
-        this.stockades.setGround(this.groundOf("town"));
+        // (A stockade on the ground under it, not its walkway's deck: core/overworld.js RAISED)
+        this.stockades.setGround(this.groundOf("town", { bare: true }));
 
         // What flies over the world outside: birds of each land, and the wyverns and the dragon
         // near their lairs (flyers3d.js)
@@ -1717,6 +1739,7 @@ export class Game {
         this.sound?.setHearth(null);
         this.hud.clear();
         this.hud.onMessage = () => {};
+        this.hud.onAttacker = () => {};
 
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
@@ -2892,12 +2915,16 @@ export class Game {
         }
 
         this.cameraFollow.follows = this.cameraSettings.follows;
+        this.cameraFollow.battle = this.cameraSettings.battle;
 
         // (In a fight, whoever it is kept in view: within so much of the way from the middle of the
-        // view to its side, as wide as the screen is)
+        // view to its side, as wide as the screen is; with the battle cam, them and the player
+        // seen clear of what stands round, where they can be)
         const [ox, oz] = foe ? this.originOf(foe.map) : [0, 0];
         const lens = this.view.camera;
         const across = 2 * Math.atan(Math.tan((lens.fov * Math.PI) / 360) * lens.aspect);
+        const seen = foe && this.avatars.get(foe.id);
+        const foeChest = seen ? seen.point(0.55, _foeChest) : null;
         const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
@@ -2905,11 +2932,13 @@ export class Game {
             away,
             keep: foe ? { x: ox + foe.x, z: oz + foe.y } : null,
             half: (across / 2) * FIGHT_VIEW.margin,
+            blocked: foeChest ? (way) => this.view.hiddenFrom(way, [chest, foeChest]) : undefined,
         });
-        const seen = foe && this.avatars.get(foe.id);
 
-        this.view.setFoe(seen ? seen.point(0.55) : null, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
+        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
         this.#threats();
+        this.#attackers();
+        this.#clearOfFight(foe);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
         // never lagging far under it, climbing)
@@ -3553,6 +3582,115 @@ export class Game {
         this.hud.threats(arrows);
     }
 
+    // Those attacking the player, an icon each down the right side (hud.js attackers), and whoever
+    // the player's set on (#target), marked: the first ATTACKERS.most, in the order they came to
+    // it; each with their likeness, drawn once (view.js portrait) when they're drawn in full (not
+    // one of a crowd)
+    #attackers() {
+        const player = this.battle.actor(this.me);
+        const target = this.#target();
+        const after = player && !player.dead ? this.battle.actors.filter((actor) => actor === target || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const since = this.attackerSince;
+
+        for (const id of since.keys()) {
+            if (!after.some((actor) => actor.id === id)) {
+                since.delete(id);
+            }
+        }
+
+        for (const actor of after) {
+            if (!since.has(actor.id)) {
+                since.set(actor.id, this.clock);
+            }
+        }
+
+        const shown = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1)).slice(0, ATTACKERS.most);
+
+        for (const id of this.likenesses.keys()) {
+            if (!shown.some((actor) => actor.id === id)) {
+                this.likenesses.delete(id);
+            }
+        }
+
+        for (const actor of shown) {
+            const avatar = this.avatars.get(actor.id);
+
+            if (!this.likenesses.has(actor.id) && avatar && !(avatar instanceof CrowdAvatar)) {
+                this.likenesses.set(actor.id, null);
+                this.view.portrait(avatar.object, { tall: avatar.point(1, _head).y - avatar.object.position.y, facing: avatar.facing, whole: avatar instanceof BeastAvatar }).then((picture) => {
+                    if (this.likenesses.has(actor.id) && this.avatars.get(actor.id) === avatar) {
+                        this.likenesses.set(actor.id, picture);
+                    }
+                });
+            }
+        }
+
+        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, picture: this.likenesses.get(actor.id) ?? null })));
+    }
+
+    // An attacker's icon tapped or held (hud.js onAttacker; `time`: ms, as performance.now()): held,
+    // set on them, walking up into reach of what's in hand; tapped twice in quick succession,
+    // running; tapped once, set on them where the player stands (whoever they were set on, they
+    // stop), or, tapped on whoever they're set on, stopping going after them
+    #attackerPressed(id, gesture, time) {
+        const player = this.battle.actor(this.me);
+        const enemy = this.battle.actor(id);
+        const last = this.lastIconTap;
+
+        this.lastIconTap = gesture === "tap" ? { id, time } : null;
+
+        if (!player || player.dead || !enemy || enemy.dead) {
+            return;
+        }
+
+        const chosen = player.order?.type === "engage" && player.order.target === id;
+
+        this.#endTalk();
+        this.approaching = null;
+
+        if (gesture === "hold") {
+            this.#command({ type: "engage", target: id });
+        } else if (last?.id === id && time - last.time <= DOUBLE_TAP_MS) {
+            this.lastIconTap = null;
+            this.#command({ type: "engage", target: id, run: true });
+        } else if (chosen) {
+            this.#halt();
+        } else {
+            this.#command({ type: "engage", target: id, stand: true });
+        }
+
+        if (!chosen) {
+            this.sound?.play("lock");
+        }
+    }
+
+    // A message on the screen kept clear of those fighting (hud.js keepClear): the player, who
+    // they're fighting (`foe`), and whoever's after them, each where they are on the screen with
+    // their name and bar over them
+    #clearOfFight(foe) {
+        if (this.hud.banner.hidden) {
+            return;
+        }
+
+        const player = this.battle.actor(this.me);
+        const fighting = player && !player.dead ? this.battle.actors.filter((actor) => actor === foe || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const rects = [];
+
+        for (const actor of fighting.length ? [player, ...fighting] : []) {
+            const avatar = this.avatars.get(actor.id);
+            const feet = avatar && this.view.toScreen(avatar.object.position);
+            const head = avatar && this.view.toScreen(avatar.point(1, _head));
+
+            if (feet && head) {
+                const tall = Math.max(MESSAGE_CLEAR.least, feet.y - head.y);
+
+                rects.push({ left: feet.x - tall * MESSAGE_CLEAR.wide, right: feet.x + tall * MESSAGE_CLEAR.wide, top: head.y - MESSAGE_CLEAR.over, bottom: feet.y + MESSAGE_CLEAR.under });
+            }
+        }
+
+        this.hud.keepClear(rects);
+    }
+
     // Whoever the camera keeps in view in a fight: who the player's fighting (#foe), or who they
     // were, for a moment after (FIGHT_VIEW.hold: a lull, a blow from another), while they're on
     // the same map and standing
@@ -4182,7 +4320,8 @@ export class Game {
         const chunk = map.chunkAt?.(sx, sz);
         const k = chunk ? (sz - chunk.y0) * CHUNK + (sx - chunk.x0) : -1;
 
-        return footing(ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
+        // (On an army's camp's walkway, or a stair up to it: its boards)
+        return footing(k >= 0 && chunk.bridge[k] === RAISED ? GROUND.planks : ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
     }
 
     // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
@@ -6171,6 +6310,22 @@ export class Game {
                     avatar.actions.dodge?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
                     break;
                 }
+                case "covered": {
+                    // (A shot taken by the stakes before someone up on a camp's walkway: splinters
+                    // off them between whoever shot and them, a knock on wood)
+                    const by = event.by ? this.avatars.get(event.by) : null;
+                    const at = avatar.point(0.6);
+                    const direction = by ? at.clone().sub(by.point(0.7)).setY(0).normalize() : null;
+
+                    if (direction) {
+                        at.addScaledVector(direction, -1);
+                    }
+
+                    hud.damage(this.#screenAbove(event.id), "Cover", { kind: "stun" });
+                    effects.burst("woodChips", at, direction);
+                    this.sound?.play("block", { at });
+                    break;
+                }
                 case "blocked": {
                     // (Caught on a shield: braced behind it, the boss ringing; a spell on a
                     // spellward, its light)
@@ -7599,14 +7754,27 @@ export class Game {
 
     /**
      * A tap or click at a point on the screen (client pixels), at `time` (ms, as performance.now()):
-     * fight who's there, go through the door or up or down the stairs there, or walk there.
-     * Tapped twice in quick succession (or with `run`: shift-clicked), run there.
+     * set on the enemy there (where the player stands: tapped twice in quick succession, or
+     * shift-clicked, running up to them), go through the door or up or down the stairs there, or
+     * walk there (tapped twice, or with `run`, run there). On the player themselves, going
+     * somewhere, they stop.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
         this.#wake();
 
-        const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
+        let who = this.#whoIsAt(clientX, clientY, { player: true, folk: true })?.actor ?? null;
         const me = this.battle.actor(this.me);
+
+        // The player themselves: going somewhere, they stop (set on someone, still set on them)
+        if (who && who === me) {
+            who = null;
+
+            if (this.#halt()) {
+                this.lastTap = { time, x: clientX, y: clientY, from: "view" };
+
+                return;
+            }
+        }
 
         // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them; another
         // player (not an enemy): trade with them
@@ -8377,6 +8545,23 @@ export class Game {
         this.#order({ enemy, ground: enemy ? null : [x, z] }, { clientX, clientY, run, time, from: "map" });
     }
 
+    // The player going somewhere (walking or running: after someone, to a place, through a door),
+    // stopped: still set on whoever they were after, where they stand. Whether they were
+    #halt() {
+        const player = this.battle.actor(this.me);
+        const order = player?.order;
+
+        if (!player || player.dead || !order || (order.type === "engage" && order.stand)) {
+            return false;
+        }
+
+        this.#endTalk();
+        this.approaching = null;
+        this.#command(order.type === "engage" ? { type: "engage", target: order.target, stand: true } : { type: "stop" });
+
+        return true;
+    }
+
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
@@ -8396,10 +8581,13 @@ export class Game {
 
         run ||= last !== null && last.from === from && time - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.x, clientY - last.y) <= DOUBLE_TAP_SLOP[from];
 
+        // An enemy: set on them where the player stands (whoever they were set on, or going up to,
+        // they stop: tapped on whoever they're set on, they stop going after them); tapped twice
+        // in quick succession, running up to them, into reach of what's in hand
         if (enemy) {
             const chosen = player.order?.type === "engage" && player.order.target === enemy.id;
 
-            this.#command({ type: "engage", target: enemy.id, run });
+            this.#command(run ? { type: "engage", target: enemy.id, run } : { type: "engage", target: enemy.id, stand: true });
 
             if (!chosen) {
                 this.sound?.play("lock");

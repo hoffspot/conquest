@@ -68,6 +68,20 @@ export const SQUARES = CHUNK * CHUNK;
 export const WET = Object.freeze({ none: 0, still: 1, river: 2 });
 
 /**
+ * What's in a chunk's `bridge` for a square of a deck raised over the ground on its own squares,
+ * none further (an army's camp's walkway behind its wall, and the stairs up to it: setStockades),
+ * rather than a bridge's or a citadel's (1).
+ */
+export const RAISED = 2;
+
+/**
+ * What's in a chunk's `opaque` for a square not seen through from the ground, but seen over from
+ * a deck raised over the ground (RAISED: an army's camp's stakes, from the walkway behind them),
+ * rather than one not seen through at all (1).
+ */
+export const LOW = 2;
+
+/**
  * The trees of each kind of land: how many to 100 square metres, and of which kinds (as likely as
  * each other: listed twice, twice as likely).
  */
@@ -348,8 +362,9 @@ export class Overworld {
         /**
          * The armies' camps' stockades standing (setStockades): by the camp's id, { key (what
          * it's made from), box (its squares), cleared (with the ground round it), clearing (as
-         * the trees keep clear of it: { at, radius }), wall, walk (squares: [[x, y], ...]),
-         * trodden (boxes of squares) }.
+         * the trees keep clear of it: { at, radius }), wall, walk, stairs (squares: [[x, y],
+         * ...]), trodden (boxes of squares), stockade (stockade.js stockadeOf's), decks (its
+         * walkway's and stairs' decks, once they're wanted: #decksOf) }.
          */
         this.stockades = new Map();
 
@@ -436,15 +451,22 @@ export class Overworld {
         };
         const blocked = read("blocked", 1);
         const opaque = read("opaque", 1);
+        const decked = read("bridge", 0);
 
-        /** Its squares, as grid.js reads them. */
+        /**
+         * Its squares, as grid.js reads them; and which are on a deck raised over the ground
+         * (`raised`: RAISED, an army's camp's walkway or a stair up to it), and which aren't seen
+         * through but are seen over from one (`low`: LOW, its stakes).
+         */
         this.squares = {
             width: WORLD_SIZE,
             height: WORLD_SIZE,
             blocked: (x, y) => blocked(x, y) === 1,
-            opaque: (x, y) => opaque(x, y) === 1,
+            opaque: (x, y) => opaque(x, y) !== 0,
             ground: read("ground", GROUND.grass),
             roomy: (x, y) => this.roomy(x, y),
+            raised: (x, y) => this.stockades.size > 0 && decked(x, y) === RAISED,
+            low: (x, y) => this.stockades.size > 0 && opaque(x, y) === LOW,
         };
 
         // (The humans' hill citadel set down at once, wherever the player is: its moat and the
@@ -484,11 +506,13 @@ export class Overworld {
     /**
      * The armies' camps' stockades standing in the world (core/war/stockade.js; [{ stockade
      * (stockadeOf's), broken (its sections broken open: brokenOf) }]): the squares of each one's
-     * wall blocked as chunks are made and not seen through, its walkway's blocked, its gates and
-     * breaches open; its ground cleared and round it (STOCKADE.clear: no crops, no trees, nothing
-     * else of the land's), its street and parade ground trodden bare. Those made already that one's
-     * gone up in, come down from, or been breached or mended in let go, to be made again. Returns
-     * the boxes of squares that changed (with the ground cleared round them), as setForts.
+     * wall blocked as chunks are made and not seen through from the ground (LOW: seen over from
+     * its walkway), its walkway's and its stairs' decks raised over theirs (RAISED: walked on at
+     * their height, STOCKADE.high over the ground), its gates and breaches open; its ground
+     * cleared and round it (STOCKADE.clear: no crops, no trees, nothing else of the land's), its
+     * street and parade ground trodden bare. Those made already that one's gone up in, come down
+     * from, or been breached or mended in let go, to be made again. Returns the boxes of squares
+     * that changed (with the ground cleared round them), as setForts.
      */
     setStockades(stockades) {
         const next = new Map(
@@ -497,8 +521,14 @@ export class Overworld {
                 const clear = STOCKADE.clear;
                 const { wall, walk } = squaresOf(stockade, broken);
                 const [mx, my] = stockade.middle;
+                const key = `${stockade.front}:${mx}:${my}:${[...broken].sort((a, b) => a - b)}`;
 
-                return [stockade.id, { key: `${stockade.front}:${mx}:${my}:${[...broken].sort((a, b) => a - b)}`, box: stockade.box, cleared: [x0 - clear, y0 - clear, x1 + clear, y1 + clear], clearing: { at: [mx + 0.5, my + 0.5], radius: (STOCKADE.half + clear) * Math.SQRT2 }, wall, walk, trodden: stockade.trodden }];
+                // (One the same as it was kept as it was, its decks with it)
+                if (this.stockades.get(stockade.id)?.key === key) {
+                    return [stockade.id, this.stockades.get(stockade.id)];
+                }
+
+                return [stockade.id, { key, box: stockade.box, cleared: [x0 - clear, y0 - clear, x1 + clear, y1 + clear], clearing: { at: [mx + 0.5, my + 0.5], radius: (STOCKADE.half + clear) * Math.SQRT2 }, wall, walk, stairs: stockade.stairs.flatMap(({ squares }) => squares), trodden: stockade.trodden, stockade, decks: null }];
             }),
         );
         // (Each that's changed: where it was and where it is, once if that's the same)
@@ -672,6 +702,18 @@ export class Overworld {
         const chunk = inside(px, py) ? this.chunkAt(px, py) : null;
         const k = chunk ? (py - chunk.y0) * CHUNK + (px - chunk.x0) : -1;
 
+        // (An army's camp's walkway or a stair up to it: its deck, on its own squares; a stair's
+        // as far along it as the point is)
+        if (chunk?.bridge[k] === RAISED) {
+            const deck = this.#raisedAt(px, py);
+
+            if (deck) {
+                const [dx, dy] = [deck.b[0] - deck.a[0], deck.b[1] - deck.a[1]];
+
+                return this.deckOf(deck, ((x - deck.a[0]) * dx + (y - deck.a[1]) * dy) / (dx * dx + dy * dy));
+            }
+        }
+
         if (chunk?.bridge[k] || (chunk?.water[k] && chunk.built[k]) || (chunk && this.#byBridge(px, py, chunk))) {
             const deck = this.#deckAt(x, y, chunk.bridge[k] ? DECK_GROW : 0);
 
@@ -683,13 +725,14 @@ export class Overworld {
         return this.ground.heightAt(x, y);
     }
 
-    // Whether any of the eight squares round a square (in `chunk`) is under a bridge's deck
+    // Whether any of the eight squares round a square (in `chunk`) is under a bridge's deck (or a
+    // citadel's: not a deck RAISED on its own squares)
     #byBridge(px, py, chunk) {
         for (let y = py - 1; y <= py + 1; y++) {
             for (let x = px - 1; x <= px + 1; x++) {
                 const own = x >= chunk.x0 && y >= chunk.y0 && x < chunk.x0 + CHUNK && y < chunk.y0 + CHUNK ? chunk : inside(x, y) ? this.chunkAt(x, y) : null;
 
-                if (own?.bridge[(y - own.y0) * CHUNK + (x - own.x0)]) {
+                if (own?.bridge[(y - own.y0) * CHUNK + (x - own.x0)] === 1) {
                     return true;
                 }
             }
@@ -730,6 +773,71 @@ export class Overworld {
         }
 
         return null;
+    }
+
+    // The deck RAISED on a square (an army's camp's walkway's or a stair's: #decksOf), or null
+    #raisedAt(x, y) {
+        for (const stockade of this.stockades.values()) {
+            const [x0, y0, x1, y1] = stockade.box;
+
+            if (x >= x0 && y >= y0 && x <= x1 && y <= y1) {
+                return this.#decksOf(stockade).squares.get(y * WORLD_SIZE + x) ?? null;
+            }
+        }
+
+        return null;
+    }
+
+    // A stockade's decks (setStockades), worked out the first time they're wanted: its walkway's,
+    // one a square, level at STOCKADE.high over the ground at its middle (as it's drawn); and its
+    // stairs', each from the ground at its foot up to the walkway's height beside its top: { a, b
+    // ([x, y] metres), half, from, to }, as a citadel's (deckOf), and by the squares they're on
+    // (`squares`: by y * WORLD_SIZE + x)
+    #decksOf(entry) {
+        if (!entry.decks) {
+            const ground = (x, y) => this.ground.heightAt(x, y);
+            const walk = entry.walk.map(([x, y]) => {
+                const high = ground(x + 0.5, y + 0.5) + STOCKADE.high;
+
+                return { square: [x, y], deck: { a: [x, y + 0.5], b: [x + 1, y + 0.5], half: 0.5, from: high, to: high } };
+            });
+            const stairs = entry.stockade.stairs.map(({ squares, foot, top, onto }) => {
+                const [ox, oy] = onto[onto.length - 1];
+
+                return { squares, deck: { a: [...foot], b: [...top], half: 0.5, from: ground(...foot), to: ground(ox + 0.5, oy + 0.5) + STOCKADE.high } };
+            });
+            const squares = new Map();
+
+            for (const { square: [x, y], deck } of walk) {
+                squares.set(y * WORLD_SIZE + x, deck);
+            }
+
+            for (const { squares: under, deck } of stairs) {
+                for (const [x, y] of under) {
+                    squares.set(y * WORLD_SIZE + x, deck);
+                }
+            }
+
+            entry.decks = { all: [...walk, ...stairs].map(({ deck }) => deck), squares };
+        }
+
+        return entry.decks;
+    }
+
+    // The decks RAISED on the squares of the armies' camps' stockades reaching into a chunk
+    #raisedNear(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const found = [];
+
+        for (const stockade of this.stockades.values()) {
+            const [bx0, by0, bx1, by1] = stockade.box;
+
+            if (bx1 >= x0 && by1 >= y0 && bx0 < x0 + CHUNK && by0 < y0 + CHUNK) {
+                found.push(...this.#decksOf(stockade).all.filter(({ a, b }) => Math.max(a[0], b[0]) + 0.5 >= x0 && Math.min(a[0], b[0]) - 0.5 < x0 + CHUNK && Math.max(a[1], b[1]) + 0.5 >= y0 && Math.min(a[1], b[1]) - 0.5 < y0 + CHUNK));
+            }
+        }
+
+        return found;
     }
 
     /**
@@ -1240,9 +1348,9 @@ export class Overworld {
 
         // The armies' camps' stockades standing in it (setStockades): the ground within and round
         // each cleared (the trees and the land's features kept clear of it as they're made), its
-        // street and parade ground trodden bare, its wall over its squares and not seen through,
-        // its walkway over its own
-        for (const { cleared, wall, walk, trodden } of this.stockades.values()) {
+        // street and parade ground trodden bare, its wall over its squares and not seen through
+        // but from its walkway (LOW), its walkway's and stairs' decks raised over their own
+        for (const { cleared, wall, walk, stairs, trodden } of this.stockades.values()) {
             const [sx0, sy0, sx1, sy1] = cleared;
 
             if (sx1 < x0 || sy1 < y0 || sx0 >= x0 + CHUNK || sy0 >= y0 + CHUNK) {
@@ -1276,14 +1384,16 @@ export class Overworld {
 
                 blocked[k] = 1;
                 solid[k] = 1;
-                opaque[k] = 1;
+                opaque[k] = LOW;
             }
 
-            for (const square of walk.filter(inChunk)) {
+            for (const square of [...walk, ...stairs].filter(inChunk)) {
                 const k = (square[1] - y0) * CHUNK + (square[0] - x0);
 
-                blocked[k] = 1;
-                solid[k] = 1;
+                bridge[k] = RAISED;
+                blocked[k] = 0;
+                solid[k] = 0;
+                opaque[k] = 0;
             }
         }
 
@@ -1493,11 +1603,12 @@ export class Overworld {
     }
 
     /**
-     * The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk); and a citadel's
-     * decks (the way over its moat, its stairs: sites.js decksNear), walked as theirs are.
+     * The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk); a citadel's decks
+     * (the way over its moat, its stairs: sites.js decksNear), walked as theirs are; and the
+     * armies' camps' walkways and the stairs up to them (RAISED: setStockades), as a citadel's.
      */
     bridgesNear(cx, cy) {
-        return [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy), ...this.sites.decksNear(cx, cy)];
+        return [...this.#bridgesNear(cx, cy), ...this.#streetBridgesNear(cx, cy), ...this.sites.decksNear(cx, cy), ...this.#raisedNear(cx, cy)];
     }
 
     /**
