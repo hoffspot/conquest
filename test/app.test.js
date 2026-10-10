@@ -7,7 +7,7 @@ import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { memberKind, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
-import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
+import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
@@ -983,6 +983,22 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
         assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");
         assert.equal(memberKind({ kind: "unit" }), "With you");
+    });
+
+    it("turns the compass (the minimap folded away) for its N to point north as the camera sees it, clockwise from 0 to a full turn", () => {
+        const near = (a, b) => Math.abs(a - b) < 1e-9;
+        const facing = (x, z) => Math.atan2(x, z);
+
+        assert.ok(near(compassTurn(facing(0, -1)), 0), "looking north: N up");
+        assert.ok(near(compassTurn(facing(1, 0)), Math.PI * 1.5), "looking east: N on the left");
+        assert.ok(near(compassTurn(facing(0, 1)), Math.PI), "looking south: N down");
+        assert.ok(near(compassTurn(facing(-1, 0)), Math.PI / 2), "looking west: N on the right");
+
+        for (let look = -7; look < 7; look += 0.37) {
+            const turn = compassTurn(look);
+
+            assert.ok(turn >= 0 && turn < Math.PI * 2, `${look} → ${turn}`);
+        }
     });
 
     it("counts the party chat's unseen lines as a badge does (none, 1 to 9, then 9+), and has its quick phrases each short enough for a tap", () => {

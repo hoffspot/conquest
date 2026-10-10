@@ -113,7 +113,7 @@ import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { hitch } from "../world/art/kits/wagon.js";
-import { Minimap, treesOf } from "./minimap.js";
+import { compassTurn, Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
 import { FatePanel, fateWords } from "./fate.js";
@@ -1907,10 +1907,31 @@ export class Game {
         this.onAdapt?.({ quality, scale });
     }
 
-    /** Show the minimap or not. */
+    /** Show the minimap or not (not: folded away into the compass in its corner, index.html #compass). */
     showMinimap(on) {
         this.minimapShown = on;
         this.minimap?.show(on);
+        this.compassTurned = null;
+    }
+
+    // The compass turned for its N to point north as the camera sees it (minimap.js compassTurn),
+    // only when that's changed (looking straight down, as it was)
+    #turnCompass() {
+        const rose = (this.compassRose ??= this.hud.root.querySelector("#compassrose"));
+        const looking = this.view.camera.getWorldDirection(_looking);
+
+        if (!rose || Math.hypot(looking.x, looking.z) <= 1e-3) {
+            return;
+        }
+
+        const turn = compassTurn(Math.atan2(looking.x, looking.z));
+
+        if (this.compassTurned !== null && Math.abs(turn - this.compassTurned) < 0.005) {
+            return;
+        }
+
+        this.compassTurned = turn;
+        rose.setAttribute("transform", `rotate(${(turn * 180) / Math.PI} 32 32)`);
     }
 
     /**
@@ -3134,9 +3155,14 @@ export class Game {
         this.washing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: seconds * 1000, easing: "ease-in" });
     }
 
-    // The minimap: everyone on it, where the player is going and what the camera sees
+    // The minimap: everyone on it, where the player is going and what the camera sees; folded
+    // away (main.js), the compass in its place turned as the camera turns
     #drawMinimap(target) {
         const minimap = this.minimap;
+
+        if (this.minimapShown === false) {
+            this.#turnCompass();
+        }
 
         if (!minimap?.due()) {
             return;
