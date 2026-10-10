@@ -5399,11 +5399,24 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
         game.advance(5);
 
         // (Tapped again as he goes about the room, till the player's up to him: where he is
-        // depends on how long the game ran before it was stopped)
+        // depends on how long the game ran before it was stopped. The camera's turned to look past
+        // the player at him first, as it doesn't follow round: he may have gone behind it)
         for (let tap = 0; tap < 12 && game.battle.actor("barkeep").talkingTo !== "player"; tap++) {
+            const barkeep = game.battle.actor("barkeep");
+
+            game.cameraFollow.yaw = Math.atan2(player.x - barkeep.x, player.y - barkeep.y);
+            game.cameraFollow.turning = 0;
+
+            for (let k = 0; k < 5; k++) {
+                game.advance(0.1);
+            }
+
             const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
 
-            game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+            if (spot) {
+                game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+            }
+
             game.advance(4);
         }
 
