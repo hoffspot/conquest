@@ -811,10 +811,13 @@ describe("the guilds' ranks at their counters (host.js)", () => {
         asked.choose(said(asked).indexOf("How's my card looking?"));
         assert.match(asked.line, /Bronze( rank)?! 40 more merit and you're Silver\.$/);
 
-        // (Signing up: the host told, besides what she and the player remember)
+        // (Signing up: the host told, besides what she remembers. The card's the host's alone: the
+        // player learns nothing that would give them one should the host refuse it, as it does
+        // once the talk's over: cardOf gives a card only to those who learnt `guildMember` before
+        // the guilds kept cards)
         const signing = talk(false);
 
         signing.choose(said(signing).indexOf("I'd like to register as an adventurer."));
-        assert.deepEqual(signing.choices[0].effects, [{ remember: "registered" }, { learn: "guildMember" }, { guild: "register" }]);
+        assert.deepEqual(signing.choices[0].effects, [{ remember: "registered" }, { guild: "register" }]);
     });
 });

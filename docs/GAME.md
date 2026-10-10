@@ -2366,8 +2366,10 @@ the adventurers drinking at a guild's tables are patrons who talk as adventurers
 
 **The guild's talk.** The receptionist is cheerful and a little flustered: she welcomes a
 stranger to the town's branch of the guild, and signs the player up as an adventurer (`{ guild:
-"register" }`: one card, good at every branch, kept with their standing; and the player learns
-`guildMember`: "Rank: Copper. Everyone starts at Copper, don't pout!"). Whether they're
+"register" }`: one card, good at every branch, kept with their standing: "Rank: Copper. Everyone
+starts at Copper, don't pout!"). The card is the host's alone: the player learnt `guildMember`
+before the guilds kept cards, and such a save is given its card from it (host.js `cardOf`); still
+learnt, it gave a card on the next load even where the host had refused the sign-up. Whether they're
 registered (`member`) is the game's, so every branch knows the card: one from another branch is
 greeted by its rank the first time she sees it, and no one's offered another. She tells of the
 quest board, their card ("How's my card looking?": their rank, `{guildRank}`, and how much more
