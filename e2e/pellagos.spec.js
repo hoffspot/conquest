@@ -1546,10 +1546,11 @@ test("the player's party: a creature called to their side has an icon down the l
     });
     expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && window.pellagos.game.avatars.has([...window.pellagos.game.host.companions.keys()][0]), { seconds: 60 })).toBe(true);
 
-    // Its icon, its likeness once it's drawn
+    // Its icon, its likeness once it's drawn (a tenth of a second at a time: each look draws a
+    // frame, slow on a slow runner, and the likeness waits half a second of play)
     await page.waitForFunction(
         () => {
-            window.pellagos.game.advance(0.02);
+            window.pellagos.game.advance(0.1);
 
             return document.querySelector("#party .member.summon.painted");
         },
@@ -1646,7 +1647,7 @@ test("the player's party: a creature called to their side has an icon down the l
 
     await expect(menu).toBeVisible();
     await page.evaluate(() => window.pellagos.game.stop());
-    await expect(row.locator(".party-kind")).toHaveText(/^Called .+ · \d:\d\d left$/);
+    await expect(row.locator(".party-kind")).toHaveText(/^Called .+ · \d+:\d\d left$/);
     await expect(row.locator(".party-state")).toContainText("Waiting");
     await row.getByRole("button", { name: "Follow" }).click();
     expect(await page.evaluate((id) => window.pellagos.game.host.waiting(id), icon.id)).toBe(false);

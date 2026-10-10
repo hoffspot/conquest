@@ -862,8 +862,9 @@ export class Host {
 
         /**
          * The creatures at the players' sides by magic (by id): { leader (a player's id), creature,
-         * tier, until (when they're gone: five minutes on), risen (Zombify's; else Summon's) }. Lost
-         * if the player's carried off by magic (Teleport...).
+         * tier, until (when they're gone: an hour on), risen (Zombify's; else Summon's) }, in the
+         * order they came (the oldest let go first when there's no more room: #companion). Lost if
+         * the player's carried off by magic (Teleport...).
          */
         this.companions = new Map();
         this.nextCompanion = 1;
@@ -2158,7 +2159,7 @@ export class Host {
                     this.#school(caster, spell.school, SPELL_XP * spell.tier);
                 }
 
-                // (A spell that grows as it's used: Vampirism, Dodge, Poison)
+                // (A spell that grows as it's used: Vampirism, Dodge, Poison, Summon, Zombify)
                 const grown = caster && event.landed > 0 ? caster.progress.growSpell(event.spell, SPELL_XP) : null;
 
                 if (grown) {
@@ -7066,7 +7067,7 @@ export class Host {
 
     // A spell landed that the host works the wonder of (a player's): raising the dead, calling a
     // creature or another player, drawing one out of the smoke, changing one, carrying the caster off
-    #wonder({ id, spell, target, at }) {
+    #wonder({ id, spell, target, at, level = 1 }) {
         const player = this.players.get(id);
         const caster = this.battle.actor(id);
 
@@ -7076,11 +7077,11 @@ export class Host {
 
         switch (spell) {
             case "zombify":
-                this.#raiseDead(player, target);
+                this.#raiseDead(player, target, level);
                 break;
             case "summon":
                 if (target === id) {
-                    this.#call(player);
+                    this.#call(player, level);
                 } else {
                     this.#summon(player, target);
                 }
@@ -7106,8 +7107,9 @@ export class Host {
         }
     }
 
-    // Zombify: one of the wild's creatures, fallen, risen to follow the player a while
-    #raiseDead(player, corpseId) {
+    // Zombify: one of the wild's creatures, fallen, risen to follow the player a while (as many at
+    // once as the spell's `level` allows: #companion)
+    #raiseDead(player, corpseId, level = 1) {
         const corpse = this.battle.actor(corpseId);
         const beast = this.wild.get(corpseId);
 
@@ -7121,12 +7123,14 @@ export class Host {
         this.battle.remove(corpseId);
         this.#unwild(corpseId);
         this.#event("gone", { id: corpseId, risen: true });
-        this.#companion(player, beast.creature, beast.tier, at, { risen: true });
+        this.#companion(player, beast.creature, beast.tier, at, { risen: true, level });
     }
 
-    // A creature at a player's side a while (SPELLS.summon.lasts), following them and fighting
-    // whoever's their enemy: risen from the dead (Zombify), or called (Summon). Its id
-    #companion(player, creature, tier, { map, square }, { risen = false } = {}) {
+    // A creature at a player's side a while (SPELLS.summon.lasts: an hour), following them and
+    // fighting whoever's their enemy: risen from the dead (Zombify), or called (Summon). As many of
+    // each at once as the spell's `level` allows (SPELLS company: one at level 1, five at 5); with
+    // that many already, the oldest of them let go to make room. Its id
+    #companion(player, creature, tier, { map, square }, { risen = false, level = 1 } = {}) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
         const id = `companion-${this.nextCompanion++}`;
@@ -7139,7 +7143,16 @@ export class Host {
             return null;
         }
 
-        this.companions.set(id, { leader: player.id, creature, tier, until: this.battle.time + SPELLS[risen ? "zombify" : "summon"].lasts, risen });
+        const spell = SPELLS[risen ? "zombify" : "summon"];
+        const most = spell.company[Math.min(Math.max(1, level), spell.company.length) - 1];
+        const already = [...this.companions].filter(([, one]) => one.leader === player.id && Boolean(one.risen) === risen);
+
+        // (The oldest first: the companions are kept in the order they came)
+        for (const [old] of already.slice(0, Math.max(0, already.length - most + 1))) {
+            this.#letGo(old, "replaced");
+        }
+
+        this.companions.set(id, { leader: player.id, creature, tier, until: this.battle.time + spell.lasts, risen });
         this.battle.add({
             id,
             kind: "beast",
@@ -7254,11 +7267,11 @@ export class Host {
     }
 
     // Summon, on themselves: a creature of these parts at their side a while
-    #call(player) {
+    #call(player, level = 1) {
         const actor = this.battle.actor(player.id);
         const { creature, tier } = this.#local(player);
 
-        this.#companion(player, creature, tier, { map: actor.map, square: this.#behind(actor) ?? actor.square });
+        this.#companion(player, creature, tier, { map: actor.map, square: this.#behind(actor) ?? actor.square }, { level });
     }
 
     // Attraction: out of a puff of smoke in front of them, one of the creatures of these parts

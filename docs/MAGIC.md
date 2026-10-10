@@ -181,14 +181,14 @@ tomes, above, are the guild's to sell, never found or given.)
 | Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | an hour: poison (or disease) hurts 30% less and ends sooner |
 | Cure Poison, Cure Disease, Lift Curse, Quench, Staunch, Unbind | common | anyone | 500 ms | 6 s | ends poisoning, disease, withering, burning, bleeding, being slowed |
 | Embolden | common | anyone | 500 ms | 6 s | ends Fear |
-| Zombify | uncommon | one fallen | 1200 ms | 30 s | an enemy fallen in the last half minute rises to follow and fight for you, five minutes (a grimoire) |
+| Zombify | uncommon | one fallen | 1200 ms | 30 s | an enemy fallen in the last half minute rises to follow and fight for you, an hour; as many at once as its level, 1 to 5 (a grimoire) |
 | Teleport | uncommon | oneself | 1500 ms | 60 s | anywhere in the world, in an instant |
 | Swole | uncommon | oneself | 600 ms | 30 s | running and fighting take a quarter of the breath, five minutes |
 | Reflect | uncommon | oneself | 800 ms | 30 s | a fifth of every blow and spell turned back on whoever dealt it, five minutes (a wand) |
 | Invisibility | rare | oneself | 1000 ms | 60 s | unseen, five minutes or till you strike, cast, talk, trade or use anything |
 | Word of Recall | uncommon | oneself | 2000 ms | 60 s | to the door of the nearest temple (a grimoire) |
 | Wizard's Walk | rare | a place | 1200 ms | 5 min | anywhere on the map you've uncovered, in a step (a wand) |
-| Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, five minutes; or another player, if they'll come |
+| Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, an hour, as many at once as its level, 1 to 5; or another player, if they'll come |
 | Levitate | common | oneself | 600 ms | 20 s | float above the ground, five minutes: nothing on it touches you |
 | Fear | uncommon | an enemy | 500 ms | 8 s | it runs blindly away, ten seconds |
 | Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's |
@@ -213,9 +213,12 @@ for 4). Never the caster or their friends and allies. Its look and sound are the
 There's no scroll of it, only its tome: found on those with hands (much likelier on the Goblin
 King, docs/WILDS.md *Goblins*), and now and then the Mystic Emporium's special.
 
-**Growing.** Vampirism, Dodge and Poison grow as they're used (their own experience, `SPELL_XP` a
-cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`), each stronger, and said
-("Vampirism grows stronger (3 of 5)").
+**Growing.** Vampirism, Dodge, Poison, Summon and Zombify grow as they're used (their own
+experience, `SPELL_XP` a cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`),
+each stronger, and said ("Vampirism grows stronger (3 of 5)"). Summon's and Zombify's level is how
+many of what each brings can be at the caster's side at once (`company`: one at level 1, five at
+5; ten together with both at 5), and said so ("Summon grows (3 of 5): up to 3 at your side at
+once").
 
 ### What lasts
 
@@ -289,8 +292,11 @@ same for everyone playing (docs/GAME.md: hosting and joining):
 
 - **Zombify** raises an enemy creature fallen in the last half minute (they lie 30 s: long enough)
   as the caster's companion, and **Summon** (on a creature) calls one of the creatures of these
-  parts as one: a companion follows its player and fights their enemies, five minutes (its time
-  up, it's gone). It keeps up as a follower does (docs/WAR.md *Following*: at its player's pace,
+  parts as one: a companion follows its player and fights their enemies, an hour (`COMPANY`; its
+  time up, it's gone). A player keeps as many called at once as Summon's level, and as many risen
+  as Zombify's (*Growing*, above: one to five each, so ten at most); one more called or raised
+  than that, and the oldest of that kind goes to make room for it ("Your wolf goes, to make room
+  for another.", host.js `#companion`). It keeps up as a follower does (docs/WAR.md *Following*: at its player's pace,
   a sprint as they sprint, faster the further behind), and one left more than 20 metres behind
   (stuck, or on another floor) is brought quietly to a few squares behind them (`FOLLOW.lost`,
   `COMPANION.behind`), out of a fight its player isn't in. They're lost when their player's
@@ -453,4 +459,5 @@ Everything a spell does is the host's (battle.js and host.js: the same for every
 host's seeded random numbers), told as events (`cast`, `hit`, `spell`, `healed`, `stunned`,
 `buffed`, `hazard`, `carried`, `companion`, `summons`, `polymorphed`, `attracted`) that everyone
 joined sees the same way. How spells look is each player's own, drawn from those events: a player
-casting on another map isn't drawn.
+casting on another map isn't drawn. Summon and Zombify growing, and how many each keeps at once,
+changed the rules every game plays by (`NET_VERSION` 103).

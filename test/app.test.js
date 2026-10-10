@@ -252,13 +252,14 @@ describe("saving (save.js)", () => {
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {
         const items = useStorage();
         const save = { id: "abcd1234", seed: 12, created: "2026-10-02T10:00:00.000Z" };
-        const progress = new Progress({ schools: { fire: 160, healing: 40 }, spells: ["burn", "dodge"], spellXp: { dodge: 30 }, gold: 75 });
+        const progress = new Progress({ schools: { fire: 160, healing: 40 }, spells: ["burn", "dodge", "summon", "zombify"], spellXp: { dodge: 30, summon: 520, zombify: 70 }, gold: 75 });
 
         assert.equal(saveProgress(save, progress), true);
 
         const again = new Progress(loadProgress(save));
 
         assert.deepEqual([again.schools, again.spells, again.spellXp, again.gold], [progress.schools, progress.spells, progress.spellXp, 75]);
+        assert.deepEqual(["dodge", "summon", "zombify"].map((spell) => again.levelOf(spell)), [1, 4, 2]);
         assert.ok(again.knows("fireball") && again.opened("fire") && !again.opened("earth"));
 
         // (Kept before: no format, every element open as it was)
@@ -979,6 +980,7 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(timeLeft(245000), "4:05");
         assert.equal(timeLeft(400), "0:01", "(rounded up: not 0:00 while it's there)");
         assert.equal(timeLeft(-5), "0:00");
+        assert.equal(timeLeft(3600000), "60:00", "(an hour, the whole of Summon's or Zombify's, in minutes)");
         assert.equal(memberKind({ kind: "adventurer", calling: "warrior" }), "Hired warrior");
         assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
         assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");

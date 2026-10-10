@@ -51,6 +51,12 @@ export const LASTING = 300000;
 /** How long a ward lasts (ms): an hour (it was five minutes, as LASTING). */
 export const WARDING = 3600000;
 
+/**
+ * How long a creature called to a player's side (Summon) or raised from the dead (Zombify) stays
+ * with them (ms): an hour (it was five minutes, as LASTING).
+ */
+export const COMPANY = 3600000;
+
 /** What's left of what a ward's against (a share): 30% less. */
 export const WARD = 0.7;
 
@@ -98,6 +104,9 @@ export const GROWTH_XP = Object.freeze([0, 60, 200, 500, 1200]);
  *    (`toss`: how far, times battle.js TOSS);
  *  - stun: stops the target for so many ms (Hexes);
  *  - `reaction`: how whoever's struck by it reacts (as a weapon's blow: characters/actions.js).
+ * A spell that grows as it's used (`grows`: GROWTH_XP) does more at each of its five levels; for
+ * Summon and Zombify, `company` is how many of what each brings can be at the caster's side at
+ * once, at each level (host.js #companion).
  * Healing restores less as damage is dealt more: tier 1 of either is weak, as a new adventurer is.
  */
 export const SPELLS = Object.freeze({
@@ -172,14 +181,14 @@ export const SPELLS = Object.freeze({
     embolden: tome("Embolden", "common", { about: "Courage: ends Fear, on anyone.", target: "any", castTime: 500, cooldown: 6000, cures: ["fear"] }),
 
     // Wonders
-    zombify: tome("Zombify", "uncommon", { about: "Raises an enemy fallen in the last half minute near you to follow you and fight for you, five minutes. Needs a grimoire in hand.", target: "corpse", needs: "grimoire", castTime: 1200, cooldown: 30000, lasts: LASTING }),
+    zombify: tome("Zombify", "uncommon", { about: "Raises an enemy fallen in the last half minute near you to follow you and fight for you, an hour. One at a time at first; the more you use it, the more at once, up to five (the oldest let go for a new one). Needs a grimoire in hand.", target: "corpse", needs: "grimoire", castTime: 1200, cooldown: 30000, lasts: COMPANY, grows: true, company: [1, 2, 3, 4, 5] }),
     teleport: tome("Teleport", "uncommon", { about: "Takes you in an instant to somewhere, anywhere, in the world. Those with you are left behind.", target: "self", castTime: 1500, cooldown: 60000 }),
     swole: tome("Swole", "uncommon", { about: "Strength swelling in you: running and fighting take a quarter of the breath, five minutes.", target: "self", castTime: 600, cooldown: 30000, lasts: LASTING, stamina: 0.25 }),
     reflect: tome("Reflect", "uncommon", { about: "A barrier round you turning a fifth of every blow and spell back on whoever dealt it, five minutes. Needs a wand in hand.", target: "self", needs: "wand", castTime: 800, cooldown: 30000, lasts: LASTING, reflect: 0.2 }),
     invisibility: tome("Invisibility", "rare", { about: "Unseen, five minutes, or till you strike, cast, talk, trade or use anything: most won't see you at all, the mightiest may, the longer you're near them.", target: "self", castTime: 1000, cooldown: 60000, lasts: LASTING }),
     wordOfRecall: tome("Word of Recall", "uncommon", { about: "Takes you in an instant to the door of the nearest temple. Those with you are left behind. Needs a grimoire in hand.", target: "self", needs: "grimoire", castTime: 2000, cooldown: 60000 }),
     wizardsWalk: tome("Wizard's Walk", "rare", { about: "Walk the world's paths in a step: to anywhere on the map you've uncovered. Those with you are left behind. Needs a wand in hand.", target: "place", needs: "wand", castTime: 1200, cooldown: 300000 }),
-    summon: tome("Summon", "common", { about: "Calls a creature of these parts to your side to fight with you, five minutes; or calls another player (of a people not your enemy) to you, if they'll come.", target: "summon", castTime: 1500, cooldown: 60000, lasts: LASTING }),
+    summon: tome("Summon", "common", { about: "Calls a creature of these parts to your side to fight with you, an hour. One at a time at first; the more you use it, the more at once, up to five (the oldest let go for a new one). Or calls another player (of a people not your enemy) to you, if they'll come.", target: "summon", castTime: 1500, cooldown: 60000, lasts: COMPANY, grows: true, company: [1, 2, 3, 4, 5] }),
     levitate: tome("Levitate", "common", { about: "Float a hand's breadth above the ground, five minutes: nothing on it (traps, pools, fire) touches you.", target: "self", castTime: 600, cooldown: 20000, lasts: LASTING }),
     fear: tome("Fear", "uncommon", { about: "Terror: an enemy runs blindly away, ten seconds (half that cast on them again soon after; a third time, nothing). The mighty may shrug it off; the unique always do.", target: "enemy", castTime: 500, cooldown: 8000, reach: SPELL_REACH.reach + SPELL_REACH.hexes, flee: 10000 }),
     explosion: tome("Explosion", "rare", { about: "A blast of fire round an enemy: every foe within four metres is hurt (the nearer, the worse) and thrown through the air, and is a few moments getting up. It never hurts or throws you or your allies.", target: "enemy", castTime: 1400, cooldown: 20000, damage: [20, 32], area: 4, blast: { toss: 1.5 }, reaction: "crush" }),
