@@ -7,7 +7,10 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { CLIPS } from "../scripts/build-clips.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
-import { EQUIPMENT, ITEMS, SLOTS, socketOn } from "../client/js/characters/equipment.js";
+import { EQUIPMENT, ITEMS, SLING, SLOTS, socketOn } from "../client/js/characters/equipment.js";
+import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
+import { LIVERY_PARTS, liveryKit } from "../client/js/characters/liveries.js";
+import { ARMS, soldierLook } from "../client/js/characters/soldiers.js";
 import { placed } from "../client/js/characters/character.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -16,7 +19,7 @@ import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/f
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { HeadMap, measureHead, rimLine } from "../client/js/characters/headwear.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap, underneath } from "../client/js/characters/garments.js";
+import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, fittingOutfit, GARMENTS, insideBetween, insideOf, measureBody, paintGarment, STAND_OFF, stackOrder, texelMap } from "../client/js/characters/garments.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton } from "../client/js/characters/drapes.js";
@@ -964,7 +967,7 @@ describe("clothing and armour (garments.js)", () => {
         }
 
         // A garment's picture, spread: each texel spread to has its neighbour's colour and height
-        const { data, bump } = paintGarment(map, GARMENTS["livery.human"]);
+        const { data, bump } = paintGarment(map, GARMENTS["livery.human"], measures);
 
         for (let p = 0; p < spread.length; p += 2) {
             const [i, from] = [spread[p], spread[p + 1]];
@@ -975,37 +978,44 @@ describe("clothing and armour (garments.js)", () => {
 
     it("paints each people's everyday dress with its own work: the elves' vine, the dark elves' web, the cat folk's bands, the lizard folk's frets, the orcs' patched hide and fur, beads and bangles", () => {
         const map = texelMap(human, 256);
-        const covered = map.covered.reduce((sum, each) => sum + (each ? 1 : 0), 0);
-        // (The share of the body's texels painted near `colour`: within a tenth of its brightness)
-        const share = (data, colour) => {
+        // (The share of the texels where the garment is painted near `colour`: within a tenth of
+        // its brightness)
+        const share = (data, colour, inside) => {
             const [r, g, b] = new THREE.Color(colour).toArray().map((c) => c * 255);
-            let found = 0;
+            let [found, there] = [0, 0];
 
             for (let i = 0; i < map.covered.length; i++) {
-                if (map.covered[i] && Math.abs(data[i * 4] - r) + Math.abs(data[i * 4 + 1] - g) + Math.abs(data[i * 4 + 2] - b) < 75) {
-                    found++;
+                const t = map.triangles[i] * 3;
+                const [w0, w1] = [map.weights[i * 2], map.weights[i * 2 + 1]];
+
+                if (!map.covered[i] || w0 * inside[map.corners[t]] + w1 * inside[map.corners[t + 1]] + (1 - w0 - w1) * inside[map.corners[t + 2]] <= 0) {
+                    continue;
                 }
+
+                there++;
+                found += Math.abs(data[i * 4] - r) + Math.abs(data[i * 4 + 1] - g) + Math.abs(data[i * 4 + 2] - b) < 75 ? 1 : 0;
             }
 
-            return found / covered;
+            return found / there;
         };
 
         // ([id, how much of it's its own colour, and of each colour worked in it, at the least]: a
-        // collar's beads a third each)
-        for (const [id, most, least] of [["elfTunicMoss", 0.25, 0.004], ["darkTunicBlack", 0.25, 0.004], ["catWrapSaffron", 0.25, 0.08], ["huipilWhite", 0.25, 0.004], ["hideVestTan", 0.25, 0.004], ["beadedCollarBright", 0.08, 0.08]]) {
+        // collar's beads a quarter each, the rest dark between them)
+        for (const [id, most, least] of [["elfTunicMoss", 0.35, 0.01], ["darkTunicBlack", 0.35, 0.01], ["catWrapSaffron", 0.25, 0.08], ["huipilWhite", 0.35, 0.01], ["hideVestTan", 0.35, 0.01], ["beadedCollarBright", 0.08, 0.08]]) {
             const garment = GARMENTS[id];
-            const { data } = paintGarment(map, garment);
+            const { data } = paintGarment(map, garment, measures);
+            const ofIt = (colour) => share(data, colour, insideOf(human, garment, measures, { toes: true }));
 
-            assert.ok(share(data, garment.colour) > most, `${id}: its colour (${share(data, garment.colour).toFixed(3)})`);
+            assert.ok(ofIt(garment.colour) > most, `${id}: its colour (${ofIt(garment.colour).toFixed(3)})`);
 
             for (const colour of [garment.trim, garment.accent].filter(Boolean)) {
-                assert.ok(share(data, colour) > least, `${id}: ${colour} worked in (${share(data, colour).toFixed(3)})`);
+                assert.ok(ofIt(colour) > least, `${id}: ${colour} worked in (${ofIt(colour).toFixed(3)})`);
             }
         }
 
         // (Fur and hide each patch or hair its own shade; bangles ringed)
         for (const id of ["furMantleGrey", "hideVestDark", "banglesBronze"]) {
-            const { bump } = paintGarment(map, GARMENTS[id]);
+            const { bump } = paintGarment(map, GARMENTS[id], measures);
             const heights = [...bump].filter((_, i) => map.covered[i]);
             const mean = heights.reduce((sum, h) => sum + h, 0) / heights.length;
             const spread = Math.sqrt(heights.reduce((sum, h) => sum + (h - mean) ** 2, 0) / heights.length);
@@ -1152,6 +1162,123 @@ describe("clothing and armour (garments.js)", () => {
         }
     });
 
+    it("runs every garment's region smoothly wherever its edge crosses the body, on both bodies: no step where the skin goes from one bone to the next", () => {
+        // (Cut where the arm's bones take over from the shoulder's, a surcoat's armholes were
+        // ragged, a sliver of a shoulder trimmed all over; where the foot's take over from the
+        // shin's, trousers' cuffs; and a chain of office lay across the shoulders out to the arms)
+        for (const body of ["human", "vitruvian"]) {
+            const data = readHumanData(body);
+            const shaped = measureBody(figure({}, data));
+            const corners = Array.from(data.renderIndices("body"), (r) => data.renderSource[r]);
+            const sides = new Set();
+
+            for (let t = 0; t < corners.length; t += 3) {
+                for (let k = 0; k < 3; k++) {
+                    const [a, b] = [corners[t + k], corners[t + ((k + 1) % 3)]];
+
+                    if (a !== b) {
+                        sides.add(Math.min(a, b) * 65536 + Math.max(a, b));
+                    }
+                }
+            }
+
+            for (const [id, garment] of Object.entries(GARMENTS).filter(([, each]) => !each.design)) {
+                const inside = insideOf(data, garment, shaped);
+                let steepest = 0;
+
+                for (const side of sides) {
+                    const [a, b] = [Math.floor(side / 65536), side % 65536];
+
+                    if (inside[a] > 0 !== inside[b] > 0) {
+                        const [pa, pb] = [shaped.vertices[a], shaped.vertices[b]];
+
+                        steepest = Math.max(steepest, Math.abs(inside[a] - inside[b]) / Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z));
+                    }
+                }
+
+                // (Its region runs at most 25 a metre across its edge: a step was 40 to 130)
+                assert.ok(steepest < 25, `${body}: ${id} steps ${steepest.toFixed(1)} a metre across its edge`);
+            }
+        }
+    });
+
+    it("cuts a garment where its region runs out between two of the body's vertices, not where a line between them would: a baldric's edges straight across its middle", () => {
+        const garment = GARMENTS.baldric;
+        const inside = insideOf(human, garment, measures);
+        const corners = Array.from(human.renderIndices("body"), (r) => human.renderSource[r]);
+        // (What's measured of the body t of the way from a to b)
+        const between = (a, b, t) => {
+            const [pa, pb] = [measures.vertices[a], measures.vertices[b]];
+
+            return { ...(t < 0.5 ? pa : pb), ...Object.fromEntries(["armShare", "legShare", "arm", "leg", "foot", "x", "y", "z"].map((key) => [key, pa[key] * (1 - t) + pb[key] * t])) };
+        };
+        let [crossings, off] = [0, 0];
+
+        for (let t = 0; t < corners.length; t += 3) {
+            for (let k = 0; k < 3; k++) {
+                const [a, b] = [corners[t + k], corners[t + ((k + 1) % 3)]];
+
+                if (a === b || inside[a] > 0 === inside[b] > 0) {
+                    continue;
+                }
+
+                const along = insideBetween(garment, measures, a, b, inside[a], inside[b]);
+                const guess = inside[a] / (inside[a] - inside[b]);
+                const [pa, pb] = [measures.vertices[a], measures.vertices[b]];
+
+                crossings++;
+                assert.ok(along >= 0 && along <= 1);
+                assert.ok(Math.abs(garment.inside(between(a, b, along), measures.landmarks)) < 1e-5, "where its region runs out");
+
+                // (Across its middle, a line between how far inside each is was millimetres off)
+                off += Math.abs(along - guess) * Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z) > 0.002 ? 1 : 0;
+            }
+        }
+
+        assert.ok(crossings > 50, `${crossings} of the body's sides crossed`);
+        assert.ok(off > 0, "some far off a line between them");
+    });
+
+    it("fits every outfit worn in the game, one garment over another: each at least STAND_OFF over all those under it, wherever both are", () => {
+        // (Every player's and folk's outfit; each people's soldiers, officials and townsfolk)
+        const looks = [...Object.values(PRESETS), ...Object.values(FOLK)].map(({ equipment }) => equipment);
+
+        for (const people of Object.keys(ARMS)) {
+            for (const sex of ["m", "f"]) {
+                looks.push(...ARMS[people].map((weapon) => soldierLook({ people, weapon, sex, seed: 11, captain: sex === "m" }).equipment));
+                looks.push(...LIVERY_PARTS.map((part) => liveryKit(people, part, sex)));
+                looks.push(...TOWNSFOLK_PARTS.flatMap((calling) => [1, 2, 3].map((seed) => folkLook({ role: "townsfolk", look: calling, sex, seed, people }).equipment)));
+            }
+        }
+
+        // (The garments each wears, as a character dresses: Character's)
+        const worn = (equipment) => [...new Set(equipment.flatMap((id) => (EQUIPMENT[id]?.kind === "garment" ? [id] : [EQUIPMENT[id]?.garment, EQUIPMENT[id]?.sheath?.garment, EQUIPMENT[id]?.sling ? SLING.garment : null])))].filter((id) => GARMENTS[id]);
+        const outfits = new Map(looks.map((equipment) => worn(equipment).sort(stackOrder)).map((ids) => [ids.join(" "), ids]));
+
+        assert.ok(outfits.size > 100, `${outfits.size} outfits`);
+
+        for (const ids of outfits.values()) {
+            const built = allAtOnce(fittingOutfit(f, ids, measures));
+            const insides = built.map(({ id }) => insideOf(human, GARMENTS[id], measures));
+
+            assert.deepEqual(built.map(({ id }) => id), [...ids].sort(stackOrder), "put on under ones first");
+
+            for (let i = 0; i < built.length; i++) {
+                for (let j = i + 1; j < built.length; j++) {
+                    let least = Infinity;
+
+                    for (let v = 0; v < human.vertexCount; v++) {
+                        if (insides[i][v] > 0 && insides[j][v] > 0) {
+                            least = Math.min(least, built[j].reach[v] - built[i].reach[v]);
+                        }
+                    }
+
+                    assert.ok(least >= STAND_OFF - 1e-6, `${built[j].id} ${(least * 1000).toFixed(1)} mm over ${built[i].id} at the least`);
+                }
+            }
+        }
+    });
+
     it("lays a strap over what's worn under it, on both bodies: a baldric over a jerkin, over a breastplate", () => {
         // (At its own thickness it was under them, a jerkin's 4 mm further out and a breastplate's
         // 2 cm: only its middle showed, its edges bitten into)
@@ -1181,8 +1308,8 @@ describe("clothing and armour (garments.js)", () => {
             };
 
             for (const outfit of [["shirt", "jerkin"], ["gambeson", "breastplate"]]) {
-                const outer = buildGarment(hero, outfit.at(-1), shaped);
-                const strap = buildGarment(hero, "baldric", shaped, allAtOnce(underneath(data, "baldric", [...outfit, "baldric"], shaped)));
+                const built = allAtOnce(fittingOutfit(hero, [...outfit, "baldric"], shaped));
+                const [outer, strap] = [built.find(({ id }) => id === outfit.at(-1)), built.find(({ id }) => id === "baldric")];
                 const [over, under] = [standing(strap), standing(outer)];
                 const both = [...over.keys()].filter((t) => strap.covers.has(t) && outer.covers.has(t));
                 const least = Math.min(...both.map((t) => over.get(t) - under.get(t)));
@@ -1198,7 +1325,8 @@ describe("clothing and armour (garments.js)", () => {
         const outfit = ["livery.human", "trousers.human", "mail.human", "gauntlets.human", "sabatons.human", "vambraces.human", "greaves.human", "surcoat.human", "belt.human"];
         const map = texelMap(human, 256);
         const count = map.size * map.size;
-        const colourOf = (k) => [20 + k * 25, 230 - k * 20, 90];
+        // (Green unevenly, so no mix of two is a third's colour)
+        const colourOf = (k) => [20 + k * 25, [230, 40, 180, 90, 210, 60, 150, 110, 250][k], 90];
         const layers = outfit.map((id, k) => ({
             data: Uint8ClampedArray.from({ length: count * 4 }, (_, i) => (i % 4 === 3 ? 255 : colourOf(k)[i % 4])),
             bump: new Uint8ClampedArray(count).fill(128 + k),
@@ -1206,9 +1334,9 @@ describe("clothing and armour (garments.js)", () => {
             bumpScale: COMPOSITE_BUMP,
             roughness: GARMENTS[id].roughness,
             metalness: GARMENTS[id].metalness ?? 0,
-            inside: insideOf(human, GARMENTS[id], measures, { toes: true }),
+            garment: GARMENTS[id],
         }));
-        const { data, surface } = compositeGarments(map, layers);
+        const { data, surface } = compositeGarments(map, layers, measures);
         const layerAt = (u, v) => {
             const i = Math.min(map.size - 1, Math.floor((1 - v) * map.size)) * map.size + Math.min(map.size - 1, Math.floor(u * map.size));
 
@@ -1216,8 +1344,9 @@ describe("clothing and armour (garments.js)", () => {
         };
         const built = outfit.map((id) => buildGarment(f, id, measures));
 
-        // Where only one garment is (no other has any of the body there), its own picture; where
-        // an outer one's edge crosses an inner one, the outer one's, on its side of the edge
+        // Where only one garment is (no other has any of the body there), its own picture, or
+        // beside another's edge, mixed with that (never wholly another's); where an outer one's
+        // edge crosses an inner one, the outer one's, on its side of the edge
         built.forEach(({ geometry, sources }, k) => {
             const others = new Set(built.filter((_, j) => j !== k).flatMap((other) => [...other.sources]));
             const outer = new Set(built.filter((_, j) => j > k).flatMap((other) => [...other.sources]));
@@ -1245,7 +1374,7 @@ describe("clothing and armour (garments.js)", () => {
 
                 if (!others.has(sources[t])) {
                     alone++;
-                    alike += layer === k ? 1 : 0;
+                    alike += layer === k || !Number.isInteger(layer) ? 1 : 0;
                 } else if (!outer.has(sources[t]) && built.some((other, j) => j < k && other.sources.includes(sources[t]))) {
                     edged++;
                     over += layer === k ? 1 : 0;
@@ -1278,17 +1407,42 @@ describe("clothing and armour (garments.js)", () => {
         assert.equal(outfit[at("arm", (v) => v.arm > 0.45 && v.arm < 0.55)], "livery.human");
         assert.equal(outfit[at("foot", (v) => v.foot > 1.05)], "sabatons.human");
 
-        for (let i = 0; i < count; i++) {
-            if (map.covered[i]) {
-                const k = (data[i * 4] - 20) / 25;
+        // (Wholly one garment's, its own; mixed, only along an edge: within 2 cm of where one
+        // of them runs out, on the body)
+        const wholly = (i) => {
+            const k = (data[i * 4] - 20) / 25;
 
-                assert.equal(surface[i * 4], 128 + k);
-                assert.equal(surface[i * 4 + 2], Math.round((GARMENTS[outfit[k]].metalness ?? 0) * 255));
+            return Number.isInteger(k) && data[i * 4 + 1] === colourOf(k)[1] ? k : null;
+        };
+        const insides = outfit.map((id) => insideOf(human, GARMENTS[id], measures, { toes: true }));
+        let mixed = 0;
+
+        for (let i = 0; i < count; i++) {
+            if (!map.covered[i]) {
+                continue;
+            }
+
+            const k = wholly(i);
+
+            // (A sliver of another's, a fiftieth or less, too little to tell in its colour, can
+            // move its height a step and its metalness a few: mail's is 217 steps from cloth's)
+            if (k !== null) {
+                assert.ok(Math.abs(surface[i * 4] - (128 + k)) <= 1);
+                assert.ok(Math.abs(surface[i * 4 + 2] - Math.round((GARMENTS[outfit[k]].metalness ?? 0) * 255)) <= 5);
+            } else {
+                const t = map.triangles[i] * 3;
+                const [w0, w1] = [map.weights[i * 2], map.weights[i * 2 + 1]];
+                const nearest = Math.min(...insides.map((inside) => Math.abs(w0 * inside[map.corners[t]] + w1 * inside[map.corners[t + 1]] + (1 - w0 - w1) * inside[map.corners[t + 2]])));
+
+                mixed++;
+                assert.ok(nearest < 0.02, `texel ${i} mixed, ${(nearest * 100).toFixed(1)} cm from any edge`);
             }
         }
 
+        assert.ok(mixed > 0 && mixed < count * 0.05, `${mixed} texels mixed`);
+
         // Tinted (in linear light), and spread past the edges of what's painted
-        const tinted = compositeGarments(map, [{ ...layers[0], data: new Uint8ClampedArray(count * 4).fill(188), tint: [0.5, 1, 1] }]);
+        const tinted = compositeGarments(map, [{ ...layers[0], data: new Uint8ClampedArray(count * 4).fill(188), tint: [0.5, 1, 1] }], measures);
         const covered = map.covered.indexOf(1);
         const edge = map.covered.findIndex((value, i) => !value && map.covered[i + 1]);
 
@@ -1514,8 +1668,11 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
             assert.ok(top > l.armpit && top < l.neck, `${id}: from the shoulders`);
             assert.ok(hem < l.crotch - 0.2 && hem > l.ankle, `${id}: down past the knees`);
 
-            // (Behind: every point below the shoulders further back than the body's middle)
+            // (Behind: every point below the shoulders further back than the body's middle; over
+            // the shoulders, behind the middle of their tops, so it doesn't show over them from
+            // the front)
             assert.ok(points.filter(({ y }) => y < l.armpit).every(({ z }) => z < 0.06), `${id}: down the back`);
+            assert.ok(points.filter(({ y }) => y > l.armpit).every(({ z }) => z < 0.025), `${id}: over the backs of the shoulders`);
 
             // (Its hem in its trim, and swinging with the thighs)
             const last = colours.count - 1;

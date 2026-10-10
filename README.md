@@ -584,7 +584,7 @@ client/                 The game (static files served to the browser)
                         shop's wares (tapped, a row opens to say what it is). gearinfo.js says
                         what gear does, and what's rolled on a shop's as it's bought
     journal.js          The journal: the player's rank, their requests, their people, their
-                        company
+                        company; and the last ten messages told across the screen
     spellbook.js        The spellbook: the schools, how far they've grown, every spell known
                         and still to come; spellicons.js draws each spell's icon
     fate.js             The war's great turns for the player's people: victory, brought under

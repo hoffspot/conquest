@@ -10,6 +10,7 @@
 // the great keep over everything; and seen from afar
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import * as THREE from "three";
 
 // (Textured materials paint a canvas: enough of one for them to in Node)
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => new Proxy({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) }, { get: (t, k) => (k in t ? t[k] : () => ({ addColorStop() {} })) }) }) };
@@ -459,6 +460,44 @@ describe("a hill citadel drawn (world/art/kits/citadel.js, world/far/shapes.js)"
 
         assert.ok(total > 15000 && total < 80000, `${total} triangles`);
         assert.ok(tops.keep > tops.tower + 10, `the keep to ${tops.keep.toFixed(1)} m, the towers to ${tops.tower.toFixed(1)} m`);
+    });
+
+    it("paves its gates' passages a little over their terrace's level, not level with the ground under them", () => {
+        // (Level with it, the stones and the ground flickered by turns under every gate's arch)
+        const citadel = layoutCitadel({ seed: 1 });
+        const gates = citadelParts(citadel).filter((part) => part.gate?.wide || part.part === "gatetower");
+
+        assert.ok(gates.length >= 3, `${gates.length} gates`);
+
+        for (const part of gates) {
+            const built = citadelPart({ ...part, kind: "citadel" });
+            // (The heights of the faces looking up in the middle of its way through, metres)
+            const ups = [];
+
+            built.updateMatrixWorld(true);
+            built.traverse((node) => {
+                if (!node.isMesh) {
+                    return;
+                }
+
+                const at = node.geometry.attributes.position;
+                const index = node.geometry.index ? node.geometry.index.array : Array.from({ length: at.count }, (_, k) => k);
+
+                for (let t = 0; t < index.length; t += 3) {
+                    const [a, b, c] = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(at, index[t + k]).applyMatrix4(node.matrixWorld));
+                    const up = b.clone().sub(a).cross(c.clone().sub(a)).normalize().y;
+                    const middle = a.clone().add(b).add(c).divideScalar(3);
+
+                    if (up > 0.99 && Math.abs(middle.x) < 5 && Math.abs(middle.y) < 2.5) {
+                        ups.push(middle.y / 5);
+                    }
+                }
+            });
+
+            assert.ok(ups.length > 0, `${part.part}: its way through paved`);
+            assert.ok(ups.every((y) => Math.abs(y) > 0.02), `${part.part}: nothing level with its terrace (${ups.map((y) => y.toFixed(3)).join(", ")} m)`);
+            assert.ok(ups.some((y) => Math.abs(y - 0.05) < 0.005), `${part.part}: paved 5 cm over it`);
+        }
     });
 
     it("is seen from afar as its wards' walls and towers, its moat, bridge and gate tower, its hall and chapel and the keep, in under 2,000 triangles", () => {

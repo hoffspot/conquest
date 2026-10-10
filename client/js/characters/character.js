@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES } from "./drapes.js";
-import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap, underneath } from "./garments.js";
+import { COMPOSITE_BUMP, compositingGarments, fittingOutfit, GARMENTS, measureBody, paintGarment, paintingGarment, stackOrder, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
@@ -86,7 +86,7 @@ function letGo(cache, key, idle, dispose) {
 
 /**
  * A body of the usual shape's measurements (garments.js measureBody), made once per kit: what
- * garments drawn all at once are fitted to (Character `merge`), so each fits the same picture.
+ * garments are cut to, and painted on, so each fits the same picture on everyone.
  */
 function referenceMeasures(kit) {
     if (!kit.referenceMeasures) {
@@ -555,40 +555,24 @@ export class Character {
             }
         }
 
-        // Garments, under ones first; each hides the skin (and garments) under it. (Drawn all at
-        // once, they're fitted as they'd fit a body of the usual shape: each outfit's picture is
-        // then the same for everyone, however they're built)
+        // Garments, under ones first (garments.js stackOrder), each fitted over those under it;
+        // each hides the skin (and garments) under it. Each is cut where it would be on a body of
+        // the usual shape, as its picture is painted, so its trims are along its edges
         yield;
 
         const measures = measureBody(this);
-        const fitted = this.merge ? referenceMeasures(this.kit) : measures;
-        const built = [];
-
-        for (const id of garmentIds) {
-            yield;
-
-            // (A strap lies over what's worn under it, grown out past it)
-            const under = GARMENTS[id].over ? yield* underneath(this.human, id, garmentIds, fitted) : null;
-            const garment = yield* fittingGarment(this, id, fitted, under);
-
-            if (garment) {
-                built.push(garment);
-            }
-        }
+        const built = yield* fittingOutfit(this, garmentIds, referenceMeasures(this.kit));
 
         yield;
-        built.sort((a, b) => a.garment.layer - b.garment.layer);
         const hidden = new Set();
         const parts = [];
 
-        built.forEach(({ geometry, covers, sources, garment }, i) => {
+        built.forEach(({ id, geometry, covers, sources, garment }, i) => {
             const over = new Set();
 
             for (const outer of built.slice(i + 1)) {
-                if (outer.garment.layer > garment.layer) {
-                    for (const t of outer.covers) {
-                        over.add(t);
-                    }
+                for (const t of outer.covers) {
+                    over.add(t);
                 }
             }
 
@@ -609,15 +593,14 @@ export class Character {
                 hidden.add(t);
             }
 
-            parts.push({ id: Object.keys(GARMENTS).find((key) => GARMENTS[key] === garment), geometry, garment });
+            parts.push({ id, geometry, garment });
         });
 
-        // All at once (but lace, see-through), outermost last: by layer, then how far out
+        // All at once (but lace, see-through), outermost last, as they're worn
         const merged = this.merge ? parts.filter(({ garment }) => !garment.design) : [];
-        const reach = ({ garment }) => garment.thickness + (garment.loose ?? 0);
 
         if (merged.length > 1) {
-            merged.sort((a, b) => a.garment.layer - b.garment.layer || reach(a) - reach(b) || (a.id < b.id ? -1 : 1));
+            merged.sort((a, b) => stackOrder(a.id, b.id));
 
             const material = yield* this.#compositing(merged.map(({ id }) => id));
 
@@ -663,6 +646,15 @@ export class Character {
 
         this.setHidden(hidden);
 
+        // (How far out the garments reach at each of the body's vertices: a cloak hangs over them)
+        const worn = new Float32Array(this.human.vertexCount);
+
+        for (const { reach } of built) {
+            for (let v = 0; v < worn.length; v++) {
+                worn[v] = Math.max(worn[v], reach[v]);
+            }
+        }
+
         // Skirts, gowns and aprons, hanging over what's under them. (In one to the ankles, it runs
         // with its heels kept low: Walker)
         this.robed = drapeIds.some((id) => !DRAPES[id].cape && (DRAPES[id].arc ?? 1) >= 1 && DRAPES[id].length >= ROBED);
@@ -670,7 +662,7 @@ export class Character {
         for (const id of drapeIds) {
             yield;
 
-            const { geometry, profile } = buildDrape(this, id, measures, drapeIds);
+            const { geometry, profile } = buildDrape(this, id, measures, drapeIds, worn);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;
@@ -1249,7 +1241,8 @@ export class Character {
                 yield;
             }
 
-            const painted = yield* paintingGarment(kit.texelMap, garment);
+            // (Painted on the body of the usual shape, as it's cut)
+            const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
             const material = new THREE.MeshStandardMaterial({
                 map: dataTexture(painted.data, painted.size, true),
                 bumpMap: dataTexture(painted.bump, painted.size, false),
@@ -1278,18 +1271,11 @@ export class Character {
 
         if (!kit.composites.has(key)) {
             kit.texelMap ??= texelMap(this.human, 512);
-            kit.garmentInsides ??= new Map();
 
-            // (Each garment's own picture painted, and where it is on the body found, in steps
-            // the first time: then the picture of them all)
+            // (Each garment's own picture painted, in steps the first time: then them all)
             for (const id of ids) {
                 yield* this.#readying(id);
-
-                if (!kit.garmentInsides.has(id)) {
-                    // (A boot's toes are the toe box's, drawn with the boot's picture)
-                    kit.garmentInsides.set(id, insideOf(this.human, GARMENTS[id], referenceMeasures(kit), { toes: true }));
-                    yield;
-                }
+                yield;
             }
 
             const layers = ids.map((id) => {
@@ -1303,10 +1289,10 @@ export class Character {
                     bumpScale: material.bumpScale,
                     roughness: material.roughness,
                     metalness: material.metalness,
-                    inside: kit.garmentInsides.get(id),
+                    garment,
                 };
             });
-            const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers);
+            const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
             const surfaceMap = dataTexture(surface, size, false);
             const material = new THREE.MeshStandardMaterial({
                 map: dataTexture(data, size, true),

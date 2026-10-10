@@ -4218,6 +4218,64 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await page.keyboard.press("Escape");
 });
 
+test("the journal keeps the last ten messages told across the screen, behind a button, the newest first, refusals left out; and the next time", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    };
+    const journal = page.getByRole("dialog", { name: "Journal" });
+    const rows = journal.locator(".journal-message");
+
+    await continued();
+
+    // Twelve told across the screen, and a refusal
+    await page.evaluate(() => {
+        const { hud } = window.pellagos.game;
+
+        for (let k = 1; k <= 12; k++) {
+            hud.message(`News number ${k}.`, 3);
+        }
+
+        hud.message("Can't do that.", 1.6);
+    });
+
+    // The journal shows itself first; its button, the last ten, the newest first
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+    await expect(journal.getByRole("heading", { name: "Standing" })).toBeVisible();
+    await journal.getByRole("button", { name: "Messages" }).click();
+    await expect(rows).toHaveCount(10);
+    await expect(rows.first()).toContainText("News number 12.");
+    await expect(rows.first()).toContainText("just now");
+    await expect(rows.last()).toContainText("News number 3.");
+    await expect(journal).not.toContainText("Can't do that.");
+
+    // Told again while it's open: shown at once, counted
+    await page.evaluate(() => window.pellagos.game.hud.message("News number 12.", 3));
+    await expect(rows.first()).toContainText("2 times, last just now");
+    await expect(rows).toHaveCount(10);
+
+    // Back to the journal; closed and opened again, the journal first
+    await journal.getByRole("button", { name: "Journal" }).click();
+    await expect(journal.getByRole("heading", { name: "Standing" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(journal).toBeHidden();
+
+    // The next time they play: still there
+    await continued();
+    await page.keyboard.press("j");
+    await expect(journal.getByRole("heading", { name: "Standing" })).toBeVisible();
+    await journal.getByRole("button", { name: "Messages" }).click();
+    await expect(rows).toHaveCount(10);
+    await expect(rows.first()).toContainText("News number 12.");
+    await expect(rows.first()).toContainText("2 times");
+});
+
 test("where the player is is kept whenever the game stops (paused, the page closed or hidden), and the next time they carry on there", async ({ page }) => {
     // (Played three times: more than the usual time)
     test.setTimeout(180000);

@@ -119,7 +119,7 @@ import { Doors } from "./doors.js";
 import { FatePanel, fateWords } from "./fate.js";
 import { plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
-import { JournalPanel, bearing, regardOf } from "./journal.js";
+import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
@@ -563,14 +563,23 @@ export class Game {
      * @param {object} [options.vitals] - How the player was then (save.js loadVitals: core/host.js
      *     vitalsOf: their hit points and stamina, what lingered and lasted on them, their boons,
      *     their abilities' and spells' waits), to carry on so; or null (whole, nothing on them).
+     * @param {Array} [options.messages] - The last messages the player was told across the screen,
+     *     as kept (save.js loadMessages: journal.js keepMessage), for the journal.
+     * @param {Function} [options.onMessages] - Hears them whenever another's kept (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
         this.world = world;
         this.hero = hero;
         this.hud = hud;
+
+        // The last messages told the player across the screen (the journal shows them), and who
+        // hears of them: each heard from the HUD as it's told
+        this.messages = messages;
+        this.onMessages = onMessages;
+        hud.onMessage = (text, seconds) => this.#told(text, seconds);
 
         // The world (the host's: made here, playing alone), this game's player in it (by id,
         // come in before the world's own people), and the battle as the host has it
@@ -1712,6 +1721,7 @@ export class Game {
         this.sound?.setPlace("town");
         this.sound?.setHearth(null);
         this.hud.clear();
+        this.hud.onMessage = () => {};
 
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
@@ -5064,7 +5074,23 @@ export class Game {
                     return { name, calling, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting };
                 }),
             most: this.host.mostFollowers(this.me),
+            messages: this.messages,
         });
+    }
+
+    // A message told the player across the screen (hud.js message): kept for the journal if it's
+    // news (journal.js keepMessage), and shown there at once if it's open on them
+    #told(text, seconds) {
+        const kept = keepMessage(this.messages, text, seconds, Date.now());
+
+        if (kept !== this.messages) {
+            this.messages = kept;
+            this.onMessages(kept);
+
+            if (this.journal?.open && this.journal.view === "messages") {
+                this.#showJournal();
+            }
+        }
     }
 
     // Where the player's people stand in the war's end (docs/WAR.md M10), in a line: serving

@@ -3173,6 +3173,34 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     min-height: 32px;
 }
 
+/* The journal's button between it and the last messages told, in its header */
+.journal-toggle {
+    min-height: 32px;
+}
+
+/* The last messages told across the screen (the HUD's banner), the newest first */
+.journal-message {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.journal-message-text {
+    flex: 1;
+}
+
+.journal-message-when {
+    flex: none;
+    font-size: 12px;
+    color: var(--muted);
+}
+
 .journal-done {
     display: flex;
     gap: 10px;

@@ -112,19 +112,20 @@ const smoothstep = (edge0, edge1, x) => {
 /**
  * The body's outline round a height band: for each of AROUND directions round its middle (0
  * straight ahead, towards its left as it grows), how far out it reaches (metres), the gaps
- * filled in and smoothed; and its middle ({ x, z }).
+ * filled in and smoothed; and its middle ({ x, z }). Over what's worn on it, if `worn` (garments' reach).
  */
-function outline(character, measures, bottom, top, centre = null) {
-    const { positions } = character;
+function outline(character, measures, bottom, top, centre = null, worn = null) {
+    const { positions, normals } = character;
     const { vertices } = measures;
     const points = [];
 
     for (let v = 0; v < vertices.length; v++) {
-        const y = positions[v * 3 + 1];
+        const out = worn ? worn[v] : 0;
+        const y = positions[v * 3 + 1] + (out && normals[v * 3 + 1] * out);
         const { region } = vertices[v];
 
         if (y >= bottom && y <= top && (region === "torso" || region === "leg")) {
-            points.push([positions[v * 3], positions[v * 3 + 2]]);
+            points.push([positions[v * 3] + (out && normals[v * 3] * out), positions[v * 3 + 2] + (out && normals[v * 3 + 2] * out)]);
         }
     }
 
@@ -173,13 +174,14 @@ function outline(character, measures, bottom, top, centre = null) {
  * Build a drape on a character: its geometry (positions, normals, colours for the pleats'
  * shading, skin indices and weights on the character's skeleton), in the body's rest pose.
  * `measures` is garments.js's measureBody(character); `under`, the skirts worn under it (an
- * apron's: it lies over them, as far out as they flare).
+ * apron's: it lies over them, as far out as they flare); `worn`, how far out the garments under
+ * it reach at each of the body's vertices (a cloak lies over them).
  */
-export function buildDrape(character, id, measures, under = []) {
+export function buildDrape(character, id, measures, under = [], worn = null) {
     const drape = DRAPES[id];
 
     if (drape.cape) {
-        return buildCape(character, id, measures);
+        return buildCape(character, id, measures, worn);
     }
 
     const { landmarks: l } = measures;
@@ -379,9 +381,10 @@ export function buildDrape(character, id, measures, under = []) {
 
 
 // A cloak's rings, from the shoulders to the hem: each ring's height, and how far round the back
-// it goes either side (radians from straight behind: over the shoulders at the top, behind the
-// arms at the armpits, widening as it falls)
-const CAPE_ROUND = { top: 1.75, armpit: 1.2, hips: 1.35, hem: 1.6 };
+// it goes either side (radians from straight behind: over the shoulders at the top, to just
+// behind the middle of their tops, so it doesn't show over them from the front; behind the arms
+// at the armpits, widening as it falls)
+const CAPE_ROUND = { top: 1.45, armpit: 1.2, hips: 1.35, hem: 1.6 };
 
 // How far out from the back it hangs (metres): close at the shoulders, falling free below them
 const CAPE_EASE = { top: 0.012, back: 0.03 };
@@ -391,9 +394,9 @@ const CAPE_EASE = { top: 0.012, back: 0.03 };
  * behind the arms, falling straight from the shoulder blades (never in to the small of the back)
  * then flaring to its hem; skinned to the upper back at the top, the lower back, the pelvis, and
  * below the hips the thighs and shins as a skirt is, so it swings as they walk. Its colours are in
- * its vertices: the cloth, and the trim at its sides and hem.
+ * its vertices: the cloth, and the trim at its sides and hem. Over what's worn under it (`worn`).
  */
-function buildCape(character, id, measures) {
+function buildCape(character, id, measures, worn = null) {
     const drape = DRAPES[id];
     const { landmarks: l } = measures;
     const { rig } = character;
@@ -401,10 +404,10 @@ function buildCape(character, id, measures) {
     const hipsY = Math.min(l.hips, l.crotch + 0.06 * scale);
     const topY = l.neck - 0.035 * scale;
     const hemY = hipsY + (l.ankle - 0.03 * scale - hipsY) * drape.length;
-    const hips = outline(character, measures, l.crotch - 0.02 * scale, l.hips + 0.03 * scale);
+    const hips = outline(character, measures, l.crotch - 0.02 * scale, l.hips + 0.03 * scale, null, worn);
     const middle = hips.middle;
     const bands = [topY, (topY + l.armpit) / 2, l.armpit, l.chest - 0.02 * scale, l.waist, hipsY];
-    const across = bands.map((y) => outline(character, measures, y - 0.025 * scale, y + 0.025 * scale, middle).reach);
+    const across = bands.map((y) => outline(character, measures, y - 0.025 * scale, y + 0.025 * scale, middle, worn).reach);
     const rings = [];
 
     for (let r = 0; r < bands.length; r++) {

@@ -2369,8 +2369,10 @@ the adventurers drinking at a guild's tables are patrons who talk as adventurers
 
 **The guild's talk.** The receptionist is cheerful and a little flustered: she welcomes a
 stranger to the town's branch of the guild, and signs the player up as an adventurer (`{ guild:
-"register" }`: one card, good at every branch, kept with their standing; and the player learns
-`guildMember`: "Rank: Copper. Everyone starts at Copper, don't pout!"). Whether they're
+"register" }`: one card, good at every branch, kept with their standing: "Rank: Copper. Everyone
+starts at Copper, don't pout!"). The card is the host's alone: the player learnt `guildMember`
+before the guilds kept cards, and such a save is given its card from it (host.js `cardOf`); still
+learnt, it gave a card on the next load even where the host had refused the sign-up. Whether they're
 registered (`member`) is the game's, so every branch knows the card: one from another branch is
 greeted by its rank the first time she sees it, and no one's offered another. She tells of the
 quest board, their card ("How's my card looking?": their rank, `{guildRank}`, and how much more
@@ -4117,7 +4119,14 @@ it.
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
    player sees there (light.js `sightAt`, as the battle has it: 30 m where they see half as far;
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
-   the nearer the camera are drawn over the farther, and all of them under the buttons.
+   the nearer the camera are drawn over the farther, and all of them under the buttons. Messages
+  are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
+  requests, loot, spells learnt, standing and rank). The last ten are kept for the journal
+  (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages button, at its top, shows them, the
+  newest first, each with how long ago it was told, and the same message told again running
+  counted ("2 times, last 5 min ago"); the button, now Journal, goes back. Refusals and the like,
+  shown less than two seconds ("Can't do that.", "Out of breath": `KEPT_FROM`), aren't news and
+  aren't kept, nor one shown till the next ("The picture was lost…").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
@@ -4137,8 +4146,9 @@ own (eight letters and digits): `pellagos.<id>.save` is `{ version, id, hero, se
 played }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair }, weapon }`;
 and beside it, under `pellagos.<id>.` too, what they've grown into and carry (`progress`), what's
 been said (`talks`), what they've found of the world (`explored`), where they stand (`standing`),
-their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), and their
-world's war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
+their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), the last
+messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), and their world's
+war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
 last. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
 controls) are in `pellagos.settings`, the same whoever's played.
 
