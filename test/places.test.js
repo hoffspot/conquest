@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { LAIRS, tierAt } from "../client/js/core/creatures.js";
+import { CREATURES, LAIRS, tierAt, tierPower } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -16,6 +16,7 @@ import { bandFolk, heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLA
 import { RELICS, rollLoot, rollRelic, wares } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { GUILD_REACH, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
+import { scalingOf } from "../client/js/core/strength.js";
 import { War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { landAt, planWorld, WORKS } from "../client/js/core/worldplan/plan.js";
@@ -261,6 +262,31 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
             assert.ok(!host.held.has(place.id) && !host.ground.has(chest.id));
             assert.ok(held.ids.every((id) => !host.wild.has(id)));
         }
+    });
+
+    it("puts out their band against the side of the players near: two alike, their leader tougher, more of the band and each of them tougher (strength.js)", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const plan = world.plan;
+        const place = placesOf(plan).find((each) => each.kind === "ruins" && heldAtStart(plan, each) !== "friendly");
+        const band = PLACE_BANDS[heldAtStart(plan, place)];
+        const at = host.world.maps.town.sites.heartOf(host.world.plan.sites.find((site) => site.id === place.id));
+
+        host.join({ id: "guest", hero: { ...HERO, name: "Bram" } });
+        Object.assign(host.battle.actor("guest"), { hp: 1e6, maxHp: 1e6 });
+        put(me, [Math.floor(at[0] + 12), Math.floor(at[1])]);
+        put(host.battle.actor("guest"), [Math.floor(at[0] + 12), Math.floor(at[1]) + 2]);
+        run(host, 600);
+
+        const held = host.held.get(place.id);
+        const [leader, ...folk] = held.ids.map((id) => host.battle.actor(id));
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+        const alone = PLACE_BANDS.count[place.size] + Math.floor(held.tier / PLACE_BANDS.per);
+
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 2);
+        assert.equal(leader.maxHp, Math.round(CREATURES[band.leader].hp * tierPower(held.tier + PLACE_BANDS.lead) * scale.leader));
+        assert.ok(folk.length >= Math.floor(alone * scale.count) && folk.length <= Math.ceil(alone * scale.count), `${folk.length} of them, ${alone} alone`);
+        assert.ok(folk.every((one) => one.maxHp === Math.round(CREATURES[one.wild.creature].hp * tierPower(held.tier) * scale.health)));
     });
 
     it("is cleared once they're all put to the sword: the war keeps it, the chest opened with a share for each player near; empty a while, then held again", () => {
