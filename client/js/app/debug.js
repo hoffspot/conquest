@@ -84,6 +84,21 @@ export function sideLine(side) {
 }
 
 /**
+ * Those drawn this frame (Game.stats.bodies: characters and creatures, not the soldiers' crowds),
+ * how many of them were posed in it, how many cast a shadow; and how many soldiers in their
+ * crowds (world/crowd.js); or null, for nothing counted yet.
+ */
+export function bodiesLine(bodies) {
+    if (!bodies) {
+        return null;
+    }
+
+    const { drawn, posed, shadows, crowd } = bodies;
+
+    return `Bodies ${drawn} drawn  ${posed} posed  ${shadows} shadows  ${crowd} in crowds`;
+}
+
+/**
  * The downloader, from its status (Fetcher.status): what it's fetching (and how far it's got) or
  * idle; its rate, and what the link's carried; the queueing delay it sees over the least round
  * trip; how many files are queued, fetched and given up on; and why it's quiet or thrifty.
@@ -237,8 +252,9 @@ export class Debug {
 
             const net = netLine(game, this.#perSecond(game.remote?.received ?? game.hosting?.sent));
             const side = sideLine(game.host?.strengthOf?.(game.me) ?? null);
+            const bodies = bodiesLine(game.stats.bodies);
 
-            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...(net ? [net] : []), ...(side ? [side] : []), ...battle.actors.map(describe));
+            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...(net ? [net] : []), ...(side ? [side] : []), ...(bodies ? [bodies] : []), ...battle.actors.map(describe));
         }
 
         if (loader) {

@@ -249,6 +249,18 @@ Every machine in a game draws everyone near a fight, so there's a body budget th
   spells' levels (docs/MAGIC.md); but where the budget's full about a player who calls or raises
   another, the oldest of theirs goes for it.
 
+So many near a fight are drawn for less (`app/game.js` `MANY`):
+
+- **A creature small on the screen** (under 40 pixels tall) casts no shadow, and is posed only as
+  often as a character as small would be (`world/avatar.js` `posingEvery`: every second to fourth
+  frame, every eighth out of view); where it is and which way it faces, every frame.
+- **A creature drawn smaller** is drawn with fewer triangles, as a character is (`characters/lod.js`
+  `LODS`: a quarter of them under 360 pixels tall, a tenth under 140), made once for each kind
+  built alike, off the page's thread, over its very vertices (`beasts/beast.js` `lowerDetail`).
+- **The players' allies past the nearest four** (hired adventurers, creatures called or raised in
+  people's shape) are drawn at the middle level of detail (`characters/lod.js`), with their
+  contact shadow and not the sun's, and so posed seldom out of view.
+
 ### What the more leave
 
 Those of a pack more than a player alone would have met (`extra`: past as many as there'd be

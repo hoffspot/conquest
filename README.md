@@ -464,9 +464,9 @@ See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
 is running: frame rate and a graph of frame times, how long updating and drawing take, what's
-drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle (and how
-strong the player's side is, as the wild weighs it), and how long each part took to download and
-build. Its controls change the drawing quality, render
+drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle (how
+strong the player's side is, as the wild weighs it, and how many characters and creatures are
+drawn, posed and casting shadows), and how long each part took to download and build. Its controls change the drawing quality, render
 scale and shadows, and show the squares characters walk on and their paths. See
 [docs/GAME.md](docs/GAME.md#debug-mode).
 
