@@ -1441,6 +1441,16 @@ $("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#quickbutton").addEventListener("click", () => openQuick(0));
 $("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
+
+// The minimap folded away into a compass in its corner (the button on its top left), and opened
+// again from the compass: as the Game options switch does it, and kept
+for (const [button, on] of [["#minimapfold", false], ["#compass", true]]) {
+    $(button).addEventListener("click", () => {
+        applySetting("minimap", on);
+        $("#minimapswitch").checked = on;
+        state.session?.sound?.play(on ? "mapUnfold" : "tap");
+    });
+}
 $("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
 $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloats", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));

@@ -134,6 +134,23 @@
                 </button>
             </div>
             <canvas id="minimap" role="img" aria-label="Map of where you are" hidden></canvas>
+            <!-- The minimap folded away into a compass in its corner, and opened again from it -->
+            <button type="button" id="minimapfold" aria-label="Fold the map into a compass" title="Fold the map into a compass">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path class="needle-north" d="M12 4.6l2.3 7.4h-4.6z"/><path d="M12 19.4l2.3-7.4h-4.6z"/></svg>
+            </button>
+            <button type="button" id="compass" aria-label="Compass: open the map" title="Open the map">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <circle class="compass-face" cx="32" cy="32" r="29"/>
+                    <g id="compassrose">
+                        <circle class="compass-ring" cx="32" cy="32" r="24.5"/>
+                        <path class="compass-ticks" d="M32 9.5v4M32 50.5v4M9.5 32h4M50.5 32h4M48 16l-2.4 2.4M16 48l2.4-2.4M48 48l-2.4-2.4M16 16l2.4 2.4"/>
+                        <path class="compass-point" d="M32 32l3.6-3.6L51 32l-15.4 3.6zM32 32l-3.6 3.6L13 32l15.4-3.6zM32 32l3.6 3.6L32 51l-3.6-15.4z"/>
+                        <path class="compass-north" d="M32 32l-3.6-3.6L32 9l3.6 19.4z"/>
+                        <text class="compass-n" x="32" y="7.6" text-anchor="middle">N</text>
+                    </g>
+                    <circle class="compass-pin" cx="32" cy="32" r="2.6"/>
+                </svg>
+            </button>
             <div id="party" role="group" aria-label="Your party">
                 <button type="button" id="partybutton" class="hud-button" aria-label="Party" title="Party (P)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 19.5c0-3.4 2.7-5.6 6-5.6s6 2.2 6 5.6M15.5 5.3a3 3 0 0 1 0 5.9M17.5 14.2c2.1.6 3.5 2.5 3.5 5.3"/></svg>
@@ -301,7 +318,7 @@
                 <h2 id="optionstitle">Game options</h2>
                 <div class="options">
                     <label class="switch option">
-                        <span class="text">Minimap<small>The map in the top left corner</small></span>
+                        <span class="text">Minimap<small>The map in the top left corner; off, a compass there instead (tap it for the map)</small></span>
                         <input type="checkbox" id="minimapswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>

@@ -32,6 +32,9 @@
     /* How wide the minimap is */
     --minimap-size: clamp(116px, 30vw, 188px);
 
+    /* How wide the compass is, the minimap folded away */
+    --compass-size: 52px;
+
     /* The gap between the buttons along the top, and how tall the quick actions are (in a fight) */
     --hud-gap: 12px;
     --quick-height: 60px;
@@ -1308,6 +1311,10 @@ body[data-minimap="on"] #party {
     top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
 }
 
+body[data-minimap="off"] #party {
+    top: calc(var(--safe-top) + 12px + var(--compass-size) + 10px);
+}
+
 .member,
 .member-more {
     position: relative;
@@ -1642,6 +1649,119 @@ body[data-minimap="on"] #party {
 
 #minimap[hidden] {
     display: none;
+}
+
+/* Its top left corner's button folds it away into a compass in the corner (main.js): the compass
+   turned as the camera turns, its N always north (game.js #turnCompass); tapped, the map's back */
+#minimapfold,
+#compass {
+    position: absolute;
+    z-index: 2;
+    padding: 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 50%;
+    background: var(--panel);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+    color: var(--gold-bright);
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#minimapfold {
+    display: none;
+    top: calc(var(--safe-top) + 4px);
+    left: calc(var(--safe-left) + 4px);
+    width: 30px;
+    height: 30px;
+}
+
+#minimapfold svg {
+    width: 20px;
+    height: 20px;
+    margin: 4px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+}
+
+#minimapfold .needle-north {
+    fill: var(--hostile);
+    stroke: var(--hostile);
+}
+
+#minimapfold:hover,
+#compass:hover {
+    border-color: var(--gold);
+}
+
+body[data-minimap="on"] #minimapfold {
+    display: block;
+}
+
+#compass {
+    display: none;
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 12px);
+    width: var(--compass-size);
+    height: var(--compass-size);
+}
+
+body[data-minimap="off"] #compass {
+    display: block;
+}
+
+#compass svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.compass-face {
+    fill: rgba(22, 18, 14, 0.6);
+}
+
+.compass-ring {
+    fill: none;
+    stroke: var(--gold-deep);
+    stroke-width: 1.4;
+}
+
+.compass-ticks {
+    stroke: var(--gold);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+}
+
+.compass-point {
+    fill: var(--gold-deep);
+    stroke: var(--gold);
+    stroke-width: 0.8;
+    stroke-linejoin: round;
+}
+
+.compass-north {
+    fill: var(--hostile);
+    stroke: #ffb4a4;
+    stroke-width: 0.8;
+    stroke-linejoin: round;
+}
+
+.compass-n {
+    fill: var(--gold-bright);
+    font: 700 8px var(--font-display);
+}
+
+.compass-pin {
+    fill: var(--gold-bright);
+    stroke: var(--gold-deep);
+    stroke-width: 1;
+}
+
+.pack-dolled #minimapfold,
+.pack-dolled #compass {
+    visibility: hidden;
 }
 
 /* Debug mode's overlay moves down out of the minimap's way */
@@ -4042,6 +4162,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
         top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
         max-width: calc(100% - var(--safe-left) - var(--safe-right) - 24px);
     }
+}
+
+body[data-minimap="off"] #netstatus {
+    left: calc(var(--safe-left) + 12px + var(--compass-size) + 10px);
 }
 
 @media (min-width: 721px) {

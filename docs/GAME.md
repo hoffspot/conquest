@@ -3265,6 +3265,19 @@ the player there, or fights an enemy within 12 pixels of the tap; a double tap r
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
 the doorway; only those on the same floor as the player are shown.
 
+**Folded into a compass.** A round button over the minimap's top left corner (`#minimapfold`, 30
+pixels, a compass needle on it) folds the minimap away: in its place, in the top left corner of the
+screen, a small compass (`#compass`, 52 pixels: `--compass-size`), the party's column moving up
+under it. Its rose (a ring, ticks every eighth of the way round, gold points and a red north
+needle, an N at its tip) turns with the camera, so its N points the way north lies on the screen:
+looking north, N straight up; looking east, N on the left; looking south, N at the bottom
+(minimap.js `compassTurn`, from which way the camera looks over the ground, as the minimap's wedge
+has it; game.js `#turnCompass`, each frame the minimap would be drawn, the rose's SVG transform set
+only once it's turned more than about a third of a degree). Tapped, the compass opens the minimap
+again. Both are Game options' Minimap switch (`minimap`, remembered with the other settings), so
+folding it with the button turns the switch off, and opening it with the compass on (the fold
+playing the tap's sound, the opening the map's unfolding).
+
 **The icons** (`app/mapicons.js`) are only over the buildings that can be gone into, and only once
 the player has been inside (a house that can't be entered never has one): a round dark badge
 rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
@@ -4241,7 +4254,7 @@ it.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
-   Medium, High) and the Adaptive switch (Keeping up, above), a switch for the minimap, a switch that turns all the sound
+   Medium, High) and the Adaptive switch (Keeping up, above), a switch for the minimap (off, the compass in its place: above), a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
    actions pages. Back (or Escape) returns to the menu.
@@ -4602,7 +4615,7 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   on to start with), where a message goes in a fight (clear of those fighting, staying where it
   is while that's clear), the minimap's colours (in the town and inside) and its patches of the world (painted the same a step at a time as at once; the next
   painted ahead of the player while they're well inside this one, and shown before its edge would
-  show), the action wheels (which of eight slices a flick is in, its shapes, its
+  show), how far round the compass is turned (its N north as the camera looks), the action wheels (which of eight slices a flick is in, its shapes, its
   actions and icons, every item's icon, what goes on each wheel, and reading them back; the
   party's wheel's orders never set nor quick), the party's icons fitted down the side (full size,
   shrunk, then a "+N" chip) and what the party menu says each is, the
@@ -4702,7 +4715,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   paused under it, the fog over every chunk but those walked into, the tavern's icon and the
   town's name on it, zooming out, closed by Escape and by M), walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders
-  (remembered), the
+  (remembered), the minimap off and the compass in its corner (turned a quarter round as the
+  camera is, the party's column under it; tapped, the minimap back; folded again with the button
+  on its corner, remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), the action
   wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), the
   quick actions on a phone's screen (the minimap in the top left corner, level with the buttons
