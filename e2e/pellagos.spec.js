@@ -3686,7 +3686,7 @@ test("an enemy army's camp near the player is pitched within its stockade, tents
     expect(errors).toEqual([]);
 });
 
-test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
+test("an enemy army's camp stormed near the player by their people's reserve: its army holding it, its archers up on its walkway, its palisade hacked at (its stakes stood in for, a bar over them) and broken open; the player told", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     const errors = [];
@@ -3760,6 +3760,19 @@ test("an enemy army's camp stormed near the player by their people's reserve: it
     // (Their people's reserve storming it: the player's own, through it)
     expect(after.said).toContain("We're hacking at the orcish camp's palisade: break it open!");
     expect(after.said).toContain("The orcish palisade is breached: we're through!");
+
+    // Its archers and casters up on its walkway, drawn standing on its boards
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const town = game.world.maps.town;
+
+        return (game.host.armies.get("force-900")?.ids ?? []).some((id) => {
+            const actor = game.battle.actor(id);
+            const avatar = game.avatars.get(id);
+
+            return Boolean(actor && !actor.dead && ["archer", "caster"].includes(actor.formation?.role) && town.squares.raised(Math.floor(actor.x), Math.floor(actor.y)) && avatar && avatar.object.position.y - town.ground.heightAt(actor.x, actor.y) > 1.3);
+        });
+    })).toBe(true);
     expect(errors).toEqual([]);
 });
 
