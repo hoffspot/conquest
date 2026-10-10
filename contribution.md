@@ -278,7 +278,7 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    which git ignores. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
-   a budget, `BOOT_BUDGET` in `test/manifest.test.js` (12 MB), and raising it is a choice to make
+   a budget, `BOOT_BUDGET` in `test/manifest.test.js` (15 MB), and raising it is a choice to make
    in review. A model the game can start without goes in `client/models/assets.json`: each with
    its `tier` (`near`, fetched when it's predicted to be wanted soon, or `demand`, only once it's
    needed) and its `files` (`path`s under `client/`, its lower-detail copy first), and whatever

@@ -484,7 +484,7 @@ npm run e2e:durations -- report.json  # keeps how long each browser test took, f
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files, their
 sizes, and the data's hashes) and `client/js/app/assets.js` (the catalog of models downloaded only
 as they're wanted, from `client/models/assets.json`) are up to date, and that what's downloaded
-before the game starts stays within its budget (12 MB), so run `npm run build:manifest` after
+before the game starts stays within its budget (15 MB), so run `npm run build:manifest` after
 changing the game's code or data. The
 browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
 to an existing Chromium or Chrome executable. Every browser test has a page of its own, in a
