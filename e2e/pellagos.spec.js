@@ -1531,6 +1531,149 @@ test("those attacking the player have an icon each down the right side, a likene
     expect(hurt.left).toEqual(["slime"]);
 });
 
+test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the quick action's Vigor cast on it); held and flicked W, told to wait; the party menu (P) lists it, Follow sets it following, and Dismiss, pressed twice, sends it off", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Summon learnt and cast where the player stands
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.progress.learn("summon");
+        Object.assign(game.battle.actor(game.me), { spellReadyAt: 0, spellsReadyAt: {} });
+        game.host.command(game.me, { type: "cast", spell: "summon" });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && window.pellagos.game.avatars.has([...window.pellagos.game.host.companions.keys()][0]), { seconds: 60 })).toBe(true);
+
+    // Its icon, its likeness once it's drawn
+    await page.waitForFunction(
+        () => {
+            window.pellagos.game.advance(0.02);
+
+            return document.querySelector("#party .member.summon.painted");
+        },
+        null,
+        { timeout: 20000 },
+    );
+
+    const icon = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [id] = [...game.host.companions.keys()];
+        const member = document.querySelector(`#party .member[data-id="${id}"]`);
+        const button = document.querySelector("#partybutton").getBoundingClientRect();
+        const map = document.querySelector("#minimap").getBoundingClientRect();
+        const rect = member.getBoundingClientRect();
+        const canvas = member.querySelector("canvas");
+        const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+        const shades = new Set();
+
+        for (let k = 0; k < data.length; k += 4) {
+            shades.add((data[k] >> 3) * 1024 + (data[k + 1] >> 3) * 32 + (data[k + 2] >> 3));
+        }
+
+        return { id, label: member.getAttribute("aria-label"), border: getComputedStyle(member).borderTopColor, time: !member.querySelector(".member-time").hidden, rect: rect.toJSON(), button: button.toJSON(), map: map.toJSON(), shades: shades.size };
+    });
+
+    expect(icon.label).toMatch(/, called to your side$/);
+    expect(icon.border).toBe("rgb(169, 139, 255)");
+    expect(icon.time).toBe(true);
+    expect(icon.shades).toBeGreaterThan(40);
+    expect(icon.button.top).toBeGreaterThanOrEqual(icon.map.bottom);
+    expect(icon.rect.top).toBeGreaterThanOrEqual(icon.button.bottom);
+    expect(icon.rect.left).toBeLessThan(40);
+
+    // Tapped: chosen to help, ringed green; Vigor from the quick actions cast on it, not the player
+    const member = page.locator(`#party .member[data-id="${icon.id}"]`);
+
+    await member.click();
+
+    const chosen = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const called = game.battle.actor(id);
+
+        game.advance(0.05);
+        called.hp = Math.round(called.maxHp / 2);
+        game.battle.actor(game.me).hp = Math.round(game.battle.actor(game.me).maxHp / 2);
+        Object.assign(game.battle.actor(game.me), { spellReadyAt: 0, spellsReadyAt: {} });
+
+        const used = game.quick(0);
+
+        game.advance(2.5, { render: false });
+
+        return { ally: game.allyTarget, ring: game.effects.ally?.object === game.avatars.get(id).object, glowing: document.querySelector(`#party .member[data-id="${id}"]`).classList.contains("ally"), used, healed: called.hp > Math.round(called.maxHp / 2), player: game.battle.actor(game.me).hp / game.battle.actor(game.me).maxHp };
+    }, icon.id);
+
+    expect(chosen.ally).toBe(icon.id);
+    expect(chosen.ring).toBe(true);
+    expect(chosen.glowing).toBe(true);
+    expect(chosen.used.ok).toBe(true);
+    expect(chosen.healed).toBe(true);
+    expect(chosen.player).toBeCloseTo(0.5, 1);
+
+    // Held: the wheel opens under the finger; flicked W, told to wait where it is
+    const box = await member.boundingBox();
+    const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+
+    const opened = await page.evaluate(() => ({ open: Boolean(window.pellagos.game.wheel.open), slots: { ...window.pellagos.game.wheel.slots } }));
+
+    await page.mouse.move(Math.max(1, cx - 34), cy, { steps: 4 });
+    await page.mouse.up();
+
+    const waiting = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        game.advance(0.05);
+
+        return { waiting: game.host.waiting(id), marked: document.querySelector(`#party .member[data-id="${id}"]`).classList.contains("waiting") };
+    }, icon.id);
+
+    expect(opened.open).toBe(true);
+    expect(opened.slots).toEqual({ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" });
+    expect(waiting).toEqual({ waiting: true, marked: true });
+
+    // The party menu (the game going again a moment, as keys are heard only then): its row,
+    // Follow (it's waiting), then Dismiss asked twice
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("p");
+
+    const menu = page.getByRole("dialog", { name: "Party" });
+    const row = menu.locator(`.party-row[data-id="${icon.id}"]`);
+
+    await expect(menu).toBeVisible();
+    await page.evaluate(() => window.pellagos.game.stop());
+    await expect(row.locator(".party-kind")).toHaveText(/^Called .+ · \d:\d\d left$/);
+    await expect(row.locator(".party-state")).toContainText("Waiting");
+    await row.getByRole("button", { name: "Follow" }).click();
+    expect(await page.evaluate((id) => window.pellagos.game.host.waiting(id), icon.id)).toBe(false);
+    await expect(row.getByRole("button", { name: "Wait" })).toBeVisible();
+
+    const dismiss = row.getByRole("button", { name: "Dismiss" });
+
+    await dismiss.click();
+    await expect(dismiss).toHaveText("Dismiss?");
+    expect(await page.evaluate(() => window.pellagos.game.host.companions.size)).toBe(1);
+    await dismiss.click();
+
+    const gone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.advance(0.05);
+
+        return { companions: game.host.companions.size, icons: document.querySelectorAll("#party .member").length, ally: game.allyTarget, banner: document.querySelector("#banner").textContent };
+    });
+
+    expect(gone).toMatchObject({ companions: 0, icons: 0, ally: null });
+    expect(gone.banner).toMatch(/^You let your .+ go\.$/);
+    await expect(menu.locator(".party-empty")).toContainText("No one's with you");
+    await menu.getByRole("button", { name: "Close" }).click();
+    await expect(menu).toBeHidden();
+});
+
 test("in a fight, the battle cam swings round to see the player and their foe from the side, both on the screen and neither hidden; leaving it be once the fight's over", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

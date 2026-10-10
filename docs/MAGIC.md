@@ -279,7 +279,10 @@ same for everyone playing (docs/GAME.md: hosting and joining):
   a sprint as they sprint, faster the further behind), and one left more than 20 metres behind
   (stuck, or on another floor) is brought quietly to a few squares behind them (`FOLLOW.lost`,
   `COMPANION.behind`), out of a fight its player isn't in. They're lost when their player's
-  carried off by magic.
+  carried off by magic. What a companion brings down counts for its player, as a follower's does:
+  the loot is theirs, and it counts towards their requests and contracts (host.js `#learn`). It's
+  one of their party (docs/GAME.md *The party*): told to wait, to follow, to go for whoever its
+  player's set on, or to go, from its icon, its wheel or the party menu.
 - **Attraction** brings one of the creatures of these parts out of a puff of smoke in front of
   the caster: as wild as any other (to hunt, for its parts or a guild's contract).
 - **Summon** on a player (of a people not the caster's enemy) asks them to come: they have 30

@@ -423,7 +423,7 @@ export class Minimap {
 
     /**
      * Draw it: `player` { x, z, facing } (metres, radians), `others` [{ x, z, hostile,
-     * targeted }], `destination` [x, z] or null, `look` the way the player's looking over the
+     * targeted, ally (one of the player's party) }], `destination` [x, z] or null, `look` the way the player's looking over the
      * ground (radians, as `facing`: 0 south, towards +z) or null, `icons` over the buildings
      * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
      * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK).
@@ -515,7 +515,7 @@ export class Minimap {
             context.stroke();
         }
 
-        // Everyone else: enemies red, the one the player is set to fight ringed
+        // Everyone else: enemies red, the player's party green, the one the player is set to fight ringed
         for (const other of others) {
             const [x, y] = at(other.x, other.z);
 
@@ -529,7 +529,7 @@ export class Minimap {
 
             context.beginPath();
             context.arc(x, y, 3.6, 0, 2 * Math.PI);
-            context.fillStyle = other.hostile ? "#ff4a2e" : "#8fd0ff";
+            context.fillStyle = other.hostile ? "#ff4a2e" : other.ally ? "#58d26e" : "#8fd0ff";
             context.fill();
             context.strokeStyle = "rgba(20, 8, 4, 0.9)";
             context.lineWidth = 1.2;

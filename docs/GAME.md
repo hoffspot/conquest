@@ -1386,7 +1386,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   side of the screen, the first six in the order they came to it (game.js `#attackers`,
   `ATTACKERS`; hud.js `attackers`): their likeness in a red frame (`--hostile`), a thin line of
   their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
-  less motion). The likeness is drawn once, head and shoulders from in front of them (a creature
+  less motion). The likeness is drawn once they've been drawn half a second (`LIKENESS_AFTER`:
+  drawn the moment they're built it came out blank, and one that does is drawn again,
+  `#likeness`), head and shoulders from in front of them (a creature
   not shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
   in a picture of its own and read back without stalling (view.js `portrait`, `LIKENESS`:
   three.js leaves such a picture untoned, so it's toned as the screen is, `toneOf`, a little
@@ -1396,6 +1398,37 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
   (`DOUBLE_TAP_MS`), they run up to them; held (`HOLD_MS`), they walk up to them, into reach of
   what's in hand (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a tap.
+- **The party** (game.js `#partyIcons`; hud.js `party`; core/host.js `partyOf`) is those with the
+  player: their hired adventurers (docs/WAR.md *Followers*), then the creatures they've called
+  to their side, then the dead they've raised (docs/MAGIC.md), each with an icon down the left
+  side, under the minimap and the Party button that heads them (`#partybutton`), over the thumb
+  stick if it's shown: their likeness (drawn once, as an attacker's is, kept in
+  `partyLikenesses`) in a green frame (`--ally`; violet, `--summoned`, for a creature called;
+  bone, `--risen`, for one raised), a thin line of their health along its foot, a called
+  creature's time left along its head, two bars in its corner while they're told to wait, faded
+  while they're elsewhere (another floor). The icons are 44 pixels while they fit between the
+  Party button and the stick (or the quick actions, up, under them; or the bottom), shrunk to
+  fit down to 30, and past that as many as fit with a "+N" chip under them opening the party
+  menu (`PARTY_ICON`, `partyFit`: measured only when what decides it changes, `#partyFit`). Their
+  names over them are green (`.floater.ally`), as are their dots on the minimap. **Tapped**, an
+  icon chooses them to help (`allyTarget`, `#chooseAlly`): ringed in green on the ground
+  (effects.js `setAlly`: the target ring's band in green, without its arrowheads), their icon
+  glowing, and the heals and wards in the quick actions cast on them (a spell that can be cast on
+  a friend, `forFriends`; anything else on the player as ever); tapped again, the player's own
+  again; gone (fallen, dismissed, their time up), let go. **Tapped twice** in quick succession,
+  the player runs to them (an `approach` order with `run`). **Held**, the unit wheel opens under
+  the finger, steered by it from wherever it's lifted (`#openMemberWheel`: the page's own
+  pointer events for that pointer), as held on one of the party in the world does: Attack my
+  target (N), Follow me (E), Wait here (W), Dismiss (SW), what they're doing already greyed
+  (`WHEELS.unit`, the `unit:` actions: core/host.js `order` commands, `#orderUnit`, `NET_VERSION`
+  99), and turned
+  over (S) the player's own wheel's first side, its heals and wards cast on them, anything else
+  greyed. The **party menu** (app/partypanel.js `PartyPanel`: the Party button, the "+N" chip,
+  or P; shown again four times a second while open, `PARTY_MENU_EVERY`) lists them all, each
+  with their likeness (tapped, chosen to help), what they are ("Hired warrior", "Called wolf ·
+  4:05 left": `memberKind`), their health, whether they follow or wait, and Follow or Wait and
+  Dismiss (asked twice: "Dismiss?" for three seconds, `DISMISS_SURE_MS`); with no one, how to
+  come by some. On a narrow screen a panel open hides the column, which would cover its edge.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
@@ -3975,7 +4008,11 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   slice.
 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
-(picking a fight with them), and no other side.
+(picking a fight with them), and no other side. One of the player's party has one too (held on
+them, or on their icon down the left: *The party*), not set by the player: Attack my target,
+Follow me, Wait here and Dismiss, and on its other side the player's own heals and wards to cast
+on them. Anyone else who isn't an enemy, held on, opens the player's own wheel, only what can be
+cast on a friend lit.
 
 A new character's wheels have Vigor at N on their own, Make camp at N on its other side with a
 wave (NW), a bow (NE), a nod (W) and a cheer (E) round it, and Burn (N), Hurt (NE), Rumble (NW),
@@ -4515,6 +4552,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
   (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
   stars; particles uploaded and drawn only as far as the highest one alive, and none with none.
+- `test/party.test.js`: the player's party (host.js `partyOf`): their hired adventurers, then the
+  creatures they've called, then the dead they've raised, whatever order they came in, and no
+  one else's; each told to wait (standing guard), to follow again or to go, a follower and a
+  called creature alike, and refused for anyone not theirs; one set on whoever the player's set
+  on (`assist`), after them till they're down and then following again, refused with no one set
+  on; and what a creature at their side brings down counting for the player, its loot theirs.
 - `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
   foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
   just as it was.
@@ -4526,7 +4569,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   is while that's clear), the minimap's colours (in the town and inside) and its patches of the world (painted the same a step at a time as at once; the next
   painted ahead of the player while they're well inside this one, and shown before its edge would
   show), the action wheels (which of eight slices a flick is in, its shapes, its
-  actions and icons, every item's icon, what goes on each wheel, and reading them back), the
+  actions and icons, every item's icon, what goes on each wheel, and reading them back; the
+  party's wheel's orders never set nor quick), the party's icons fitted down the side (full size,
+  shrunk, then a "+N" chip) and what the party menu says each is, the
   loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
