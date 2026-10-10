@@ -9,17 +9,19 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { TIERS } from "../client/js/core/creatures.js";
+import { CREATURES, tierPower, TIERS } from "../client/js/core/creatures.js";
+import { cacheTier } from "../client/js/core/caches.js";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { CHAMPIONS, COFFER, DELVES, foeKey, HOARD, hoardTier, rollCoffer, rollHoard } from "../client/js/core/dungeons/play.js";
 import { THEMES, themeFor } from "../client/js/core/dungeons/themes.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { DUNGEON_ORIGINS, dungeonLevel } from "../client/js/core/insides.js";
+import { DUNGEON_ORIGINS, dungeonLevel, dungeonTier } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
 import { layoutNeutral } from "../client/js/core/setpieces/neutral.js";
+import { scalingOf } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { DUNGEON_SITES } from "../client/js/core/worldplan/settle.js";
 
@@ -358,3 +360,81 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         assert.ok(delve.awake[0]?.length > 0);
     });
 });
+
+describe("a dungeon against a stronger side (host.js #dungeons, #wakeLevel; strength.js)", () => {
+    it("is as strong as the mightiest finding it, if they're mightier than its land; and against two alike, more of each pack and each tougher, its boss and mini-bosses tougher still; kept so in a snapshot", () => {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.join({ id: "guest", hero: { ...HERO, name: "Bram" } });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const [me, guest] = [HOST_PLAYER, "guest"].map((id) => host.battle.actor(id));
+
+        for (const one of [me, guest]) {
+            Object.assign(one, { hp: 1e6, maxHp: 1e6 });
+        }
+
+        // (Mighty: their might as a seasoned adventurer's)
+        host.players.get(HOST_PLAYER).progress.might = () => 6;
+
+        const [sx, sy] = world.start.at;
+        const site = world.plan.sites.filter(({ kind }) => kind === "dungeon").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))[0];
+
+        world.maps.town.sites.heartOf(site);
+
+        const outside = world.maps.town.sites.set.get(site.id).entrance.outside;
+
+        put(me, outside);
+        put(guest, [outside[0] + 1, outside[1]]);
+        run(host, 1500, me);
+
+        const delve = host.dungeons.get(site.id);
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+        const tier = cacheTier(dungeonTier(world.plan, site), 6);
+
+        assert.equal(delve.tier, tier);
+        assert.ok(tier > dungeonTier(world.plan, site), "mightier than its land");
+        assert.equal(building.tier, tier);
+        assert.equal(building.dungeon.tier, tier);
+
+        // (Its first level's packs against the two of them)
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+        const level = building.dungeon.levels[0];
+
+        assert.ok(host.strengthOf(HOST_PLAYER).strength > 1);
+
+        for (const pack of level.packs) {
+            const out = delve.awake[0].map((id) => host.battle.actor(id)).filter((actor) => actor && host.wild.get(actor.id).foe.startsWith(`0/${pack.id}/`));
+            const ordinary = pack.foes.filter((foe) => !foe.boss && !foe.mini);
+
+            assert.ok(out.length >= pack.foes.length, `pack ${pack.id}: ${out.length} of ${pack.foes.length}`);
+            assert.ok(out.length - (pack.foes.length - ordinary.length) <= Math.ceil(ordinary.length * scale.count));
+
+            for (const actor of out) {
+                const { champion } = host.wild.get(actor.id);
+                const spec = CREATURES[actor.wild.creature];
+                const stands = CHAMPIONS[champion] ?? { hp: 1 };
+                const hp = Math.round(spec.hp * tierPower(actor.wild.tier) * stands.hp * (champion ? scale.leader : scale.health));
+
+                if (champion) {
+                    assert.equal(actor.maxHp, hp, `${actor.wild.creature} (${champion})`);
+                } else {
+                    // (Tougher still only where the level's too crowded for more of them: BODIES)
+                    assert.ok(actor.maxHp >= hp, `${actor.wild.creature}: ${actor.maxHp} of ${hp}`);
+                    assert.ok(actor.maxHp === hp || out.length - (pack.foes.length - ordinary.length) < Math.floor(ordinary.length * scale.count), `${actor.wild.creature}: ${actor.maxHp} of ${hp}, crowded`);
+                }
+            }
+        }
+
+        // (Kept in a snapshot: made again as strong)
+        const again = Host.restore(buildWorld({ seed: 1 }), decode(encode(host.snapshot())));
+
+        assert.equal(again.dungeons.get(site.id).tier, tier);
+        assert.equal(again.world.interiors.buildings.get(`site:${site.id}`).tier, tier);
+        assert.deepEqual(again.world.maps[building.maps[0]].plan, world.maps[building.maps[0]].plan);
+    });
+});
+

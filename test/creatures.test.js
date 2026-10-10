@@ -827,6 +827,67 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.ok(most <= Math.round((WILDS.count + WILDS.night) * scale.count), `at most ${most} about them`);
     });
 
+    it("sends more of a pack into a fight when the side it's fighting grows by one or more, each as tough as the side now has them, those there already as they were; kept in a snapshot (host.js #reinforce)", () => {
+        const context = outside(hosted());
+        const { host, me } = context;
+        // (A pack put out against the player alone, and set on them)
+        run(host, 5000);
+
+        const fighting = [...host.packs.keys()][0];
+        const foe = about(host).find((actor) => !actor.dead && host.wild.get(actor.id).pack === fighting);
+
+        // (Too tough to fall while they fight)
+        Object.assign(foe, { hp: 1e5, maxHp: 1e5 });
+        host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+        for (let s = 0; s < 30 && foe.target !== HOST_PLAYER; s++) {
+            run(host, 1000);
+            Object.assign(me, { hp: me.maxHp });
+        }
+
+        assert.equal(foe.target, HOST_PLAYER);
+        assert.equal(host.packs.get(fighting).strength, 1);
+
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.packs], [...host.packs]);
+
+        const members = () => about(host).filter((actor) => host.wild.get(actor.id)?.pack === fighting);
+        const before = new Map(members().map((actor) => [actor.id, actor.maxHp]));
+        const { creature, tier } = host.packs.get(fighting);
+
+        // (Three more players beside them: a side four strong)
+        for (const name of ["Bea", "Cy", "Di"]) {
+            host.join({ id: name, hero: { ...HERO, name } });
+            Object.assign(host.battle.actor(name), { hp: 5000, maxHp: 5000 });
+            put(host.battle.actor(name), [me.square[0] + 1, me.square[1] + ["Bea", "Cy", "Di"].indexOf(name)]);
+        }
+
+        const events = run(host, 1000);
+        const reinforced = events.filter(({ type, pack }) => type === "reinforced" && pack === fighting);
+        const scale = scalingOf(host.strengthOf(HOST_PLAYER).opposition);
+
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 4);
+        assert.equal(reinforced.length, 1);
+        assert.ok(reinforced[0].ids.length >= 1);
+        assert.equal(host.packs.get(fighting).strength, 4);
+
+        for (const id of reinforced[0].ids) {
+            const actor = host.battle.actor(id);
+
+            assert.equal(host.wild.get(id).creature, creature);
+            assert.equal(actor.maxHp, Math.round(CREATURES[creature].hp * tierPower(tier) * scale.health));
+        }
+
+        for (const [id, maxHp] of before) {
+            assert.equal(host.battle.actor(id).maxHp, maxHp);
+        }
+
+        // (No more while it stays as strong)
+        Object.assign(me, { hp: me.maxHp });
+        assert.ok(!run(host, 2000).some(({ type, pack }) => type === "reinforced" && pack === fighting));
+    });
+
     it("carries on exactly from a snapshot, the creatures and all", () => {
         const { host } = outside(hosted());
 

@@ -205,8 +205,35 @@ the foes are put out, never after):
 | A new adventurer and a new hire | about 2 | ×1.5 | ×1.15 | ×1.6 |
 
 So a tier-4 wolf pack is three wolves of 39 hit points against one player, four or five of 45
-against two, about seven of 52 against four. It's where they're put out (*Kept about the players*,
-*Elites* and *Adventurers' caches*, below) that it applies.
+against two, about seven of 52 against four.
+
+### Where it applies
+
+Wherever foes are put out near the players, against the side there when they are:
+
+- **Roaming packs, elites and caches:** against the group's side (*Kept about the players*,
+  *Elites* and *Adventurers' caches*, below).
+- **Wild camps:** against the players within the camp's round; its folk and its patrols each
+  ordinary ones.
+- **Lairs:** against the players near it or inside it; its master as a leader, its guards
+  ordinary ones.
+- **The outlaws' and the dead's places, and works overrun** (docs/WAR.md): against the players
+  near or inside; the leader as a leader, the band ordinary ones.
+- **Dungeons** (docs/DUNGEONS.md): each level as it wakes, against the players on it, on the
+  level above it, or (the first level) by its way in. The boss and mini-bosses are leaders; each
+  pack ordinary ones, the more of it beside those its plan has. And a dungeon's as strong as its
+  land, or as the mightiest of those finding it is, whichever's the more, as a cache is
+  (`caches.js` `cacheTier`): settled as it's made, and kept with it.
+
+### More mid-fight
+
+What a pack is is settled when it's put out, and those there never grow tougher, nor weaker. But
+should the side it's fighting grow by one or more since (`REINFORCE.grown`: a player come, more
+called to their side), more of the pack come (`host.js` `#reinforce`): as many more as the
+opposition grown has them, each as tough as the side now has them, from 10 m past the fight
+(`REINFORCE.from`), beyond those it's fighting; held to the body budget (*A ceiling*). Each
+roaming pack, elite's escort and cache's band is kept for it (`host.packs`, in snapshots), till
+it's gone.
 
 ### A ceiling
 
@@ -220,9 +247,10 @@ Every machine in a game draws everyone near a fight, so there's a body budget th
   spells' levels (docs/MAGIC.md); but where the budget's full about a player who calls or raises
   another, the oldest of theirs goes for it.
 
-That the players together are one group, one roll for an elite and one cache between them, and
-the wild answering their side's strength, changed the rules every game plays by (`NET_VERSION`
-105).
+That the players together are one group, one roll for an elite and one cache between them, the
+wild answering their side's strength wherever foes are put out, more coming mid-fight, and a
+dungeon as strong as its finders, changed the rules every game plays by (`NET_VERSION` 106), and
+what a snapshot holds (`SNAPSHOT_VERSION` 26: the packs kept, each dungeon's tier).
 
 ## Elites
 

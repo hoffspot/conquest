@@ -1408,6 +1408,8 @@ export class Interiors {
          * made as they were (a saved world's, a joining player's: core/host.js).
          */
         this.generations = new Map();
+        // (The tier a dungeon's to be made at, if not its land's: its finders', by key, setTier)
+        this.tiers = new Map();
     }
 
     /**
@@ -1524,7 +1526,7 @@ export class Interiors {
             maps: [],
             folk: [],
             // (A dungeon's: its theme, how strong, and how many times it's been made)
-            ...(dungeon ? { theme: site.theme ?? "caves", tier: this.world.plan ? dungeonTier(this.world.plan, site) : 1, generation, flights: [], dungeon: null } : {}),
+            ...(dungeon ? { theme: site.theme ?? "caves", tier: this.tiers.get(key) ?? (this.world.plan ? dungeonTier(this.world.plan, site) : 1), generation, flights: [], dungeon: null } : {}),
         };
         building.door = {
             id: `${key}/door`,
@@ -1733,6 +1735,21 @@ export class Interiors {
         this.setGeneration(key, building.generation + 1);
 
         return building;
+    }
+
+    /**
+     * The tier a dungeon's made at, its finders' (host.js #dungeons: the higher of its land's and
+     * the mightiest's near it, kept with the world): kept, and its building's, if it's here and not
+     * made yet.
+     */
+    setTier(key, tier) {
+        this.tiers.set(key, tier);
+
+        const building = this.buildings.get(key);
+
+        if (building?.kind === "dungeon" && !building.made) {
+            building.tier = tier;
+        }
     }
 
     /**
