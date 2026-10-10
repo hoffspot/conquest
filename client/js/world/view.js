@@ -116,6 +116,40 @@ export function backFor(tall, apart = 0) {
 
 // The layer the player's drawn on for the pack's paperdoll, and what's behind them there
 const PREVIEW = 3;
+
+// The layer someone's drawn on alone for a likeness of them (portrait: the icons of those
+// attacking the player, hud.js attackers), how big it's drawn (pixels square), and how much of
+// them is seen (`span`: of their height, top to bottom, round `at` of it up: head and shoulders);
+// a creature not shaped as a person seen whole, from `aside` radians round from its front, near
+// enough that the ball round it fills `snug` of the picture (its corners never reach the ball);
+// toned `bright` times as bright as the screen, to read on an icon so small
+const LIKENESS = Object.freeze({ layer: 4, size: 96, span: 0.42, at: 0.8, fov: 30, aside: 0.6, snug: 1.25, bright: 1.4 });
+
+// ACES, as three.js tones the picture on the screen (ACESFilmicToneMapping), for a portrait drawn
+// into a picture of its own, which three.js leaves untoned: its matrices (each row a channel), and
+// the fit between them
+const ACES_IN = [
+    [0.59719, 0.35458, 0.04823],
+    [0.076, 0.90834, 0.01566],
+    [0.0284, 0.13383, 0.83777],
+];
+const ACES_OUT = [
+    [1.60475, -0.53108, -0.07367],
+    [-0.10208, 1.10813, -0.00605],
+    [-0.00327, -0.07276, 1.07602],
+];
+const acesFit = (v) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
+const toSrgb = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+
+/** A linear colour (r, g, b) toned as the screen is (ACES at `exposure`) and made sRGB: [0..255] x3. */
+export function toneOf(r, g, b, exposure = 1) {
+    const scale = exposure / 0.6;
+    const input = [r * scale, g * scale, b * scale];
+    const fitted = ACES_IN.map((row) => acesFit(row[0] * input[0] + row[1] * input[1] + row[2] * input[2]));
+
+    return ACES_OUT.map((row) => Math.round(255 * toSrgb(Math.min(1, Math.max(0, row[0] * fitted[0] + row[1] * fitted[1] + row[2] * fitted[2])))));
+}
+
 const PREVIEW_BACKGROUND = new THREE.Color(0x221c16);
 const ABOVE_HORIZON = 45;
 
@@ -280,6 +314,8 @@ const REACH_ROUND = 1;
 
 const _point = new THREE.Vector3();
 const _up = new THREE.Vector3();
+const _likeness = new THREE.Box3();
+const _likenessPart = new THREE.Box3();
 const _toCamera = new THREE.Vector3();
 const _eye = new THREE.Vector3();
 const _knee = new THREE.Vector3();
@@ -1345,6 +1381,105 @@ export class View {
         this.sun.intensity = lit.strength;
         this.scene.environment = lit.environment;
         renderer.toneMappingExposure = lit.exposure;
+    }
+
+    /**
+     * A portrait of someone (`subject`: their object; `tall` metres; facing `facing` radians, as
+     * the object's turned), head and shoulders from in front of them (or, `whole`, a creature not
+     * shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
+     * (LIKENESS): drawn once into a picture of its own and read back. Resolves with its pixels (an
+     * ImageData, LIKENESS.size square), or null where they can't be read back.
+     */
+    async portrait(subject, { tall = 1.7, facing = subject.rotation.y, whole = false } = {}) {
+        const renderer = this.renderer;
+        const { layer, size, span, at, fov } = LIKENESS;
+
+        // (Drawn as the screen is, untoned and linear, in a picture deep enough to tone after:
+        // half floats where they can be read back, else bytes, clipped)
+        if (!this.portraits) {
+            const target = new THREE.WebGLRenderTarget(size, size, { type: THREE.HalfFloatType });
+            const deep = renderer.capabilities.textureTypeReadable(THREE.HalfFloatType);
+            const camera = new THREE.PerspectiveCamera(fov, 1, 0.05, 400);
+
+            camera.layers.set(layer);
+            this.portraits = { target: deep ? target : new THREE.WebGLRenderTarget(size, size), deep, camera };
+
+            if (!deep) {
+                target.dispose();
+            }
+        }
+
+        const { target, deep, camera } = this.portraits;
+
+        // (A creature's whole: as far as its parts reach, each as it was made, where it is; not
+        // Box3.setFromObject, which takes a skinned part's bones' reach as it's posed and then
+        // moves that where the part is again, far off)
+        const box = _likeness.makeEmpty();
+
+        if (whole) {
+            subject.updateMatrixWorld(true);
+            subject.traverse((node) => {
+                if (node.visible && node.geometry) {
+                    node.geometry.boundingBox ?? node.geometry.computeBoundingBox();
+                    box.union(_likenessPart.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld));
+                }
+            });
+        }
+
+        if (!box.isEmpty()) {
+            const middle = box.getCenter(_point);
+            const back = box.getSize(_up).length() / 2 / LIKENESS.snug / Math.sin((fov * Math.PI) / 360);
+            const way = facing + LIKENESS.aside;
+
+            camera.position.set(middle.x + Math.sin(way) * back, middle.y + back * 0.25, middle.z + Math.cos(way) * back);
+            camera.lookAt(middle);
+        } else {
+            const middle = subject.getWorldPosition(_point).add(_up.set(0, tall * at, 0));
+            const back = (tall * span) / 2 / Math.tan((fov * Math.PI) / 360);
+
+            camera.position.set(middle.x + Math.sin(facing) * back, middle.y + tall * 0.04, middle.z + Math.cos(facing) * back);
+            camera.lookAt(middle);
+        }
+
+        subject.traverse((node) => node.layers.enable(layer));
+        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+
+        const background = this.scene.background;
+        const shadows = renderer.shadowMap.autoUpdate;
+
+        this.scene.background = PREVIEW_BACKGROUND;
+        renderer.shadowMap.autoUpdate = false;
+        subject.updateMatrixWorld(true);
+        renderer.setRenderTarget(target);
+        renderer.clear();
+        renderer.render(this.scene, camera);
+        renderer.setRenderTarget(null);
+        renderer.shadowMap.autoUpdate = shadows;
+        this.scene.background = background;
+        subject.traverse((node) => node.layers.disable(layer));
+
+        const read = deep ? new Uint16Array(size * size * 4) : new Uint8Array(size * size * 4);
+
+        try {
+            await renderer.readRenderTargetPixelsAsync(target, 0, 0, size, size, read);
+        } catch {
+            return null;
+        }
+
+        // (Toned and turned the right way up: read from the bottom row)
+        const pixels = new ImageData(size, size);
+        const linear = (k) => (deep ? THREE.DataUtils.fromHalfFloat(read[k]) : read[k] / 255);
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const from = ((size - 1 - y) * size + x) * 4;
+                const [r, g, b] = toneOf(linear(from), linear(from + 1), linear(from + 2), renderer.toneMappingExposure * LIKENESS.bright);
+
+                pixels.data.set([r, g, b, 255], (y * size + x) * 4);
+            }
+        }
+
+        return pixels;
     }
 
     // The world drawn once into a picture (half as sharp), to show behind the pack, still and dimmed

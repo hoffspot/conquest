@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CameraFollow, PITCH } from "../client/js/app/camera.js";
-import { backFor, framed, PORTRAIT } from "../client/js/world/view.js";
+import { backFor, framed, PORTRAIT, toneOf } from "../client/js/world/view.js";
 
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -487,5 +487,24 @@ describe("a phone held upright (world/view.js framed)", () => {
 
         // (Its lens: about 35 degrees across at 9:16, where the landscape lens widened to 50 saw 29)
         assert.ok(Math.abs(across(PORTRAIT.fov, 9 / 16) - 34.6) < 0.1 && across(50, 9 / 16) < 30, `${across(PORTRAIT.fov, 9 / 16)}`);
+    });
+});
+
+describe("a likeness toned as the screen is (world/view.js toneOf)", () => {
+    it("black stays black, mid-grey sits mid-way, the brightest clip to white, and more exposure brightens", () => {
+        assert.deepEqual(toneOf(0, 0, 0), [0, 0, 0]);
+        assert.deepEqual(toneOf(0.18, 0.18, 0.18), [127, 127, 127]);
+        assert.deepEqual(toneOf(100, 100, 100), [255, 255, 255]);
+
+        const levels = [0.01, 0.05, 0.18, 0.5, 1, 4].map((v) => toneOf(v, v, v)[0]);
+
+        assert.ok(levels.every((level, k) => k === 0 || level > levels[k - 1]), `${levels}`);
+        assert.ok(toneOf(0.18, 0.18, 0.18, 2)[0] > 127);
+    });
+
+    it("a red stays red", () => {
+        const [r, g, b] = toneOf(1, 0.05, 0.05);
+
+        assert.ok(r > 200 && g < 80 && b < 80, `${[r, g, b]}`);
     });
 });
