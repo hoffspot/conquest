@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS, WARY_MS } from "../client/js/core/battle.js";
+import { Battle, BODY, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS, WARY_MS } from "../client/js/core/battle.js";
 import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
@@ -434,6 +434,79 @@ describe("the battle (battle.js)", () => {
 
         // (Round the two blocks' corners: the mesh rounds a corner off, into two or three turns)
         assert.ok(turns <= 5, `turned ${turns} times`);
+    });
+
+    it("makes for where someone's standing and stops by them, never in them: not round and round them, then squeezing through onto where they stand", () => {
+        // (Two of the folk making for the square the player stands on, from either side, and
+        // a third for the same square as the first, a moment behind it)
+        const battle = new Battle(open(21, 9), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [10, 4] });
+        const routine = { stops: [{ square: [10, 4], facing: 0 }, { square: [2, 4], facing: 0 }], wait: [6000, 6000] };
+        const folk = [
+            [2, 4],
+            [18, 4],
+            [1, 3],
+        ].map((square, k) => battle.add({ id: `folk-${k}`, kind: "folk", team: "folk", square, neutral: true, ai: "routine", routine }));
+        const everyone = [player, ...folk];
+        let nearest = Infinity;
+
+        for (let t = 0; t < 12000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+
+            for (const [k, one] of everyone.entries()) {
+                for (const other of everyone.slice(k + 1)) {
+                    nearest = Math.min(nearest, Math.hypot(one.x - other.x, one.y - other.y));
+                }
+            }
+        }
+
+        assert.ok(nearest >= 2 * BODY - 1e-9, `two came within ${nearest.toFixed(2)} m of each other`);
+        assert.deepEqual(player.square, [10, 4]);
+
+        for (const one of folk) {
+            assert.ok(one.arrived && !one.path.length, `${one.id} there`);
+            assert.ok(Math.hypot(one.x - 10.5, one.y - 4.5) < 2, `${one.id} by the player, ${Math.hypot(one.x - 10.5, one.y - 4.5).toFixed(2)} m off`);
+        }
+    });
+
+    it("never squeezes past the player: held up behind them where there's no way round, it waits", () => {
+        const rows = ["###########", "...........", "###########"];
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [5, 1] });
+        const one = battle.add({ id: "folk", kind: "folk", team: "folk", square: [1, 1], neutral: true, ai: "routine", routine: { stops: [{ square: [9, 1], facing: 0 }, { square: [1, 1], facing: 0 }], wait: [1000, 1000] } });
+        let nearest = Infinity;
+
+        for (let t = 0; t < 12000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            nearest = Math.min(nearest, Math.hypot(one.x - player.x, one.y - player.y));
+        }
+
+        assert.ok(nearest >= 2 * BODY - 1e-9, `came within ${nearest.toFixed(2)} m of the player`);
+        assert.ok(one.x < player.x, "still on its side of them");
+    });
+
+    it("steps round someone standing by a wall in its way the same way all along, not one way and then back the other, rocking where it stands", () => {
+        // (Its way along the wall, half a metre out from it; the one in it a little further out,
+        // all but straight ahead: round them on the open side, or between them and the wall, but
+        // not first one way and then the other, getting nowhere, till it squeezed through them)
+        const rows = ["....................", "....................", "....................", "####################"];
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const walker = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+        const standing = battle.add({ id: "folk", kind: "folk", team: "folk", square: [10, 2], neutral: true, ai: "routine", routine: { stops: [{ square: [10, 2], facing: 0 }], wait: [60000, 60000] } });
+        let nearest = Infinity;
+        let t = 0;
+
+        Object.assign(standing, { y: 2.4 });
+        battle.command("player", { type: "move", to: [18, 2] });
+
+        for (; t < 20000 && (walker.path.length || walker.order); t += STEP_MS) {
+            battle.advance(STEP_MS);
+            nearest = Math.min(nearest, Math.hypot(walker.x - standing.x, walker.y - standing.y));
+        }
+
+        assert.deepEqual(walker.square, [18, 2]);
+        assert.ok(nearest >= 2 * BODY - 1e-9, `came within ${nearest.toFixed(2)} m of them`);
+        assert.ok(t < 12000, `${t / 1000} s on the way`);
     });
 
     it("sends the player to fight an enemy it's told to engage, stopping as soon as it's within reach", () => {
