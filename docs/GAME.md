@@ -4136,7 +4136,16 @@ it.
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
    the nearer the camera are drawn over the farther, and all of them under the buttons. Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
-  requests, loot, spells learnt, standing and rank). The last ten are kept for the journal
+  requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
+  (but for an Undo's button) to whoever's under them. In a fight they're kept clear of those
+  fighting, the player, who they're fighting and whoever's after them, each where they are on
+  the screen with their name and bar over them (game.js `#clearOfFight`, `MESSAGE_CLEAR`): where
+  a message would cover one of them, it's moved up under the buttons along the top (and the
+  minimap, on a screen so narrow it would reach under it), or else down over the quick actions,
+  or else to the left of the screen or its right, a little up from half way (the player and
+  their foe one over the other down the middle), whichever is clear (or covers least of them),
+  staying there while that's clear, eased there (moved as it is, its width kept), and back once
+  the fight's over (hud.js `keepClear`, `messagePlace`). The last ten are kept for the journal
   (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages button, at its top, shows them, the
   newest first, each with how long ago it was told, and the same message told again running
   counted ("2 times, last 5 min ago"); the button, now Journal, goes back. Refusals and the like,
@@ -4485,8 +4494,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   (and what's been said in talks, and what's been found of the world, for the saved character
   only),
   heroes (and forgetting volumes saved on the old scale, and camera following saved when it was
-  on to start with), the minimap's colours (in the town and
-  inside) and its patches of the world (painted the same a step at a time as at once; the next
+  on to start with), where a message goes in a fight (clear of those fighting, staying where it
+  is while that's clear), the minimap's colours (in the town and inside) and its patches of the world (painted the same a step at a time as at once; the next
   painted ahead of the player while they're well inside this one, and shown before its edge would
   show), the action wheels (which of eight slices a flick is in, its shapes, its
   actions and icons, every item's icon, what goes on each wheel, and reading them back), the

@@ -1290,6 +1290,90 @@ test("in a fight, the battle cam turned off, the camera keeps the foe in view, t
     expect(after.turned).toBeLessThan(Math.PI - 0.3);
 });
 
+test("in a fight, a message is moved clear of those fighting, taps going through it; the fight over, it's back where it goes as a rule", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const placed = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const { view } = session;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const banner = document.querySelector("#banner");
+        const screen = document.querySelector("#hud").getBoundingClientRect();
+        const box = (id) => {
+            const avatar = game.avatars.get(id);
+            const [feet, head] = [view.toScreen(avatar.object.position), view.toScreen(avatar.point(1))];
+
+            return { left: feet.x - (feet.y - head.y) * 0.3, right: feet.x + (feet.y - head.y) * 0.3, top: head.y, bottom: feet.y };
+        };
+        const meet = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+        // (The camera looking north from behind the player, not swinging round; a message up)
+        game.stop();
+        game.cameraSettings = { ...game.cameraSettings, battle: false };
+        game.cameraFollow.yaw = 0;
+        game.hud.message("The orc is coming for you!", 60);
+
+        // The orc set on the player, stunned, as far north of them as puts it where a message goes
+        // as a rule (28% of the way down the screen)
+        const [px, py] = player.square;
+        let at = null;
+
+        for (let d = 3; d <= 16 && !at; d++) {
+            const square = [px, py - d];
+
+            if (squares.blocked(...square)) {
+                continue;
+            }
+
+            Object.assign(orc, { x: square[0] + 0.5, y: square[1] + 0.5, square, path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
+            game.avatars.get("orc").place(orc.x, orc.y, 0);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+            game.advance(0.1);
+
+            const usual = { left: screen.left + (screen.width - banner.offsetWidth) / 2, right: screen.left + (screen.width + banner.offsetWidth) / 2, top: screen.top + screen.height * 0.28, bottom: screen.top + screen.height * 0.28 + banner.offsetHeight };
+
+            at = meet(usual, box("orc")) ? d : null;
+        }
+
+        game.advance(0.5);
+        window.boxes = [box("player"), box("orc")];
+
+        return { at, moved: banner.style.translate, taps: getComputedStyle(banner).pointerEvents, shown: !banner.hidden };
+    });
+
+    // (Once it's eased there: the page's animations don't run on while the game's stopped)
+    placed.clear = await page.evaluate(() => {
+        const banner = document.querySelector("#banner");
+
+        banner.getAnimations().forEach((animation) => animation.finish());
+
+        const moved = banner.getBoundingClientRect();
+
+        return window.boxes.every((rect) => !(moved.left < rect.right && rect.left < moved.right && moved.top < rect.bottom && rect.top < moved.bottom));
+    });
+
+    // The orc gone: back where a message goes as a rule
+    placed.after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity, target: null });
+        game.fightView = null;
+        game.advance(0.5);
+
+        return document.querySelector("#banner").style.translate;
+    });
+
+    expect(placed.at).not.toBe(null);
+    expect(placed.shown).toBe(true);
+    expect(placed.moved).not.toBe("");
+    expect(placed.clear).toBe(true);
+    expect(placed.taps).toBe("none");
+    expect(placed.after).toBe("");
+});
+
 test("in a fight, the battle cam swings round to see the player and their foe from the side, both on the screen and neither hidden; leaving it be once the fight's over", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

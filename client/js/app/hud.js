@@ -1,6 +1,7 @@
 // The game's heads-up display, drawn with the page (not in 3D): the player's name and health,
 // a name and health bar over every other character, numbers for the damage each blow does, and
-// messages across the middle of the screen. Under a health bar, an orange bar shows stamina
+// messages across the middle of the screen (in a fight, moved up under the buttons or down over
+// the quick actions where they'd cover those fighting). Under a health bar, an orange bar shows stamina
 // while it isn't full; under that, an icon for each thing lingering on them (poison, a web...) on
 // a blood-red disc, then each spell lasting on them (a ward, Reflect...) and each boon (a
 // blessing) on a sapphire tile, darkening round as it wears off: in one row as wide as the bars,
@@ -10,6 +11,11 @@
 // name, a chip of its metal (Copper to Mithril).
 
 import { ICONS, useDefs } from "./icons.js";
+
+// How far a message is kept from the buttons along the top and the quick actions (pixels); and
+// with no quick actions up, how far from the bottom it can come
+const MESSAGE_GAP = 10;
+const MESSAGE_LOW = 150;
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -41,6 +47,38 @@ export function plateScale(distance, sight = 1) {
     return distance >= far ? 0 : (far - distance) / (far - near);
 }
 
+/**
+ * Where a message goes to keep clear of those fighting (`rects`: { left, top, right, bottom }
+ * each, pixels), as big as it is (`size`: { width, height }): of the places it can go (`places`:
+ * { x, top } each, pixels, `x` its middle across; the first where it goes as a rule), the one
+ * it's at (`now`: an index) while that's clear of them all, else the first that is, else the one
+ * over least of them. Returns an index into `places`.
+ */
+export function messagePlace(places, rects, { width, height }, now = null) {
+    const over = ({ x, top }) => rects.reduce((sum, rect) => sum + Math.max(0, Math.min(x + width / 2, rect.right) - Math.max(x - width / 2, rect.left)) * Math.max(0, Math.min(top + height, rect.bottom) - Math.max(top, rect.top)), 0);
+
+    if (now !== null && now < places.length && over(places[now]) === 0) {
+        return now;
+    }
+
+    let best = 0;
+    let least = Infinity;
+
+    for (const [k, place] of places.entries()) {
+        const covered = over(place);
+
+        if (covered === 0) {
+            return k;
+        }
+
+        if (covered < least - 1e-6) {
+            [best, least] = [k, covered];
+        }
+    }
+
+    return best;
+}
+
 export class Hud {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
     constructor(root) {
@@ -48,6 +86,11 @@ export class Hud {
         this.plate = root.querySelector("#playerplate");
         this.floaters = root.querySelector("#floaters");
         this.banner = root.querySelector("#banner");
+        this.top = root.querySelector(".hud-top");
+        this.quick = root.querySelector(".quickbar");
+
+        // (Which of the places a message can go it's at in a fight, or null: where it goes as a rule)
+        this.bannerAt = null;
         this.netStatus = root.querySelector("#netstatus");
 
         /** The minimap's canvas (app/minimap.js draws it). */
@@ -402,6 +445,53 @@ export class Hud {
 
         if (text && seconds) {
             this.bannerTimer = setTimeout(() => (this.banner.hidden = true), seconds * 1000);
+        }
+    }
+
+    /**
+     * Keep a message clear of those fighting (`rects`: where each is on the page, { left, top,
+     * right, bottom }, pixels, their name and bar over them too): where it goes as a rule (28% of
+     * the way down) if that's clear of them, else just under the buttons along the top (and the
+     * minimap, on a screen so narrow it would reach under it), else just over the quick actions
+     * (or the bottom), else at the left of the screen or its right, a little up from half way; the
+     * one over least of them if none is. None fighting, back where it goes as a rule.
+     */
+    keepClear(rects) {
+        if (this.banner.hidden || !rects.length) {
+            if (this.bannerAt !== null) {
+                this.bannerAt = null;
+                this.banner.style.translate = "";
+            }
+
+            return;
+        }
+
+        const screen = this.root.getBoundingClientRect();
+        const { offsetWidth: width, offsetHeight: height } = this.banner;
+        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
+        const map = !this.map.hidden && this.map.getBoundingClientRect();
+        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
+        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
+        const quick = this.quick?.classList.contains("up") ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
+        const [middle, usual, aside, low] = [screen.width / 2, screen.height * 0.28, MESSAGE_GAP + width / 2, screen.height * 0.45 - height / 2];
+        const places = [
+            { x: middle, top: usual },
+            { x: middle, top: under },
+            { x: middle, top: quick - screen.top - MESSAGE_GAP - height },
+            { x: Math.min(middle, aside), top: low },
+            { x: Math.max(middle, screen.width - aside), top: low },
+        ];
+        const at = messagePlace(
+            places,
+            rects.map(({ left, top, right, bottom }) => ({ left: left - screen.left, top: top - screen.top, right: right - screen.left, bottom: bottom - screen.top })),
+            { width, height },
+            this.bannerAt,
+        );
+
+        if (at !== this.bannerAt) {
+            this.bannerAt = at;
+            // (Moved from where it goes as a rule, as wide as it is there)
+            this.banner.style.translate = `${(places[at].x - middle).toFixed(0)}px ${(places[at].top - usual).toFixed(0)}px`;
         }
     }
 

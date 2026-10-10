@@ -162,7 +162,9 @@ stands between you and it, and keeps to that side as you fight; a drag still tur
 second after you let go it frames the fight again. With the battle cam off, it keeps you and your
 foe both in view by itself, turning no more than it must. Either way it draws back for a dragon or
 a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
-from out of view has a red arrow at the screen's edge pointing to them.
+from out of view has a red arrow at the screen's edge pointing to them. Messages told in a fight
+move up under the buttons, down over the quick actions, or off to the side rather than cover
+anyone fighting, and taps go through them.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left

@@ -3361,6 +3361,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     text-align: center;
     color: var(--gold-bright);
     animation: appear 0.3s ease-out;
+    /* (Taps go through it to whoever's under it, but for its button; in a fight it's moved clear
+    of those fighting: hud.js keepClear) */
+    pointer-events: none;
+    transition: translate 0.2s ease-out;
 }
 
 @keyframes appear {

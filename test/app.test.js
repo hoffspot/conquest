@@ -5,7 +5,7 @@ import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, random
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
-import { PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
+import { messagePlace, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -902,6 +902,38 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 });
 
 describe("the bars over the others (hud.js)", () => {
+    it("puts a message where it goes as a rule if that's clear of those fighting, else the first place that is, staying where it is while that's clear; if none is, over the least of them", () => {
+        // (A message 300 by 50 on a screen 1000 wide: its places 28% down, under the buttons, over
+        // the quick actions, and at the left and right a little up from half way)
+        const places = [
+            { x: 500, top: 170 },
+            { x: 500, top: 70 },
+            { x: 500, top: 420 },
+            { x: 160, top: 245 },
+            { x: 840, top: 245 },
+        ];
+        const size = { width: 300, height: 50 };
+        const foe = { left: 470, top: 150, right: 530, bottom: 300 };
+        const player = { left: 470, top: 300, right: 530, bottom: 480 };
+
+        assert.equal(messagePlace(places, [], size), 0, "no one fighting: where it goes as a rule");
+        assert.equal(messagePlace(places, [{ left: 100, top: 150, right: 160, bottom: 300 }], size), 0, "off to the side, clear of it");
+        assert.equal(messagePlace(places, [foe], size), 1, "over the foe: up under the buttons");
+        assert.equal(messagePlace(places, [foe, { left: 450, top: 40, right: 520, bottom: 140 }], size), 2, "and someone there too: down over the quick actions");
+        assert.equal(messagePlace(places, [{ left: 470, top: 40, right: 530, bottom: 300 }, player], size), 3, "the foe and the player one over the other down the middle: off to the left");
+        assert.equal(messagePlace(places, [], size, 2), 2, "where it is while that's clear, not back and forth");
+        assert.equal(messagePlace(places, [{ left: 450, top: 400, right: 520, bottom: 480 }], size, 2), 0, "and not once it isn't");
+
+        // (Everywhere covered: over the least of them)
+        const crowd = [
+            { left: 300, top: 40, right: 700, bottom: 480 },
+            { left: 0, top: 240, right: 320, bottom: 300 },
+            { left: 820, top: 240, right: 1000, bottom: 300 },
+        ];
+
+        assert.equal(messagePlace(places, crowd, size), 4);
+    });
+
     it("draws a bar full size near the player's character, then smaller and fainter evenly with the distance, gone at the edge of sight", () => {
         const near = (a, b) => Math.abs(a - b) < 1e-9;
 
