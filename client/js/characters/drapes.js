@@ -11,7 +11,9 @@
 // legs walk, and sitting, it lies over the lap and falls down the shins. Each side goes with its
 // own leg, but its front with whichever leg is further forward and its back with whichever is
 // further back (two bones of the drape's own for each, swung as those legs are: drapeSkeleton),
-// so a leg striding out takes the cloth before it along, never coming through it.
+// so a leg striding out takes the cloth before it along, never coming through it. An apron over a
+// skirt goes just as the skirt under it does (skirtUnder): from the skirt's own bones, as far
+// onto the shins below the knees at each height, so the skirt never comes out through it.
 
 import * as THREE from "three";
 import { LIVERIES } from "./liveries.js";
@@ -97,6 +99,15 @@ const ON_SHINS = 0.75;
 const THIGH_REACH = 0.5;
 const SHIN_REACH = 0.3;
 
+// How far in from an apron's sides (radians round) and up from its hem (metres) the skirt under it
+// is taken to be hidden by it: drawn smaller, without it (buildDrape's `shown`)
+const UNDER_APRON = { round: 0.12, hem: 0.05 };
+
+// An apron drawn smaller (at each of lod.js LODS' levels): every this many of its columns round,
+// its sides' last too, and all its rings (buildDrape's `levels`). A simplifier taking rings off
+// would leave it straight across the knees, where the skirt under it bends out through it
+const APRON_STEPS = Object.freeze([2, 4]);
+
 /**
  * A drape's own bones, after the body's in its skeleton (drapeSkeleton): for its front, a thigh
  * swung forward about the middle of the hips as far as the knee furthest forward has swung, and
@@ -104,6 +115,21 @@ const SHIN_REACH = 0.3;
  * the same, back.
  */
 export const DRAPE_BONES = Object.freeze(["frontThigh", "frontShin", "backThigh", "backShin"]);
+
+/**
+ * The skirt an apron (`id`: a drape only part of the way round) worn with `ids` hangs over: the
+ * longest of them all the way round (not a cloak), or null (none, or `id` isn't an apron). The
+ * apron goes as it does: from its bones (drapeSkeleton), onto the shins as it is (buildDrape).
+ */
+export function skirtUnder(id, ids) {
+    if (DRAPES[id].cape || (DRAPES[id].arc ?? 1) >= 1) {
+        return null;
+    }
+
+    const skirts = ids.filter((each) => each !== id && DRAPES[each] && !DRAPES[each].cape && (DRAPES[each].arc ?? 1) >= 1);
+
+    return skirts.sort((a, b) => DRAPES[b].length - DRAPES[a].length)[0] ?? null;
+}
 
 const smoothstep = (edge0, edge1, x) => {
     const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -177,7 +203,9 @@ function outline(character, measures, bottom, top, centre = null, worn = null) {
  * shading, skin indices and weights on the character's skeleton), in the body's rest pose.
  * `measures` is garments.js's measureBody(character); `under`, the skirts worn under it (an
  * apron's: it lies over them, as far out as they flare); `worn`, how far out the garments under
- * it reach at each of the body's vertices (a cloak lies over them).
+ * it reach at each of the body's vertices (a cloak lies over them). And to draw it with small on
+ * the screen: a skirt with an apron over it, its triangles that show (`shown`: those the apron
+ * hides left out); an apron, its own triangles at each of lod.js LODS' levels (`levels`).
  */
 export function buildDrape(character, id, measures, under = [], worn = null) {
     const drape = DRAPES[id];
@@ -233,6 +261,11 @@ export function buildDrape(character, id, measures, under = [], worn = null) {
 
         return most;
     };
+
+    // (Where it's all on the shins below the knees, going down: by its hem, or an apron's by the
+    // skirt's under it, so the two go alike: skirtUnder)
+    const skirt = skirtUnder(id, under);
+    const shinsHem = skirt ? hipsY + (l.ankle - 0.03 * scale - hipsY) * DRAPES[skirt].length : hemY;
 
     for (const t of downs.filter((each, k) => k === 0 || each - downs[k - 1] > 1e-6)) {
         const y = hipsY + (hemY - hipsY) * t;
@@ -329,7 +362,7 @@ export function buildDrape(character, id, measures, under = [], worn = null) {
                 skinIndex.push(bones.hips, alongThigh, asideThigh, 0);
                 skinWeight.push(1 - legs, legs * along, legs * aside, 0);
             } else {
-                const onShins = smoothstep(kneeY, kneeY - (kneeY - hemY) * SHIN_REACH, y);
+                const onShins = smoothstep(kneeY, kneeY - (kneeY - shinsHem) * SHIN_REACH, y);
 
                 skinIndex.push(alongThigh, alongShin, asideThigh, asideShin);
                 skinWeight.push(along * (1 - onShins), along * onShins, aside * (1 - onShins), aside * onShins);
@@ -348,6 +381,47 @@ export function buildDrape(character, id, measures, under = [], worn = null) {
             index.push(a, a + columns, b, b, a + columns, b + columns);
         }
     }
+
+    // (A skirt with an apron over it: its triangles that show, those the apron hides left out, to
+    // draw it with when it's small on the screen, so it never comes through the apron there)
+    const aprons = under.filter((each) => skirtUnder(each, under) === id).map((each) => DRAPES[each]);
+    let shown = null;
+
+    if (aprons.length) {
+        const hidden = (v) => {
+            const angle = Math.abs(Math.atan2(positions[v * 3] - hips.middle.x, positions[v * 3 + 2] - hips.middle.z));
+            const y = positions[v * 3 + 1];
+
+            return aprons.some((apron) => angle <= (apron.arc ?? 1) * Math.PI - UNDER_APRON.round && y >= hipsY + (l.ankle - 0.03 * scale - hipsY) * apron.length + UNDER_APRON.hem);
+        };
+
+        shown = [];
+
+        for (let k = 0; k < index.length; k += 3) {
+            if (![0, 1, 2].every((c) => hidden(index[k + c]))) {
+                shown.push(index[k], index[k + 1], index[k + 2]);
+            }
+        }
+    }
+
+    // (An apron's triangles to draw it with smaller: all its rings, fewer of its columns)
+    const levels =
+        arc < 1
+            ? APRON_STEPS.map((step) => {
+                  const kept = Array.from({ length: columns }, (_, c) => c).filter((c) => c % step === 0 || c === columns - 1);
+                  const fewer = [];
+
+                  for (let r = 0; r < rings.length - 1; r++) {
+                      for (let k = 0; k + 1 < kept.length; k++) {
+                          const [a, b] = [r * columns + kept[k], r * columns + kept[k + 1]];
+
+                          fewer.push(a, a + columns, b, b, a + columns, b + columns);
+                      }
+                  }
+
+                  return fewer;
+              })
+            : null;
 
     const geometry = new THREE.BufferGeometry();
 
@@ -378,7 +452,7 @@ export function buildDrape(character, id, measures, under = [], worn = null) {
         }
     });
 
-    return { geometry, drape, rings: rings.length, columns, profile };
+    return { geometry, drape, rings: rings.length, columns, profile, shown, levels };
 }
 
 

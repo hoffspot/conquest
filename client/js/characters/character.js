@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn } from "./equipment.js";
-import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES } from "./drapes.js";
+import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES, skirtUnder } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingOutfit, GARMENTS, measureBody, paintGarment, paintingGarment, stackOrder, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
@@ -659,20 +659,31 @@ export class Character {
         // with its heels kept low: Walker)
         this.robed = drapeIds.some((id) => !DRAPES[id].cape && (DRAPES[id].arc ?? 1) >= 1 && DRAPES[id].length >= ROBED);
 
-        for (const id of drapeIds) {
+        // (Skirts first: an apron over one hangs from its bones, so it never comes out through the
+        // apron: skirtUnder)
+        const swung = new Map();
+
+        for (const id of [...drapeIds].sort((a, b) => Number(skirtUnder(a, drapeIds) !== null) - Number(skirtUnder(b, drapeIds) !== null))) {
             yield;
 
-            const { geometry, profile } = buildDrape(this, id, measures, drapeIds, worn);
+            const { geometry, profile, shown, levels } = buildDrape(this, id, measures, drapeIds, worn);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;
             mesh.userData.drape = true;
+            // (Drawn small on the screen: under an apron, without what it hides; an apron, with
+            // triangles of its own: #lowerGarment)
+            mesh.userData.shown = shown;
+            mesh.userData.levels = levels;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
-            // (A skirt's front and back swung by bones of its own, as the legs go: a cloak's
-            // hangs from the body's)
-            mesh.bind(profile ? drapeSkeleton(this.rig, profile) : this.rig.skeleton, new THREE.Matrix4());
+            // (A skirt's front and back swung by bones of its own, as the legs go, and an apron
+            // over one by the skirt's: a cloak's hangs from the body's)
+            const skeleton = swung.get(skirtUnder(id, drapeIds)) ?? (profile ? drapeSkeleton(this.rig, profile) : this.rig.skeleton);
+
+            swung.set(id, skeleton);
+            mesh.bind(skeleton, new THREE.Matrix4());
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
@@ -1758,10 +1769,14 @@ export class Character {
     // triangles of it
     #lowerGarment(mesh) {
         const { index, attributes } = mesh.geometry;
-        const key = mesh.userData.merged ? `outfit:${mesh.userData.merged.join("+")}` : keyOf(mesh.name, index.array);
+        // (A skirt under an apron's from those of its triangles that show: buildDrape's `shown`)
+        const indices = mesh.userData.shown ? Uint32Array.from(mesh.userData.shown) : index.array;
+        const key = mesh.userData.merged ? `outfit:${mesh.userData.merged.join("+")}` : keyOf(mesh.name, indices);
         // (A skirt's has no picture's layout to keep)
         const uvs = attributes.uv?.array ?? new Float32Array(attributes.position.count * 2);
-        const levels = LODS.map(({ share, error }, k) => this.lods.of(`${key}@${k + 1}`, () => ({ indices: index.array, positions: attributes.position.array, uvs, share, error })));
+        // (An apron's its own: buildDrape's `levels`)
+        const own = mesh.userData.levels;
+        const levels = LODS.map(({ share, error }, k) => (own ? Promise.resolve(own[Math.min(k, own.length - 1)]) : this.lods.of(`${key}@${k + 1}`, () => ({ indices, positions: attributes.position.array, uvs, share, error }))));
 
         Promise.all(levels).then(
             (lows) => {

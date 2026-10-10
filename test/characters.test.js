@@ -22,7 +22,8 @@ import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURV
 import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, fittingOutfit, GARMENTS, insideBetween, insideOf, measureBody, paintGarment, STAND_OFF, stackOrder, texelMap } from "../client/js/characters/garments.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
-import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton } from "../client/js/characters/drapes.js";
+import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton, skirtUnder } from "../client/js/characters/drapes.js";
+import { LODS, lowerDetail } from "../client/js/characters/lod.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
 import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
@@ -1844,6 +1845,132 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
 
         assert.ok(inside(apronOn(["kirtle", "apron"])) <= 0, `over it: ${(inside(apronOn(["kirtle", "apron"])) * 100).toFixed(1)} cm in`);
         assert.ok(inside(apronOn([])) > 0.01, "on its own, the kirtle came through it");
+    });
+
+    // How far a skirt comes out through the apron over it (metres, the furthest each moment) as a
+    // body in them walks a stride (each skinned as three.js does): the apron hung from the skirt's
+    // own bones (`shared`: skirtUnder), or from its own; each drawn with all its triangles, or with
+    // those it's drawn with far off (`far`: the skirt's that show, lowered as character.js does;
+    // the apron's own). Out, a point of the skirt's triangles is past the apron: a line to it,
+    // level, from the middle of the hips crosses the apron an odd number of times
+    const skirtOut = async (shape, skirt, apron, { shared = true, far = false } = {}) => {
+        const body = figure(shape);
+        const measures = measureBody(body);
+        const ids = [skirt, apron];
+        const [under, over] = ids.map((id) => buildDrape(body, id, measures, ids));
+        const skeletons = [drapeSkeleton(body.rig, under.profile)];
+        const walker = new Walker(body, WALK_STYLES.natural);
+        const [skirtIndex, apronIndex] = far ? [await lowerDetail(Uint32Array.from(under.shown), under.geometry.attributes.position.array, new Float32Array(under.geometry.attributes.position.count * 2), LODS.at(-1).share, LODS.at(-1).error), over.levels.at(-1)] : [under.geometry.index.array, over.geometry.index.array];
+        const cloth = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+        const caster = new THREE.Raycaster();
+        const triangle = new THREE.Triangle();
+        const [from, near, point] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+        const worst = [];
+
+        skeletons.push(shared ? skeletons[0] : drapeSkeleton(body.rig, over.profile));
+        body.robed = DRAPES[skirt].length >= 0.9;
+        cloth.geometry.setIndex(Array.from(apronIndex));
+
+        // (Each vertex of a drape where its skeleton has it now)
+        const skinned = ({ geometry }, skeleton) => {
+            const matrices = skeleton.bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(bone.matrixWorld, skeleton.boneInverses[i]));
+            const { position, skinIndex, skinWeight } = geometry.attributes;
+
+            return Array.from({ length: position.count }, (_, i) => {
+                const rest = new THREE.Vector3().fromBufferAttribute(position, i);
+
+                return [0, 1, 2, 3].reduce((sum, k) => (skinWeight.getComponent(i, k) > 0 ? sum.addScaledVector(rest.clone().applyMatrix4(matrices[skinIndex.getComponent(i, k)]), skinWeight.getComponent(i, k)) : sum), new THREE.Vector3());
+            });
+        };
+
+        for (let frame = 0; frame < 66; frame++) {
+            walker.update(1 / 30, { speed: NATURAL_SPEED });
+            body.object.updateMatrixWorld(true);
+
+            if (frame < 30 || frame % 3) {
+                continue;
+            }
+
+            skeletons.forEach((skeleton) => skeleton.swing());
+
+            const [points, apronPoints] = [skinned(under, skeletons[0]), skinned(over, skeletons[1])];
+            const hips = body.rig.bone("Hips").getWorldPosition(new THREE.Vector3());
+            let out = 0;
+
+            cloth.geometry.setAttribute("position", new THREE.Float32BufferAttribute(apronPoints.flatMap((p) => p.toArray()), 3));
+            cloth.geometry.computeBoundingSphere();
+
+            // (Each of the skirt's triangles: its corners, the middles of its sides, and its middle)
+            for (let k = 0; k < skirtIndex.length; k += 3) {
+                const corners = [0, 1, 2].map((c) => points[skirtIndex[k + c]]);
+
+                for (const share of [[1, 0, 0], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5], [1 / 3, 1 / 3, 1 / 3]]) {
+                    point.set(0, 0, 0);
+                    corners.forEach((corner, c) => point.addScaledVector(corner, share[c]));
+                    from.set(hips.x, point.y, hips.z);
+                    caster.set(from, near.subVectors(point, from).normalize());
+                    caster.far = point.distanceTo(from);
+
+                    if (caster.intersectObject(cloth, false).length % 2 === 1) {
+                        let least = Infinity;
+
+                        for (let j = 0; j < apronIndex.length; j += 3) {
+                            triangle.set(apronPoints[apronIndex[j]], apronPoints[apronIndex[j + 1]], apronPoints[apronIndex[j + 2]]);
+                            least = Math.min(least, triangle.closestPointToPoint(point, near).distanceTo(point));
+                        }
+
+                        out = Math.max(out, least);
+                    }
+                }
+            }
+
+            worst.push(out);
+        }
+
+        return Math.max(...worst);
+    };
+
+    it("keeps the skirt in under an apron walking: the apron hangs from the skirt's own bones, onto the shins as it is", async () => {
+        assert.equal(skirtUnder("apron", ["chemise", "kirtle", "apron"]), "kirtle");
+        assert.equal(skirtUnder("leatherApron", ["brownSkirt", "albSkirt", "leatherApron"]), "albSkirt", "the longest");
+        assert.equal(skirtUnder("kirtle", ["kirtle", "apron"]), null, "a skirt's not an apron");
+        assert.equal(skirtUnder("apron", ["trousers", "apron"]), null, "nor over trousers");
+        assert.equal(skirtUnder("apron", ["travelCloak", "apron"]), null, "nor over a cloak");
+
+        // (A serving wench in a kirtle and an apron, a smith's wife in a skirt and a leather one, as
+        // about the town's squares: on main, the apron hung from bones of its own, swung less than
+        // the skirt's, and the skirt came out through it, 0.6 cm and 2 cm; from its own still, with
+        // the shins as the skirt's, 0.3 cm and 1.4 cm)
+        for (const [skirt, apron] of [["kirtle", "apron"], ["skirt", "leatherApron"]]) {
+            const [alike, apart] = await Promise.all([true, false].map((shared) => skirtOut(FOLK.wench.shape, skirt, apron, { shared })));
+
+            assert.ok(alike < 0.001, `${skirt} under ${apron}: out ${(alike * 100).toFixed(1)} cm`);
+            assert.ok(apart > alike + 0.002, `${skirt} under ${apron}, on bones of its own: out ${(apart * 100).toFixed(1)} cm`);
+        }
+    });
+
+    it("keeps it in drawn far off: the skirt without what the apron hides, the apron with all its rings and fewer of its columns", async () => {
+        const body = figure(FOLK.wench.shape);
+        const measures = measureBody(body);
+        const ids = ["kirtle", "apron"];
+        const [kirtle, apron] = ids.map((id) => buildDrape(body, id, measures, ids));
+        const ringsOf = (index, columns) => new Set(Array.from(index, (v) => Math.floor(v / columns)));
+
+        assert.equal(buildDrape(body, "kirtle", measures, ["kirtle"]).shown, null, "a skirt alone, all of it");
+        assert.ok(kirtle.shown.length < kirtle.geometry.index.count * 0.95, "under an apron, without what it hides");
+        assert.equal(kirtle.levels, null);
+        assert.equal(apron.levels.length, LODS.length);
+
+        for (const level of apron.levels) {
+            assert.ok(level.length < apron.geometry.index.count * 0.6, `${level.length / 3} triangles`);
+            assert.equal(ringsOf(level, apron.columns).size, apron.rings, "every ring");
+        }
+
+        // (On main, with both lowered by the simplifier, the kirtle came 2.4 cm out through the apron
+        // walking, far off; lowered so, it stays in)
+        const out = await skirtOut(FOLK.wench.shape, "kirtle", "apron", { far: true });
+
+        assert.ok(out < 0.001, `out ${(out * 100).toFixed(1)} cm`);
     });
 
     it("keeps them in setting off with a long stride, the foot far behind taken in by the cloth's back, though the pelvis turned makes it seem off to the side", () => {
