@@ -605,8 +605,10 @@ export class Battle {
             ai,
             patrol,
             leash,
-            // (A follower's: whom it follows, by id)
+            // (A follower's: whom it follows, by id; and whom it was told to fight, the one its
+            // leader was set on, till they're down: host.js #orderUnit "assist")
             leader,
+            assist: null,
             post: facing,
             // Whom it holds a grudge against (by id), and until when (FOE_MS); and who's struck it,
             // until when it goes after them beyond its leash (DEFEND_MS)
@@ -2419,6 +2421,20 @@ export class Battle {
 
             return;
         }
+
+        // (Told to fight whoever its leader was set on: after them till they're down or gone)
+        const assisted = actor.assist ? this.actor(actor.assist) : null;
+
+        if (assisted && !assisted.dead && assisted.map === actor.map && this.hostile(actor, assisted)) {
+            actor.target = assisted.id;
+            actor.lastSeen = this.time;
+            actor.walkPace = actor.chaseSpeed;
+            this.#pursue(actor, assisted);
+
+            return;
+        }
+
+        actor.assist = null;
 
         // (Anyone after it, too, wherever they are)
         const seen = this.#nearestSeen(actor, (enemy) => distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || enemy.target === actor.id || enemy.attack?.target === actor.id);

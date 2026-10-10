@@ -2470,8 +2470,12 @@ say what they'd want and stay where they are.
 - what they bring down counts for their leader: its loot is theirs, and it counts towards their
   requests.
 
-**Orders** (talking to them): wait here (they stand guard where they are), come on (they follow
-again), or go their own way (dismissed). A follower who falls is gone.
+**Orders** (talking to them; or from the party, docs/GAME.md *The party*: their icon's wheel, or
+the party menu, the same for the creatures by magic at their side, host.js `#orderUnit`, an
+`order` command): wait here (they stand guard where they are), come on (they follow again), go for
+whoever their leader's set on (the `assist` order: after them till they're down, then following
+again; refused, "untargeted", with no one set on), or go their own way (dismissed). A follower
+who falls is gone.
 
 **Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
 `save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The

@@ -5,7 +5,8 @@ import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, random
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
-import { messagePlace, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
+import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
+import { memberKind, timeLeft } from "../client/js/app/partypanel.js";
 import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -771,14 +772,14 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const enemy = { n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" };
         const self = [{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" }];
 
-        assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], provoke: [{ n: "fight" }] });
+        assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], provoke: [{ n: "fight" }], unit: [{ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" }] });
         assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"], version: 2 });
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
-            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order) || EMOTES[action.emote], id);
+            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order) || EMOTES[action.emote] || ["assist", "follow", "wait", "dismiss"].includes(action.unit), id);
             assert.equal(typeof action.label, "string");
-            assert.ok(["self", "any", "friend", "enemy", "provoke"].includes(action.on), id);
+            assert.ok(["self", "any", "friend", "enemy", "provoke", "unit"].includes(action.on), id);
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
         }
 
@@ -791,6 +792,11 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal(SPELLS.vigor.target, "any", "healing: on anyone");
         assert.equal(SPELLS.burn.target, "enemy");
         assert.equal(SPELLS.stun.target, "enemy");
+
+        // (What one of the party's told, on the wheel held on them: never set by the player, nor a quick action)
+        assert.deepEqual(actionOf("unit:assist"), { label: "Attack my target", unit: "assist", on: "unit" });
+        assert.ok(!assignable("self", {}).some((key) => key.startsWith("unit:")) && !assignable("quick", {}).some((key) => key.startsWith("unit:")));
+        assert.deepEqual(readWheels({ quick: ["unit:wait", null, null, null] }).quick, [null, null, null, null]);
 
         // (Every emote on the player's own wheel, by its name)
         for (const [name, { label }] of Object.entries(EMOTES)) {
@@ -950,6 +956,33 @@ describe("the bars over the others (hud.js)", () => {
         ];
 
         assert.equal(messagePlace(places, crowd, size), 4);
+    });
+
+    it("fits the party's icons down the left side: full size while they fit, shrunk to fit, then as many as fit at their least with a \"+N\" chip for the rest", () => {
+        const { most, least, gap } = PARTY_ICON;
+
+        assert.deepEqual({ ...PARTY_ICON }, { most: 44, least: 30, gap: 6, margin: 16 });
+        assert.deepEqual(partyFit(0, 300), { size: most, shown: 0, more: 0 }, "no one");
+        assert.deepEqual(partyFit(3, 300), { size: most, shown: 3, more: 0 }, "room to spare: full size");
+
+        // (Five in 200 pixels: (200 - 4 gaps) / 5 = 35 each)
+        assert.deepEqual(partyFit(5, 200), { size: 35, shown: 5, more: 0 }, "shrunk to fit");
+        assert.ok(5 * 35 + 4 * gap <= 200);
+
+        // (Eight in 200: too many even at 30; 5 fit at 30 with their gaps, so 4 and the chip)
+        assert.deepEqual(partyFit(8, 200), { size: least, shown: 4, more: 4 }, "the rest on a chip");
+        assert.ok(5 * least + 4 * gap <= 200 && 6 * least + 5 * gap > 200);
+        assert.deepEqual(partyFit(3, 10), { size: least, shown: 0, more: 3 }, "no room: all on the chip");
+    });
+
+    it("says what each of the party is in the party menu: a hired adventurer by calling, a creature called or raised by name with its time left", () => {
+        assert.equal(timeLeft(245000), "4:05");
+        assert.equal(timeLeft(400), "0:01", "(rounded up: not 0:00 while it's there)");
+        assert.equal(timeLeft(-5), "0:00");
+        assert.equal(memberKind({ kind: "adventurer", calling: "warrior" }), "Hired warrior");
+        assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
+        assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");
+        assert.equal(memberKind({ kind: "unit" }), "With you");
     });
 
     it("draws a bar full size near the player's character, then smaller and fainter evenly with the distance, gone at the edge of sight", () => {

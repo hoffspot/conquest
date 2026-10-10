@@ -490,6 +490,31 @@ export const ICONS = Object.freeze({
         <path d="M-12,14 C-12,-2 -4,-10 8,-10" fill="none" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>
         <path d="M5,-17 L15,-10 L5,-3 Z" fill="#f2e6cf"/>`,
 
+    // What one of the player's party is told (core/host.js #orderUnit): go for whoever the player's
+    // set on, a sword pointed at a red target mark; follow, footsteps after an arrow; wait here, a
+    // raised hand; go, an arrow out of the circle
+    "unit:assist": `
+        <circle r="20" fill="#7a1a14" opacity="0.45"/>
+        <g fill="none" stroke="#ff5a3c" stroke-width="2.4">
+            <circle cx="6" cy="-6" r="9"/>
+            <path d="M6,-19 v6 M6,1 v6 M-7,-6 h6 M13,-6 h6" stroke-linecap="round"/>
+        </g>
+        <g transform="translate(-6 7) rotate(45) scale(0.62)">${SWORD}</g>`,
+    "unit:follow": `
+        <circle r="20" fill="#1f5a2c" opacity="0.45"/>
+        ${ARROW("M0,-2 L0,-15", "M-6,-12 L0,-20 L6,-12 Z")}
+        <g fill="#f2e6cf">
+            <ellipse cx="-6" cy="5" rx="3" ry="4.6"/><circle cx="-6" cy="-1.6" r="1.3"/>
+            <ellipse cx="6" cy="13" rx="3" ry="4.6"/><circle cx="6" cy="6.4" r="1.3"/>
+        </g>`,
+    "unit:wait": `
+        <circle r="20" fill="#1c3a5a" opacity="0.5"/>
+        <g transform="translate(0 2) scale(0.92)">${OPEN_HAND}</g>`,
+    "unit:dismiss": `
+        <circle r="20" fill="#3a3530" opacity="0.5"/>
+        <path d="M2,-13 A13,13 0 1 0 2,13" fill="none" stroke="#f2e6cf" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="4 3"/>
+        ${ARROW("M-4,0 L13,0", "M10,-6 L19,0 L10,6 Z")}`,
+
     // Two arrows chasing each other round: the wheel turned to its other side
     flip: `
         <circle r="19" fill="#f2e6cf" opacity="0.12"/>

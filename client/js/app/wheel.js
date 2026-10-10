@@ -47,11 +47,12 @@ const ON = Object.freeze({ enemy: "enemy", any: "any", friend: "friend" });
 
 /**
  * What each action does: a spell (core/spells.js: each once they know it), an ability
- * (core/progress.js ABILITIES: learnt as the skills grow), an order (core/host.js command), or an
- * emote ("emote:" and its name: core/emotes.js, shown to everyone they play with); its label;
- * and whose wheel it goes on (`on`: the player's own ("self"), an enemy's, "any": either, as
- * healing, which can be cast on anyone, or "friend": the player's own, cast on them or on a friend
- * held on).
+ * (core/progress.js ABILITIES: learnt as the skills grow), an order (core/host.js command), an
+ * emote ("emote:" and its name: core/emotes.js, shown to everyone they play with), or what one of
+ * their party's told (`unit`: "unit:" and the order); its label; and whose wheel it goes on (`on`:
+ * the player's own ("self"), an enemy's, "any": either, as healing, which can be cast on anyone,
+ * "friend": the player's own, cast on them or on a friend held on, or "unit": one of their party's,
+ * never set by the player).
  */
 export const ACTIONS = Object.freeze({
     ...Object.fromEntries(Object.entries(SPELLS).map(([id, { label, target }]) => [id, { label, spell: id, learnt: id, on: ON[target] ?? "self" }])),
@@ -61,6 +62,11 @@ export const ACTIONS = Object.freeze({
     attack: { label: "Attack", order: "engage", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
     camp: { label: "Make camp", order: "camp", on: "self" },
+    // (What one of the player's party is told, on the wheel held on them: core/host.js #orderUnit)
+    "unit:assist": { label: "Attack my target", unit: "assist", on: "unit" },
+    "unit:follow": { label: "Follow me", unit: "follow", on: "unit" },
+    "unit:wait": { label: "Wait here", unit: "wait", on: "unit" },
+    "unit:dismiss": { label: "Dismiss", unit: "dismiss", on: "unit" },
     ...Object.fromEntries(Object.entries(EMOTES).map(([name, { label }]) => [`emote:${name}`, { label, emote: name, on: "self" }])),
 });
 
@@ -119,6 +125,9 @@ export const WHEELS = Object.freeze({
     self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" })]),
     enemy: Object.freeze([Object.freeze({ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }), Object.freeze({})]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
+    // (One of the player's party's: what to tell them, then, turned over, the player's own healing
+    // and wards (their own wheel's first side) to cast on them)
+    unit: Object.freeze([Object.freeze({ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" })]),
 });
 
 /** The wheels a player sets themselves. */
@@ -160,7 +169,8 @@ function withAttack(sides) {
 export const QUICK = Object.freeze(["vigor", "stun", "burn", "item:potion"]);
 
 // Whether an action can be a quick action: anything a wheel's slice can hold but a fight picked
-const quickable = (action) => Boolean(action) && action.on !== "provoke";
+// (or what one of the party's told)
+const quickable = (action) => Boolean(action) && action.on !== "provoke" && action.on !== "unit";
 
 /**
  * Whether a quick action (an ACTIONS key, or "item:" and a thing to use) is used on the enemy the
