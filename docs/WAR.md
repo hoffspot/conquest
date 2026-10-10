@@ -2195,7 +2195,7 @@ wood.
 snapshot (`WAR_VERSION` 9; a war kept before has the first of its stockade's order broken, as many
 as its breaches). The storms under way are in the host's. What two games share changed
 (`NET_VERSION` 94): the storms, and those hacking at a palisade left to it; and again (`NET_VERSION`
-95): its walkway and stairs raised, walked and fought from (the world's squares, the navigation
+96): its walkway and stairs raised, walked and fought from (the world's squares, the navigation
 mesh, sight, blows and cover).
 
 ### Playing together (M11)
