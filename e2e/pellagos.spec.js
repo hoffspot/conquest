@@ -2441,20 +2441,49 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
     await playing(page, "/?play&seed=1");
 
     const bar = page.locator("#playerplate .bar.stamina");
-    const order = () => page.evaluate(() => window.pellagos.game.battle.actor("player").order);
     const spot = await spotNorth(page, 4);
 
     await expect(bar).toBeHidden();
 
-    // A click walks, and a shift-click (not so soon as to be a double click) runs
+    // (The orders to go somewhere as the clicks give them: input reaching the page seconds apart
+    // on a slow machine, a walk or a run can be over before the player's order is looked at)
+    await page.evaluate(() => {
+        const { host } = window.pellagos.game;
+        const command = host.command;
+
+        window.moves = [];
+        window.unwatch = () => {
+            host.command = command;
+        };
+        host.command = function (id, order) {
+            if (order.type === "move") {
+                window.moves.push(order);
+            }
+
+            return command.call(this, id, order);
+        };
+    });
+
+    const moves = () => page.evaluate(() => window.moves.map((move) => move.run));
+
+    // A click walks, and a shift-click (not so soon as to be a double click) runs: stopped first,
+    // and clicked 4 m ahead of where they stopped (walking on, they could be under the pointer by
+    // then, and a click on them as they walk stops them)
     await page.mouse.click(spot.x, spot.y);
-    expect((await order()).run).toBe(false);
-    await page.waitForTimeout(500);
-    await page.keyboard.down("Shift");
-    await page.mouse.click(spot.x, spot.y);
-    await page.keyboard.up("Shift");
-    expect((await order()).run).toBe(true);
+    expect(await moves()).toEqual([false]);
     await page.evaluate(() => window.pellagos.game.battle.command("player", { type: "stop" }));
+    await page.waitForTimeout(500);
+
+    const ahead = await spotNorth(page, 4);
+
+    await page.keyboard.down("Shift");
+    await page.mouse.click(ahead.x, ahead.y);
+    await page.keyboard.up("Shift");
+    expect(await moves()).toEqual([false, true]);
+    await page.evaluate(() => {
+        window.unwatch();
+        window.pellagos.game.battle.command("player", { type: "stop" });
+    });
 
     // A spot a few metres north of the player, double-clicked
     await doubleTap(page, spot);
