@@ -50,10 +50,11 @@ import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
 import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
+import { brokenOf } from "../core/war/stockade.js";
 import { Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -494,7 +495,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1369,9 +1370,10 @@ export class Game {
             return yield* this.#addingWagon(actor);
         }
 
-        // A fortification (its stone drawn by world/forts3d.js): standing in for it in the battle
-        if (actor.kind === "fort") {
-            return this.#register(actor.id, new FortAvatar(this.host.fortsOut.get(actor.id)?.kind ?? "tower"), { wounds: false });
+        // A fortification (its stone drawn by world/forts3d.js): standing in for it in the battle; and
+        // a camp's stakes being hacked at (drawn by world/stockades3d.js) the same way
+        if (actor.kind === "fort" || actor.kind === "stakes") {
+            return this.#register(actor.id, new FortAvatar(actor.kind === "stakes" ? "stakes" : (this.host.fortsOut.get(actor.id)?.kind ?? "tower")), { wounds: false });
         }
 
         // The orc
@@ -2215,8 +2217,8 @@ export class Game {
                 [x, z] = this.predict.at(actor, x, z, this.clock * 1000);
             }
 
-            // (A fortification: only where it stands, on the ground there)
-            if (actor.kind === "fort") {
+            // (A fortification, or a camp's stakes: only where it stands, on the ground there)
+            if (actor.kind === "fort" || actor.kind === "stakes") {
                 avatar.update(dt, ox + x, oz + z, actor.facing);
                 avatar.object.position.y = this.#groundOn(actor.map, ox + x, oz + z);
                 continue;
@@ -5609,7 +5611,7 @@ export class Game {
             me.map === "town"
                 ? war.camps
                       .filter((camp) => camp.built !== null)
-                      .map((camp) => ({ id: camp.id, people: camp.realm, stockade: war.stockade(camp.id), breaches: camp.breaches ?? 0, mendable: affords(war.realm(camp.realm)?.stores, PALISADE.stakes) }))
+                      .map((camp) => ({ id: camp.id, people: camp.realm, stockade: war.stockade(camp.id), broken: brokenOf(camp), mendable: affords(war.realm(camp.realm)?.stores, PALISADE.stakes) }))
                 : [];
 
         this.stockades.sync(stockades, [ox + me.x, oz + me.y], [ox, oz]);
@@ -5626,6 +5628,86 @@ export class Game {
             this.hud.message(by && by === this.self?.realm ? `The ${name} is razed!` : `The ${name} has fallen!`, 3);
             this.sound?.play("newsHeard");
             this.fortsClock = 0;
+        }
+    }
+
+    // A camp's stockade stormed near a player (host.js STORM), and a force routed in a fight there:
+    // the stakes being hacked at stood in for (#mirror), and the crash of them coming down fetched
+    // for when they do; a breach heard and seen, its dust thrown up (its stakes drawn down:
+    // world/stockades3d.js); and each said, if it's near the player, or it's their people's camp
+    // or force, or their people storming it or routing it
+    #storm(event) {
+        const mine = this.self?.realm;
+        const me = this.battle.actor(this.me);
+        const near = me?.map === "town" && Boolean(event.at) && Math.hypot(me.x - event.at[0], me.y - event.at[1]) <= STORM.near * 2;
+        const adjective = (realm) => ADJECTIVES[realm] ?? realm;
+        const say = (text, seconds = 3, heard = false) => {
+            this.hud.message(text, seconds);
+
+            if (heard) {
+                this.sound?.play("newsHeard");
+            }
+        };
+
+        if (event.type === "hacking") {
+            this.#mirror();
+            this.sound?.want(["chop", "treantDeath"]);
+
+            if (event.people === mine) {
+                say(`The ${peopleOf(event.by)} are hacking at our camp's palisade!`);
+            } else if (event.by === mine) {
+                say(`We're hacking at the ${adjective(event.people)} camp's palisade: break it open!`);
+            }
+
+            return;
+        }
+
+        if (event.type === "breach") {
+            const [ox, oz] = this.originOf("town");
+            const [x, z] = [ox + event.at[0], oz + event.at[1]];
+            const at = new THREE.Vector3(x, this.#groundOn("town", x, z) + 0.6, z);
+
+            this.#mirror();
+            this.sound?.play("treantDeath", { at });
+
+            for (let k = 0; k < 3; k++) {
+                this.effects?.burst("dust", at);
+            }
+
+            if (event.people === mine) {
+                say("Our camp's palisade is breached!", 3, true);
+            } else if (event.by === mine) {
+                say(`The ${adjective(event.people)} palisade is breached: we're through!`, 3, true);
+            } else if (near) {
+                say(`The ${adjective(event.people)} camp's palisade is breached.`);
+            }
+
+            return;
+        }
+
+        if (event.type === "stormed") {
+            const Them = event.by ? peopleOf(event.by) : "enemy";
+
+            if (event.people === mine) {
+                say(event.held ? `Our camp holds: the ${Them} are beaten off!` : `Our camp has fallen to the ${Them}, and burns!`, 4, true);
+            } else if (event.by === mine) {
+                say(event.held ? `We're beaten off from the ${adjective(event.people)} camp!` : `The ${adjective(event.people)} camp is carried, and burns: their army runs!`, 4, true);
+            } else if (near) {
+                say(event.held ? `The ${adjective(event.people)} camp holds: the ${Them} are beaten off.` : `The ${Them} have carried the ${adjective(event.people)} camp, and burn it.`, 4);
+            }
+
+            return;
+        }
+
+        // (Routed: `against` broken by `realm`)
+        const kind = event.kind === "reserve" ? "reserve" : "army";
+
+        if (event.against === mine) {
+            say(`Our ${kind} breaks and runs!`, 4, true);
+        } else if (event.realm === mine) {
+            say(`The ${adjective(event.against)} ${kind} breaks and runs!`, 4, true);
+        } else if (near) {
+            say(`The ${adjective(event.against)} ${kind} breaks before the ${peopleOf(event.realm)}, and runs.`, 4);
         }
     }
 
@@ -6128,6 +6210,13 @@ export class Game {
                 case "death": {
                     const killer = event.by ? this.avatars.get(event.by) : null;
 
+                    // (A camp's stakes hacked through: heard and seen coming down as its breach
+                    // is: #storm)
+                    if (battle.actor(event.id)?.kind === "stakes") {
+                        this.onDeath(event);
+                        break;
+                    }
+
                     // (Falling as they do, they hit the ground so long after: `lands`)
                     avatar.lands = avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 }) ?? FALL_LANDS;
                     avatar.deadFor = 0;
@@ -6440,6 +6529,11 @@ export class Game {
 
                 break;
             }
+            case "hacking":
+            case "breach":
+            case "stormed":
+                this.#storm(event);
+                break;
             case "stockades":
                 // (A camp's stockade gone up or come down, breached or mended: the ground under it
                 // and round it drawn again, as the world's squares were made again: core/
@@ -6457,6 +6551,12 @@ export class Game {
                 }
 
                 this.#supplyCut(event.event);
+
+                // (A force routed in a fight played out near a player: told, as a storm is)
+                if (event.event.type === "battle" && event.event.routed) {
+                    this.#storm({ ...event.event, type: "routed" });
+                }
+
                 break;
             case "fortOut":
                 // (A fortification near the player stood up in the battle: stood in for, its bar over it)
@@ -6788,10 +6888,15 @@ export class Game {
             this.sound?.voice(hurt, "hurt", victim.object.position);
             victim.cried = this.clock + CALLS.hurt;
         }
+        // (A camp's stakes hacked at: a blade chopping into the wood)
+        const stakes = actor?.kind === "stakes" && !event.spell;
+
         // (Armour heard under a weapon's or a fist's blow, not a spell's, whatever it feels like;
         // a spell's blow heard as it lands, its own, unless it's the fire it left on the ground or
         // it's turned back: #spellLanded)
-        if (!(event.spell && !event.ground && !event.reflected && spellSounds(event.spell).land)) {
+        if (stakes) {
+            this.sound?.play("chop", { at: victim.object.position });
+        } else if (!(event.spell && !event.ground && !event.reflected && spellSounds(event.spell).land)) {
             this.sound?.hit(event.reaction, victim.object.position, event.spell ? null : armourOf(victim.character));
         }
 
@@ -6814,7 +6919,18 @@ export class Game {
         const direction = attacker ? at.clone().sub(attacker.point(0.7)).setY(0).normalize() : null;
         const kind = KINDS[event.reaction] ?? KINDS.strike;
 
-        effects.impact(reaction?.effect ?? "sparks", at, direction, event.projectile ? effects.lookOf(event.projectile) : null);
+        // (On a camp's stakes, where it bites into them before whoever struck: splinters flying)
+        if (stakes && attacker && actor.footprint) {
+            const [x0, y0, x1, y1] = actor.footprint;
+            const by = battle.actor(event.by);
+            const [ox, oz] = this.originOf(actor.map);
+            const [x, z] = [ox + Math.min(Math.max(by.x, x0), x1 + 1), oz + Math.min(Math.max(by.y, y0), y1 + 1)];
+
+            at.set(x, this.#groundOn(actor.map, x, z) + 1.1, z);
+            effects.burst("woodChips", at, direction);
+        } else {
+            effects.impact(reaction?.effect ?? "sparks", at, direction, event.projectile ? effects.lookOf(event.projectile) : null);
+        }
 
         // Blood sprays from it, gushing from a wound (and a killing blow), with a splash on the
         // ground beyond (not from a creature that doesn't bleed red); burns smoke
@@ -7168,7 +7284,7 @@ export class Game {
 
     // Does a character bleed red (not a skeleton, a slime, a spider, a wisp...)?
     #bleeds(actor) {
-        return actor?.kind !== "fort" && (actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red");
+        return actor?.kind !== "fort" && actor?.kind !== "stakes" && (actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red");
     }
 
     // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse

@@ -39,8 +39,8 @@ import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
-import { STOCKADE } from "./war/stockade.js";
-import { CAMP as ARMY_CAMP } from "./war/armies.js";
+import { brokenOf, SIDES, STOCKADE } from "./war/stockade.js";
+import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
@@ -156,6 +156,54 @@ export const WAGON_NEAR = Object.freeze({ near: 150, far: 300, ahead: 16, worth:
  * marching on it till their fronts are `close`, then closing with it as a line does.
  */
 export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close: 20, most: 80, pace: 1.4, past: 8 });
+
+/**
+ * A storm near a player (docs/WAR.md *A storm near a player*): an army's camp held and stormed in
+ * the world. Its army, met at it, mans its stockade once an enemy's force met is within
+ * ARMY_NEAR.fight of it, or a player at odds with it within `near` metres, and stands down `calm`
+ * ms after the last of them; an enemy's force met within `near` metres of it storms it.
+ * - Those holding it stand at its gates and breaches, each opening's share of them the more the
+ *   nearer it is to their foes (as 1 / (`spread` + metres)³): its shield line and two-handers in
+ *   ranks across it, the first just within its wall and the rest `depth` metres behind, going no
+ *   further than `hold` metres after anyone outside it (any within it, as far as it takes); its
+ *   archers and casters `back` metres within it, across it; its healers where they stood.
+ * - Those storming it make for `muster` metres out from the opening nearest them, their archers
+ *   and casters standing there; the rest make for its parade ground, after anyone within `reach`
+ *   metres of it on the way. A share of their shield line and two-handers (`party`, `least` to
+ *   `most` of them) hack down the section of its wall nearest them that's no nearer an opening
+ *   than `clear` metres (its stakes, KINDS.stakes); another `again` ms after one falls.
+ * - Either side's beaten, and the storm's over, once it's down to ARMY.rout of those it went in
+ *   with and outnumbered, in the war's numbers (and a force met in the field, likewise); or those
+ *   storming it beaten off once it's come to nothing, none on either side falling and no stakes
+ *   hacked at for `stall` ms. Beaten, a line runs (`run` metres a second) while it's getting away
+ *   (war.js fleeing).
+ */
+export const STORM = Object.freeze({ near: 60, calm: 20000, spread: 10, depth: 1.6, hold: 3, back: 7, muster: 14, reach: 40, party: 0.2, least: 2, most: 6, clear: 8, again: 45000, run: 3, stall: 60000 });
+
+// The forces that fight out in the field (and storm camps): the armies and reserves
+const FIELDED = Object.freeze(["army", "reserve"]);
+
+// The nearest of some things with an `at` ([x, y] metres) to a point (of two as near, the first)
+const nearestOf = (things, [x, y]) => things.reduce((best, each) => (hypot(each.at[0] - x, each.at[1] - y) < hypot(best.at[0] - x, best.at[1] - y) ? each : best));
+
+// `count` shared out as near as whole ones go to `weights` (the largest remainders rounded up; of
+// two as large, the first)
+function shares(count, weights) {
+    const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+    const exact = weights.map((weight) => (count * weight) / total);
+    const whole = exact.map(Math.floor);
+    let left = count - whole.reduce((sum, each) => sum + each, 0);
+
+    for (const k of exact.map((each, k) => [each - whole[k], k]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map(([, k]) => k)) {
+        if (left-- <= 0) {
+            break;
+        }
+
+        whole[k]++;
+    }
+
+    return whole;
+}
 
 /**
  * A fortification near a player (docs/WAR.md *Fortifications*): stood up in the battle once a
@@ -658,6 +706,16 @@ export class Host {
          * `soldiers`.
          */
         this.armies = new Map();
+
+        /**
+         * The camps' stockades held near a player (STORM), by the camp's id: { army (its army met
+         * there, or null), alarm (when an enemy was last near it: battle ms), attackers (the forces
+         * met storming it now: ids), by (all that have stormed it), went ({ by, of }: how many
+         * were storming it and holding it, in the war, as it began; null till it has), breaches
+         * (hacked open in it), section ({ id, index }: the stakes being hacked down, or null),
+         * next (when the next may be: battle ms), posted (how its holders were last posted) }.
+         */
+        this.storms = new Map();
 
         /**
          * The envoys met on the road near a player (by the envoy's id): { people, to (whose seat
@@ -1509,6 +1567,11 @@ export class Host {
                 this.#bring(event.id);
             }
 
+            // A section of a camp's palisade hacked down: broken open (#hacked)
+            if (event.type === "death" && this.battle.actor(event.id)?.kind === "stakes") {
+                this.#hacked(event.id, event.by);
+            }
+
             // A fortification struck: the less of it stands in the war (war.strike), razed at nothing
             if ((event.type === "hit" || event.type === "death") && this.fortsOut.has(event.id)) {
                 const [struck, fort] = [this.battle.actor(event.id), this.war?.fort(event.id)];
@@ -1704,6 +1767,7 @@ export class Host {
             townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
+            storms: [...this.storms.entries()],
             supplies: [...this.supplies.entries()],
             skirmishers: [...this.skirmishers.entries()],
             leaders: [...this.leaders.entries()],
@@ -1825,6 +1889,7 @@ export class Host {
         );
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.armies = new Map(structuredClone(snapshot.armies ?? []));
+        host.storms = new Map(structuredClone(snapshot.storms ?? []));
         host.supplies = new Map(structuredClone(snapshot.supplies ?? []));
         host.skirmishers = new Map(structuredClone(snapshot.skirmishers ?? []));
         host.leaders = new Map(structuredClone(snapshot.leaders ?? []));
@@ -3118,6 +3183,7 @@ export class Host {
         }
 
         this.#watchArmies();
+        this.#storms();
 
         // The envoys near a player met on the road, and let go once they're far (or gone, and far)
         for (const [id, met] of [...this.envoys]) {
@@ -3433,7 +3499,7 @@ export class Host {
         const counts = {};
         const ids = [];
 
-        this.battle.formation(formation, { anchor, facing, to: [...to], speed: ARMY_NEAR.pace, advance: true });
+        this.battle.formation(formation, { anchor, facing, to: [...to], speed: ARMY_NEAR.pace, advance: !parade });
 
         roles.forEach((role, k) => {
             let square;
@@ -3459,11 +3525,17 @@ export class Host {
     // point on it as the war has it (reinforcements, for theirs where it is now: #joining), the war
     // told where it's got to (war.move); reinforcements there, joining it (#joined); turned on an
     // enemy's met within ARMY_NEAR.fight (marching on it, and once their fronts are
-    // ARMY_NEAR.close, closing with it as a line does: battle.js ADVANCE), and on its way again once
-    // there's none; as many of it stood up as the war has of it (those it's lost elsewhere, or
-    // deserted, let go from the back; those joined it stood up at the back)
+    // ARMY_NEAR.close, closing with it as a line does: battle.js ADVANCE; on one holding its camp,
+    // for the opening of its stockade nearest: STORM), and on its way again once there's none; an
+    // army at its camp holding it, not going out to anyone; one storming a camp where its storm
+    // has it (#storms); beaten, running while it gets away, none turning on it; as many of it
+    // stood up as the war has of it (those it's lost elsewhere, or deserted, let go from the back;
+    // those joined it stood up at the back). One beaten in the field there, down to ARMY.rout of
+    // what it went in with and outnumbered, the war's told (war.routed)
     #watchArmies() {
         const war = this.war;
+        const storming = new Set([...this.storms.values()].flatMap(({ attackers }) => attackers));
+        const holding = new Set([...this.storms.values()].map(({ army }) => army).filter(Boolean));
 
         for (const [id, met] of [...this.armies]) {
             const force = war.force(id);
@@ -3486,16 +3558,41 @@ export class Host {
                 continue;
             }
 
-            // (An enemy's met within reach: on it; within sight of it, closing with it)
+            // (Beaten and getting away: running, its line broken, for as long as it is)
+            const fleeing = war.fleeing(id);
+
+            if (formation.broken !== fleeing) {
+                this.battle.formation(met.formation, { broken: fleeing, speed: fleeing ? STORM.run : ARMY_NEAR.pace });
+            }
+
+            // (Storming a camp: where its storm has it)
+            if (storming.has(id) && !fleeing) {
+                this.#keepUpArmy(force, met);
+                continue;
+            }
+
+            // (An enemy's met within reach, not beaten and getting away: on it; within sight of
+            // it, closing with it; one holding its camp, making for its stockade's nearest opening)
             const foe = [...this.armies]
-                .filter(([other]) => other !== id && war.hostile(war.force(other)?.realm, force.realm))
-                .map(([, other]) => this.battle.formations[other.formation]?.anchor)
-                .filter(Boolean)
-                .map((at) => ({ at, distance: hypot(at[0] - met.at[0], at[1] - met.at[1]) }))
+                .filter(([other]) => other !== id && war.hostile(war.force(other)?.realm, force.realm) && !war.fleeing(other))
+                .map(([other, theirs]) => ({ id: other, at: this.battle.formations[theirs.formation]?.anchor }))
+                .filter(({ at }) => at)
+                .map((each) => ({ ...each, distance: hypot(each.at[0] - met.at[0], each.at[1] - met.at[1]) }))
                 .filter(({ distance }) => distance <= ARMY_NEAR.fight)
                 .sort((a, b) => a.distance - b.distance)[0];
             const way = force.kind === "reinforcement" ? this.#joining(force) : force.leg < force.path.length - 1 ? this.#standFor(force, force.path[force.leg + 1]) : null;
-            const to = foe ? (foe.distance <= ARMY_NEAR.close ? null : foe.at) : way;
+            const home = force.kind === "army" && this.#paradeOf(force, met.at) !== null;
+            const camp = foe && !fleeing && !home ? this.#heldBy(foe.id) : null;
+            const to = fleeing || home || !foe ? way : camp ? this.#musterFor(camp, met.at) : foe.distance <= ARMY_NEAR.close ? null : foe.at;
+
+            if (formation.advance === home) {
+                this.battle.formation(met.formation, { advance: !home });
+            }
+
+            // (Beaten in the field: told to the war)
+            if (!fleeing && !holding.has(id) && FIELDED.includes(force.kind)) {
+                this.#routed(id, force, met, foe);
+            }
 
             if (String(to) !== String(formation.to)) {
                 this.battle.formation(met.formation, { to: to ? [...to] : null });
@@ -3526,6 +3623,448 @@ export class Host {
     // camp's middle (#paradeOf), not its fire among the tents; else the point
     #standFor(force, point) {
         return this.#paradeOf(force, point)?.at ?? point;
+    }
+
+    // The army holding its camp in the world that a force met is (by id), if it is: its camp
+    // (war.js's), at whose stockade it's met; else null
+    #heldBy(id) {
+        const force = this.war.force(id);
+        const met = this.armies.get(id);
+
+        return force?.kind === "army" && met && this.#paradeOf(force, met.at) ? this.war.camp(force.camp) : null;
+    }
+
+    // A camp's stockade's openings, its gates and its breaches: { at (the middle of the gap, on the
+    // line of its wall), out (the way out, [dx, dy]), along (across it, [dx, dy]), width (squares),
+    // key } in metres
+    #openings(camp) {
+        const stockade = this.war.stockade(camp.id);
+        const opening = (at, side, width, key) => {
+            const out = SIDES[side];
+
+            return { at: [...at], out, along: [out[1], -out[0]], width, key };
+        };
+
+        return [
+            ...stockade.gates.map((gate, k) => opening(gate.at, gate.side, gate.squares.length, `gate-${k}`)),
+            ...brokenOf(camp).map((k) => opening(stockade.sections[k].at, stockade.sections[k].side, stockade.sections[k].wall.length, `section-${k}`)),
+        ];
+    }
+
+    // Where those storming a camp from `from` ([x, y] metres) gather: STORM.muster metres out from
+    // the opening of its stockade nearest them
+    #musterFor(camp, from) {
+        const { at, out } = nearestOf(this.#openings(camp), from);
+
+        return [at[0] + out[0] * STORM.muster, at[1] + out[1] * STORM.muster];
+    }
+
+    // An army or reserve met fighting in the field (not at a camp), beaten once it's down to
+    // ARMY.rout of what it went in with and outnumbered by the enemy's met near it, in the war's
+    // numbers: the war told (war.routed), by whoever beat it
+    #routed(id, force, met, foe) {
+        const war = this.war;
+        const now = this.battle.time;
+
+        if (foe) {
+            met.went ??= force.size;
+            met.fought = now;
+        } else if (met.went !== undefined && met.went !== null && now - (met.fought ?? 0) > STORM.calm) {
+            met.went = null;
+        }
+
+        if (!foe || !met.went) {
+            return;
+        }
+
+        const theirs = [...this.armies.keys()]
+            .filter((other) => war.hostile(war.force(other)?.realm, force.realm) && !war.fleeing(other) && hypot(this.armies.get(other).at[0] - met.at[0], this.armies.get(other).at[1] - met.at[1]) <= ARMY_NEAR.fight)
+            .reduce((sum, other) => sum + war.force(other).size, 0);
+
+        if (force.size <= ARMY.rout * met.went && force.size < theirs) {
+            const victor = war.force(foe.id);
+            const theirsMet = this.armies.get(foe.id);
+
+            war.routed(id, { by: victor.realm, killed: met.went - force.size, lost: Math.max(0, (theirsMet?.went ?? victor.size) - victor.size) });
+            met.went = null;
+        }
+    }
+
+    // The camps' stockades near a player held and stormed (STORM): manned once an enemy's near,
+    // stood down once none has been a while; those storming it set at it; its stakes hacked down;
+    // and the storm over once either side's beaten (#stormEnded), or those storming it gone or
+    // let go (stood down, nothing told)
+    #storms() {
+        const war = this.war;
+        const now = this.battle.time;
+
+        for (const id of [...this.storms.keys()]) {
+            if (!war.camp(id)) {
+                this.#stormOver(id);
+            }
+        }
+
+        for (const camp of war.camps) {
+            if (camp.built === null) {
+                continue;
+            }
+
+            const stockade = war.stockade(camp.id);
+            const middle = [stockade.middle[0] + 0.5, stockade.middle[1] + 0.5];
+            const within = (at, reach) => hypot(at[0] - middle[0], at[1] - middle[1]) <= reach;
+            const army = [...this.armies.keys()].find((each) => war.force(each)?.camp === camp.id && this.#heldBy(each) === camp) ?? null;
+            let storm = this.storms.get(camp.id);
+            // (Its army in a storm under way put down: the storm's to end, carried, below)
+            const fallen = Boolean(storm?.went && storm.army && !(war.force(storm.army)?.size > 0));
+
+            // (None of it in the world)
+            if (!army && !this.camps.has(camp.id) && !fallen) {
+                if (storm) {
+                    this.#stormOver(camp.id);
+                }
+
+                continue;
+            }
+
+            const foes = [...this.armies.keys()].filter((each) => {
+                const force = war.force(each);
+
+                return FIELDED.includes(force?.kind) && force.size > 0 && war.hostile(force.realm, camp.realm) && !war.fleeing(each) && within(this.armies.get(each).at, ARMY_NEAR.fight);
+            });
+            const players = [...this.players.values()].filter(({ id: each, realm }) => {
+                const actor = this.battle.actor(each);
+
+                return actor && !actor.dead && actor.map === "town" && realm && war.hostile(realm, camp.realm) && within([actor.x, actor.y], STORM.near);
+            });
+
+            if (!storm && !foes.length && !players.length) {
+                continue;
+            }
+
+            storm ??= this.storms.set(camp.id, { army, alarm: now, attackers: [], by: [], went: null, breaches: 0, section: null, next: 0, posted: "", stood: null }).get(camp.id);
+            storm.army = army ?? storm.army;
+
+            if (foes.length || players.length) {
+                storm.alarm = now;
+            }
+
+            // Those storming it: the enemy's met that come within STORM.near of it
+            for (const each of foes) {
+                if (!storm.attackers.includes(each) && within(this.armies.get(each).at, STORM.near)) {
+                    storm.attackers.push(each);
+                    storm.by.push(...(storm.by.includes(each) ? [] : [each]));
+
+                    if (storm.went) {
+                        storm.went.by += war.force(each).size;
+                    }
+                }
+            }
+
+            storm.attackers = storm.attackers.filter((each) => this.armies.has(each) && (war.force(each)?.size ?? 0) > 0 && !war.fleeing(each));
+
+            const holders = () => (storm.army ? (war.force(storm.army)?.size ?? 0) : 0) + (war.camp(camp.id)?.guard ?? 0);
+            const stormers = () => storm.by.reduce((sum, each) => sum + (war.force(each)?.size ?? 0), 0);
+
+            if (storm.attackers.length && !storm.went) {
+                storm.went = { by: stormers(), of: holders() };
+            }
+
+            // Over: those storming it gone (put down to the last: held), or beaten; or those
+            // holding it beaten
+            if (storm.went) {
+                const [by, of] = [stormers(), holders()];
+                const fell = { killed: Math.max(0, storm.went.of - of), lost: Math.max(0, storm.went.by - by) };
+
+                if (by <= 0 || (storm.attackers.length && by <= ARMY.rout * storm.went.by && by < of)) {
+                    this.#stormEnded(camp.id, true, fell);
+                    continue;
+                }
+
+                if (of <= 0 || (storm.attackers.length && of <= ARMY.rout * storm.went.of && of < by)) {
+                    this.#stormEnded(camp.id, false, fell);
+                    continue;
+                }
+
+                // (Come to nothing a while, none falling and no stakes hacked at: beaten off)
+                const stakes = storm.section ? (this.battle.actor(storm.section.id)?.hp ?? 0) : null;
+                const state = `${by}|${of}|${stakes}`;
+
+                if (storm.stood?.state !== state) {
+                    storm.stood = { state, since: now };
+                } else if (storm.attackers.length && now - storm.stood.since > STORM.stall) {
+                    this.#stormEnded(camp.id, true, fell);
+                    continue;
+                }
+
+                // (Those storming it gone off, or let go: no more of it, nothing told)
+                if (!storm.attackers.length) {
+                    this.#stormOver(camp.id);
+                    continue;
+                }
+            }
+
+            // (Quiet a while: stood down)
+            if (!storm.attackers.length && now - storm.alarm > STORM.calm) {
+                this.#stormOver(camp.id);
+                continue;
+            }
+
+            const toward = [...storm.attackers, ...foes].map((each) => this.armies.get(each).at)[0] ?? (players[0] && [this.battle.actor(players[0].id).x, this.battle.actor(players[0].id).y]) ?? null;
+
+            if (toward) {
+                this.#holdStockade(camp, storm, toward);
+            }
+
+            for (const each of storm.attackers) {
+                this.#storming(camp, storm, each);
+            }
+
+            this.#hack(camp, storm);
+        }
+    }
+
+    // A camp's army met there manning its stockade against an enemy near `toward` ([x, y] metres):
+    // its shield line and two-handers in ranks across its openings, its archers and casters behind
+    // them (STORM), each opening's share as near as it is; posted again only as its openings, the
+    // one nearest the enemy or its numbers change
+    #holdStockade(camp, storm, toward) {
+        const met = storm.army && this.armies.get(storm.army);
+
+        if (!met) {
+            return;
+        }
+
+        const openings = this.#openings(camp);
+        const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
+        const weights = openings.map(({ at }) => {
+            const away = STORM.spread + hypot(at[0] - toward[0], at[1] - toward[1]);
+
+            return 1 / (away * away * away);
+        });
+        const order = openings.map((_, k) => k).sort((a, b) => weights[b] - weights[a] || a - b);
+        const melee = soldiers.filter((actor) => ["front", "heavy"].includes(actor.formation.role));
+        const posted = `${openings.map(({ key }) => key)}|${shares(melee.length, weights)}|${soldiers.length}`;
+
+        if (posted === storm.posted) {
+            return;
+        }
+
+        storm.posted = posted;
+
+        // (Any within its stockade theirs to go after, as far as it takes)
+        const { box } = this.war.stockade(camp.id);
+        const holds = [box[0] + 1, box[1] + 1, box[2] - 1, box[3] - 1];
+
+        for (const actor of soldiers) {
+            actor.holds = holds;
+        }
+
+        const post = (actor, opening, depth, across, leash) => {
+            const { at, out, along } = opening;
+
+            actor.formation.post = [at[0] - out[0] * depth + along[0] * across, at[1] - out[1] * depth + along[1] * across];
+            actor.formation.facing = atan2(out[0], out[1]);
+            actor.leash = leash;
+        };
+
+        for (const [roles, place] of [
+            [["front", "heavy"], (actor, opening, k) => post(actor, opening, 1.2 + Math.floor(k / opening.width) * STORM.depth, (k % opening.width) - (opening.width - 1) / 2, STORM.hold)],
+            [["archer", "caster"], (actor, opening, k, count) => post(actor, opening, STORM.back, (k - (count - 1) / 2) * 1.5, ROLES[actor.formation.role].leash)],
+        ]) {
+            const left = soldiers.filter((actor) => roles.includes(actor.formation.role));
+            const counts = shares(left.length, weights);
+
+            for (const k of order) {
+                const opening = openings[k];
+                const taken = left.sort((a, b) => hypot(a.x - opening.at[0], a.y - opening.at[1]) - hypot(b.x - opening.at[0], b.y - opening.at[1]) || (a.id < b.id ? -1 : 1)).splice(0, counts[k]);
+
+                taken.forEach((actor, j) => place(actor, opening, j, taken.length));
+            }
+        }
+    }
+
+    // A force met storming a camp, set at it: its line gathering before the opening of its
+    // stockade nearest it, its archers and casters there, the rest making for its parade ground
+    // (those hacking at its wall at that: #hack); set again only as that opening or its numbers
+    // change
+    #storming(camp, storm, id) {
+        const met = this.armies.get(id);
+        const formation = this.battle.formations[met.formation];
+        const opening = nearestOf(this.#openings(camp), formation.anchor);
+        const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
+        const posted = `${opening.key}|${soldiers.length}|${storm.section?.id ?? ""}`;
+
+        if (met.storming === posted) {
+            return;
+        }
+
+        met.storming = posted;
+
+        const { at, out, along } = opening;
+        const muster = [at[0] + out[0] * STORM.muster, at[1] + out[1] * STORM.muster];
+        const inward = atan2(-out[0], -out[1]);
+        const parade = this.war.stockade(camp.id).parade.at;
+        const shooters = soldiers.filter((actor) => ["archer", "caster"].includes(actor.formation.role));
+        const rest = soldiers.filter((actor) => !shooters.includes(actor) && actor.siege !== storm.section?.id);
+
+        this.battle.formation(met.formation, { to: muster, advance: false });
+
+        shooters.forEach((actor, k) => {
+            const across = (k - (shooters.length - 1) / 2) * 1.5;
+
+            Object.assign(actor.formation, { post: [muster[0] + along[0] * across, muster[1] + along[1] * across], facing: inward });
+            actor.leash = ROLES[actor.formation.role].leash;
+        });
+
+        rest.forEach((actor, k) => {
+            const [across, back] = [(k % 7) - 3, Math.floor(k / 7)];
+
+            Object.assign(actor.formation, { post: [parade[0] + along[0] * across * 1.5 - out[0] * back, parade[1] + along[1] * across * 1.5 - out[1] * back], facing: inward });
+            actor.siege = null;
+            actor.leash = STORM.reach;
+        });
+    }
+
+    // A camp's wall hacked at by those storming it: the section of it nearest them that's clear of
+    // its openings stood up in the battle (its stakes: KINDS.stakes, over its squares of wall), and
+    // a share of their shield line and two-handers (STORM.party) sent at it, from outside it
+    #hack(camp, storm) {
+        const section = storm.section && this.battle.actor(storm.section.id);
+
+        if ((section && !section.dead) || !storm.attackers.length || this.battle.time < storm.next) {
+            return;
+        }
+
+        const stockade = this.war.stockade(camp.id);
+        const openings = this.#openings(camp);
+        const met = this.armies.get(storm.attackers[0]);
+        const from = this.battle.formations[met.formation]?.anchor ?? met.at;
+        const broken = brokenOf(camp);
+        const index = stockade.sections
+            .map((each, k) => ({ k, at: each.at }))
+            .filter(({ k, at }) => !broken.includes(k) && openings.every((opening) => hypot(opening.at[0] - at[0], opening.at[1] - at[1]) >= STORM.clear))
+            .sort((a, b) => hypot(a.at[0] - from[0], a.at[1] - from[1]) - hypot(b.at[0] - from[0], b.at[1] - from[1]) || a.k - b.k)[0]?.k;
+
+        if (index === undefined) {
+            return;
+        }
+
+        const { wall, at, side } = stockade.sections[index];
+        const id = `${camp.id}/stakes-${index}`;
+        const xs = wall.map(([x]) => x);
+        const ys = wall.map(([, y]) => y);
+
+        // (Its hackers: those of their shield line and two-handers nearest it; with none left, none
+        // hacked at, for a while)
+        const melee = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && ["front", "heavy"].includes(actor.formation?.role));
+        const count = Math.min(melee.length, STORM.most, Math.max(STORM.least, Math.round(melee.length * STORM.party)));
+        const hackers = melee.sort((a, b) => hypot(a.x - at[0], a.y - at[1]) - hypot(b.x - at[0], b.y - at[1]) || (a.id < b.id ? -1 : 1)).slice(0, count);
+
+        if (!hackers.length) {
+            storm.next = this.battle.time + STORM.again;
+
+            return;
+        }
+
+        this.battle.add({ id, kind: "stakes", name: `${ADJECTIVES[camp.realm] ?? camp.realm} palisade`, team: camp.realm, square: [...wall[Math.floor(wall.length / 2)]], footprint: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], armed: false });
+        storm.section = { id, index };
+
+        const out = SIDES[side];
+
+        hackers.forEach((actor, k) => {
+            const across = (k - (hackers.length - 1) / 2) * 1.2;
+
+            Object.assign(actor.formation, { post: [at[0] + out[0] * 1.5 + out[1] * across, at[1] + out[1] * 1.5 - out[0] * across], facing: atan2(-out[0], -out[1]) });
+            actor.siege = id;
+            actor.leash = STORM.reach;
+        });
+
+        met.storming = null;
+        this.#event("hacking", { camp: camp.id, people: camp.realm, section: index, stakes: id, at: [...at], by: this.war.force(storm.attackers[0])?.realm ?? null, force: storm.attackers[0], ids: hackers.map(({ id: each }) => each) });
+    }
+
+    // A section of a camp's palisade hacked down (its stakes felled, by `by`): broken open in the
+    // war (war.breach) and so in the world; those who hacked it storming through it with the rest,
+    // and another to be hacked at a while after (STORM.again)
+    #hacked(id, by) {
+        for (const [campId, storm] of this.storms) {
+            if (storm.section?.id !== id) {
+                continue;
+            }
+
+            const team = this.battle.actor(by)?.team;
+            const realm = this.#realmOf(by) ?? (this.war.realm(team) ? team : null);
+            const { index } = storm.section;
+
+            this.battle.remove(id);
+            this.#event("parted", { stakes: campId, ids: [id] });
+            storm.section = null;
+            storm.next = this.battle.time + STORM.again;
+
+            for (const each of storm.attackers) {
+                const met = this.armies.get(each);
+
+                for (const actor of (met?.ids ?? []).map((one) => this.battle.actor(one)).filter(Boolean)) {
+                    if (actor.siege === id) {
+                        actor.siege = null;
+                    }
+                }
+
+                if (met) {
+                    met.storming = null;
+                }
+            }
+
+            if (this.war.breach(campId, index, realm)) {
+                storm.breaches++;
+                storm.posted = "";
+                this.#stockadesChanged();
+                this.#event("breach", { camp: campId, people: this.war.camp(campId).realm, section: index, at: [...this.war.stockade(campId).sections[index].at], by: realm });
+            }
+        }
+    }
+
+    // A storm over, either side beaten (`held` by those within, or carried), as the war has it
+    // (war.stormEnded): the beaten running (#watchArmies), the rest stood down
+    #stormEnded(id, held, { killed, lost }) {
+        const storm = this.storms.get(id);
+        const camp = this.war.camp(id);
+        const by = storm.by.map((each) => this.war.force(each)?.realm).find(Boolean) ?? null;
+
+        this.#event("stormed", { camp: id, people: camp.realm, at: [...camp.at], held, army: storm.army, by, forces: [...storm.by], killed, lost, breaches: storm.breaches });
+        this.war.stormEnded(id, { by: storm.by, held, killed, lost, breaches: storm.breaches });
+        this.#stormOver(id);
+    }
+
+    // A camp's stockade no longer held or stormed: its stakes being hacked let go, and those who
+    // held it and stormed it back in their lines
+    #stormOver(id) {
+        const storm = this.storms.get(id);
+
+        this.storms.delete(id);
+
+        if (storm.section) {
+            this.battle.remove(storm.section.id);
+            this.#event("parted", { stakes: id, ids: [storm.section.id] });
+        }
+
+        for (const each of [storm.army, ...storm.by]) {
+            const met = each && this.armies.get(each);
+
+            if (!met) {
+                continue;
+            }
+
+            met.storming = null;
+
+            for (const actor of met.ids.map((one) => this.battle.actor(one)).filter((actor) => actor?.formation)) {
+                delete actor.formation.post;
+                delete actor.formation.facing;
+                actor.siege = null;
+                actor.holds = null;
+                actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
+            }
+        }
     }
 
     // As many of an army or reserve met stood up as the war has of it now: the rearmost let go if
@@ -4224,7 +4763,7 @@ export class Host {
     #stockadesChanged({ tell = true } = {}) {
         const town = this.world.maps?.town;
         const built = (this.war?.camps ?? []).filter((camp) => camp.built !== null);
-        const key = built.map(({ id, breaches = 0 }) => `${id}:${breaches}`).join(" ");
+        const key = built.map((camp) => `${camp.id}:${brokenOf(camp)}`).join(" ");
 
         if (!town?.setStockades || key === this.stockaded) {
             return;
@@ -4232,7 +4771,7 @@ export class Host {
 
         this.stockaded = key;
 
-        const boxes = town.setStockades(built.map((camp) => ({ stockade: this.war.stockade(camp.id), breaches: camp.breaches ?? 0 })));
+        const boxes = town.setStockades(built.map((camp) => ({ stockade: this.war.stockade(camp.id), broken: brokenOf(camp) })));
 
         for (const box of boxes) {
             dropTiles(town, box);

@@ -10,7 +10,7 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
-import { frontOf, SIDES, squaresOf, STOCKADE, stockadeOf, standsAt } from "../client/js/core/war/stockade.js";
+import { brokenOf, frontOf, nextBreak, SIDES, squaresOf, STOCKADE, stockadeOf, standsAt } from "../client/js/core/war/stockade.js";
 import { STAGES, TURN_MS, War, WAR_VERSION } from "../client/js/core/war/war.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
 
@@ -101,15 +101,19 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         assert.equal(frontOf("camp-1", [0, 0], null), own);
     });
 
-    it("breaks its sections open in its own order, the same every time, the walkway behind each with it", () => {
+    it("breaks its sections open in its own order, the same every time, or the one nearest where it's pressed, the walkway behind each with it", () => {
         const stockade = stockadeOf({ id: "camp-7", at: [1000, 2000], front: 0 });
-        const whole = squaresOf(stockade, 0);
+        const whole = squaresOf(stockade);
+        const broken = [];
 
         for (let breaches = 1; breaches <= 4; breaches++) {
+            broken.push(nextBreak(stockade, broken));
+
             const open = stockade.sections[breaches - 1];
-            const left = squaresOf(stockade, breaches);
+            const left = squaresOf(stockade, broken);
             const wall = new Set(left.wall.map(key));
 
+            assert.deepEqual(broken, Array.from({ length: breaches }, (_, k) => k), "(in its own order)");
             assert.equal(left.wall.length, whole.wall.length - stockade.sections.slice(0, breaches).reduce((sum, { wall: squares }) => sum + squares.length, 0));
             assert.ok(open.wall.every((square) => !wall.has(key(square))));
             assert.ok(open.walk.every((square) => !new Set(left.walk.map(key)).has(key(square))));
@@ -117,6 +121,21 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
 
         assert.deepEqual(stockadeOf({ id: "camp-7", at: [1000, 2000], front: 0 }).sections, stockade.sections);
         assert.notDeepEqual(stockadeOf({ id: "camp-8", at: [1000, 2000], front: 0 }).sections.slice(0, 4), stockade.sections.slice(0, 4));
+
+        // Pressed in the world: the one nearest where it's pressed, then the nearest of the rest
+        const near = stockade.sections[17].at;
+        const after = nextBreak(stockade, [17], near);
+        const apart = (k) => Math.hypot(stockade.sections[k].at[0] - near[0], stockade.sections[k].at[1] - near[1]);
+
+        assert.equal(nextBreak(stockade, [], near), 17);
+        assert.ok(stockade.sections.every((_, k) => k === 17 || apart(k) >= apart(after)));
+        assert.equal(nextBreak(stockade, stockade.sections.map((_, k) => k)), null, "(none left standing)");
+
+        // Its breaches as they're kept: its own list, or (kept before it had one) the first so many
+        // in its order
+        assert.deepEqual(brokenOf({ breaches: 2, broken: [17, 3] }), [17, 3]);
+        assert.deepEqual(brokenOf({ breaches: 2 }), [0, 1]);
+        assert.deepEqual(brokenOf({}), []);
     });
 
     it("stands only on dry land off the roads, clear of the settlements", () => {
@@ -208,12 +227,12 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
             }
         }
 
-        const changed = world.setStockades([{ stockade, breaches: 0 }]);
+        const changed = world.setStockades([{ stockade, broken: [] }]);
 
         assert.equal(changed.length, 1);
-        assert.deepEqual(world.setStockades([{ stockade, breaches: 0 }]), [], "(nothing changed)");
+        assert.deepEqual(world.setStockades([{ stockade, broken: [] }]), [], "(nothing changed)");
 
-        const { wall, walk } = squaresOf(stockade, 0);
+        const { wall, walk } = squaresOf(stockade);
 
         for (const square of wall) {
             assert.deepEqual([squareOf(world, square).blocked, squareOf(world, square).solid, squareOf(world, square).opaque], [1, 1, 1]);
@@ -240,14 +259,14 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
 
         assert.ok([GROUND.road, GROUND.grass].includes(squareOf(world, [sx0 + 2, sy0 + 10]).ground));
 
-        // Breached: its first section open, wall and walkway, the rest standing
-        assert.equal(world.setStockades([{ stockade, breaches: 1 }]).length, 1);
+        // Breached: that section open, wall and walkway, the rest standing
+        assert.equal(world.setStockades([{ stockade, broken: [3] }]).length, 1);
 
-        for (const square of [...stockade.sections[0].wall, ...stockade.sections[0].walk]) {
+        for (const square of [...stockade.sections[3].wall, ...stockade.sections[3].walk]) {
             assert.equal(squareOf(world, square).solid, 0);
         }
 
-        assert.equal(squareOf(world, stockade.sections[1].wall[0]).solid, 1);
+        assert.equal(squareOf(world, stockade.sections[0].wall[0]).solid, 1);
 
         // Gone: its squares as they were
         assert.equal(world.setStockades([]).length, 1);
@@ -320,7 +339,7 @@ describe("the armies' camps' stockades (stockade.js, war.js, overworld.js, host.
         assert.equal(squareOf(world, square).opaque, 1);
 
         // Breached
-        camp.breaches = 1;
+        Object.assign(camp, { breaches: 1, broken: [0] });
 
         const breached = run(host, TURN_MS);
 

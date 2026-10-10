@@ -124,6 +124,10 @@ export const KINDS = Object.freeze({
     // (A guard tower or a forward garrison (core/war/forts.js): standing over its `footprint`, never
     // moving, shooting at whatever comes within reach of its loops; razed, it's gone)
     fort: { hp: 1200, speed: 0, chase: 0, respawn: Infinity },
+    // (A section of a camp's palisade under assault (host.js #storms): standing over its
+    // `footprint` of wall, doing nothing; no one's set on it but those sent to hack it down (a
+    // `siege`, or a player told to), and felled it's broken open)
+    stakes: { hp: 900, speed: 0, chase: 0, respawn: Infinity },
 });
 
 /**
@@ -273,6 +277,9 @@ export const HEALING = Object.freeze({ below: 0.8, mend: 0.5 });
 
 // A formation stops marching while any of it's fighting, and for this long after (ms)
 const HOLD_MS = 1500;
+
+// How near (squares) an enemy has to come to one hacking at a palisade for it to turn on them
+const SIEGE_GUARD = 2.5;
 
 // A formation closes its ranks over its fallen (and opens them for any joining it) this often (ms);
 // one of it further than this from its place in it runs back to it (squares)
@@ -635,11 +642,13 @@ export class Battle {
     /**
      * A formation (core/formation.js) set up, or changed: { anchor: [x, y], facing (radians from
      * south, towards east), to: where it marches ([x, y]; null, it stands), speed (m/s), advance
-     * (whether, standing, it closes with the nearest enemy any of it sees) }, each left as it is if
-     * not given. Those in it (add's `formation`) keep to their places in it as it goes, and go
-     * after enemies as far from them as their role's leash; it stops marching while any of them
-     * are fighting, and closes its ranks as they fall (CLOSE_MS). Null takes it away: they stand
-     * where they are.
+     * (whether, standing, it closes with the nearest enemy any of it sees), broken (whether it's
+     * broken and running: none of it takes on anyone, each runs for its place, and it marches
+     * whoever's fighting) }, each left as it is if not given. Those in it (add's `formation`) keep
+     * to their places in it as it goes (or the `post`s they're given: [x, y] metres, facing its
+     * `facing`, if they have one), and go after enemies as far from them as their role's leash;
+     * it stops marching while any of them are fighting, and closes its ranks as they fall
+     * (CLOSE_MS). Null takes it away: they stand where they are.
      */
     formation(id, settings) {
         if (settings === null) {
@@ -648,9 +657,9 @@ export class Battle {
             return null;
         }
 
-        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
+        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
 
-        for (const key of ["anchor", "facing", "to", "speed", "advance"]) {
+        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken"]) {
             if (settings[key] !== undefined) {
                 formation[key] = Array.isArray(settings[key]) ? [...settings[key]] : settings[key];
             }
@@ -1551,6 +1560,11 @@ export class Battle {
             return;
         }
 
+        // (A section of a palisade: it only stands)
+        if (actor.kind === "stakes") {
+            return;
+        }
+
         // (A fortification: it only shoots)
         if (actor.ai === "fort") {
             this.#hold(actor);
@@ -2005,19 +2019,34 @@ export class Battle {
             return;
         }
 
+        // (One of a broken line: running for its place, set on no one)
+        const broken = Boolean(actor.formation && this.formations[actor.formation.id]?.broken);
+
+        if (broken && actor.target !== null) {
+            Object.assign(actor, { target: null, path: [], pathGoal: null });
+        }
+
         // (One in a formation: set on whoever it's set on, or no one, a while before looking again,
         // unless whoever it's set on is gone; anyone: a player near before anyone else, as many as
         // can be on them)
         const thinking = !actor.formation || this.time >= actor.rethinkAt;
         let seen = null;
 
-        if (!thinking && actor.target !== null) {
+        // (Sent to hack down a section of a palisade, its `siege`: at it, unless an enemy's on it up
+        // close: SIEGE_GUARD)
+        const siege = broken || !actor.siege ? null : this.actor(actor.siege);
+
+        if (siege && !siege.dead && siege.map === actor.map) {
+            seen = this.#nearestSeen(actor, (enemy) => distanceBetween(actor.square, enemy.square) <= SIEGE_GUARD && this.#roomOn(actor, enemy)) ?? siege;
+        }
+
+        if (!broken && !seen && !thinking && actor.target !== null) {
             const kept = this.actor(actor.target);
 
             seen = kept && !kept.dead && kept.map === actor.map ? kept : null;
         }
 
-        if (!seen && (thinking || actor.target !== null)) {
+        if (!broken && !seen && (thinking || actor.target !== null)) {
             seen = this.#drawnTo(actor) ?? this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy)) ?? this.#alarmed(actor);
 
             if (actor.formation) {
@@ -2076,8 +2105,9 @@ export class Battle {
 
         actor.target = null;
 
-        // (One in a formation, well away from its place in it: hurrying back to it)
-        actor.walkPace = actor.formation && actor.map === actor.spawnMap && distanceBetween(actor.square, actor.patrol[0]) > RANKS_RUN ? actor.chaseSpeed : actor.speed;
+        // (One in a formation, well away from its place in it, or its line broken: hurrying back
+        // to it)
+        actor.walkPace = broken || (actor.formation && actor.map === actor.spawnMap && distanceBetween(actor.square, actor.patrol[0]) > RANKS_RUN) ? actor.chaseSpeed : actor.speed;
 
         // Somewhere else than its patrol (it followed someone in): back the way it came
         if (actor.map !== actor.spawnMap) {
@@ -2335,9 +2365,14 @@ export class Battle {
     }
 
     // Is someone within a guard's leash of its post, or of the round it walks (always, for those
-    // with none), or one who's struck it lately (DEFEND_MS: it defends itself), however far?
+    // with none), or within what it holds (`holds`: a box of squares, [x0, y0, x1, y1]: a camp's
+    // stockade, host.js #holdStockade), or one who's struck it lately (DEFEND_MS: it defends
+    // itself), however far?
     #leashed(actor, other) {
-        return !actor.leash || !other || (other.map === actor.spawnMap && (offRound(actor.patrol, other.square) <= actor.leash || (actor.struckBy?.[other.id] ?? -Infinity) > this.time));
+        const [x, y] = other?.square ?? [];
+        const held = actor.holds && x >= actor.holds[0] && y >= actor.holds[1] && x <= actor.holds[2] && y <= actor.holds[3];
+
+        return !actor.leash || !other || (other.map === actor.spawnMap && (held || offRound(actor.patrol, other.square) <= actor.leash || (actor.struckBy?.[other.id] ?? -Infinity) > this.time));
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
@@ -2358,7 +2393,8 @@ export class Battle {
             for (const k of ring) {
                 const other = this.actors[k];
 
-                if (other.dead || other.map !== actor.map || !this.#near(actor, other, within)) {
+                // (Nor a section of a palisade: none set on one of their own accord)
+                if (other.dead || other.map !== actor.map || other.kind === "stakes" || !this.#near(actor, other, within)) {
                     continue;
                 }
 
@@ -2407,7 +2443,8 @@ export class Battle {
             const foe = this.actor(other.target);
             const distance = distanceBetween(actor.square, other.square);
 
-            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && foe && !foe.dead && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.#roomOn(actor, foe) && this.canSee(actor, other)) {
+            // (Not those hacking at a palisade: no help wanted there but their own: core/host.js #hack)
+            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && foe && !foe.dead && foe.kind !== "stakes" && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.#roomOn(actor, foe) && this.canSee(actor, other)) {
                 best = foe;
                 bestDistance = distance;
                 bestK = k;
@@ -2435,7 +2472,7 @@ export class Battle {
                 this.#closeRanks(id, formation);
             }
 
-            if (this.time - formation.engagedAt < HOLD_MS) {
+            if (this.time - formation.engagedAt < HOLD_MS && !formation.broken) {
                 continue;
             }
 
@@ -2536,7 +2573,7 @@ export class Battle {
             return;
         }
 
-        const [x, y] = placeAt(formation, actor.formation.slot);
+        const [x, y] = actor.formation.post ?? placeAt(formation, actor.formation.slot);
         const post = [Math.floor(x), Math.floor(y)];
 
         if (actor.patrol?.length !== 1 || !same(actor.patrol[0], post)) {
@@ -2544,7 +2581,7 @@ export class Battle {
             actor.patrolIndex = 0;
         }
 
-        actor.post = formation.facing;
+        actor.post = actor.formation.facing ?? formation.facing;
         formation.member = actor.id;
 
         if (actor.target !== null) {

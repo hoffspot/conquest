@@ -118,9 +118,10 @@ export class Stockades {
 
     /**
      * Draw those near `near` ([x, z] world metres) of these ([{ id, people, stockade
-     * (stockade.js's, in the world's metres: `origin` added to its squares), breaches, mendable
-     * (whether its people have the wood to mend it) }]), as they stand now; those gone or far off
-     * let go. A section mended since it was last drawn is drawn fresh, its stakes rising.
+     * (stockade.js's, in the world's metres: `origin` added to its squares), broken (its sections
+     * broken open: stockade.js brokenOf), mendable (whether its people have the wood to mend it)
+     * }]), as they stand now; those gone or far off let go. A section mended since it was last
+     * drawn is drawn fresh, its stakes rising.
      */
     sync(stockades, near, origin = [0, 0]) {
         const keep = new Set();
@@ -134,7 +135,8 @@ export class Stockades {
 
             keep.add(each.id);
 
-            const key = `${each.people}:${each.stockade.front}:${mx}:${my}:${each.breaches}:${each.mendable ? 1 : 0}`;
+            const down = new Set(each.broken);
+            const key = `${each.people}:${each.stockade.front}:${mx}:${my}:${[...down].sort((a, b) => a - b)}:${each.mendable ? 1 : 0}`;
             const was = this.drawn.get(each.id);
 
             if (was?.key === key) {
@@ -143,7 +145,7 @@ export class Stockades {
 
             // (Mended since: those sections fresh, and rising)
             const fresh = new Set(was && was.place === `${each.stockade.front}:${mx}:${my}` ? was.fresh : []);
-            const mended = was && was.place === `${each.stockade.front}:${mx}:${my}` ? Array.from({ length: Math.max(0, was.breaches - each.breaches) }, (_, k) => each.breaches + k) : [];
+            const mended = was && was.place === `${each.stockade.front}:${mx}:${my}` ? [...was.broken].filter((k) => !down.has(k)) : [];
 
             for (const section of mended) {
                 fresh.add(section);
@@ -161,7 +163,8 @@ export class Stockades {
     }
 
     // A stockade drawn: its stakes, stumps, fallen stakes, timbers and posts as instances
-    #draw({ id, people, stockade, breaches, mendable }, [ox, oz], { key, fresh, rising }) {
+    #draw({ id, people, stockade, broken, mendable }, [ox, oz], { key, fresh, rising }) {
+        const down = new Set(broken);
         const random = createRandom(hashOf(id));
         const look = WOODS[people] ?? WOODS.human;
         const [mx, my] = stockade.middle;
@@ -206,7 +209,7 @@ export class Stockades {
         }
 
         stockade.sections.forEach((section, k) => {
-            if (k >= breaches) {
+            if (!down.has(k)) {
                 for (const square of section.wall) {
                     stakesOf(square, fresh.has(k) ? lists.fresh : lists.stakes, { section: k });
                 }
@@ -253,7 +256,7 @@ export class Stockades {
         // The walkway: boards on each square of it behind the wall standing, on posts on its inner
         // edge every other square
         const walked = new Set();
-        const walkway = [...stockade.corners.walk, ...stockade.sections.slice(breaches).flatMap(({ walk }) => walk)];
+        const walkway = [...stockade.corners.walk, ...stockade.sections.filter((_, k) => !down.has(k)).flatMap(({ walk }) => walk)];
 
         for (const square of walkway) {
             const at = `${square[0]},${square[1]}`;
@@ -365,7 +368,7 @@ export class Stockades {
         }
 
         this.group.add(object);
-        this.drawn.set(id, { key, place: `${stockade.front}:${mx}:${my}`, breaches, object, meshes, fresh, rising: rising && meshes.fresh ? { sections: rising, since: this.clock } : null });
+        this.drawn.set(id, { key, place: `${stockade.front}:${mx}:${my}`, broken: down, object, meshes, fresh, rising: rising && meshes.fresh ? { sections: rising, since: this.clock } : null });
         this.#rise(this.drawn.get(id));
     }
 

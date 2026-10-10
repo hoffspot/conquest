@@ -480,22 +480,22 @@ export class Overworld {
 
     /**
      * The armies' camps' stockades standing in the world (core/war/stockade.js; [{ stockade
-     * (stockadeOf's), breaches }]): the squares of each one's wall blocked as chunks are made and
-     * not seen through, its walkway's blocked, its gates and breaches open; its ground cleared and
-     * round it (STOCKADE.clear: no crops, no trees, nothing else of the land's), its street and
-     * parade ground trodden bare. Those made already that one's gone up in, come down from, or been
-     * breached or mended in let go, to be made again. Returns the boxes of squares that changed
-     * (with the ground cleared round them), as setForts.
+     * (stockadeOf's), broken (its sections broken open: brokenOf) }]): the squares of each one's
+     * wall blocked as chunks are made and not seen through, its walkway's blocked, its gates and
+     * breaches open; its ground cleared and round it (STOCKADE.clear: no crops, no trees, nothing
+     * else of the land's), its street and parade ground trodden bare. Those made already that one's
+     * gone up in, come down from, or been breached or mended in let go, to be made again. Returns
+     * the boxes of squares that changed (with the ground cleared round them), as setForts.
      */
     setStockades(stockades) {
         const next = new Map(
-            stockades.map(({ stockade, breaches = 0 }) => {
+            stockades.map(({ stockade, broken = [] }) => {
                 const [x0, y0, x1, y1] = stockade.box;
                 const clear = STOCKADE.clear;
-                const { wall, walk } = squaresOf(stockade, breaches);
+                const { wall, walk } = squaresOf(stockade, broken);
                 const [mx, my] = stockade.middle;
 
-                return [stockade.id, { key: `${stockade.front}:${mx}:${my}:${breaches}`, box: stockade.box, cleared: [x0 - clear, y0 - clear, x1 + clear, y1 + clear], clearing: { at: [mx + 0.5, my + 0.5], radius: (STOCKADE.half + clear) * Math.SQRT2 }, wall, walk, trodden: stockade.trodden }];
+                return [stockade.id, { key: `${stockade.front}:${mx}:${my}:${[...broken].sort((a, b) => a - b)}`, box: stockade.box, cleared: [x0 - clear, y0 - clear, x1 + clear, y1 + clear], clearing: { at: [mx + 0.5, my + 0.5], radius: (STOCKADE.half + clear) * Math.SQRT2 }, wall, walk, trodden: stockade.trodden }];
             }),
         );
         // (Each that's changed: where it was and where it is, once if that's the same)

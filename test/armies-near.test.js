@@ -2,14 +2,16 @@
 // docs/WAR.md *The armies near a player*): an army or reserve out in the field near a player met in
 // its line of battle, marching its war path at its pace, the war told where it's got to and holding
 // it meanwhile; none mustering at its seat; two peoples' met fighting it out there, each fallen one
-// fewer in the war, which doesn't reckon their fight itself; as many of it stood up as the war has;
-// let go once every player's far; kept with the world. Reinforcements met too, making for their
-// army's line and taking their places in it; fallen on there, fought out there
+// fewer in the war, which doesn't reckon their fight itself, one broken there routed (the war told);
+// as many of it stood up as the war has; let go once every player's far; kept with the world.
+// Reinforcements met too, making for their army's line and taking their places in it; fallen on
+// there, fought out there
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DOCTRINES, rolesOf } from "../client/js/core/formation.js";
 import { ARMY_NEAR, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { ARMY } from "../client/js/core/war/armies.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { STAGES, TURN_MS } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -110,25 +112,35 @@ describe("the armies in the world near a player (host.js ARMY_NEAR, war.js)", ()
         assert.deepEqual(army.at, before);
     });
 
-    it("has two peoples' armies met fight it out in the world, each fallen one fewer in the war, which doesn't reckon it itself; the one put down to the last gone", () => {
+    it("has two peoples' armies met fight it out in the world, each fallen one fewer in the war, which doesn't reckon it itself; the one broken (ARMY.rout of it left, and outnumbered) routed, the war told, running", () => {
         const { host, war, middle: [mx, my] } = hosted();
         const orcs = afield(war, "orc", [mx + 230, my + 50], [mx + 230, my - 100], 8, "force-900");
         const humans = afield(war, "human", [mx + 230, my - 50], [mx + 230, my + 100], 24, "force-901");
         const events = [];
+        const routed = () => events.find(({ type, event }) => type === "war" && event.type === "battle" && event.routed);
 
-        for (let k = 0; k < 240 && war.force(orcs.id); k++) {
+        for (let k = 0; k < 240 && !routed(); k++) {
             events.push(...run(host, 1000, () => (war.relations["human|orc"] = { state: "hostile", since: 0 })));
         }
 
-        assert.equal(war.force(orcs.id), null, "the orcs' army put down");
-        assert.ok(events.some(({ type, event }) => type === "war" && event.type === "destroyed" && event.army === orcs.id));
+        const { event } = routed() ?? {};
+
+        assert.ok(event, "routed");
+        assert.deepEqual([event.realm, event.against, event.other, event.kind, event.won, event.played], ["human", "orc", orcs.id, "army", true, true]);
+        assert.ok(orcs.size > 0 && orcs.size <= ARMY.rout * 8, "down to ARMY.rout of what it went in with");
+        assert.equal(event.killed, 8 - orcs.size);
+        assert.equal(orcs.size, alive(host, orcs.id).length);
         assert.ok(humans.size < 24, "the humans lost some");
         assert.equal(humans.size, alive(host, humans.id).length);
-        assert.ok(!events.some(({ type, event }) => type === "war" && event.type === "battle" && [event.army, event.other].includes(orcs.id)), "not reckoned by the war");
+        assert.ok(!events.some(({ type, event: each }) => type === "war" && each.type === "battle" && !each.routed && [each.army, each.other].includes(orcs.id)), "not reckoned by the war itself");
 
-        // (Let go, with the war's army gone)
+        // Beaten, running: its line broken, at a run
         run(host, 500);
-        assert.ok(!host.armies.has(orcs.id));
+
+        const met = host.armies.get(orcs.id);
+
+        assert.ok(war.fleeing(orcs.id));
+        assert.ok(!met || host.battle.formations[met.formation].broken, "its line broken");
     });
 
     it("stands up as many of it as the war has: those it's lost elsewhere let go from the back, those joined it stood up behind its line", () => {
