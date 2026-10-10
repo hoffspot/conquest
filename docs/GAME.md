@@ -1382,6 +1382,20 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
   `threats`).
+- **Those attacking the player** (and whoever they're set on) each have an icon down the right
+  side of the screen, the first six in the order they came to it (game.js `#attackers`,
+  `ATTACKERS`; hud.js `attackers`): their likeness in a red frame (`--hostile`), a thin line of
+  their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
+  less motion). The likeness is drawn once, head and shoulders from in front of them (a creature
+  not shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
+  in a picture of its own and read back without stalling (view.js `portrait`, `LIKENESS`:
+  three.js leaves such a picture untoned, so it's toned as the screen is, `toneOf`, a little
+  brighter to read so small); one of a
+  crowd shows their name's first letter till they're drawn in full. Tapped, an icon sets the
+  player on them where they stand (an `engage` order with `stand`, as tapping them does);
+  tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
+  (`DOUBLE_TAP_MS`), they run up to them; held (`HOLD_MS`), they walk up to them, into reach of
+  what's in hand (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a tap.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
@@ -4101,12 +4115,14 @@ it.
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. **Tapping an enemy** sets the player on them where they stand (an `engage`
    order with `stand`, `NET_VERSION` 98: battle.js strikes them while they're in reach, a bow's
-   shot or a blow's, and doesn't go after them; out of reach, whoever is in reach is struck, as standing), ringed as
-   their target; tapped twice, the player runs up to them, into reach of what's in hand; Attack,
-   at the top of an enemy's wheel, walks up to them. Tapping whoever the player's going after,
-   or the player themselves, while they're walking or running anywhere, stops them where they
-   are (game.js `#halt`: still set on whoever they were after, where they stand). A drag turns the camera round the player (and tilts it). A swipe up that
-   starts on the player (40 pixels up within 600 ms, mostly up)
+   shot or a blow's, and doesn't go after them; out of reach, whoever is in reach is struck, as
+   standing), ringed as their target; tapped twice, the player runs up to them, into reach of
+   what's in hand; Attack, at the top of an enemy's wheel, walks up to them. Tapping whoever the
+   player's going after, or the player themselves, while they're walking or running anywhere,
+   stops them where they are (game.js `#halt`: still set on whoever they were after, where they
+   stand). The attackers' icons down the right side do the same for whoever each is, held
+   walking up to them (*Those attacking the player*). A drag turns the camera round the player
+   (and tilts it). A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
    turns them the way the camera looks (over the ground) and sends them straight ahead that way,
    running while their stamina lasts and then walking (an `ahead` order, which turns them as
    well as setting them off), with the ring where they'll stop; blocked straight away, it's
@@ -4153,8 +4169,8 @@ it.
   a message would cover one of them, it's moved up under the buttons along the top (and the
   minimap, on a screen so narrow it would reach under it), or else down over the quick actions,
   or else to the left of the screen or its right, a little up from half way (the player and
-  their foe one over the other down the middle), whichever is clear (or covers least of them),
-  staying there while that's clear, eased there (moved as it is, its width kept), and back once
+  their foe one over the other down the middle; left of the attackers' icons), whichever is
+  clear of them and the icons (or covers least of them), staying there while that's clear, eased there (moved as it is, its width kept), and back once
   the fight's over (hud.js `keepClear`, `messagePlace`). The last ten are kept for the journal
   (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages button, at its top, shows them, the
   newest first, each with how long ago it was told, and the same message told again running
@@ -4471,7 +4487,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   player; round the other way, or nearer behind them or further round, where what stands there
   would hide them; nearer behind them for a foe a bow's shot away, keeping both in view; keeping
   to the side it's on; held by a drag and framing the fight again a moment after it's let go;
-  and turned off, keeping the foe in view by the least turn, following or not.
+  and turned off, keeping the foe in view by the least turn, following or not. An attacker's
+  likeness toned as the screen is (view.js `toneOf`: black black, mid-grey half way, the
+  brightest white, more exposure brighter, a red still red).
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they

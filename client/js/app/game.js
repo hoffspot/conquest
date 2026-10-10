@@ -272,6 +272,9 @@ const MESSAGE_CLEAR = Object.freeze({ wide: 0.35, least: 40, over: 34, under: 6 
 // far in from its sides and top (pixels), and from its bottom, clear of the quick actions risen in
 // a fight
 const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
+// The icons down the right side for those attacking the player (hud.js attackers): the first
+// `most` to set on them, in the order they did
+const ATTACKERS = Object.freeze({ most: 6 });
 
 // The tavern's folk: how much hair they grow (at most: less than the player, as there are more
 // of them), and what each of their acts is: its animation's timing (s: core/roles.js ACT_TIMES)
@@ -585,6 +588,14 @@ export class Game {
         this.messages = messages;
         this.onMessages = onMessages;
         hud.onMessage = (text, seconds) => this.#told(text, seconds);
+
+        // Those attacking the player, an icon each down the right side: since when each has been
+        // (the game's clock, s), their likenesses (an ImageData, or null while it's drawn), and
+        // the last of them tapped ({ id, time: ms })
+        this.attackerSince = new Map();
+        this.likenesses = new Map();
+        this.lastIconTap = null;
+        hud.onAttacker = (id, gesture, time) => this.#attackerPressed(id, gesture, time);
 
         // The world (the host's: made here, playing alone), this game's player in it (by id,
         // come in before the world's own people), and the battle as the host has it
@@ -1728,6 +1739,7 @@ export class Game {
         this.sound?.setHearth(null);
         this.hud.clear();
         this.hud.onMessage = () => {};
+        this.hud.onAttacker = () => {};
 
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
@@ -2925,6 +2937,7 @@ export class Game {
 
         this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
         this.#threats();
+        this.#attackers();
         this.#clearOfFight(foe);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
@@ -3567,6 +3580,88 @@ export class Game {
         }
 
         this.hud.threats(arrows);
+    }
+
+    // Those attacking the player, an icon each down the right side (hud.js attackers), and whoever
+    // the player's set on (#target), marked: the first ATTACKERS.most, in the order they came to
+    // it; each with their likeness, drawn once (view.js portrait) when they're drawn in full (not
+    // one of a crowd)
+    #attackers() {
+        const player = this.battle.actor(this.me);
+        const target = this.#target();
+        const after = player && !player.dead ? this.battle.actors.filter((actor) => actor === target || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const since = this.attackerSince;
+
+        for (const id of since.keys()) {
+            if (!after.some((actor) => actor.id === id)) {
+                since.delete(id);
+            }
+        }
+
+        for (const actor of after) {
+            if (!since.has(actor.id)) {
+                since.set(actor.id, this.clock);
+            }
+        }
+
+        const shown = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1)).slice(0, ATTACKERS.most);
+
+        for (const id of this.likenesses.keys()) {
+            if (!shown.some((actor) => actor.id === id)) {
+                this.likenesses.delete(id);
+            }
+        }
+
+        for (const actor of shown) {
+            const avatar = this.avatars.get(actor.id);
+
+            if (!this.likenesses.has(actor.id) && avatar && !(avatar instanceof CrowdAvatar)) {
+                this.likenesses.set(actor.id, null);
+                this.view.portrait(avatar.object, { tall: avatar.point(1, _head).y - avatar.object.position.y, facing: avatar.facing, whole: avatar instanceof BeastAvatar }).then((picture) => {
+                    if (this.likenesses.has(actor.id) && this.avatars.get(actor.id) === avatar) {
+                        this.likenesses.set(actor.id, picture);
+                    }
+                });
+            }
+        }
+
+        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, picture: this.likenesses.get(actor.id) ?? null })));
+    }
+
+    // An attacker's icon tapped or held (hud.js onAttacker; `time`: ms, as performance.now()): held,
+    // set on them, walking up into reach of what's in hand; tapped twice in quick succession,
+    // running; tapped once, set on them where the player stands (whoever they were set on, they
+    // stop), or, tapped on whoever they're set on, stopping going after them
+    #attackerPressed(id, gesture, time) {
+        const player = this.battle.actor(this.me);
+        const enemy = this.battle.actor(id);
+        const last = this.lastIconTap;
+
+        this.lastIconTap = gesture === "tap" ? { id, time } : null;
+
+        if (!player || player.dead || !enemy || enemy.dead) {
+            return;
+        }
+
+        const chosen = player.order?.type === "engage" && player.order.target === id;
+
+        this.#endTalk();
+        this.approaching = null;
+
+        if (gesture === "hold") {
+            this.#command({ type: "engage", target: id });
+        } else if (last?.id === id && time - last.time <= DOUBLE_TAP_MS) {
+            this.lastIconTap = null;
+            this.#command({ type: "engage", target: id, run: true });
+        } else if (chosen) {
+            this.#halt();
+        } else {
+            this.#command({ type: "engage", target: id, stand: true });
+        }
+
+        if (!chosen) {
+            this.sound?.play("lock");
+        }
     }
 
     // A message on the screen kept clear of those fighting (hud.js keepClear): the player, who

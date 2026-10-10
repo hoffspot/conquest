@@ -164,7 +164,10 @@ foe both in view by itself, turning no more than it must. Either way it draws ba
 a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
 from out of view has a red arrow at the screen's edge pointing to them. Messages told in a fight
 move up under the buttons, down over the quick actions, or off to the side rather than cover
-anyone fighting, and taps go through them.
+anyone fighting, and taps go through them. **Down the right side** of the screen everyone
+attacking you has an icon: their likeness in a red frame with a thin line of their health along
+its foot, the one you're set on glowing and pulsing. Tap one to set on them where you stand (tap
+the glowing one to stop going after them), double-tap to run at them, or hold to walk up to them.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left
@@ -400,6 +403,7 @@ remembered.
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
 | Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
 | Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
+| Fight from the icons down the right | Tap an attacker's icon to set on them where you stand (the glowing one: stop going after them); double-tap to run at them; hold to walk up to them | Click (double-click to run at them; hold to walk up to them) |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |

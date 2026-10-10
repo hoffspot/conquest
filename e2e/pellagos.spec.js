@@ -1374,6 +1374,163 @@ test("in a fight, a message is moved clear of those fighting, taps going through
     expect(placed.after).toBe("");
 });
 
+test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The orc 8 squares north of the player and a slime 8 south, each stunned where it stands, after them
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const free = (dy) => [0, 1, -1, 2, -2, 3, -3].map((dx) => [px + dx, py + dy]).find(([x, y]) => !squares.blocked(x, y));
+        const [ox, oy] = free(-8);
+        const [sx, sy] = free(8);
+
+        game.stop();
+        Object.assign(orc, { x: ox + 0.5, y: oy + 0.5, square: [ox, oy], to: null, path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 600000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.add({ id: "slime", kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [sx, sy], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: "slimes", leader: null, menace: false } });
+        Object.assign(battle.actor("slime"), { x: sx + 0.5, y: sy + 0.5, target: "player", stunnedUntil: battle.time + 600000 });
+        game.enlisting.push("slime");
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("slime"))).toBe(true);
+
+    // Each with their likeness, once it's drawn: the orc first (they came to it in that order)
+    await page.waitForFunction(
+        () => {
+            window.pellagos.game.advance(0.02);
+
+            return document.querySelectorAll("#attackers .attacker.painted").length === 2;
+        },
+        null,
+        { timeout: 20000 },
+    );
+
+    const icons = await page.evaluate(() => {
+        const column = document.querySelector("#attackers");
+        const screen = document.querySelector("#hud").getBoundingClientRect();
+
+        return {
+            right: screen.right - column.getBoundingClientRect().right,
+            each: [...column.querySelectorAll(".attacker")].map((icon) => {
+                const canvas = icon.querySelector("canvas");
+                const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+                const shades = new Set();
+
+                for (let k = 0; k < data.length; k += 4) {
+                    shades.add((data[k] >> 3) * 1024 + (data[k + 1] >> 3) * 32 + (data[k + 2] >> 3));
+                }
+
+                return { id: icon.dataset.id, label: icon.getAttribute("aria-label"), border: getComputedStyle(icon).borderTopColor, health: icon.querySelector(".attacker-health-fill").style.transform, size: canvas.width, shades: shades.size, target: icon.classList.contains("target") };
+            }),
+        };
+    });
+
+    expect(icons.each.map(({ id }) => id)).toEqual(["orc", "slime"]);
+    expect(icons.right).toBeGreaterThanOrEqual(12);
+    expect(icons.right).toBeLessThan(40);
+
+    for (const icon of icons.each) {
+        expect(icon.border).toBe("rgb(212, 83, 59)");
+        expect(Number(icon.health.match(/scaleX\(([\d.]+)\)/)[1])).toBe(1);
+        expect(icon.size).toBe(96);
+        expect(icon.shades, `${icon.id}'s likeness`).toBeGreaterThan(40);
+        expect(icon.target).toBe(false);
+    }
+
+    expect(icons.each[1].label).toBe("Green slime");
+
+    // (Where the player is and what they're doing a moment after a tap, a double tap or a hold)
+    const state = (seconds) =>
+        page.evaluate((seconds) => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            game.advance(seconds);
+
+            const target = document.querySelector("#attackers .attacker.target");
+
+            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target).animationName : null };
+        }, seconds);
+    const orcIcon = page.locator('#attackers .attacker[data-id="orc"]');
+    const slimeIcon = page.locator('#attackers .attacker[data-id="slime"]');
+    const start = await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square]);
+
+    // Tapped: set on the orc where the player stands, its icon glowing; then on the slime
+    await orcIcon.click();
+
+    const tapped = await state(0.5);
+
+    await page.waitForTimeout(400);
+    await slimeIcon.click();
+
+    const swapped = await state(0.5);
+
+    expect(tapped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(tapped.walking).toBe(false);
+    expect(tapped.target).toBe("orc");
+    expect(tapped.pulsing).toBe("attacker-pulse");
+    expect(swapped.order).toEqual({ type: "engage", target: "slime", run: false, stand: true });
+    expect(swapped.target).toBe("slime");
+    expect(await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square])).toEqual(start);
+
+    // Tapped twice in quick succession: running up to the orc; tapped again on the way, stopped
+    await page.waitForTimeout(400);
+    await orcIcon.dblclick();
+
+    const doubled = await state(0.4);
+
+    await page.waitForTimeout(400);
+    await orcIcon.click();
+
+    const stopped = await state(0.4);
+
+    expect(doubled.order).toMatchObject({ type: "engage", target: "orc", run: true });
+    expect(doubled.walking).toBe(true);
+    expect(doubled.running).toBe(true);
+    expect(doubled.target).toBe("orc");
+    expect(stopped.order).toEqual({ type: "engage", target: "orc", run: false, stand: true });
+    expect(stopped.walking).toBe(false);
+
+    // Held on the slime: walking up to it
+    const box = await slimeIcon.boundingBox();
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+
+    const held = await state(0.4);
+
+    expect(held.order).toEqual({ type: "engage", target: "slime", run: false });
+    expect(held.walking).toBe(true);
+    expect(held.running).toBe(false);
+    expect(held.target).toBe("slime");
+
+    // Its health line as it's hurt; gone once it's dead
+    const hurt = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const slime = game.battle.actor("slime");
+
+        slime.hp = Math.round(slime.maxHp / 2);
+        game.advance(0.05);
+
+        const line = document.querySelector('#attackers .attacker[data-id="slime"] .attacker-health-fill').style.transform;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.05);
+
+        return { line, left: [...document.querySelectorAll("#attackers .attacker")].map((icon) => icon.dataset.id) };
+    });
+
+    expect(Number(hurt.line.match(/scaleX\(([\d.]+)\)/)[1])).toBeCloseTo(0.5, 1);
+    expect(hurt.left).toEqual(["slime"]);
+});
+
 test("in a fight, the battle cam swings round to see the player and their foe from the side, both on the screen and neither hidden; leaving it be once the fight's over", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
