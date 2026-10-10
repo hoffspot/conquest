@@ -427,6 +427,28 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.ok(!host.ground.has(mine.id) && host.ground.has(theirs.id));
     });
 
+    it("leaves only its gold and its parts on one more of a pack than a player alone would meet, the world's dice going on as they would (spoils.js rollSpoils extra)", () => {
+        const [one, other] = [createRandom(11), createRandom(11)];
+        let [kept, dropped] = [0, 0];
+
+        for (let k = 0; k < 3000; k++) {
+            for (const [creature, tier] of [["bandit", 5], ["banditChief", 6], ["goblin", 5], ["wolf", 3], ["goblinKing", 6]]) {
+                const whole = rollSpoils(creature, tier, one, CREATURES[creature].tiers[0]);
+                const extra = rollSpoils(creature, tier, other, CREATURES[creature].tiers[0], { extra: true });
+
+                assert.equal(extra.gold, whole.gold);
+                assert.deepEqual(extra.items, whole.items.filter(({ id }) => PARTS[id]));
+                assert.ok(extra.items.every(({ id }) => !ITEMS[id].slot && !ITEMS[id].tome && ITEMS[id].part), creature);
+
+                kept += extra.items.length;
+                dropped += whole.items.length - extra.items.length;
+            }
+        }
+
+        assert.equal(one.next(), other.next(), "as many dice thrown");
+        assert.ok(kept > 0 && dropped > 0, `${kept} kept, ${dropped} left`);
+    });
+
     it("rolls creatures' spoils as their tables say, never certain but for a dragon's gold, worth more the mightier", () => {
         const random = createRandom(7);
         const tally = (creature, tier, n = 2000) => {
@@ -821,6 +843,17 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
             most = Math.max(most, roaming.length);
         }
 
+        // (Those more than there'd be about one, each pack's past as many as alone, marked so:
+        // their gold and their parts only, spoils.js)
+        for (const [pack, { least }] of host.packs) {
+            const members = [...host.wild.values()].filter((one) => one.pack === pack);
+
+            assert.ok(members.filter((one) => !one.extra).length <= least, pack);
+            assert.ok(members.filter((one) => one.extra).length <= Math.max(0, members.length - least) || members.length < least, pack);
+        }
+
+        assert.ok([...host.wild.values()].some((one) => one.extra), "some more than about one");
+
         // (More about them than about one, and no more than the opposition has room for)
         assert.ok(packs > 0);
         assert.ok(most > WILDS.count + WILDS.night, `at most ${most} about them`);
@@ -876,6 +909,7 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
             const actor = host.battle.actor(id);
 
             assert.equal(host.wild.get(id).creature, creature);
+            assert.equal(host.wild.get(id).extra, true, "one more than alone");
             assert.equal(actor.maxHp, Math.round(CREATURES[creature].hp * tierPower(tier) * scale.health));
         }
 

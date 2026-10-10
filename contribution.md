@@ -114,6 +114,7 @@ Whatever is merged to `main` goes live, so `main` must always be green.
 | `npm run check` | Lint and the unit tests together: run it before every push |
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
 | `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
+| `npm run balance` | Changes to how the wild answers the players' side, or to how strong players, hirelings or creatures are: the balance runner (docs/WILDS.md, *Tuning it*), each side's fights at tiers 2, 5 and 8. A few minutes; `-- --tiers 5 --sides solo,four` for less |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
