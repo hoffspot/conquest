@@ -76,7 +76,7 @@ export const WEAPONS = Object.freeze({
     grimoire: {
         label: "Grimoire",
         school: "Magic",
-        about: "A book of spells, held open in both hands: it makes them stronger, a quarter more than a wand as strong does. Its own little fireballs, from 7 metres, are weak.",
+        about: "A book of spells, held open in both hands. Spells cast from it are a quarter stronger than from an equally good wand, but there's no hand free for a spellward. Its own little fireballs reach 7 metres and are weak.",
         equipment: ["grimoire"],
         attacks: [ranged({ id: "fireball", reach: 7, damage: [2, 4], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
     },
