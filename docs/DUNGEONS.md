@@ -164,7 +164,12 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 
 - **Made as a player comes near** (`DELVES.near`, 45 m from its way in), from the site's seed and
   theme, at the tier of the land it's in (`dungeonTier`: as the wilds' creatures there,
-  `creatures.js` `tierAt`) and its generation (`buildDungeon`).
+  `creatures.js` `tierAt`), or the mightiest of those finding it (in it, or by its way in) as a
+  cache would be (`caches.js` `cacheTier`), whichever's the more (`host.js` `#findersTier`,
+  `insides.js` `setTier`), and its generation (`buildDungeon`).
+- **Each level's foes as many and as tough as the side there** as it wakes (docs/WILDS.md, *A
+  side's strength*): the boss and mini-bosses tougher, more of each pack and each a little tougher,
+  the more set on free ground beside those the plan has.
 - **Each level its own map**, `site:dungeon-N/level-K` (`site:dungeon-N/gG/level-K` once it's been
   made again), read from its plan rows as any building's floor is. The levels sit well away from
   every other inside (`DUNGEON_ORIGINS`: a column of them for each dungeon, from x 20000).
@@ -304,9 +309,9 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 
 ### Kept
 
-The host keeps each dungeon's state by site (`host.dungeons`): its generation, which levels are
-awake, the slain, the chests opened, and whether it's cleared. It goes into snapshots
-(`SNAPSHOT_VERSION` 8) and saves, and a game taken up again makes each dungeon's levels as many
+The host keeps each dungeon's state by site (`host.dungeons`): its generation, its tier, which
+levels are awake, the slain, the chests opened, and whether it's cleared. It goes into snapshots
+(`SNAPSHOT_VERSION` 8; its tier from 26) and saves, and a game taken up again makes each dungeon's levels as many
 times over as they had been, so a player saved deep in a dungeon is back where they were.
 
 ## Always the same, and stable as it grows (`seeds.js`)
