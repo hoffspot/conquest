@@ -5667,6 +5667,10 @@ test("a people's castle's undercroft, down the stairs from its great hall: the c
 
         Object.assign(player, { x: quartermaster.square[0] + 0.5, y: 3.5, path: [], order: null, progress: null });
 
+        // (The camera turned to look past the player at them, as it doesn't follow round)
+        game.cameraFollow.yaw = Math.atan2(player.x - quartermaster.x, player.y - quartermaster.y);
+        game.cameraFollow.turning = 0;
+
         for (let k = 0; k < 20; k++) {
             game.advance(0.1);
         }
