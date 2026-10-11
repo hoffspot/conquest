@@ -764,9 +764,10 @@ export function dressCreature(kit, id, options) {
 /**
  * The same (dressCreature), a step at a time (each a yield: a people-shaped one's character is
  * built in steps, Character.building's; a beast's body, the first time one of its kind's is
- * wanted, sculpted in steps, sculpting's), returning it.
+ * wanted, sculpted in steps, sculpting's), returning it. (`release`: a people-shaped one's skin
+ * let go of once it's sent, Character's.)
  */
-export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1, champion = null, regalia = null } = {}) {
+export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1, champion = null, regalia = null, release = false } = {}) {
     // (A dungeon's boss or mini-boss, `champion` its rank and `regalia` its id: champions.js)
     const own = championLook(champion, regalia);
 
@@ -775,7 +776,7 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
     }
 
     const look = humanoidLook(id, seed);
-    const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: wearing([...look.equipment, ...equipment], own?.wear ?? []), hairDetail, merge: true });
+    const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: wearing([...look.equipment, ...equipment], own?.wear ?? []), hairDetail, merge: true, release });
     const scale = sizeOf(id, seed) * (own ? championScale(own, character.height * sizeOf(id, seed)) : 1);
 
     character.object.scale.setScalar(scale);

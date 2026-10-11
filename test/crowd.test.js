@@ -40,6 +40,7 @@ const { allAtOnce } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
 const { CROWD, CROWD_CASTS, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
+const { released } = await import("../client/js/world/release.js");
 
 const humanFiles = readHumanFiles();
 const human = new HumanData(humanFiles.manifest, humanFiles.data);
@@ -217,6 +218,47 @@ describe("a kind's figure (crowd.js figureOf)", () => {
         }
 
         assert.ok(furthestFrom(posedFigure(character, geometry), cornersOf(character)) < 0.002, "mid-swing");
+    });
+});
+
+describe("a character's skin let go of once it's sent (character.js release)", () => {
+    it("lets go of the page's copy of its skin and bumps as they're sent, if it's one of the game's; painted again, they're sent and let go of again; and a figure's still merged from it", () => {
+        const look = soldierLook({ people: "human", weapon: "sword", seed: 5 });
+        const kept = new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: 0.2, merge: true });
+        const character = new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: 0.2, merge: true, release: true });
+        const { map, bumpMap } = character.materials.body;
+        // (Sent to the graphics card, as three.js tells once it has: its onUpdate)
+        const send = (texture) => texture.onUpdate?.(texture);
+
+        assert.ok(map.image.data && bumpMap.image.data, "kept till it's sent");
+
+        for (const texture of [map, bumpMap, kept.materials.body.map]) {
+            send(texture);
+        }
+
+        assert.equal(map.image.data, null);
+        assert.equal(bumpMap.image.data, null);
+        assert.equal(released.any, true, "the page loads again if the drawing's lost (main.js)");
+        assert.ok(kept.materials.body.map.image.data, "not one that isn't the game's (the lab's)");
+        assert.equal(character.skinCanvas, null);
+
+        // (Painted again, the same texture's given the new picture, sent, and let go of again)
+        const version = map.version;
+
+        character.setLook({ ...look.look, skin: { ...look.look.skin, tone: "#5a3a2a" } });
+        assert.equal(character.materials.body.map, map);
+        assert.ok(map.image.data && map.version > version, "the new picture, to send");
+        send(map);
+        assert.equal(map.image.data, null);
+
+        // (Merged into a crowd's figure: its skin's place left as its colour, not painted from
+        // pixels it no longer has)
+        character.sheathe(false);
+
+        const { geometry, picture } = figureOf(character, 64);
+
+        assert.ok(geometry.attributes.position.count > 1000);
+        assert.equal(picture.image.width, 128);
     });
 });
 

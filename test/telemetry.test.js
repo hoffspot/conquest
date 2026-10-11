@@ -90,6 +90,50 @@ describe("the debug log (telemetry.js)", () => {
         assert.equal(at.log.events.length, 1);
     });
 
+    it("says what a frozen frame gave the graphics card: the shaders it made, by material, and the textures and geometries it sent", () => {
+        const at = logOn();
+        const info = { programs: [{ id: 0, type: "ShaderMaterial", name: "sky" }, { id: 1, type: "MeshStandardMaterial", name: "" }], memory: { textures: 40, geometries: 300 } };
+
+        at.log.playing = true;
+        at.log.graphics = info;
+        frame(at, 16, { draw: 4 });
+        frame(at, 16, { draw: 4 });
+
+        // (Two more shaders for a lit window's material and another of the sky's, as three.js
+        // numbers them; a texture and geometries sent, as the frame's drawn)
+        at.time.now += 16;
+        at.log.begin(at.time.now);
+        info.programs.push({ id: 2, type: "MeshLambertMaterial", name: "lit windows" }, { id: 3, type: "MeshLambertMaterial", name: "lit windows" }, { id: 4, type: "ShaderMaterial", name: "sky" });
+        info.memory.textures += 3;
+        info.memory.geometries += 12;
+        at.time.now += 400;
+        at.log.mark(PHASE.draw);
+        at.log.end(416, () => ({}));
+
+        assert.deepEqual(at.log.events[0].made, { shaders: { "MeshLambertMaterial lit windows": 2, "ShaderMaterial sky": 1 }, textures: 3, geometries: 12 });
+
+        // (Nothing made: nothing said; between frames, since the frame before began)
+        const still = logOn();
+
+        still.log.playing = true;
+        still.log.graphics = { programs: [{ id: 7, type: "ShaderMaterial", name: "sky" }], memory: { textures: 1, geometries: 2 } };
+        frame(still, 16, { draw: 4 });
+        frame(still, 300, { draw: 300 });
+        assert.equal(still.log.events[0].made, undefined);
+
+        const gap = logOn();
+        const later = { programs: [], memory: { textures: 0, geometries: 0 } };
+
+        gap.log.playing = true;
+        gap.log.graphics = later;
+        frame(gap, 16, { draw: 4 });
+        later.programs.push({ id: 9, type: "MeshBasicMaterial", name: "" });
+        later.memory.textures = 2;
+        frame(gap, 500, { draw: 5 });
+        assert.equal(gap.log.events[0].where, "between");
+        assert.deepEqual(gap.log.events[0].made, { shaders: { MeshBasicMaterial: 1 }, textures: 2 });
+    });
+
     it("keeps each kind at most so often, the newest five, across loads; and forgets them all when cleared", () => {
         const at = logOn();
 

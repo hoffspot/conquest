@@ -4525,7 +4525,12 @@ to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser'
   the battle's steps, setting up, everyone moved and posed, the effects and the HUD, the world
   round the player, the buildings' insides and their folk, the bars over heads, drawing); or the
   time went between frames, the page busy with something else (collecting its garbage, a worker's
-  word handled, the browser held up), kept with the frame before's phases.
+  word handled, the browser held up), kept with the frame before's phases. With what the graphics
+  card was given meanwhile (`made`, since the frame began, or the frame before for time between
+  frames): the shaders made, how many of each by their material's type and name (three.js
+  numbers each program as it's made, so the newest when a frame begins is all that's kept), and
+  how many more textures and geometries it holds; a frozen frame that made a dozen shaders, or
+  sent forty pictures, says so.
 - **Slow going**: the middle of 3 seconds' frames under 30 a second, with each phase's time on
   average over them.
 - **An error** no one caught, a frame's work failing (app/game.js `#fault`) or a promise refused,
@@ -4584,10 +4589,25 @@ its copy, and the page's copy would only be read to give it the same again. For 
 the page reads once it's made, the page's copy is let go of once it's there (world/release.js, on
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
 (kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
-pictures (ground.js); and the buildings' and props' picture atlas (art/engine/atlas.js), with the
-copy kept to hand it to the next atlas made. Not a character's pictures (their garments and skins
-are composited and sampled again: characters/character.js, world/crowd.js, skin.js), nor a mesh
-that's merged, cloned, posed or bent. And Recast's WebAssembly (the navigation meshes) starts with
+pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
+copy kept to hand it to the next atlas made; and each of the game's characters' own skin, 4 MB of
+colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
+again, as a disguise or a change of look does, it's sent and let go of again). Not the pictures of
+what characters wear (composited from each garment's, and painted into a crowd's figure:
+characters/character.js, world/crowd.js; a crowd's figure is made from a character of its own,
+before it's ever sent, and one whose skin's been let go of is coloured by its material there),
+nor the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged, cloned, posed or
+bent. What each body keeps that's the same for every body of its build is kept once for them all:
+its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
+coordinates are), and the moves' compiled tracks only once a move's first played (characters/
+actions.js `tracksOf`: 7.5 MB of them for every attack, rest, emote, draw and put-away, compiled
+before as the page loaded); and the triangles hidden under what a body wears are a byte each, not
+a set of their numbers (14 MB for 34 bodies before). Thirty seconds into the start town (headless
+Chromium, High, seed 1) the bodies' own copies on the page were 322 MB before and 244 MB after, the
+page's heap 731 MB and 625 MB, and the graphics card's 200 MB and 249 MB (the pictures of what's
+shown sent while loading, not when first looked at), what the game holds all told 970 MB and
+913 MB; most of what's left on the page are the skins of the folk dressed inside buildings the
+player isn't in, kept till they're seen. And Recast's WebAssembly (the navigation meshes) starts with
 16 MB, not the 64 MB it was built with: its static data and stack are under 100 KB, and it grows as
 the meshes want more, in the page and in the navigation worker both (scripts/vendor-recast.js
 patches the vendored module's memory section: scripts/wasm-memory.js). Turning the camera all the
@@ -4638,10 +4658,23 @@ desktop): walking across the world, no frame's streaming takes over 8 ms there. 
 sees 160 metres; past that, the far land out to 1, 2 or 4 km (low, medium, high), in four to
 eight more draw calls and about 50,000 more triangles (the view, *The far land and the haze*).
 Everything that can be is built once: the town is merged, shaders are compiled while loading
-(and a character, creature, wyvern or dragon that comes later has its compiled before it's first
-drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
+(the far land's and the sky's with the rest's, drawn first as they are; and a character,
+creature, wyvern or dragon that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
-start, so their shader's the one compiled while loading), particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
+start, so their shader's the one compiled while loading), the pictures of what's shown are sent to
+the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
+each in the first frame it's drawn in, and the first frames wait on them all), and the loading
+waits till the graphics card has them (`View.settled`, a fence looked at between frames: what's
+sent is only on its way, the browser's graphics work being done in a process of its own, and
+would otherwise hold up the first frames still), and someone coming
+into view (made, come into the player's building or near them, or the camera turned to them) is
+kept hidden till theirs are sent, two a frame (`SENDING`, app/game.js `#sending`: a skin and its
+bumps are 5 MB, and a building's dozen folk all sent in the one frame held it up); those out of
+sight (a building's folk the player's outside), or out in the world out of the camera's view (3
+metres round them, for their shadows), aren't given room on the graphics card till they're
+wanted. In headless
+Chromium (High, seed 1) the draws before play begins took 9.2 s before and 3.8 s after, with
+0.6 s more of loading sending the pictures, particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
 and a small texture (a megabyte) each, uploaded again only when a blow lands or a wound heals.
 Each frame works out the place in the world of only what's shown (`View #updateShown`: the
@@ -4787,9 +4820,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   worked out first and how many corners it has still known; a picture's pixels once uploaded, and
   whatever else held them, what it was told before still told, and a picture waiting for its pixels
   let go of only once it has them; Recast's WebAssembly starting with 16 MB, still a module with
-  its memory its own, and made to start with 64 again the module as built but for two bytes. E2E:
-  the picture lost once the page has let go, and given back: the page loaded again, the title
-  carrying on with the same character.
+  its memory its own, and made to start with 64 again the module as built but for two bytes.
+  `test/crowd.test.js` also: a character's skin and bumps let go of once they're sent, if it's one
+  of the game's (not otherwise), painted again into the same texture, sent and let go of again,
+  and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
+  has let go, and given back: the page loaded again, the title carrying on with the same
+  character.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
@@ -4810,8 +4846,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   notes, when the last were written, only the slow work of the last half minute, and the work
   begun lately, that begun after the last notes marked), work told of as it takes its first step,
   once, by name (core/steps.js); memory past each mark once, and the heap near its limit, a crash
-  keeping what was held; each kind kept at most so often, the newest five, across loads, and
-  cleared; the log as text to copy; and the debug overlay's memory lines, the way-finding's and
+  keeping what was held; what a frozen frame gave the graphics card (the shaders made, by material,
+  and the textures and geometries sent), nothing if nothing, and since the frame before for time
+  between frames; each kind kept at most so often, the newest five, across loads, and cleared; the
+  log as text to copy; and the debug overlay's memory lines, the way-finding's and
   the bodies' own copies among them. `test/release.test.js`: what the page still holds of objects
   counted, each mesh and picture once however many share it, none let go of. E2E: a crash found from
   the last game's notes; a frame held up (with what the graphics card held) and an error thrown,

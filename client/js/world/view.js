@@ -552,7 +552,65 @@ export class View {
         return this.renderer.compileAsync(object, this.camera, this.scene);
     }
 
-    /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
+    /**
+     * Send every picture what's shown in the scenes (or under `roots`; `hidden` too, if asked) is
+     * drawn with to the graphics card now (while the game's loading, or a character before it's
+     * shown: app/game.js #sending), rather than in the first frame it's drawn in, which would wait
+     * on it (on a phone, a long pause as play starts). Those already sent aren't sent again, and
+     * what's hidden isn't given room on the graphics card till it's wanted. Returns how many there
+     * are.
+     */
+    upload(roots = [this.scene, this.far.scene], { hidden = false } = {}) {
+        const sent = new Set();
+        const send = (value) => {
+            if (value?.isTexture && !sent.has(value)) {
+                sent.add(value);
+                this.renderer.initTexture(value);
+            }
+        };
+
+        for (const root of roots) {
+            send(root.environment);
+            root[hidden ? "traverse" : "traverseVisible"]((node) => {
+                for (const material of [node.material ?? []].flat()) {
+                    Object.values(material).forEach(send);
+                    Object.values(material.uniforms ?? {}).forEach((uniform) => send(uniform?.value));
+                }
+            });
+        }
+
+        return sent.size;
+    }
+
+    /**
+     * Wait till the graphics card's done all it's been given so far (pictures sent, shaders
+     * compiled): the browser hands it on to be done after (a browser's graphics card work done
+     * in a process of its own), so what's sent while the game's loading would otherwise hold up
+     * the first frames drawn instead. A frame at a time, not holding the page up; `most` ms at
+     * the most. Resolves at once without a way to tell (WebGL 1).
+     */
+    async settled({ most = 20000 } = {}) {
+        const gl = this.renderer.getContext();
+
+        if (typeof gl.fenceSync !== "function") {
+            return;
+        }
+
+        const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        const until = performance.now() + most;
+
+        gl.flush();
+
+        try {
+            // (Its state changes only between the page's tasks: looked at again after each wait)
+            while (gl.getSyncParameter(fence, gl.SYNC_STATUS) !== gl.SIGNALED && performance.now() < until) {
+                await new Promise((resolve) => setTimeout(resolve, 16));
+            }
+        } finally {
+            gl.deleteSync(fence);
+        }
+    }
+
     /** Draw this share of the pixels the quality level and render scale would (app/governor.js). */
     adapt(scale) {
         this.adaptiveScale = scale;
@@ -560,6 +618,7 @@ export class View {
         this.resize();
     }
 
+    /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
     setRenderScale(scale) {
         this.renderScale = scale;
         this.setQuality(this.qualityName);

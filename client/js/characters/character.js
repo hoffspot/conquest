@@ -23,6 +23,7 @@ import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
+import { releaseTexture } from "../world/release.js";
 
 /** How a character looks unless told otherwise. */
 export const LOOK_DEFAULTS = Object.freeze({
@@ -41,6 +42,26 @@ const ROBED = 0.9;
 // How many pictures of outfits (or of eyes) no one is wearing just now are kept, for the next to
 // wear one
 const IDLE_COMPOSITES = 8;
+
+// Each body's bones and weights at each of its drawn vertices (its human's: the same for everyone
+// of it, whatever their shape), worked out once and shared, as its eyelashes' layout is
+const skinnings = new WeakMap();
+
+function skinningOf(human) {
+    if (!skinnings.has(human)) {
+        const count = human.renderSource.length;
+        const skinIndex = new Uint8Array(count * 4);
+        const skinWeight = new Uint8Array(count * 4);
+
+        human.renderSource.forEach((v, r) => {
+            skinIndex.set(human.skinIndices.subarray(v * 4, v * 4 + 4), r * 4);
+            skinWeight.set(human.skinWeights.subarray(v * 4, v * 4 + 4), r * 4);
+        });
+        skinnings.set(human, { skinIndex, skinWeight });
+    }
+
+    return skinnings.get(human);
+}
 const IDLE_EYES = 8;
 
 // How a carried torch's shaft lies across the palm (radians from straight across, towards the
@@ -268,15 +289,19 @@ export class Character {
      *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
      * @param {boolean} [options.far] - Whether it'll be drawn with fewer triangles from afar or
      *   into shadows (lowerDetail): its hair's grown far thinner too (by default, if it's merged).
+     * @param {boolean} [options.release] - Let go of the page's copy of its skin's pictures once
+     *   they're on the graphics card (world/release.js): for the game's many, whose skins nothing
+     *   on the page reads again (not the lab's, saved as a template: skinCanvas).
      */
     constructor(kit, options = {}, later = null) {
-        const { materials = {}, hairDetail = 1, merge = false, far = merge } = options;
+        const { materials = {}, hairDetail = 1, merge = false, far = merge, release = false } = options;
         const human = kit.human;
 
         this.kit = kit;
         this.hairDetail = hairDetail;
         this.merge = merge;
         this.far = far;
+        this.release = release;
 
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
@@ -367,8 +392,12 @@ export class Character {
         castCheaply(this.mesh, { groups: this.detail.shadow });
         this.object.add(this.mesh);
 
-        /** Body triangles hidden under clothing (indices of the body part's triangles). */
-        this.hidden = new Set();
+        /**
+         * Body triangles hidden under clothing: a byte for each of the body part's triangles, 1
+         * where it's hidden (none, null). A byte each, not a set of them: tens of thousands of
+         * them, for everyone drawn.
+         */
+        this.hidden = null;
 
         if (later !== LATER) {
             allAtOnce(this.#building(options));
@@ -1419,6 +1448,15 @@ export class Character {
         this.#setTexture(this.materials.body, "map", data, width, true);
         this.#setTexture(this.materials.body, "bumpMap", bump, width, false);
         this.materials.body.bumpScale = 1.2;
+
+        // (Its 4 MB of colour and 1 MB of bumps let go of once they're sent, if it's one of the
+        // game's: painted again, they're sent and let go of again)
+        for (const texture of this.release ? [this.materials.body.map, this.materials.body.bumpMap] : []) {
+            if (!texture.userData.released) {
+                texture.userData.released = true;
+                releaseTexture(texture);
+            }
+        }
     }
 
     // Its eyes' picture: painted once for each look of eye, and shared by everyone with it
@@ -1522,13 +1560,14 @@ export class Character {
 
     /**
      * Put a painted picture (rows from the top: RGBA, or a byte a texel for heights) into a
-     * material's texture, reusing it if it's the same size.
+     * material's texture, reusing it if it's the same size (and kind: its pixels may have been
+     * let go of, once sent).
      */
     #setTexture(material, slot, data, size, colour) {
         const texture = material[slot];
 
         // (Not one given it on a canvas: materials, the constructor's option)
-        if (texture?.isDataTexture && texture.image.width === size && texture.image.data.length === data.length) {
+        if (texture?.isDataTexture && texture.image.width === size && texture.format === (data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat)) {
             texture.image.data = bytesOf(data);
             texture.needsUpdate = true;
 
@@ -1600,7 +1639,13 @@ export class Character {
 
     /** Hide body triangles (under clothing), replacing those hidden before. */
     setHidden(triangles) {
-        this.hidden = new Set(triangles);
+        const hidden = new Uint8Array(this.human.renderIndices("body").length / 3);
+
+        for (const t of triangles) {
+            hidden[t] = 1;
+        }
+
+        this.hidden = hidden;
         this.#updateIndex();
     }
 
@@ -1608,13 +1653,7 @@ export class Character {
         const human = this.human;
         const count = human.renderSource.length;
         const geometry = new THREE.BufferGeometry();
-        const skinIndex = new Uint8Array(count * 4);
-        const skinWeight = new Uint8Array(count * 4);
-
-        human.renderSource.forEach((v, r) => {
-            skinIndex.set(human.skinIndices.subarray(v * 4, v * 4 + 4), r * 4);
-            skinWeight.set(human.skinWeights.subarray(v * 4, v * 4 + 4), r * 4);
-        });
+        const { skinIndex, skinWeight } = skinningOf(human);
 
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
@@ -1631,7 +1670,7 @@ export class Character {
         }
 
         this.geometry = geometry;
-        this.hidden = new Set();
+        this.hidden = null;
         this.#updateIndex();
 
         return geometry;
@@ -1700,7 +1739,7 @@ export class Character {
         const kept = [];
 
         for (let t = 0; t < body.length / 3; t++) {
-            if (!this.hidden.has(t)) {
+            if (!this.hidden?.[t]) {
                 kept.push(body[t * 3], body[t * 3 + 1], body[t * 3 + 2]);
             }
         }
@@ -1867,11 +1906,14 @@ export class Character {
         this.rig.apply();
     }
 
-    /** The skin's picture as it is now, on a canvas, say to save as a template for painting skins. */
+    /**
+     * The skin's picture as it is now, on a canvas, say to save as a template for painting skins
+     * (null if it's been let go of: the constructor's `release`).
+     */
     get skinCanvas() {
         const image = this.materials.body.map?.image;
 
-        if (!image) {
+        if (!image?.data) {
             return null;
         }
 
