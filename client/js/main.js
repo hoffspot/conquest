@@ -27,6 +27,7 @@ import { telemetry } from "./app/telemetry.js";
 import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
+import { released } from "./world/release.js";
 
 const params = new URLSearchParams(location.search);
 const canvas = document.querySelector("#view");
@@ -50,6 +51,8 @@ window.pellagos = {
     get telemetry() {
         return telemetry;
     },
+    /** Whether the page has let go of anything the graphics card has (world/release.js). */
+    released: () => released.any,
     get creator() {
         return state.creator;
     },
@@ -181,14 +184,24 @@ async function load() {
     });
     state.hud = new hud.Hud($("#hud"));
 
-    // (The drawing lost, as phones do when short of memory: the game paused and the player told,
-    // until it's given back and the shaders made again)
+    // (The drawing lost, as phones do when short of memory: the game paused, where the player is
+    // kept, and the player told, until it's given back and the shaders made again. What the page
+    // let go of once the graphics card had it can't be given it again (world/release.js), so then
+    // the page's loaded again instead, to carry on from where the player was kept)
     state.session.view.onLost = () => {
         telemetry.lost(gameState);
         pause();
         state.hud.message("The picture was lost. Waiting for it to come back…", 0);
     };
     state.session.view.onRestored = async () => {
+        if (released.any) {
+            keepPlace();
+            state.hud.message("The picture's back. Loading the game again…", 0);
+            location.reload();
+
+            return;
+        }
+
         await state.session.view.renderer.compileAsync(state.session.view.scene, state.session.view.camera);
         state.hud.message("");
     };

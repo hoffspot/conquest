@@ -27,6 +27,7 @@
 import * as THREE from "three";
 import { COLOURS, GLOWS, MATERIALS, paintLayer, TINTS } from "./painters.js";
 import { fireLit } from "../../firelight.js";
+import { releaseTexture } from "../../release.js";
 import { WIND_GLSL } from "../../wind.js";
 
 /** How many pixels square each layer is painted. */
@@ -436,7 +437,8 @@ atlasTexel.rgb *= ${(1 - ROCK.mottle).toFixed(2)} + ${(ROCK.mottle * 2).toFixed(
 // The atlas's texture array, made once: its layers as painted (prepareAtlas's, or here and now).
 // Asked for while prepareAtlas's are still being painted (as the game gets the land ready), it
 // takes theirs once they are, rather than painting them all again here: until then it has none,
-// and isn't drawn (the game waits for them before it draws anything)
+// and isn't drawn (the game waits for them before it draws anything). Once the graphics card has
+// them, the page lets go of its copy (and prepareAtlas's: release.js), 14 MB at Medium
 let texture = null;
 
 function atlasTexture() {
@@ -454,6 +456,14 @@ function atlasTexture() {
         texture.minFilter = THREE.LinearMipmapLinearFilter;
         texture.generateMipmaps = true;
         texture.anisotropy = 4;
+        // (prepareAtlas's promise holds them too, as what it resolved with: whatever waits on it
+        // again only waits for them to be painted, and the texture is made once)
+        releaseTexture(texture, () => {
+            if (prepared) {
+                prepared.data = null;
+                prepared.promise = Promise.resolve(null);
+            }
+        });
 
         if (waiting) {
             prepared.promise.then((data) => {

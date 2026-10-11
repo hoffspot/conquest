@@ -20,6 +20,7 @@ import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
+import { releaseTexture } from "./release.js";
 import { splitAlong } from "./far/levels.js";
 import { FAR_FOG } from "./fog.js";
 import { causticTexture, FIELD, SHORE, STILL_WATER, WATER_DETAIL } from "./water.js";
@@ -559,7 +560,8 @@ function patchTexture() {
 }
 
 // A splat texture (splatOf's) for the GPU, mipmapped (a road's or a field's ragged edge, far off,
-// is many texels to a pixel: read from the full-size texture alone, it crawls as the camera moves)
+// is many texels to a pixel: read from the full-size texture alone, it crawls as the camera moves),
+// its pixels let go of on the page once it has them (nothing reads them again: release.js)
 function splatTexture({ data, width, height }) {
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
 
@@ -569,7 +571,7 @@ function splatTexture({ data, width, height }) {
     texture.flipY = false;
     texture.needsUpdate = true;
 
-    return texture;
+    return releaseTexture(texture);
 }
 
 // No land's colour: the grass as it is

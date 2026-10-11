@@ -14,6 +14,11 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "esbuild";
+import { startingMemory, withStartingMemory } from "./wasm-memory.js";
+
+// How much memory Recast's WebAssembly starts with (MB): its build starts it with 64, which it
+// doesn't need (it grows as it wants more), in the page and the navigation worker both
+const STARTING_MEMORY = 16;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const core = path.join(root, "node_modules/@recast-navigation/core");
@@ -31,15 +36,22 @@ const { code } = await transform(source, { minify: true, format: "esm" });
 await mkdir(target, { recursive: true });
 await writeFile(path.join(target, "core.min.mjs"), `// @recast-navigation/core ${version}, by Isaac Mason: MIT License (LICENSE); Recast and Detour by Mikko Mononen: zlib License\n${code}`);
 
-// The WebAssembly module and its glue, as they are (the glue finds the module beside it)
-for (const file of ["recast-navigation.wasm.js", "recast-navigation.wasm.wasm"]) {
-    await copyFile(path.join(wasm, "dist", file), path.join(target, file));
-}
+// The WebAssembly module's glue as it is (it finds the module beside it), and the module made to
+// start with less memory (wasm-memory.js: marked as altered in LICENSE-recastnavigation.txt)
+await copyFile(path.join(wasm, "dist", "recast-navigation.wasm.js"), path.join(target, "recast-navigation.wasm.js"));
+
+const module = await readFile(path.join(wasm, "dist", "recast-navigation.wasm.wasm"));
+
+await writeFile(path.join(target, "recast-navigation.wasm.wasm"), withStartingMemory(module, STARTING_MEMORY));
+console.log(`Recast's memory starts with ${STARTING_MEMORY} MB (built with ${startingMemory(module) / 1048576})`);
 
 await copyFile(path.join(core, "LICENSE"), path.join(target, "LICENSE"));
 await writeFile(
     path.join(target, "LICENSE-recastnavigation.txt"),
     `Recast and Detour (https://github.com/recastnavigation/recastnavigation), built into recast-navigation.wasm.*:
+
+Altered: recast-navigation.wasm.wasm's memory starts with ${STARTING_MEMORY} MB, not the 64 MB it was
+built with (scripts/vendor-recast.js, scripts/wasm-memory.js); nothing else in it is changed.
 
 Copyright (c) 2009 Mikko Mononen memon@inside.org
 
