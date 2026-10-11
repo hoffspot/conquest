@@ -2214,7 +2214,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     shrouded in web, silk cocoons and clusters of black crystal with violet hearts.
 - **Undergrowth**, near the player only (every chunk whose nearest edge is within 64 metres,
   let go past 84), built a few things at a time in the same 6 ms a frame and drawn in tiles 32
-  metres square, each only while it's within 56 metres of the player:
+  metres square, each built only once it's within 64 metres of the player (8 more than where it's
+  first seen, so it's ready before it rises out of the ground) and drawn only while it's within
+  56:
   - grass in tufts (short and tall, with seed heads; dry straw on the savannah and in the
     badlands, marram on beaches, sedge and reeds with bulrushes by water and in the marsh);
   - wildflowers in drifts of one kind: daisies, poppies, cornflowers, buttercups, dandelions
@@ -2248,11 +2250,19 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,
   stretched, tinted and its texture shifted, so no two look alike, and a tile's are baked into
   one mesh (a lush chunk's undergrowth is about 20,000 triangles, 4 ms to build, grown a step at
-  a time in the frames' budget: where it grows a few rows of squares at a time, the looks it
-  wants made one a step, placed a millisecond at a time, a tile's mesh a step). Its material is
-  the atlas's (`wildsMaterial`): both sides lit as the ground is, each blade's tip stirring in the
-  breeze (a `sway` for each vertex), and past 40 metres from the player everything sinking into
-  the ground, gone by 56, so nothing pops in or out. How thick it grows follows the quality level.
+  a time in the frames' budget: where it grows a few rows of squares at a time and the looks it
+  wants made one a step, then each tile as the player comes near enough, placed a millisecond at
+  a time, its mesh a step). Its material is the atlas's (`wildsMaterial`): both sides lit as the
+  ground is, each blade's tip stirring in the breeze (how much each vertex sways), and past 40
+  metres from the player everything sinking into the ground (to its foot: how high each vertex
+  is over that), gone by 56, so nothing pops in or out. How thick it grows follows the quality
+  level. Each vertex is 36 bytes, not 56 (`Mesher.geometry`, swaying): its position and layer
+  as floats (the ground's up to 420 metres high, where a half float's in steps of a quarter of a
+  metre), its normal in bytes, and its colour, its texture coordinates, its sway and how high it
+  is over its foot in half floats, each triangle's texture coordinates moved a whole number of
+  copies of its picture towards 0 first (they're shifted hundreds of copies by where each thing
+  grows, too far out for a half float; the atlas repeats, so it reads the same); and each four
+  bytes or a multiple of four, as graphics cards read them without copying them first.
 - **Tall grass** (terrain plan M7b; `world/grassmap.js`, `world/grass.js`), thick over the open
   land round the player, knee to waist high: a field, as the Elden Ring's are, not tufts on a
   lawn.
@@ -4651,6 +4661,20 @@ overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB l
 JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
 same.
 
+**The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
+reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
+four tiles a chunk, a third of them were built out past the 56 metres where any of it shows, for
+nothing but to be held. Now each tile is built only once it's within 64 metres itself (chunks3d.js
+`UNDERGROWTH.ahead`: 8 more than where it's first seen), shown or hidden as soon as it's made (not
+drawn once far off before the next frame hides it), and each of its vertices is 36 bytes, not 56
+(above). Where the game starts (Chromium, High), 24 tiles are built rather than 36 (850,000
+vertices rather than 1.5 million; 29 MB of them rather than 82), the page holding 21 MB of them
+before any's drawn rather than 69, and none once the camera's turned all the way round rather than
+36 MB (12 tiles never drawn); the graphics card's buffers then 72 MB rather than 88. In the woods
+130 metres west, likewise, 5 MB of the undergrowth's copies were held rather than 40 (4 tiles
+built, not yet in sight, rather than 15), and the graphics card's buffers were 99 MB rather than
+128. The picture's the same, but for a pixel here and there on an edge.
+
 ## Performance
 
 A frame draws the town (the blocks of it in view: a draw call or two each), the ground (one draw
@@ -4759,10 +4783,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   `test/chunks.test.js`: the world drawn round the player (a chunk a step at a time, hidden till
   it's whole, no more than one begun a frame; one half drawn thrown away when the player's gone,
   and all near drawn at once when asked; the undergrowth grown over several frames, the same as
-  all at once; the splat and the undergrowth's places the same a step at a time; a settlement's
-  buildings built a piece at a time, each made ready to merge in a step of its own, merged the
-  same as all at once, drawn whole while the player's near and without the timbers' sides from
-  further off); and the
+  all at once, each tile of it built only once the player's near enough to see it soon, and more
+  as they come nearer; the splat and the undergrowth's places the same a step at a time; a
+  settlement's buildings built a piece at a time, each made ready to merge in a step of its own,
+  merged the same as all at once, drawn whole while the player's near and without the timbers'
+  sides from further off); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -5033,7 +5058,7 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   every land's look, whole and within its budget of triangles, no two looks alike; a chunk's
   features as one mesh; the undergrowth only on open grass, the same every time, thinner when
   asked and in the towns (but not their fields), built a few things at a time in tiles within
-  budget.
+  budget, and packed into 36 bytes a vertex, each value read back as it was made.
 - `test/neutral.test.js`: the sites no people keeps laid out the same for the same seed, within
   their plots, their hearts open; a ruined castle's pieces left to ruin and its gate's way open;
   every one on seed 1 set down, blocking only what stands, its heart open, lying with the land

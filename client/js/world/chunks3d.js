@@ -14,8 +14,8 @@
 //
 // The chunks near the player (those within WILDS.fade's reach, give or take) have their
 // undergrowth too: grass, flowers, ferns, pebbles, sticks... (kits/wilds.js), built a few at a time
-// in the same budget, and let go again once the player's gone far enough that it's all sunk into
-// the ground.
+// in the same budget, a tile of it at a time as the player comes near enough to see it soon, and
+// let go again once the player's gone far enough that it's all sunk into the ground.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -72,10 +72,13 @@ export const LOAD_BUDGET = 40;
 const PLACING = 1;
 
 /**
- * Undergrowth is grown for chunks whose nearest edge is within `grow` metres of the player, and let
- * go once it's more than `drop` (past where it's all sunk into the ground: WILDS.fade).
+ * Undergrowth is grown for chunks whose nearest edge is within `grow` metres of the player (where
+ * it grows found, and the looks it wants made), each of its tiles built only once that's within
+ * `ahead` metres of where it's first seen (WILDS.fade's far end: so none's built that can't be
+ * shown yet, and each is ready before it rises out of the ground), and all of it let go once the
+ * chunk's more than `drop` (past where it's all sunk into the ground).
  */
-export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
+export const UNDERGROWTH = Object.freeze({ grow: 64, ahead: 8, drop: 84 });
 
 /**
  * A chunk's buildings are drawn whole while its nearest edge is within this many metres of the
@@ -102,6 +105,10 @@ const WALK_LAYER = 0.003;
 const RAIL = Object.freeze({ height: 0.95, thick: 0.1, post: 0.14, every: 1.8 });
 
 const key = (cx, cy) => cy * CHUNKS + cx;
+
+// How far (x, z) is from the nearest edge of a square `size` metres across, its corner at (x0, z0)
+// (metres: 0 within it)
+const offSquare = (x0, z0, size, x, z) => Math.hypot(Math.max(x0 - x, 0, x - (x0 + size)), Math.max(z0 - z, 0, z - (z0 + size)));
 
 export class Chunks {
     /**
@@ -152,9 +159,10 @@ export class Chunks {
         // it's still being drawn, hidden), job (its buildings, while they're being built: {
         // pieces, index, group, waiting, trees, built, parts }), buildings (once they're built,
         // merged) and far (whether they're drawn as from far off: #detail), growth (its
-        // undergrowth while it's being grown: its steps), undergrowth (its meshes), cliffs (its
-        // cliffs' mesh, if it has any: setCliffs), arches (its arches of rock's mesh, if it has
-        // any) }; the steps
+        // undergrowth while it's being grown: its steps), sown (where its undergrowth grows,
+        // once that's found: a Growth, its tiles those not yet built), undergrowth (its tiles'
+        // meshes, those built), cliffs (its cliffs' mesh, if it has any: setCliffs), arches (its
+        // arches of rock's mesh, if it has any) }; the steps
         // of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
@@ -303,8 +311,9 @@ export class Chunks {
         return this.drawing !== null || this.building.length > 0 || this.growing.length > 0 || this.wanted.some(([cx, cy]) => !this.drawn.has(key(cx, cy)));
     }
 
-    // Keep the undergrowth where the player is: grown for the chunks near them (queued), let go
-    // for those they've left behind
+    // Keep the undergrowth where the player is: grown for the chunks near them (queued), and
+    // again whenever a tile of one they've come nearer is to be built (#wanted), let go for those
+    // they've left behind
     #tend(x, z) {
         WILDS.focus.value.set(x, z);
 
@@ -317,21 +326,17 @@ export class Chunks {
                 continue;
             }
 
-            const [x0, z0] = [drawn.cx * CHUNK, drawn.cy * CHUNK];
-            const off = Math.hypot(Math.max(x0 - x, 0, x - (x0 + CHUNK)), Math.max(z0 - z, 0, z - (z0 + CHUNK)));
+            const off = offSquare(drawn.cx * CHUNK, drawn.cy * CHUNK, CHUNK, x, z);
 
-            if (off <= UNDERGROWTH.grow && !drawn.growth && !drawn.undergrowth) {
+            if (off <= UNDERGROWTH.grow && !drawn.growth && (!drawn.undergrowth || this.#wanted(drawn))) {
                 drawn.growth = this.#growing(drawn);
                 this.growing.push(drawn);
             } else if (off > UNDERGROWTH.drop && (drawn.growth || drawn.undergrowth)) {
                 this.#uproot(drawn);
             }
 
-            // (Each tile drawn only while any of it is near enough not to have sunk from sight)
             for (const mesh of drawn.undergrowth ?? []) {
-                const [tx, tz] = mesh.userData.tile;
-
-                mesh.visible = Math.hypot(Math.max(tx - x, 0, x - (tx + TILE)), Math.max(tz - z, 0, z - (tz + TILE))) < WILDS.fade.value.y;
+                mesh.visible = this.#seen(mesh);
             }
         }
 
@@ -357,35 +362,54 @@ export class Chunks {
     }
 
     // Grow what undergrowth can be grown before `until` (performance.now()'s), a step at a time;
-    // whether a chunk's was finished
+    // whether a tile of it was finished
     #grow(until) {
-        let finished = false;
+        const was = this.version;
 
         while (this.growing.length && performance.now() < until) {
             const drawn = this.growing[0];
-            const step = drawn.growth.next();
 
-            if (step.done) {
+            if (drawn.growth.next().done) {
                 this.growing.shift();
                 drawn.growth = null;
-                drawn.undergrowth = step.value;
-
-                for (const mesh of drawn.undergrowth) {
-                    drawn.object.add(mesh);
-                }
-
-                finished = true;
-                this.version++;
             }
         }
 
-        return finished;
+        return this.version !== was;
     }
 
-    // Grow a chunk's undergrowth, a step at a time (each a yield), returning its meshes: where it
-    // grows (a few rows of squares a step), the looks it wants made (a look a step), placed (a
-    // millisecond's worth a step), then a tile's mesh a step
+    // Grow a chunk's undergrowth, a step at a time (each a yield): where it grows found, the first
+    // time (#sowing); then each of its tiles that's wanted now (#wanted), the nearest first,
+    // placed (a millisecond's worth a step) and its mesh made (a step), drawn if it's near enough
+    // already
     *#growing(drawn) {
+        if (!drawn.sown) {
+            drawn.sown = yield* this.#sowing(drawn);
+            drawn.undergrowth = [];
+        }
+
+        for (let tile = this.#wanted(drawn); tile; tile = this.#wanted(drawn)) {
+            while (!drawn.sown.grow(performance.now() + PLACING, tile)) {
+                yield;
+            }
+
+            yield;
+
+            const mesh = drawn.sown.mesh(tile);
+
+            if (mesh) {
+                mesh.visible = this.#seen(mesh);
+                drawn.undergrowth.push(mesh);
+                drawn.object.add(mesh);
+                this.version++;
+            }
+        }
+    }
+
+    // Where a chunk's undergrowth grows, a step at a time (each a yield): where it grows (a few
+    // rows of squares a step), then the looks it wants made (a look a step); returning it sorted
+    // into its tiles, none of them built yet (a Growth)
+    *#sowing(drawn) {
         const chunk = this.overworld.chunk(drawn.cx, drawn.cy);
         const items = yield* sowing(this.overworld, chunk, { density: this.undergrowth });
 
@@ -406,26 +430,41 @@ export class Chunks {
 
         yield* undergrowthLooks(items);
 
-        const growth = new Growth(items, [chunk.x0, chunk.y0]);
+        return new Growth(items, [chunk.x0, chunk.y0]);
+    }
 
-        while (!growth.grow(performance.now() + PLACING)) {
-            yield;
+    // The nearest of a chunk's tiles of undergrowth not yet built that's to be built now: within
+    // UNDERGROWTH.ahead of where it's first seen from the player (WILDS.fade's far end), if any
+    #wanted(drawn) {
+        const { x, y } = WILDS.focus.value;
+        let wanted = null;
+        let nearest = WILDS.fade.value.y + UNDERGROWTH.ahead;
+
+        for (const tile of drawn.sown?.tiles ?? []) {
+            const off = offSquare(tile.at[0], tile.at[1], TILE, x, y);
+
+            if (off <= nearest) {
+                wanted = tile;
+                nearest = off;
+            }
         }
 
-        const meshes = [];
+        return wanted;
+    }
 
-        for (const mesh of growth.meshing()) {
-            meshes.push(mesh);
-            yield;
-        }
+    // Whether a tile of undergrowth is drawn: only while any of it is near enough the player not
+    // to have sunk from sight
+    #seen(mesh) {
+        const [tx, tz] = mesh.userData.tile;
 
-        return meshes;
+        return offSquare(tx, tz, TILE, WILDS.focus.value.x, WILDS.focus.value.y) < WILDS.fade.value.y;
     }
 
     // Let a chunk's undergrowth go (or stop growing it)
     #uproot(drawn) {
         this.growing = this.growing.filter((other) => other !== drawn);
         drawn.growth = null;
+        drawn.sown = null;
 
         for (const mesh of drawn.undergrowth ?? []) {
             mesh.removeFromParent();
@@ -752,7 +791,7 @@ export class Chunks {
         const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
-        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null, cliffs: null, arches: null };
+        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, sown: null, undergrowth: null, cliffs: null, arches: null };
         // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
         const standing = (boxes) => {
             for (const { min, max, top } of boxes) {

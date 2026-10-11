@@ -316,9 +316,10 @@ let wilds = null;
 /**
  * The atlas's material for the undergrowth (grass, flowers, pebbles, sticks: kits/wilds.js): both
  * sides of each blade and petal drawn, lit as the ground is whichever side is seen; the higher up a
- * blade each vertex is (a `sway` attribute, 0 at its foot to 1 at its tip), the more it stirs in
- * the breeze (`time`: seconds, a uniform the game keeps going); and further from the player than
- * WILDS.fade, sunk into the ground, so none of it pops in or out of sight.
+ * blade each vertex is (its sway, the first of a `wild` attribute: 0 at its foot to 1 at its tip),
+ * the more it stirs in the breeze (`time`: seconds, a uniform the game keeps going); and further
+ * from the player than WILDS.fade, sunk into the ground (to its foot, a little under: how high
+ * over that each vertex is, the second of `wild`), so none of it pops in or out of sight.
  */
 export function wildsMaterial(time) {
     if (wilds) {
@@ -333,8 +334,10 @@ export function wildsMaterial(time) {
     material.onBeforeCompile = (shader) => {
         fromAtlas(shader, uniforms);
         shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", `#include <common>\nattribute float sway;\nattribute float foot;\nuniform float wildsTime;\nuniform vec2 wildsFocus;\nuniform vec2 wildsFade;\nuniform float wildsSway;\n${WIND_GLSL}`)
+            .replace("#include <common>", `#include <common>\nattribute vec2 wild;\nuniform float wildsTime;\nuniform vec2 wildsFocus;\nuniform vec2 wildsFade;\nuniform float wildsSway;\n${WIND_GLSL}`)
             .replace("#include <begin_vertex>", `#include <begin_vertex>
+float sway = wild.x;
+float foot = transformed.y - wild.y;
 vec3 wildAt = (modelMatrix * vec4(transformed, 1.0)).xyz;
 float wildPhase = wildAt.x * 0.61 + wildAt.z * 0.47;
 float wildGusting = windGust(wildAt.xz, wildsTime);
