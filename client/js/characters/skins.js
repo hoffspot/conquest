@@ -18,6 +18,11 @@ export class Skins {
         this.worker = null;
         this.analysed = null;
 
+        // Whether the worker worked the atlas out itself (`analyse`): then it makes its own fields
+        // for fur, stripes and scales when they're first wanted, not this page (half a second of a
+        // phone's, the first time someone furry was dressed: a boggart coming out of the wild)
+        this.whole = false;
+
         // The skins asked for and not yet painted, by id; the atlas's fields sent over so far
         this.jobs = new Map();
         this.sent = new Set();
@@ -77,6 +82,8 @@ export class Skins {
                       this.sent.add(name);
                   }
 
+                  this.whole = true;
+
                   return atlas;
               }, here)
             : here();
@@ -116,8 +123,9 @@ export class Skins {
             return null;
         }
 
-        // (Fur, stripes and scales: their fields made, the first time, and sent over)
-        if (settings.fur || settings.stripes || settings.scales) {
+        // (Fur, stripes and scales: their fields made, the first time, and sent over; or made there,
+        // if the worker has the whole atlas: skin.js paintingSkin)
+        if (!this.whole && (settings.fur || settings.stripes || settings.scales)) {
             this.atlas.furAndScales();
             this.#send();
         }
