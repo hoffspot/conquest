@@ -73,6 +73,7 @@ import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } f
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
+import { heightAt as landHeightAt } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
@@ -1357,7 +1358,11 @@ export class Game {
         // (Banners and camps only ever outside, on the world's ground)
         this.banners.setGround(this.groundOf("town"));
         this.camps.setGround(this.groundOf("town"));
-        this.forts3d.setGround(this.groundOf("town"));
+        // (Their far shapes on the land as it's seen from afar, where the far land and the places'
+        // far shapes are: the ground itself would lay out the land round every one of them to say)
+        const [lx, lz] = this.originOf("town");
+
+        this.forts3d.setGround(this.groundOf("town"), world.plan ? (x, z) => landHeightAt(world.plan, x - lx, z - lz) : null);
         // (A stockade on the ground under it, not its walkway's deck: core/overworld.js RAISED)
         this.stockades.setGround(this.groundOf("town", { bare: true }));
 
@@ -2441,11 +2446,20 @@ export class Game {
         TREE_WIND.time.value = this.clock;
 
         // (The fortifications and the camps' stockades standing near the player drawn, a couple of
-        // times a second; a stockade's mended stakes rising every frame)
+        // times a second, named in the debug log if that's slow; a stockade's mended stakes rising
+        // every frame)
         if ((this.fortsClock -= dt) <= 0) {
+            const started = performance.now();
+
             this.fortsClock = 0.5;
             this.#syncForts();
             this.#syncStockades();
+
+            const took = performance.now() - started;
+
+            if (took > Steps.SLOW) {
+                Steps.slow?.("fortifications and stockades drawn", took);
+            }
         }
 
         this.stockades?.update(dt);

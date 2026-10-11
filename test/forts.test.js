@@ -563,6 +563,36 @@ describe("the fortifications drawn (art/kits/forts.js, world/forts3d.js, app/map
         assert.equal(scene.children.length, 0);
     });
 
+    it("sets those from afar on the land as it's seen from afar, asking the ground only where they're drawn near", () => {
+        const forts = new Forts(new THREE.Scene(), new THREE.Scene());
+        const asked = { ground: [], land: [] };
+        const list = Array.from({ length: 40 }, (_, k) => ({ id: `fort-${k}`, kind: k % 2 ? "garrison" : "tower", realm: "human", at: [100 + k * 500, 100], facing: 0 }));
+
+        // (The ground's height lays out the land round a point to say, in the game: core/overworld.js)
+        forts.setGround(
+            (x, z) => (asked.ground.push([x, z]), 7),
+            (x, z) => (asked.land.push([x, z]), 5),
+        );
+        forts.sync(list, [100, 120]);
+
+        assert.deepEqual(asked.ground, [[100, 100]], "only the one drawn near");
+        assert.equal(asked.land.length, list.length, "every one from afar");
+        assert.equal(forts.drawn.get("fort-0").position.y, 7);
+
+        const lowest = Math.min(...forts.farGeometry.getAttribute("position").array.filter((_, k) => k % 3 === 1));
+
+        assert.ok(Math.abs(lowest - 3) < 1e-6, `sunk into the land: ${lowest}`);
+
+        // (Without the land's, the ground's: as before)
+        const alone = new Forts(new THREE.Scene());
+
+        alone.setGround(() => 4);
+        alone.sync(list.slice(0, 1), [100, 120]);
+        assert.ok(Math.abs(Math.min(...alone.farGeometry.getAttribute("position").array.filter((_, k) => k % 3 === 1)) - 2) < 1e-6);
+        forts.dispose();
+        alone.dispose();
+    });
+
     it("stands in for one in the battle: as tall as it is, loosing from its loops, doing nothing else", () => {
         for (const kind of FORT_KINDS) {
             const avatar = new FortAvatar(kind);
