@@ -285,7 +285,9 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
             return render(...args);
         };
 
-        for (let k = 0; k < 600 && !telemetry.events.some(({ kind }) => kind === "freeze"); k++) {
+        // (Till that frame's been held up and its freeze kept: not one kept before, a slow frame
+        // as play began, which the log's clearing then lets go of)
+        for (let k = 0; k < 600 && !(held && telemetry.events.some(({ kind }) => kind === "freeze")); k++) {
             await new Promise((resolve) => requestAnimationFrame(resolve));
         }
 
