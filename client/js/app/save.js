@@ -82,6 +82,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     dragSpeed: 1,
     invertTilt: false,
     shake: true,
+    // Full screen while playing (app/fullscreen.js): asked for whenever play starts or carries on
+    fullscreen: true,
     sound: true,
     // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS), and the scale
     // they're on: volumes saved on another (louder) scale are forgotten, for the defaults

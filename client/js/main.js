@@ -18,9 +18,10 @@
 
 import { ASSETS } from "./app/assets.js";
 import { releaseOf } from "./app/catalog.js";
-import { registerServiceWorker } from "./app/device.js";
+import { isInstalledApp, isIOS, lockLandscape, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
+import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
@@ -34,6 +35,25 @@ const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
+
+// Full screen while playing (Game options: app/fullscreen.js); left any other way, the game pauses
+const fullScreen = new FullScreen({
+    wanted: settings.fullscreen,
+    onLeft: () => pause(),
+    onEntered: () => {
+        lockLandscape();
+        raiseWindows();
+    },
+});
+
+// A window opened (the menu, a talk) while full screen was being granted: the page gone full screen
+// after it covers it, still there to be tapped though not seen, so it's opened again over the page
+function raiseWindows() {
+    for (const dialog of document.querySelectorAll("dialog[open]")) {
+        dialog.close();
+        dialog.showModal();
+    }
+}
 
 // The downloader: the catalog's models, fetched in the background (app/fetcher.js), kept out of
 // the way of the game's start and of playing together
@@ -67,6 +87,7 @@ window.pellagos = {
     },
     debug,
     fetcher,
+    fullScreen,
     playing: false,
 };
 
@@ -201,6 +222,8 @@ async function load() {
 
 function title() {
     const save = loadSave(WEAPONS);
+
+    fullScreen.stop();
     const kept = loadCharacters(WEAPONS);
     const continueButton = $("#continuebutton");
     const note = $("#savenote");
@@ -385,6 +408,10 @@ $("#followswitch").checked = settings.cameraFollows;
 $("#battlecamswitch").checked = settings.battleCam;
 $("#invertswitch").checked = settings.invertTilt;
 $("#shakeswitch").checked = settings.shake;
+$("#fullscreenswitch").checked = settings.fullscreen;
+// (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
+$("#fullscreenoption").hidden = !fullScreen.available;
+$("#fullscreennote").hidden = fullScreen.available || !isIOS() || isInstalledApp();
 $("#dragslider").value = Math.round(settings.dragSpeed * 100);
 $("#dragname").textContent = `${Math.round(settings.dragSpeed * 100)}%`;
 $("#adaptiveswitch").checked = settings.adaptive;
@@ -493,6 +520,7 @@ function failed(error) {
 
 async function play(save) {
     state.building = true;
+    fullScreen.play();
 
     // (The one Continue as... carries on with, from now)
     playedSave(save);
@@ -608,6 +636,7 @@ function pause() {
 
 function resume() {
     $("#menu").close();
+    fullScreen.play();
     state.game?.start();
 }
 
@@ -1400,6 +1429,7 @@ function holdForLink(link) {
 // to keep)
 async function playJoined(save, welcome, joining) {
     state.building = true;
+    fullScreen.play();
 
     try {
         await playingJoined(save, welcome, joining);
@@ -1538,6 +1568,7 @@ $("#followswitch").addEventListener("change", (event) => applySetting("cameraFol
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
+$("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
 $("#dragslider").addEventListener("input", (event) => ($("#dragname").textContent = `${event.target.value}%`));
 $("#dragslider").addEventListener("change", (event) => applySetting("dragSpeed", Number(event.target.value) / 100));
 
@@ -1643,6 +1674,23 @@ for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
     document.addEventListener(type, () => state.session?.sound.unlock(), { capture: true });
 }
 
+// Full screen asked for again on a tap or key on the game while it's playing, if it isn't (play
+// started or resumed with no tap to ask from: ?play, a world joined, Resume by Escape). Asked once
+// the tap's done all it does (its click too: the browser still takes it as just tapped), and not
+// for one that opens a window or pauses (the menu button, the pack, M for the map)
+for (const type of ["pointerup", "keyup"]) {
+    document.addEventListener(
+        type,
+        () =>
+            setTimeout(() => {
+                if (document.body.dataset.screen === "hud" && state.game?.running && !document.querySelector("dialog[open]")) {
+                    fullScreen.tapped();
+                }
+            }, 0),
+        { capture: true },
+    );
+}
+
 // Coming back to the page (from another app, or the browser's back and forward cache), the
 // sound is started again if the browser stopped it
 for (const type of ["pageshow", "focus"]) {
@@ -1695,6 +1743,8 @@ function applySetting(key, value) {
         }
     } else if (CAMERA_SETTINGS.includes(key)) {
         applyCamera();
+    } else if (key === "fullscreen") {
+        fullScreen.wanted = value;
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
         showVolumes(value);

@@ -4371,10 +4371,27 @@ it.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
-   Medium, High) and the Adaptive switch (Keeping up, above), a switch for the minimap (off, the compass in its place: above), a switch that turns all the sound
+   Medium, High) and the Adaptive switch (Keeping up, above), a switch for full screen while
+   playing (below), a switch for the minimap (off, the compass in its place: above), a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
    actions pages. Back (or Escape) returns to the menu.
+
+**Full screen while playing** (on to start with: Game options; app/fullscreen.js): the game asks
+the browser for the whole screen whenever play starts or carries on from a tap, click or key
+(Continue, a character chosen or made, Resume), or on the next tap on the game if it's playing
+without (play started with no tap, as `?play` or joining a world does; Resume by Escape, which
+browsers don't take as asking): asked once the tap's done all it does, and not for one that opens
+a window or pauses (the menu button, the pack, M for the map), as the page gone full screen after
+a window's opened covers it (still there to be tapped, though not seen). A window that opens as
+it's being granted all the same is opened again over it. It's left going back to the title, or
+turned off. Left any other
+way while playing (Escape, the browser's own button, Android's back, another app), the game
+pauses, as the menu button does, and Resume asks again. On a phone it's locked to landscape too,
+where the browser allows it (Android). Browsers grant it only straight after a tap, click or key,
+so it's asked only then (`navigator.userActivation`), never to be refused in the console; and
+not at all where the page may not have it: an iPhone keeps full screen for videos, so there's no
+switch, but a word that a game added to the Home Screen plays without Safari's bars.
 
 If the browser takes the picture away (as phones do when short of memory, or switching apps), the
 game pauses and says so ("The picture was lost…"); when it's given back, what was drawn into (the
@@ -4802,6 +4819,17 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   sent to a player outside it; tidied, held to 200 characters, the sixth line in 10 seconds held
   back, none said out of a party, nothing said not sent; and every copy of the world the same
   after.
+- `test/fullscreen.test.js`: full screen asked for as play starts or carries on (the navigation
+  bar hidden), not again while it's on, left back at the title with nothing paused; the player
+  leaving it pausing the game, asked again as play carries on; only on to off pausing, told of
+  more than once or not, and asked once while it's being granted; turned off, left at once and not
+  asked, turned on, asked on the next tap playing, not from the menu; asked only straight after a
+  tap (taking no for an answer), Safari's prefixed way (told it's granted as it changes), and not
+  at all where the page may not. E2E: asked for as Continue starts the game; left by the player,
+  paused, Resume asking again; turned off in Game options, left at once, kept, and not asked
+  again; on, asked as play carries on, not from the menu; playing without it, the menu button's
+  tap not asking, a tap on the world asking; a window opened as it's granted opened again over
+  it; back at the title, left.
 - `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
   foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
   just as it was.

@@ -1,8 +1,9 @@
-// Helpers for phones and tablets: landscape lock, full screen, installing the game as an app.
+// Helpers for phones and tablets: landscape lock, installing the game as an app (full screen:
+// app/fullscreen.js).
 //
 // Browsers only let a web page lock the screen orientation in some situations:
-//  - Android: in full screen (requested when a game starts) or when installed as an app
-//    (the manifest asks for landscape).
+//  - Android: in full screen (asked for while playing: app/fullscreen.js) or when installed as an
+//    app (the manifest asks for landscape).
 //  - iPhone: not at all, but a game added to the Home Screen runs full screen without Safari's
 //    toolbars. The "turn your device" screen (styles.css) covers the game in portrait everywhere.
 
@@ -30,41 +31,16 @@ export function isIOS() {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-export function canUseFullscreen() {
-    return Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen);
-}
-
-export function isFullscreen() {
-    return Boolean(document.fullscreenElement);
-}
-
-/**
- * On touch screens, go full screen and lock to landscape where the browser allows it.
- * Must be called from a tap or click handler. Failures are ignored: the game works either way.
- */
-export async function enterLandscapeFullscreen() {
-    if (!isTouchScreen() || isInstalledApp() || isFullscreen() || !canUseFullscreen()) {
+/** On a touch screen, lock it to landscape where the browser allows it (full screen, on Android). */
+export function lockLandscape() {
+    if (!isTouchScreen()) {
         return;
     }
 
     try {
-        await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-        await screen.orientation?.lock?.("landscape");
+        screen.orientation?.lock?.("landscape")?.catch?.(() => {});
     } catch {
-        // Not allowed here (e.g. desktop browsers or iPhone Safari)
-    }
-}
-
-export async function toggleFullscreen() {
-    try {
-        if (isFullscreen()) {
-            await document.exitFullscreen();
-        } else {
-            await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-            await screen.orientation?.lock?.("landscape");
-        }
-    } catch {
-        // Ignore: full screen or orientation locking is not available
+        // Not allowed here: the "turn your device" screen covers the game in portrait
     }
 }
 
