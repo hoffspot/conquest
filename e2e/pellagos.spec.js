@@ -1734,7 +1734,7 @@ test("in a fight, the battle cam swings round to see the player and their foe fr
     expect(fight.after).toBeLessThan(0.01);
 });
 
-test("the battle cam takes a fight over only once the player and their foe are both wholly on the screen: one coming for them out of view leaves the camera be; come into view, it frames the fight", async ({ page }) => {
+test("the battle cam takes a fight over only once the player and their foe are both wholly on the screen: one coming for them out of view leaves the camera be; come into view, it frames the fight, once: turned by hand, the camera's left as it's turned", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const fight = await page.evaluate(() => {
@@ -1797,8 +1797,17 @@ test("the battle cam takes a fight over only once the player and their foe are b
         game.advance(3);
 
         const behind = Math.atan2(me.object.position.x - it.object.position.x, me.object.position.z - it.object.position.z);
+        const framed = { round: Math.abs(wrap(view.yaw - behind)), seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))] };
 
-        return { away, inFull, round: Math.abs(wrap(view.yaw - behind)), seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))] };
+        // Turned by hand (a drag: taken hold of, turned straight behind the player, let go): left
+        // as it's turned, not swung back round to frame the fight again a second after
+        game.cameraFollow.grab();
+        game.advance(0.1);
+        game.cameraFollow.turn(wrap(behind - game.cameraFollow.yaw));
+        game.cameraFollow.release();
+        game.advance(3);
+
+        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)) };
     });
 
     expect(fight.away).toEqual({ found: true, turned: 0, seen: false });
@@ -1806,6 +1815,7 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.round).toBeGreaterThan(Math.PI / 6 - 0.15);
     expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
     expect(fight.seen).toEqual([true, true]);
+    expect(fight.left).toBeLessThan(0.01);
 });
 
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {

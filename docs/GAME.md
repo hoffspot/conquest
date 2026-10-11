@@ -1383,8 +1383,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `hiddenFrom`, town3d.js `props`) or out of the view (as below: a foe far off, a bow's shot away,
   brings it nearer behind them); of those as clear, the one it turns least to, each step off
   counting as 30 degrees more turning and the side it's on 45 less, so it keeps to its side as
-  the foe steps about rather than swapping round. A drag holds it, and a second after it's let
-  go, it frames the fight again.
+  the foe steps about rather than swapping round. It frames each foe once: turned by hand (a
+  drag) while it frames the fight, it lets that foe be till the fight's over (game.js
+  `battleCamLeft`), the camera left as the player turned it; it had swung back round to frame
+  the fight a second after every drag. Someone else the player then fights it frames once
+  they're wholly on the screen.
 - **With the battle cam off, it doesn't swing round behind the player** as they move about, but
   turns only as far as keeps both of them within 60% of the way from the middle of the view to
   its side (camera.js `keep`: the least turn, 5 degrees at a time, either way round; if none does,

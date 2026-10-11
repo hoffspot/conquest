@@ -842,10 +842,11 @@ export class Game {
          */
         this.cameraSettings = { follows: false, battle: true, shake: true, drag: 1, invert: false };
 
-        // (Who the camera's kept in view in a fight, and till when after: #kept; and who the
-        // battle cam's taken the fight with over: #battleFoe)
+        // (Who the camera's kept in view in a fight, and till when after: #kept; who the battle
+        // cam's taken the fight with over, and those it's let be, turned by hand: #battleFoe)
         this.fightView = null;
         this.battleCamOn = null;
+        this.battleCamLeft = new Set();
 
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
@@ -4187,17 +4188,29 @@ export class Game {
      * the screen, or only partly on it), none: the camera goes on as if there were no fight,
      * rather than swinging round to whoever came for the player, from wherever they were
      * (someone fighting the player from behind the camera has an arrow at the screen's edge:
-     * #threats).
+     * #threats). And once only for each foe: the camera turned by hand (a drag) while it frames
+     * the fight, it lets that foe be till the fight's over, rather than swinging back round to
+     * frame it again a second after every drag.
      */
     #battleFoe(foe, me) {
         if (!foe) {
             this.battleCamOn = null;
+            this.battleCamLeft.clear();
 
             return null;
         }
 
         if (!this.cameraSettings.battle) {
             return foe;
+        }
+
+        if (this.battleCamOn === foe.id && this.cameraFollow.held) {
+            this.battleCamLeft.add(foe.id);
+            this.battleCamOn = null;
+        }
+
+        if (this.battleCamLeft.has(foe.id)) {
+            return null;
         }
 
         if (this.battleCamOn !== foe.id) {
