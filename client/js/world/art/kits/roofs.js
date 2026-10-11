@@ -25,10 +25,9 @@ const m = (metres) => metres * M;
  * a shelter's on posts: the underside of each slope, the soffit's material, laid all the way up
  * to the ridge, seen from below, in place of the soffits under the overhangs only; without it, its
  * slopes are seen from above alone, and from under one with no walls the sky shows through).
- * Returns the roof's shape: { top (the ridge's
- * height), rise, slopeAt(across) (the roof's height over a point across it, at its surface), and
- * the gables' outlines: gable (the height of the gable wall's top at each end: the eaves up to
- * the ridge, or up to where the hip starts) }.
+ * Returns the roof's shape: { top (the ridge's height), rise, slopeAt(across) (the roof's height
+ * over a point across it, at its surface), and the gables' outlines: gable (the height of the
+ * gable wall's top at each end: the eaves up to the ridge, or up to where the hip starts) }.
  */
 export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, verge, thickness, kind = "gable", sag = 0, cover, under, cap = null, barge = null, thatch = false, swap = false, clip = 0.65, open = false }) {
     const put = swap ? ([x, y, z]) => [z, y, x] : (point) => point;
