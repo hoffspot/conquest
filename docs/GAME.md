@@ -2381,15 +2381,24 @@ shaders.
 
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
-making for) is got ready: its plans made, then each floor built and each of its folk, one to a
-piece of work, for at most 6 ms a frame, so it's ready well before the player's at the door. A
-floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and furniture
-laid out, made into meshes, made ready to merge, merged), and each of its folk (CHARACTERS.md,
-*Built a step at a time*). If
-they're through it first, whatever's still to build is built at once. Once the player is 90
-metres away (and outside), it's let go: its folk out of the battle, their characters and its
-floors thrown away (built again if they come back); the plans are kept. Wenches and Ale is
-built at the start and kept.
+making for) is got ready: its plans made, then each floor built, one to a piece of work, for at
+most 6 ms a frame. Its folk are in the battle from then on, but each is dressed (their body,
+garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player's making for
+its door (told to go through it), at it (6 metres from it: `DOORSTEP`, app/game.js `#doorstep`),
+or inside, a piece of work each after its floors; and let go of again (their characters thrown
+away, skins and all) once the player's 20 metres from it outside, though the building's still
+got ready, its floors kept: standing in the start town's square, its tavern's, smithy's,
+church's and hall's doors 11 to 16 metres off, all their folk were dressed and kept before, 26 of
+the 40 bodies about thirty seconds in, each holding its skin on the page and the graphics card. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
+door before its folk are all dressed, its floors are built at once and the screen's kept dark
+while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
+in the skins worker meanwhile), for 3 seconds at most, the rest coming in as they're dressed
+after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
+frame in headless Chromium). Once the player is 90 metres away (and outside), it's let go: its
+folk out of the battle, their characters and its floors thrown away (built again if they come
+back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
+dressed and let go of at its door as any building's.
 
 **Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (a
 building's front door, the inside of the door, the side of the stairs, the stairwell upstairs)
@@ -4625,10 +4634,11 @@ the game's hair detail), and again from the sun for shadows. In the taproom ther
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
 characters on the player's map are drawn or animated. The tavern's folk aren't built before
 the game starts (they were about three seconds of loading on a desktop computer): only seen
-inside, they're built as any other building's folk are, a step at a time from the start
-(`tavernFolk`), with whatever time's left after any building the player's coming near and only
-while none is (so that its folk's skins aren't kept waiting behind theirs in the skins worker),
-and whatever of them isn't built yet is built at once if the player walks in first. In headless
+inside, they're built as any other building's folk are, a step at a time once the player's at
+its door (`tavernFolk`), with whatever time's left after any building the player's coming near
+and only while none is (so that its folk's skins aren't kept waiting behind theirs in the skins
+worker), the screen kept dark while the rest are built if the player walks in first (and all at
+once only when the game starts inside, while it's loading). In headless
 Chromium on "high", from opening `?play` to playing: 14.0 to 18.2 s before, 10.9 to 14.3 now.
 Anyone who comes into view while playing (soldiers,
 the folk of a building near, the wild's people-shaped creatures) is built a step at a time
@@ -5036,7 +5046,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   another tavern got ready as the player comes near (its own taproom, sound, minimap and folk
-  inside), let go far off and built at once if walked straight into, a smithy's smith heating,
+  inside), its folk let go of a little way off and dressed again at its door, let go far off,
+  and walked straight into, its floors built at once and its folk dressed while the screen's
+  dark, then lit, a smithy's smith heating,
   hammering and quenching and its apprentice at the bellows and grindstone (each heard), a
   temple's priest in white blessing and lighting the shrines' candles, worshippers praying, and
   the priest telling of the temple's patron, a guild's receptionist stamping notices and

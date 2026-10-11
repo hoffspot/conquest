@@ -348,6 +348,18 @@ const EMBERS = 5;
 // how often (s) the doors of the settlements come to since are picked up
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
+// A building's folk (Wenches and Ale's too) dressed only once the player's making for its door, at
+// it (`near` metres from it, out in the world), or inside; and let go of again once they're `far`
+// off it (its floors kept while the host keeps it got ready): the folk of a town's buildings round
+// its square aren't all kept dressed, their skins on the page and the graphics card, for a player
+// standing in it or walking past
+const DOORSTEP = Object.freeze({ near: 6, far: 20 });
+
+// Gone into a building before its folk are all dressed: the screen kept dark while they're
+// dressed, `budget` ms a frame (their skins painted elsewhere meanwhile), for `most` seconds at
+// most (the rest come in as they're dressed after), rather than all of them in the one frame
+const ENTERING = Object.freeze({ budget: 30, most: 3 });
+
 // How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
 const FLUSH_EVERY = 0.1;
 
@@ -952,13 +964,20 @@ export class Game {
         /**
          * The buildings got ready to go into (their floors and folk built: world.interiors makes
          * their plans), by key: { key, queue (what's still to build, a piece at a time), maps,
-         * folk (the ids of what's been built) }; and when they're next looked over (s).
+         * folk (the ids of what's been built), door (where it is, its folk dressed only near it:
+         * #doorstep), welcomed (whether they're wanted), people (their ids), dressing (whether
+         * what's being built now is one of them) }; and when they're next looked over (s).
          */
         this.visits = new Map();
         this.visitClock = 0;
 
         /** Wenches and Ale's folk being dressed from the start, the same way (build), or null. */
         this.tavernFolk = null;
+
+        // (A building gone into before its folk were all dressed, dressed while the screen's dark:
+        // { visit, until (the game's clock) }, #entering; and whether the screen's kept dark)
+        this.arriving = null;
+        this.curtainHeld = false;
 
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
@@ -1401,10 +1420,7 @@ export class Game {
         let filled = 0;
 
         if (tavern) {
-            const visit = { key: tavern, queue: [], maps: [], folk: [] };
-
-            visit.queue.push(...this.battle.actors.filter(({ kind }) => kind === "folk").map(({ id }) => () => this.#people(visit, id)));
-            this.tavernFolk = visit;
+            this.tavernFolk = { key: tavern, queue: [], maps: [], folk: [], door: world.tavern?.door ?? null, welcomed: false, people: () => this.battle.actors.filter(({ kind }) => kind === "folk").map(({ id }) => id) };
         }
 
         for (const actor of [...this.battle.actors]) {
@@ -1422,7 +1438,7 @@ export class Game {
         }
 
         // (Starting in the tavern: its folk there to see from the first)
-        this.#ready(world.interiors?.of(this.battle.actor(this.me).map)?.key);
+        this.#ready(world.interiors?.of(this.battle.actor(this.me).map)?.key, { now: true });
 
         step("Getting ready to draw");
 
@@ -5305,9 +5321,23 @@ export class Game {
         this.#follow(0);
         this.effects.markerAge = Infinity;
 
-        if (this.curtain) {
-            this.curtain.style.transition = "none";
-            this.curtain.style.opacity = "1";
+        // (Up from black; or kept dark while the folk of a building gone into before they were
+        // all dressed are dressed: #entering)
+        this.#curtain(Boolean(this.arriving) && this.world.interiors?.of(actor.map)?.key === this.arriving.visit.key);
+    }
+
+    // The screen black, kept so (`held`), or coming up from it
+    #curtain(held) {
+        this.curtainHeld = held;
+
+        if (!this.curtain) {
+            return;
+        }
+
+        this.curtain.style.transition = "none";
+        this.curtain.style.opacity = "1";
+
+        if (!held) {
             this.curtain.getBoundingClientRect();
             this.curtain.style.transition = `opacity ${FADE_IN}s ease-out`;
             this.curtain.style.opacity = "0";
@@ -5493,12 +5523,21 @@ export class Game {
             return;
         }
 
+        // (Gone into a building whose folk weren't all dressed: dressed with more of the frame,
+        // the screen dark meanwhile)
+        this.#entering();
+
         const until = performance.now() + VISITS.budget;
         let busy = false;
 
         for (const visit of this.visits.values()) {
+            this.#doorstep(visit);
             this.#work(visit, until);
             busy ||= Boolean(visit.steps || visit.queue.length);
+        }
+
+        if (this.tavernFolk) {
+            this.#doorstep(this.tavernFolk);
         }
 
         // (Then Wenches and Ale's folk, needed only once the player goes in: with any time left,
@@ -7122,43 +7161,124 @@ export class Game {
         }
     }
 
-    // Start building a building the host's got ready: each floor and each of its folk, one to a
-    // piece of work, and the doors told of its insides
+    // Start building a building the host's got ready: each floor, one to a piece of work, and the
+    // doors told of its insides; its folk once the player's at its door (#doorstep)
     #prepare(building) {
-        const visit = { key: building.key, queue: [], maps: [], folk: [] };
+        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, people: () => this.host.open.get(building.key) ?? [] };
 
         visit.queue.push(...building.maps.map((id) => () => this.#furnishing(visit, id)));
-        visit.queue.push(...(this.host.open.get(building.key) ?? []).map((id) => () => this.#people(visit, id)));
         visit.queue.push(() => this.doors?.sync());
         this.visits.set(building.key, visit);
 
         return visit;
     }
 
-    // A building ready to go into now: whatever of it's still to build, built at once
-    #ready(key) {
-        const building = key ? this.world.interiors?.buildings.get(key) : null;
+    // A building's folk wanted, the player making for its door, at it or inside (DOORSTEP), or let
+    // go of, the player well away from it out in the world
+    #doorstep(visit) {
+        const me = this.battle.actor(this.me);
 
-        // (Wenches and Ale's floors built with the town: any of its folk not dressed yet, now)
-        if (!building?.entrance) {
-            if (key && this.tavernFolk?.key === key) {
-                this.#work(this.tavernFolk);
-            }
-
+        if (!me || !visit.door) {
             return;
         }
 
-        this.#work(this.visits.get(key) ?? this.#prepare(building));
+        const ours = (map) => this.world.interiors?.of(map)?.key === visit.key;
+        const inside = ours(me.map);
+        const away = me.map === "town" ? Math.hypot(visit.door.x - me.x, visit.door.z - me.y) : Infinity;
+        const making = me.order?.type === "enter" && Boolean(this.battle.links?.find(({ id }) => id === me.order.link)?.ends.some(({ map }) => ours(map)));
+
+        if (!visit.welcomed && (inside || making || away < DOORSTEP.near)) {
+            this.#welcome(visit);
+        } else if (visit.welcomed && !inside && !making && away > DOORSTEP.far) {
+            this.#farewell(visit);
+        }
+    }
+
+    // A building's folk wanted: each of those not dressed yet, one to a piece of work, after its
+    // floors
+    #welcome(visit) {
+        if (visit.welcomed) {
+            return;
+        }
+
+        visit.welcomed = true;
+
+        for (const id of visit.people()) {
+            visit.queue.push(Object.assign(() => this.#people(visit, id), { folk: true }));
+        }
+    }
+
+    // A building's folk no longer wanted: those dressed let go of (their bodies, skins and all),
+    // those still to be not dressed (one being dressed now let go of once it is: #people)
+    #farewell(visit) {
+        visit.welcomed = false;
+        visit.queue = visit.queue.filter((work) => !work.folk);
+
+        for (const id of visit.folk.splice(0)) {
+            this.#undress(id);
+        }
+    }
+
+    // A building ready to go into now: its floors built at once, and its folk (wanted now, if they
+    // weren't) dressed with more of each frame while the screen's dark, for a while (#entering);
+    // or all of it at once (`now`: starting in it, while the game's loading)
+    #ready(key, { now = false } = {}) {
+        const building = key ? this.world.interiors?.buildings.get(key) : null;
+        // (Wenches and Ale's floors built with the town: only its folk to dress)
+        const visit = building?.entrance ? (this.visits.get(key) ?? this.#prepare(building)) : key && this.tavernFolk?.key === key ? this.tavernFolk : null;
+
+        if (!visit) {
+            return;
+        }
+
+        this.#welcome(visit);
+        this.#work(visit, Infinity, { floors: !now });
+
+        if (visit.steps || visit.queue.length) {
+            this.arriving = { visit, until: this.clock + ENTERING.most };
+        }
+    }
+
+    // Gone into a building whose folk weren't all dressed (#ready): dressed with ENTERING.budget
+    // ms a frame, the screen kept dark (#arrive), till they all are, ENTERING.most seconds have
+    // gone, or the player's left it; then the screen's lit
+    #entering() {
+        const arriving = this.arriving;
+
+        if (!arriving) {
+            return;
+        }
+
+        this.#work(arriving.visit, performance.now() + ENTERING.budget);
+
+        const me = this.battle.actor(this.me);
+        const done = !arriving.visit.steps && !arriving.visit.queue.length;
+        const left = this.world.interiors?.of(me?.map)?.key !== arriving.visit.key;
+
+        if (done || left || this.clock >= arriving.until) {
+            this.arriving = null;
+
+            // (Lit, if it's still dark: not again, if the player's come out and it's lit already)
+            if (this.curtainHeld) {
+                this.#curtain(false);
+            }
+        }
     }
 
     // Do what can be done of a building's getting ready before `until` (performance.now()'s; all
-    // of it, without): each piece of work at once, or a step at a time if it's in steps (its folk;
-    // one waiting on work done elsewhere, a skin, come back to next frame)
-    #work(visit, until = Infinity) {
+    // of it, without; only its floors, if `floors`): each piece of work at once, or a step at a
+    // time if it's in steps (its folk; one waiting on work done elsewhere, a skin, come back to
+    // next frame)
+    #work(visit, until = Infinity, { floors = false } = {}) {
         while ((visit.steps || visit.queue.length) && performance.now() < until) {
+            if (floors && (visit.steps ? visit.dressing : visit.queue[0].folk)) {
+                return;
+            }
+
             if (!visit.steps) {
                 const started = performance.now();
-                const work = visit.queue.shift()();
+                const next = visit.queue.shift();
+                const work = next();
                 const took = performance.now() - started;
 
                 if (took > Steps.SLOW) {
@@ -7166,6 +7286,7 @@ export class Game {
                 }
 
                 visit.steps = typeof work?.next === "function" ? new Steps(work, `building ${visit.key}`) : null;
+                visit.dressing = Boolean(next.folk);
             }
 
             if (visit.steps?.take(until, { wait: this.waits && until !== Infinity })) {
@@ -7195,6 +7316,13 @@ export class Game {
         }
 
         if (yield* this.#dressing(actor)) {
+            // (Not wanted any more while they were dressed: let go of)
+            if (!visit.welcomed) {
+                this.#undress(id);
+
+                return;
+            }
+
             this.#place(actor);
             visit.folk.push(id);
         }
