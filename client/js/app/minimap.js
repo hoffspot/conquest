@@ -653,7 +653,7 @@ export class Minimap {
         const snap = CHUNK / 4;
         const [px, pz] = [x, z].map((v) => Math.round((v - PAINTED / 2) / snap) * snap);
 
-        return { x: px, z: pz, steps: new Steps(paintingPatch(this.world, px, pz, PAINTED, this.town)) };
+        return { x: px, z: pz, steps: new Steps(paintingPatch(this.world, px, pz, PAINTED, this.town), "minimap patch") };
     }
 
     // A patch painted, shown
