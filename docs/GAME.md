@@ -4540,9 +4540,11 @@ that's merged, cloned, posed or bent. And Recast's WebAssembly (the navigation m
 16 MB, not the 64 MB it was built with: its static data and stack are under 100 KB, and it grows as
 the meshes want more, in the page and in the navigation worker both (scripts/vendor-recast.js
 patches the vendored module's memory section: scripts/wasm-memory.js). Turning the camera all the
-way round where the game starts (Chromium, High), the page's array buffers held 276 MB before and
-196 MB after (Recast's memory 48 MB less, the meshes and pictures let go of 32 MB), and the
-navigation worker 48 MB less again; the JavaScript heap's objects, about 61 MB, are the same.
+way round where the game starts (Chromium, High), the page's array buffers held 316 MB before and
+234 MB after (Recast's memory 48 MB less, the meshes and pictures let go of 34 MB; the debug
+overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB less again; the
+JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
+same.
 
 ## Performance
 
