@@ -1,11 +1,12 @@
 // The page letting go of what the graphics card has (client/js/world/release.js): a static mesh's
-// attributes once uploaded, a picture's pixels once uploaded (and whatever else holds them); and
-// Recast's WebAssembly starting with the memory it needs (scripts/wasm-memory.js, the vendored copy)
+// attributes once uploaded, a picture's pixels once uploaded (and whatever else holds them); how
+// much of its own copies the page still holds (heldOnPage); and Recast's WebAssembly starting with
+// the memory it needs (scripts/wasm-memory.js, the vendored copy)
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
+import { heldOnPage, released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
 import { startingMemory, withStartingMemory } from "../scripts/wasm-memory.js";
 
 const RECAST = new URL("../client/vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", import.meta.url);
@@ -66,6 +67,33 @@ describe("letting go of what the graphics card has (release.js)", () => {
 });
 
 describe("Recast's WebAssembly memory (scripts/wasm-memory.js)", () => {
+    it("counts what the page still holds of objects: their meshes' attributes, morphs and indices, and their pictures' pixels, each once however many share it; none let go of", () => {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(30), 3));
+        geometry.morphAttributes.position = [new THREE.Float32BufferAttribute(new Float32Array(30), 3)];
+        geometry.setIndex(new THREE.Uint16BufferAttribute(new Uint16Array(6), 1));
+
+        const data = new THREE.DataTexture(new Uint8Array(16 * 16 * 4), 16, 16);
+        const canvas = new THREE.Texture({ width: 64, height: 32 });
+        const material = new THREE.MeshStandardMaterial({ map: data, normalMap: canvas });
+        const body = new THREE.Group();
+
+        // (Two meshes sharing a mesh and its pictures: counted once)
+        body.add(new THREE.Mesh(geometry, material), new THREE.Mesh(geometry, material));
+
+        const once = 120 + 120 + 12 + 16 * 16 * 4 + 64 * 32 * 4;
+
+        assert.equal(heldOnPage([body]), once);
+        assert.equal(heldOnPage([body, body.clone()]), once, "a clone shares them");
+        assert.equal(heldOnPage([null, undefined]), 0);
+
+        // (Let go of once uploaded: no longer counted)
+        geometry.attributes.position.array = null;
+        data.image.data = null;
+        assert.equal(heldOnPage([body]), once - 120 - 16 * 16 * 4);
+    });
+
     it("starts with 16 MB, not the 64 it was built with, and grows from there; nothing else in it changed", async () => {
         const bytes = new Uint8Array(await readFile(RECAST));
 

@@ -1879,6 +1879,7 @@ async function start() {
     telemetry.recover(globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type ?? "");
     telemetry.observe();
     Steps.slow = (label, ms) => telemetry.job(label, ms);
+    Steps.begun = (label) => telemetry.began(label);
     window.addEventListener("error", (event) => telemetry.error(event.error ?? event.message, "uncaught", gameState));
 
     // (Anything that fails with no one to catch it: told in the console, and, while a game's

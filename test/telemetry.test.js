@@ -292,6 +292,76 @@ describe("the debug log (telemetry.js)", () => {
         assert.equal(asked, 1);
     });
 
+    it("a crash keeps the minute before it: what was held at each of the notes, when the last were written, and the work begun lately, that begun after the last notes marked (likely under way as it fell)", () => {
+        const at = logOn();
+        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, held: { avatars } } });
+
+        at.log.playing = true;
+        at.log.job("dressing player player", 357);
+
+        // (Notes every so often for over a minute, what's held rising as more bodies are dressed)
+        for (let k = 0; k < TELEMETRY.trend + 5; k++) {
+            at.time.now += TELEMETRY.notes;
+            at.log.began(`dressing folk folk-${k}`);
+            at.log.alive(held(300 + k * 5, k));
+        }
+
+        at.time.now += TELEMETRY.lately;
+        at.log.job("dressing beast boggart", 491);
+        at.log.alive(held(520, 40));
+
+        // (Then a boggart begun, after the last notes, and the page falls over doing it)
+        at.time.now += 800;
+        at.log.began("dressing beast boggart");
+
+        const crash = logOn(at.kept, { now: 300, clock: at.time.clock + 1500 }).log.recover("back_forward");
+
+        assert.equal(crash.trend.length, TELEMETRY.trend, "a minute of the notes' readings");
+        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, heapMB: null, avatars: 40, actors: 32 });
+        assert.ok(crash.trend[0].totalMB < crash.trend.at(-2).totalMB, "rising");
+        assert.equal(crash.pageAt, at.time.now - 800);
+        assert.deepEqual(
+            crash.jobs.map(({ label }) => label),
+            ["dressing beast boggart"],
+            "only the slow work of the last half minute: not the player's, dressed at the start",
+        );
+        assert.equal(crash.begun.length, TELEMETRY.begun);
+        assert.deepEqual(crash.begun.at(-1), { label: "dressing beast boggart", at: at.time.now, afterNotes: true });
+        assert.ok(crash.begun.slice(0, -1).every((each) => !each.afterNotes));
+        assert.equal(at.kept.getItem(TELEMETRY.working), null, "what was begun forgotten once it's kept");
+
+        // (Work begun while not playing, as the game loads, isn't written down)
+        const loading = logOn();
+
+        loading.log.began("dressing player player");
+        assert.equal(loading.kept.getItem(TELEMETRY.working), null);
+    });
+
+    it("tells of work as it takes its first step, by name, once; not work without a name (core/steps.js)", () => {
+        const told = [];
+        const was = Steps.begun;
+        const work = () =>
+            (function* () {
+                yield;
+                yield;
+            })();
+
+        Steps.begun = (label) => told.push(label);
+
+        try {
+            const named = new Steps(work(), "building home:tavern");
+
+            named.take(0);
+            assert.deepEqual(told, ["building home:tavern"], "told before a step's taken, though there's no time for one");
+            named.take();
+            new Steps(work()).take();
+        } finally {
+            Steps.begun = was;
+        }
+
+        assert.deepEqual(told, ["building home:tavern"]);
+    });
+
     it("keeps memory as it passes each mark, once each, and the page's heap near its limit; a crash keeps what was held", () => {
         const at = logOn();
         const held = (totalMB, heapMB = null, limitMB = null) => () => ({ map: "town", memory: { totalMB, heapMB, limitMB, gpu: { totalMB: totalMB / 2 }, soundMB: 20, held: { avatars: 40 } } });
@@ -331,6 +401,10 @@ describe("the debug log (telemetry.js)", () => {
             "Held 64 bodies  9 chunks  2 interiors  6 crowd kinds",
         ]);
         assert.match(memoryLines({ totalMB: 560, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 3, chunks: 9, interiors: 0, crowds: 0 } })[0], /JS heap not told by this browser$/);
+        assert.match(
+            memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 0 } })[0],
+            /sound 101\.3 MB, way-finding 16 MB, bodies' own copies 154\.5 MB, JS heap not told by this browser$/,
+        );
         assert.match(memoryLines(null, gpu)[0], /^Memory graphics 540\.2 MB/);
     });
 

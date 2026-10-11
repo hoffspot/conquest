@@ -15,10 +15,15 @@
 //    or put away. While playing, a few notes of how it's going are written every
 //    TELEMETRY.notes ms (TELEMETRY.alive) and marked closed when the page is closed or hidden; found
 //    unclosed on loading, they're what's kept of the crash (with what the game held then: a phone
-//    short of memory closes the page and loads it again).
+//    short of memory closes the page and loads it again). With them, how what's held went over
+//    the last minute (rising, or jumping at the end), and the work begun lately, each written down
+//    as it begins (TELEMETRY.working): work begun after the last notes was likely under way as the
+//    page fell, as a step of it that takes half a second can be, the page never coming back from
+//    it to say so.
 //  - **Memory**: what the game holds (the page's heap where the browser tells, what the graphics
-//    card's been given, the sounds) past each of TELEMETRY.memory.marks, or the page's heap near
-//    its limit (TELEMETRY.memory.heap of it). With what holds it, and what's going on.
+//    card's been given, the sounds, the way-finding's WebAssembly, the bodies' own copies) past
+//    each of TELEMETRY.memory.marks, or the page's heap near its limit (TELEMETRY.memory.heap of
+//    it). With what holds it, and what's going on.
 //
 // Each kind of event is kept at most once every TELEMETRY.again ms, so one bad patch doesn't fill
 // the log. It costs a frame a few clock readings and a little arithmetic; the rest is only done
@@ -33,9 +38,12 @@
  * - `notes`: how often the notes of how it's going are written while playing (ms).
  * - `recent`: how many of the latest frames' times an event keeps.
  * - `scripts`, `jobs`: how many of the scripts the browser names, and of the slowest jobs done a
- *   step at a time, an event keeps; `job`: a step of one that takes longer than this (ms) is noted.
+ *   step at a time, an event keeps; `job`: a step of one that takes longer than this (ms) is noted;
+ *   `lately`: only those noted this long before the event (ms).
  * - `memory`: what the game holds (MB) kept as it passes each of `marks`, once each; and the page's
  *   heap past `heap` of its limit, once.
+ * - `trend`: how many of the notes' readings of what's held the notes keep (a minute's).
+ * - `begun`: how many of the jobs begun lately are written down (`working`), as each begins.
  */
 export const TELEMETRY = Object.freeze({
     kept: 5,
@@ -47,9 +55,13 @@ export const TELEMETRY = Object.freeze({
     scripts: 8,
     jobs: 5,
     job: 20,
+    lately: 30000,
     memory: Object.freeze({ marks: Object.freeze([768, 1024, 1536, 2048, 3072]), heap: 0.8 }),
+    trend: 30,
+    begun: 6,
     key: "pellagos.debuglog",
     alive: "pellagos.alive",
+    working: "pellagos.working",
 });
 
 /**
@@ -88,6 +100,8 @@ export class Telemetry {
     #lastOwn = 0;
     #memoryMark = 0;
     #nearLimit = false;
+    #trend = [];
+    #begun = [];
 
     /**
      * @param {object} [options]
@@ -191,7 +205,7 @@ export class Telemetry {
             ms: round(ms),
             where,
             phases,
-            jobs: [...this.#frameJobs, ...this.#jobs].sort((a, b) => b.ms - a.ms).slice(0, TELEMETRY.jobs),
+            jobs: this.#lately(this.#frameJobs),
             scripts: this.#scriptsBetween(from, end),
             recent: this.#recent(),
             state: state(),
@@ -238,10 +252,17 @@ export class Telemetry {
             summary: `Slow: ${round(1000 / middle)} frames a second over ${round(spanned / 1000)} s`,
             fps: round(1000 / middle),
             phases,
-            jobs: this.#jobs.slice(0, TELEMETRY.jobs),
+            jobs: this.#lately(),
             recent: this.#recent(),
             state: state(),
         });
+    }
+
+    // The slowest steps of work noted lately (TELEMETRY.lately), and `also` (this frame's), each once
+    #lately(also = []) {
+        const since = this.#now() - TELEMETRY.lately;
+
+        return [...new Set([...also, ...this.#jobs.filter(({ at }) => at >= since)])].sort((a, b) => b.ms - a.ms).slice(0, TELEMETRY.jobs);
     }
 
     // The latest frames' times (ms, whole), the newest last
@@ -256,16 +277,30 @@ export class Telemetry {
     }
 
     /**
-     * One step of some work done a step at a time took `ms` (core/steps.js Steps.slow): the
-     * slowest kept, by name, for the next event.
+     * One step of some work done a step at a time took `ms` (core/steps.js Steps.slow): kept, by
+     * name and when (`at`, ms since the page loaded), for the next event, the slowest of those
+     * lately.
      */
     job(label, ms) {
         const entry = { label: String(label ?? "unnamed work"), ms: round(ms), at: round(this.#now()) };
 
         this.#frameJobs.push(entry);
         this.#jobs.push(entry);
-        this.#jobs.sort((a, b) => b.ms - a.ms);
-        this.#jobs.length = Math.min(this.#jobs.length, TELEMETRY.jobs * 2);
+        this.#jobs.splice(0, Math.max(0, this.#jobs.length - 40));
+    }
+
+    /**
+     * Some work done a step at a time begun (core/steps.js Steps.begun: what it's making, by name):
+     * while playing, written down at once with the others begun lately, so that if the page falls
+     * over doing it, the crash says what it was doing.
+     */
+    began(label) {
+        this.#begun.push({ label: String(label ?? "unnamed work"), at: round(this.#now()) });
+        this.#begun.splice(0, Math.max(0, this.#begun.length - TELEMETRY.begun));
+
+        if (this.playing) {
+            this.#write(TELEMETRY.working, this.#begun);
+        }
     }
 
     // --- What the browser says ran (Chromium's long animation frames) ---
@@ -349,8 +384,15 @@ export class Telemetry {
         this.#notedAt = now;
 
         const noted = state();
+        const memory = noted?.memory;
 
-        this.#write(TELEMETRY.alive, { at: this.#clock(), build: this.build, closed: false, state: noted, recent: this.#recent(), jobs: this.#jobs.slice(0, TELEMETRY.jobs), errors: this.#errors });
+        // (What's held, read at each of the notes: the last minute of it)
+        if (memory) {
+            this.#trend.push({ at: round(now / 1000), totalMB: memory.totalMB, gpuMB: memory.gpu?.totalMB ?? null, soundMB: memory.soundMB, bodiesMB: memory.bodiesMB ?? null, heapMB: memory.heapMB, avatars: memory.held?.avatars ?? null, actors: noted.actors ?? null });
+            this.#trend.splice(0, Math.max(0, this.#trend.length - TELEMETRY.trend));
+        }
+
+        this.#write(TELEMETRY.alive, { at: this.#clock(), pageAt: round(now), build: this.build, closed: false, state: noted, trend: this.#trend, recent: this.#recent(), jobs: this.#lately(), errors: this.#errors });
         this.#memory(noted);
     }
 
@@ -375,7 +417,7 @@ export class Telemetry {
         const kept = this.keep("memory", {
             summary: near && !this.#nearLimit ? `The page's memory near its limit: ${heapMB} of ${limitMB} MB` : `Memory past ${past}: ${totalMB} MB held`,
             recent: this.#recent(),
-            jobs: this.#jobs.slice(0, TELEMETRY.jobs),
+            jobs: this.#lately(),
             state,
         });
 
@@ -398,27 +440,35 @@ export class Telemetry {
 
     /**
      * Loading: the last game's notes, if it was playing, in view, and never closed: a crash, kept
-     * (`navigation`: how this page was come to, as the browser has it: "reload"...). Returns it.
+     * (`navigation`: how this page was come to, as the browser has it: "reload"...), with what was
+     * held over the minute before (`trend`), and the work begun lately (`begun`, each `afterNotes`
+     * if it was begun after the last notes: likely under way as the page fell). Returns it.
      */
     recover(navigation = "") {
         const notes = this.#read(TELEMETRY.alive);
+        const begun = this.#read(TELEMETRY.working) ?? [];
 
         this.#storage?.removeItem?.(TELEMETRY.alive);
+        this.#storage?.removeItem?.(TELEMETRY.working);
 
         if (!notes || notes.closed) {
             return null;
         }
 
         const ago = Math.max(0, this.#clock() - notes.at);
+        const pageAt = notes.pageAt ?? null;
 
         return this.keep("crash", {
             summary: `The game stopped while playing and loaded again${navigation ? ` (${navigation})` : ""}`,
             at: notes.at,
             later: round(ago / 1000),
             build: notes.build,
+            pageAt,
             jobs: notes.jobs ?? [],
+            begun: begun.map((each) => (pageAt !== null && each.at > pageAt ? { ...each, afterNotes: true } : each)),
             errors: notes.errors ?? [],
             recent: notes.recent ?? [],
+            trend: notes.trend ?? [],
             state: notes.state ?? {},
         });
     }
