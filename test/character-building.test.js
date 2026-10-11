@@ -647,6 +647,19 @@ describe("characters built a step at a time (Character.building)", () => {
             assert.equal(steps.take(Infinity, { wait: true }), true);
             assert.equal(hashOf(steps.value), hashOf(new Character(kitOf(), options(soldier))));
             assert.deepEqual(told, ["analyse", "id"]);
+
+            // (A furry one, as a boggart: its fur's fields made there, as it's painted, not here
+            // first and sent over, half a second of a phone's the first time; painted the same)
+            const furry = { ...soldier, look: { ...soldier.look, skin: { ...soldier.look.skin, fur: 0.9 } } };
+            const fur = new Steps(Character.building(kit, options(furry)));
+
+            told.length = 0;
+            assert.equal(fur.take(Infinity, { wait: true }), false);
+            assert.equal(made.fields.fur, undefined, "not made here");
+            await worker.deliver();
+            assert.equal(fur.take(Infinity, { wait: true }), true);
+            assert.deepEqual(told, ["id"], "asked for, no fields sent over");
+            assert.equal(hashOf(fur.value), hashOf(new Character(kitOf(), options(furry))));
         } finally {
             delete globalThis.Worker;
         }
