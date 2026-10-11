@@ -1643,6 +1643,58 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")))).toMatchObject({ autoSnag: true, snagGrades: null, snagKinds: null });
 });
 
+test("the first time a fight leaves a character something, they're told what to do with it; never again, their loot floating where it fell over its rarity's glow, and what they pick up rising over them, not said across the screen", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (A wolf's spoils for the player at their feet, and the host telling of it; a frame played)
+    const leave = (id) => page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.stop();
+        game.host.ground.set(id, { id, bundle: { gold: 3, items: [{ id: "ring", count: 1, quality: "rare" }] }, for: game.me, from: "wolf", map: me.map, square: [...me.square], until: game.battle.time + 600000 });
+        game.host.events.push({ type: "spoils", id: game.me, ground: id, from: "wolf-1", creature: "wolf" });
+        game.advance(0.1);
+
+        const banner = document.querySelector("#banner");
+        const drawn = game.drops.drawn.get(id);
+
+        return { told: banner.hidden ? "" : banner.textContent, once: [...game.toldOnce], things: drawn?.things.map(({ icon, ring }) => ({ name: icon.name, glow: ring.material.color.getHexString() })) };
+    }, id);
+
+    const first = await leave("loot-1");
+
+    expect(first.told).toContain("The wolf left something where it fell.");
+    expect(first.told).toContain("Auto-snag");
+    expect(first.once).toEqual(["spoils"]);
+    // (Its gold and its rare ring, each over its glow: the rare violet)
+    expect(first.things).toEqual([{ name: "gold:common", glow: "e9e1d0" }, { name: "ring:rare", glow: "b07cff" }]);
+
+    // The next time: nothing said, the loot there all the same
+    await page.locator("#banner .banner-close").click();
+
+    const second = await leave("loot-2");
+
+    expect(second.told).not.toContain("left something");
+    expect(second.things).toHaveLength(2);
+
+    // Picked up: what's taken rising over the player, kept for the journal, not said across the screen
+    const picked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.command(game.me, { type: "pickUp", ground: "loot-2" });
+        game.advance(0.1);
+
+        const banner = document.querySelector("#banner");
+
+        return { said: banner.hidden ? "" : banner.textContent, rising: [...document.querySelectorAll("#floaters .damage.loot")].map(({ textContent }) => textContent), kept: game.messages.at(-1)?.text };
+    });
+
+    expect(picked.said).not.toContain("You take");
+    expect(picked.rising).toContain("+3 gold, a rare ring");
+    expect(picked.kept).toBe("You take 3 gold, a rare ring.");
+});
+
 test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -6423,8 +6475,11 @@ test("the pack stacks things alike: dragged together, split by how many, held fo
         return session.view.toScreen(drawn.object.position.clone());
     });
 
+    // (What's picked up rising over the player, no message across the screen: kept for the
+    // journal all the same)
     await page.mouse.click(bundle.x, bundle.y);
-    await expect(page.locator("#banner")).toHaveText("You pick up a tankard of ale.");
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.messages.at(-1)?.text)).toBe("You pick up a tankard of ale.");
+    await expect(page.locator("#banner")).not.toHaveText("You pick up a tankard of ale.");
     expect(await page.evaluate(() => ({ ground: window.pellagos.game.host.ground.size, ale: window.pellagos.game.progress.count("ale") }))).toEqual({ ground: 0, ale: 1 });
 });
 

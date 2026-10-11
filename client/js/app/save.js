@@ -24,7 +24,7 @@ const ROSTER_KEY = "pellagos.characters";
 const SETTINGS_KEY = "pellagos.settings";
 
 // What's kept of each character, each under its own key
-const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages"]);
+const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages", "told"]);
 
 // A character's id: eight letters and digits
 const ID = /^[a-z0-9]{8}$/;
@@ -444,6 +444,18 @@ export function loadMessages(save) {
 /** Keep the last messages the character was told, in a saved game. */
 export function saveMessages(save, messages) {
     return save?.id ? write(keyOf(save, "messages"), { created: save.created, seed: save.seed, messages }) : false;
+}
+
+/** What the character's been told once and needn't be again (app/game.js `#once`: "spoils"), in a saved game. */
+export function loadTold(save) {
+    const kept = own(save, "told");
+
+    return Array.isArray(kept?.told) ? kept.told.filter((each) => typeof each === "string") : [];
+}
+
+/** Keep what the character's been told once, in a saved game. */
+export function saveTold(save, told) {
+    return save?.id ? write(keyOf(save, "told"), { created: save.created, seed: save.seed, told }) : false;
 }
 
 /**

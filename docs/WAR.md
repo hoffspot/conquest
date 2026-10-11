@@ -766,8 +766,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     is turned to.
   - **Thrown away**, a stack's gone, but "Undo" takes it back for 8 seconds (`discard`,
     `undiscard`: `UNDO_MS`), where it was if that's still free.
-  - **Dropped**, things lie on the ground where the player stands, a cloth bundle with their
-    icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
+  - **Dropped**, things lie on the ground where the player stands, their icon floating just off
+    the ground over a ring glowing the colour of how rare it is (world/drops3d.js: *What they
+    leave*, docs/WILDS.md), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack. A tap counts
     within 40 pixels of it anywhere from where it lies up to its top, its icon over it

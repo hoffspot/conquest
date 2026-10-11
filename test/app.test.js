@@ -12,7 +12,7 @@ import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
+import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -434,6 +434,22 @@ describe("saving (save.js)", () => {
         // (Kept more than ten, only the last ten; anything else kept there let go)
         globalThis.localStorage.setItem("pellagos.abcd1234.messages", JSON.stringify({ ...save, messages: [{ text: 3, at: 1, times: 1 }, ...told, { text: "Bad", at: "now", times: 1 }] }));
         assert.deepEqual(loadMessages(save), told.slice(-MESSAGES_KEPT));
+    });
+
+    it("keeps what a saved game's character's been told once (the first loot a fight left them), not for another, nor what isn't one", () => {
+        useStorage();
+
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-03T10:00:00.000Z" };
+
+        assert.deepEqual(loadTold(save), []);
+        assert.equal(saveTold(save, ["spoils"]), true);
+        assert.deepEqual(loadTold(save), ["spoils"]);
+        assert.deepEqual(loadTold({ ...save, seed: 13 }), [], "another world's");
+        assert.equal(saveTold({ seed: 1 }, ["spoils"]), false);
+
+        // (Anything else kept there let go)
+        globalThis.localStorage.setItem("pellagos.abcd1234.told", JSON.stringify({ ...save, told: ["spoils", 3, null] }));
+        assert.deepEqual(loadTold(save), ["spoils"]);
     });
 
     it("keeps the last ten messages told the player across the screen, not refusals, the same again counted (journal.js)", () => {

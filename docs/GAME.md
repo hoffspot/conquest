@@ -4479,8 +4479,9 @@ played }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eye
 and beside it, under `pellagos.<id>.` too, what they've grown into and carry (`progress`), what's
 been said (`talks`), what they've found of the world (`explored`), where they stand (`standing`),
 their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), the last
-messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), and their world's
-war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
+messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), what they've been
+told once and needn't be again (`told`: `["spoils"]`, the first loot a fight left them: docs/WILDS.md
+*What they leave*), and their world's war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
 last. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
 controls) are in `pellagos.settings`, the same whoever's played.
 

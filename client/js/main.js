@@ -25,7 +25,7 @@ import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
-import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -594,6 +594,8 @@ async function playing(save) {
         vitals: loadVitals(save),
         messages: loadMessages(save),
         onMessages: (messages) => saveMessages(save, messages),
+        told: loadTold(save),
+        onTold: (told) => saveTold(save, told),
     });
 
     state.keepPlace = () => {

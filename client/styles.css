@@ -1843,6 +1843,15 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-size: 20px;
 }
 
+/* What the player's picked up, rising over them (no message across the screen): smaller, gold, on
+   one line, a little longer to read */
+.damage.loot {
+    font-size: 16px;
+    color: #f4d58a;
+    white-space: nowrap;
+    animation-duration: 1.8s;
+}
+
 /* What lingers hurting them: smaller, the colour of it */
 .damage.ail {
     font-size: 15px;
