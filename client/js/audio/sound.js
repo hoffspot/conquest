@@ -24,6 +24,10 @@
 // downloaded meanwhile, but for the spells' and the creatures', each downloaded only once it's
 // wanted (want: the spells the player can cast, as they come to know them; a creature's as it's
 // drawn; anyone else's the first time it's heard, what's made playing in its place till then).
+// Decoded, a recording's big (the browser's own 32-bit samples, 25 to 30 times its MP3: a bed's 5
+// to 7 MB), so no more than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
+// played least lately are let go of (never one sounding), their MP3s kept, each decoded again the
+// next time it's wanted, what's made playing in its place meanwhile, as before it was in.
 // Browsers only let a page make sound once someone has tapped, clicked or pressed a key on it, so
 // it starts on the first one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
@@ -128,10 +132,25 @@ const TREES_HEARD = 22;
 
 // The ambience's beds (setAmbience): each copy of a bed's recording set going this far ahead of
 // when it's to play (seconds); a bed fading to a new loudness over this long; one silent this long
-// let go of (its recording forgotten, downloaded again should it be wanted again)
+// let go of (its decoded recording dropped, decoded again from its MP3 should it be wanted again)
 const BED_AHEAD = 1.5;
 const BED_FADE = 2;
 const BED_KEPT = 60;
+
+/**
+ * How much of the recorded sounds is kept decoded at most (bytes): on a touch screen (a phone or a
+ * tablet, with least to spare: Safari on an iPhone closes a page holding too much, and the sound's
+ * counted against it), and anywhere else. All of them decoded are about 280 MB at 48 kHz (an
+ * iPhone's rate), their MP3s about 10; the ones downloaded at the start about 22 MB, and the beds
+ * heard at once in a busy place 20 to 30. Past it, the sounds played least lately are let go of
+ * (never one sounding, a bed heard or a sound not done), their MP3s kept to decode them again.
+ * (Travelling through sixteen places in a few minutes, what was decoded climbed past 150 MB; kept
+ * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.)
+ */
+export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96 * 1024 * 1024 });
+
+// What a sound's copy holds (bytes): an MP3's, or its samples' (32-bit, each channel's)
+const bytesOf = (copy) => copy.byteLength ?? (copy.length ?? 0) * (copy.numberOfChannels ?? 1) * 4;
 
 // One copy of a bed fading into the next: as one falls (cos), the other rises (sin), together as
 // loud as either (their sound unrelated, as a bed's is from one moment to the next)
@@ -565,8 +584,10 @@ export class Sound {
      * @param {boolean} [options.enabled] - Whether it's on.
      * @param {object} [options.volumes] - { effects, environment, music }, 0 to 1.
      * @param {Function} [options.fetch] - How to download the music's recordings.
+     * @param {number} [options.budget] - How much of the recorded sounds to keep decoded at most
+     *     (bytes: DECODED_BUDGET's, for a touch screen or not).
      */
-    constructor({ enabled = true, volumes = VOLUME_DEFAULTS, fetch = globalThis.fetch?.bind(globalThis) } = {}) {
+    constructor({ enabled = true, volumes = VOLUME_DEFAULTS, fetch = globalThis.fetch?.bind(globalThis), budget = DECODED_BUDGET[globalThis.matchMedia?.("(pointer: coarse)").matches ? "touch" : "other"] } = {}) {
         this.enabled = enabled;
         this.volumes = { ...VOLUME_DEFAULTS, ...volumes };
         this.paused = true;
@@ -595,6 +616,18 @@ export class Sound {
          */
         this.recorded = new Map();
         this.decoded = new Map();
+
+        /**
+         * Each recorded sound's MP3s, kept once they're decoded (name → [MP3 by variant]: small,
+         * a twenty-fifth of them decoded or so), to decode again once they're let go of; how much
+         * is kept decoded at most (bytes: DECODED_BUDGET); the recordings being decoded ("name
+         * variant"); and the sounds decoded, the one played least lately first, each with when
+         * it's done sounding (name → the browser's time): #trim.
+         */
+        this.mp3s = new Map();
+        this.budget = budget;
+        this.decoding = new Set();
+        this.heard = new Map();
 
         /**
          * The recorded sounds downloaded only once wanted (recorded.js ON_DEMAND) asked for so
@@ -773,6 +806,12 @@ export class Sound {
         this.samples.clear();
         this.sounding = [];
         this.clock = null;
+
+        // (Nothing sounding in the last one sounds in this one, its clock starting again from 0)
+        for (const name of this.heard.keys()) {
+            this.heard.set(name, 0);
+        }
+
         this.#startWind();
 
         // Stopped by the browser rather than by us: started again
@@ -1130,6 +1169,12 @@ export class Sound {
         if (!made && LATER.has(name)) {
             this.want(name);
         }
+
+        // (Let go of past the budget: decoded again, for next time, what's made playing meanwhile)
+        if (!made && !recorded && this.mp3s.has(name)) {
+            this.#recall(name);
+        }
+
         // (Recorded once two of its recordings are in, or its only one)
         const buffers = recorded?.length >= Math.min(2, RECORDED[name]?.length ?? 2) ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
 
@@ -1208,7 +1253,15 @@ export class Sound {
             level.gain.linearRampToValueAtTime(gain, start + JOIN);
         }
 
-        this.sounding.push(start + (source.buffer.duration - into) / source.playbackRate.value);
+        const end = start + (source.buffer.duration - into) / source.playbackRate.value;
+
+        this.sounding.push(end);
+
+        // (A recording played: the last to be let go of, and not till it's done)
+        if (buffers === recorded) {
+            this.#hear(name, end);
+        }
+
         source.addEventListener("ended", () => {
             source.disconnect();
             level.disconnect();
@@ -1394,18 +1447,19 @@ export class Sound {
     /**
      * What the sounds hold (bytes): the browser's decoded copies (outside the page's heap, so the
      * browser's heap size never shows them) and the samples and recordings kept to make them (the
-     * debug overlay and log: app/telemetry.js).
+     * recorded sounds' MP3s among them, kept to decode them again) (the debug overlay and log:
+     * app/telemetry.js).
      */
     memory() {
         const seen = new Set();
         let bytes = 0;
 
-        for (const kept of [this.samples, this.recordings, this.buffers, this.instruments, this.decoded]) {
+        for (const kept of [this.samples, this.recordings, this.mp3s, this.buffers, this.instruments, this.decoded]) {
             for (const value of kept.values()) {
                 for (const each of [value].flat()) {
                     if (each && !seen.has(each)) {
                         seen.add(each);
-                        bytes += each.byteLength ?? (each.length ?? 0) * (each.numberOfChannels ?? 1) * 4;
+                        bytes += bytesOf(each);
                     }
                 }
             }
@@ -1478,22 +1532,100 @@ export class Sound {
 
         if (RECORDED[name]) {
             const variant = Number(id.split(" ")[1]);
+            const mp3s = this.mp3s.get(name) ?? [];
 
-            this.context.decodeAudioData(recording).then(
+            // (Its MP3 kept, to decode again once it's let go of: the browser's given a copy to
+            // decode, as it takes what it's given, leaving the page's empty)
+            mp3s[variant] = recording;
+            this.mp3s.set(name, mp3s);
+            this.decoding.add(id);
+            this.context.decodeAudioData(recording.slice(0)).then(
                 (buffer) => {
                     const variants = this.decoded.get(name) ?? [];
 
                     // (A swing's loudest moment, to time it to the blow: play's peakAt)
                     buffer.peak = RECORDED[name][variant].peak ?? 0;
                     variants[variant] = buffer;
+                    this.decoding.delete(id);
                     this.decoded.set(name, variants);
                     this.recorded.set(name, variants.filter(Boolean));
+                    this.#hear(name);
+
+                    // (Any of its others let go of meanwhile decoded again with it; and past the
+                    // budget, what's played least lately let go of)
+                    this.#recall(name);
+                    this.#trim(name);
                 },
-                () => {},
+                () => {
+                    // (It can't be: its made one plays, as if it couldn't be downloaded)
+                    this.decoding.delete(id);
+                    mp3s[variant] = null;
+                },
             );
         } else {
             this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
         }
+    }
+
+    // A recorded sound let go of, decoded again from its MP3s (those of them not decoded already,
+    // nor being)
+    #recall(name) {
+        const decoded = this.decoded.get(name);
+
+        if (!this.context || this.context.state === "closed") {
+            return;
+        }
+
+        this.mp3s.get(name)?.forEach((mp3, variant) => {
+            if (mp3 && !decoded?.[variant] && !this.decoding.has(`${name} ${variant}`)) {
+                this.#decode(`${name} ${variant}`, mp3);
+            }
+        });
+    }
+
+    // A recorded sound played, or decoded: the last of them now to be let go of, and not before
+    // it's done sounding (`until`, the browser's time)
+    #hear(name, until = 0) {
+        const was = this.heard.get(name) ?? 0;
+
+        this.heard.delete(name);
+        this.heard.set(name, Math.max(was, until));
+    }
+
+    // Past the budget, the recorded sounds played least lately let go of till it's kept to: never
+    // one sounding (a bed heard, or still fading; a sound played and not done), one being decoded,
+    // or `fresh`, just decoded (it's wanted now: never let go of before it's heard). (Should those
+    // come to more than the budget, the rest are let go of once they're done, as the next sound's
+    // decoded: what's decoded only grows as something is.)
+    #trim(fresh) {
+        const held = (name) => (this.decoded.get(name) ?? []).reduce((bytes, buffer) => bytes + bytesOf(buffer), 0);
+        const now = this.context?.currentTime ?? 0;
+        let bytes = 0;
+
+        for (const name of this.decoded.keys()) {
+            bytes += held(name);
+        }
+
+        for (const [name, until] of this.heard) {
+            if (bytes <= this.budget) {
+                return;
+            }
+
+            const bed = this.beds.get(name);
+            const busy = name === fresh || until > now || bed?.level || bed?.gain > 0 || RECORDED[name].some((_, variant) => this.decoding.has(`${name} ${variant}`));
+
+            if (!busy) {
+                bytes -= held(name);
+                this.#release(name);
+            }
+        }
+    }
+
+    // A recorded sound let go of: its decoded copies (big) dropped, its MP3s kept to decode again
+    #release(name) {
+        this.recorded.delete(name);
+        this.decoded.delete(name);
+        this.heard.delete(name);
     }
 
     // A call heard now (ambience.js CALLS): from a tree near, if it's a tree's, or from where it's
@@ -1545,6 +1677,11 @@ export class Sound {
             }
 
             if (!bed.level) {
+                // (Heard again, let go of past the budget while it was silent: decoded again)
+                if (bed.gain > 0 && !buffer) {
+                    this.#recall(name);
+                }
+
                 // (Silent so long: forgotten)
                 bed.quiet = bed.gain > 0 ? null : (bed.quiet ?? now);
 
@@ -1567,6 +1704,7 @@ export class Sound {
 
             if (gain > 0 && (bed.next === null || bed.next - now < BED_AHEAD)) {
                 this.#copy(bed, buffer, loop, Math.max(bed.next ?? now, now + 0.02), bed.next === null);
+                this.#hear(name);
             }
 
             blowing ||= WINDS.includes(name) && gain > 0;
@@ -1625,13 +1763,17 @@ export class Sound {
         bed.next = at + length;
     }
 
-    // A bed not heard for a while forgotten: its recording dropped (big, decoded), to be
-    // downloaded again should it be wanted again
+    // A bed not heard for a while forgotten: its recording let go of (big, decoded), to be
+    // decoded again from its MP3 should it be wanted again
     #letGo(name) {
         this.beds.delete(name);
-        this.recorded.delete(name);
-        this.decoded.delete(name);
-        this.wanted.delete(name);
+        this.#release(name);
+
+        // (None of it in, as when it couldn't be downloaded: downloaded again, should it be
+        // wanted again)
+        if (!this.mp3s.get(name)?.some(Boolean)) {
+            this.wanted.delete(name);
+        }
     }
 
     #startWind() {

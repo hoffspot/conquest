@@ -10,7 +10,7 @@ import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
@@ -245,6 +245,13 @@ const fromDisk = async (url) => {
     const data = await readFile(url);
 
     return { ok: true, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
+};
+
+// The same, each download noted in `fetched`, to see what's downloaded again
+const noting = (fetched) => (url) => {
+    fetched.push(String(url));
+
+    return fromDisk(url);
 };
 
 // The sounds, made once (without a worker, as in Node), and the music's recordings, downloaded
@@ -1342,8 +1349,9 @@ describe("the ambience played (sound.js setAmbience)", () => {
         sound.close();
     });
 
-    it("fades a bed out when it's not heard, stops it, and in a while lets its recording go, downloaded again if it's wanted again", async () => {
-        const { sound, played } = await started();
+    it("fades a bed out when it's not heard, stops it, and in a while lets its recording go, decoded again from its MP3 if it's wanted again", async () => {
+        const fetched = [];
+        const { sound, played } = await started({ fetch: noting(fetched) });
 
         sound.setAmbience({ beds: { caveDrips: 1 } });
         await sound.want("caveDrips");
@@ -1362,7 +1370,16 @@ describe("the ambience played (sound.js setAmbience)", () => {
 
         sound.context.currentTime += 61;
         sound.tick();
-        assert.ok(!sound.beds.has("caveDrips") && !sound.recorded.has("caveDrips") && !sound.wanted.has("caveDrips"), "let go of");
+        assert.ok(!sound.beds.has("caveDrips") && !sound.recorded.has("caveDrips") && !sound.decoded.has("caveDrips"), "let go of");
+        assert.ok(sound.mp3s.get("caveDrips")?.every(Boolean) && sound.wanted.has("caveDrips"), "its MP3 kept");
+
+        // (Heard again: decoded again from it, not downloaded, and looped)
+        fetched.length = 0;
+        sound.setAmbience({ beds: { caveDrips: 1 } });
+        await tick();
+        sound.tick();
+        assert.ok(sound.recorded.has("caveDrips") && sound.beds.get("caveDrips").level, "heard again");
+        assert.deepEqual(fetched, []);
         sound.close();
     });
 
@@ -1384,6 +1401,128 @@ describe("the ambience played (sound.js setAmbience)", () => {
         sound.setAmbience({});
         sound.update(60);
         assert.equal(birds().length, 1);
+        sound.close();
+    });
+});
+
+describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)", () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    // What's held (bytes): by a sound decoded (here, a sample for each byte of its MP3s), by all
+    // of them, and by any of the sound's kept copies
+    const held = (sound, name) => (sound.decoded.get(name) ?? []).reduce((bytes, buffer) => bytes + buffer.length * buffer.numberOfChannels * 4, 0);
+    const decoded = (sound) => [...sound.decoded.keys()].reduce((bytes, name) => bytes + held(sound, name), 0);
+    const bytes = (kept) => [...kept.values()].flat().reduce((sum, each) => sum + (each.byteLength ?? each.length * each.numberOfChannels * 4), 0);
+
+    // A spell's sound decoded, before it's downloaded (from its MP3s on disk)
+    const sizeOf = async (name) => (await Promise.all(recordedFiles([name]).map(([, url]) => readFile(url)))).reduce((sum, mp3) => sum + mp3.byteLength * 4, 0);
+
+    it("keeps less on a touch screen than on a computer, and past it lets go of the sounds played least lately, their MP3s kept", async () => {
+        assert.ok(DECODED_BUDGET.touch < DECODED_BUDGET.other);
+        assert.equal(new Sound().budget, DECODED_BUDGET.other);
+
+        try {
+            globalThis.matchMedia = (query) => ({ matches: query === "(pointer: coarse)" });
+            assert.equal(new Sound().budget, DECODED_BUDGET.touch, "on a phone");
+        } finally {
+            delete globalThis.matchMedia;
+        }
+
+        const { sound } = await started();
+
+        // Played one after another, and done
+        for (const name of ["stepGrass", "stepStone", "stepDirt"]) {
+            assert.ok(sound.play(name));
+        }
+
+        sound.context.currentTime += 5;
+
+        // A spell's sound decoded, with room for it and the last two played only
+        sound.budget = held(sound, "stepStone") + held(sound, "stepDirt") + (await sizeOf("castFireLow"));
+        await sound.want("castFireLow");
+        await tick();
+        assert.deepEqual([...sound.decoded.keys()].sort(), ["castFireLow", "stepDirt", "stepStone"], "the rest let go of, the footstep played first with them");
+        assert.ok(decoded(sound) <= sound.budget);
+        assert.ok(!sound.recorded.has("stepGrass") && !sound.recorded.has("slash"));
+        assert.equal(sound.mp3s.get("stepGrass").filter(Boolean).length, RECORDED.stepGrass.length, "its MP3s kept");
+        assert.equal(sound.mp3s.size, Object.keys(RECORDED).filter((name) => !ON_DEMAND.includes(name)).length + 1, "and every other's");
+        sound.close();
+    });
+
+    it("never lets go of a sound playing: a bed heard, or fading out; a sound not done", async () => {
+        const { sound } = await started();
+
+        sound.setAmbience({ beds: { caveDrips: 1 } });
+        await sound.want("caveDrips");
+        await tick();
+        sound.tick();
+        assert.ok(sound.beds.get("caveDrips").level, "looping");
+        assert.ok(sound.play("stepGrass"), "a footstep sounding");
+
+        // Past a budget of nothing, everything else let go of (but the spell's just decoded)
+        sound.budget = 0;
+        await sound.want("castFireLow");
+        await tick();
+        assert.deepEqual([...sound.decoded.keys()].sort(), ["castFireLow", "caveDrips", "stepGrass"]);
+
+        // Fading out, still not
+        sound.setAmbience({});
+        await sound.want("castFireMid");
+        await tick();
+        assert.deepEqual([...sound.decoded.keys()].sort(), ["castFireMid", "caveDrips", "stepGrass"]);
+
+        // Faded out and stopped, and the footstep done: let go of as the next is decoded
+        sound.context.currentTime += 3;
+        sound.tick();
+        assert.ok(!sound.beds.get("caveDrips").level);
+        await sound.want("castFireHigh");
+        await tick();
+        assert.deepEqual([...sound.decoded.keys()], ["castFireHigh"]);
+        sound.close();
+    });
+
+    it("plays a sound let go of as before it was in (its made one, or what stands in for it), and decodes it again from its MP3, not downloading it again", async () => {
+        const fetched = [];
+        const { sound, played } = await started({ fetch: noting(fetched) });
+
+        sound.budget = 0;
+        await sound.want("castFireLow");
+        await tick();
+        assert.ok(!sound.recorded.has("stepGrass") && !sound.recorded.has("clash"));
+
+        sound.budget = Infinity;
+        fetched.length = 0;
+        played.length = 0;
+        sound.play("stepGrass");
+        sound.play("clash");
+        assert.ok(sound.buffers.get("stepGrass").includes(played[0].source.buffer), "the made footstep meanwhile");
+        assert.ok(sound.buffers.get("block").includes(played[1].source.buffer), "a recorded-only one's stand-in");
+
+        await tick();
+        assert.equal(sound.recorded.get("stepGrass")?.length, RECORDED.stepGrass.length, "decoded again");
+        assert.equal(sound.recorded.get("clash")?.length, RECORDED.clash.length);
+        assert.deepEqual(fetched, [], "from its MP3s");
+
+        played.length = 0;
+        sound.play("stepGrass");
+        assert.ok(sound.recorded.get("stepGrass").includes(played[0].source.buffer), "then its recording again");
+        sound.close();
+    });
+
+    it("counts the MP3s it keeps in what it holds, with what's decoded", async () => {
+        const { sound } = await started();
+        const mp3s = bytes(sound.mp3s);
+        const was = bytes(sound.decoded);
+
+        assert.ok(mp3s > 0 && sound.recordings.size === 0, "kept once they're decoded");
+        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + was + mp3s);
+
+        // (Let go of, what's decoded is less, and the MP3s are all still counted)
+        sound.budget = 0;
+        await sound.want("castFireLow");
+        await tick();
+        assert.ok(bytes(sound.decoded) < was / 4 && bytes(sound.mp3s) > mp3s);
+        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + bytes(sound.decoded) + bytes(sound.mp3s));
         sound.close();
     });
 });

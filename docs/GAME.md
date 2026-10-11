@@ -4024,8 +4024,9 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   made wind was. Changing place, each bed fades to its new loudness over 2 seconds.
 - **Downloaded where it's heard**: every bed and call is on demand (`want`), asked for as the
   player comes where it's heard. A bed is big decoded (a 37-second loop is about 8 MB), so one
-  silent for a minute is let go of, downloaded again (from the browser's cache) if it's heard
-  again. The rain and the thunder are in the sound studio only, as there's no weather yet.
+  silent for a minute is let go of, decoded again from its MP3 (kept) if it's heard again; and
+  all of them are kept to a budget with the rest (below). The rain and the thunder are in the
+  sound studio only, as there's no weather yet.
 
 **Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
 were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
@@ -4124,6 +4125,26 @@ is paused, the music and the wind play on (the birds and leaves wait). Everythin
 while the page is hidden, and off (suspended) when turned off in Game options; turned off from
 the start, the browser's sound isn't started at all (taps don't start it), so it isn't kept
 working on silence, until it's turned on.
+
+**Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
+browser's decoded copy, 32-bit samples at its own rate (48 kHz on an iPhone), 25 to 30 times its
+MP3: all the recorded sounds decoded come to about 280 MB (their MP3s to about 10), a bed's 5 to
+7 MB, and an iPhone's debug log saw them climb from 63 to 120 MB before Safari closed the page.
+So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else. Past it,
+as each sound's decoded, those played least lately (or decoded, not played since) are let go of
+first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
+out; a sound played and not done), one being decoded, or the one just decoded. Their MP3s are
+kept (and counted in what the sounds hold), so one let go of is decoded again from it the next
+time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
+its made sound, what stands in for it, or nothing. What's sounding at once can come to more
+than the budget (a busy place's beds are 20 to 30 MB, the sounds downloaded at the start 22):
+the rest are let go of once they're done. The music's recordings (about 20 MB decoded) are kept
+as they are, and the sound studio keeps everything decoded. Travelling through sixteen places in
+Chromium (the town by day and by night, the taproom, a smithy, the wilds' lands by day and by
+night, a cave, a crypt, the lair, a temple, a ruin), with their creatures' voices and a few
+spells, what was decoded climbed past 150 MB, and was still climbing; kept to the budget, it
+stayed at 96 MB or under (48 with a touch screen's), with 8.5 MB of MP3s kept, and about 90
+recordings decoded again over nine minutes (under 30 with a computer's budget).
 
 The browser's sound can also stop on its own, and `sound.js` starts it again however it stops:
 
@@ -4584,9 +4605,10 @@ nothing), what the graphics card's been given (world/gpumemory.js: buffers, pict
 levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
 give it them and take them back, wrapped on the context; never a frame's draws, so it costs
 nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
-(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of), the
-way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as tiles are baked and
-gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
+(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of; the
+recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a budget*, under
+*Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
+tiles are baked and gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
 kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept. Where the heap isn't
 told, the bodies' copies stand in for it in the total, the least of it: in Chromium, playing on
@@ -4972,7 +4994,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   decoded (or, offline, not, without fuss), the music scheduled ahead and round again without a
   gap, fading into the tavern's going in (from its start), quieter and muffled upstairs, and back
   to the town's where it left off, and the sound started again however it stops (interrupted, hidden, stuck, closed, a note
-  going wrong, effects never ending).
+  going wrong, effects never ending); the recorded sounds kept decoded to their budget (the
+  least lately played let go of first, never one sounding, their MP3s counted and kept to
+  decode them again, what's made playing meanwhile).
 - `test/music.test.js`: the score (its sections and length, every note in time and near a
   recording of its instrument, a tune in every section, in key, ending on A to lead back to D),
   the tavern's jig (its strains of eight bars, the lute in every one, the drums on every beat,

@@ -27,7 +27,9 @@ const FEET = Object.fromEntries(Object.entries(GAITS).filter(([, { sound }]) => 
 // A walk: four footfalls this far apart (s), at this pace (m/s)
 const WALK = { steps: 4, apart: 0.5, speed: 1.5 };
 
-const sound = new Sound({ volumes: VOLUMES });
+// (Every recording kept decoded, so whichever's asked for is heard as it is, never its made one
+// while it's decoded again: the game keeps to sound.js DECODED_BUDGET)
+const sound = new Sound({ volumes: VOLUMES, budget: Infinity });
 
 // The ambience's beds playing (name → how loud: as the game plays them at their loudest)
 const beds = {};
