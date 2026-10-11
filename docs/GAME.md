@@ -2720,10 +2720,12 @@ facing south; each is turned about its middle to face the way the layout says:
   panels, a St Andrew's cross under a window, a corner brace up top), or close studding on a
   rich house; then the roof (kits/roofs.js: gabled, hipped or half-hipped, with thickness, the
   fascia and soffit at its eaves, the verges' bargeboards, ridge and hip tiles, an old ridge
-  sagging), the gables carried up under it (framed on a timber house, with a little window),
-  the chimney stack (up a gable end outside, or through the roof) and dormers. A stack outside
-  never goes up the front gable, across the door and the name board or sign over it: a house
-  with its gable to the street has it up the back one.
+  sagging; a roof open beneath, over the well or a shelter on posts, has the underside of its
+  boards drawn under every slope instead, so it isn't seen through from below), the gables
+  carried up under it (framed on a timber house, with a little window), the chimney stack (up a
+  gable end outside, or through the roof) and dormers. A stack outside never goes up the front
+  gable, across the door and the name board or sign over it: a house with its gable to the street
+  has it up the back one.
 
   Its weathering is painted on its corners: dirt splashed up the foot of the walls, damp rising
   up them (darker and a little brown-green to 0.15 m, gone by 0.95 m) and, on a wall facing north

@@ -115,7 +115,7 @@ const PROPS = {
 
     well(solid, { cx, cz }) {
         // A ring of stone, water below, two posts and a windlass with its bucket, under a little
-        // roof of shingles. (The ring turned whole, its outside, the lip of its rim, its top and
+        // roof of shingles, open beneath (its planks seen from under it, the sky not). (The ring turned whole, its outside, the lip of its rim, its top and
         // its inside down to the water each facing the way it's seen from: so the far side's
         // inside shows, looking in over the near side, and it's never cut in half)
         solid.lathe(cx, cz, [[m(0.95), 0], [m(0.9), m(0.85)]], material("stone"), { segments: 12 });
@@ -132,7 +132,7 @@ const PROPS = {
         solid.cylinder(cx - m(0.2), cz, m(0.8), m(1.62), m(0.015), m(0.015), material("rope"), { segments: 4, capped: false });
         barrel(solid, cx - m(0.2), cz, m(0.35), m(0.17));
         solid.beam([cx + m(1.05), m(1.65), cz], [cx + m(1.05), m(1.3), cz + m(0.3)], m(0.05), m(0.05), material("iron"));
-        pitchedRoof(solid, { x0: cx - m(1.1), x1: cx + m(1.1), z0: cz - m(0.7), z1: cz + m(0.7), eaves: m(2.3), pitch: 0.8, overhang: m(0.25), verge: m(0.15), thickness: m(0.1), cover: "shingles", under: "planks-dark", cap: "ridge", barge: "timber" });
+        pitchedRoof(solid, { x0: cx - m(1.1), x1: cx + m(1.1), z0: cz - m(0.7), z1: cz + m(0.7), eaves: m(2.3), pitch: 0.8, overhang: m(0.25), verge: m(0.15), thickness: m(0.1), cover: "shingles", under: "planks-dark", cap: "ridge", barge: "timber", open: true });
     },
 
     barrels(solid, { random }) {

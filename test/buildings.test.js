@@ -703,6 +703,45 @@ describe("shapes turned about an axis (Solid.lathe), lofted, swept and stood up"
 });
 
 describe("props (kits/props.js)", () => {
+    it("roofs the well open beneath: looked up at from under it, its planks over every point of it, the sky through none", () => {
+        // (Kit units: 5 a metre; a 4 x 4 plot's middle at 40, 40)
+        const M = 5;
+        const well = prop({ name: "well", w: 4, h: 4 });
+        const triangles = [];
+
+        well.traverse((node) => {
+            const position = node.geometry?.attributes.position;
+
+            for (let k = 0; position && k < position.count; k += 3) {
+                const [a, b, c] = [k, k + 1, k + 2].map((i) => [position.getX(i), position.getY(i), position.getZ(i)]);
+                const [u, v] = [b.map((p, i) => p - a[i]), c.map((p, i) => p - a[i])];
+                const up = u[2] * v[0] - u[0] * v[2];
+
+                triangles.push({ a, b, c, up: up / Math.hypot(u[1] * v[2] - u[2] * v[1], up, u[0] * v[1] - u[1] * v[0]) });
+            }
+        });
+
+        // (Whether a triangle seen from below, its front facing down, covers a point, as high as the roof)
+        const side = (p, q, r) => (q[0] - p[0]) * (r[2] - p[2]) - (q[2] - p[2]) * (r[0] - p[0]);
+        const over = (x, z) =>
+            triangles.some(({ a, b, c, up }) => {
+                const p = [x, 0, z];
+                const [d1, d2, d3] = [side(a, b, p), side(b, c, p), side(c, a, p)];
+
+                return up < -0.2 && Math.min(a[1], b[1], c[1]) >= 2 * M && !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+            });
+        let points = 0;
+
+        for (let x = 40 - 1.1 * M; x <= 40 + 1.1 * M; x += 0.5) {
+            for (let z = 40 - 0.7 * M; z <= 40 + 0.7 * M; z += 0.5) {
+                assert.ok(over(x, z), `the sky through the well's roof at ${x}, ${z}`);
+                points++;
+            }
+        }
+
+        assert.ok(points > 300, `${points} points`);
+    });
+
     it("builds every prop a town has, a few hundred triangles each at most", () => {
         for (const name of PROP_NAMES) {
             const triangles = trianglesOf(prop({ name, w: name === "well" || name === "tent" ? 2 : 1, h: name === "well" || name === "tent" ? 2 : 1, x: 3, y: 4 }));
