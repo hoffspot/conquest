@@ -505,7 +505,10 @@ lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
   with a paler belly, throat and inner arms; stripes are bands across the body and limbs, broken
   up by noise, in a darker shade; scales are Worley cells (`noise.js` `cells`), each a little
   different in shade, darker at the edges, and raised in the bump map. Their fields are made the
-  first time a skin wants them (`SkinAtlas.furAndScales`), so no one else pays for them.
+  first time a skin wants them (`SkinAtlas.furAndScales`), so no one else pays for them: in the
+  skin worker, when it worked the atlas out itself (below), not on the page, where making them
+  froze the game half a second on a phone the first time someone furry was dressed (a boggart
+  coming out of the wild: the user's debug log, "dressing beast boggart", 462 ms).
 - **How rough it is** (`SKIN_ROUGHNESS`): painted in the picture's alpha, which skin had no use
   for, so it costs nothing to keep. Skin is a little glossy (0.56), oilier down the middle of the
   forehead and the nose (the T-zone, a field of its own), matte in its creases and where hair's
@@ -782,7 +785,8 @@ they're the same, and each piece the same step by step as at once.
 **Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
 milliseconds at 1024, a phone's at 512 as long). The game gives the kit a painter (`skins.js`
 `Skins`, made with the kit in `app/session.js`) that paints them in a worker (`skin-worker.js`),
-sent a copy of the skin atlas's fields once (and the fields for fur and scales when first wanted).
+sent a copy of the skin atlas's fields once (and the fields for fur and scales when first wanted,
+if it was sent the atlas rather than working it out itself: `Skins.whole`, and then it makes them).
 A character built a step at a time asks for its skin first (`ask`), so it's painted while the rest
 of it is built, and puts it on last (`painting`): if it isn't back yet, that step yields `WAITING`
 (`core/steps.js`), and whatever's taking the steps comes back to it next frame (`Steps`), or, if
