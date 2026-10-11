@@ -55,7 +55,7 @@ import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, RELEVANCE, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -354,6 +354,12 @@ const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 // its square aren't all kept dressed, their skins on the page and the graphics card, for a player
 // standing in it or walking past
 const DOORSTEP = Object.freeze({ near: 6, far: 20 });
+
+// A building's floors, built as it's got ready, let go of again once the player's `far` metres
+// from its door (or, inside another building, that building's door is), though the host keeps it
+// got ready to RELEVANCE.far; built again, a piece at a time, once they're `near` it again (as
+// near as the host gets it ready), or all at once if they go straight in
+const FLOORS = Object.freeze({ near: RELEVANCE.near, far: 40 });
 
 // Gone into a building before its folk are all dressed: the screen kept dark while they're
 // dressed, `budget` ms a frame (their skins painted elsewhere meanwhile), for `most` seconds at
@@ -5536,6 +5542,7 @@ export class Game {
 
         for (const visit of this.visits.values()) {
             this.#doorstep(visit);
+            this.#floorsWanted(visit);
             this.#work(visit, until);
             busy ||= Boolean(visit.steps || visit.queue.length);
         }
@@ -7168,13 +7175,41 @@ export class Game {
     // Start building a building the host's got ready: each floor, one to a piece of work, and the
     // doors told of its insides; its folk once the player's at its door (#doorstep)
     #prepare(building) {
-        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, people: () => this.host.open.get(building.key) ?? [] };
+        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, bare: false, people: () => this.host.open.get(building.key) ?? [] };
 
-        visit.queue.push(...building.maps.map((id) => () => this.#furnishing(visit, id)));
-        visit.queue.push(() => this.doors?.sync());
+        visit.queue.push(...this.#floorsOf(visit, building));
         this.visits.set(building.key, visit);
 
         return visit;
+    }
+
+    // The work of building a building's floors, one to a piece of work, and telling the doors of
+    // its insides after
+    #floorsOf(visit, building) {
+        return [...building.maps.map((id) => () => this.#furnishing(visit, id)), () => this.doors?.sync()];
+    }
+
+    // A building's floors let go of, the player well away from it (FLOORS), though it's still got
+    // ready: built again (#furnish) when they come near it again
+    #bare(visit) {
+        for (const id of visit.maps.splice(0)) {
+            this.interiors.get(id)?.dispose();
+            this.interiors.delete(id);
+            this.minimap?.forget(id);
+        }
+
+        visit.bare = true;
+    }
+
+    // A building's floors let go of (#bare) built again: first, before any of its folk
+    #furnish(visit) {
+        const building = this.world.interiors?.buildings.get(visit.key);
+
+        visit.bare = false;
+
+        if (building) {
+            visit.queue.unshift(...this.#floorsOf(visit, building));
+        }
     }
 
     // A building's folk wanted, the player making for its door, at it or inside (DOORSTEP), or let
@@ -7195,6 +7230,30 @@ export class Game {
             this.#welcome(visit);
         } else if (visit.welcomed && !inside && !making && away > DOORSTEP.far) {
             this.#farewell(visit);
+        }
+    }
+
+    // A building's floors (one the host's got ready: not Wenches and Ale, built with the town) let
+    // go of, the player well away from it, or wanted again, as they come near it (FLOORS): how
+    // far measured from where the player is out in the world, or from the door of the building
+    // they're in (not let go of while they're somewhere else, a cave or a dungeon); let go of only
+    // once they're all built, and nothing else of it's being done
+    #floorsWanted(visit) {
+        const me = this.battle.actor(this.me);
+
+        if (!me || !visit.door) {
+            return;
+        }
+
+        const ours = (map) => this.world.interiors?.of(map)?.key === visit.key;
+        const near = ours(me.map) || (me.order?.type === "enter" && Boolean(this.battle.links?.find(({ id }) => id === me.order.link)?.ends.some(({ map }) => ours(map))));
+        const from = me.map === "town" ? { x: me.x, z: me.y } : (this.world.interiors?.of(me.map)?.entrance?.door ?? null);
+        const off = from ? Math.hypot(visit.door.x - from.x, visit.door.z - from.z) : null;
+
+        if (visit.bare && (near || (off !== null && off < FLOORS.near))) {
+            this.#furnish(visit);
+        } else if (!visit.bare && !near && off !== null && off > FLOORS.far && !visit.steps && !visit.queue.length) {
+            this.#bare(visit);
         }
     }
 
@@ -7233,6 +7292,11 @@ export class Game {
 
         if (!visit) {
             return;
+        }
+
+        // (Its floors let go of, the player having been well away: built again, first)
+        if (visit.bare) {
+            this.#furnish(visit);
         }
 
         this.#welcome(visit);

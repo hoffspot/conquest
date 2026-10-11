@@ -393,9 +393,9 @@ export class Character {
         this.object.add(this.mesh);
 
         /**
-         * Body triangles hidden under clothing: a byte for each of the body part's triangles, 1
-         * where it's hidden (none, null). A byte each, not a set of them: tens of thousands of
-         * them, for everyone drawn.
+         * Body triangles hidden under clothing: a bit for each of the body part's triangles
+         * (triangle `t`'s is bit `t & 7` of byte `t >> 3`), set where it's hidden (none, null). A
+         * bit each, not a set of them nor a byte: tens of thousands of them, for everyone drawn.
          */
         this.hidden = null;
 
@@ -1639,10 +1639,10 @@ export class Character {
 
     /** Hide body triangles (under clothing), replacing those hidden before. */
     setHidden(triangles) {
-        const hidden = new Uint8Array(this.human.renderIndices("body").length / 3);
+        const hidden = new Uint8Array(Math.ceil(this.human.renderIndices("body").length / 3 / 8));
 
         for (const t of triangles) {
-            hidden[t] = 1;
+            hidden[t >> 3] |= 1 << (t & 7);
         }
 
         this.hidden = hidden;
@@ -1739,7 +1739,7 @@ export class Character {
         const kept = [];
 
         for (let t = 0; t < body.length / 3; t++) {
-            if (!this.hidden?.[t]) {
+            if (!(this.hidden && (this.hidden[t >> 3] & (1 << (t & 7))))) {
                 kept.push(body[t * 3], body[t * 3 + 1], body[t * 3 + 2]);
             }
         }
