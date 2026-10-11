@@ -137,7 +137,9 @@ function averageOf(texture) {
         const image = texture.image;
         let pixels = image?.data ?? null;
 
-        if (!pixels && image) {
+        // (A picture of data whose pixels have been let go of, once sent (world/release.js): white,
+        // its material's colour all there is to go by)
+        if (!pixels && image && !("data" in image)) {
             const scratch = document.createElement("canvas");
 
             scratch.width = 16;
@@ -235,7 +237,9 @@ export function figureOf(character, size = 256) {
 
         const image = texture?.image;
 
-        if (!image) {
+        // (Nor a picture whose pixels have been let go of, once sent: world/release.js. Coloured
+        // by its material, all told, then)
+        if (!image || ("data" in image && !image.data)) {
             return false;
         }
 

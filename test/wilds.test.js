@@ -20,6 +20,10 @@ let world;
 let overworld;
 let chunks;
 
+// An attribute's values as they're read (its normalised bytes and half floats as numbers: x, y,
+// z, w of each vertex in turn)
+const valuesOf = (attribute) => Array.from({ length: attribute.count * attribute.itemSize }, (_, k) => attribute[["getX", "getY", "getZ", "getW"][k % attribute.itemSize]](Math.floor(k / attribute.itemSize)));
+
 describe("noise (core/noise.js)", () => {
     it("is smooth, from 0 to 1, the same for the same seed and different for another", () => {
         for (let k = 0; k < 200; k++) {
@@ -234,11 +238,11 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
 
                 assert.ok(triangles >= 4 && triangles <= (["ring", "ribs", "bush", "campfire", "outcrop", "ruin", "bean"].includes(kind) ? 400 : 260), `${kind} (${land}): ${triangles} triangles`);
 
-                for (const name of ["position", "normal", "color", "uv", "layer", "sway"]) {
-                    assert.ok(geometry.attributes[name].array.every(Number.isFinite), `${kind} (${land}): ${name}`);
+                for (const name of ["position", "normal", "color", "uv", "layer", "wild"]) {
+                    assert.ok(valuesOf(geometry.attributes[name]).every(Number.isFinite), `${kind} (${land}): ${name}`);
                 }
 
-                assert.ok(geometry.attributes.color.array.every((value) => value >= 0 && value <= 1.3), `${kind} (${land}): colours`);
+                assert.ok(valuesOf(geometry.attributes.color).every((value) => value >= 0 && value <= 1.3), `${kind} (${land}): colours`);
                 assert.ok(geometry.boundingBox.min.y > -0.2 && geometry.boundingBox.max.y < 2, `${kind} (${land}): ${geometry.boundingBox.min.y} to ${geometry.boundingBox.max.y}`);
                 geometry.dispose();
             }
@@ -357,11 +361,69 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
 
         for (const mesh of meshes) {
             assert.equal(mesh.material.name, "wilds");
-            assert.ok(mesh.geometry.attributes.sway);
+            assert.ok(mesh.geometry.attributes.wild);
             assert.ok(!mesh.castShadow);
             triangles += mesh.geometry.attributes.position.count / 3;
         }
 
         assert.ok(triangles < 45000, `${triangles} triangles`);
+        assert.equal(growth.tiles.size, 0, "every tile built");
+    });
+
+    it("packs the undergrowth into 36 bytes a vertex, not 56, each read back as it was made", () => {
+        const chunk = chunks.find(({ ground }) => ground.filter((kind) => kind === GROUND.grass).length > 3000);
+        const growth = new Growth(undergrowthOf(overworld, chunk), [chunk.x0, chunk.y0]);
+        let checked = 0;
+        let farthest = 0;
+
+        for (const tile of [...growth.tiles]) {
+            // (As it's placed, every value a float; then as it's drawn)
+            growth.grow(Infinity, tile);
+
+            const { count, arrays } = tile.mesher;
+            const { attributes } = growth.mesh(tile).geometry;
+            const [position, normal, color, uv, wild] = ["position", "normal", "color", "uv", "wild"].map((name) => valuesOf(attributes[name]));
+            const near = (a, b, within, what) => assert.ok(Math.abs(a - b) <= within, `${what}: ${a} for ${b}`);
+
+            // (Each 4 bytes a vertex or a multiple of 4, 36 in all)
+            assert.equal(attributes.position.count, count);
+            assert.ok(Object.values(attributes).every(({ itemSize, array }) => (itemSize * array.BYTES_PER_ELEMENT) % 4 === 0));
+            assert.equal(Object.values(attributes).reduce((sum, { itemSize, array }) => sum + itemSize * array.BYTES_PER_ELEMENT, 0), 36);
+            assert.deepEqual(attributes.position.array, arrays.position.slice(0, count * 3));
+            assert.deepEqual(attributes.layer.array, arrays.layer.slice(0, count));
+
+            for (let i = 0; i < count; i++) {
+                for (let k = 0; k < 3; k++) {
+                    near(normal[i * 4 + k], arrays.normal[i * 3 + k], 0.005, "normal");
+                    near(color[i * 4 + k], arrays.color[i * 3 + k], arrays.color[i * 3 + k] / 1000 + 1e-6, "colour");
+                }
+
+                assert.equal(color[i * 4 + 3], 1);
+                near(wild[i * 2], arrays.sway[i], 0.001, "sway");
+                near(position[i * 3 + 1] - wild[i * 2 + 1], arrays.foot[i], 0.001, "foot");
+            }
+
+            // (Each triangle's texture coordinates moved by whole copies of its picture, the same
+            // for its three corners, to within a 1000th of a copy: a quarter of one of the atlas's
+            // pixels)
+            for (let i = 0; i < count; i += 3) {
+                for (let k = 0; k < 2; k++) {
+                    const whole = Math.round(arrays.uv[i * 2 + k] - uv[i * 2 + k]);
+
+                    for (let j = i; j < i + 3; j++) {
+                        near(uv[j * 2 + k] + whole, arrays.uv[j * 2 + k], 0.001, "uv");
+                        assert.ok(uv[j * 2 + k] >= 0 && uv[j * 2 + k] < 4, `uv ${uv[j * 2 + k]}`);
+                    }
+                }
+            }
+
+            checked += count;
+            farthest = arrays.uv.subarray(0, count * 2).reduce((most, value) => Math.max(most, value), farthest);
+        }
+
+        // (Their texture coordinates as made hundreds of copies of their pictures out: shifted by
+        // where each thing grows)
+        assert.ok(checked > 1000, `${checked} vertices`);
+        assert.ok(farthest > 100, `${farthest} copies`);
     });
 });

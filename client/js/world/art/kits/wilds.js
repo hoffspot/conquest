@@ -144,23 +144,23 @@ export class Mesher {
     }
 
     /**
-     * A Three.js geometry of what's been made (with `sway` if `swaying`, and `foot`: the height
-     * of the ground under whatever each vertex is part of, which undergrowth sinks to far off).
+     * A Three.js geometry of what's been made, for the atlas's material; or if `swaying`, for the
+     * undergrowth's (engine/atlas.js wildsMaterial), packed into fewer bytes (#packed), with
+     * `wild` too: how much each vertex sways, and how high it is over its foot (the ground under
+     * whatever it's part of, which undergrowth sinks to far off).
      */
     geometry(swaying = false) {
         const n = this.count;
-        const { position, normal, color, uv, layer, sway, foot } = this.arrays;
-        const geometry = new THREE.BufferGeometry();
+        const { position, normal, color, uv, layer } = this.arrays;
+        const geometry = swaying ? this.#packed() : new THREE.BufferGeometry();
 
         geometry.setAttribute("position", new THREE.BufferAttribute(position.slice(0, n * 3), 3));
-        geometry.setAttribute("normal", new THREE.BufferAttribute(normal.slice(0, n * 3), 3));
-        geometry.setAttribute("color", new THREE.BufferAttribute(color.slice(0, n * 3), 3));
-        geometry.setAttribute("uv", new THREE.BufferAttribute(uv.slice(0, n * 2), 2));
         geometry.setAttribute("layer", new THREE.BufferAttribute(layer.slice(0, n), 1));
 
-        if (swaying) {
-            geometry.setAttribute("sway", new THREE.BufferAttribute(sway.slice(0, n), 1));
-            geometry.setAttribute("foot", new THREE.BufferAttribute(foot.slice(0, n), 1));
+        if (!swaying) {
+            geometry.setAttribute("normal", new THREE.BufferAttribute(normal.slice(0, n * 3), 3));
+            geometry.setAttribute("color", new THREE.BufferAttribute(color.slice(0, n * 3), 3));
+            geometry.setAttribute("uv", new THREE.BufferAttribute(uv.slice(0, n * 2), 2));
         }
 
         geometry.computeBoundingSphere();
@@ -168,6 +168,84 @@ export class Mesher {
 
         return geometry;
     }
+
+    // The undergrowth's normals, colours, texture coordinates and `wild` in 20 bytes a vertex,
+    // not 40 (its position and layer, 16 more, are left as they are: the ground's up to 420
+    // metres high, where a half float's in steps of a quarter of a metre), each 4 bytes a vertex
+    // or 8, as graphics cards read them without copying them first:
+    // - its normal in bytes, -127 to 127, read as -1 to 1 (the fourth byte nothing);
+    // - its colour in half floats (some are over 1, a glow's or a tint's, and the darkest near 0,
+    //   which a byte a channel would band), and a 1 (three.js reads it as the alpha);
+    // - its texture coordinates in half floats, each triangle's moved a whole number of copies of
+    //   its picture towards 0 first (the atlas repeats, so it reads the same): from the hundreds
+    //   of copies they're shifted by where each thing grows (place's `shift`) to 0 to 2 or so,
+    //   where a half float's within a 2000th of a copy;
+    // - `wild`, in half floats: its sway (0 to 1.3) and how high it is over its foot (-0.05 to
+    //   1.6 metres, within half a millimetre).
+    #packed() {
+        const n = this.count;
+        const { position, normal, color, uv, sway, foot } = this.arrays;
+        const normals = new Int8Array(n * 4);
+        const colours = new Uint16Array(n * 4);
+        const uvs = new Uint16Array(n * 2);
+        const wild = new Uint16Array(n * 2);
+        const one = half(1);
+
+        for (let i = 0; i < n; i++) {
+            normals[i * 4] = Math.round(normal[i * 3] * 127);
+            normals[i * 4 + 1] = Math.round(normal[i * 3 + 1] * 127);
+            normals[i * 4 + 2] = Math.round(normal[i * 3 + 2] * 127);
+            colours[i * 4] = half(color[i * 3]);
+            colours[i * 4 + 1] = half(color[i * 3 + 1]);
+            colours[i * 4 + 2] = half(color[i * 3 + 2]);
+            colours[i * 4 + 3] = one;
+            wild[i * 2] = half(sway[i]);
+            wild[i * 2 + 1] = half(position[i * 3 + 1] - foot[i]);
+        }
+
+        // (Each triangle's u, then its v: k its first corner's, k + 2 and k + 4 its others')
+        for (let i = 0; i < n * 2; i += 6) {
+            for (let k = i; k < i + 2; k++) {
+                const whole = Math.floor(Math.min(uv[k], uv[k + 2], uv[k + 4]));
+
+                uvs[k] = half(uv[k] - whole);
+                uvs[k + 2] = half(uv[k + 2] - whole);
+                uvs[k + 4] = half(uv[k + 4] - whole);
+            }
+        }
+
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 4, true));
+        geometry.setAttribute("color", new THREE.Float16BufferAttribute(colours, 4));
+        geometry.setAttribute("uv", new THREE.Float16BufferAttribute(uvs, 2));
+        geometry.setAttribute("wild", new THREE.Float16BufferAttribute(wild, 2));
+
+        return geometry;
+    }
+}
+
+// A number as a half float's bits (as WebGL2 reads HALF_FLOAT), rounded to the nearest: as
+// three.js's DataUtils.toHalfFloat, but rounded rather than cut short, and quicker (a few hundred
+// thousand a tile)
+const _float = new Float32Array(1);
+const _bits = new Uint32Array(_float.buffer);
+
+function half(value) {
+    _float[0] = value;
+
+    const bits = _bits[0];
+    const sign = (bits >>> 16) & 0x8000;
+    const size = bits & 0x7fffffff;
+
+    // (Less than the least a half float holds whole, 2^-14: in steps of 2^-24)
+    if (size < 0x38800000) {
+        return sign | Math.round(Math.abs(value) * 16777216);
+    }
+
+    // (Its exponent moved from a float's to a half's, and its fraction cut to 10 bits, rounded;
+    // no more than the most a half float holds, 65504)
+    return sign | Math.min(0x7bff, (size - 0x38000000 + 0x1000) >>> 13);
 }
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -3011,78 +3089,98 @@ function near(size, points, reach) {
 export const TILE = 32;
 
 /**
- * A chunk's undergrowth (undergrowthOf's) being built a few things at a time, then drawn as a mesh
- * for each TILE of it, at the tile's corner, with the atlas's undergrowth material (swaying, and
+ * A chunk's undergrowth (undergrowthOf's) sorted into its TILEs, each built on its own a few
+ * things at a time when it's wanted (chunks3d.js: once the player's near enough to see it soon),
+ * then drawn as a mesh at the tile's corner with the atlas's undergrowth material (swaying, and
  * sinking into the ground away from the player: engine/atlas.js WILDS, whose `focus` the game
  * keeps where the player is).
  */
 export class Growth {
     constructor(items, [x0, y0]) {
-        this.items = items;
-        this.origin = [x0, y0];
-        this.index = 0;
-        this.tiles = new Map();
-    }
+        const tiles = new Map();
 
-    /** Place what can be placed before `until` (performance.now()'s); whether it's all placed. */
-    grow(until = Infinity) {
-        while (this.index < this.items.length) {
-            if (this.index % 8 === 0 && performance.now() > until) {
-                return false;
-            }
-
-            const { kind, land, look, x, y, turn, size, tint, ground = 0 } = this.items[this.index++];
-            const [tx, ty] = [Math.floor((x - this.origin[0]) / TILE), Math.floor((y - this.origin[1]) / TILE)];
+        for (const item of items) {
+            const [tx, ty] = [Math.floor((item.x - x0) / TILE), Math.floor((item.y - y0) / TILE)];
             const key = `${tx},${ty}`;
 
-            if (!this.tiles.has(key)) {
-                this.tiles.set(key, { at: [this.origin[0] + tx * TILE, this.origin[1] + ty * TILE], mesher: new Mesher(4096) });
+            if (!tiles.has(key)) {
+                tiles.set(key, { at: [x0 + tx * TILE, y0 + ty * TILE], items: [], placed: 0, mesher: null });
             }
 
-            const { at, mesher } = this.tiles.get(key);
+            tiles.get(key).items.push(item);
+        }
 
-            place(mesher, lookOf(kind, land, look), { at: [x - at[0], ground, y - at[1]], turn, scale: [size, size, size], tint, shift: [x * 0.37, y * 0.29] });
+        this.origin = [x0, y0];
+
+        /**
+         * Its tiles not yet built: { at ([x0, y0], its corner, in the world), items (what grows on
+         * it, in order), placed (how many of them are), mesher (what's placed, once any is) }.
+         */
+        this.tiles = new Set(tiles.values());
+    }
+
+    /**
+     * Place what can be placed before `until` (performance.now()'s) of a tile (one of `tiles`), or
+     * of every one; whether it's all placed.
+     */
+    grow(until = Infinity, tile = null) {
+        for (const each of tile ? [tile] : this.tiles) {
+            const { at, items } = each;
+
+            each.mesher ??= new Mesher(4096);
+
+            while (each.placed < items.length) {
+                if (each.placed % 8 === 0 && performance.now() > until) {
+                    return false;
+                }
+
+                const { kind, land, look, x, y, turn, size, tint, ground = 0 } = items[each.placed++];
+
+                place(each.mesher, lookOf(kind, land, look), { at: [x - at[0], ground, y - at[1]], turn, scale: [size, size, size], tint, shift: [x * 0.37, y * 0.29] });
+            }
         }
 
         return true;
     }
 
-    /** A mesh for each tile with anything in it (`userData.tile`: [x0, y0], its corner). */
-    meshes() {
-        return [...this.meshing()];
+    /**
+     * A tile's mesh (`userData.tile`: [x0, y0], its corner), what grows on it placed first if it
+     * isn't all yet; the tile's then built, no longer one of `tiles`. Null if nothing's on it.
+     */
+    mesh(tile) {
+        this.grow(Infinity, tile);
+        this.tiles.delete(tile);
+
+        if (!tile.mesher.count) {
+            return null;
+        }
+
+        // (Let go of on the page once it's on the graphics card: nothing reads it again, and it's
+        // grown again, not kept, when it's needed again: chunks3d.js)
+        const mesh = new THREE.Mesh(releaseGeometry(tile.mesher.geometry(true)), wildsMaterial(TREE_WIND.time));
+
+        mesh.name = "undergrowth";
+        mesh.position.set(tile.at[0], 0, tile.at[1]);
+        mesh.receiveShadow = true;
+        mesh.matrixAutoUpdate = false;
+        mesh.updateMatrix();
+        mesh.userData.tile = tile.at;
+
+        return mesh;
     }
 
-    /** The same, made one at a time (each yielded). */
-    *meshing() {
-        for (const { at, mesher } of this.tiles.values()) {
-            if (!mesher.count) {
-                continue;
-            }
-
-            // (Let go of on the page once it's on the graphics card: nothing reads it again, and it's
-            // grown again, not kept, when it's needed again: chunks3d.js)
-            const mesh = new THREE.Mesh(releaseGeometry(mesher.geometry(true)), wildsMaterial(TREE_WIND.time));
-
-            mesh.name = "undergrowth";
-            mesh.position.set(at[0], 0, at[1]);
-            mesh.receiveShadow = true;
-            mesh.matrixAutoUpdate = false;
-            mesh.updateMatrix();
-            mesh.userData.tile = at;
-
-            yield mesh;
-        }
+    /** A mesh for each tile with anything in it, all at once. */
+    meshes() {
+        return [...this.tiles].map((tile) => this.mesh(tile)).filter(Boolean);
     }
 }
 
 /** A chunk's undergrowth (undergrowthOf's) drawn, all at once: a Group of its tiles' meshes. */
 export function undergrowthMesh(items, origin) {
-    const growth = new Growth(items, origin);
     const group = new THREE.Group();
 
-    growth.grow();
     group.name = "undergrowth";
-    group.add(...growth.meshes());
+    group.add(...new Growth(items, origin).meshes());
 
     return group;
 }

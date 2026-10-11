@@ -234,8 +234,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      graphics card: `releaseGeometry` and `releaseTexture` (`client/js/world/release.js`), as
      the undergrowth, hedges, ground and building atlas do. On a phone the graphics card shares
      the page's memory, so the copy costs twice. Don't for anything read again: a character's
-     pictures are. (A drawing lost and given back then loads the page again, where the player
-     was: `docs/GAME.md`.)
+     garment pictures are. (A game character's skin is let go of once it's sent, as it's painted
+     again whole whenever it changes. A drawing lost and given back then loads the page again,
+     where the player was: `docs/GAME.md`.)
    - A new shield (an item in `ITEMS`, `client/js/characters/equipment.js`, held on the left
      forearm or fist) must say whether it's slung on the back once the weapons are put away:
      `sling: true` for a round, kite or other strapped shield light and short enough, `false`
@@ -254,7 +255,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      The sound studio (`client/sound-studio.html`) shows and plays it from there, so keep its
      words true when the sound or where it plays changes. A recording names its source in
      `SOURCES` (title, recordist, page, licence). `test/audio.test.js` fails if a sound isn't
-     described or a recording has no CC0 source.
+     described or a recording has no CC0 source. A recording's decoded when it's first wanted
+     and may be let go of again once it's done (`DECODED_BUDGET` in `client/js/audio/sound.js`),
+     so play it through `sound.js` and don't keep its decoded copy anywhere else.
 4. **Bump a version number when you change what it guards:**
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another

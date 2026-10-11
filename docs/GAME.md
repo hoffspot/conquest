@@ -2214,7 +2214,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     shrouded in web, silk cocoons and clusters of black crystal with violet hearts.
 - **Undergrowth**, near the player only (every chunk whose nearest edge is within 64 metres,
   let go past 84), built a few things at a time in the same 6 ms a frame and drawn in tiles 32
-  metres square, each only while it's within 56 metres of the player:
+  metres square, each built only once it's within 64 metres of the player (8 more than where it's
+  first seen, so it's ready before it rises out of the ground) and drawn only while it's within
+  56:
   - grass in tufts (short and tall, with seed heads; dry straw on the savannah and in the
     badlands, marram on beaches, sedge and reeds with bulrushes by water and in the marsh);
   - wildflowers in drifts of one kind: daisies, poppies, cornflowers, buttercups, dandelions
@@ -2248,11 +2250,19 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,
   stretched, tinted and its texture shifted, so no two look alike, and a tile's are baked into
   one mesh (a lush chunk's undergrowth is about 20,000 triangles, 4 ms to build, grown a step at
-  a time in the frames' budget: where it grows a few rows of squares at a time, the looks it
-  wants made one a step, placed a millisecond at a time, a tile's mesh a step). Its material is
-  the atlas's (`wildsMaterial`): both sides lit as the ground is, each blade's tip stirring in the
-  breeze (a `sway` for each vertex), and past 40 metres from the player everything sinking into
-  the ground, gone by 56, so nothing pops in or out. How thick it grows follows the quality level.
+  a time in the frames' budget: where it grows a few rows of squares at a time and the looks it
+  wants made one a step, then each tile as the player comes near enough, placed a millisecond at
+  a time, its mesh a step). Its material is the atlas's (`wildsMaterial`): both sides lit as the
+  ground is, each blade's tip stirring in the breeze (how much each vertex sways), and past 40
+  metres from the player everything sinking into the ground (to its foot: how high each vertex
+  is over that), gone by 56, so nothing pops in or out. How thick it grows follows the quality
+  level. Each vertex is 36 bytes, not 56 (`Mesher.geometry`, swaying): its position and layer
+  as floats (the ground's up to 420 metres high, where a half float's in steps of a quarter of a
+  metre), its normal in bytes, and its colour, its texture coordinates, its sway and how high it
+  is over its foot in half floats, each triangle's texture coordinates moved a whole number of
+  copies of its picture towards 0 first (they're shifted hundreds of copies by where each thing
+  grows, too far out for a half float; the atlas repeats, so it reads the same); and each four
+  bytes or a multiple of four, as graphics cards read them without copying them first.
 - **Tall grass** (terrain plan M7b; `world/grassmap.js`, `world/grass.js`), thick over the open
   land round the player, knee to waist high: a field, as the Elden Ring's are, not tufts on a
   lawn.
@@ -2381,15 +2391,27 @@ shaders.
 
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
-making for) is got ready: its plans made, then each floor built and each of its folk, one to a
-piece of work, for at most 6 ms a frame, so it's ready well before the player's at the door. A
-floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and furniture
-laid out, made into meshes, made ready to merge, merged), and each of its folk (CHARACTERS.md,
-*Built a step at a time*). If
-they're through it first, whatever's still to build is built at once. Once the player is 90
-metres away (and outside), it's let go: its folk out of the battle, their characters and its
-floors thrown away (built again if they come back); the plans are kept. Wenches and Ale is
-built at the start and kept.
+making for) is got ready: its plans made, then each floor built, one to a piece of work, for at
+most 6 ms a frame. Its folk are in the battle from then on, but each is dressed (their body,
+garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player's making for
+its door (told to go through it), at it (6 metres from it: `DOORSTEP`, app/game.js `#doorstep`),
+or inside, a piece of work each after its floors; and let go of again (their characters thrown
+away, skins and all) once the player's 20 metres from it outside, though the building's still
+got ready, its floors kept: standing in the start town's square, its tavern's, smithy's,
+church's and hall's doors 11 to 16 metres off, all their folk were dressed and kept before, 25 of
+the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card; now
+16 are (headless Chromium, High, seed 1: the bodies' own copies 348 MB before and 110 MB after, the
+page's heap 748 MB and 464 MB, all told 988 MB and 715 MB). A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
+door before its folk are all dressed, its floors are built at once and the screen's kept dark
+while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
+in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
+for 3 seconds at most, the rest coming in as they're dressed
+after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
+frame in headless Chromium). Once the player is 90 metres away (and outside), it's let go: its
+folk out of the battle, their characters and its floors thrown away (built again if they come
+back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
+dressed and let go of at its door as any building's.
 
 **Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (a
 building's front door, the inside of the door, the side of the stairs, the stairwell upstairs)
@@ -4016,8 +4038,9 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   made wind was. Changing place, each bed fades to its new loudness over 2 seconds.
 - **Downloaded where it's heard**: every bed and call is on demand (`want`), asked for as the
   player comes where it's heard. A bed is big decoded (a 37-second loop is about 8 MB), so one
-  silent for a minute is let go of, downloaded again (from the browser's cache) if it's heard
-  again. The rain and the thunder are in the sound studio only, as there's no weather yet.
+  silent for a minute is let go of, decoded again from its MP3 (kept) if it's heard again; and
+  all of them are kept to a budget with the rest (below). The rain and the thunder are in the
+  sound studio only, as there's no weather yet.
 
 **Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
 were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
@@ -4116,6 +4139,26 @@ is paused, the music and the wind play on (the birds and leaves wait). Everythin
 while the page is hidden, and off (suspended) when turned off in Game options; turned off from
 the start, the browser's sound isn't started at all (taps don't start it), so it isn't kept
 working on silence, until it's turned on.
+
+**Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
+browser's decoded copy, 32-bit samples at its own rate (48 kHz on an iPhone), 25 to 30 times its
+MP3: all the recorded sounds decoded come to about 280 MB (their MP3s to about 10), a bed's 5 to
+7 MB, and an iPhone's debug log saw them climb from 63 to 120 MB before Safari closed the page.
+So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else. Past it,
+as each sound's decoded, those played least lately (or decoded, not played since) are let go of
+first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
+out; a sound played and not done), one being decoded, or the one just decoded. Their MP3s are
+kept (and counted in what the sounds hold), so one let go of is decoded again from it the next
+time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
+its made sound, what stands in for it, or nothing. What's sounding at once can come to more
+than the budget (a busy place's beds are 20 to 30 MB, the sounds downloaded at the start 22):
+the rest are let go of once they're done. The music's recordings (about 20 MB decoded) are kept
+as they are, and the sound studio keeps everything decoded. Travelling through sixteen places in
+Chromium (the town by day and by night, the taproom, a smithy, the wilds' lands by day and by
+night, a cave, a crypt, the lair, a temple, a ruin), with their creatures' voices and a few
+spells, what was decoded climbed past 150 MB, and was still climbing; kept to the budget, it
+stayed at 96 MB or under (48 with a touch screen's), with 8.5 MB of MP3s kept, and about 90
+recordings decoded again over nine minutes (under 30 with a computer's budget).
 
 The browser's sound can also stop on its own, and `sound.js` starts it again however it stops:
 
@@ -4532,7 +4575,12 @@ to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser'
   the battle's steps, setting up, everyone moved and posed, the effects and the HUD, the world
   round the player, the buildings' insides and their folk, the bars over heads, drawing); or the
   time went between frames, the page busy with something else (collecting its garbage, a worker's
-  word handled, the browser held up), kept with the frame before's phases.
+  word handled, the browser held up), kept with the frame before's phases. With what the graphics
+  card was given meanwhile (`made`, since the frame began, or the frame before for time between
+  frames): the shaders made, how many of each by their material's type and name (three.js
+  numbers each program as it's made, so the newest when a frame begins is all that's kept), and
+  how many more textures and geometries it holds; a frozen frame that made a dozen shaders, or
+  sent forty pictures, says so.
 - **Slow going**: the middle of 3 seconds' frames under 30 a second, with each phase's time on
   average over them.
 - **An error** no one caught, a frame's work failing (app/game.js `#fault`) or a promise refused,
@@ -4574,9 +4622,10 @@ nothing), what the graphics card's been given (world/gpumemory.js: buffers, pict
 levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
 give it them and take them back, wrapped on the context; never a frame's draws, so it costs
 nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
-(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of), the
-way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as tiles are baked and
-gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
+(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of; the
+recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a budget*, under
+*Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
+tiles are baked and gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
 kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept. Where the heap isn't
 told, the bodies' copies stand in for it in the total, the least of it: in Chromium, playing on
@@ -4591,10 +4640,25 @@ its copy, and the page's copy would only be read to give it the same again. For 
 the page reads once it's made, the page's copy is let go of once it's there (world/release.js, on
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
 (kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
-pictures (ground.js); and the buildings' and props' picture atlas (art/engine/atlas.js), with the
-copy kept to hand it to the next atlas made. Not a character's pictures (their garments and skins
-are composited and sampled again: characters/character.js, world/crowd.js, skin.js), nor a mesh
-that's merged, cloned, posed or bent. And Recast's WebAssembly (the navigation meshes) starts with
+pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
+copy kept to hand it to the next atlas made; and each of the game's characters' own skin, 4 MB of
+colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
+again, as a disguise or a change of look does, it's sent and let go of again). Not the pictures of
+what characters wear (composited from each garment's, and painted into a crowd's figure:
+characters/character.js, world/crowd.js; a crowd's figure is made from a character of its own,
+before it's ever sent, and one whose skin's been let go of is coloured by its material there),
+nor the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged, cloned, posed or
+bent. What each body keeps that's the same for every body of its build is kept once for them all:
+its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
+coordinates are), and the moves' compiled tracks only once a move's first played (characters/
+actions.js `tracksOf`: 7.5 MB of them for every attack, rest, emote, draw and put-away, compiled
+before as the page loaded); and the triangles hidden under what a body wears are a byte each, not
+a set of their numbers (14 MB for 34 bodies before). Thirty seconds into the start town (headless
+Chromium, High, seed 1) the bodies' own copies on the page were 348 MB before and 307 MB after, the
+page's heap 748 MB and 687 MB, and the graphics card's 201 MB and 209 MB (the pictures of what the
+camera sees sent while loading, not when first looked at), what the game holds all told 988 MB and
+935 MB; most of what's left on the page are the skins of the folk dressed inside buildings the
+player isn't in, kept till they're seen (no longer dressed: *Getting buildings ready*). And Recast's WebAssembly (the navigation meshes) starts with
 16 MB, not the 64 MB it was built with: its static data and stack are under 100 KB, and it grows as
 the meshes want more, in the page and in the navigation worker both (scripts/vendor-recast.js
 patches the vendored module's memory section: scripts/wasm-memory.js). Turning the camera all the
@@ -4604,6 +4668,20 @@ overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB l
 JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
 same.
 
+**The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
+reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
+four tiles a chunk, a third of them were built out past the 56 metres where any of it shows, for
+nothing but to be held. Now each tile is built only once it's within 64 metres itself (chunks3d.js
+`UNDERGROWTH.ahead`: 8 more than where it's first seen), shown or hidden as soon as it's made (not
+drawn once far off before the next frame hides it), and each of its vertices is 36 bytes, not 56
+(above). Where the game starts (Chromium, High), 24 tiles are built rather than 36 (850,000
+vertices rather than 1.5 million; 29 MB of them rather than 82), the page holding 21 MB of them
+before any's drawn rather than 69, and none once the camera's turned all the way round rather than
+36 MB (12 tiles never drawn); the graphics card's buffers then 72 MB rather than 88. In the woods
+130 metres west, likewise, 5 MB of the undergrowth's copies were held rather than 40 (4 tiles
+built, not yet in sight, rather than 15), and the graphics card's buffers were 99 MB rather than
+128. The picture's the same, but for a pixel here and there on an edge.
+
 ## Performance
 
 A frame draws the town (the blocks of it in view: a draw call or two each), the ground (one draw
@@ -4612,10 +4690,11 @@ the game's hair detail), and again from the sun for shadows. In the taproom ther
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
 characters on the player's map are drawn or animated. The tavern's folk aren't built before
 the game starts (they were about three seconds of loading on a desktop computer): only seen
-inside, they're built as any other building's folk are, a step at a time from the start
-(`tavernFolk`), with whatever time's left after any building the player's coming near and only
-while none is (so that its folk's skins aren't kept waiting behind theirs in the skins worker),
-and whatever of them isn't built yet is built at once if the player walks in first. In headless
+inside, they're built as any other building's folk are, a step at a time once the player's at
+its door (`tavernFolk`), with whatever time's left after any building the player's coming near
+and only while none is (so that its folk's skins aren't kept waiting behind theirs in the skins
+worker), the screen kept dark while the rest are built if the player walks in first (and all at
+once only when the game starts inside, while it's loading). In headless
 Chromium on "high", from opening `?play` to playing: 14.0 to 18.2 s before, 10.9 to 14.3 now.
 Anyone who comes into view while playing (soldiers,
 the folk of a building near, the wild's people-shaped creatures) is built a step at a time
@@ -4645,10 +4724,23 @@ desktop): walking across the world, no frame's streaming takes over 8 ms there. 
 sees 160 metres; past that, the far land out to 1, 2 or 4 km (low, medium, high), in four to
 eight more draw calls and about 50,000 more triangles (the view, *The far land and the haze*).
 Everything that can be is built once: the town is merged, shaders are compiled while loading
-(and a character, creature, wyvern or dragon that comes later has its compiled before it's first
-drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
+(the far land's and the sky's with the rest's, drawn first as they are; and a character,
+creature, wyvern or dragon that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
-start, so their shader's the one compiled while loading), particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
+start, so their shader's the one compiled while loading), the pictures of what the camera sees are
+sent to the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
+each in the first frame it's drawn in, and the first frames wait on them all), and the loading
+waits till the graphics card has them (`View.settled`, a fence looked at between frames: what's
+sent is only on its way, the browser's graphics work being done in a process of its own, and
+would otherwise hold up the first frames still), and someone coming
+into view (made, come into the player's building or near them, or the camera turned to them) is
+kept hidden till theirs are sent, two a frame (`SENDING`, app/game.js `#sending`: a skin and its
+bumps are 5 MB, and a building's dozen folk all sent in the one frame held it up); those out of
+sight (a building's folk the player's outside), or out in the world out of the camera's view (3
+metres round them, for their shadows), aren't given room on the graphics card till they're
+wanted. In headless
+Chromium (High, seed 1) the draws before play begins took 9.2 s before and 3.8 s after, with
+0.6 s more of loading sending the pictures, particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
 and a small texture (a megabyte) each, uploaded again only when a blow lands or a wound heals.
 Each frame works out the place in the world of only what's shown (`View #updateShown`: the
@@ -4698,10 +4790,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   `test/chunks.test.js`: the world drawn round the player (a chunk a step at a time, hidden till
   it's whole, no more than one begun a frame; one half drawn thrown away when the player's gone,
   and all near drawn at once when asked; the undergrowth grown over several frames, the same as
-  all at once; the splat and the undergrowth's places the same a step at a time; a settlement's
-  buildings built a piece at a time, each made ready to merge in a step of its own, merged the
-  same as all at once, drawn whole while the player's near and without the timbers' sides from
-  further off); and the
+  all at once, each tile of it built only once the player's near enough to see it soon, and more
+  as they come nearer; the splat and the undergrowth's places the same a step at a time; a
+  settlement's buildings built a piece at a time, each made ready to merge in a step of its own,
+  merged the same as all at once, drawn whole while the player's near and without the timbers'
+  sides from further off); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -4796,9 +4889,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   worked out first and how many corners it has still known; a picture's pixels once uploaded, and
   whatever else held them, what it was told before still told, and a picture waiting for its pixels
   let go of only once it has them; Recast's WebAssembly starting with 16 MB, still a module with
-  its memory its own, and made to start with 64 again the module as built but for two bytes. E2E:
-  the picture lost once the page has let go, and given back: the page loaded again, the title
-  carrying on with the same character.
+  its memory its own, and made to start with 64 again the module as built but for two bytes.
+  `test/crowd.test.js` also: a character's skin and bumps let go of once they're sent, if it's one
+  of the game's (not otherwise), painted again into the same texture, sent and let go of again,
+  and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
+  has let go, and given back: the page loaded again, the title carrying on with the same
+  character.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
@@ -4819,8 +4915,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   notes, when the last were written, only the slow work of the last half minute, and the work
   begun lately, that begun after the last notes marked), work told of as it takes its first step,
   once, by name (core/steps.js); memory past each mark once, and the heap near its limit, a crash
-  keeping what was held; each kind kept at most so often, the newest five, across loads, and
-  cleared; the log as text to copy; and the debug overlay's memory lines, the way-finding's and
+  keeping what was held; what a frozen frame gave the graphics card (the shaders made, by material,
+  and the textures and geometries sent), nothing if nothing, and since the frame before for time
+  between frames; each kind kept at most so often, the newest five, across loads, and cleared; the
+  log as text to copy; and the debug overlay's memory lines, the way-finding's and
   the bodies' own copies among them. `test/release.test.js`: what the page still holds of objects
   counted, each mesh and picture once however many share it, none let go of. E2E: a crash found from
   the last game's notes; a frame held up (with what the graphics card held) and an error thrown,
@@ -4930,7 +5028,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   decoded (or, offline, not, without fuss), the music scheduled ahead and round again without a
   gap, fading into the tavern's going in (from its start), quieter and muffled upstairs, and back
   to the town's where it left off, and the sound started again however it stops (interrupted, hidden, stuck, closed, a note
-  going wrong, effects never ending).
+  going wrong, effects never ending); the recorded sounds kept decoded to their budget (the
+  least lately played let go of first, never one sounding, their MP3s counted and kept to
+  decode them again, what's made playing meanwhile).
 - `test/music.test.js`: the score (its sections and length, every note in time and near a
   recording of its instrument, a tune in every section, in key, ending on A to lead back to D),
   the tavern's jig (its strains of eight bars, the lute in every one, the drums on every beat,
@@ -4967,7 +5067,7 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   every land's look, whole and within its budget of triangles, no two looks alike; a chunk's
   features as one mesh; the undergrowth only on open grass, the same every time, thinner when
   asked and in the towns (but not their fields), built a few things at a time in tiles within
-  budget.
+  budget, and packed into 36 bytes a vertex, each value read back as it was made.
 - `test/neutral.test.js`: the sites no people keeps laid out the same for the same seed, within
   their plots, their hearts open; a ruined castle's pieces left to ruin and its gate's way open;
   every one on seed 1 set down, blocking only what stands, its heart open, lying with the land
@@ -5007,7 +5107,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   another tavern got ready as the player comes near (its own taproom, sound, minimap and folk
-  inside), let go far off and built at once if walked straight into, a smithy's smith heating,
+  inside), its folk let go of a little way off and dressed again at its door, let go far off,
+  and walked straight into, its floors built at once and its folk dressed while the screen's
+  dark, then lit, a smithy's smith heating,
   hammering and quenching and its apprentice at the bellows and grindstone (each heard), a
   temple's priest in white blessing and lighting the shrines' candles, worshippers praying, and
   the priest telling of the temple's patron, a guild's receptionist stamping notices and

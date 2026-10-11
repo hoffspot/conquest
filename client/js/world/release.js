@@ -3,9 +3,11 @@
 // mesh's attributes and index, a picture's pixels. The graphics card's copy is the one drawn; the
 // page's would only be read again to give it the same once more, were the drawing lost and given
 // back (main.js: the game loads the page again then, where it was, rather than give back what's
-// been let go of). Only for what nothing reads after it's made: not a character's pictures
-// (composited and sampled again: characters/character.js, world/crowd.js), nor a mesh that's
-// merged, cloned, posed or bent on the page.
+// been let go of). Only for what nothing reads after it's made: not the pictures of what
+// characters wear (composited and sampled again: characters/character.js, world/crowd.js), nor a
+// mesh that's merged, cloned, posed or bent on the page. A character's own skin is let go of in
+// the game (character.js `release`), the crowd's figures being made from characters of their own,
+// before they're ever sent.
 
 /** Whether anything's been let go of (the drawing, lost, can't be given it back: main.js). */
 export const released = { any: false };

@@ -6,7 +6,8 @@
 //    parts of the update, drawing), or the time went between frames, the page busy with something
 //    else (the frame before's phases, for what was going on). With what the browser says ran then
 //    (Chromium's long animation frames: each script's source, function and place in it, and what
-//    called it), and the slowest of the work done a step at a time then (core/steps.js, by name).
+//    called it), the slowest of the work done a step at a time then (core/steps.js, by name), and
+//    what the graphics card was given then (shaders made, by material; textures and geometries).
 //  - **Slow going**: the middle of TELEMETRY.slow.window ms of frames under TELEMETRY.slow.fps a
 //    second. With each phase's time on average over it, and what's being drawn.
 //  - **An error**: one no one caught (its stack), a frame's work failing (app/game.js #fault), or
@@ -102,6 +103,9 @@ export class Telemetry {
     #nearLimit = false;
     #trend = [];
     #begun = [];
+    // What the graphics card had been given as this frame and the one before began (#look)
+    #given = { textures: 0, geometries: 0, shaders: -1, newest: -1 };
+    #givenBefore = { textures: 0, geometries: 0, shaders: -1, newest: -1 };
 
     /**
      * @param {object} [options]
@@ -124,6 +128,13 @@ export class Telemetry {
 
         /** Is the game being played, in view (a freeze or slow going counts only then)? */
         this.playing = false;
+
+        /**
+         * What the graphics card's been given (three.js's WebGLRenderer.info: its programs, each
+         * numbered as made, and how many textures and geometries): set by the game, for a freeze
+         * to say what its frame made. Read as each frame begins.
+         */
+        this.graphics = null;
     }
 
     // --- Frames ---
@@ -133,6 +144,72 @@ export class Telemetry {
         this.#started = now;
         this.#marks.fill(now);
         this.#frameJobs.length = 0;
+        this.#look();
+    }
+
+    // What the graphics card's been given as a frame begins (the frame before's kept): how many
+    // textures and geometries, and the newest shader's number (looked for again only when there
+    // are more or fewer of them)
+    #look() {
+        const info = this.graphics;
+
+        if (!info) {
+            return;
+        }
+
+        const programs = info.programs ?? [];
+        const before = this.#given;
+        const given = this.#givenBefore;
+        let newest = before.newest;
+
+        if (programs.length !== before.shaders) {
+            newest = -1;
+
+            for (const program of programs) {
+                newest = Math.max(newest, program.id);
+            }
+        }
+
+        given.textures = info.memory.textures;
+        given.geometries = info.memory.geometries;
+        given.shaders = programs.length;
+        given.newest = newest;
+        this.#givenBefore = before;
+        this.#given = given;
+    }
+
+    // What the graphics card's been given since `given` (#look's, as a frame began): the shaders
+    // made (how many of each, by material: its type and name), and how many more textures and
+    // geometries it holds (fewer, if more were let go): as `made`, if anything
+    #made(given) {
+        const info = this.graphics;
+
+        if (!info || given.shaders < 0) {
+            return {};
+        }
+
+        const made = {};
+        const shaders = {};
+
+        for (const program of info.programs ?? []) {
+            if (program.id > given.newest) {
+                const name = [program.type, program.name].filter(Boolean).join(" ") || "unnamed";
+
+                shaders[name] = (shaders[name] ?? 0) + 1;
+            }
+        }
+
+        if (Object.keys(shaders).length) {
+            made.shaders = shaders;
+        }
+
+        for (const kind of ["textures", "geometries"]) {
+            if (info.memory[kind] !== given[kind]) {
+                made[kind] = info.memory[kind] - given[kind];
+            }
+        }
+
+        return Object.keys(made).length ? { made } : {};
     }
 
     /** A frame's work reached the end of a phase (PHASE's index). */
@@ -182,7 +259,8 @@ export class Telemetry {
 
     // A freeze (`ms` long): in a frame's own work (`where`: "frame"), its phases; or between frames
     // ("between"), the time not in either and the phases of the frame before it; with what the
-    // browser says ran from `from` to `end`, and the jobs then
+    // browser says ran from `from` to `end`, the jobs then, and what the graphics card was given
+    // since the frame (or the frame before) began
     #freeze({ ms, where, slot, own, from, end, state }) {
         const phases = {};
 
@@ -207,6 +285,7 @@ export class Telemetry {
             phases,
             jobs: this.#lately(this.#frameJobs),
             scripts: this.#scriptsBetween(from, end),
+            ...this.#made(where === "frame" ? this.#given : this.#givenBefore),
             recent: this.#recent(),
             state: state(),
         });
