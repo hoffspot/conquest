@@ -1142,7 +1142,11 @@ let go once every player's beyond 350:
 - each turned with its front towards home, away from the enemy town it faces, its people's
   banner by its door or gate;
 - drawn whole within 200 m (`FORTS_VIEW`), and from afar as a few boxes and roofs in its people's
-  colours, fading in where the near world fades out;
+  colours, fading in where the near world fades out, set on the land as it's seen from afar (the
+  world plan's own heights, `core/terrain/height.js` `heightAt`, as the places' far shapes are):
+  the ground's height as it's walked would lay out the land round every one of them to say
+  (`core/overworld.js` chunks: a game a long war in, its dozens of fortifications, froze for
+  seconds on its first frame);
 - a bar over it, broader and heavier than a soldier's (`hud.js` `fort`).
 
 **The building screen** (`app/building.js`): at their own people's keep, a Knight or above asks

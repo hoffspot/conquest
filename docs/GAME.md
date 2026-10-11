@@ -4529,7 +4529,8 @@ actors and avatars, draw calls, triangles, geometries, textures and shader progr
 rate and update and drawing times, playing together or not, what the game holds, and the
 device), the last 60 frames' times, and the slowest work done a step at a
 time lately: each step of one taking over 20 ms is named (core/steps.js `Steps.slow`: a crowd's
-figure, a character dressed, a building got ready, the minimap painted, a beast sculpted). Where
+figure, a character dressed, a building got ready, the minimap painted, a beast sculpted; and the
+fortifications and stockades drawn, twice a second, when that's slow). Where
 the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
 longest first: each one's file and place in it, its function and what called it; that's the
 nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch

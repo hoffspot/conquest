@@ -5,7 +5,9 @@
 // to: FAR.nearFar), let go further off. Each kind of each people's is built once and drawn as many
 // times as it stands, sharing its shapes. And every one of them as it's seen from afar (as the
 // settlements are: far/silhouettes.js), a few boxes and roofs in its people's colours, fading in
-// where the near world fades out: with the far land, and its copy with the near world.
+// where the near world fades out: with the far land, and its copy with the near world; set on the
+// land as it's seen from afar (the world plan's own heights, as the settlements' are), not the
+// ground's, which would lay out the land round every one of them, however far, to find it.
 //
 // And a fortification stood up in the battle near a player (core/host.js FORT_NEAR), as an avatar
 // as the game asks for one (FortAvatar): nothing of its own to draw (its stone's drawn here), but
@@ -41,6 +43,7 @@ export class Forts {
     constructor(scene, farScene = null) {
         this.scene = scene;
         this.groundAt = () => 0;
+        this.landAt = this.groundAt;
 
         /** Those drawn, by id: their group. */
         this.drawn = new Map();
@@ -67,9 +70,14 @@ export class Forts {
         });
     }
 
-    /** Set them down on this ground (its height at a point, (x, z) => metres). */
-    setGround(at) {
+    /**
+     * Set them down on this ground (its height at a point, (x, z) => metres): those near on `at`
+     * (the ground's, as it's walked), those from afar on `land` (the land's, as it's seen from afar:
+     * core/terrain/height.js heightAt), or on `at` too without.
+     */
+    setGround(at, land = null) {
         this.groundAt = at ?? (() => 0);
+        this.landAt = land ?? this.groundAt;
     }
 
     /**
@@ -170,7 +178,7 @@ export class Forts {
         for (const { kind, realm, at: [x, z], facing } of forts) {
             const builders = buildersOf(realm);
             const look = FORT_LOOKS[realm] ?? FORT_LOOKS.human;
-            const y = this.groundAt(x, z) - SUNK;
+            const y = this.landAt(x, z) - SUNK;
 
             if (kind === "garrison") {
                 const high = GARRISON.high + SUNK;
