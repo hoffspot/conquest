@@ -52,7 +52,7 @@ import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
 import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { brokenOf } from "../core/war/stockade.js";
-import { Steering } from "./steering.js";
+import { HELD_REACH, Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
@@ -3507,7 +3507,9 @@ export class Game {
             // (The wild's elites, marked their own way as soon as they're near enough: core/
             // creatures.js ELITES `marker`, drawn or not)
             elites: battle.actors.filter((other) => other.wild?.elite && !other.dead && other.map === this.mapId && Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker).map((other) => ({ x: other.x, z: other.y, targeted: other === target })),
-            destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
+            // (Not while held input steers them: where its order reaches is just a little way
+            // on ahead of them, never where they're going)
+            destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
             icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
         });
@@ -8704,7 +8706,8 @@ export class Game {
         }
 
         // W, A, S, D (or the arrows), and a thumb stick on a touch screen: held, they come out as
-        // the same "ahead" order the swipe up gives (app/steering.js)
+        // the same "ahead" order the swipe up gives, reaching only as far as held input needs
+        // (app/steering.js)
         const zone = this.hud.root.querySelector("#stickzone");
         const knob = this.hud.root.querySelector("#stickknob");
 
@@ -8716,7 +8719,7 @@ export class Game {
                 looking: () => this.#steerable(),
                 go: (facing, run) => {
                     this.#wake();
-                    this.#command({ type: "ahead", facing, run });
+                    this.#command({ type: "ahead", facing, run, reach: HELD_REACH });
                 },
                 stop: () => this.#command({ type: "stop" }),
             });
@@ -9733,7 +9736,8 @@ export class Game {
             return then;
         }
 
-        const to = command.type === "move" ? [command.to[0] + 0.5, command.to[1] + 0.5] : [player.x + Math.sin(command.facing) * AHEAD, player.y + Math.cos(command.facing) * AHEAD];
+        const ahead = Math.min(command.reach ?? AHEAD, AHEAD);
+        const to = command.type === "move" ? [command.to[0] + 0.5, command.to[1] + 0.5] : [player.x + Math.sin(command.facing) * ahead, player.y + Math.cos(command.facing) * ahead];
 
         this.predict.ordered(player, to, Boolean(command.run), this.clock * 1000);
 

@@ -520,9 +520,9 @@ const SQUEEZE_MS = 2000;
 // character blocked by them stops (#blocked)
 const THRONG = 2 * BODY + 1;
 
-// How long the straight way ahead (an "ahead" order) is looked along (metres), and how near
-// where it was told to go a character's way can end before it's found again from there (a way
-// too long to find at once), at most how many times
+// How long the straight way ahead (an "ahead" order) is looked along (metres; or as far as the
+// order's `reach`, if that's shorter), and how near where it was told to go a character's way can
+// end before it's found again from there (a way too long to find at once), at most how many times
 const AHEAD = 400;
 const MOVE_ON = 1.5;
 const MOVE_LEGS = 8;
@@ -1103,7 +1103,8 @@ export class Battle {
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
      * near as can be), { type: "ahead", facing } (turned the way `facing` points, radians, and
-     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and
+     * straight ahead that way as far as the way is clear; with reach: metres, at most that far),
+     * { type: "engage", target: id } (go and
      * fight it; with stand: true, set on it where they stand, striking only while it's in reach),
      * { type: "enter", link: id } (walk to the link's end on its map and go through),
      * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
@@ -1137,11 +1138,14 @@ export class Battle {
             }
             case "ahead": {
                 // Turned that way, and from wherever it is, straight on as far as the mesh goes
+                // (or as far as it was asked to go: held input, given again as it's held, asks
+                // only for the way near by, whose tiles are baked already)
                 actor.facing = order.facing;
 
+                const reach = order.reach > 0 ? Math.min(order.reach, AHEAD) : AHEAD;
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
-                    const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * AHEAD, y + cos(order.facing) * AHEAD]);
+                    const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * reach, y + cos(order.facing) * reach]);
 
                     return ray ? [ray.point] : [];
                 });

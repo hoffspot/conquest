@@ -784,8 +784,9 @@ hundreds has a fight, not a crowd, on them.
   run.
 - **Straight ahead.** An `ahead` order (`{ type: "ahead", facing, run }`) sends a character in a
   straight line the way it faces, as far as it can go: its way is one corner, where a line along
-  the mesh that way (up to 400 metres) meets the mesh's edge (a wall, less its body's width, or
-  the world's). Running, it sprints while its stamina lasts, then walks.
+  the mesh that way (up to 400 metres, or its `reach` if that's shorter: held input asks for 30,
+  app/steering.js) meets the mesh's edge (a wall, less its body's width, or the world's).
+  Running, it sprints while its stamina lasts, then walks.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
@@ -4294,23 +4295,35 @@ it.
    a stick's angle goes through whole, so diagonals need nothing of their own (which is why a
    stick suits this where four buttons wouldn't). The order is given again as that way turns (past
    about 7 degrees), when the walk or run changes, and every half second besides; a `stop` order
-   goes when the last of the input is let go. So no held key crosses the wire, only the way it
-   adds up to, and the host still decides where they get to. Shift held along with a way runs, as
+   goes when the last of the input is let go. Held input's order reaches only 30 metres ahead
+   (`reach`, steering.js `HELD_REACH`), not the 400 a swipe up looks along: given again every
+   half second, it never gets there, and that near, the way's all on navigation tiles already
+   baked round the player (`BAKE_AHEAD`), where looking 400 metres along each new way baked tiles
+   on the spot, stalling the game a fifth of a second or more at a turn of the stick (measured
+   steering a minute round two worlds: up to a second, and 39 to 44 of 120 orders longer than a
+   frame; with the 30 metres, none over 1.5 ms, the player walked just the same). Nor does the
+   minimap ring where an order held input gives reaches, a little way on ahead of them, as if
+   they were going there. So no held key crosses the wire, only the way it adds up to, and the
+   host still decides where they get to. Shift held along with a way runs, as
    a Shift-click does, and so does the stick pushed past seven tenths of its reach. The stick
    keeps to its corner rather than springing up under the thumb, and only its own circle takes
    touches, so the rest of the view taps and drags as before; or, with **Stick under your thumb**
-   (Game options, under Thumb stick, off until asked for), its zone is the bottom left of the
+   (Game options, under Thumb stick, off to start with), its zone is the bottom left of the
    screen (up to 380 by 340 pixels) and the stick springs up wherever the thumb lands there, the
    way it's pushed measured from that point, and goes back to its corner let go (the camera
    study's recommendation 7: Apple's guidelines, and fewer glances and less drift measured with
-   it), tapping there walking the player no more. Thumb stick in Game options is what
-   puts it there, and it's off until then, tapping being how the game has always been walked; the
-   keys steer whether it's shown or not, nothing is said of the stick in the opening hint while
-   it's off, and a pause lets go of whatever was held. The heads-up display
+   it), tapping there walking the player no more. **Thumb stick** in Game options (on) puts it
+   there, and it's there from the start (tapping still walks, anywhere but its circle; turned off
+   when it was off till asked for is forgotten once, for the new default: save.js
+   `stickDefaults`); turned off, it goes, and tapping alone walks. The keys steer whether it's
+   shown or not, nothing is said of the stick in the opening hint while it's off, and a pause
+   lets go of whatever was held. Nothing else takes the stick's touches from it (what lies over
+   its corner, the hint and the floating words, takes no touches), and its circle doesn't blur
+   what's behind it, which a phone's GPU did afresh every frame. The heads-up display
    (app/hud.js) shows the player's name and health in the bottom right corner (and, once
    they've registered with the adventurers' guilds, their rank there by their name: a chip of
    its metal, Copper to Mithril, docs/WAR.md M8; the thumb stick,
-   asked for, in the bottom left; the zoom buttons, which Game options also leaves off, take that
+   unless it's turned off, in the bottom left; the zoom buttons, which Game options also leaves off, take that
    right corner and send the card up above them; all of them go up over the quick actions in a
    fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
@@ -4788,8 +4801,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   swiping up from the player to go straight ahead (running),
   steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the
-  thumb stick (not there till Game options asks for it, then walking pushed partway, running at
-  its rim, stopping let go, and gone again turned off, the keys still steering without it; asked to
+  thumb stick (there from the start, walking pushed partway, running at its rim, stopping let go,
+  and gone turned off in Game options, the keys still steering without it; asked to
   float, springing up under the thumb where it lands, walking the way it's pushed from there, and
   back to its corner let go),
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,

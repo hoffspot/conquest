@@ -210,6 +210,7 @@ describe("saving (save.js)", () => {
         assert.equal(SETTINGS_DEFAULTS.sound, true, "and so does the sound");
         assert.deepEqual([SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [1, false, true], "and the camera's turning as it's always been");
         assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.battleCam], [false, true], "not following round behind the player, but framing fights");
+        assert.deepEqual([SETTINGS_DEFAULTS.stick, SETTINGS_DEFAULTS.stickFloats], [true, false], "the thumb stick there, waiting in its corner");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
@@ -233,6 +234,20 @@ describe("saving (save.js)", () => {
         // Set again, they're remembered
         saveSettings({ effectsVolume: 0.3 });
         assert.equal(loadSettings().effectsVolume, 0.3);
+    });
+
+    it("forgets the thumb stick saved off when it was off till asked for, for today's default (there), keeping it once it's set again", () => {
+        const items = useStorage();
+
+        items.set("pellagos.settings", JSON.stringify({ minimap: false, stick: false, stickFloats: true, cameraDefaults: 2 }));
+
+        const settings = loadSettings();
+
+        assert.equal(settings.stick, true);
+        assert.deepEqual([settings.minimap, settings.stickFloats], [false, true]);
+
+        saveSettings({ stick: false });
+        assert.equal(loadSettings().stick, false);
     });
 
     it("forgets following saved when the camera followed by default, for today's default (not following), keeping it once it's set again", () => {

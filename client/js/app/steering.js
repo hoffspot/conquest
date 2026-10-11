@@ -15,10 +15,16 @@
 // recommendation 7 have it: fewer glances down to find it, less drift off it.
 
 // How far the way has to turn before the order's given again (radians, about 7 degrees), and how
-// often it's given again anyway while the input's held (ms), in case they stopped short of the
-// 400 m an "ahead" order reaches
+// often it's given again anyway while the input's held (ms), in case they stopped short of where
+// it reached
 const TURNED = 0.12;
 const AGAIN_MS = 500;
+
+// How far ahead held input asks to be taken (metres), not the 400 m a swipe up looks along: given
+// again every half second, it never gets there, and the way that near is all on navigation tiles
+// already baked (game.js BAKE_AHEAD), where looking 400 m along a new way baked tiles on the spot,
+// stalling the game a fifth of a second or more at each turn of the stick
+export const HELD_REACH = 30;
 
 // The thumb stick: how far the knob goes from where the thumb went down (px), how far counts as
 // pointing anywhere at all, and how far over counts as asking to run (of its reach)
