@@ -2408,8 +2408,14 @@ while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; t
 in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
 for 3 seconds at most, the rest coming in as they're dressed
 after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
-frame in headless Chromium). Once the player is 90 metres away (and outside), it's let go: its
-folk out of the battle, their characters and its floors thrown away (built again if they come
+frame in headless Chromium). Its floors are thrown away sooner than the building's let go, once the
+player's 40 metres from its door (`FLOORS`, `#floorsWanted`; from the door of the building they're
+in, if they're in one), all of them built and nothing else of it being done; built again, a piece
+at a time, once they're back within 22 metres of it, or at once if they go straight in. Walking
+from door to door round the start town (headless Chromium, High, seed 1), the floors kept came to
+3 to 14 MB at each stop, not 11 to 15 MB; back in the square, those within 40 metres of it are
+still kept (13.7 MB, from 14.6). Once the player is 90 metres away (and outside), it's let go: its
+folk out of the battle, their characters and any floors thrown away (built again if they come
 back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
 dressed and let go of at its door as any building's.
 
@@ -4644,9 +4650,11 @@ nor the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged, clo
 bent. What each body keeps that's the same for every body of its build is kept once for them all:
 its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
 coordinates are), and the moves' compiled tracks only once a move's first played (characters/
-actions.js `tracksOf`: 7.5 MB of them for every attack, rest, emote, draw and put-away, compiled
-before as the page loaded); and the triangles hidden under what a body wears are a byte each, not
-a set of their numbers (14 MB for 34 bodies before). Thirty seconds into the start town (headless
+actions.js `tracksOf`: all of them were compiled as the page loaded before), each track's numbers
+in one run, key after key (`compile`, `width` of them a key), not an array for each key: tens of
+thousands of little arrays, 12.4 MB for every attack, rest, emote, draw and put-away, 3.3 MB so,
+the same numbers; and the triangles hidden under what a body wears are a bit each, not a set of
+their numbers (14 MB for 34 bodies) nor a byte (438 KB for 16; 55 KB so). Thirty seconds into the start town (headless
 Chromium, High, seed 1) the bodies' own copies on the page were 348 MB before and 307 MB after, the
 page's heap 748 MB and 687 MB, and the graphics card's 201 MB and 209 MB (the pictures of what the
 camera sees sent while loading, not when first looked at), what the game holds all told 988 MB and
