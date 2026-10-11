@@ -14,7 +14,7 @@ import { GEAR } from "../client/js/core/gear.js";
 import { CHARMS } from "../client/js/core/goods.js";
 import { Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
 import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
-import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, snagChoice, snaggable, SNAG_GRADES, SNAG_KINDS, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { scalingOf } from "../client/js/core/strength.js";
@@ -425,6 +425,55 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(progress.gold, before + bundle.gold);
         assert.ok(bundle.items.every(({ id, count }) => progress.pack.some((stack) => stack?.id === id && stack.count >= count)));
         assert.ok(!host.ground.has(mine.id) && host.ground.has(theirs.id));
+    });
+
+    it("auto-snag takes a player's own spoils of a fight in reach, and of them only what it's set to take, the rest left in the sack to tap (host.js snaggable, snagChoice)", () => {
+        const { host, me } = outside(hosted());
+        const lay = (id, dropped) => host.ground.set(id, { id, map: me.map, square: [...me.square], until: host.battle.time + 60000, ...dropped });
+        const legendary = { id: "sword", count: 1, quality: "legendary" };
+        const plain = { id: "sword", count: 1 };
+        const pelt = { id: "wolfPelt", count: 2 };
+
+        // A wolf's spoils and a convoy's gold, theirs and at their feet: snagged. A chest's share,
+        // something given them with no room for it, something a player dropped, someone else's
+        // spoils, and spoils two squares off: not
+        lay("snag-wolf", { bundle: { gold: 9, items: [legendary, plain, pelt] }, for: HOST_PLAYER, from: "wolf" });
+        lay("snag-convoy", { bundle: { gold: 5, items: [] }, for: HOST_PLAYER, from: "convoy" });
+        lay("snag-chest", { bundle: { gold: 5, items: [] }, for: HOST_PLAYER, from: "chest" });
+        lay("snag-given", { bundle: { gold: 0, items: [pelt] }, for: HOST_PLAYER });
+        lay("snag-dropped", { item: plain, by: HOST_PLAYER });
+        lay("snag-theirs", { bundle: { gold: 5, items: [] }, for: "p2", from: "wolf" });
+        lay("snag-far", { bundle: { gold: 5, items: [] }, for: HOST_PLAYER, from: "wolf", square: [me.square[0] + 2, me.square[1]] });
+
+        const snagged = (only = null) => [...host.ground.values()].filter((dropped) => dropped.id.startsWith("snag-") && snaggable(dropped, me, HOST_PLAYER, only)).map(({ id }) => id);
+
+        assert.deepEqual(snagged(), ["snag-wolf", "snag-convoy"]);
+
+        // Set to take legendary weapons alone (what isn't a rarity or a kind left out)
+        const only = snagChoice({ grades: ["legendary", "mythic"], kinds: ["weapon", 7] });
+
+        assert.deepEqual(only, { grades: ["legendary"], kinds: ["weapon"] });
+        assert.deepEqual(snagged(only), ["snag-wolf"], "a convoy's gold not wanted");
+        assert.equal(snagChoice("everything"), null);
+        assert.deepEqual(snagChoice({ grades: SNAG_GRADES, kinds: SNAG_KINDS }), { grades: [...SNAG_GRADES], kinds: [...SNAG_KINDS] });
+        assert.deepEqual(SNAG_KINDS.slice(0, 2), ["gold", "weapon"]);
+
+        const { progress } = host.players.get(HOST_PLAYER);
+        const gold = progress.gold;
+
+        // Only the legendary sword taken: the gold, the plain sword and the pelts left in the sack
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: "snag-wolf", only }), { ok: true, left: 3 });
+        assert.equal(progress.gold, gold);
+        assert.ok(progress.pack.some((stack) => stack?.id === "sword" && stack.quality === "legendary"));
+        assert.deepEqual(host.ground.get("snag-wolf").bundle, { gold: 9, items: [plain, pelt] });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: "snag-wolf", only }), { ok: false, reason: "unwanted" });
+        assert.equal(snaggable(host.ground.get("snag-wolf"), me, HOST_PLAYER, only), false, "nothing in it it's set to take now");
+
+        // Gold alone: the gold, the rest still there; tapped, the rest
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: "snag-wolf", only: { grades: SNAG_GRADES, kinds: ["gold"] } }), { ok: true, left: 2 });
+        assert.ok(progress.gold > gold);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: "snag-wolf" }), { ok: true });
+        assert.ok(!host.ground.has("snag-wolf"));
     });
 
     it("leaves only its gold and its parts on one more of a pack than a player alone would meet, the world's dice going on as they would (spoils.js rollSpoils extra)", () => {

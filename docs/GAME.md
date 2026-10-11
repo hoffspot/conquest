@@ -4441,7 +4441,9 @@ it.
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
    Medium, High) and the Adaptive switch (Keeping up, above), a switch for full screen while
-   playing (below), a switch for the minimap (off, the compass in its place: above), a switch that turns all the sound
+   playing (below), a switch for the minimap (off, the compass in its place: above), the
+   Auto-snag switch (off to start with) and under it, while it's on, what it takes (its own
+   page: docs/WILDS.md *What they leave*), a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
    actions pages. Back (or Escape) returns to the menu.

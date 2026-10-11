@@ -55,7 +55,7 @@ import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -881,6 +881,16 @@ export class Game {
 
         /** Whether another player asking this one to their party is let go unanswered, not asked (Game options). */
         this.refuseInvites = false;
+
+        /**
+         * Whether the player's spoils of a fight are picked up as they come within reach of them,
+         * not left for a tap (Game options: Auto-snag; host.js `snaggable`); what of them it takes
+         * (`snagFilter`); and those tried, each once (one there's no room for is left for a tap,
+         * not asked for again and again; all tried again when what it takes is changed).
+         */
+        this.autoSnag = false;
+        this.snagOnly = null;
+        this.snagTried = new Set();
 
         /**
          * Party chat (core/netplay.js CHAT): what's been said in the player's party, and its comings
@@ -5647,7 +5657,7 @@ export class Game {
         } else if (event.type === "picked" && event.bundle) {
             const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
 
-            this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
+            this.hud.message(`You take ${things.join(", ")}.${event.full ? " There's no room for the rest: it's still there." : ""}`, 2.5);
             this.sound?.play(event.bundle.gold ? "coinPickup" : "pickup");
 
             // (A chest emptied, its lid shut)
@@ -6889,6 +6899,46 @@ export class Game {
         } else if (picking && picking.map === me.map && Math.hypot(me.x - picking.square[0] - 0.5, me.y - picking.square[1] - 0.5) <= PICK_REACH) {
             this.picking = null;
             this.#packCommand({ type: "pickUp", ground: picking.id });
+        }
+
+        this.#snag(me);
+    }
+
+    /**
+     * What auto-snag takes (Game options, Auto-snag: { grades, kinds }, host.js SNAG_GRADES,
+     * SNAG_KINDS): only things as rare as these and of these kinds. Changed, what it's left is
+     * looked at again.
+     */
+    set snagFilter(only) {
+        this.snagOnly = snagChoice(only);
+        this.snagTried.clear();
+    }
+
+    get snagFilter() {
+        return this.snagOnly;
+    }
+
+    // Auto-snag (Game options): the player's own spoils of a fight picked up as they come within
+    // reach of them (what of them it's set to take), each tried once
+    #snag(me) {
+        if (!this.autoSnag || me.dead) {
+            return;
+        }
+
+        for (const dropped of this.host.ground.values()) {
+            if (!this.snagTried.has(dropped.id) && snaggable(dropped, me, this.me, this.snagOnly)) {
+                this.snagTried.add(dropped.id);
+                this.#packCommand({ type: "pickUp", ground: dropped.id, ...(this.snagOnly && { only: this.snagOnly }) });
+            }
+        }
+
+        // (Those gone forgotten, now and then)
+        if (this.snagTried.size > 32) {
+            for (const id of this.snagTried) {
+                if (!this.host.ground.has(id)) {
+                    this.snagTried.delete(id);
+                }
+            }
         }
     }
 

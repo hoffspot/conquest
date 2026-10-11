@@ -1566,6 +1566,83 @@ test("a message has a little X at its top right, clear of its words: tapped, the
     await expect(banner).toBeHidden();
 });
 
+test("auto-snag, off to start with, turned on in Game options, picks up the player's spoils of a fight as they come within reach of them, and only what it's set to take on its own page under the switch, the rest left to tap", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (A wolf's spoils for the player, at their feet or a few squares off; a frame played. The
+    // game left running: the menu's only opened on a game that is)
+    const lay = (id, away = 0) => page.evaluate(([id, away]) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.host.ground.set(id, { id, bundle: { gold: 7, items: [{ id: "sword", count: 1, quality: "legendary" }, { id: "wolfPelt", count: 1 }] }, for: game.me, from: "wolf", map: me.map, square: [me.square[0] + away, me.square[1]], until: game.battle.time + 600000 });
+        game.advance(0.1);
+
+        return game.host.ground.get(id)?.bundle ?? null;
+    }, [id, away]);
+    const left = (id) => page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        game.advance(0.1);
+
+        return game.host.ground.get(id)?.bundle ?? null;
+    }, id);
+    // (Legendary swords in the pack: stacked, alike)
+    const legendaries = () => page.evaluate(() => window.pellagos.game.progress.pack.filter((stack) => stack?.id === "sword" && stack.quality === "legendary").reduce((sum, { count }) => sum + count, 0));
+
+    // Off to start with: left there to tap
+    expect((await lay("snag-1")).items).toHaveLength(2);
+
+    // Turned on: what it takes under its switch (everything, to start with), and the sack at the
+    // player's feet taken
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await expect(page.locator("#snagswitch")).not.toBeChecked();
+    await expect(page.locator("#snagbutton")).toBeHidden();
+    await page.locator("label:has(#snagswitch)").click();
+    await expect(page.locator("#snagbutton")).toBeVisible();
+    await expect(page.locator("#snagsummary")).toHaveText("Everything");
+    expect(await left("snag-1")).toBe(null);
+    expect(await legendaries()).toBe(1);
+
+    // Set to take legendary weapons alone, on its own page: each rarity in its colour
+    await page.locator("#snagbutton").click();
+    await expect(page.locator("#menusnag")).toBeVisible();
+    await expect(page.locator("#snaggrades input")).toHaveCount(6);
+    await expect(page.locator("#snagkinds input")).toHaveCount(9);
+    await expect(page.locator("#snaggrades .rarity-legendary")).toHaveText("Legendary");
+
+    for (const box of await page.locator("#snaggrades input:not([value=legendary]), #snagkinds input:not([value=weapon])").all()) {
+        await box.click();
+    }
+
+    await page.locator("#snagback").click();
+    await expect(page.locator("#snagsummary")).toHaveText("Legendary; Weapons");
+
+    // At their feet: the legendary sword taken, its gold and the pelt left in the sack
+    expect(await lay("snag-2")).toEqual({ gold: 7, items: [{ id: "wolfPelt", count: 1 }] });
+    expect(await legendaries()).toBe(2);
+
+    // A few squares off: left till they're within reach of it
+    expect((await lay("snag-3", 3)).items).toHaveLength(2);
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        Object.assign(me, { x: me.x + 3, square: [me.square[0] + 3, me.square[1]] });
+    });
+    expect((await left("snag-3")).items).toEqual([{ id: "wolfPelt", count: 1 }]);
+
+    // Set to take everything again: what it left looked at again, and taken
+    await page.locator("#snagbutton").click();
+    await page.locator("#snagall").click();
+    await expect(page.locator("#snaggrades input:checked")).toHaveCount(6);
+    expect(await left("snag-3")).toBe(null);
+
+    // Remembered
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")))).toMatchObject({ autoSnag: true, snagGrades: null, snagKinds: null });
+});
+
 test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

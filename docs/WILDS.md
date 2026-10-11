@@ -498,7 +498,17 @@ A creature brought down may leave something: its parts (a wolf's pelt and fangs,
 and meat, a wyvern's scales and sting, a dragon's scales, fangs and heart), and the people-shaped
 ones a little gold and gear (`core/spoils.js`). Every player within 30 m when it falls finds their
 own bundle on it, rolled for them alone: a leather sack where it fell, seen only by them, there
-for five minutes to tap and take (what doesn't fit in the pack stays in the sack). Nothing's
+for five minutes to tap and take (what doesn't fit in the pack stays in the sack). With
+**Auto-snag** on (Game options; off to start with), a player's spoils of a fight (a creature's
+sack, a convoy's or a supply wagon's gold: not a chest's share, nor anything a player dropped) are
+picked up as soon as they're within reach of them (`PICK_REACH`), each sack once (what there's no
+room for is left to tap); and under its switch, **What auto-snag takes** (its own page) chooses
+how rare and what kind, both ticked for it to take a thing: Legendary and Weapons alone, say, and
+it takes legendary weapons and leaves the rest in the sack, gold too unless that's ticked
+(host.js `snaggable`, `snagChoice`, `SNAG_GRADES`, `SNAG_KINDS`; app/save.js `autoSnag`,
+`snagGrades`, `snagKinds`: null, everything; the user, "Create a setting called auto-snag ... if
+the user only wants to pick up legendary weapons with auto-snag, that configuration is
+possible"). Nothing's
 certain: each thing has its chance, a little better for each tier the creature's above its least,
 and gold's as much more as the creature's stronger. One of a pack more than a player alone would
 meet leaves only its gold and its parts (*What the more leave*, above). The only way to share

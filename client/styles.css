@@ -4596,6 +4596,91 @@ dialog#menu .options {
     flex: none;
 }
 
+/* Under a switch, a page of its own to choose more (Auto-snag: what it takes) */
+.option-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 2px 12px 18px;
+    border: none;
+    border-bottom: 1px solid var(--field-border);
+    background: none;
+    font: inherit;
+    font-size: 15px;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+}
+
+.option-link .text {
+    display: grid;
+    gap: 2px;
+}
+
+.option-link small {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.option-link .chevron {
+    flex: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--muted);
+}
+
+/* What auto-snag takes: how rare (each in its colour) and what kind, ticked in two lists, side by
+   side, or one over the other on a narrow screen */
+.snag-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 4px 0 8px;
+}
+
+@media (max-width: 440px) {
+    .snag-lists {
+        grid-template-columns: 1fr;
+    }
+}
+
+.snag-list {
+    display: grid;
+    gap: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 12px 8px;
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+}
+
+.snag-list legend {
+    padding: 0 6px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.snag-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 2px;
+    font-size: 15px;
+    color: var(--rarity, var(--ink));
+    cursor: pointer;
+}
+
+.snag-choice input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--gold);
+}
+
 /* How loud each kind of sound is: a slider on each row */
 .volumes {
     display: grid;
