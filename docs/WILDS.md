@@ -506,7 +506,9 @@ the colour of how rare it is, the pack's own colours (drops3d.js `FLOAT`, `RING`
 time a fight leaves a character something they're told so across the screen, and how to take it
 (or turn on Auto-snag); never again (game.js `#once`, kept with the character: save.js
 `loadTold`). What's picked up rises over the player ("+3 gold, a rare ring"), not said across the
-screen, and is kept for the journal's messages all the same; only what there was no room for is
+screen, and is kept for the journal's messages all the same (as a creature's fall rises off its
+body, unless it's one of note: an elite, a boss, a perilous place's own or master, a wyvern;
+creatures.js `notable`, GAME.md); only what there was no room for is
 said (the user: "Only show a message box the first time an item drops for a new player ... Make
 each collectible item float slightly above the ground with a glowing circle corresponding to the
 items rarity under it"). With

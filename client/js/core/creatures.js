@@ -262,6 +262,20 @@ export function memberOf(creature, k, chance) {
     return creature;
 }
 
+/** The creatures whose fall is always news (`notable`), besides the perilous places' own: the dragon's lair's guards. */
+export const NOTABLE = Object.freeze(["wyvern"]);
+
+/**
+ * Whether one of the wild's creatures (an actor's `wild`) is a foe of note, its fall told across
+ * the screen and not only rising off its body (app/game.js `#slain`): an elite, a dungeon's boss
+ * or mini-boss (`champion`), a perilous place's own (`unique`: the bandit chief, the dragon, the
+ * wight lord, the frost troll), a site's or a lair's master (`master`, the host's), or a wyvern.
+ * Anyone else (a wolf, an orc, a soldier) isn't: no `wild`, or none of these.
+ */
+export function notable(wild, { master = false } = {}) {
+    return Boolean(wild && (master || wild.elite || wild.champion || wild.unique || NOTABLE.includes(wild.creature)));
+}
+
 /**
  * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep` and
  * `bomb` (CREATURES); as a dungeon's boss (`boss`), its bomb as its `boss` has it.

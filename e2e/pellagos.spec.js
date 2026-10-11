@@ -1695,6 +1695,114 @@ test("the first time a fight leaves a character something, they're told what to 
     expect(picked.kept).toBe("You take 3 gold, a rare ring.");
 });
 
+test("a foe the player slays: its fall rising off its body in red as it lands, as what's picked up rises over the player, not said across the screen nor kept for the journal; its body off the screen, over the player; a foe of note (an elite) said across the screen, as ever", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (What rises, as it's put up: where, and where the orc's body and the player's head are then)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [damage, message] = [game.hud.damage.bind(game.hud), game.hud.message.bind(game.hud)];
+
+        window.risen = [];
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+            message(text, seconds);
+        };
+        game.hud.damage = (point, text, options = {}) => {
+            const at = (id, share) => game.view.toScreen(game.avatars.get(id).point(share));
+
+            damage(point, text, options);
+            window.risen.push({ point, text, kind: options.kind ?? "", body: at("orc", 0.3), head: at(game.me, 0.95), drawn: document.querySelector("#floaters").lastElementChild?.className });
+        };
+    });
+
+    const slain = () => page.evaluate(() => {
+        const { game } = window.pellagos;
+        return { risen: window.risen.filter(({ kind }) => kind === "slain"), said: window.said.filter((text) => text.includes("slain")), kept: game.messages.map(({ text }) => text).filter((text) => text.includes("slain")) };
+    });
+
+    // The orc put down by the player
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { hp: 1 });
+        Object.assign(game.battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        game.host.command(game.me, { type: "engage", target: "orc" });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actor("orc").dead, { seconds: 40 })).toBe(true);
+    expect(await playUntil(page, () => window.risen.some(({ kind }) => kind === "slain"), { seconds: 5 })).toBe(true);
+
+    const fell = await slain();
+
+    // (Risen once, in red, off where its body lies, not over the player; not said across the
+    // screen, nor kept)
+    expect(fell.risen).toHaveLength(1);
+    expect(fell.risen[0].text).toBe("The orc is slain!");
+    expect(fell.risen[0].drawn).toBe("damage slain");
+    expect(Math.hypot(fell.risen[0].point.x - fell.risen[0].body.x, fell.risen[0].point.y - fell.risen[0].body.y)).toBeLessThan(2);
+    expect(Math.hypot(fell.risen[0].point.x - fell.risen[0].head.x, fell.risen[0].point.y - fell.risen[0].head.y)).toBeGreaterThan(20);
+    expect(fell.said).toEqual([]);
+    expect(fell.kept).toEqual([]);
+
+    // Its body off the screen (far behind the camera) as it falls: over the player instead
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const orc = game.battle.actor("orc");
+        const avatar = game.avatars.get("orc");
+        const away = [[-160, 0], [160, 0], [0, -160], [0, 160]].find(([dx, dy]) => {
+            avatar.place(me.x + dx, me.y + dy, 0);
+
+            const at = game.view.toScreen(avatar.point(0.3));
+
+            return !at || at.x < 0 || at.y < 0 || at.x > innerWidth || at.y > innerHeight;
+        });
+
+        window.away = away;
+        window.risen = [];
+
+        // (There in the battle too, so it's drawn there)
+        if (away) {
+            const [x, y] = [me.x + away[0], me.y + away[1]];
+
+            Object.assign(orc, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], to: null, dead: true });
+            game.previous.set("orc", { x, y });
+        }
+        game.battle.events.push({ type: "death", time: game.battle.time, id: "orc", by: game.me, respawnAt: game.battle.time + 60000 });
+    });
+    expect(await page.evaluate(() => window.away)).toBeTruthy();
+    expect(await playUntil(page, () => window.risen.some(({ kind }) => kind === "slain"), { seconds: 5 })).toBe(true);
+
+    const far = await slain();
+
+    expect(far.risen).toHaveLength(1);
+    expect(Math.hypot(far.risen[0].point.x - far.risen[0].head.x, far.risen[0].point.y - far.risen[0].head.y)).toBeLessThan(2);
+    expect(far.said).toEqual([]);
+
+    // A foe of note (an elite): said across the screen as ever, kept, and nothing risen
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const orc = game.battle.actor("orc");
+
+        window.risen = [];
+        orc.wild = { creature: "wolf", elite: true, champion: "elite" };
+        game.battle.events.push({ type: "death", time: game.battle.time, id: "orc", by: game.me, respawnAt: game.battle.time + 60000 });
+        game.advance(0.1);
+    });
+
+    const noted = await slain();
+
+    // (And nothing risen once it's down, either)
+    await playUntil(page, () => false, { seconds: 2 });
+    expect((await slain()).risen).toEqual([]);
+
+    expect(noted.risen).toEqual([]);
+    expect(noted.said).toEqual(["The orc is slain!"]);
+    expect(noted.kept).toEqual(["The orc is slain!"]);
+});
+
 test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

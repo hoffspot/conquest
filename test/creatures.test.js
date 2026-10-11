@@ -13,7 +13,7 @@ import { elitePrize } from "../client/js/core/caches.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { CHARMS } from "../client/js/core/goods.js";
 import { AGGRO, Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
-import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
+import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, notable, NOTABLE, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, snagChoice, snaggable, SNAG_GRADES, SNAG_KINDS, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -101,6 +101,30 @@ const field = (size) => ({ blocked: parseGrid(Array.from({ length: size }, () =>
 const perSecond = (attack) => ((attack.either?.[0] ?? attack).damage[0] + (attack.either?.[0] ?? attack).damage[1]) / 2 / ((attack.either?.[0] ?? attack).interval / 1000);
 
 describe("the wild's creatures (creatures.js)", () => {
+    it("counts a foe of note, its fall told across the screen, only an elite, a dungeon's boss or mini-boss, a perilous place's own or master, or a wyvern (notable)", () => {
+        // (As host.js #rouse makes an actor's `wild`)
+        const wild = (creature, more = {}) => ({ creature, tier: 3, unique: Boolean(CREATURES[creature].perilous), ...more });
+
+        assert.ok(notable(wild("wolf", { elite: true, champion: "elite" })), "an elite");
+        assert.ok(notable(wild("skeleton", { champion: "boss" })), "a dungeon's boss");
+        assert.ok(notable(wild("skeleton", { champion: "mini" })), "a dungeon's mini-boss");
+        assert.ok(notable(wild("wolf"), { master: true }), "a site's or a lair's master");
+
+        for (const id of Object.keys(CREATURES).filter((each) => CREATURES[each].perilous)) {
+            assert.ok(notable(wild(id)), `${id}: a perilous place's own`);
+        }
+
+        assert.ok(NOTABLE.every((id) => CREATURES[id] && notable(wild(id))), "a wyvern");
+
+        // (Anyone else: risen off their body)
+        for (const id of ["wolf", "boar", "skeleton", "bogFrog", "hyena", "troll", "orcRaider"].filter((each) => CREATURES[each])) {
+            assert.equal(notable(wild(id)), false, id);
+        }
+
+        assert.equal(notable(undefined), false, "a soldier or one of the folk (no `wild`)");
+        assert.equal(notable(null, { master: false }), false);
+    });
+
     it("gives every creature a look, a weapon, a temper, tiers and a pack that make sense", () => {
         for (const [id, creature] of Object.entries(CREATURES)) {
             assert.ok(LOOKS[id], `${id}: a look`);
