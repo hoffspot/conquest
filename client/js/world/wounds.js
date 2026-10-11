@@ -68,6 +68,11 @@ const GLOW_TIME = { fire: 4, arcane: 5 };
 // The most arrows left in anyone (the oldest go)
 const ARROWS = 8;
 
+// How long after its last blow the arrows of its lesser hits (marks: no threshold crossed) fall
+// out (seconds). A wound's arrow stays till it's healed: health doesn't come back by itself, so a
+// scratch at 83 of 85 would otherwise leave them in for good.
+export const LOOSE = 30;
+
 // What the shaders mix in (linear colours): fresh and thick blood, bruising, char, the raw edges
 // and dark inside of a cut, torn cloth; and the glows
 const METAL_SHADER = /* glsl */ `
@@ -249,6 +254,9 @@ export class Wounds {
         this.list = [];
         this.seed = seed;
         this.count = 0;
+
+        /** Seconds since its last blow (LOOSE). */
+        this.calm = 0;
         this.uniforms = {
             damageMap: { value: UNHURT },
             skinTone: { value: new THREE.Color(character.look?.skin?.tone ?? "#c89a7a") },
@@ -282,6 +290,7 @@ export class Wounds {
         const vertex = this.#landing(kind, from, random);
         let landed = null;
 
+        this.calm = 0;
         this.#patch();
         this.#picture();
 
@@ -344,7 +353,10 @@ export class Wounds {
         this.#repaint();
     }
 
-    /** Keep an object (an arrow stuck in it) with a wound: gone when it heals (or when too many are). */
+    /**
+     * Keep an object (an arrow stuck in it) with a wound: gone when it heals (or when too many are);
+     * with a mark, LOOSE seconds after its last blow too.
+     */
     keep(wound, object) {
         wound.arrow = object;
 
@@ -396,6 +408,18 @@ export class Wounds {
 
     /** Advance by `dt` seconds: glows fade. */
     update(dt) {
+        // (A while after its last blow, its lesser hits' arrows fall out)
+        this.calm += dt;
+
+        if (this.calm >= LOOSE) {
+            for (const wound of this.list) {
+                if (wound.mark && wound.arrow) {
+                    wound.arrow.removeFromParent();
+                    wound.arrow = null;
+                }
+            }
+        }
+
         for (const glow of ["fire", "arcane"]) {
             this.glow[glow] = Math.max(0, this.glow[glow] - dt);
 

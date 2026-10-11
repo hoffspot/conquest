@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { REACTIONS } from "../client/js/characters/actions.js";
 import { Rig } from "../client/js/characters/rig.js";
 import { SkinMaterial } from "../client/js/characters/surfaces.js";
-import { KINDS, stageOf, THRESHOLDS, Wounds } from "../client/js/world/wounds.js";
+import { KINDS, LOOSE, stageOf, THRESHOLDS, Wounds } from "../client/js/world/wounds.js";
 import { readHumanData } from "../scripts/lib/human-data.js";
 
 // (The game's body: body.js GAME_BODY)
@@ -257,6 +257,46 @@ describe("battle damage (wounds.js)", () => {
             arrows.map((arrow) => Boolean(arrow.parent)),
             [false, false, true, true, true, true, true, true, true, true],
         );
+    });
+
+    it("lets its lesser hits' arrows fall out a while after its last blow, a wound's kept till it's healed", () => {
+        const wounds = new Wounds(figure());
+        const stick = (landed) => {
+            const arrow = new THREE.Group();
+
+            new THREE.Group().add(arrow);
+            wounds.keep(landed, arrow);
+
+            return arrow;
+        };
+        // (A scratch, then a hit to below three quarters: a mark and a wound)
+        const [scratch, wound] = beat(wounds, "pierce", [45, 30]).map(stick);
+        const wait = (seconds) => {
+            for (let t = 0; t < seconds; t += 1) {
+                wounds.update(1);
+            }
+        };
+
+        assert.ok(LOOSE >= 10 && LOOSE <= 60);
+        wait(LOOSE - 2);
+        assert.ok(scratch.parent && wound.parent, "both in, the fight not long over");
+
+        // Struck again (a scratch, its arrow too): the wait starts again
+        const later = stick(wounds.hit({ reaction: "pierce", from: 0, hp: 29, maxHp: 50, before: 30 }));
+
+        wait(LOOSE - 2);
+        assert.ok(scratch.parent && later.parent, "still in, struck again since");
+
+        wait(3);
+        assert.equal(scratch.parent, null, "a scratch's arrow out");
+        assert.equal(later.parent, null);
+        assert.ok(wound.parent, "a wound's still in");
+        assert.equal(wounds.list.length, 3, "the marks still painted");
+
+        wait(600);
+        assert.ok(wound.parent, "still in, unhealed");
+        wounds.heal(50, 50);
+        assert.equal(wound.parent, null, "out once healed");
     });
 
     it("mixes the damage into the body's material and a copy of each garment's (shared with others who wear it), metal its own way", () => {
