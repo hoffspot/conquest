@@ -84,18 +84,19 @@ export function sideLine(side) {
 }
 
 /**
- * Those drawn this frame (Game.stats.bodies: characters and creatures, not the soldiers' crowds),
- * how many of them were posed in it, how many cast a shadow; and how many soldiers in their
- * crowds (world/crowd.js); or null, for nothing counted yet.
+ * Those drawn this frame (Game.stats.bodies: characters and creatures, not the crowds), how many of
+ * them were posed in it, how many cast a shadow; and how many in their crowds (world/crowd.js: the
+ * soldiers', and any standing in for those drawn in full but for a crowded fight, app/throng.js);
+ * or null, for nothing counted yet.
  */
 export function bodiesLine(bodies) {
     if (!bodies) {
         return null;
     }
 
-    const { drawn, posed, shadows, crowd } = bodies;
+    const { drawn, posed, shadows, crowd, standing = 0 } = bodies;
 
-    return `Bodies ${drawn} drawn  ${posed} posed  ${shadows} shadows  ${crowd} in crowds`;
+    return `Bodies ${drawn} drawn  ${posed} posed  ${shadows} shadows  ${crowd} in crowds${standing ? ` (${standing} standing in)` : ""}`;
 }
 
 /**
