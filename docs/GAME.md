@@ -1670,8 +1670,14 @@ south), 8 to 20 metres wide as its block has them, a metre's baulk of grass betw
 next, and grass where a block runs out with no room for another. No field comes up to a road,
 a bridge or a settlement's street out through its fields: at least 2 metres of the wild's own
 grass are left between them, edge to edge (the user: "Farm fields should not butt right up
-against roads"; overworld.js `VERGE`). (The fields drawn far off, past the chunks, are worked out
-on the GPU from the fields alone, `FIELDS_GLSL`: the verge, under a pixel there, isn't.) Each
+against roads"; overworld.js `VERGE`). The land keeps that verge square by square (a square's
+middle within the verge and a road's half width, and a square's diagonal more, of a road's line),
+but the ground draws a field's soil back from a road along the road's own line: 3 metres from its
+edge, over a ramp of 0.6, as ragged as any edge (ground.js `FIELD_EDGE`, from overworld.js
+`fieldByRoad`, the squares the road's verge alone leaves grass, and `roadEdgeAt`, how far a point
+is from a road's edge), so a field by a road that runs at a slant has a straight edge, not a
+staircase of whole squares. (The fields drawn far off, past the chunks, are worked out on the GPU
+from the fields alone, `FIELDS_GLSL`: the verge, under a pixel there, isn't.) Each
 strip's its own crop
 (`CROP`): ploughed (a third of them), wheat, barley, greens, or fallow (grass). Ploughed and sown
 strips are soil, their furrows running along them (the soil's texture turned for a block's strips
@@ -1680,7 +1686,10 @@ its furrows showing through, so the strips show far off and on low quality, and 
 in it as tall grass (*Tall grass*, below). Each chunk keeps its squares' strips (`chunk.crops`: a
 byte each, its crop and which way its strip runs), from the world's seed and the squares' whole
 metres by integer hashing alone, the same in every browser; the ground reads them from a small
-texture a texel a square (`fieldsOf`), its chunks with fields only. Trees aren't planted in the
+texture a texel a square (`fieldsOf`), its chunks with fields only, each sown crop carried two
+squares out over the grass round it (`FIELD_EDGE.spread`), so that where the soil's soft edge,
+or its blur far off, reaches past a strip's squares it's the crop's colour, not a band of bare
+earth round it. Trees aren't planted in the
 strips (on the verges, as hedgerow trees), and of the land's own things only haystacks and
 scarecrows stand in them. A hedgerow runs along each farmed block's edges (its first row and
 column: `hedgeAt`; kits/hedges.js), one continuous wall of small hawthorn leaves: here trimmed

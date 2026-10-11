@@ -1994,6 +1994,62 @@ export class Overworld {
 
     // The kind of road at a point (the widest, where roads and paths meet: the same whichever
     // were listed first), or null
+    /**
+     * How far a point (px, py, metres) is from the nearest road's edge (metres; less than 0 on the
+     * road), looking no further than `reach` beyond its edge: Infinity if none is that near. For
+     * drawing what's kept back from a road along its own line (world/ground.js), not square by
+     * square as the land's laid out.
+     */
+    roadEdgeAt(px, py, reach) {
+        let nearest = Infinity;
+
+        for (const segment of this.#roadsIn(Math.floor(px / CHUNK), Math.floor(py / CHUNK))) {
+            const half = ROAD_HALF[segment[4]];
+
+            if (px < Math.min(segment[0], segment[2]) - half - reach || px > Math.max(segment[0], segment[2]) + half + reach || py < Math.min(segment[1], segment[3]) - half - reach || py > Math.max(segment[1], segment[3]) + half + reach) {
+                continue;
+            }
+
+            nearest = Math.min(nearest, fromSegment(px, py, segment) - half);
+        }
+
+        return nearest <= reach ? nearest : Infinity;
+    }
+
+    /**
+     * A square's field as it would be sown (its crop and which way its strips run, as chunk.crops
+     * keeps them) where the verge kept along a road (VERGE) is all that leaves it grass; else 0.
+     * For the ground's painting (world/ground.js): the soil cut along the road's own line, not
+     * square by square, a diagonal road's verge a staircase of whole squares.
+     */
+    fieldByRoad(x, y) {
+        const [px, py] = [x + 0.5, y + 0.5];
+
+        if (this.inTown(x, y) || this.#roadAt(px, py, VERGE_REACH) === null || this.#roadAt(px, py) !== null || this.#bridgeAt(px, py) || this.#fordWayAt(px, py)) {
+            return 0;
+        }
+
+        const { plan } = this;
+        const field = fieldAt(plan.seed, x, y);
+        const [mx, my] = field.middle;
+
+        if (!sown(field.crop) || plan.biome[cellAt(my) * CELLS + cellAt(mx)] !== BIOME.farmland || this.sites?.clearedAt(px, py) || this.#nearBridge(px, py, VERGE_REACH) || this.#fordWayAt(px, py, VERGE_REACH)) {
+            return 0;
+        }
+
+        // (Nor where a settlement's street, a fingerpost or a castle's site keeps the field off it
+        // as well: chunk.crops's own other verges)
+        const settled = this.settlements.settle(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+
+        if ((settled.length > 0 && (this.#settledAt(settled, x, y) || this.#byStreet(settled, x, y))) || this.fingerposts.has(y * WORLD_SIZE + x) || this.sites.moatAt(x, y) || this.sites.rimAt(x, y) || this.sites.squareAt(x, y)) {
+            return 0;
+        }
+
+        const river = this.waters.riverAt(px, py);
+
+        return river || stillWaterAt(plan, px, py) !== null ? 0 : field.crop + ALONG * field.along;
+    }
+
     #roadAt(px, py, margin = 0) {
         let kind = null;
 
