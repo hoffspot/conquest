@@ -285,7 +285,9 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
             return render(...args);
         };
 
-        for (let k = 0; k < 600 && !telemetry.events.some(({ kind }) => kind === "freeze"); k++) {
+        // (Till that frame's been held up and its freeze kept: not one kept before, a slow frame
+        // as play began, which the log's clearing then lets go of)
+        for (let k = 0; k < 600 && !(held && telemetry.events.some(({ kind }) => kind === "freeze")); k++) {
             await new Promise((resolve) => requestAnimationFrame(resolve));
         }
 
@@ -3300,7 +3302,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
-test("every tavern can be gone into: got ready as the player comes near, its own room and folk inside; let go once they're far off, and built at once if they walk straight in", async ({ page }) => {
+test("every tavern can be gone into: got ready as the player comes near, its folk dressed at its door; its own room and folk inside; its folk let go of a little way off, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
     // (Seed 2's town has a second tavern, the Stag's Head, an inn)
     await playing(page, "/?play&seed=2");
 
@@ -3356,6 +3358,28 @@ test("every tavern can be gone into: got ready as the player comes near, its own
     expect(near.ready).toEqual({ maps: 2, folk: expect.any(Number), left: 0 });
     expect(near.ready.folk).toBeGreaterThanOrEqual(6);
     expect(near.hidden).toBe(true);
+
+    // Stepped well away from its door, though it's still got ready: its folk let go of (bodies,
+    // skins and all), its floors kept; back at its door, dressed again
+    const away = await page.evaluate((key) => {
+        const { game } = window.pellagos;
+        const building = game.world.interiors.buildings.get(key);
+        const { x, z } = building.entrance.door;
+        const [ax, ay] = building.door.ends[0].arrive;
+        const [dx, dy] = [ax + 0.5 - x, ay + 0.5 - z];
+        const length = Math.hypot(dx, dy) || 1;
+
+        // (40 metres out from it, the way its door faces)
+        window.put("player", [Math.floor(x + (dx / length) * 40), Math.floor(z + (dy / length) * 40)]);
+        game.advance(0.2);
+
+        return { visited: game.visits.has(key), floors: building.maps.filter((id) => game.interiors.has(id)).length, dressed: window.visit.folk.length, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${key}/`)).length };
+    }, near.key);
+
+    expect(away).toEqual({ visited: true, floors: 2, dressed: 0, drawn: 0 });
+    await page.evaluate((key) => window.put("player", window.pellagos.game.world.interiors.buildings.get(key).door.ends[0].arrive), near.key);
+    expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps && window.visit.folk.length > 0)).toBe(true);
+    expect(await page.evaluate(() => window.visit.folk.length)).toBe(near.ready.folk);
 
     // Through its door: its own taproom, heard and mapped as one, with its own folk
     const inside = await page.evaluate((key) => {
@@ -3422,7 +3446,8 @@ test("every tavern can be gone into: got ready as the player comes near, its own
 
     expect(told).toBe("quietly");
 
-    // Straight back in through the door, before it's got ready: built there and then
+    // Straight back in through the door, before it's got ready: its floors built there and then,
+    // its folk dressed a frame at a time with the screen kept dark meanwhile, then lit
     const again = await page.evaluate((key) => {
         const { game } = window.pellagos;
         const [outside] = game.world.interiors.buildings.get(key).door.ends;
@@ -3433,11 +3458,34 @@ test("every tavern can be gone into: got ready as the player comes near, its own
 
         const player = game.battle.actor("player");
 
-        return { map: player.map, shown: game.mapId, visible: game.interiors.get(player.map)?.object.visible ?? false, folk: game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player").length };
+        return { map: player.map, shown: game.mapId, visible: game.interiors.get(player.map)?.object.visible ?? false, folk: game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player").length, dark: Boolean(game.arriving) && document.querySelector(".curtain").style.opacity === "1" };
     }, near.key);
 
-    expect(again).toEqual({ map: `${near.key}/taproom`, shown: `${near.key}/taproom`, visible: true, folk: expect.any(Number) });
+    expect(again).toEqual({ map: `${near.key}/taproom`, shown: `${near.key}/taproom`, visible: true, folk: expect.any(Number), dark: true });
     expect(again.folk).toBeGreaterThanOrEqual(5);
+    expect(await playUntil(page, () => !window.pellagos.game.arriving)).toBe(true);
+
+    const lit = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { curtain: document.querySelector(".curtain").style.opacity, drawn: game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player" && game.avatars.has(actor.id)).length };
+    });
+
+    expect(lit.curtain).toBe("0");
+
+    // (Any not dressed in the dark, dressed after, a few milliseconds a frame)
+    expect(await playUntil(page, () => {
+        const visit = window.pellagos.game.visits.get(window.visit.key);
+
+        return Boolean(visit) && !visit.queue.length && !visit.steps;
+    })).toBe(true);
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player" && game.avatars.has(actor.id)).length;
+    })).toBeGreaterThanOrEqual(5);
 });
 
 test("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async ({ page }) => {
@@ -3466,6 +3514,11 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         // A while at work (what each of them does, as the battle says)
         for (let k = 0; k < 90; k++) {
@@ -3512,6 +3565,11 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
         const priest = folk.find(({ role }) => role === "priest");
@@ -3880,6 +3938,11 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
         const receptionist = folk.find(({ role }) => role === "receptionist");
