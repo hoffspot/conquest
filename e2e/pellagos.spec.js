@@ -240,11 +240,13 @@ test.describe("drawn at the screen's own pixels", () => {
 test("the debug log (Game options): a crash found from the last game's notes, a frame held up kept with where its time went and what was held, an error with its stack; shown, copied and cleared", async ({ page }) => {
     test.setTimeout(180000);
 
-    // (The last game fell over while playing: its notes left behind, never closed)
+    // (The last game fell over while playing: its notes left behind, never closed, and a boggart's
+    // dressing begun after them)
     await page.addInitScript(() => {
         if (!sessionStorage.getItem("noted")) {
             sessionStorage.setItem("noted", "yes");
-            localStorage.setItem("pellagos.alive", JSON.stringify({ at: Date.now() - 30000, build: "earlier", closed: false, state: { map: "town", bodies: { drawn: 61 } }, recent: [16, 17, 950], jobs: [{ label: "crowd figure herd:wolf:1", ms: 70 }], errors: [] }));
+            localStorage.setItem("pellagos.alive", JSON.stringify({ at: Date.now() - 30000, pageAt: 245000, build: "earlier", closed: false, state: { map: "town", bodies: { drawn: 61 } }, trend: [{ at: 243, totalMB: 590, avatars: 31 }, { at: 245, totalMB: 600, avatars: 32 }], recent: [16, 17, 950], jobs: [{ label: "crowd figure herd:wolf:1", ms: 70 }], errors: [] }));
+            localStorage.setItem("pellagos.working", JSON.stringify([{ label: "dressing folk folk-3", at: 244100 }, { label: "dressing beast boggart", at: 246072 }]));
         }
     });
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
@@ -252,8 +254,13 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
 
     const crash = await page.evaluate(() => window.pellagos.telemetry.events.find(({ kind }) => kind === "crash"));
 
-    expect(crash).toMatchObject({ build: "earlier", state: { map: "town", bodies: { drawn: 61 } }, jobs: [{ label: "crowd figure herd:wolf:1" }] });
+    expect(crash).toMatchObject({ build: "earlier", pageAt: 245000, state: { map: "town", bodies: { drawn: 61 } }, jobs: [{ label: "crowd figure herd:wolf:1" }] });
     expect(crash.summary).toContain("loaded again");
+    expect(crash.trend.map(({ totalMB }) => totalMB)).toEqual([590, 600]);
+    expect(crash.begun).toEqual([
+        { label: "dressing folk folk-3", at: 244100 },
+        { label: "dressing beast boggart", at: 246072, afterNotes: true },
+    ]);
 
     // A frame held up while playing (its drawing, 600 ms longer than it is), and an error no one
     // caught: each kept, the log cleared first so nothing before stands in their way
@@ -300,6 +307,11 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
     expect(freeze.memory.gpu.totalMB).toBeGreaterThan(10);
     expect(freeze.memory.gpu.texturesMB).toBeGreaterThan(0);
     expect(freeze.memory.held.avatars).toBeGreaterThan(0);
+
+    // (And what Safari wouldn't tell: the bodies' own copies on the page, and the way-finding's
+    // WebAssembly)
+    expect(freeze.memory.bodiesMB).toBeGreaterThan(1);
+    expect(freeze.memory.wasmMB).toBeGreaterThanOrEqual(16);
     expect(error.stack).toContain("A test's error, thrown on purpose");
 
     // Game options (the menu pausing the game: nothing more kept meanwhile): the Debug log, each

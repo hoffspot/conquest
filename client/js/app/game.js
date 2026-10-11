@@ -71,6 +71,7 @@ import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.
 import { nearestFree, squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
+import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
@@ -80,6 +81,7 @@ import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapon
 import { Avatar, posingEvery } from "../world/avatar.js";
 import { Crowd, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
 import { megabytes } from "../world/gpumemory.js";
+import { heldOnPage } from "../world/release.js";
 import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
@@ -1017,14 +1019,21 @@ export class Game {
     /**
      * What the game holds now (megabytes), for the debug overlay and log (app/telemetry.js): the
      * page's heap where the browser tells (Chromium's; null elsewhere), what the graphics card's
-     * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), all of
-     * them together, and how many of what's kept for the world.
+     * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), the
+     * way-finding's WebAssembly (core/navigation/recast.js wasmBytes), the bodies' own copies on
+     * the page (their meshes and pictures, kept to be posed and painted again: world/release.js
+     * heldOnPage), all of them together, and how many of what's kept for the world. Where the
+     * heap isn't told (Safari), the bodies' copies stand in for it in the total: the least of it,
+     * the most of what grows as more are about (measured in Chromium, a town's 30 bodies took the
+     * heap from 325 to 485 MB).
      */
     memoryNow() {
         const heap = globalThis.performance?.memory;
         const gpu = this.view.gpuMemory?.report() ?? null;
         const sound = this.sound?.memory?.() ?? 0;
-        const total = (heap?.usedJSHeapSize ?? 0) + (this.view.gpuMemory?.total ?? 0) + sound;
+        const wasm = wasmBytes();
+        const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
+        const total = (heap?.usedJSHeapSize ?? bodies) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
 
         return {
             totalMB: megabytes(total),
@@ -1032,6 +1041,8 @@ export class Game {
             limitMB: heap ? megabytes(heap.jsHeapSizeLimit) : null,
             gpu,
             soundMB: megabytes(sound),
+            wasmMB: megabytes(wasm),
+            bodiesMB: megabytes(bodies),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0 },
         };
     }

@@ -4516,10 +4516,17 @@ to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser'
   with its stack; or **the picture lost** (WebGL's context taken back, as a phone short of memory
   does).
 - **A crash**: while playing, in view, a few notes of how it's going are written every 2 seconds
-  (`pellagos.alive`: how it's going, the frames before, the slow work and errors lately), and
-  marked closed when the page is closed, hidden, or the game's paused. Loading again and finding
-  them unclosed, the game fell over (a phone's browser loads the page again when it runs out of
-  memory): kept as a crash, with those notes, what the game held then among them.
+  (`pellagos.alive`: how it's going, the frames before, the slow work and errors lately, when
+  the page wrote them, `pageAt`, ms since it loaded, as the slow work's `at`), and marked closed
+  when the page is closed, hidden, or the game's paused. Loading again and finding them unclosed,
+  the game fell over (a phone's browser loads the page again when it runs out of memory): kept as
+  a crash, with those notes, what the game held then among them. With them, how what was held went
+  over the minute before (`trend`: at each of the last 30 notes, what was held all told, the
+  graphics card's, the sounds', the bodies' own copies, the heap where it's told, and how many
+  bodies and actors: rising as more are dressed, or jumping at the end), and the work begun lately
+  (`begun`: the last six, each written down as it takes its first step, `pellagos.working`, core/
+  steps.js `Steps.begun`; one begun after the last notes, `afterNotes`, was likely under way as the
+  page fell, as a step of it taking half a second can be, the page never back from it to say so).
 - **Memory**: what the game holds passing 768 MB, 1 GB, 1.5 GB, 2 GB or 3 GB, once each, or the
   page's heap past 80% of its limit (where the browser tells), with what holds it.
 
@@ -4528,9 +4535,10 @@ share of pixels drawn, how many drawn in full, the bodies drawn, posed and stand
 actors and avatars, draw calls, triangles, geometries, textures and shader programs, the frame
 rate and update and drawing times, playing together or not, what the game holds, and the
 device), the last 60 frames' times, and the slowest work done a step at a
-time lately: each step of one taking over 20 ms is named (core/steps.js `Steps.slow`: a crowd's
-figure, a character dressed, a building got ready, the minimap painted, a beast sculpted; and the
-fortifications and stockades drawn, twice a second, when that's slow). Where
+time in the 30 seconds before it: each step of one taking over 20 ms is named (core/steps.js
+`Steps.slow`: a crowd's figure, a character dressed, a building got ready, the minimap painted, a
+beast sculpted; and the fortifications and stockades drawn, twice a second, when that's slow),
+with when (`at`, ms since the page loaded). Where
 the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
 longest first: each one's file and place in it, its function and what called it; that's the
 nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch
@@ -4543,10 +4551,17 @@ nothing), what the graphics card's been given (world/gpumemory.js: buffers, pict
 levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
 give it them and take them back, wrapped on the context; never a frame's draws, so it costs
 nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
-(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of), all of
-them together, and how many bodies, chunks, interiors and crowd kinds are kept. On a phone the
-graphics card shares the phone's memory, and what the page has given it counts against the page:
-on an iPhone, where the browser tells nothing of the heap, it's most of what can be seen.
+(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of), the
+way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as tiles are baked and
+gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
+kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), all of them
+together, and how many bodies, chunks, interiors and crowd kinds are kept. Where the heap isn't
+told, the bodies' copies stand in for it in the total, the least of it: in Chromium, playing on
+in a town while 30 bodies were dressed took the heap from 325 to 485 MB and the page's own
+resident memory to 1.2 GB, the bodies' copies growing about 4.5 MB a body, three-quarters of the
+heap's growth, over a fixed 300 MB or so of the world's own. On a phone the graphics card shares
+the phone's memory, and what the page has given it counts against the page: on an iPhone, where
+the browser tells nothing of the heap, it and the bodies' copies are most of what can be seen.
 
 **Letting go of what's on the graphics card.** What's given to the graphics card is drawn from
 its copy, and the page's copy would only be read to give it the same again. For what nothing on
@@ -4775,9 +4790,14 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   each phase's time on average; the slowest work done a step at a time named, and a step that takes
   long told by name (core/steps.js); what the browser says ran, the longest first; an error with its
   stack, the same once so often; the picture lost; a crash found on loading from a game's unclosed
-  notes, none if it was closed; memory past each mark once, and the heap near its limit, a crash
+  notes, none if it was closed; a crash keeping the minute before it (what was held at each of the
+  notes, when the last were written, only the slow work of the last half minute, and the work
+  begun lately, that begun after the last notes marked), work told of as it takes its first step,
+  once, by name (core/steps.js); memory past each mark once, and the heap near its limit, a crash
   keeping what was held; each kind kept at most so often, the newest five, across loads, and
-  cleared; the log as text to copy; and the debug overlay's memory lines. E2E: a crash found from
+  cleared; the log as text to copy; and the debug overlay's memory lines, the way-finding's and
+  the bodies' own copies among them. `test/release.test.js`: what the page still holds of objects
+  counted, each mesh and picture once however many share it, none let go of. E2E: a crash found from
   the last game's notes; a frame held up (with what the graphics card held) and an error thrown,
   each kept; the Debug log in Game options showing them, copied and cleared.
 - `test/throng.test.js`: a crowded fight that keeps up, or one with few about however slow, left
