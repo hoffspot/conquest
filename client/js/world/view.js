@@ -582,6 +582,35 @@ export class View {
         return sent.size;
     }
 
+    /**
+     * Wait till the graphics card's done all it's been given so far (pictures sent, shaders
+     * compiled): the browser hands it on to be done after (a browser's graphics card work done
+     * in a process of its own), so what's sent while the game's loading would otherwise hold up
+     * the first frames drawn instead. A frame at a time, not holding the page up; `most` ms at
+     * the most. Resolves at once without a way to tell (WebGL 1).
+     */
+    async settled({ most = 20000 } = {}) {
+        const gl = this.renderer.getContext();
+
+        if (typeof gl.fenceSync !== "function") {
+            return;
+        }
+
+        const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        const until = performance.now() + most;
+
+        gl.flush();
+
+        try {
+            // (Its state changes only between the page's tasks: looked at again after each wait)
+            while (gl.getSyncParameter(fence, gl.SYNC_STATUS) !== gl.SIGNALED && performance.now() < until) {
+                await new Promise((resolve) => setTimeout(resolve, 16));
+            }
+        } finally {
+            gl.deleteSync(fence);
+        }
+    }
+
     /** Draw this share of the pixels the quality level and render scale would (app/governor.js). */
     adapt(scale) {
         this.adaptiveScale = scale;

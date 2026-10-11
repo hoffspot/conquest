@@ -20,7 +20,7 @@ test("builds a dressed, armed human and walks them", async ({ page }) => {
     const hero = await page.evaluate(() => ({
         garments: window.lab.character.garments.length,
         items: window.lab.character.items.map((item) => item.name),
-        hidden: window.lab.character.hidden.size,
+        hidden: window.lab.character.hidden.reduce((sum, one) => sum + one, 0),
         height: window.lab.character.height,
     }));
 

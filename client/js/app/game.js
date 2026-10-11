@@ -1496,8 +1496,9 @@ export class Game {
         this.washing.className = "spellwash";
         this.hud.root.prepend(this.washing);
 
-        // Compile every shader now rather than when each thing first comes into view
-        await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
+        // Compile every shader now rather than when each thing first comes into view (the far
+        // land and sky, drawn first, theirs too)
+        await time("shaders", () => Promise.all([view.renderer.compileAsync(view.scene, view.camera), view.renderer.compileAsync(view.far.scene, view.far.camera)]));
 
         // (And every picture of what's shown sent to the graphics card now, not in the first
         // frames drawn: those in sight with the rest)
@@ -1514,6 +1515,9 @@ export class Game {
 
             this.#sending(this.unsent, Infinity);
             view.upload();
+
+            // (Waited on till they're there: sent, they're only on their way)
+            return view.settled();
         });
         done = steps;
         report("Ready");

@@ -482,6 +482,10 @@ test("two players walk about a while: the joined copy's checked against the host
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
+    // (The guest's first frames drawn before the walking's timed: in software, without a GPU, the
+    // first takes seconds, and its drawing seconds more before the next comes)
+    await guest.waitForFunction(() => window.pellagos.game.clock > 0.3, null, { timeout: 60000, polling: 250 });
+
     const sentAtFirst = await host.evaluate(() => ({ at: performance.now(), ...window.pellagos.game.hosting.sent }));
 
     // Both walk about for a while, here and there round where they are: the host's player as the

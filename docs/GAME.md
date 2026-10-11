@@ -4658,12 +4658,15 @@ desktop): walking across the world, no frame's streaming takes over 8 ms there. 
 sees 160 metres; past that, the far land out to 1, 2 or 4 km (low, medium, high), in four to
 eight more draw calls and about 50,000 more triangles (the view, *The far land and the haze*).
 Everything that can be is built once: the town is merged, shaders are compiled while loading
-(and a character, creature, wyvern or dragon that comes later has its compiled before it's first
-drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
+(the far land's and the sky's with the rest's, drawn first as they are; and a character,
+creature, wyvern or dragon that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
 start, so their shader's the one compiled while loading), the pictures of what's shown are sent to
 the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
-each in the first frame it's drawn in, and the first frames wait on them all), and someone coming
+each in the first frame it's drawn in, and the first frames wait on them all), and the loading
+waits till the graphics card has them (`View.settled`, a fence looked at between frames: what's
+sent is only on its way, the browser's graphics work being done in a process of its own, and
+would otherwise hold up the first frames still), and someone coming
 into view (made, come into the player's building or near them, or the camera turned to them) is
 kept hidden till theirs are sent, two a frame (`SENDING`, app/game.js `#sending`: a skin and its
 bumps are 5 MB, and a building's dozen folk all sent in the one frame held it up); those out of
