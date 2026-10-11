@@ -4388,9 +4388,8 @@ browsers don't take as asking): asked once the tap's done all it does, and not f
 a window or pauses (the menu button, the pack, M for the map), as the page gone full screen after
 a window's opened covers it (still there to be tapped, though not seen). A window that opens as
 it's being granted all the same is opened again over it. It's left going back to the title, or
-turned off. Left any other
-way while playing (Escape, the browser's own button, Android's back, another app), the game
-pauses, as the menu button does, and Resume asks again. On a phone it's locked to landscape too,
+turned off. Left any other way while playing (Escape, the browser's own button, Android's back,
+another app), the game pauses, as the menu button does, and Resume asks again. On a phone it's locked to landscape too,
 where the browser allows it (Android). Browsers grant it only straight after a tap, click or key,
 so it's asked only then (`navigator.userActivation`), never to be refused in the console; and
 not at all where the page may not have it: an iPhone keeps full screen for videos, so there's no
