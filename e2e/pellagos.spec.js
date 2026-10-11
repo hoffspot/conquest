@@ -462,7 +462,7 @@ test("makes a character of another people: a cat folk's ears, tail and fur, thei
     expect({ ...played, saved: (await keptOf(page, "save")).hero.race }).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
 });
 
-test("carries on with the saved character, in the same world", async ({ page }) => {
+test("carries on with the saved character, in the same world; and again after the picture is lost", async ({ page }) => {
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
     await title(page);
     await expect(page.locator("#continuebutton")).toHaveText("Continue as Wren");
@@ -473,15 +473,21 @@ test("carries on with the saved character, in the same world", async ({ page }) 
 
     expect(game).toEqual({ seed: 4242, weapon: "staff", name: "Wren" });
 
-    // The picture lost (as a phone short of memory does): the game paused, the player told; given
-    // back, made again, and carried on
+    // The picture lost (as a phone short of memory does): the game paused, where the player is
+    // kept, and the player told; given back, the page loaded again (what it let go of once the
+    // graphics card had it, world/release.js, isn't there to give it again), to carry on
+    await page.waitForFunction(() => window.pellagos.released(), null, { timeout: 30000 });
     await page.evaluate(() => window.pellagos.session.view.renderer.forceContextLoss());
     await expect(page.locator("#menu")).toBeVisible();
     await expect(page.locator("#banner")).toContainText("picture was lost");
+
+    const loaded = page.waitForEvent("load");
+
     await page.evaluate(() => window.pellagos.session.view.renderer.forceContextRestore());
-    await expect(page.locator("#banner")).toBeHidden({ timeout: 60000 });
-    await page.locator("#resumebutton").click();
-    await expect(page.locator("#menu")).toBeHidden();
+    await loaded;
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Wren", { timeout: 60000 });
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
     // The menu pauses, and goes back to the title
     await page.locator("#menubutton").click();

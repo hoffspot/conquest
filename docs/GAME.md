@@ -4382,7 +4382,11 @@ it.
 If the browser takes the picture away (as phones do when short of memory, or switching apps), the
 game pauses and says so ("The picture was lost…"); when it's given back, what was drawn into (the
 light the materials reflect, the shadows) is made again and the shaders compiled again, and the
-message goes. A frame whose work throws an error is told once in the console, and the world is
+message goes. Once the page has let go of its copies of what's on the graphics card (*What the
+game holds*, below), which is soon after the world's first drawn, the drawing can't be given them
+again: the page is loaded again instead, where the player was ("The picture's back. Loading the
+game again…", main.js `onRestored`), and the title has Continue as them. A host with others in
+their world loses them then, as on any loading. A frame whose work throws an error is told once in the console, and the world is
 still drawn; a piece of a settlement that fails to build is left out, the rest built without it.
 
 Up to six characters are kept in the browser's local storage (save.js), each under an id of its
@@ -4526,6 +4530,24 @@ nothing a frame), the sounds' decoded copies and the samples and recordings kept
 them together, and how many bodies, chunks, interiors and crowd kinds are kept. On a phone the
 graphics card shares the phone's memory, and what the page has given it counts against the page:
 on an iPhone, where the browser tells nothing of the heap, it's most of what can be seen.
+
+**Letting go of what's on the graphics card.** What's given to the graphics card is drawn from
+its copy, and the page's copy would only be read to give it the same again. For what nothing on
+the page reads once it's made, the page's copy is let go of once it's there (world/release.js, on
+three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
+(kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
+pictures (ground.js); and the buildings' and props' picture atlas (art/engine/atlas.js), with the
+copy kept to hand it to the next atlas made. Not a character's pictures (their garments and skins
+are composited and sampled again: characters/character.js, world/crowd.js, skin.js), nor a mesh
+that's merged, cloned, posed or bent. And Recast's WebAssembly (the navigation meshes) starts with
+16 MB, not the 64 MB it was built with: its static data and stack are under 100 KB, and it grows as
+the meshes want more, in the page and in the navigation worker both (scripts/vendor-recast.js
+patches the vendored module's memory section: scripts/wasm-memory.js). Turning the camera all the
+way round where the game starts (Chromium, High), the page's array buffers held 316 MB before and
+234 MB after (Recast's memory 48 MB less, the meshes and pictures let go of 34 MB; the debug
+overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB less again; the
+JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
+same.
 
 ## Performance
 
@@ -4713,6 +4735,13 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   size, given again and given back; pictures by format, levels and faces (given whole, by size, as
   storage, compressed, with their mipmaps), given back; render targets with their samples; each
   format's bytes a texel; nothing once the drawing's lost.
+- `test/release.test.js`: a mesh's attributes and index let go of as each is uploaded, its bounds
+  worked out first and how many corners it has still known; a picture's pixels once uploaded, and
+  whatever else held them, what it was told before still told, and a picture waiting for its pixels
+  let go of only once it has them; Recast's WebAssembly starting with 16 MB, still a module with
+  its memory its own, and made to start with 64 again the module as built but for two bytes. E2E:
+  the picture lost once the page has let go, and given back: the page loaded again, the title
+  carrying on with the same character.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
@@ -4881,7 +4910,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   its world stepped and drawn a frame (`Game.underway`), not just started: before then, a tap
   can land where the camera was, and nothing's been explored yet.)
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
-  through to playing them, carrying on with a saved character, a fight to the death, walking by
+  through to playing them, carrying on with a saved character (and again after the picture's lost
+  and given back, the page loaded again), a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   swiping up from the player to go straight ahead (running),
   steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the

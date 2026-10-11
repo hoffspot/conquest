@@ -127,7 +127,7 @@ Whatever is merged to `main` goes live, so `main` must always be green.
 | `npm run build:footprints` | After changing how a prop or a yard's fence looks (`client/js/world/art/kits/props.js`, `peoples/props.js`, `kits/yards.js`): measures what each stands on into `client/js/core/setpieces/outlines.js`, which the navigation mesh walks round. `test/footprints.test.js` fails until you do. Then `npm run build:manifest` |
 | `npm run vendor:three` | Only after changing the `three` version in `package.json`, or which of its add-ons the game uses (`ADDONS` in `scripts/vendor-three.js`). Then `npm run build:manifest` |
 | `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
-| `npm run vendor:recast` | Only after changing the recast-navigation version |
+| `npm run vendor:recast` | Only after changing the recast-navigation version. It also makes Recast's WebAssembly start with 16 MB of memory, not the 64 MB it's built with (`STARTING_MEMORY`, by `scripts/wasm-memory.js`); `test/release.test.js` checks it. Then `npm run build:manifest` |
 
 ### The browser tests
 
@@ -229,6 +229,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      build the same world and play out the same fight.
    - The game has to run well on a phone (the budget is an iPhone 16 Pro). Anything costly to
      draw goes under the Visual quality setting's levels.
+   - A mesh or picture made once and never read on the page again (not merged, cloned, posed or
+     bent, nor composited or sampled by code) can let go of the page's copy once it's on the
+     graphics card: `releaseGeometry` and `releaseTexture` (`client/js/world/release.js`), as
+     the undergrowth, hedges, ground and building atlas do. On a phone the graphics card shares
+     the page's memory, so the copy costs twice. Don't for anything read again: a character's
+     pictures are. (A drawing lost and given back then loads the page again, where the player
+     was: `docs/GAME.md`.)
    - A new shield (an item in `ITEMS`, `client/js/characters/equipment.js`, held on the left
      forearm or fist) must say whether it's slung on the back once the weapons are put away:
      `sling: true` for a round, kite or other strapped shield light and short enough, `false`

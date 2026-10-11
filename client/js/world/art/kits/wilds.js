@@ -29,6 +29,7 @@ import { between } from "../../../core/terrain/ground.js";
 import { neglect, rockiness } from "../../../core/wilds.js";
 import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
+import { releaseGeometry } from "../../release.js";
 import { facingSun } from "../../sun.js";
 import { TREE_WIND } from "./trees.js";
 import { plantsOf } from "./yards.js";
@@ -3058,7 +3059,9 @@ export class Growth {
                 continue;
             }
 
-            const mesh = new THREE.Mesh(mesher.geometry(true), wildsMaterial(TREE_WIND.time));
+            // (Let go of on the page once it's on the graphics card: nothing reads it again, and it's
+            // grown again, not kept, when it's needed again: chunks3d.js)
+            const mesh = new THREE.Mesh(releaseGeometry(mesher.geometry(true)), wildsMaterial(TREE_WIND.time));
 
             mesh.name = "undergrowth";
             mesh.position.set(at[0], 0, at[1]);
