@@ -1566,6 +1566,15 @@ the pixels"), and debug mode shows it on the quality line. Not under automation
 (`navigator.webdriver`): a test's frames, drawn in software, are always slow, and what it measures
 mustn't change.
 
+**A crowded fight first** (Adaptive too; `app/throng.js`). With more than 10 about who can be drawn
+in their kind's crowd (hired adventurers and the wild's people-shaped creatures within 80 metres),
+frames slower than 48 a second (the middle of 1.5 seconds' worth) put the 4 least seen of them in
+their crowds, and so on every 3 seconds or so while it stays slow, never fewer than 6 left in full
+(*Standing in*, below). Meanwhile the steps above wait (`Governor.hold`), so those far off are
+drawn for less before everything is. After 6 seconds near 60 again, 2 are drawn in full again at
+a time; 2 drawn in full again that made it too slow go back to their crowds, and aren't tried again
+for 20 seconds, then 40, 80..., so it doesn't see-saw.
+
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
 height of what's built on each square (`buildings`: houses, landmarks, walls, towers,
@@ -3149,7 +3158,37 @@ only once it's 3 places past the last drawn in full):
 Drawn so, a frame's work hardly grows with the crowd: in headless Chromium on "medium", out on open
 ground with every soldier in the crowds, a frame's update took 14 ms for 50 a side and 18 ms for
 100, where the battle's own steps are most of it; the crowds themselves don't show among what a
-frame's JavaScript spends its time on.
+frame's JavaScript spends its time on. A crowd's figure's drawn with the fewer triangles beyond
+`CROWD.far.from` metres or under `CROWD.far.below` pixels tall on the screen.
+
+### Standing in (app/game.js #thronging, app/throng.js)
+
+With Adaptive on, a crowded fight that comes too slowly (*A crowded fight first*, above) has those
+least seen of the players' hired adventurers and the wild's people-shaped creatures (bandits,
+goblins, cultists, trolls...) drawn in their kind's crowd, as the soldiers are, as many as the
+throng leaves in full (`Throng.full`; all of them without Adaptive). Looked at a couple of times a
+second (`MARSHAL.every`), and at once when the throng changes:
+
+- **Who stays in full.** Whoever's fighting the player or the player's fighting, the four of the
+  players' allies nearest them (`MANY.full`), one thrown by a blast, then the biggest on the
+  screen (those out of view last); never a dungeon's boss or mini-boss, nor an elite. One drawn in
+  full goes to its crowd only once it's 3 places past the last (`MARSHAL.margin`), and once its
+  kind's figure's made.
+- **Their kinds.** A hired adventurer's their own (as they look, with their weapon: there are a
+  few, named, on the party's icons); a creature's as one of its kind looks (`humanoidLook`: a bandit's or cultist's sex), holding its
+  weapon, drawn as big as it is (`CrowdAvatar.size`). Made a step at a time as a soldier's kind is.
+- **Their bodies kept.** Each stays the game's avatar, following its actor, struck, healed and
+  killed as ever, but neither posed nor seen: what's drawn of it is put on a layer no camera sees
+  (`OFFSTAGE`, so casting no shadow either), as is whatever it takes up meanwhile. A stand-in
+  (`CrowdAvatar`, `standIn`) is drawn where it is, the way it faces, going as fast as it goes
+  (`track`), told whatever it's told to do: a blow, a cast, a flinch, a fall, getting up
+  (`echo`); already down, lying there. Drawn in full again, its body's seen and posed again at
+  once (for no more than a moment's time), its stand-in gone: nothing to build either way.
+
+In headless Chromium on "medium", 30 bandits, goblins, cultists and trolls and 8 hired adventurers
+about the player, each walking a little circle: all drawn in full, a frame's update took 12.6 ms
+and 340 draws; with all but 9 standing in, 5.7 ms and 181 draws, as many triangles (the debug
+overlay's bodies line: "10 in crowds (29 standing in)", those in view).
 
 ### The paperdoll (app/pack.js, world/view.js)
 
@@ -4572,6 +4611,15 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
   keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
   quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
+- `test/throng.test.js`: a crowded fight that keeps up, or one with few about however slow, left
+  as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
+  spare a while, a few back at a time, all in the end; more drawn in full that made it too slow
+  tried again only later, longer each time; a hitch now and then and a game stopped a while
+  forgiven; all in full again with few about. `test/governor.test.js` also: held while the throng
+  changes what's drawn. `test/crowd.test.js` also: a stand-in drawn where the one it stands for
+  is, as big, going as it goes, told what it's told (its own actions put back after, a class's or
+  its own), lying if it's down; what's drawn of the one in full kept from being seen and seen again
+  as it was.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.

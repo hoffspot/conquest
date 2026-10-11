@@ -39,7 +39,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { CROWD, CROWD_CASTS, CrowdAvatar, figureOf, recordingMoves } = await import("../client/js/world/crowd.js");
+const { CROWD, CROWD_CASTS, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
 
 const humanFiles = readHumanFiles();
 const human = new HumanData(humanFiles.manifest, humanFiles.data);
@@ -412,5 +412,105 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         assert.ok(Math.abs(chest.position.y - 1.8 * 0.72) < 1e-9);
         assert.equal(one.character.rig.bone("Spine2"), chest);
         assert.ok(one.point(0.5).distanceTo(new THREE.Vector3(3, 1.5 + 0.9, 4)) < 1e-9);
+    });
+
+    it("stands in for one drawn in full: drawn where it is, as big, going as it goes, told what it's told to do, till it's let be", () => {
+        // (One drawn in full, half as big again as its kind's figure, its actions its class's, as a character's are)
+        class Acts {
+            told = [];
+            startAttack(name) {
+                this.told.push(name);
+
+                return "struck";
+            }
+            react() {}
+            dodge() {}
+            knockdown() {}
+            die() {
+                this.told.push("die");
+
+                return 0.7;
+            }
+            revive() {}
+        }
+        const full = { object: new THREE.Object3D(), facing: 0.5, follow: { x: 0, z: 0, vx: 0, vz: 1.3 }, actions: new Acts() };
+        const one = new CrowdAvatar(crowdOf(), "human:m:sword", { size: 1.5, standIn: true });
+        const unecho = one.echo(full);
+
+        assert.equal(one.character.height, 1.8 * 1.5);
+
+        for (let k = 1; k <= 40; k++) {
+            full.object.position.set(0, 0.2, 1.3 * 0.05 * k);
+            one.track(full, 0.05);
+        }
+
+        assert.ok(one.object.position.distanceTo(new THREE.Vector3(0, 0.2, 2.6)) < 1e-9);
+        assert.equal(one.facing, 0.5);
+        assert.equal(moveOf(one.frameIn(table)), "walk");
+
+        // (Drawn half as big again: a metre ahead of it is a metre and a half ahead)
+        const ahead = new THREE.Vector3(0, 0, 1).applyMatrix4(one.placed()).sub(one.object.position);
+
+        assert.ok(Math.abs(ahead.length() - 1.5) < 1e-9);
+
+        // (Told what it's told: the one in full does it too, and says what it says)
+        assert.equal(full.actions.startAttack("sword", { hitAt: 0.38, duration: 0.8 }), "struck");
+        one.track(full, 0.05);
+        assert.equal(moveOf(one.frameIn(table)), "attack");
+        assert.equal(full.actions.die({ from: 0 }), 0.7);
+        assert.deepEqual(full.actions.told, ["sword", "die"]);
+        assert.notEqual(one.fallen, null);
+
+        // (Not seen when it isn't)
+        full.object.visible = false;
+        one.track(full, 0.05);
+        assert.equal(one.object.visible, false);
+
+        // (Let be: what it's told is its own again)
+        unecho();
+        assert.equal(Object.hasOwn(full.actions, "startAttack"), false);
+        full.actions.revive();
+        assert.notEqual(one.fallen, null);
+
+        // (One whose actions are its own, as a creature's are, has them back as they were; one
+        // already down lies there)
+        const own = { startAttack: () => "own", react() {}, dodge() {}, knockdown() {}, die: () => 1, revive() {} };
+        const creature = { object: new THREE.Object3D(), facing: 0, follow: { x: 0, z: 0, vx: 0, vz: 0 }, actions: own };
+        const other = new CrowdAvatar(crowdOf(), "human:m:sword", { standIn: true });
+        const first = own.startAttack;
+        const undo = other.echo(creature, { deadFor: 5 });
+
+        other.track(creature, 0.05);
+        assert.deepEqual(other.frameIn(table).slice(0, 2), [table.die.start + table.die.frames - 1, table.die.start + table.die.frames - 1]);
+        undo();
+        assert.equal(own.startAttack, first);
+    });
+
+    it("keeps what's drawn of one in full from being seen while it's stood in for, and seen again after, as it was", () => {
+        const object = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BufferGeometry());
+        const sword = new THREE.Mesh(new THREE.BufferGeometry());
+
+        sword.layers.enable(3);
+        object.add(body, new THREE.Object3D().add(sword));
+
+        const hidden = offstage(object);
+
+        assert.equal(hidden.size, 2);
+        assert.ok(!body.layers.isEnabled(0) && body.layers.isEnabled(OFFSTAGE) && !sword.layers.isEnabled(3));
+
+        // (What's put on it since kept from being seen too, the rest as they were kept)
+        const torch = new THREE.Mesh(new THREE.BufferGeometry());
+
+        object.add(torch);
+        offstage(object, hidden);
+        assert.equal(hidden.size, 3);
+        assert.ok(torch.layers.isEnabled(OFFSTAGE));
+
+        onstage(hidden);
+        assert.ok(body.layers.isEnabled(0) && !body.layers.isEnabled(OFFSTAGE));
+        assert.ok(sword.layers.isEnabled(0) && sword.layers.isEnabled(3));
+        assert.ok(torch.layers.isEnabled(0));
+        assert.equal(hidden.size, 0);
     });
 });

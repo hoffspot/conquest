@@ -27,8 +27,8 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
-import { LOOKS as CREATURE_LOOKS } from "../beasts/looks.js";
+import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
+import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
@@ -76,7 +76,7 @@ import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SC
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
-import { Crowd, CROWD_CASTS, CrowdAvatar } from "../world/crowd.js";
+import { Crowd, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
 import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
@@ -125,6 +125,7 @@ import { SpellbookPanel } from "./spellbook.js";
 import { PartyPanel } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
+import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Prediction } from "./predict.js";
 import { describe, totals } from "./gearinfo.js";
@@ -381,6 +382,14 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // `full` nearest the player drawn in full and casting their shadows, the rest at the middle level
 // of detail (lod.js) with only their contact shadows, and posed seldom out of view
 const MANY = Object.freeze({ shadow: 40, again: 48, full: 4 });
+
+// Who can be drawn in their kind's crowd when a crowded fight comes too slowly (#thronging,
+// app/throng.js): the players' hired adventurers and the wild's people-shaped creatures (bandits,
+// goblins, trolls...), their bodies kept but not drawn nor posed meanwhile; never a dungeon's boss or
+// mini-boss, an elite, one thrown by a blast, nor whoever's fighting the player or the player's
+// fighting. Looked at as often as the soldiers are (MARSHAL), those within `near` metres of the
+// player only
+const THRONGING = Object.freeze({ near: DRAW_REACH / 2 });
 
 // How near (metres) an adventurers' cache has to be to be seen, and marked on the maps from then
 // on (core/caches.js: they're put out further off than this, ahead of the player)
@@ -755,11 +764,20 @@ export class Game {
          */
         this.governor = new Governor({ levels: Object.keys(QUALITY), ceiling: view.chosenQuality ?? view.qualityName, at: { quality: view.qualityName, scale: view.adaptiveScale } });
 
+        /**
+         * Keeping a crowded fight moving (Adaptive too, before the governor draws less: app/throng.js):
+         * how many of those about who can be are drawn in full, the rest in their kind's crowd
+         * (#thronging); and those that are: id -> { avatar, standIn, hidden, unecho }.
+         */
+        this.throng = new Throng();
+        this.thronged = new Map();
+        this.throngCount = { crowdable: 0, inFull: 0 };
+
         /** Heard when it draws a level, or a share of the pixels, it didn't (Adaptive): ({ quality, scale }). */
         this.onAdapt = null;
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
-        this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0, bodies: { drawn: 0, posed: 0, shadows: 0, crowd: 0 } };
+        this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0, bodies: { drawn: 0, posed: 0, shadows: 0, crowd: 0, standing: 0 } };
 
         // (The errors a frame's work has thrown, each reported once: #fault)
         this.faults = new Set();
@@ -1537,6 +1555,8 @@ export class Game {
 
     // Someone gone from the battle, no longer drawn
     #undress(id) {
+        this.#unthrong(id);
+
         const avatar = this.avatars.get(id);
 
         avatar?.character.object.removeFromParent();
@@ -1597,7 +1617,7 @@ export class Game {
     // if it's people-shaped (and wounded as people are): a step at a time (a people-shaped one's
     // character is built in steps)
     *#addingBeast(actor) {
-        const seed = [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
+        const seed = this.#seedOf(actor);
         const weapon = WEAPONS[actor.weapon];
         const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null });
 
@@ -1825,6 +1845,7 @@ export class Game {
             avatar.character.dispose();
         }
 
+        this.thronged.clear();
         this.crowds?.dispose();
 
         for (const wounds of this.wounds.values()) {
@@ -2141,12 +2162,20 @@ export class Game {
         const rendered = performance.now();
 
         // (Less drawn while it can't keep up, more again when it can, if that's left to it:
-        // Adaptive, app/governor.js)
+        // Adaptive. In a crowded fight, those least seen drawn in their kind's crowd first,
+        // app/throng.js; then fewer pixels and a lower level, app/governor.js)
         if (this.view.adaptive) {
-            const rung = this.governor.observe(now, elapsed * 1000);
+            const full = this.throng.observe(now, elapsed * 1000, this.throngCount);
 
-            if (rung) {
-                this.adapt(rung);
+            if (full !== null) {
+                this.throngClock = 0;
+                this.governor.hold(now);
+            } else {
+                const rung = this.governor.observe(now, elapsed * 1000);
+
+                if (rung) {
+                    this.adapt(rung);
+                }
             }
         }
 
@@ -2329,8 +2358,9 @@ export class Game {
         this.stockades?.update(dt);
         this.contacts?.begin();
         this.#marshal(dt);
-        this.#crowding();
         this.#allying();
+        this.#thronging(dt);
+        this.#crowding();
 
         const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
         this.#cheered();
@@ -2349,6 +2379,11 @@ export class Game {
             // those near them)
             if (actor.map !== this.mapId || (mine && actor !== mine && (Math.abs(actor.x - mine.x) > DRAW_REACH || Math.abs(actor.y - mine.y) > DRAW_REACH))) {
                 avatar.object.visible = false;
+
+                if (this.thronged.has(actor.id)) {
+                    this.thronged.get(actor.id).standIn.object.visible = false;
+                }
+
                 continue;
             }
 
@@ -2379,10 +2414,16 @@ export class Game {
                 avatar.actions.stopEmote();
             }
 
-            avatar.every = this.#posing(actor, avatar, dt, pixels);
+            // (Drawn in its kind's crowd for now: its body not posed, its stand-in drawn where it is)
+            const thronged = this.thronged.get(actor.id);
+
+            avatar.every = thronged ? Infinity : this.#posing(actor, avatar, dt, pixels);
             this.#gazing(actor, avatar, mine);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
-            this.#counted(avatar, bodies);
+
+            if (!thronged) {
+                this.#counted(avatar, bodies);
+            }
             // (Where they're drawn, which trails where they are a little)
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
@@ -2394,10 +2435,12 @@ export class Game {
 
             this.#grounded(actor, avatar);
             this.#calling(actor, avatar);
+            thronged?.standIn.track(avatar, dt);
         }
 
         this.contacts?.end();
-        bodies.crowd = this.crowds?.draw(view.camera) ?? 0;
+        bodies.crowd = this.crowds?.draw(view.camera, pixels) ?? 0;
+        bodies.standing = this.thronged.size;
 
         // Projectiles, between their last two steps, rising and falling on the way
         for (const projectile of battle.projectiles) {
@@ -2839,7 +2882,7 @@ export class Game {
         const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
         const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
 
-        if ((soldiers.length <= MARSHAL.from || soldiers.length <= full) && !this.crowds?.members.size) {
+        if ((soldiers.length <= MARSHAL.from || soldiers.length <= full) && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
             return;
         }
 
@@ -2938,6 +2981,151 @@ export class Game {
         avatar.actions.setGuard(actor.armed);
     }
 
+    // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): as many
+    // as the throng has drawn in full (all, but with Adaptive in a crowded fight that comes too
+    // slowly), the first of them first (#crowdable); one in full put in its crowd only once it's
+    // MARSHAL.margin places past the last drawn in full, and once its kind's figure's made (a step at
+    // a time meanwhile, as the soldiers' are). A couple of times a second, and as soon as the throng
+    // changes how many
+    #thronging(dt) {
+        if ((this.throngClock = (this.throngClock ?? 0) - dt) > 0) {
+            return;
+        }
+
+        this.throngClock = MARSHAL.every;
+
+        const me = this.battle.actor(this.me);
+        const ranked = me ? this.#crowdable(me) : [];
+        const full = this.view.adaptive ? this.throng.full : Infinity;
+        const kept = new Set();
+
+        if (full !== Infinity) {
+            this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
+        }
+
+        ranked.forEach(({ actor, avatar, first }, place) => {
+            const thronged = this.thronged.get(actor.id);
+
+            if (first || place < full || (!thronged && place < full + MARSHAL.margin)) {
+                return;
+            }
+
+            // (Still in its crowd: what's been put on it since, a torch taken up, not seen either)
+            if (thronged?.avatar === avatar) {
+                offstage(avatar.object, thronged.hidden);
+                kept.add(actor.id);
+
+                return;
+            }
+
+            const { key, spec, size } = this.#throngKind(actor);
+
+            if (this.crowds.failed(key) || !this.crowds.template(key, spec)) {
+                return;
+            }
+
+            this.#unthrong(actor.id);
+            this.#throng(actor, avatar, key, size);
+            kept.add(actor.id);
+        });
+
+        // (Those drawn in full again: among the first, gone, out of reach)
+        for (const id of [...this.thronged.keys()]) {
+            if (!kept.has(id)) {
+                this.#unthrong(id);
+            }
+        }
+
+        this.throngCount = { crowdable: ranked.length, inFull: ranked.length - this.thronged.size };
+    }
+
+    // Those within THRONGING.near of the player who can be drawn in their kind's crowd: the players'
+    // hired adventurers, the wild's people-shaped creatures (not a boss, a mini-boss nor an elite);
+    // the first to be drawn in full first (`first`: whoever's fighting the player or the player's
+    // fighting, the players' allies nearest (#allying), one thrown by a blast), then the biggest on
+    // the screen (those out of view last)
+    #crowdable(me) {
+        const pixels = this.view.pixelsPerMetre();
+        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
+        const list = [];
+
+        for (const actor of this.battle.actors) {
+            const avatar = this.avatars.get(actor.id);
+            const people = actor.kind === "beast" && CREATURE_LOOKS[actor.wild?.creature]?.body === "humanoid" && !actor.wild.champion && !actor.wild.elite;
+
+            if (!(avatar instanceof Avatar) || !(actor.kind === "follower" || people) || actor.map !== me.map || Math.hypot(actor.x - me.x, actor.y - me.y) > THRONGING.near) {
+                continue;
+            }
+
+            const tall = avatar.object.visible ? this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) : 0;
+
+            list.push({ actor, avatar, tall, first: fighting(actor) || this.alliesNear.has(actor.id) || avatar.thrown });
+        }
+
+        return list.sort((a, b) => Number(b.first) - Number(a.first) || b.tall - a.tall);
+    }
+
+    // The crowd one's drawn in for now (#thronging), and what its kind's figure's made from
+    // (world/crowd.js makingTemplate): a hired adventurer as they look, carrying their weapon; one of the wild's people-shaped creatures as one of its kind looks (beasts/looks.js
+    // humanoidLook: a bandit's or a cultist's sex), holding its weapon, drawn as big as it is (`size`)
+    #throngKind(actor) {
+        const weapon = actor.weapon;
+        const fights = { guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null };
+
+        // (One of the players' own, named and on the party's icons: drawn as they look, a figure of their own)
+        if (actor.kind === "follower") {
+            const { calling = "warrior", sex = "m", seed = 1, people = "human" } = this.host.followers.get(actor.id) ?? {};
+
+            return { key: `follower:${people}:${sex}:${calling}:${seed}:${weapon}`, size: 1, spec: { ...fights, look: folkLook({ role: "adventurer", look: calling, sex, seed, people }) } };
+        }
+
+        const creature = actor.wild.creature;
+        const seed = this.#seedOf(actor);
+        // (A bandit's, a chief's or a cultist's sex as its seed has it: humanoidLook)
+        const kind = ["bandit", "banditChief", "cultist"].includes(creature) && seed % 4 === 0 ? 4 : 1;
+        const look = humanoidLook(creature, kind);
+
+        return {
+            key: `wild:${creature}:${kind}:${weapon}`,
+            size: sizeOf(creature, seed),
+            spec: { ...fights, look: { ...look, equipment: [...look.equipment, ...(WEAPONS[weapon]?.equipment ?? [])] } },
+        };
+    }
+
+    // One of the wild's creatures' seed: which one of its kind it is (from its id), as it's drawn
+    #seedOf(actor) {
+        return [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
+    }
+
+    // Someone drawn in their kind's crowd for now: their body kept, not drawn nor posed; a stand-in
+    // drawn where they are, told what they're told to do
+    #throng(actor, avatar, key, size) {
+        const standIn = new CrowdAvatar(this.crowds, key, { height: avatar.character.height / size, size, standIn: true });
+
+        standIn.object.position.copy(avatar.object.position);
+        standIn.facing = avatar.facing;
+        this.thronged.set(actor.id, { avatar, standIn, hidden: offstage(avatar.object), unecho: standIn.echo(avatar, { deadFor: actor.dead ? (avatar.deadFor ?? 0) : null }) });
+    }
+
+    // Someone drawn in full again: their body seen and posed again (all the time since at once, but
+    // no more than a moment of it), their stand-in gone
+    #unthrong(id) {
+        const thronged = this.thronged.get(id);
+
+        if (!thronged) {
+            return;
+        }
+
+        const { avatar, standIn, hidden, unecho } = thronged;
+
+        unecho();
+        onstage(hidden);
+        this.crowds?.leave(standIn);
+        avatar.unposed.dt = Math.min(avatar.unposed.dt, 0.25);
+        avatar.unposed.frames = Infinity;
+        this.thronged.delete(id);
+    }
+
     // The crowd drawn in full: only so many of those in view can be (QUALITY crowd), the biggest on
     // the screen as the world was last drawn; the rest at most at the middle level (lod.js)
     #crowding() {
@@ -2946,7 +3134,7 @@ export class Game {
         const seen = [];
 
         for (const [id, avatar] of this.avatars) {
-            if (id !== this.me && avatar instanceof Avatar && avatar.object.visible && avatar.character) {
+            if (id !== this.me && avatar instanceof Avatar && avatar.object.visible && avatar.character && !this.thronged.has(id)) {
                 const tall = this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels);
 
                 if (tall > 0) {

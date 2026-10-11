@@ -119,6 +119,18 @@ describe("keeping up (app/governor.js)", () => {
         assert.ok(ups[1] - ups[0] > ups[0] - down, `waits longer each time (${down}, ${ups})`);
     });
 
+    it("holds while something else changes what's drawn (app/throng.js), judging again once that's settled", () => {
+        const governor = new Governor({ ceiling: "high" });
+
+        play(governor, { interval: FAST, seconds: 10 });
+        governor.hold(10000);
+
+        const steps = play(governor, { interval: SLOW, seconds: 20, from: 10000 });
+
+        assert.ok(steps[0][0] - 10 >= (GOVERNOR.settle + GOVERNOR.window * 0.9) / 1000 - 0.05, `not before it's settled (${steps[0][0]} s)`);
+        assert.deepEqual(steps[0].slice(1), ["high", 0.85]);
+    });
+
     it("forgives a hitch now and then, and a game stopped a while", () => {
         const hitchy = new Governor({ ceiling: "high" });
         let now = 0;

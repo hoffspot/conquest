@@ -23,6 +23,7 @@
     "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops": 14.3,
     "pellagos.spec.js › a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been": 55.5,
     "pellagos.spec.js › a convoy on the road near the player: its wagons drawn, an ox in each one's shafts and its goods aboard, its captain and guards of its people; said; emptied at the road's end": 58.9,
+    "pellagos.spec.js › a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare": 52.1,
     "pellagos.spec.js › a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns": 23.2,
     "pellagos.spec.js › a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap": 23.8,
     "pellagos.spec.js › a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people": 71.4,

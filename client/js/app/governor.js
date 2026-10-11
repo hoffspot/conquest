@@ -163,6 +163,16 @@ export class Governor {
         return this.rung;
     }
 
+    /**
+     * Something else changed what's drawn at `now` (ms: more drawn in crowds, app/throng.js): judged
+     * again only once that's settled, where it is.
+     */
+    hold(now) {
+        this.#frames = [];
+        this.#good = null;
+        this.#since = Math.max(this.#since ?? now, now - GOVERNOR.warmup + GOVERNOR.settle);
+    }
+
     /** Start again at the quality chosen, every pixel, nothing held against any step. */
     reset() {
         this.step = 0;
