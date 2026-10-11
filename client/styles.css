@@ -1939,6 +1939,15 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     animation-duration: 1.8s;
 }
 
+/* A foe slain, rising off its body as what's picked up rises over the player (game.js #slain):
+   in red, and a little bigger, so it isn't taken for something picked up */
+.damage.slain {
+    font-size: 19px;
+    color: #ff5a48;
+    white-space: nowrap;
+    animation-duration: 1.8s;
+}
+
 /* What lingers hurting them: smaller, the colour of it */
 .damage.ail {
     font-size: 15px;

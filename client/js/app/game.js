@@ -36,7 +36,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { CREATURES, ELITES } from "../core/creatures.js";
+import { CREATURES, ELITES, notable } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
@@ -173,6 +173,10 @@ const RINGING = new Set(["slash", "hack", "cleave", "chop"]);
 
 // How long after trading blows with the player a death's still theirs to be told of (s: #ours)
 const FOUGHT = 30;
+
+// How far up a fallen foe's height their fall's said from, rising off their body, if it has no
+// bones to find its hips by (#slain, #lying)
+const SLAIN_RISES = 0.3;
 
 // How long after a body hits the ground what it fought with clatters down after it (s)
 const DROPPED = 0.15;
@@ -7948,7 +7952,7 @@ export class Game {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
                         this.sound?.play("fallen");
                     } else if (this.#ours(event)) {
-                        hud.message(`The ${battle.actor(event.id).name.toLowerCase()} is slain!`, 3);
+                        this.#slain(event.id, avatar);
                         this.sound?.play("slain", { delay: avatar.lands });
                     }
 
@@ -9050,6 +9054,39 @@ export class Game {
         const avatar = this.avatars.get(id);
 
         return avatar ? this.view.toScreen(avatar.point(0.95)) : null;
+    }
+
+    // A foe the player's to be told of fallen (#ours): one of note (creatures.js `notable`: an
+    // elite, a boss, a perilous place's own or master) said across the screen, as ever; anyone
+    // else's fall said rising off their body as it lands (`avatar.lands`), in red, as what's
+    // picked up rises over the player (#gained), and not kept for the journal. Their body off the
+    // screen (or behind the camera), it rises over the player instead
+    #slain(id, avatar) {
+        const actor = this.battle.actor(id);
+        const said = `The ${actor.name.toLowerCase()} is slain!`;
+
+        if (notable(actor.wild, { master: Boolean(this.host?.wild?.get(id)?.master) })) {
+            this.hud.message(said, 3);
+
+            return;
+        }
+
+        this.#after(avatar.lands ?? 0, () => {
+            const body = this.avatars.get(id);
+            const at = body ? this.view.toScreen(this.#lying(body)) : null;
+            const seen = at && at.x >= 0 && at.y >= 0 && at.x <= globalThis.innerWidth && at.y <= globalThis.innerHeight;
+
+            this.hud.damage(seen ? at : this.#screenAbove(this.me), said, { kind: "slain" });
+        });
+    }
+
+    // Where a fallen body lies in the world: its hips (a beast's, its body), as it's thrown down
+    // from where it stood; one drawn in a crowd, without bones, SLAIN_RISES of its height over
+    // where it stood
+    #lying(avatar) {
+        const hips = avatar.character?.rig?.bone?.("Hips");
+
+        return hips?.getWorldPosition ? hips.getWorldPosition(new THREE.Vector3()) : avatar.point(SLAIN_RISES);
     }
 
     // --- Taps, clicks and zooming ---

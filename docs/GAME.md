@@ -4466,6 +4466,16 @@ it.
   counted ("2 times, last 5 min ago"); the button, now Journal, goes back. Refusals and the like,
   shown less than two seconds ("Can't do that.", "Out of breath": `KEPT_FROM`), aren't news and
   aren't kept, nor one shown till the next ("The picture was lost…").
+  **A foe slain** that's the player's to be told of (one they or a follower felled, or one they
+  fought in the last 30 seconds: game.js `#ours`) isn't told across the screen: "The wolf is
+  slain!" rises off its body as it hits the ground, in red and a little bigger than what's picked
+  up (styles.css `.damage.slain`), from its hips where it lies (a beast's, its body; one drawn in
+  a crowd, without bones, 30% of its height over where it stood: `#lying`, `SLAIN_RISES`), and
+  isn't kept for the journal (game.js `#slain`). Its body off the screen, or behind the camera, it rises over the
+  player instead. A foe of note (creatures.js `notable`: an elite, a dungeon's boss or mini-boss,
+  a perilous place's own or a site's or lair's master, a wyvern) is still told across the screen
+  and kept, as before (the user: "Keep the full popup for major enemies such as elites, sub
+  bosses, and bosses").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
