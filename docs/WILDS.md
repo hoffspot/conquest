@@ -260,6 +260,9 @@ So many near a fight are drawn for less (`app/game.js` `MANY`):
 - **The players' allies past the nearest four** (hired adventurers, creatures called or raised in
   people's shape) are drawn at the middle level of detail (`characters/lod.js`), with their
   contact shadow and not the sun's, and so posed seldom out of view.
+- **Too slow even so** (Adaptive), those least seen of the hired adventurers and the people-shaped
+  creatures are drawn in their kind's crowd, as a battle's soldiers are, a few at a time, and drawn
+  in full again a few at a time once there's time to spare (docs/GAME.md *Standing in*).
 
 ### What the more leave
 

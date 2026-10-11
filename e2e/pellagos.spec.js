@@ -9157,3 +9157,108 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(lying.row).toBeGreaterThanOrEqual(lying.from);
     expect(lying.row).toBeLessThan(lying.to);
 });
+
+test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
+    test.setTimeout(240000);
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "low" })));
+    await playing(page, "/?play&seed=2");
+
+    // (Out of town, a dozen bandits about the player, holding back, and four hired adventurers by them)
+    const ids = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const [mx, my] = world.stamp.middle;
+        const [x0, y0] = [Math.floor(mx - 140), Math.floor(my - 20)];
+        const out = [];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [x0, y0], { facing: Math.PI });
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+
+        for (let k = 0; k < 12; k++) {
+            const id = `throng-${k}`;
+            const angle = Math.PI + (k / 12 - 0.5) * 2;
+            const r = 9 + (k % 4) * 5;
+
+            host.wild.set(id, { creature: "bandit", tier: 2, pack: `throng-${k}`, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: "Bandit", weapon: "sword", team: "beasts", square: [Math.floor(x0 + Math.sin(angle) * r), Math.floor(y0 + Math.cos(angle) * r)], ai: "wild", hp: 1e6, speed: 1.2, chase: 2, wild: { creature: "bandit", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: `throng-${k}`, leader: null, menace: false } });
+            out.push(id);
+        }
+
+        for (let k = 0; k < 4; k++) {
+            const id = `throng-hired-${k}`;
+
+            host.followers.set(id, { leader: game.me, name: `Hired ${k}`, calling: "warrior", sex: k % 2 ? "f" : "m", seed: k + 1, people: "human", from: null, waiting: false });
+            battle.add({ id, kind: "follower", name: `Hired ${k}`, weapon: "sword", team: me.team, square: [x0 + k - 2, y0 + 2], map: "town", ai: "follow", leader: game.me, role: "guard", hp: 1e6, maxHp: 1e6 });
+            out.push(id);
+        }
+
+        game.enlisting.push(...out);
+
+        return out;
+    });
+
+    expect(await playUntil(page, () => [...window.pellagos.game.battle.actors].filter(({ id }) => id.startsWith("throng-")).every(({ id }) => window.pellagos.game.avatars.has(id)), { seconds: 60 })).toBe(true);
+
+    // Told it's too slow with them all drawn (as app/throng.js would be: its own judging is its
+    // tests'), six of them left in full: the rest, once their kind's figure's made, stand in
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        session.view.adaptive = true;
+        game.throng.observe = () => null;
+        game.throng.full = 6;
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.thronged.size >= 5 && !window.pellagos.game.crowds?.busy, { seconds: 90 })).toBe(true);
+
+    const standing = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.advance(1 / 30, { render: true });
+
+        const entries = [...game.thronged];
+
+        return {
+            count: entries.length,
+            bandits: entries.every(([id]) => id.startsWith("throng-") && !id.startsWith("throng-hired")),
+            // (Still the game's own avatar, posed no more, all of it unseen)
+            kept: entries.every(([id, { avatar }]) => game.avatars.get(id) === avatar && avatar.every === Infinity),
+            unseen: entries.every(([, { avatar }]) => {
+                let all = true;
+
+                avatar.object.traverse((node) => (all &&= !node.isMesh || (node.layers.isEnabled(31) && !node.layers.isEnabled(0))));
+
+                return all;
+            }),
+            // (Its stand-in in its crowd, where it is)
+            placed: entries.every(([, { avatar, standIn }]) => game.crowds.members.has(standIn) && standIn.object.position.distanceTo(avatar.object.position) < 0.01),
+            counted: game.stats.bodies.standing,
+        };
+    });
+
+    expect(standing).toMatchObject({ bandits: true, kept: true, unseen: true, placed: true });
+    expect(standing.counted).toBe(standing.count);
+    await expect(page.locator("#debugbody")).toContainText(`(${standing.count} standing in)`);
+
+    // Time to spare: all drawn in full again, as they were
+    await page.evaluate(() => {
+        window.pellagos.game.throng.full = Infinity;
+    });
+    expect(await playUntil(page, () => window.pellagos.game.thronged.size === 0, { seconds: 5 })).toBe(true);
+
+    const back = await page.evaluate((ids) => {
+        const { game } = window.pellagos;
+        let seen = true;
+
+        for (const id of ids) {
+            game.avatars.get(id).object.traverse((node) => (seen &&= !node.isMesh || node.layers.isEnabled(0)));
+        }
+
+        return { seen, standing: [...game.crowds.members].filter(({ standIn }) => standIn).length, posed: ids.every((id) => game.avatars.get(id).every !== Infinity) };
+    }, ids);
+
+    expect(back).toEqual({ seen: true, standing: 0, posed: true });
+});

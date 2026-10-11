@@ -18,6 +18,10 @@
 //    fewer triangles still (CROWD.far), as another draw of the same.
 // Each soldier drawn so has a CrowdAvatar: an avatar (avatar.js) as far as the game's concerned,
 // placed, turned, struck and fallen as one is, its moves told to the crowd.
+//
+// One drawn in full can be drawn in a crowd for a while too (a stand-in: app/game.js #thronging),
+// its body kept but not drawn (OFFSTAGE) nor posed: the stand-in drawn where it is, as it's going
+// (track), told what it's told to do (echo).
 
 import * as THREE from "three";
 import { Avatar } from "./avatar.js";
@@ -30,7 +34,8 @@ import { Steps, WAITING } from "../core/steps.js";
  * - `fps`: how many times a second each move is recorded (played between them).
  * - `near`, `far`: drawn with about `share` of its figure's triangles (never more than `error`
  *   metres out, taken off across its picture's seams too and its smallest pieces dropped: lod.js),
- *   near the camera, and beyond `from` metres from it.
+ *   near the camera, and beyond `from` metres from it or under `below` pixels tall on the screen
+ *   (as a character's drawn at its lowest level of detail: lod.js LODS).
  * - `walk`, `run`: how fast it walks and runs as those are recorded (metres a second: a soldier's,
  *   core/battle.js KINDS), and `pace`, between the two, over which it's drawn running; `still`,
  *   under which it's drawn standing.
@@ -42,7 +47,7 @@ import { Steps, WAITING } from "../core/steps.js";
 export const CROWD = Object.freeze({
     fps: 20,
     near: Object.freeze({ share: 0.45, error: 0.012 }),
-    far: Object.freeze({ from: 24, share: 0.18, error: 0.05 }),
+    far: Object.freeze({ from: 24, below: 140, share: 0.18, error: 0.05 }),
     walk: 1.3,
     run: 2.3,
     pace: 1.8,
@@ -68,6 +73,34 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _sphere = new THREE.Sphere();
 const _frustum = new THREE.Frustum();
 const _view = new THREE.Matrix4();
+
+/** The layer what's drawn of one in full is put on while it's stood in for: seen by no camera, casting no shadow. */
+export const OFFSTAGE = 31;
+
+/**
+ * What's drawn of `object` (its meshes) kept from being seen, as each was kept in `hidden` (a Map,
+ * made if it isn't given: what each one's layers were), those already kept left as they are; returns
+ * `hidden`. (What's added to it since, a torch taken up, is kept from being seen the next time.)
+ */
+export function offstage(object, hidden = new Map()) {
+    object.traverse((node) => {
+        if ((node.isMesh || node.isLine || node.isPoints) && !hidden.has(node)) {
+            hidden.set(node, node.layers.mask);
+            node.layers.set(OFFSTAGE);
+        }
+    });
+
+    return hidden;
+}
+
+/** What `offstage` kept from being seen, seen again as it was. */
+export function onstage(hidden) {
+    for (const [node, mask] of hidden) {
+        node.layers.mask = mask;
+    }
+
+    hidden.clear();
+}
 
 // --- The figure ---
 
@@ -863,10 +896,11 @@ export class Crowd {
     }
 
     /**
-     * Draw everyone in the crowds as they are now, those in view of `camera`: each kind's in one
-     * go near, one far. Returns how many were drawn.
+     * Draw everyone in the crowds as they are now, those in view of `camera` (`pixels`: how many
+     * pixels tall a metre is a metre from it, view.js pixelsPerMetre): each kind's in one go near,
+     * one far. Returns how many were drawn.
      */
-    draw(camera) {
+    draw(camera, pixels = 0) {
         _view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
         _frustum.setFromProjectionMatrix(_view);
 
@@ -884,8 +918,10 @@ export class Crowd {
             const template = kind.template;
             const position = avatar.object.position;
 
-            _sphere.center.set(position.x, position.y + template.height / 2, position.z);
-            _sphere.radius = template.height;
+            const tall = template.height * avatar.size;
+
+            _sphere.center.set(position.x, position.y + tall / 2, position.z);
+            _sphere.radius = tall;
 
             if (!_frustum.intersectsSphere(_sphere)) {
                 continue;
@@ -893,7 +929,9 @@ export class Crowd {
 
             const list = each.get(kind) ?? each.set(kind, []).get(kind);
 
-            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), far: Boolean(template.farIndex) && position.distanceTo(eye) > CROWD.far.from });
+            const away = position.distanceTo(eye);
+
+            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), far: Boolean(template.farIndex) && (away > CROWD.far.from || (tall * pixels) / Math.max(away, 0.1) < CROWD.far.below) });
             drawn++;
         }
 
@@ -936,12 +974,22 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
  * `object` (nothing drawn of its own) is put in the scene for what's left on it (arrows stuck in it).
  */
 export class CrowdAvatar {
-    constructor(crowd, key, { height = 1.75, tint = 1 } = {}) {
+    /**
+     * @param {Crowd} crowd
+     * @param {string} key - Its kind (the crowd's).
+     * @param {object} [options]
+     * @param {number} [options.height] - How tall it is, till its kind's figure is made (metres).
+     * @param {number} [options.size] - How big it's drawn, its figure's size times (a creature bigger or smaller than its kind's).
+     * @param {boolean} [options.standIn] - Standing in for one drawn in full (track, echo), not an avatar of its own.
+     */
+    constructor(crowd, key, { height = 1.75, tint = 1, size = 1, standIn = false } = {}) {
         this.crowd = crowd;
         this.key = key;
         this.object = new THREE.Object3D();
         this.object.name = "crowd";
         this.tint = tint;
+        this.size = size;
+        this.standIn = standIn;
         this.facing = 0;
         this.last = new THREE.Vector3();
         this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -963,7 +1011,7 @@ export class CrowdAvatar {
         this.character = {
             object: this.object,
             get height() {
-                return crowd.kinds.get(key)?.template?.height ?? height;
+                return (crowd.kinds.get(key)?.template?.height ?? height) * self.size;
             },
             sheathed: false,
             slings: false,
@@ -1114,11 +1162,70 @@ export class CrowdAvatar {
         return target.set(this.object.position.x + c * across + s * 0.3, this.object.position.y + this.character.height * 0.72, this.object.position.z - s * across + c * 0.3);
     }
 
-    /** Where it's drawn: its place, turned the way it faces. */
+    /** Where it's drawn: its place, turned the way it faces, at its size. */
     placed() {
         _quaternion.setFromAxisAngle(_up, this.facing);
+        _scale.setScalar(this.size);
 
         return _matrix.compose(this.object.position, _quaternion, _scale).clone();
+    }
+
+    /**
+     * Standing in for `avatar` (one drawn in full, its body not drawn meanwhile), `dt` seconds on:
+     * drawn where it is, the way it faces, seen as it is, going as fast (its stride kept with how
+     * far it's gone).
+     */
+    track(avatar, dt) {
+        const position = avatar.object.position;
+        const moved = Math.hypot(position.x - this.object.position.x, position.z - this.object.position.z);
+
+        this.object.position.copy(position);
+        this.object.visible = avatar.object.visible;
+        this.facing = avatar.facing;
+        Object.assign(this.follow, avatar.follow);
+        this.time += dt;
+
+        const move = this.#gait(this.crowd.kinds.get(this.key)?.template?.table);
+
+        if (move) {
+            this.stride = (this.stride + moved / move.stride) % 1;
+        }
+    }
+
+    /**
+     * Told what `avatar` is told to do from now (its actions: a blow, a cast, a flinch, a fall, back
+     * up), as well as it, till what this returns is called; already down, lying (`deadFor` seconds).
+     */
+    echo(avatar, { deadFor = null } = {}) {
+        const actions = avatar.actions;
+        const names = ["startAttack", "react", "dodge", "knockdown", "die", "revive"];
+
+        this.fallen = deadFor === null ? null : this.time - deadFor;
+        this.doing = null;
+
+        const before = new Map();
+
+        for (const name of names) {
+            const own = actions[name];
+
+            // (Its own, if it was one of its own, put back after: else what it is again)
+            before.set(name, Object.hasOwn(actions, name) ? own : null);
+            actions[name] = (...args) => {
+                this.actions[name](...args);
+
+                return own.apply(actions, args);
+            };
+        }
+
+        return () => {
+            for (const [name, own] of before) {
+                if (own) {
+                    actions[name] = own;
+                } else {
+                    delete actions[name];
+                }
+            }
+        };
     }
 
     /**
