@@ -2209,7 +2209,14 @@ function compile(rawKeys, { settle = null, scaled = false } = {}) {
             });
         }
 
-        return { joint, names, values };
+        // (Kept as one run of numbers, key after key, `width` of them a key: not an array for
+        // each key, tens of thousands of little ones, which came to most of what tracks held)
+        const width = names.length;
+        const run = new Float64Array(values.length * width);
+
+        values.forEach((row, k) => run.set(row, k * width));
+
+        return { joint, names, values: run, width };
     });
 
     // (It eases out after its last key before the end, or from 1.55 if that's sooner; or from where
@@ -2217,17 +2224,23 @@ function compile(rawKeys, { settle = null, scaled = false } = {}) {
     return { times, tracks, settle: settle ?? Math.max(1.55, times.at(-2) ?? 0), scaled };
 }
 
+// The `n`th value at key `k`: `values` each key's row of them, or (`width` of them a key, as
+// tracks have them: compile) one run of them, key after key
+function valueAt(values, width, k, n) {
+    return width ? values[k * width + n] : values[k][n];
+}
+
 // A value on the smooth curve through a track's keys at time `time` (Catmull-Rom, with tangents
-// from the neighbouring keys, flat at the ends)
-function sample(times, values, n, time) {
+// from the neighbouring keys, flat at the ends): `values` as valueAt has them
+function sample(times, values, n, time, width = 0) {
     const last = times.length - 1;
 
     if (time <= times[0]) {
-        return values[0][n];
+        return valueAt(values, width, 0, n);
     }
 
     if (time >= times[last]) {
-        return values[last][n];
+        return valueAt(values, width, last, n);
     }
 
     let k = 0;
@@ -2237,8 +2250,8 @@ function sample(times, values, n, time) {
     }
 
     const [t0, t1] = [times[k], times[k + 1]];
-    const [p0, p1] = [values[k][n], values[k + 1][n]];
-    const tangent = (i) => (i <= 0 || i >= last ? 0 : (values[i + 1][n] - values[i - 1][n]) / (times[i + 1] - times[i - 1]));
+    const [p0, p1] = [valueAt(values, width, k, n), valueAt(values, width, k + 1, n)];
+    const tangent = (i) => (i <= 0 || i >= last ? 0 : (valueAt(values, width, i + 1, n) - valueAt(values, width, i - 1, n)) / (times[i + 1] - times[i - 1]));
     const [m0, m1] = [tangent(k) * (t1 - t0), tangent(k + 1) * (t1 - t0)];
     const u = (time - t0) / (t1 - t0);
     const u2 = u * u;
@@ -3424,20 +3437,20 @@ export class Actions {
         const carried = shielded && rest;
         let shieldHand = null;
 
-        for (const { joint, names, values } of tracks) {
+        for (const { joint, names, values, width } of tracks) {
             // (The hands and fingers left as they are)
             if (!arms && (HANDS.includes(joint) || DIGIT.test(joint))) {
                 continue;
             }
 
             const value = (n) => {
-                const sampled = sample(times, values, n, key);
+                const sampled = sample(times, values, n, key, width);
 
                 return mirror && MIRRORED.has(names[n]) ? -sampled : sampled;
             };
 
             if (joint === "offset") {
-                const [x, y, z] = [0, 1, 2].map((n) => sample(times, values, n, key));
+                const [x, y, z] = [0, 1, 2].map((n) => sample(times, values, n, key, width));
 
                 rig.offset.x += (mirror ? -x : x) * weight * reach;
                 // (Seated, a clip's pelvis goes no lower: the bench holds it)

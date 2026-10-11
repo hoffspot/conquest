@@ -3508,7 +3508,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
-test("every tavern can be gone into: got ready as the player comes near, its folk dressed at its door; its own room and folk inside; its folk let go of a little way off, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
+test("every tavern can be gone into: got ready as the player comes near, its folk dressed at its door; its own room and folk inside; its folk let go of a little way off, its floors further, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
     // (Seed 2's town has a second tavern, the Stag's Head, an inn)
     await playing(page, "/?play&seed=2");
 
@@ -3565,8 +3565,9 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
     expect(near.ready.folk).toBeGreaterThanOrEqual(6);
     expect(near.hidden).toBe(true);
 
-    // Stepped well away from its door, though it's still got ready: its folk let go of (bodies,
-    // skins and all), its floors kept; back at its door, dressed again
+    // Stepped away from its door, though it's still got ready: a little way off, its folk let go
+    // of (bodies, skins and all), its floors kept; further off, its floors let go of too; back at
+    // its door, its floors built again, then its folk dressed again
     const away = await page.evaluate((key) => {
         const { game } = window.pellagos;
         const building = game.world.interiors.buildings.get(key);
@@ -3574,18 +3575,21 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
         const [ax, ay] = building.door.ends[0].arrive;
         const [dx, dy] = [ax + 0.5 - x, ay + 0.5 - z];
         const length = Math.hypot(dx, dy) || 1;
+        // (So many metres out from it, the way its door faces)
+        const out = (metres) => {
+            window.put("player", [Math.floor(x + (dx / length) * metres), Math.floor(z + (dy / length) * metres)]);
+            game.advance(0.2);
 
-        // (40 metres out from it, the way its door faces)
-        window.put("player", [Math.floor(x + (dx / length) * 40), Math.floor(z + (dy / length) * 40)]);
-        game.advance(0.2);
+            return { visited: game.visits.has(key), floors: building.maps.filter((id) => game.interiors.has(id)).length, dressed: window.visit.folk.length, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${key}/`)).length };
+        };
 
-        return { visited: game.visits.has(key), floors: building.maps.filter((id) => game.interiors.has(id)).length, dressed: window.visit.folk.length, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${key}/`)).length };
+        return { off: out(30), far: out(50) };
     }, near.key);
 
-    expect(away).toEqual({ visited: true, floors: 2, dressed: 0, drawn: 0 });
+    expect(away).toEqual({ off: { visited: true, floors: 2, dressed: 0, drawn: 0 }, far: { visited: true, floors: 0, dressed: 0, drawn: 0 } });
     await page.evaluate((key) => window.put("player", window.pellagos.game.world.interiors.buildings.get(key).door.ends[0].arrive), near.key);
     expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps && window.visit.folk.length > 0)).toBe(true);
-    expect(await page.evaluate(() => window.visit.folk.length)).toBe(near.ready.folk);
+    expect(await page.evaluate((key) => ({ floors: window.pellagos.game.world.interiors.buildings.get(key).maps.filter((id) => window.pellagos.game.interiors.has(id)).length, folk: window.visit.folk.length }), near.key)).toEqual({ floors: 2, folk: near.ready.folk });
 
     // Through its door: its own taproom, heard and mapped as one, with its own folk
     const inside = await page.evaluate((key) => {
