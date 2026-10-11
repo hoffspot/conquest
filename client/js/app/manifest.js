@@ -50,7 +50,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/mapicons.js", 26728],
             ["js/app/minimap.js", 42653],
             ["js/app/pacing.js", 1893],
-            ["js/app/pack.js", 60295],
+            ["js/app/pack.js", 61771],
             ["js/app/partypanel.js", 20779],
             ["js/app/predict.js", 6326],
             ["js/app/quickbar.js", 9084],

@@ -3358,6 +3358,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     text-align: center;
 }
 
+.pack-ask-text {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink);
+    text-align: center;
+}
+
 .pack-ask-count {
     font: 800 22px var(--font-ui);
     color: var(--ink);

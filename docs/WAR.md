@@ -782,7 +782,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     the shop's wares under their kinds (weapons, shields and the off hand, clothes and armour,
     jewellery, food, drink and draughts, tomes and scrolls: core/progress.js `WARE_KINDS`), the commoner made
     first, then by name, each with its price and a button to buy it (greyed past the gold to
-    hand). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
+    hand), asking first whether they're sure: what it is, what it costs and what they'd have
+    left, Buy or Cancel (pack.js `#buy`, `#sure`; the user: "have a confirmation dialog when
+    buying something from a shop"). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
     to sell it (asked how many, of a stack); what that shop won't buy (`buys`: tomes and the
     spoils of the wild, but at the guild) is greyed, saying so, and why. **With another
     player**, face to face (docs/WILDS.md), it shows what

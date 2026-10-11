@@ -482,7 +482,7 @@ export class PackPanel {
                         peek: `ware:${item.id}:${item.quality ?? "common"}:${item.people ?? ""}`,
                         // (What it is worked out as it's opened: the shop's preview, app/gearinfo.js)
                         about: () => card({ ...item, label, ...this.view.shop.preview?.(item) }, { named: false, compare: "Bought and put on instead of what's worn:" }),
-                        after: [...left(count), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable || count === 0 })],
+                        after: [...left(count), element("span", "pack-price", `${price} gold`), button("Buy", () => this.#buy({ item }, label, price), { label: `Buy ${label} for ${price} gold`, disabled: !affordable || count === 0 })],
                     }),
                 ),
             );
@@ -500,7 +500,7 @@ export class PackPanel {
                     label: special.label,
                     peek: "ware:special",
                     about: () => card({ ...special.item, label: special.label, about: special.about, info: special.info }, { named: false, compare: "Bought and put on instead of what's worn:" }),
-                    after: [...left(special.left ? null : 0), element("span", "pack-price", `${special.price} gold`), button("Buy", () => this.onCommand({ type: "buy", special: true }), { label: `Buy today's special, ${special.label}, for ${special.price} gold`, disabled: !special.affordable || !special.left })],
+                    after: [...left(special.left ? null : 0), element("span", "pack-price", `${special.price} gold`), button("Buy", () => this.#buy({ special: true }, special.label, special.price), { label: `Buy today's special, ${special.label}, for ${special.price} gold`, disabled: !special.affordable || !special.left })],
                 }),
             );
 
@@ -508,6 +508,17 @@ export class PackPanel {
         }
 
         return sections;
+    }
+
+    // Something bought (`what`: the buy command's { item } or { special }), once the player's said
+    // they're sure: what it is, what it costs and what they'd have left
+    async #buy(what, label, price) {
+        const gold = this.view.gold;
+        const sure = await this.#sure({ title: `Buy ${label}?`, text: `For ${price} gold${Number.isFinite(gold) ? `: you'd have ${gold - price} gold left` : ""}.`, verb: "Buy" });
+
+        if (sure) {
+            this.onCommand({ type: "buy", ...what });
+        }
     }
 
     // What the player carries, each with what it fetches (each, of a stack) and a button to sell
@@ -1380,9 +1391,30 @@ export class PackPanel {
             row.append(fewer, range, more);
             buttons.append(button("Cancel", () => this.#endAsk(null)), button(verb, () => this.#endAsk(Number(range.value)), { className: "pack-button primary" }));
             this.ask.replaceChildren(element("h3", "pack-ask-title", title), count, row, buttons);
+            this.ask.setAttribute("aria-label", "How many");
             this.ask.hidden = false;
             this.asking = resolve;
             range.focus();
+        });
+    }
+
+    // --- Sure? ---
+
+    // Ask the player whether they're sure (`title`, `text` under it, `verb` on the button that says
+    // they are): resolves true, or false if not (Cancel, or asked something else first)
+    #sure({ title, text, verb }) {
+        this.#endAsk(null);
+
+        return new Promise((resolve) => {
+            const buttons = element("div", "pack-ask-buttons");
+            const yes = button(verb, () => this.#endAsk(true), { className: "pack-button primary" });
+
+            buttons.append(button("Cancel", () => this.#endAsk(false)), yes);
+            this.ask.replaceChildren(element("h3", "pack-ask-title", title), element("p", "pack-ask-text", text), buttons);
+            this.ask.setAttribute("aria-label", title);
+            this.ask.hidden = false;
+            this.asking = (answer) => resolve(answer === true);
+            yes.focus();
         });
     }
 

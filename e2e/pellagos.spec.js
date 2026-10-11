@@ -5971,7 +5971,20 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack.locator(".pack-peeked")).toHaveCount(1);
     await ware("Tankard of ale").locator(".pack-peek").click();
     await expect(pack.locator(".pack-peeked")).toHaveCount(0);
+
+    // Bought once they've said they're sure: asked first, what it costs and what they'd have
+    // left; cancelled, nothing spent
+    const ask = pack.locator(".pack-ask");
+
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await expect(ask).toBeVisible();
+    await expect(ask.locator(".pack-ask-title")).toHaveText("Buy Tankard of ale?");
+    await expect(ask.locator(".pack-ask-text")).toHaveText("For 2 gold: you'd have 28 gold left.");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toBeHidden();
+    await expect(pack.locator(".pack-gold")).toHaveText("30 gold");
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await ask.getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
     await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
 
@@ -5989,6 +6002,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion"]);
     await modes.getByRole("tab", { name: "Buy" }).click();
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await ask.getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("27 gold");
     await page.locator("#packbutton").click();
     await expect(pack).toBeHidden();
@@ -6192,11 +6206,13 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
     const cost = Number((await first.locator(".pack-price").textContent()).split(" ")[0]);
 
     await first.getByRole("button", { name: /^Buy / }).click();
+    await pack.locator(".pack-ask").getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost} gold`);
     await expect(first.locator(".pack-left")).toHaveText(left > 1 ? `${left - 1} left` : "Sold out");
 
     // The special bought: paid for, and gone for the day
     await special.getByRole("button", { name: /^Buy today's special/ }).click();
+    await pack.locator(".pack-ask").getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost - Number(price)} gold`);
     await expect(special.locator(".pack-left")).toHaveText("Sold out");
     await expect(special.getByRole("button", { name: /^Buy today's special/ })).toBeDisabled();
