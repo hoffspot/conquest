@@ -859,7 +859,7 @@ export class Crowd {
             return kind.template ?? null;
         }
 
-        this.kinds.set(key, { making: new Steps((spec.make ?? makingTemplate)(this.kit, key, { size: this.size, ...spec })) });
+        this.kinds.set(key, { making: new Steps((spec.make ?? makingTemplate)(this.kit, key, { size: this.size, ...spec }), `crowd figure ${key}`) });
         this.waiting.push(key);
 
         return null;

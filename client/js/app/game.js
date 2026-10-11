@@ -78,6 +78,7 @@ import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
 import { Crowd, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
+import { megabytes } from "../world/gpumemory.js";
 import { NavBaker } from "../world/navbaker.js";
 import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
@@ -126,6 +127,7 @@ import { SpellbookPanel } from "./spellbook.js";
 import { PartyPanel } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
+import { PHASE, telemetry } from "./telemetry.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Prediction } from "./predict.js";
@@ -780,6 +782,36 @@ export class Game {
          * (#thronging); and those that are: id -> { avatar, standIn, hidden, unecho }.
          */
         this.throng = new Throng();
+
+        /**
+         * How it's going, for the debug log (app/telemetry.js): where the player is, what's drawn
+         * and how, how many are about, the frame's timings, the memory (where the browser tells)
+         * and the device. Only worked out when something's kept, or now and then for a crash.
+         */
+        this.telemetryState = () => {
+            const view = this.view;
+            const info = view.renderer.info;
+            const me = this.battle.actor(this.me);
+            const one = (value) => Math.round(value * 10) / 10;
+
+            return {
+                map: this.mapId,
+                at: me ? [Math.round(me.x), Math.round(me.y)] : null,
+                playing: Math.round(this.clock),
+                quality: view.qualityName,
+                pixels: view.adaptiveScale,
+                adaptive: view.adaptive,
+                inFull: Number.isFinite(this.throng.full) ? this.throng.full : "all",
+                bodies: { ...this.stats.bodies },
+                actors: this.battle.actors.length,
+                avatars: this.avatars.size,
+                drawn: { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 },
+                frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render) },
+                together: this.remote ? "joined" : this.hosting ? "hosting" : null,
+                memory: this.memoryNow(),
+                device: { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${view.renderer.domElement.width}x${view.renderer.domElement.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null },
+            };
+        };
         this.thronged = new Map();
         this.throngCount = { crowdable: 0, inFull: 0 };
 
@@ -981,6 +1013,28 @@ export class Game {
     }
 
     /** What each of the folk remembers of the player (by id). */
+    /**
+     * What the game holds now (megabytes), for the debug overlay and log (app/telemetry.js): the
+     * page's heap where the browser tells (Chromium's; null elsewhere), what the graphics card's
+     * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), all of
+     * them together, and how many of what's kept for the world.
+     */
+    memoryNow() {
+        const heap = globalThis.performance?.memory;
+        const gpu = this.view.gpuMemory?.report() ?? null;
+        const sound = this.sound?.memory?.() ?? 0;
+        const total = (heap?.usedJSHeapSize ?? 0) + (this.view.gpuMemory?.total ?? 0) + sound;
+
+        return {
+            totalMB: megabytes(total),
+            heapMB: heap ? megabytes(heap.usedJSHeapSize) : null,
+            limitMB: heap ? megabytes(heap.jsHeapSizeLimit) : null,
+            gpu,
+            soundMB: megabytes(sound),
+            held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0 },
+        };
+    }
+
     get memory() {
         return this.self.talks.memory;
     }
@@ -1333,7 +1387,7 @@ export class Game {
                 step(actor.kind === "player" ? `Dressing ${actor.name}` : `Waking the ${actor.name.toLowerCase()}`);
             }
 
-            await time(actor.id === this.me ? "hero" : actor.id, () => allWaiting(this.#dressing(actor)));
+            await time(actor.id === this.me ? "hero" : actor.id, () => allWaiting(this.#dressing(actor), { label: `dressing ${actor.kind} ${actor.wild?.creature ?? actor.id}` }));
         }
 
         // (Starting in the tavern: its folk there to see from the first)
@@ -1759,6 +1813,7 @@ export class Game {
         this.running = true;
         this.lastFrame = performance.now();
         this.steppedAt = this.lastFrame;
+        telemetry.playing = true;
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
@@ -1784,6 +1839,8 @@ export class Game {
     /** Stop: nothing moves until start() again. */
     stop() {
         this.running = false;
+        telemetry.playing = false;
+        telemetry.closed();
         this.view.renderer.setAnimationLoop(null);
         this.sound?.setPaused(true);
         this.#deafen();
@@ -2147,6 +2204,7 @@ export class Game {
         const dt = Math.min(0.1, elapsed);
 
         this.lastFrame = now;
+        telemetry.begin(frameStart);
 
         // (An error in the frame's work is reported, and the world still drawn, rather than the
         // picture freezing on it)
@@ -2173,6 +2231,8 @@ export class Game {
         }
 
         const rendered = performance.now();
+
+        telemetry.mark(PHASE.draw);
 
         // (Less drawn while it can't keep up, more again when it can, if that's left to it:
         // Adaptive. In a crowded fight, those least seen drawn in their kind's crowd first,
@@ -2214,6 +2274,11 @@ export class Game {
             this.frames = 0;
             this.fpsTime = now;
         }
+
+        // (The debug log: a freeze or slow going kept, with how it was going; and how it's going
+        // written down now and then, for a crash to be found by)
+        telemetry.end(elapsed * 1000, this.telemetryState);
+        telemetry.alive(this.telemetryState);
     }
 
     // Any projectile drawn in flight that the battle no longer has, landed (taken away)
@@ -2235,6 +2300,7 @@ export class Game {
         if (!this.faults.has(told)) {
             this.faults.add(told);
             console.error("A frame's work failed:", error);
+            telemetry.error(error, "frame", this.telemetryState);
         }
     }
 
@@ -2292,6 +2358,8 @@ export class Game {
             steps++;
         }
 
+        telemetry.mark(PHASE.steps);
+
         // (Projectiles the battle let go of without a word, their shooter or target taken out of
         // it: out of the air too)
         if (steps && this.flights.size) {
@@ -2325,6 +2393,7 @@ export class Game {
         }
 
         this.#update(dt, this.accumulator / STEP_MS);
+        telemetry.mark(PHASE.bars);
 
         return steps;
     }
@@ -2377,6 +2446,7 @@ export class Game {
 
         const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
         this.#cheered();
+        telemetry.mark(PHASE.setup);
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -2454,6 +2524,7 @@ export class Game {
         this.contacts?.end();
         bodies.crowd = this.crowds?.draw(view.camera, pixels) ?? 0;
         bodies.standing = this.thronged.size;
+        telemetry.mark(PHASE.bodies);
 
         // Projectiles, between their last two steps, rising and falling on the way
         for (const projectile of battle.projectiles) {
@@ -2547,6 +2618,7 @@ export class Game {
         }
 
         this.#bakeAhead();
+        telemetry.mark(PHASE.effects);
 
         // The time of day, out in the world and indoors
         if (this.chunks) {
@@ -2596,9 +2668,11 @@ export class Game {
             this.#lightNear(x, z);
         }
 
+        telemetry.mark(PHASE.world);
         this.#visit(dt);
         this.#follow(dt);
         this.#inside(dt);
+        telemetry.mark(PHASE.inside);
 
         // Bars over the soldiers who are enemies (or hurt), none over the rest
         const player = battle.actor(this.me);
@@ -5295,7 +5369,7 @@ export class Game {
 
         if (nearest && !this.enlistees.has(nearest.id)) {
             this.enlisting = this.enlisting.filter((id) => id !== nearest.id);
-            this.enlistees.set(nearest.id, { actor: nearest, steps: new Steps(this.#dressing(nearest)) });
+            this.enlistees.set(nearest.id, { actor: nearest, steps: new Steps(this.#dressing(nearest), `dressing ${nearest.kind} ${nearest.wild?.creature ?? nearest.id}`) });
         }
 
         return nearest ? this.enlistees.get(nearest.id) : null;
@@ -6966,9 +7040,15 @@ export class Game {
     #work(visit, until = Infinity) {
         while ((visit.steps || visit.queue.length) && performance.now() < until) {
             if (!visit.steps) {
+                const started = performance.now();
                 const work = visit.queue.shift()();
+                const took = performance.now() - started;
 
-                visit.steps = typeof work?.next === "function" ? new Steps(work) : null;
+                if (took > Steps.SLOW) {
+                    Steps.slow?.(`building ${visit.key}`, took);
+                }
+
+                visit.steps = typeof work?.next === "function" ? new Steps(work, `building ${visit.key}`) : null;
             }
 
             if (visit.steps?.take(until, { wait: this.waits && until !== Infinity })) {

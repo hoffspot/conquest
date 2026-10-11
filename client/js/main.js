@@ -23,7 +23,9 @@ import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
+import { telemetry } from "./app/telemetry.js";
 import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -45,6 +47,9 @@ window.pellagos = {
     get game() {
         return state.game;
     },
+    get telemetry() {
+        return telemetry;
+    },
     get creator() {
         return state.creator;
     },
@@ -64,6 +69,9 @@ window.pellagos = {
     fetcher,
     playing: false,
 };
+
+// How the game's going, for the debug log (app/telemetry.js), if one's being played
+const gameState = () => state.game?.telemetryState?.() ?? { playing: false, building: state.building };
 
 function show(id) {
     for (const screen of document.querySelectorAll(".screen")) {
@@ -176,6 +184,7 @@ async function load() {
     // (The drawing lost, as phones do when short of memory: the game paused and the player told,
     // until it's given back and the shaders made again)
     state.session.view.onLost = () => {
+        telemetry.lost(gameState);
         pause();
         state.hud.message("The picture was lost. Waiting for it to come back…", 0);
     };
@@ -602,8 +611,8 @@ function resume() {
     state.game?.start();
 }
 
-// The menu's pages: the main one, Game options, and its Action wheels and Quick actions
-const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"] };
+// The menu's pages: the main one, Game options, and its Action wheels, Quick actions and Debug log
+const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"], log: ["#menulog", "logtitle", "#logback"] };
 
 function menuPage(page) {
     for (const [each, [id]] of Object.entries(MENU_PAGES)) {
@@ -611,8 +620,53 @@ function menuPage(page) {
     }
 
     $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page][1]);
-    $("#menu").classList.toggle("wide", page === "wheels" || page === "quick");
+    $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
     $(MENU_PAGES[page][2]).focus();
+}
+
+// The debug log (app/telemetry.js): each event kept, the newest first, its summary opening on
+// what was going on then; copied as text, to send to whoever's looking into it
+const LOG_KINDS = { freeze: "Freeze", slow: "Slow", error: "Error", crash: "Crash", lost: "Picture lost" };
+
+function showLog() {
+    const entries = telemetry.events.map((event) => {
+        const entry = document.createElement("details");
+        const summary = document.createElement("summary");
+        const kind = Object.assign(document.createElement("span"), { className: "log-kind", textContent: LOG_KINDS[event.kind] ?? event.kind });
+        const text = Object.assign(document.createElement("span"), { textContent: event.summary ?? "" });
+        const time = Object.assign(document.createElement("time"), { dateTime: event.at, textContent: new Date(event.at).toLocaleString() });
+        const detail = Object.assign(document.createElement("pre"), { textContent: JSON.stringify(event, null, 2) });
+
+        entry.className = "log-entry";
+        summary.append(kind, text, time);
+        entry.append(summary, detail);
+
+        return entry;
+    });
+
+    $("#logentries").replaceChildren(...(entries.length ? entries : [Object.assign(document.createElement("p"), { className: "log-empty", textContent: "Nothing kept: no freezes, slowdowns, errors or crashes so far." })]));
+}
+
+function openLog() {
+    $("#logstatus").textContent = "";
+    showLog();
+    menuPage("log");
+}
+
+// (Copied where the browser lets it; else the log's text selected, to copy by hand)
+async function copyLog() {
+    const text = telemetry.text();
+
+    try {
+        await navigator.clipboard.writeText(text);
+        $("#logstatus").textContent = "Copied. Paste it wherever you're sending it.";
+    } catch {
+        const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true, className: "log-copy" });
+
+        $("#logentries").replaceChildren(area);
+        area.select();
+        $("#logstatus").textContent = "Copying wasn't allowed: it's selected here to copy yourself.";
+    }
 }
 
 // What's on the player's action wheels, to change (app/wheelsetup.js: loaded the first time)
@@ -1454,6 +1508,14 @@ $("#optionsbutton").addEventListener("click", () => menuPage("options"));
 $("#optionsback").addEventListener("click", () => menuPage("main"));
 $("#wheelsbutton").addEventListener("click", openWheels);
 $("#wheelsback").addEventListener("click", () => menuPage("options"));
+$("#logbutton").addEventListener("click", openLog);
+$("#logback").addEventListener("click", () => menuPage("options"));
+$("#logcopy").addEventListener("click", copyLog);
+$("#logclear").addEventListener("click", () => {
+    telemetry.clear();
+    $("#logstatus").textContent = "Cleared.";
+    showLog();
+});
 $("#quickbutton").addEventListener("click", () => openQuick(0));
 $("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
@@ -1544,7 +1606,7 @@ showVolumes(settings.sound);
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
 
-    if (!$("#menuwheels").hidden) {
+    if (!$("#menuwheels").hidden || !$("#menulog").hidden) {
         menuPage("options");
     } else if (!$("#menuquick").hidden) {
         quickBack();
@@ -1587,8 +1649,10 @@ for (const type of ["pageshow", "focus"]) {
     window.addEventListener(type, () => state.session?.sound.wake());
 }
 
-// Closed, or left for another page: where the player is kept (as hidden, below)
+// Closed, or left for another page: where the player is kept (as hidden, below); and whatever
+// comes next isn't a crash (the debug log)
 window.addEventListener("pagehide", keepPlace);
+window.addEventListener("pagehide", () => telemetry.closed());
 
 // Pause when the page is hidden (switching apps on a phone), and silence it; a world open to
 // others can't move on while it's hidden, and those in it are told so
@@ -1598,6 +1662,7 @@ document.addEventListener("visibilitychange", () => {
 
     if (document.hidden) {
         pause();
+        telemetry.closed();
     }
 });
 
@@ -1738,14 +1803,26 @@ function showAdapted() {
 // --- Off we go ---
 
 async function start() {
+    const release = releaseOf(MANIFEST, ASSETS, document.baseURI);
+
     debug.show(settings.debug);
     debug.watch({ fetcher });
-    registerServiceWorker(releaseOf(MANIFEST, ASSETS, document.baseURI));
+    registerServiceWorker(release);
+
+    // The debug log (Game options): the last game's, if it fell over while playing, kept as a
+    // crash; what the browser says takes long, listened for; work done a step at a time that
+    // takes long, named; and anything that fails with no one to catch it
+    telemetry.build = String(release?.release ?? "");
+    telemetry.recover(globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type ?? "");
+    telemetry.observe();
+    Steps.slow = (label, ms) => telemetry.job(label, ms);
+    window.addEventListener("error", (event) => telemetry.error(event.error ?? event.message, "uncaught", gameState));
 
     // (Anything that fails with no one to catch it: told in the console, and, while a game's
     // being got ready, on the loading screen)
     window.addEventListener("unhandledrejection", (event) => {
         console.error(event.reason);
+        telemetry.error(event.reason, "promise", gameState);
 
         if (state.building) {
             failed(event.reason);

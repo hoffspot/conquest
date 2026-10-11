@@ -29,10 +29,10 @@ export function allAtOnce(steps) {
  * rather than doing it here: resolves with what they make. (For work nothing's drawn during,
  * such as the game's loading, which would otherwise do all of it here: allAtOnce.) Taking longer
  * than `patience` (ms, all told: whatever it's waiting on gone quiet, as a worker a phone's
- * stopped can), it's told NOW, and does the work itself.
+ * stopped can), it's told NOW, and does the work itself. `label` names the work (Steps.slow).
  */
-export async function allWaiting(steps, { patience = 10000 } = {}) {
-    const taking = new Steps(steps);
+export async function allWaiting(steps, { patience = 10000, label = null } = {}) {
+    const taking = new Steps(steps, label);
     const start = performance.now();
 
     while (!taking.take(Infinity, { wait: performance.now() - start < patience })) {
@@ -46,11 +46,22 @@ export async function allWaiting(steps, { patience = 10000 } = {}) {
  * Steps (a generator's) taken as there's time: `take(until)` takes them till `until`
  * (performance.now()'s: Infinity, all of them), stopping early if one is WAITING, unless it's not
  * to `wait` (as when there's no end to the time): then it's told NOW. `done` once they're all
- * taken, `value` what they made.
+ * taken, `value` what they made. `label` names the work (what's being made), for when a step of it
+ * takes long (Steps.slow).
  */
 export class Steps {
-    constructor(steps) {
+    /**
+     * Told of any step that takes longer than Steps.SLOW ms, with its work's label and how long it
+     * took (app/telemetry.js: the debug log's jobs), if anything's listening.
+     */
+    static slow = null;
+
+    /** How long a step may take (ms) before Steps.slow's told. */
+    static SLOW = 20;
+
+    constructor(steps, label = null) {
         this.steps = steps;
+        this.label = label;
         this.done = false;
         this.value = undefined;
 
@@ -60,8 +71,17 @@ export class Steps {
 
     /** Take steps till `until`; whether they're all taken. */
     take(until = Infinity, { wait = until !== Infinity } = {}) {
-        while (!this.done && performance.now() < until) {
+        let now = performance.now();
+
+        while (!this.done && now < until) {
             const step = this.steps.next(this.waiting && !wait ? NOW : undefined);
+            const then = now;
+
+            now = performance.now();
+
+            if (now - then > Steps.SLOW) {
+                Steps.slow?.(this.label, now - then);
+            }
 
             this.waiting = step.value === WAITING;
 

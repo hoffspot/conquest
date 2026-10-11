@@ -409,7 +409,19 @@
                 <div class="menu">
                     <button type="button" class="button" id="wheelsbutton">Action wheels</button>
                     <button type="button" class="button" id="quickbutton">Quick actions</button>
+                    <button type="button" class="button" id="logbutton">Debug log</button>
                     <button type="button" class="button" id="optionsback">Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menulog" hidden>
+                <h2 id="logtitle">Debug log</h2>
+                <p class="wheels-note">The last five times the game froze, slowed, hit an error or crashed, the newest first, with what was going on then. Copy it to send to whoever's looking into it.</p>
+                <div id="logentries" class="log" aria-live="polite"></div>
+                <p class="log-status" id="logstatus" role="status"></p>
+                <div class="menu">
+                    <button type="button" class="button primary" id="logcopy">Copy the log</button>
+                    <button type="button" class="button" id="logclear">Clear it</button>
+                    <button type="button" class="button" id="logback">Back</button>
                 </div>
             </div>
             <div class="menupage" id="menuwheels" hidden>

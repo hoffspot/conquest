@@ -4634,6 +4634,77 @@ dialog#menu.wide {
     text-align: center;
 }
 
+/* The debug log (Game options): each event kept, its summary to open on what was going on */
+.log {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.log-empty {
+    margin: 12px 0;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.log-entry {
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--panel-solid);
+}
+
+.log-entry summary {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.log-entry summary .log-kind {
+    color: var(--gold-bright);
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.log-entry summary time {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.log-entry pre {
+    max-height: 40vh;
+    margin: 0;
+    padding: 8px 10px;
+    overflow: auto;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-top: 1px solid var(--panel-border);
+}
+
+.log-copy {
+    width: 100%;
+    min-height: 40vh;
+    font: 11px/1.35 ui-monospace, monospace;
+    color: var(--ink);
+    background: var(--panel-solid);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+}
+
+.log-status {
+    min-height: 1em;
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--gold-bright);
+    text-align: center;
+}
+
 .wheels-whose,
 .wheels-sides {
     display: grid;
