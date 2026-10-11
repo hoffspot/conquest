@@ -1734,6 +1734,80 @@ test("in a fight, the battle cam swings round to see the player and their foe fr
     expect(fight.after).toBeLessThan(0.01);
 });
 
+test("the battle cam takes a fight over only once the player and their foe are both wholly on the screen: one coming for them out of view leaves the camera be; come into view, it frames the fight", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const fight = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const { view } = session;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+        const rect = view.canvas.getBoundingClientRect();
+        const onScreen = (point) => {
+            const spot = view.toScreen(point);
+
+            return Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom;
+        };
+        const it = game.avatars.get("orc");
+        const me = game.avatars.get("player");
+        // (The orc on a square, stunned where it stands, set on the player)
+        const put = ([x, y]) => {
+            Object.assign(orc, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 60000 });
+            it.place(x + 0.5, y + 0.5, 0);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+        };
+
+        // The camera looking north from behind the player; the orc off to one side of them, out of
+        // the picture
+        game.stop();
+        game.cameraFollow.yaw = 0;
+        game.advance(0.1);
+
+        const aside = [8, 9, 10, 11, -8, -9, -10, -11].map((dx) => [px + dx, py]).find((square) => {
+            if (squares.blocked(...square)) {
+                return false;
+            }
+
+            put(square);
+            game.advance(0.1);
+
+            return !onScreen(it.object.position) && !onScreen(it.point(1));
+        });
+
+        game.cameraFollow.yaw = 0;
+        game.advance(0.1);
+
+        const yaw = game.cameraFollow.yaw;
+
+        game.advance(3);
+
+        const away = { found: Boolean(aside), turned: Math.abs(wrap(game.cameraFollow.yaw - yaw)), seen: onScreen(it.point(0.55)) };
+
+        // Come round in front of the player, a few steps off, the whole of it in the picture: the
+        // battle cam takes over, and swings round to see the fight from the side, both on the screen
+        put([0, 1, -1].map((dx) => [px + dx, py - 3]).find((square) => !squares.blocked(...square)));
+        game.advance(0.1);
+
+        const inFull = [onScreen(it.object.position), onScreen(it.point(1))];
+
+        game.advance(3);
+
+        const behind = Math.atan2(me.object.position.x - it.object.position.x, me.object.position.z - it.object.position.z);
+
+        return { away, inFull, round: Math.abs(wrap(view.yaw - behind)), seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))] };
+    });
+
+    expect(fight.away).toEqual({ found: true, turned: 0, seen: false });
+    expect(fight.inFull).toEqual([true, true]);
+    expect(fight.round).toBeGreaterThan(Math.PI / 6 - 0.15);
+    expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
+    expect(fight.seen).toEqual([true, true]);
+});
+
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

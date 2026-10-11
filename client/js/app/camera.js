@@ -12,7 +12,8 @@
 // but turns only as far as keeps them and whoever they're fighting both in view (the camera
 // study, recommendation 5: a soft lock, framing the fight by itself); or with the battle cam
 // (Game options: on at first), swings round to see them both three-quarters on from the player's
-// side, clear of what would stand between (keeping to the side it's on). Its height and zoom are
+// side, clear of what would stand between (keeping to the side it's on): told of the fight by the
+// game only once they're both wholly on the screen (game.js #battleFoe). Its height and zoom are
 // the view's (world/view.js).
 //
 // Pure maths on plain numbers (no Three.js), so it's tested in Node: the game (game.js) says
