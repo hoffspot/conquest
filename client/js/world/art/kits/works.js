@@ -237,7 +237,8 @@ const BUILD = {
             solid.beam([x, eaves, z0], [x, eaves, z1], m(0.18), m(0.2), material(stuff.timber));
         }
 
-        pitchedRoof(solid, { x0, x1, z0: z0 + m(0.3), z1: z1 - m(0.3), eaves: eaves + m(0.05), pitch: 0.6, overhang: m(0.45), verge: m(0.35), thickness: m(0.12), cover: stuff.roof, under: stuff.boards, barge: stuff.timber, thatch: stuff.roof === "thatch-palm" });
+        // (Open beneath, on its posts: its boards seen from under it)
+        pitchedRoof(solid, { x0, x1, z0: z0 + m(0.3), z1: z1 - m(0.3), eaves: eaves + m(0.05), pitch: 0.6, overhang: m(0.45), verge: m(0.35), thickness: m(0.12), cover: stuff.roof, under: stuff.boards, barge: stuff.timber, thatch: stuff.roof === "thatch-palm", open: true });
 
         // The trestles, each two crossed pairs of legs and a bearer on them
         const bed = m(1.65);
