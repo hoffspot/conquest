@@ -4204,7 +4204,12 @@ it.
    (Recast), the game's code, the body and its shapes, its skin details, the lettering, and the
    things in the world (the treasure chest's model). The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
-   cache. Then the last part of the bar is starting the 3D view and unpacking the body; the skin
+   cache: first the way-finding on its own, and wholly (`core/navigation.js`, the one module that
+   waits as it loads, for Recast's WebAssembly: a top-level await), then the rest, three imports
+   side by side (`app/session.js`, `app/creator.js`, `app/hud.js`). Imported with the rest while it
+   still waited, mobile Safari ran modules over it before those they import were done ("Cannot
+   access 'TALK_REACH' before initialization"), and the game never loaded (test/boot.test.js).
+   Then the last part of the bar is starting the 3D view and unpacking the body; the skin
    atlas is worked out in a worker meanwhile, and the title doesn't wait for it (making a
    character or playing does: CHARACTERS.md, *The skin atlas worked out elsewhere*). Nothing
    before the loader imports Three.js, so the engine's download is counted too. Debug mode asks the
