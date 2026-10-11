@@ -975,7 +975,8 @@ export class Game {
         this.tavernFolk = null;
 
         // (A building gone into before its folk were all dressed, dressed while the screen's dark:
-        // { visit, until (the game's clock) }, #entering; and whether the screen's kept dark)
+        // { visit, until (performance.now()'s: the dark held no longer, however slow the frames) },
+        // #entering; and whether the screen's kept dark)
         this.arriving = null;
         this.curtainHeld = false;
 
@@ -2297,7 +2298,8 @@ export class Game {
             this.waits = true;
         }
 
-        if (render) {
+        // (Not while the screen's kept dark: #curtain)
+        if (render && !this.curtainHeld) {
             this.view.render();
         }
     }
@@ -2334,10 +2336,12 @@ export class Game {
         const updated = performance.now();
         const mine = this.avatars.get(this.me);
 
-        // (The pack open on the paperdoll: the player alone drawn, live, the world behind it still)
+        // (The pack open on the paperdoll: the player alone drawn, live, the world behind it still;
+        // nothing, while the screen's kept dark going into a building, its folk dressed with the
+        // frame's time instead: #curtain)
         if (this.pack?.showingDoll && mine) {
             this.view.renderPreview(this.pack.dollView, mine.object, { height: mine.character.height ?? 1.7, turn: this.dollTurn, clip: this.pack.body });
-        } else {
+        } else if (!this.curtainHeld) {
             this.view.render();
         }
 
@@ -7235,7 +7239,7 @@ export class Game {
         this.#work(visit, Infinity, { floors: !now });
 
         if (visit.steps || visit.queue.length) {
-            this.arriving = { visit, until: this.clock + ENTERING.most };
+            this.arriving = { visit, until: performance.now() + ENTERING.most * 1000 };
         }
     }
 
@@ -7255,7 +7259,7 @@ export class Game {
         const done = !arriving.visit.steps && !arriving.visit.queue.length;
         const left = this.world.interiors?.of(me?.map)?.key !== arriving.visit.key;
 
-        if (done || left || this.clock >= arriving.until) {
+        if (done || left || performance.now() >= arriving.until) {
             this.arriving = null;
 
             // (Lit, if it's still dark: not again, if the player's come out and it's lit already)

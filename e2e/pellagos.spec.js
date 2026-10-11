@@ -3471,7 +3471,19 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
     });
 
     expect(lit.curtain).toBe("0");
-    expect(lit.drawn).toBeGreaterThanOrEqual(5);
+
+    // (Any not dressed in the dark, dressed after, a few milliseconds a frame)
+    expect(await playUntil(page, () => {
+        const visit = window.pellagos.game.visits.get(window.visit.key);
+
+        return Boolean(visit) && !visit.queue.length && !visit.steps;
+    })).toBe(true);
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player" && game.avatars.has(actor.id)).length;
+    })).toBeGreaterThanOrEqual(5);
 });
 
 test("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async ({ page }) => {
@@ -3500,6 +3512,11 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         // A while at work (what each of them does, as the battle says)
         for (let k = 0; k < 90; k++) {
@@ -3546,6 +3563,11 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
         const priest = folk.find(({ role }) => role === "priest");
@@ -3914,6 +3936,11 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "enter", link: building.door.id });
         game.advance(0.3);
+
+        // (Its folk dressed while the screen's dark, a little of each frame)
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
 
         const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
         const receptionist = folk.find(({ role }) => role === "receptionist");

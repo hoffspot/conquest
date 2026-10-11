@@ -2393,7 +2393,8 @@ the 40 bodies about thirty seconds in, each holding its skin on the page and the
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
-in the skins worker meanwhile), for 3 seconds at most, the rest coming in as they're dressed
+in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
+for 3 seconds at most, the rest coming in as they're dressed
 after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
 frame in headless Chromium). Once the player is 90 metres away (and outside), it's let go: its
 folk out of the battle, their characters and its floors thrown away (built again if they come
