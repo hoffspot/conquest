@@ -3212,6 +3212,23 @@ spiders, skeletons, bears and dire wolves instead, a frame's update took about t
 (5.4 ms in full, 5.7 standing in: a beast's cheap to pose), but its draws went from 227 to 174 and
 its triangles from 765,000 to 674,000: what a beast saves in a crowd is the graphics card's.
 
+The body budget near a fight (WILDS.md *A ceiling*) was raised from forty to sixty on these
+numbers. Bandits, wolves, goblins, boars, cultists, cave spiders, trolls and skeletons with 8 hired
+adventurers about the player, the same way (a frame's update, draws and triangles):
+
+| About the player | All in full | All but 8 standing in |
+|---|---|---|
+| 40 | 15.5 ms, 259 draws, 675,000 triangles | 6.5 ms, 172 draws, 705,000 triangles |
+| 60 | 12.8 ms, 326 draws, 753,000 triangles | 6.3 ms, 170 draws, 800,000 triangles |
+| 80 | 14.1 ms, 383 draws, 818,000 triangles | 6.5 ms, 171 draws, 913,000 triangles |
+
+Those standing in cost about the same however many there are; in full, each is posed less often
+the smaller it is on the screen (WILDS.md *A ceiling*), so the update hardly grows either, but the
+draws do. Memory (Chromium's JS heap, and what the scene's geometry and pictures hold): 350 MB,
+84 MB and 104 MB before any of them; 685, 226 and 318 MB with forty built; 756, 261 and 378 MB with
+eighty. Most of what the first forty add is the first of each kind (its skin, garments, a crowd's
+figure); each one more takes about 4 MB.
+
 ### The paperdoll (app/pack.js, world/view.js)
 
 The pack's Gear tab shows the player themself in the middle of its slots, drawn live
