@@ -4234,8 +4234,8 @@ ranking up with an ability says to put it on a wheel.
 
 ### The quick actions (app/quickbar.js)
 
-In a fight, four slots rise from the bottom of the screen side by side (`QuickBar`), sliding up
-in 0.28 s, and the player's name and the zoom buttons go up with them, 10 pixels above (the
+In a fight, four slots (or six: below) rise from the bottom of the screen side by side
+(`QuickBar`), sliding up in 0.28 s, and the player's name and the zoom buttons go up with them, 10 pixels above (the
 HUD's `quick-up`). A fight is an enemy the player's set to fight (the one ringed), or anyone
 hostile on their map set to fight them or striking at them (`#underAttack`); the slots stay up
 3 s after the last of it (`QUICK_LINGER`), so they don't come and go between blows, and go down
@@ -4245,9 +4245,18 @@ at once if the player falls.
 not Fight): Vigor, Stun, Burn and a healing draught to start with (`QUICK`), shown with its icon
 and name, a count for a thing to use, and a line along its foot saying who it's used on (red,
 the foe; green, the player). They're kept with the wheels (`pellagos.<id>.wheels`'s `quick`, read
-back safely by `readWheels`: four, each something that can be one, or empty).
+back safely by `readWheels`: six, each something that can be one, or empty; a save from when there
+were four has the last two empty).
 
-**Tapped** (or 1 to 4 on a keyboard), a slot's used at once, with no wheel to open:
+**Six across** (Game options, Quick actions: the Six across switch, `quickSix`, off to start
+with; `QUICK_SHOWN`): six slots instead of four, a little closer together, on a bar up to 640
+pixels wide. Each slot is a size container (styles.css), so what's shown goes by how wide each
+slot is, not by the device: up to 75 pixels wide, its name is 9 pixels high; up to 57 (a phone
+held upright), its name's hidden and its icon is 30 pixels across. Held on its side, a phone's
+slots are wide enough for their names again, the icon over the name to fit. With four, the
+last two are kept but not shown, and their keys do nothing.
+
+**Tapped** (or 1 to 4 on a keyboard, 1 to 6 six across), a slot's used at once, with no wheel to open:
 - an attack, a hex or a blow (`offensive`: what goes only on an enemy's wheel) on the enemy the
   player's set to fight;
 - anything else (healing, a ward, a draught, a spell that finds its own mark) on the player.
@@ -4261,10 +4270,22 @@ passes, as a wheel's slice is (one spell's cooldown is all the spells', `#cooldo
 while it can't be used, it flashes red and says why ("Tap a foe first: that's used on them",
 "You've none left", "Not ready yet"); an empty slot tapped opens its choices.
 
+**Flicked** up or down (a finger moved 24 pixels, more up or down than across, `STRAY`: at
+once, without waiting to be lifted), a school's spell turns to the next of its school (up) or
+the last (down) that the player knows (`flicked`: Healing's Vigor, Mend Wounds, Detraumatize,
+Renewal and Astral Heal, or an element's seven, `SCHOOLS`' tiers; a tier not yet known is
+passed over). It's kept, as if chosen in Quick actions. The old spell rolls out the way it was
+flicked and the new one in after it, like a slot machine's reel (`roll`: 0.16 s out, 0.2 s in,
+overshooting a little and settling; blurred as they move), with the wheel's chosen sound. At
+either end of its school, or for anything else (a hex, a blow, a thing to use, an empty slot),
+the slot gives 9 pixels that way and springs back (`bounce`, 0.26 s), with a tap. Where only
+icons are shown, the new spell's name is said a moment over its slot (`.quick-name`, 1.1 s).
+Asked for less motion (`prefers-reduced-motion`), the spell's simply changed.
+
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
 pauses (when no one else is playing in the world) at **Game options, Quick actions**
 (app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game
-options shows the four slots as they rise; tap one, then what goes in it: "Nothing", or anything
+options shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
 used on ("On your foe", "On yourself").
 
@@ -5141,6 +5162,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   quick actions on a phone's screen (the minimap in the top left corner, level with the buttons
   in the top right; up in a fight with the name and zoom buttons over them; Stun tapped on the orc and Vigor
   on the player, each swept over while cooling and refused; attacks greyed with no foe set on;
-  put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), and a
+  put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), six
+  across (only icons on a phone held upright and names on its side; Mend Wounds flicked down to
+  Vigor and up to Detraumatize with its name said, bouncing at either end and on Stun; the 5 key),
+  and a
   phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

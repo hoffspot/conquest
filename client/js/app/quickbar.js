@@ -1,17 +1,23 @@
 // The quick actions: in a fight (an enemy the player's set to fight, or anyone after them), four
-// slots rise from the bottom of the screen side by side, lifting the player's name and the zoom
-// buttons above them. Each holds what the player's put in it (Game options, Quick actions; or
-// held on: app/quicksetup.js): a spell, a blow or a thing to use, as a wheel's slice can
-// (app/wheel.js QUICK). Tapped, it's used: an attack, a hex or a blow on the enemy the player's
-// set to fight; anything else (healing, a ward, a draught) on themselves. While it can't be used
-// (an attack with no enemy set on, not learnt, none left, the wrong weapon) it's greyed; while
-// it's cooling down, greyed over as much of it as the cooldown has left, swept back round as it
-// passes, as a wheel's slice is. The keys 1 to 4 tap them too.
+// slots (or six: Game options) rise from the bottom of the screen side by side, lifting the
+// player's name and the zoom buttons above them. Each holds what the player's put in it (Game
+// options, Quick actions; or held on: app/quicksetup.js): a spell, a blow or a thing to use, as a
+// wheel's slice can (app/wheel.js QUICK). Tapped, it's used: an attack, a hex or a blow on the
+// enemy the player's set to fight; anything else (healing, a ward, a draught) on themselves. While
+// it can't be used (an attack with no enemy set on, not learnt, none left, the wrong weapon) it's
+// greyed; while it's cooling down, greyed over as much of it as the cooldown has left, swept back
+// round as it passes, as a wheel's slice is. The keys 1 to 4 (or 6) tap them too. Flicked up or
+// down, a school's spell in one turns to the next of its school or the last, rolling in like a
+// slot machine's reel (wheel.js flicked); at either end of its school, it bounces.
+//
+// Six across, each slot's name is smaller where they're narrow, and where they're narrower still
+// (a phone held upright) only their icons are shown (styles.css), a flicked spell's name said a
+// moment over its slot.
 //
 // It only shows and hears: the game (game.js) says what's in each and what to do.
 
 import { useDefs } from "./icons.js";
-import { actionOf, iconOf, offensive, QUICK } from "./wheel.js";
+import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 
 /** How long a slot's held before it's to be changed (ms), not tapped. */
 export const QUICK_HOLD_MS = 500;
@@ -26,8 +32,19 @@ export const QUICK_REFUSALS = Object.freeze({
     weapon: "Not with that weapon",
 });
 
-// How far a finger can stray from where it went down and still tap (pixels)
+// How far a finger can stray from where it went down and still tap (pixels): as far up or down,
+// more up or down than across, and it's a flick
 const STRAY = 24;
+
+/**
+ * A flicked slot's reel: how long the old spell takes to roll out and the new one in (ms), and
+ * the bounce at either end of a school (ms, and how far it gives: pixels); how long a flicked
+ * spell's name is said over its slot, where only icons are shown (ms).
+ */
+export const REEL = Object.freeze({ roll: 200, bounce: 260, give: 9, named: 1100 });
+
+// (Without motion, if the player's asked for less of it)
+const still = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 // How long after a finger's lifted from a slot the click a browser fires for it may come (ms)
 const TAP_CLICK_MS = 700;
@@ -96,11 +113,17 @@ export class QuickBar {
         this.element.setAttribute("aria-label", "Quick actions");
         this.element.inert = true;
         this.slots = QUICK.map((_, index) => this.#listen(quickSlot(index), index));
-        this.element.append(...this.slots);
+        this.named = Object.assign(document.createElement("span"), { className: "quick-name" });
+        this.named.setAttribute("aria-hidden", "true");
+        this.element.append(...this.slots, this.named);
         root.append(this.element);
 
         /** Whether they're up (in a fight). */
         this.up = false;
+
+        /** How many are shown: four, or six across (QUICK_SHOWN). */
+        this.shown = QUICK_SHOWN.four;
+        this.show(this.shown);
 
         /** Hears a slot tapped (its index), to use what's in it. */
         this.onUse = () => {};
@@ -108,12 +131,24 @@ export class QuickBar {
         /** Hears a slot held (its index), to change what's in it. */
         this.onChoose = () => {};
 
+        /** Hears a slot flicked (its index, and "up" or "down"), to turn its spell to another of its school. */
+        this.onFlick = () => {};
+
         this.left = QUICK.map(() => 0);
     }
 
-    // A slot tapped (used) or held (changed); Enter or Space on it, as a tap. (A tap's used as the
-    // finger's lifted; the click a browser fires after it is the tap's, not another: a phone's
-    // Chrome gives it no count, as the keyboard's has none, but says it's a finger's)
+    /** Show four of them (with their names) or six across (`count`: QUICK_SHOWN). */
+    show(count) {
+        this.shown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
+        this.element.classList.toggle("six", this.shown === QUICK_SHOWN.six);
+        this.element.style.setProperty("--quick-count", String(this.shown));
+        this.slots.forEach((slot, index) => (slot.hidden = index >= this.shown));
+    }
+
+    // A slot tapped (used), held (changed) or flicked up or down (its spell turned); Enter or Space
+    // on it, as a tap. (A tap's used as the finger's lifted; the click a browser fires after it is
+    // the tap's, not another: a phone's Chrome gives it no count, as the keyboard's has none, but
+    // says it's a finger's)
     #listen(slot, index) {
         let press = null;
         let lifted = -Infinity;
@@ -148,8 +183,19 @@ export class QuickBar {
             }, QUICK_HOLD_MS);
         });
         slot.addEventListener("pointermove", (event) => {
-            // (Slid off it: neither)
-            if (press?.pointer === event.pointerId && !press.held && Math.hypot(event.clientX - press.x, event.clientY - press.y) > STRAY) {
+            if (press?.pointer !== event.pointerId || press.held) {
+                return;
+            }
+
+            const [dx, dy] = [event.clientX - press.x, event.clientY - press.y];
+
+            // (Flicked up or down, the moment it's gone far enough: its spell turned; slid off it
+            // any other way, neither)
+            if (Math.abs(dy) >= STRAY && Math.abs(dy) > Math.abs(dx)) {
+                clearTimeout(press.hold);
+                press.held = true;
+                this.onFlick(index, dy < 0 ? "up" : "down");
+            } else if (Math.hypot(dx, dy) > STRAY) {
                 clearTimeout(press.hold);
                 press.held = true;
             }
@@ -209,6 +255,78 @@ export class QuickBar {
         });
     }
 
+    /**
+     * A slot's spell flicked `way` ("up" or "down") to another (`key`, with `count` of it, if it's a
+     * thing to use): the old one rolled out that way and the new one in after it, like a slot
+     * machine's reel, quickly; its name said a moment over it, where only icons are shown.
+     */
+    roll(index, way, key, count = 0) {
+        const slot = this.slots[index];
+
+        if (!slot) {
+            return;
+        }
+
+        const parts = [slot.querySelector(".quick-icon"), slot.querySelector(".quick-label")];
+        const ghost = document.createElement("span");
+
+        ghost.className = "quick-ghost";
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.append(...parts.map((part) => part.cloneNode(true)));
+        slot.querySelector(".quick-ghost")?.remove();
+        fillSlot(slot, key, count);
+        this.#name(slot, actionOf(key)?.label ?? "");
+
+        if (still() || typeof slot.animate !== "function") {
+            return;
+        }
+
+        // (The reel's as tall as the slot: out of it one way, in from the other)
+        const reel = (way === "up" ? -1 : 1) * slot.clientHeight;
+
+        slot.prepend(ghost);
+        ghost.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${reel}px)`, opacity: 0.25, filter: "blur(1px)" }], { duration: REEL.roll * 0.8, easing: "cubic-bezier(0.5, 0, 0.9, 0.6)", fill: "forwards" }).finished.then(
+            () => ghost.remove(),
+            () => ghost.remove(),
+        );
+
+        for (const part of parts) {
+            part.animate([{ transform: `translateY(${-reel}px)`, filter: "blur(1px)" }, { transform: "translateY(0)", filter: "blur(0)" }], { duration: REEL.roll, easing: "cubic-bezier(0.25, 1.35, 0.4, 1)" });
+        }
+    }
+
+    /** A slot flicked `way` ("up" or "down") with nothing further that way: it gives a little, and springs back. */
+    bounce(index, way) {
+        const slot = this.slots[index];
+
+        if (!slot || still() || typeof slot.animate !== "function") {
+            return;
+        }
+
+        const give = (way === "up" ? -1 : 1) * REEL.give;
+
+        for (const part of [slot.querySelector(".quick-icon"), slot.querySelector(".quick-label")]) {
+            part.animate([{ transform: "translateY(0)" }, { transform: `translateY(${give}px)`, offset: 0.35 }, { transform: `translateY(${-give * 0.25}px)`, offset: 0.7 }, { transform: "translateY(0)" }], { duration: REEL.bounce, easing: "ease-out" });
+        }
+    }
+
+    // Where only icons are shown (six across, narrow: styles.css), a slot's name said a moment over it
+    #name(slot, label) {
+        const shownLabel = slot.querySelector(".quick-label");
+
+        if (!label || !globalThis.getComputedStyle || getComputedStyle(shownLabel).display !== "none") {
+            return;
+        }
+
+        this.named.textContent = label;
+        this.named.style.left = `${slot.offsetLeft + slot.offsetWidth / 2}px`;
+        this.named.classList.remove("said");
+        void this.named.offsetWidth;
+        this.named.classList.add("said");
+        clearTimeout(this.naming);
+        this.naming = setTimeout(() => this.named.classList.remove("said"), REEL.named);
+    }
+
     /** Show a slot used (lit) or refused (flashed red) a moment. */
     mark(index, how) {
         const slot = this.slots[index];
@@ -225,6 +343,7 @@ export class QuickBar {
     }
 
     dispose() {
+        clearTimeout(this.naming);
         this.raise(false);
         this.element.remove();
     }

@@ -909,7 +909,7 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     }
 }
 
-/* The quick actions: four slots side by side along the bottom, risen in a fight */
+/* The quick actions: four slots (or six) side by side along the bottom, risen in a fight */
 #hud .quickbar {
     position: absolute;
     left: calc(var(--safe-left) + 12px);
@@ -918,7 +918,7 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     max-width: 560px;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--quick-count, 4), minmax(0, 1fr));
     gap: 8px;
     transform: translateY(calc(100% + 16px + var(--safe-bottom)));
     visibility: hidden;
@@ -929,6 +929,12 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     transform: none;
     visibility: visible;
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* (Six across: a little wider, and closer together) */
+#hud .quickbar.six {
+    max-width: 640px;
+    gap: 6px;
 }
 
 .quick-slot {
@@ -952,6 +958,75 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+}
+
+/* Six across: each slot's name smaller where they're narrow, and only its icon (bigger) where
+   they're narrower still, as on a phone held upright (its name said over it a moment when a spell's
+   flicked in: .quick-name) */
+.quickbar.six .quick-slot,
+.quick-row.six .quick-slot {
+    container-type: inline-size;
+}
+
+@container (max-width: 75px) {
+    .quickbar.six .quick-label,
+    .quick-row.six .quick-label {
+        font-size: 9px;
+    }
+}
+
+@container (max-width: 57px) {
+    .quickbar.six .quick-label,
+    .quick-row.six .quick-label {
+        display: none;
+    }
+
+    .quickbar.six .quick-icon,
+    .quick-row.six .quick-icon {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+/* A flicked slot's reel: the spell rolling out, over the one rolling in (app/quickbar.js roll) */
+.quick-ghost {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: inherit;
+    align-items: center;
+    justify-content: center;
+    gap: inherit;
+    padding: inherit;
+    pointer-events: none;
+}
+
+/* (A flicked spell's name, said a moment over its slot where only icons are shown) */
+.quick-name {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translate(-50%, 4px);
+    padding: 3px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--ink);
+    font: 700 12px/1.2 var(--font-ui);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition:
+        opacity 0.25s ease,
+        transform 0.25s ease;
+}
+
+.quick-name.said {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition:
+        opacity 0.12s ease,
+        transform 0.12s ease;
 }
 
 /* (Who it's used on, a line along its foot: the foe in red, the player in green) */
@@ -1091,6 +1166,18 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     .quick-icon {
         width: 24px;
         height: 24px;
+    }
+
+    /* (Six across: the icon over its name again, smaller, to fit six) */
+    .quickbar.six .quick-slot {
+        flex-direction: column;
+        gap: 1px;
+        padding: 3px 3px 4px;
+    }
+
+    .quickbar.six .quick-icon {
+        width: 20px;
+        height: 20px;
     }
 }
 
@@ -4943,10 +5030,10 @@ dialog#menu.wide {
     color: var(--muted);
 }
 
-/* The Quick actions options: the four slots, as they rise in a fight, one picked */
+/* The Quick actions options: the four slots (or six), as they rise in a fight, one picked */
 .quick-row {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--quick-count, 4), minmax(0, 1fr));
     gap: 6px;
     margin: 10px 0 4px;
 }

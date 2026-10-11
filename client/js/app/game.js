@@ -137,7 +137,7 @@ import { Prediction } from "./predict.js";
 import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
-import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, offensive, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, offensive, PLACES, QUICK_SHOWN, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -766,12 +766,15 @@ export class Game {
 
         /**
          * What's on the player's action wheels: their own and an enemy's, each two sides; and their
-         * quick actions, four (app/wheel.js).
+         * quick actions, six (four shown, or all six: app/wheel.js).
          */
         this.wheels = readWheels(wheels);
 
         /** Hears a quick action held on (its slot), to change what's in it (main.js: Quick actions). */
         this.onChooseQuick = () => {};
+
+        /** How many quick actions are shown: four, or six across (QUICK_SHOWN; Game options: showQuick). */
+        this.quickShown = QUICK_SHOWN.four;
 
         /** Till when (the clock) the quick actions stay up: a moment after the last of a fight. */
         this.fightUntil = -Infinity;
@@ -1497,8 +1500,10 @@ export class Game {
         this.wheel = new ActionWheel(this.hud.root);
         this.wheel.element.classList.add("action-wheel");
         this.quickBar = new QuickBar(this.hud.root);
+        this.quickBar.show(this.quickShown);
         this.quickBar.onUse = (slot) => this.quick(slot);
         this.quickBar.onChoose = (slot) => this.onChooseQuick(slot);
+        this.quickBar.onFlick = (slot, way) => this.flickQuick(slot, way);
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
@@ -9249,7 +9254,7 @@ export class Game {
                 // (Enter, in a party of players, with nothing else to press: its chat, ready to type)
                 event.preventDefault();
                 this.toggleParty({ chat: true });
-            } else if (/^[1-4]$/.test(event.key) && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
+            } else if (/^[1-6]$/.test(event.key) && Number(event.key) <= this.quickShown && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
                 this.quick(Number(event.key) - 1);
             }
         }, { capture: true });
@@ -10022,8 +10027,40 @@ export class Game {
         return offensive(key) && !target ? "untargeted" : null;
     }
 
+    /** Show four quick actions (with their names) or six across (`count`: QUICK_SHOWN; Game options). */
+    showQuick(count) {
+        this.quickShown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
+        this.quickBar?.show(this.quickShown);
+    }
+
     /**
-     * Use a quick action (its slot, 0 to 3, from the left): an attack, a hex or a blow on the enemy
+     * A quick action flicked `way` ("up" or "down"): a school's spell in it turned to the next of
+     * its school's spells the player knows, or the last (app/wheel.js flicked), rolled in, and kept
+     * as if it had been put there in the Quick actions options; at either end of its school, or
+     * not a school's spell, it bounces. Returns what's in it now, and whether it turned.
+     */
+    flickQuick(slot, way) {
+        const quick = [...this.wheels.quick];
+        const key = quick[slot] ?? null;
+        const next = flicked(key, way, this.progress.known());
+
+        if (!next) {
+            this.quickBar?.bounce(slot, way);
+            this.sound?.play("tap");
+
+            return { key, turned: false };
+        }
+
+        quick[slot] = next;
+        this.setQuick(quick);
+        this.quickBar?.roll(slot, way, next);
+        this.sound?.play("wheelSelect");
+
+        return { key: next, turned: true };
+    }
+
+    /**
+     * Use a quick action (its slot, 0 to 5, from the left): an attack, a hex or a blow on the enemy
      * the player's set to fight, anything else on themselves; refused (and said why) if it can't
      * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
      */

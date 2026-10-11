@@ -65,6 +65,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     stickFloats: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
+    // Six quick actions across the bottom in a fight, not four with their names (app/quickbar.js):
+    // on a narrow screen their names smaller, or only their icons
+    quickSix: false,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)
