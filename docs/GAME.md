@@ -1367,7 +1367,15 @@ touch suits, not a lock the player turns on). Whoever the player's fighting (the
 on, or else the nearest coming for them; and the last of those for 2 seconds after, through a
 lull: game.js `#kept`, `FIGHT_VIEW`):
 - **The battle cam** (Game options, on to start with; following or not: camera.js `battle`,
-  `#framing`) swings round to look at the fight three-quarters on: 60 degrees round from straight
+  `#framing`) takes the fight over only once the player and their foe are both wholly on the
+  screen (game.js `#battleFoe`, `#inFull`, `FULL_VIEW`: each from their feet to the top of their
+  head, and a fifth of their height either side of them, a beast half its length, all in front of
+  the camera and a little in from the screen's edges), and from then on till the fight's over;
+  fighting someone else, it waits till they're wholly on the screen too. Till then the camera goes
+  on as if there were no fight: it doesn't turn, lean or draw back for them (someone fighting the
+  player out of view has an arrow at the screen's edge, below). It had swung round at once to
+  whoever came for the player, from wherever they were, off the screen or behind the camera.
+  Then it swings round to look at the fight three-quarters on: 60 degrees round from straight
   behind the player looking at their foe, either side. Of the two, and of those a step (15 degrees)
   or two nearer behind them or further round, it takes the one that leaves the fewest of them
   hidden (the line from each one's chest and knees to where the camera would be, over the town's
@@ -1479,7 +1487,7 @@ their shadows whole), as they're put on.
 follows** (off): on, it swings round behind the player as they walk (above); off, it keeps the
 way it's turned and its tilt as they walk, only keeping up with them (following saved before it
 was off to start with is forgotten once, for the new default: save.js `cameraDefaults`);
-**Battle cam** (on): in a fight, it frames it three-quarters on (above); **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
+**Battle cam** (on): in a fight, once the player and their foe are both wholly on the screen, it frames it three-quarters on (above); **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
 **Invert tilt** (off): dragging up looks down; **Screen shake** (on): off, the greater spells
 don't shake it.
 
@@ -4196,7 +4204,12 @@ it.
    (Recast), the game's code, the body and its shapes, its skin details, the lettering, and the
    things in the world (the treasure chest's model). The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
-   cache. Then the last part of the bar is starting the 3D view and unpacking the body; the skin
+   cache: first the way-finding on its own, and wholly (`core/navigation.js`, the one module that
+   waits as it loads, for Recast's WebAssembly: a top-level await), then the rest, three imports
+   side by side (`app/session.js`, `app/creator.js`, `app/hud.js`). Imported with the rest while it
+   still waited, mobile Safari ran modules over it before those they import were done ("Cannot
+   access 'TALK_REACH' before initialization"), and the game never loaded (test/boot.test.js).
+   Then the last part of the bar is starting the 3D view and unpacking the body; the skin
    atlas is worked out in a worker meanwhile, and the title doesn't wait for it (making a
    character or playing does: CHARACTERS.md, *The skin atlas worked out elsewhere*). Nothing
    before the loader imports Three.js, so the engine's download is counted too. Debug mode asks the

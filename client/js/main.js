@@ -150,6 +150,14 @@ async function load() {
     step("Starting the 3D engine", 0);
 
     const started = performance.now();
+
+    // (The way-finding first, on its own, and wholly: it waits for its WebAssembly (a top-level
+    // await, core/navigation.js), and while it was still waiting, mobile Safari went on with the
+    // modules over it in the three below, imported side by side, before those they import were
+    // done: "Cannot access 'TALK_REACH' before initialization", and the game didn't load. With it
+    // done, nothing left in them waits, and each is run through at once)
+    await import("./core/navigation.js");
+
     const [session, creator, hud] = await Promise.all([import("./app/session.js"), import("./app/creator.js"), import("./app/hud.js")]);
     const imported = performance.now();
 

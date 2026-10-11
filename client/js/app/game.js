@@ -267,6 +267,13 @@ const CREAKS = 1.4;
 // fighting (a moment's lull, a blow from another)
 const LEAN = { share: 0.4, most: 4.5, away: 0.25 };
 const FIGHT_VIEW = Object.freeze({ margin: 0.6, hold: 2 });
+
+// The battle cam takes a fight over only once the player and whoever they're fighting are both
+// wholly on the screen (#inFull): from their feet to the tops of their heads, and as wide as they
+// are (`wide` of their height either side of them, a beast half its length), at least `edge` of
+// the way in from the screen's edges to its middle, in front of the camera
+const FULL_VIEW = Object.freeze({ wide: 0.2, edge: 0.02 });
+
 // A message kept clear of those fighting (hud.js keepClear): each taken to be `wide` of their
 // height either side of their feet (no less than `least` pixels tall), with `over` pixels over
 // their head for their name and bar, and `under` under their feet
@@ -567,6 +574,8 @@ const _gazeAt = new THREE.Vector3();
 const _lean = new THREE.Vector3();
 const _foeChest = new THREE.Vector3();
 const _looking = new THREE.Vector3();
+const _across = new THREE.Vector3();
+const _corner = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 const _lit = new THREE.Vector3();
@@ -833,8 +842,10 @@ export class Game {
          */
         this.cameraSettings = { follows: false, battle: true, shake: true, drag: 1, invert: false };
 
-        // (Who the camera's kept in view in a fight, and till when after: #kept)
+        // (Who the camera's kept in view in a fight, and till when after: #kept; and who the
+        // battle cam's taken the fight with over: #battleFoe)
         this.fightView = null;
+        this.battleCamOn = null;
 
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
@@ -3380,7 +3391,8 @@ export class Game {
         }
 
         const position = player.object.position;
-        const foe = this.#kept();
+        const fighting = this.#kept();
+        const foe = this.#battleFoe(fighting, player);
         const chest = player.point(0.55);
 
         // (On its leash at how far it is now from where it looks, across the ground)
@@ -3420,7 +3432,7 @@ export class Game {
         this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
         this.#threats();
         this.#attackers();
-        this.#clearOfFight(foe);
+        this.#clearOfFight(fighting);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
         // never lagging far under it, climbing)
@@ -4166,6 +4178,61 @@ export class Game {
         }
 
         this.hud.keepClear(rects);
+    }
+
+    /**
+     * Who the camera's to frame a fight with (who it keeps in view: #kept). With the battle cam,
+     * only once they and the player have both been wholly on the screen (#inFull) since they became
+     * who the player's fighting, and from then on till the fight's over; till then (they're off
+     * the screen, or only partly on it), none: the camera goes on as if there were no fight,
+     * rather than swinging round to whoever came for the player, from wherever they were
+     * (someone fighting the player from behind the camera has an arrow at the screen's edge:
+     * #threats).
+     */
+    #battleFoe(foe, me) {
+        if (!foe) {
+            this.battleCamOn = null;
+
+            return null;
+        }
+
+        if (!this.cameraSettings.battle) {
+            return foe;
+        }
+
+        if (this.battleCamOn !== foe.id) {
+            const seen = this.avatars.get(foe.id);
+
+            this.battleCamOn = seen && this.#inFull(me) && this.#inFull(seen) ? foe.id : null;
+        }
+
+        return this.battleCamOn === foe.id ? foe : null;
+    }
+
+    // Whether someone (their avatar) is wholly on the screen as the camera looks now (FULL_VIEW):
+    // their feet and the tops of their heads, either side of them, all in front of the camera and
+    // within the screen
+    #inFull(avatar) {
+        const camera = this.view.camera;
+        const { x, y, z } = avatar.object.position;
+        const tall = avatar.character?.height ?? 1.8;
+        const wide = Math.max(tall * FULL_VIEW.wide, ((avatar.plan?.length ?? 0) * (avatar.scale ?? 1)) / 2);
+        const inside = 1 - FULL_VIEW.edge;
+
+        camera.updateMatrixWorld();
+        _across.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
+
+        for (const up of [0, tall]) {
+            for (const side of [-wide, wide]) {
+                _corner.set(x + _across.x * side, y + up, z + _across.z * side).project(camera);
+
+                if (!(_corner.z < 1 && Math.abs(_corner.x) <= inside && Math.abs(_corner.y) <= inside)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     // Whoever the camera keeps in view in a fight: who the player's fighting (#foe), or who they
