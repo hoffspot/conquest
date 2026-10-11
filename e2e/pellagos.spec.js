@@ -8301,6 +8301,100 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).minimap)).toBe(false);
 });
 
+test("full screen while playing: asked for as Continue starts the game; left by the player, the game paused, and Resume asks again; turned off in Game options, left at once and not asked again; on, asked on the next tap playing; back at the title, left", async ({ page }) => {
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
+    await title(page);
+
+    const full = () => page.evaluate(() => Boolean(document.fullscreenElement));
+    // (Full screen granted and staying so: headless Chromium now and then grants it and takes it
+    // back in the same frame, and the next tap on the game asks again)
+    const settled = async () => {
+        await expect.poll(full).toBe(true);
+        await page.waitForTimeout(400);
+        await expect.poll(full).toBe(true);
+    };
+    const fullScreen = page.getByRole("switch", { name: /Full screen while playing/ });
+
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    expect(await full()).toBe(true);
+
+    // Left by the player (Escape, the browser's own button, Android's back): paused
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(page.locator("#menu")).toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(false);
+    await page.getByRole("button", { name: "Resume" }).click();
+    await expect.poll(full).toBe(true);
+    await expect(page.locator("#menu")).toBeHidden();
+
+    // Turned off: left at once, the menu still up, kept; playing on, not asked for
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+    await expect(fullScreen).toBeChecked();
+    await page.locator("label:has(#fullscreenswitch)").click();
+    await expect(fullScreen).not.toBeChecked();
+    await expect.poll(full).toBe(false);
+    await expect(page.locator("#menu")).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).fullscreen)).toBe(false);
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
+    await page.mouse.click(640, 330);
+    expect(await full()).toBe(false);
+
+    // On again: not asked for from the menu, but as play carries on
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+    await page.locator("label:has(#fullscreenswitch)").click();
+    await expect(fullScreen).toBeChecked();
+    expect(await full()).toBe(false);
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
+    await settled();
+
+    // Playing without it (as after Resume by Escape, which browsers don't take as asking: here,
+    // turned off and on again, left by the game, so nothing's paused): a tap that opens a window
+    // (the menu button's) doesn't ask, the page gone full screen after it covering it; a tap on the
+    // world does
+    const without = () =>
+        page.evaluate(() => {
+            const { fullScreen } = window.pellagos;
+
+            fullScreen.wanted = false;
+            fullScreen.wanted = true;
+        });
+
+    await without();
+    await expect.poll(full).toBe(false);
+    await expect(page.locator("#menu")).toBeHidden();
+    await page.locator("#menubutton").click();
+    await expect(page.locator("#menu")).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(await full()).toBe(false);
+    await page.getByRole("button", { name: "Resume" }).click();
+    await settled();
+    await without();
+    await expect.poll(full).toBe(false);
+    await page.mouse.click(640, 330);
+    await settled();
+
+    // A window opened as full screen's granted is opened again over it, still open
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(page.locator("#menu")).toBeVisible();
+    await page.evaluate(() => window.pellagos.fullScreen.play());
+    await expect.poll(full).toBe(true);
+    await expect(page.locator("#menu")).toBeVisible();
+    expect(await page.evaluate(() => document.querySelector("#menu").contains(document.activeElement))).toBe(true);
+    await page.getByRole("button", { name: "Resume" }).click();
+
+    // Back at the title: left, and the title not paused into
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Back to the title" }).click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect.poll(full).toBe(false);
+    await expect(page.locator("#menu")).toBeHidden();
+});
+
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
@@ -8954,6 +9048,9 @@ test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
     test("turned on its side and back, the world's drawn the shape of the screen, never stretched: even told it's resized while it's still turning, as Chrome on Android tells it", async ({ page }) => {
+        // (Full screen while playing off: the browser here can't be turned, resized, while it's
+        // full screen, as a phone can)
+        await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ fullscreen: false })));
         await playing(page, "/?play&seed=1");
 
         // How the world's drawn against the canvas it's drawn on: the drawing's shape and the

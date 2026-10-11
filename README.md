@@ -654,7 +654,8 @@ client/                 The game (static files served to the browser)
     save.js             The saved characters (up to six), what they've grown into and carry,
                         what's been said and found, where they were and how; and settings
                         (local storage)
-    device.js           Full screen and the service worker
+    device.js           Touch screens, landscape, installing and the service worker
+    fullscreen.js       Full screen while playing (Game options), and pausing when it's left
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
                         plan, with the town set in where the player starts

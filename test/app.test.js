@@ -211,6 +211,7 @@ describe("saving (save.js)", () => {
         assert.deepEqual([SETTINGS_DEFAULTS.dragSpeed, SETTINGS_DEFAULTS.invertTilt, SETTINGS_DEFAULTS.shake], [1, false, true], "and the camera's turning as it's always been");
         assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.battleCam], [false, true], "not following round behind the player, but framing fights");
         assert.deepEqual([SETTINGS_DEFAULTS.stick, SETTINGS_DEFAULTS.stickFloats], [true, false], "the thumb stick there, waiting in its corner");
+        assert.equal(SETTINGS_DEFAULTS.fullscreen, true, "full screen while playing");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
