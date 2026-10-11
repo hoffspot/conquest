@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { fireLit } from "./firelight.js";
 import { ALONG, CROP, CROP_ODDS, FIELDS, NARROWEST, sown } from "../core/fields.js";
 import { tiling } from "../core/noise.js";
-import { CHUNK } from "../core/overworld.js";
+import { CHUNK, VERGE } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { allAtOnce } from "../core/steps.js";
 import { BIOMES, CELL, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -32,6 +32,17 @@ const SPLAT_RESOLUTION = 4;
 
 // How many rows of texels splatting makes a step
 const SPLAT_ROWS = 32;
+
+/**
+ * A field beside a road, its soil drawn back from the road's own line (core/overworld.js
+ * roadEdgeAt) rather than square by square (the verge the land keeps along a road, VERGE, judged
+ * at each square's middle, a staircase of whole squares beside a road that runs at a slant):
+ * `edge` metres from the road's edge, over a ramp `ramp` metres wide (its raggedness the edges'
+ * noise, as every edge's). And the crops' colours carried `spread` squares out over the grass
+ * round them, so that wherever the soil's soft edge, or its blur far off, reaches past a field's
+ * squares, it's the crop's colour, not bare earth's.
+ */
+export const FIELD_EDGE = Object.freeze({ edge: VERGE + 1, ramp: 0.6, spread: 2 });
 
 // The grass beside a road worn to the road's dirt: up to this much of it in the eight squares
 // round it, half as much a square further off (raggedly: as the edges' noise has it)
@@ -331,12 +342,18 @@ export function splatData(world, resolution = SPLAT_RESOLUTION) {
  * layer's ground is in it at all) }. Its edges' raggedness is the same wherever it's cut, so
  * the parts of a map that meet match.
  */
-export function splatOf(kindAt, area, resolution) {
-    return allAtOnce(splatting(kindAt, area, resolution));
+export function splatOf(kindAt, area, resolution, byRoad = null) {
+    return allAtOnce(splatting(kindAt, area, resolution, byRoad));
 }
 
-/** The same (splatOf), made a step at a time (each a yield: the squares' kinds, then a few rows of texels), returning it. */
-export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_RESOLUTION) {
+/**
+ * The same (splatOf), made a step at a time (each a yield: the squares' kinds, then a few rows of
+ * texels), returning it. `byRoad`, beside the land's roads ({ fieldAt(x, y): the crop a square of
+ * grass would be sown with but for a road's verge, or 0; edgeAt(px, py, reach): how far a point is
+ * from the nearest road's edge, metres }): those squares' soil drawn, back to FIELD_EDGE.edge
+ * from the road's edge along its own line.
+ */
+export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_RESOLUTION, byRoad = null) {
     const w = width * resolution;
     const h = height * resolution;
     const data = new Uint8Array(w * h * 4);
@@ -349,16 +366,64 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
     // (and how worn the squares one further round are)
     const across = width + 6;
     const kinds = new Int8Array(across * (height + 6));
+    const soil = layerOf[GROUND.soil];
+    // (Squares of a field a road's verge leaves grass, drawn as soil, and those by them, where the
+    // soil's cut back along the road's line)
+    const cut = byRoad ? new Uint8Array(across * (height + 6)) : null;
     let any = false;
 
     for (let j = 0; j < height + 6; j++) {
+        // (Asking after the fields by the roads a step at a time: each square of them a fraction of a
+        // millisecond on a laptop, more on a phone)
+        if (cut && j > 0 && j % 16 === 0) {
+            yield;
+        }
+
         for (let i = 0; i < across; i++) {
-            const layer = layerOf[kindAt(x0 + i - 3, y0 + j - 3) ?? GROUND.grass];
+            const kind = kindAt(x0 + i - 3, y0 + j - 3) ?? GROUND.grass;
+            let layer = layerOf[kind];
+
+            if (cut && kind === GROUND.grass && byRoad.fieldAt(x0 + i - 3, y0 + j - 3)) {
+                layer = soil;
+                cut[j * across + i] = 1;
+            }
 
             kinds[j * across + i] = layer;
             any ||= layer >= 0;
         }
     }
+
+    const near = cut ? new Uint8Array(cut.length) : null;
+
+    if (cut) {
+        for (let j = 1; j < height + 5; j++) {
+            for (let i = 1; i < across - 1; i++) {
+                for (let dy = -1; dy <= 1 && !near[j * across + i]; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (cut[(j + dy) * across + i + dx]) {
+                            near[j * across + i] = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    const nearCut = (i, j) => near[(j + 3) * across + i + 3] === 1;
+    // (How far from a road's edge each corner of the squares is, worked out as it's first wanted:
+    // a texel's, between its four, as near as makes no difference along a road's straight stretch)
+    const corners = cut ? new Float32Array((width + 1) * (height + 1)).fill(NaN) : null;
+    const reach = FIELD_EDGE.edge + FIELD_EDGE.ramp + 2;
+    const cornerAt = (cx, cy) => {
+        const k = cy * (width + 1) + cx;
+
+        if (Number.isNaN(corners[k])) {
+            corners[k] = Math.min(reach, byRoad.edgeAt(x0 + cx, y0 + cy, reach));
+        }
+
+        return corners[k];
+    };
 
     if (!any) {
         return { data, width: w, height: h, any };
@@ -433,6 +498,15 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
 
             if (c3 >= 0) {
                 amounts[c3] += tx * ty;
+            }
+
+            // (A field by a road: its soil back from the road's edge along the road's own line)
+            if (near && amounts[soil] > 0 && (nearCut(x, y) || nearCut(x + 1, y) || nearCut(x, y + 1) || nearCut(x + 1, y + 1))) {
+                const [cx, cy] = [Math.floor((i + 0.5) / resolution), Math.floor((j + 0.5) / resolution)];
+                const [ux, uy] = [(i + 0.5) / resolution - cx, (j + 0.5) / resolution - cy];
+                const away = (1 - ux) * (1 - uy) * cornerAt(cx, cy) + ux * (1 - uy) * cornerAt(cx + 1, cy) + (1 - ux) * uy * cornerAt(cx, cy + 1) + ux * uy * cornerAt(cx + 1, cy + 1);
+
+                amounts[soil] *= Math.max(0, Math.min(1, (away - FIELD_EDGE.edge) / FIELD_EDGE.ramp + 0.5));
             }
 
             // Ragged edges: noise moves where each edge falls (the same wherever the map's cut)
@@ -1201,19 +1275,53 @@ function noFields() {
 /**
  * A chunk's fields (core/overworld.js chunk.crops) as the ground reads them: a texel a square, red
  * its crop, green 255 if its strip runs north to south; or null if none of its strips are sown.
+ * With the squares a road's verge leaves grass (`fieldAt`: splatting's byRoad's) their field's
+ * crop, its soil drawn back along the road's line; and each sown crop carried FIELD_EDGE.spread
+ * squares out over the grass round it, so the soil's soft edge is its crop's colour.
  */
-export function fieldsOf(chunk) {
-    const { crops } = chunk;
+export function fieldsOf(chunk, fieldAt = null) {
+    const { crops, x0, y0 } = chunk;
+    const kept = Uint8Array.from(crops ?? []);
 
-    if (!crops?.some((crop) => sown(crop % ALONG))) {
+    if (fieldAt && crops) {
+        for (let k = 0; k < kept.length; k++) {
+            if (!kept[k] && chunk.ground[k] === GROUND.grass) {
+                kept[k] = fieldAt(x0 + (k % CHUNK), y0 + Math.floor(k / CHUNK));
+            }
+        }
+    }
+
+    if (!kept.some((crop) => sown(crop % ALONG))) {
         return null;
+    }
+
+    // (Out over the grass a square at a time, from the sown squares beside it)
+    for (let pass = 0; pass < FIELD_EDGE.spread; pass++) {
+        const from = Uint8Array.from(kept);
+
+        for (let k = 0; k < kept.length; k++) {
+            if (sown(from[k] % ALONG) || chunk.ground[k] === GROUND.soil) {
+                continue;
+            }
+
+            const [i, j] = [k % CHUNK, Math.floor(k / CHUNK)];
+
+            for (let n = 0; n < 8 && !sown(kept[k] % ALONG); n++) {
+                const [di, dj] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]][n];
+                const [ni, nj] = [i + di, j + dj];
+
+                if (ni >= 0 && nj >= 0 && ni < CHUNK && nj < CHUNK && sown(from[nj * CHUNK + ni] % ALONG)) {
+                    kept[k] = from[nj * CHUNK + ni];
+                }
+            }
+        }
     }
 
     const data = new Uint8Array(CHUNK * CHUNK * 4);
 
     for (let k = 0; k < CHUNK * CHUNK; k++) {
-        data[k * 4] = crops[k] % ALONG;
-        data[k * 4 + 1] = crops[k] >= ALONG ? 255 : 0;
+        data[k * 4] = kept[k] % ALONG;
+        data[k * 4 + 1] = kept[k] >= ALONG ? 255 : 0;
     }
 
     const texture = new THREE.DataTexture(data, CHUNK, CHUNK, THREE.RGBAFormat);
@@ -1514,14 +1622,27 @@ export function* layingGround(overworld, chunk, land, step = 1, water = null) {
 
     // (One square further round than the chunk, so the kinds of ground blend across its edges
     // as they would were there no edge)
-    const splat = yield* splatting((x, y) => bedOf(overworld, x, y), [x0 - 1, y0 - 1, size + 2, size + 2]);
+    // (A field by a road drawn back along the road's own line: FIELD_EDGE; each square asked
+    // after once, for the splat and the fields both)
+    const asked = new Map();
+    const fieldAt = (x, y) => {
+        const key = y * 65536 + x;
+
+        if (!asked.has(key)) {
+            asked.set(key, overworld.fieldByRoad(x, y));
+        }
+
+        return asked.get(key);
+    };
+    const byRoad = overworld.fieldByRoad ? { fieldAt, edgeAt: (px, py, reach) => overworld.roadEdgeAt(px, py, reach) } : null;
+    const splat = yield* splatting((x, y) => bedOf(overworld, x, y), [x0 - 1, y0 - 1, size + 2, size + 2], SPLAT_RESOLUTION, byRoad);
     const contact = contactOf(overworld.squares.opaque, [x0, y0, size]);
     let material;
 
     yield;
 
     if (splat.any || contact || water) {
-        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact, water, fields: splat.any ? fieldsOf(chunk) : null });
+        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact, water, fields: splat.any ? fieldsOf(chunk, byRoad?.fieldAt) : null });
         material.userData.own = true;
     } else {
         grassOnly.set(land, grassOnly.get(land) ?? groundMaterial({ land }));

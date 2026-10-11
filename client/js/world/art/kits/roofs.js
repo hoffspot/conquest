@@ -21,15 +21,28 @@ const m = (metres) => metres * M;
  * "half-hip"), `sag` (how far the ridge dips in the middle), `cover` (the roof's material name),
  * `under` (the soffit's), `cap` (the ridge and hips' tiles, or null), `barge` (bargeboards'
  * material, or null), `thatch` (thick and rounded), `swap` (the ridge runs along z instead: x0 to
- * x1 are then along z and z0 to z1 along x). Returns the roof's shape: { top (the ridge's
- * height), rise, slopeAt(across) (the roof's height over a point across it, at its surface), and
- * the gables' outlines: gable (the height of the gable wall's top at each end: the eaves up to
- * the ridge, or up to where the hip starts) }.
+ * x1 are then along z and z0 to z1 along x), `open` (nothing under it, no walls nor loft: a well's,
+ * a shelter's on posts: the underside of each slope, the soffit's material, laid all the way up
+ * to the ridge, seen from below, in place of the soffits under the overhangs only; without it, its
+ * slopes are seen from above alone, and from under one with no walls the sky shows through).
+ * Returns the roof's shape: { top (the ridge's height), rise, slopeAt(across) (the roof's height
+ * over a point across it, at its surface), and the gables' outlines: gable (the height of the
+ * gable wall's top at each end: the eaves up to the ridge, or up to where the hip starts) }.
  */
-export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, verge, thickness, kind = "gable", sag = 0, cover, under, cap = null, barge = null, thatch = false, swap = false, clip = 0.65 }) {
+export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, verge, thickness, kind = "gable", sag = 0, cover, under, cap = null, barge = null, thatch = false, swap = false, clip = 0.65, open = false }) {
     const put = swap ? ([x, y, z]) => [z, y, x] : (point) => point;
     const dir = swap ? ([x, y, z]) => [z, y, x] : (vector) => vector;
     const face = (points, out, name, tone) => solid.facing(points.map(put), dir(out), material(name), undefined, tone);
+    // (A slope's face, and, open, its underside: as far under it as the roof is thick, facing down
+    // and in; a soffit, only where there's no underside of the slope over it)
+    const slope = (points, out) => {
+        face(points, out, cover);
+
+        if (open) {
+            face(points.map(([x, y, z]) => [x, y - thickness, z]), out.map((v) => -v), under);
+        }
+    };
+    const soffit = (points, out) => !open && face(points, out, under);
     const half = (z1 - z0) / 2;
     const mid = (z0 + z1) / 2;
     const rise = half * pitch;
@@ -65,18 +78,18 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
         for (let i = 0; i < segments; i++) {
             const [xa, xb] = [xs[i], xs[i + 1]];
 
-            face([at(xa, 0), at(xb, 0), at(xb, 0.5), at(xa, 0.5)], out, cover);
-            face([at(xa, 0.5), at(xb, 0.5), at(xb, 1), at(xa, 1)], out, cover);
+            slope([at(xa, 0), at(xb, 0), at(xb, 0.5), at(xa, 0.5)], out);
+            slope([at(xa, 0.5), at(xb, 0.5), at(xb, 1), at(xa, 1)], out);
         }
 
         if (hipped) {
-            face([[ex0, ye, ze], [rx0, ye, ze], [rx0, top, mid]], out, cover);
-            face([[rx1, ye, ze], [ex1, ye, ze], [rx1, top, mid]], out, cover);
+            slope([[ex0, ye, ze], [rx0, ye, ze], [rx0, top, mid]], out);
+            slope([[rx1, ye, ze], [ex1, ye, ze], [rx1, top, mid]], out);
         } else if (clipped) {
             const zc = mid + side * clipAcross;
 
-            face([[ex0, ye, ze], [rx0, ye, ze], [rx0, top, mid], [ex0, clipHeight, zc]], out, cover);
-            face([[rx1, ye, ze], [ex1, ye, ze], [ex1, clipHeight, zc], [rx1, top, mid]], out, cover);
+            slope([[ex0, ye, ze], [rx0, ye, ze], [rx0, top, mid], [ex0, clipHeight, zc]], out);
+            slope([[rx1, ye, ze], [ex1, ye, ze], [ex1, clipHeight, zc], [rx1, top, mid]], out);
         }
 
         // The eaves' edge (rounded, on thatch), and the soffit back to the wall
@@ -91,7 +104,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
             face([[ex0, ye, ze], [ex1, ye, ze], [ex1, ye - thickness, ze], [ex0, ye - thickness, ze]], [0, 0, side], barge ?? under);
         }
 
-        face([[ex0, ye - thickness, ze], [ex1, ye - thickness, ze], [hipped ? x1 : ex1, eaves - thickness, zw], [hipped ? x0 : ex0, eaves - thickness, zw]], [0, -1, 0], under);
+        soffit([[ex0, ye - thickness, ze], [ex1, ye - thickness, ze], [hipped ? x1 : ex1, eaves - thickness, zw], [hipped ? x0 : ex0, eaves - thickness, zw]], [0, -1, 0]);
     }
 
     // The ends: a hip's slope (with its own eaves and soffit), or the verge of a gable (the roof's
@@ -103,7 +116,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
         const xw = end < 0 ? x0 : x1;
 
         if (hipped) {
-            face([[ex, ye, zn], [ex, ye, zs], [rx, top, mid]], [end, 1, 0], cover);
+            slope([[ex, ye, zn], [ex, ye, zs], [rx, top, mid]], [end, 1, 0]);
 
             if (thatch) {
                 const round = thickness * 0.45;
@@ -114,7 +127,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
                 face([[ex, ye, zn], [ex, ye, zs], [ex, ye - thickness, zs], [ex, ye - thickness, zn]], [end, 0, 0], barge ?? under);
             }
 
-            face([[ex, ye - thickness, zn], [ex, ye - thickness, zs], [xw, eaves - thickness, z1], [xw, eaves - thickness, z0]], [0, -1, 0], under);
+            soffit([[ex, ye - thickness, zn], [ex, ye - thickness, zs], [xw, eaves - thickness, z1], [xw, eaves - thickness, z0]], [0, -1, 0]);
             continue;
         }
 
@@ -129,7 +142,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
             // The roof's edge along the rake
             face([edge[0], edge[1], [ex, peakY - thickness, peakZ(side)], [ex, ye - thickness, ze]], [end, 0, 0], thatch ? cover : barge ?? under);
             // Under the overhang, from the verge back to the gable wall
-            face([[ex, ye - thickness, ze], [ex, peakY - thickness, peakZ(side)], [xw, peakY - thickness, peakZ(side)], [xw, eaves - thickness, zw]], [0, -1, 0], under);
+            soffit([[ex, ye - thickness, ze], [ex, peakY - thickness, peakZ(side)], [xw, peakY - thickness, peakZ(side)], [xw, eaves - thickness, zw]], [0, -1, 0]);
 
             if (barge && !thatch) {
                 solid.member(put([ex + end * 0.1, ye - thickness * 0.4, ze]), put([ex + end * 0.1, peakY - thickness * 0.4, peakZ(side)]), dir([end, 0, 0]), thickness * 1.8, 0.35, material(barge), { ends: false });
@@ -137,7 +150,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
         }
 
         if (clipped) {
-            face([[ex, clipHeight, mid - clipAcross], [ex, clipHeight, mid + clipAcross], [rx, top, mid]], [end, 1, 0], cover);
+            slope([[ex, clipHeight, mid - clipAcross], [ex, clipHeight, mid + clipAcross], [rx, top, mid]], [end, 1, 0]);
             face([[ex, clipHeight, mid - clipAcross], [ex, clipHeight, mid + clipAcross], [ex, clipHeight - thickness, mid + clipAcross], [ex, clipHeight - thickness, mid - clipAcross]], [end, 0, 0], thatch ? cover : barge ?? under);
         }
     }

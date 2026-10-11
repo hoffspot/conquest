@@ -7,7 +7,7 @@ import { before, describe, it } from "node:test";
 import { ALONG, blockAlong, CROP, fieldAt, FIELDS, hedgeLine, sown } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK, VERGE } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
-import { fieldsOf } from "../client/js/world/ground.js";
+import { FIELD_EDGE, fieldsOf, splatOf } from "../client/js/world/ground.js";
 import { CROP_STANDS, grassMap } from "../client/js/world/grassmap.js";
 import { HEDGES, hedgeMesh, hedgeRuns } from "../client/js/world/art/kits/hedges.js";
 import { undergrowthOf } from "../client/js/world/art/kits/wilds.js";
@@ -359,19 +359,134 @@ describe("the fields in the world (overworld.js, grassmap.js, ground.js)", () =>
         }
     });
 
-    it("tells the ground each square's crop and which way its strip runs, and nothing where there are no fields", () => {
+    it("knows the squares a road's verge alone leaves grass, and how far each point is from a road's edge, for the ground to draw the fields back along the road's own line", () => {
+        let cut = 0;
+
+        for (let y = 5240; y < 5330; y++) {
+            for (let x = 2570; x < 2660; x++) {
+                const chunk = overworld.chunk(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+                const k = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+                const crop = overworld.fieldByRoad(x, y);
+                const edge = overworld.roadEdgeAt(x + 0.5, y + 0.5, 10);
+
+                if (crop) {
+                    const field = fieldAt(SEED, x, y);
+
+                    // (Its field's own crop and way; grass as it's laid; a road's edge within the verge's reach)
+                    assert.equal(crop, field.crop + ALONG * field.along);
+                    assert.ok(sown(field.crop));
+                    assert.equal(chunk.crops[k], 0);
+                    assert.equal(chunk.ground[k], GROUND.grass);
+                    assert.ok(edge >= 0 && edge <= VERGE + Math.SQRT2 + 1e-6, `${x}, ${y}: ${edge} m from a road`);
+                    cut++;
+                } else if (chunk.crops[k]) {
+                    // (A strip's square that's laid already: none, and further from any road than the verge)
+                    assert.ok(edge > VERGE, `${x}, ${y}: a strip ${edge} m from a road`);
+                }
+            }
+        }
+
+        assert.ok(cut > 50, `${cut} squares of fields by the roads`);
+        assert.equal(overworld.roadEdgeAt(0.5, 0.5, 4), Infinity, "none that near");
+    });
+
+    it("draws a field's soil by a road back along the road's own line, not a staircase of whole squares", () => {
+        // (A road running at a slant, 2 m wide; the field beside it to the north east: soil where the
+        // land lays it, its squares within the verge's reach left grass, as overworld.js lays them)
+        const [ux, uy] = [Math.cos(0.35), Math.sin(0.35)];
+        const edgeAt = (px, py) => Math.abs((px - 1) * uy - (py - 20) * ux) - 1;
+        const side = (px, py) => (px - 1) * uy - (py - 20) * ux < 0;
+        const byRoad = { fieldAt: (x, y) => (side(x + 0.5, y + 0.5) && edgeAt(x + 0.5, y + 0.5) >= 0 && edgeAt(x + 0.5, y + 0.5) <= VERGE + Math.SQRT2 ? CROP.wheat : 0), edgeAt: (px, py, reach) => (edgeAt(px, py) <= reach ? edgeAt(px, py) : Infinity) };
+        const kindAt = (x, y) => (side(x + 0.5, y + 0.5) && edgeAt(x + 0.5, y + 0.5) > VERGE + Math.SQRT2 ? GROUND.soil : GROUND.grass);
+        const resolution = 4;
+        const soilOf = (splat, i, j) => splat.data[(j * splat.width + i) * 4 + 2];
+        const drawn = splatOf(kindAt, [0, 0, 40, 40], resolution, byRoad);
+        const before = splatOf(kindAt, [0, 0, 40, 40], resolution);
+        let [field, verge, stepped] = [0, 0, 0];
+
+        for (let j = 8; j < drawn.height - 8; j++) {
+            for (let i = 8; i < drawn.width - 8; i++) {
+                const [px, py] = [(i + 0.5) / resolution, (j + 0.5) / resolution];
+
+                if (!side(px, py)) {
+                    continue;
+                }
+
+                const away = edgeAt(px, py);
+
+                // (Past the ramp's middle by more than the edges' raggedness can move it: field, or verge)
+                if (away >= FIELD_EDGE.edge + 0.3) {
+                    assert.ok(soilOf(drawn, i, j) >= 128, `soil ${away.toFixed(2)} m from the road at ${px}, ${py}`);
+                    field++;
+                    stepped += soilOf(before, i, j) < 128 ? 1 : 0;
+                } else if (away <= FIELD_EDGE.edge - 0.3) {
+                    assert.ok(soilOf(drawn, i, j) < 128, `grass ${away.toFixed(2)} m from the road at ${px}, ${py}`);
+                    verge++;
+                }
+            }
+        }
+
+        assert.ok(field > 2000 && verge > 1000, `${field} texels of field, ${verge} of verge`);
+
+        // (Square by square, as it was: whole squares of the field beyond the line drawn as grass)
+        assert.ok(stepped > 100, `${stepped} texels of field left grass square by square`);
+
+        // (The crop's colour where the soil reaches over the squares the road's verge left grass)
+        const chunk = { x0: 0, y0: 0, crops: new Uint8Array(CHUNK * CHUNK), ground: new Uint8Array(CHUNK * CHUNK).fill(GROUND.grass) };
+
+        chunk.crops[CHUNK * 10 + 30] = CROP.wheat;
+        chunk.ground[CHUNK * 10 + 30] = GROUND.soil;
+
+        const { texture } = fieldsOf(chunk, (x, y) => (x === 12 && y === 30 ? CROP.barley + ALONG : 0));
+
+        assert.equal(texture.image.data[(30 * CHUNK + 12) * 4], CROP.barley);
+        assert.equal(texture.image.data[(30 * CHUNK + 12) * 4 + 1], 255);
+        assert.equal(texture.image.data[(10 * CHUNK + 32) * 4], CROP.wheat, "two squares out");
+        assert.equal(texture.image.data[(10 * CHUNK + 33) * 4], 0, "and no further");
+        texture.dispose();
+    });
+
+    it("tells the ground each square's crop and which way its strip runs, the sown crops carried a little way out over the grass round them, and nothing where there are no fields", () => {
+        let spread = 0;
+
         for (const chunk of chunks) {
             const { texture, area } = fieldsOf(chunk);
+            const at = (i, j) => (i >= 0 && j >= 0 && i < CHUNK && j < CHUNK ? chunk.crops[j * CHUNK + i] : 0);
 
             assert.deepEqual(area, [chunk.x0, chunk.y0, CHUNK, CHUNK]);
 
             for (let k = 0; k < CHUNK * CHUNK; k++) {
-                assert.equal(texture.image.data[k * 4], chunk.crops[k] % ALONG);
-                assert.equal(texture.image.data[k * 4 + 1], chunk.crops[k] >= ALONG ? 255 : 0);
+                const [i, j] = [k % CHUNK, Math.floor(k / CHUNK)];
+                const [told, along] = [texture.image.data[k * 4], texture.image.data[k * 4 + 1] === 255];
+
+                if (sown(chunk.crops[k] % ALONG) || chunk.ground[k] === GROUND.soil) {
+                    // (A sown strip's own: its crop and its way, as it's laid)
+                    assert.equal(told, chunk.crops[k] % ALONG);
+                    assert.equal(along, chunk.crops[k] >= ALONG);
+                } else if (sown(told)) {
+                    // (Over the grass, a fallow strip's too: a sown crop from no further off than
+                    // FIELD_EDGE.spread, and its way; read only where the soil reaches over it)
+                    const from = [];
+
+                    for (let dj = -FIELD_EDGE.spread; dj <= FIELD_EDGE.spread; dj++) {
+                        for (let di = -FIELD_EDGE.spread; di <= FIELD_EDGE.spread; di++) {
+                            from.push(at(i + di, j + dj));
+                        }
+                    }
+
+                    assert.ok(sown(told) && from.some((crop) => crop % ALONG === told && crop >= ALONG === along), `${chunk.x0 + i}, ${chunk.y0 + j}`);
+                    spread++;
+                } else {
+                    // (As it's laid, fallow or none: grass with a sown square beside it takes its crop)
+                    assert.equal(told, chunk.crops[k] % ALONG);
+                    assert.ok(![at(i - 1, j), at(i + 1, j), at(i, j - 1), at(i, j + 1)].some((crop) => sown(crop % ALONG)), `${chunk.x0 + i}, ${chunk.y0 + j}`);
+                }
             }
 
             texture.dispose();
         }
+
+        assert.ok(spread > 500, `${spread} squares of grass coloured`);
 
         // (The town's chunk: no fields)
         const town = overworld.chunk(Math.floor(overworld.stamp.at[0] / CHUNK) + 1, Math.floor(overworld.stamp.at[1] / CHUNK) + 1);
