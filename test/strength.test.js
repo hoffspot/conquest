@@ -140,7 +140,7 @@ describe("a side's strength (strength.js)", () => {
         assert.deepEqual(withinBudget(9, 4, 6), { count: 6, health: 1.5 }, "six there, as tough as nine");
         assert.deepEqual(withinBudget(9, 4, 0), { count: 4, health: 2.25 }, "never fewer than alone");
         assert.deepEqual(withinBudget(3, 4, 0), { count: 3, health: 1 }, "never more than wanted");
-        assert.equal(BODIES.most, 40);
+        assert.equal(BODIES.most, 60);
     });
 
     it("takes players on one map near one another, one after another, as one group; those apart or elsewhere their own", () => {

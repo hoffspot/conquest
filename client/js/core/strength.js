@@ -46,9 +46,10 @@ export const SCALING = Object.freeze({ count: 1, health: 0.25, leader: 0.8 });
 
 /**
  * The body budget near one fight: at most `most` of the side's and the wild's within `reach`
- * metres of where foes are put out (every machine draws them all: docs/WILDS.md, *A ceiling*).
+ * metres of where foes are put out (every machine draws them all, those least seen in their
+ * kind's crowd when it comes too slowly: docs/WILDS.md, *A ceiling*).
  */
-export const BODIES = Object.freeze({ most: 40, reach: 80 });
+export const BODIES = Object.freeze({ most: 60, reach: 80 });
 
 // What a spell does on average, before the caster's power
 const meanOf = ([least, most]) => (least + most) / 2;
