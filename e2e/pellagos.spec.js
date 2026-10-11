@@ -9153,6 +9153,8 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
 
 test("six quick actions across (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
     test.setTimeout(180000);
+    // (Not full screen, as a tap on the game asks to be, or the phone can't be turned on its side)
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ fullscreen: false })));
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 
