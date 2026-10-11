@@ -183,6 +183,30 @@ describe("the host (host.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "hellfire", target: "orc" }), { ok: false, reason: "unknown" });
     });
 
+    it("sends a player straight ahead no further than the reach held input asks for, a reach that's no number left out", () => {
+        const host = hosted();
+        const player = host.battle.actor(HOST_PLAYER);
+        const gone = () => Math.hypot(player.path.at(-1)[0] - player.x, player.path.at(-1)[1] - player.y);
+
+        // (Whichever way's clearest from where they stand)
+        const ways = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4);
+        const facing = ways.map((way) => {
+            host.command(HOST_PLAYER, { type: "ahead", facing: way });
+
+            return { way, far: player.path.length ? gone() : 0 };
+        }).sort((a, b) => b.far - a.far)[0];
+
+        assert.ok(facing.far > 5, `${facing.far.toFixed(1)} m clear`);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "ahead", facing: facing.way, reach: 5 }), { ok: true });
+        // (To the centimetre, as the ways found are)
+        assert.ok(gone() < 5.02 && gone() > 4, `${gone().toFixed(2)} m`);
+
+        for (const reach of ["far", NaN, Infinity, -5]) {
+            assert.deepEqual(host.command(HOST_PLAYER, { type: "ahead", facing: facing.way, reach }), { ok: true });
+            assert.ok(Math.abs(gone() - facing.far) < 1e-6, `as far as the way's clear with reach ${reach}`);
+        }
+    });
+
     it("shows a player's emote to everyone, standing still for it: only an emote, and not while they're down, mid-blow or dead", () => {
         const host = hosted();
         const player = host.battle.actor(HOST_PLAYER);

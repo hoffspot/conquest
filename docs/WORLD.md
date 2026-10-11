@@ -676,7 +676,10 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   but down a terrace's face under its wall, too steep to stand. Its ways over what's built
   (`citadelWays` `decks`: the way from the bridge's far end over the moat, through the gate tower
   and the outer gate to the outer ward; each stair's lower flight, its turning landing, its upper
-  flight, its gate's landing and the passage through the gate into the ward above) are decks, as
+  flight, its gate's landing and the passage through the gate into the ward above; the keep's
+  steps, from their foot through the middle of each tread to the top one's, level from there to
+  its door's sill, as high over the inner ward as the art builds them: sites.js lifts a deck over
+  the innermost terrace by as much as it stands over it) are decks, as
   the bridges over the rivers are: their squares open and paved whatever's under them, their
   height along each the deck's (`sites.js` `deckAt`, `decksNear`; the overworld's `heightAt`),
   rising from one end to the other up a flight; under a deck more than a metre over the ground,

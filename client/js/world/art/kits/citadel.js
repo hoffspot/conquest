@@ -679,7 +679,8 @@ function chapelInto(solid, piece) {
 // windows up each face, a crown of machicolations round its top and a steep slate roof behind
 // its battlements; a needle tower on two opposite corners rising far over it under a tall spire,
 // a flag at each point, and a bartizan corbelled out from each of the other two under a cone;
-// its door (towards the inner gate, +z) up a few steps, torches either side
+// its door (towards the inner gate, +z) up a few steps (`steps`, as core/setpieces/citadel.js
+// walks them), torches either side
 function keepInto(solid, piece) {
     const stone = material("stone");
     const dark = material("stone-dark");
@@ -740,13 +741,18 @@ function keepInto(solid, piece) {
         solid.cone(cx, cz, top + m(piece.turret), b * 4, b + m(0.3), slate, 10);
     }
 
-    // (Its door in a forebuilding out past its plinth, up a few steps)
+    // (Its door in a forebuilding out past its plinth, up a few steps: each built down into the
+    // ground, the top one first)
     const front = plinth + m(0.4);
+    const { count, rise, tread, wide } = piece.steps;
 
     solid.box(-m(2.4), foot, half, m(2.4), m(5), front, stone);
     solid.box(-m(2.7), m(5), half, m(2.7), m(5.5), front + m(0.3), dark);
-    solid.box(-m(1.3), m(0.6), front, m(1.3), m(3.8), front + m(0.06), material("planks-dark"));
-    solid.box(-m(2), foot, front, m(2), m(0.6), front + m(2.4), stone);
+    solid.box(-m(1.3), m(count * rise), front, m(1.3), m(3.8), front + m(0.06), material("planks-dark"));
+
+    for (let k = 0; k < count; k++) {
+        solid.box(-m(wide / 2), foot, front + m(k * tread), m(wide / 2), m((count - k) * rise), front + m((k + 1) * tread), stone);
+    }
     torch(solid, [-m(1.9), m(3), front + m(0.06)], [0, 1]);
     torch(solid, [m(1.9), m(3), front + m(0.06)], [0, 1]);
 }

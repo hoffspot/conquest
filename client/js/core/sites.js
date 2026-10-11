@@ -649,6 +649,11 @@ export class Sites {
         const ways = citadelWays(citadel);
         const rises = citadel.wards.map(({ rise }) => rise);
         const lift = (h) => {
+            // (Over the innermost terrace, as high over it: the keep's steps)
+            if (h >= rises.at(-1)) {
+                return level(base + rises.at(-1)) + (h - rises.at(-1));
+            }
+
             const k = Math.max(0, Math.min(rises.length - 2, rises.findLastIndex((rise) => rise <= h)));
             const t = (h - rises[k]) / (rises[k + 1] - rises[k]);
 

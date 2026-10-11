@@ -1067,7 +1067,7 @@ test("the thumb stick, asked to float, springs up under the thumb where it lands
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).stickFloats)).toBe(true);
 });
 
-test("the thumb stick, off until Game options asks for it, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off again", async ({ page }) => {
+test("the thumb stick, there from the start, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off in Game options", async ({ page }) => {
     // (Turned on and off again, pushed twice and played on between: more than the usual time, on a
     // machine drawing in software)
     test.setTimeout(180000);
@@ -1075,18 +1075,10 @@ test("the thumb stick, off until Game options asks for it, walks the player the 
 
     await clearestWayAhead(page);
 
-    // Not there until it's asked for, and nothing said of it either
-    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).display)).toBe("none");
-    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".stick-only")).display)).toBe("none");
-
-    await page.evaluate(() => {
-        const switched = document.querySelector("#stickswitch");
-
-        switched.checked = true;
-        switched.dispatchEvent(new Event("change"));
-    });
-
-    // Asked for, it's there, and only its own circle takes touches
+    // There from the start (Game options' switch on), the opening hint telling of it, and only its
+    // own circle takes touches
+    expect(await page.evaluate(() => document.querySelector("#stickswitch").checked)).toBe(true);
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".stick-only")).display)).not.toBe("none");
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).pointerEvents)).toBe("auto");
 
     const zone = await page.locator("#stickzone").boundingBox();
@@ -1734,7 +1726,7 @@ test("in a fight, the battle cam swings round to see the player and their foe fr
     expect(fight.after).toBeLessThan(0.01);
 });
 
-test("the battle cam takes a fight over only once the player and their foe are both wholly on the screen: one coming for them out of view leaves the camera be; come into view, it frames the fight", async ({ page }) => {
+test("the battle cam takes a fight over only once the player and their foe are both wholly on the screen: one coming for them out of view leaves the camera be; come into view, it frames the fight, once: turned by hand, the camera's left as it's turned", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const fight = await page.evaluate(() => {
@@ -1797,8 +1789,17 @@ test("the battle cam takes a fight over only once the player and their foe are b
         game.advance(3);
 
         const behind = Math.atan2(me.object.position.x - it.object.position.x, me.object.position.z - it.object.position.z);
+        const framed = { round: Math.abs(wrap(view.yaw - behind)), seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))] };
 
-        return { away, inFull, round: Math.abs(wrap(view.yaw - behind)), seen: [onScreen(me.point(0.55)), onScreen(it.point(0.55))] };
+        // Turned by hand (a drag: taken hold of, turned straight behind the player, let go): left
+        // as it's turned, not swung back round to frame the fight again a second after
+        game.cameraFollow.grab();
+        game.advance(0.1);
+        game.cameraFollow.turn(wrap(behind - game.cameraFollow.yaw));
+        game.cameraFollow.release();
+        game.advance(3);
+
+        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)) };
     });
 
     expect(fight.away).toEqual({ found: true, turned: 0, seen: false });
@@ -1806,6 +1807,7 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.round).toBeGreaterThan(Math.PI / 6 - 0.15);
     expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
     expect(fight.seen).toEqual([true, true]);
+    expect(fight.left).toBeLessThan(0.01);
 });
 
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
@@ -8945,7 +8947,8 @@ test.describe("on a phone", () => {
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
 
-        // (The zoom buttons and the thumb stick are off until Game options asks for them: below)
+        // (The zoom buttons are off until Game options asks for them, and the thumb stick's there
+        // from the start: both below)
         for (const button of ["#menubutton", "#packbutton", "#journalbutton", "#spellbookbutton"]) {
             const box = await page.locator(button).boundingBox();
 
@@ -8969,8 +8972,8 @@ test.describe("on a phone", () => {
         expect(plate.y + plate.height).toBeLessThanOrEqual(844);
         expect(hint.y + hint.height).toBeLessThanOrEqual(plate.y - 20);
 
-        // Asked for, the zoom buttons and the thumb stick are big enough to tap and on the screen
-        // too, and the card rises clear of the zoom buttons rather than sitting under them
+        // Asked for, the zoom buttons are big enough to tap and on the screen too, as the thumb
+        // stick is, and the card rises clear of the zoom buttons rather than sitting under them
         await page.evaluate(() => {
             for (const id of ["#zoomswitch", "#stickswitch"]) {
                 const switched = document.querySelector(id);
@@ -8994,7 +8997,7 @@ test.describe("on a phone", () => {
 
         expect(risen.y + risen.height).toBeLessThanOrEqual(zoom.y);
 
-        // (Put back, so the double tap below meets the view and not the stick)
+        // (Both turned off, so the double tap below meets the view and not the stick)
         await page.evaluate(() => {
             for (const id of ["#zoomswitch", "#stickswitch"]) {
                 const switched = document.querySelector(id);

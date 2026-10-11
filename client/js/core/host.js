@@ -1156,7 +1156,7 @@ export class Host {
 
     /**
      * Do what a player asks, if it can be done. A command is one of:
-     *  - { type: "move", to: [x, y] }, { type: "ahead", facing }, { type: "engage", target }
+     *  - { type: "move", to: [x, y] }, { type: "ahead", facing, reach? }, { type: "engage", target }
      *    (stand: true, set on them where they stand), { type: "approach", target },
      *    { type: "enter", link }, { type: "stop" }: orders for their character in the battle
      *    (battle.js command), with run: true to run;
@@ -1249,7 +1249,7 @@ export class Host {
                     return refuse("command");
                 }
 
-                return this.#order(actor, { type: "ahead", facing: command.facing, run });
+                return this.#order(actor, { type: "ahead", facing: command.facing, run, ...(Number.isFinite(command.reach) && command.reach > 0 ? { reach: command.reach } : {}) });
             case "engage":
             case "approach": {
                 const target = this.battle.actor(command.target);

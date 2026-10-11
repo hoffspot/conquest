@@ -818,7 +818,7 @@ input[type="range"] {
     bottom: calc(var(--safe-bottom) + 16px + var(--quick-height) + 10px);
 }
 
-/* Off until Game options asks for it, and then nothing is said of it either (nor whether it
+/* On to start with; turned off in Game options, nothing is said of it either (nor whether it
    floats) */
 body[data-stick="off"] #hud .stickzone,
 body[data-stick="off"] .stick-only,
@@ -867,8 +867,9 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     inset: 0;
     border-radius: 50%;
     border: 1px solid var(--panel-border);
+    /* (No blur of what's behind it: the view under it changes every frame, and a phone's GPU
+       blurred it afresh each time, for a blur of one pixel) */
     background: radial-gradient(circle, rgba(255, 244, 220, 0.09), rgba(22, 18, 14, 0.5));
-    backdrop-filter: blur(1px);
     opacity: 0.72;
     transition: opacity 0.18s ease-out;
 }

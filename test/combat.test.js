@@ -779,6 +779,21 @@ describe("the battle (battle.js)", () => {
         assert.ok(player.pace <= KINDS.player.speed + 1e-9, `walking at ${player.pace.toFixed(2)} m/s`);
     });
 
+    it("goes straight ahead no further than an order's reach, if it has one (held input's)", () => {
+        const battle = new Battle(open(60, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+
+        battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true, reach: 10 });
+        assert.deepEqual(player.order, { type: "move", to: [11, 2], run: true });
+        assert.deepEqual(player.path, [[11.5, 2.5]]);
+
+        // (None, or none to speak of: as far as the way is clear)
+        for (const reach of [undefined, 0, -5]) {
+            battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true, reach });
+            assert.ok(player.path.at(-1)[0] > 59 && player.path.at(-1)[0] < 60, `to ${player.path.at(-1)} with reach ${reach}`);
+        }
+    });
+
     it("stops running when its stamina runs out, and walks the rest of the way", () => {
         const battle = new Battle(open(60, 5), { seed: 1 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
