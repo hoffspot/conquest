@@ -25,7 +25,7 @@ import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
-import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -417,6 +417,8 @@ $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#resistswitch").checked = settings.resistSummons;
 $("#refuseswitch").checked = settings.refuseInvites;
+$("#snagswitch").checked = settings.autoSnag;
+$("#snagbutton").hidden = !settings.autoSnag;
 $("#followswitch").checked = settings.cameraFollows;
 $("#battlecamswitch").checked = settings.battleCam;
 $("#invertswitch").checked = settings.invertTilt;
@@ -592,6 +594,8 @@ async function playing(save) {
         vitals: loadVitals(save),
         messages: loadMessages(save),
         onMessages: (messages) => saveMessages(save, messages),
+        told: loadTold(save),
+        onTold: (told) => saveTold(save, told),
     });
 
     state.keepPlace = () => {
@@ -613,6 +617,8 @@ async function playing(save) {
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    game.autoSnag = settings.autoSnag;
+    game.snagFilter = snagChoiceOf();
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -653,8 +659,9 @@ function resume() {
     state.game?.start();
 }
 
-// The menu's pages: the main one, Game options, and its Action wheels, Quick actions and Debug log
-const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"], log: ["#menulog", "logtitle", "#logback"] };
+// The menu's pages: the main one, Game options, and its Auto-snag, Action wheels, Quick actions
+// and Debug log
+const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], snag: ["#menusnag", "snagtitle", "#snaggrades input"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"], log: ["#menulog", "logtitle", "#logback"] };
 
 function menuPage(page) {
     for (const [each, [id]] of Object.entries(MENU_PAGES)) {
@@ -664,6 +671,88 @@ function menuPage(page) {
     $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page][1]);
     $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
     $(MENU_PAGES[page][2]).focus();
+
+    // (What auto-snag takes, told under its switch)
+    if (page === "options") {
+        showSnag(settings.autoSnag);
+    }
+}
+
+// Auto-snag (Game options): what it takes, for the game (host.js snagChoice: null, everything)
+function snagChoiceOf() {
+    return settings.snagGrades && settings.snagKinds ? { grades: settings.snagGrades, kinds: settings.snagKinds } : null;
+}
+
+// What auto-snag takes, its choices and their names (host.js SNAG_GRADES, SNAG_KINDS: loaded with
+// the game, so at hand by the time Game options is open)
+async function snagLists() {
+    const [{ SNAG_GRADES, SNAG_KINDS }, { QUALITIES, WARE_KINDS }] = await Promise.all([import("./core/host.js"), import("./core/progress.js")]);
+
+    return {
+        grades: SNAG_GRADES.map((value) => ({ value, label: QUALITIES[value].label || "Common" })),
+        kinds: SNAG_KINDS.map((value) => ({ value, label: value === "gold" ? "Gold" : WARE_KINDS[value] })),
+    };
+}
+
+// Under the Auto-snag switch while it's on, what it takes, in a word: its own page to change it
+async function showSnag(on) {
+    $("#snagbutton").hidden = !on;
+
+    const choice = snagChoiceOf();
+
+    if (!choice) {
+        $("#snagsummary").textContent = "Everything";
+
+        return;
+    }
+
+    const lists = await snagLists();
+    const named = (list, ticked, all) => (ticked.length === list.length ? all : list.filter(({ value }) => ticked.includes(value)).map(({ label }) => label).join(", ") || "none");
+
+    $("#snagsummary").textContent = `${named(lists.grades, choice.grades, "Any rarity")}; ${named(lists.kinds, choice.kinds, "any kind")}`;
+}
+
+async function openSnag() {
+    const lists = await snagLists();
+    const choice = snagChoiceOf();
+    const box = (name, { value, label }, on) => {
+        const choiceLabel = document.createElement("label");
+        const input = Object.assign(document.createElement("input"), { type: "checkbox", name, value, checked: on });
+
+        choiceLabel.className = `snag-choice${name === "grade" ? ` rarity-${value}` : ""}`;
+        choiceLabel.append(input, Object.assign(document.createElement("span"), { textContent: label }));
+
+        return choiceLabel;
+    };
+
+    $("#snaggrades").replaceChildren($("#snaggrades legend"), ...lists.grades.map((grade) => box("grade", grade, !choice || choice.grades.includes(grade.value))));
+    $("#snagkinds").replaceChildren($("#snagkinds legend"), ...lists.kinds.map((kind) => box("kind", kind, !choice || choice.kinds.includes(kind.value))));
+    menuPage("snag");
+}
+
+// A box ticked or not: what auto-snag takes kept (everything ticked: null, so whatever's thought of
+// later is taken too), and told to the game
+async function snagChanged({ all = false } = {}) {
+    const lists = await snagLists();
+
+    if (all) {
+        for (const input of $("#menusnag").querySelectorAll("input")) {
+            input.checked = true;
+        }
+    }
+
+    const ticked = (id) => [...$(id).querySelectorAll("input:checked")].map(({ value }) => value);
+    const [grades, kinds] = [ticked("#snaggrades"), ticked("#snagkinds")];
+    const everything = grades.length === lists.grades.length && kinds.length === lists.kinds.length;
+
+    Object.assign(settings, { snagGrades: everything ? null : grades, snagKinds: everything ? null : kinds });
+    saveSettings({ snagGrades: settings.snagGrades, snagKinds: settings.snagKinds });
+
+    if (state.game) {
+        state.game.snagFilter = snagChoiceOf();
+    }
+
+    showSnag(settings.autoSnag);
 }
 
 // The debug log (app/telemetry.js): each event kept, the newest first, its summary opening on
@@ -1496,6 +1585,8 @@ async function playingJoined(save, welcome, joining) {
     showZoom(settings.zoom);
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    game.autoSnag = settings.autoSnag;
+    game.snagFilter = snagChoiceOf();
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -1577,6 +1668,12 @@ $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloat
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
+$("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
+$("#snagbutton").addEventListener("click", openSnag);
+$("#snagback").addEventListener("click", () => menuPage("options"));
+$("#snagall").addEventListener("click", () => snagChanged({ all: true }));
+$("#snaggrades").addEventListener("change", () => snagChanged());
+$("#snagkinds").addEventListener("change", () => snagChanged());
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
@@ -1650,7 +1747,7 @@ showVolumes(settings.sound);
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
 
-    if (!$("#menuwheels").hidden || !$("#menulog").hidden) {
+    if (!$("#menuwheels").hidden || !$("#menulog").hidden || !$("#menusnag").hidden) {
         menuPage("options");
     } else if (!$("#menuquick").hidden) {
         quickBack();
@@ -1750,9 +1847,13 @@ function applySetting(key, value) {
         floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
-    } else if (key === "resistSummons" || key === "refuseInvites") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag") {
         if (state.game) {
             state.game[key] = value;
+        }
+
+        if (key === "autoSnag") {
+            showSnag(value);
         }
     } else if (CAMERA_SETTINGS.includes(key)) {
         applyCamera();

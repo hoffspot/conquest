@@ -388,7 +388,11 @@ whoever holds the town, and whom they fight is as their peoples stand.
 - **Defending itself.** Struck (or cast at) by someone beyond its leash, a soldier goes after them
   all the same, till 10 seconds after they last did it (`DEFEND_MS`), or it's lost sight of them
   3 seconds; then back to its post or its round. Before, one shot at from beyond its leash stood
-  there to be shot down.
+  there to be shot down. A creature of the wild does the same, and keeps after them unseen till
+  then too (a spell reaches 16 to 20 metres, further than a creature sees: struck from out of
+  its sight, it comes looking), and the rest of its pack with it, wherever they are, as if it
+  howled (battle.js `#wild`, `#provoke`, `#struckBy`; the user: "It's possible to hit an enemy
+  with an offensive spell at maximum range and they don't notice you").
 - **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
   the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life.
 - **Relief.** A minute after one of a town's soldiers is taken away, another of its garrison takes
@@ -766,8 +770,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     is turned to.
   - **Thrown away**, a stack's gone, but "Undo" takes it back for 8 seconds (`discard`,
     `undiscard`: `UNDO_MS`), where it was if that's still free.
-  - **Dropped**, things lie on the ground where the player stands, a cloth bundle with their
-    icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
+  - **Dropped**, things lie on the ground where the player stands, their icon floating just off
+    the ground over a ring glowing the colour of how rare it is (world/drops3d.js: *What they
+    leave*, docs/WILDS.md), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack. A tap counts
     within 40 pixels of it anywhere from where it lies up to its top, its icon over it
@@ -777,7 +782,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     the shop's wares under their kinds (weapons, shields and the off hand, clothes and armour,
     jewellery, food, drink and draughts, tomes and scrolls: core/progress.js `WARE_KINDS`), the commoner made
     first, then by name, each with its price and a button to buy it (greyed past the gold to
-    hand). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
+    hand), asking first whether they're sure: what it is, what it costs and what they'd have
+    left, Buy or Cancel (pack.js `#buy`, `#sure`; the user: "have a confirmation dialog when
+    buying something from a shop"). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
     to sell it (asked how many, of a stack); what that shop won't buy (`buys`: tomes and the
     spoils of the wild, but at the guild) is greyed, saying so, and why. **With another
     player**, face to face (docs/WILDS.md), it shows what

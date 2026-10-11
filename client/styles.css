@@ -1843,6 +1843,15 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-size: 20px;
 }
 
+/* What the player's picked up, rising over them (no message across the screen): smaller, gold, on
+   one line, a little longer to read */
+.damage.loot {
+    font-size: 16px;
+    color: #f4d58a;
+    white-space: nowrap;
+    animation-duration: 1.8s;
+}
+
 /* What lingers hurting them: smaller, the colour of it */
 .damage.ail {
     font-size: 15px;
@@ -3349,6 +3358,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     text-align: center;
 }
 
+.pack-ask-text {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink);
+    text-align: center;
+}
+
 .pack-ask-count {
     font: 800 22px var(--font-ui);
     color: var(--ink);
@@ -3406,6 +3422,47 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .wheel.item-wheel.clickable .slice[data-action]:hover .face {
     fill: rgba(236, 200, 130, 0.35);
+}
+
+/* A message's little X, at its top right: tapped, the message is put away (hud.js message). A
+   bigger target than it looks, for a finger. */
+#banner .banner-close {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--gold);
+    opacity: 0.8;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+#banner .banner-close::before,
+#banner .banner-close::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#banner .banner-close::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#banner .banner-close:hover,
+#banner .banner-close:focus-visible {
+    opacity: 1;
+    color: var(--gold-bright);
 }
 
 /* A message's button (Undo) */
@@ -4115,7 +4172,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     top: 28%;
     transform: translateX(-50%);
     max-width: calc(100% - 32px);
-    padding: 12px 22px;
+    /* (Room either side for its little X, at the top right, the words kept in the middle) */
+    padding: 12px 34px;
     border-radius: 12px;
     background: var(--panel);
     border: 1px solid var(--panel-border);
@@ -4552,6 +4610,91 @@ dialog#menu .options {
 
 .switch.option .track {
     flex: none;
+}
+
+/* Under a switch, a page of its own to choose more (Auto-snag: what it takes) */
+.option-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 2px 12px 18px;
+    border: none;
+    border-bottom: 1px solid var(--field-border);
+    background: none;
+    font: inherit;
+    font-size: 15px;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+}
+
+.option-link .text {
+    display: grid;
+    gap: 2px;
+}
+
+.option-link small {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.option-link .chevron {
+    flex: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--muted);
+}
+
+/* What auto-snag takes: how rare (each in its colour) and what kind, ticked in two lists, side by
+   side, or one over the other on a narrow screen */
+.snag-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 4px 0 8px;
+}
+
+@media (max-width: 440px) {
+    .snag-lists {
+        grid-template-columns: 1fr;
+    }
+}
+
+.snag-list {
+    display: grid;
+    gap: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 12px 8px;
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+}
+
+.snag-list legend {
+    padding: 0 6px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.snag-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 2px;
+    font-size: 15px;
+    color: var(--rarity, var(--ink));
+    cursor: pointer;
+}
+
+.snag-choice input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--gold);
 }
 
 /* How loud each kind of sound is: a slider on each row */

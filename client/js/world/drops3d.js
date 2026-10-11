@@ -1,7 +1,8 @@
-// Things dropped on the ground (core/host.js: a player's "drop"): a little cloth bundle where each
-// lies, its icon floating over it, bobbing and turning to the camera, until it's picked up or
-// it's lain there too long. Anyone near can tap it to pick it up (app/game.js). A creature's
-// spoils (host.js: a bundle for one player) are a leather sack, and only that player sees theirs.
+// Things dropped on the ground (core/host.js: a player's "drop"; a creature's spoils, a bundle for
+// one player, and only that player sees theirs): each thing there (and its gold) its icon, turned
+// to the camera, floating just off the ground and bobbing a few centimetres up and down over a
+// ring glowing the colour of how rare it is (the pack's colours: styles.css .rarity-*), until it's
+// picked up or it's lain there too long. Anyone near can tap one to pick up the lot (app/game.js).
 // A place's chest (host.js #places: held by outlaws or the dead, by their leader) is an iron-bound
 // wooden chest (the JMI 3D Toolkit's, client/models/jmi, read from the catalog once the game's
 // started; drawn here till it's read, or if it can't be), shut while its guardians hold the place;
@@ -16,11 +17,35 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { hashed } from "../app/catalog.js";
 import { loadGltf } from "./art/engine/models.js";
+import { gradeOf } from "../core/progress.js";
 import { drawGold, GOLD, goldParts } from "./gold3d.js";
 
-// A bundle's size (metres), and where its icon floats over it
-const BUNDLE = Object.freeze({ radius: 0.2, squash: 0.55 });
+// An icon over a chest: its size (metres), how far over the chest, how far it bobs
 const ICON = Object.freeze({ size: 0.46, above: 0.62, bob: 0.06 });
+
+/**
+ * A thing lying on the ground: its icon's size (metres), how far its foot floats off the ground at
+ * the middle of its bob, how far it bobs either way of that (a few centimetres, its foot never
+ * touching the ground) and how fast (radians a second); how far apart the things in a bundle lie;
+ * and the ring glowing under each (its radius, how far off the ground, how its glow breathes).
+ */
+export const FLOAT = Object.freeze({ size: 0.42, lift: 0.055, bob: 0.03, pace: 2.4, apart: 0.34 });
+export const RING = Object.freeze({ radius: 0.27, above: 0.012, glow: [0.6, 0.95] });
+
+/** The colour each rarity glows (progress.js QUALITIES: the pack's own, styles.css .rarity-*). */
+export const RARITY_GLOW = Object.freeze({ common: 0xe9e1d0, fine: 0x6aa6ff, masterwork: 0xe8c35a, rare: 0xb07cff, veryRare: 0xff6aa8, legendary: 0xf08a3a });
+
+/** What's shown of something dropped (not a chest): its gold, if any, and each thing in it, as { id (its icon), grade }. */
+export function shownOf(dropped) {
+    if (dropped.item) {
+        return [{ id: dropped.item.id, grade: gradeOf(dropped.item) }];
+    }
+
+    return [...(dropped.bundle.gold > 0 ? [{ id: "gold", grade: "common" }] : []), ...dropped.bundle.items.map((item) => ({ id: item.id, grade: gradeOf(item) }))];
+}
+
+// (What's in it, in short: drawn again when it changes, part of it taken)
+const contentsOf = (dropped) => JSON.stringify(dropped.bundle ?? dropped.item ?? null);
 
 // A chest's size (metres: its body; its lid's rise over it, a half-round flattened), its iron
 // bands' width, and how far back its lid's thrown once it's open (radians)
@@ -62,17 +87,16 @@ export class Drops {
         /** The ground's height at a point ((x, z) => metres: set with setGround). */
         this.groundAt = () => 0;
 
-        /** What's drawn, by the id of the thing dropped: { object, icon, x, z, seed }. */
+        /**
+         * What's drawn, by the id of the thing dropped: { object, icon (over a chest), things
+         * (floating: [{ icon, ring, seed }]), x, z, seed, contents }.
+         */
         this.drawn = new Map();
 
-        this.bundle = new THREE.SphereGeometry(BUNDLE.radius, 12, 8);
-        this.bundle.scale(1, BUNDLE.squash, 1);
-        this.bundle.translate(0, BUNDLE.radius * BUNDLE.squash, 0);
-        this.knot = new THREE.ConeGeometry(BUNDLE.radius * 0.35, BUNDLE.radius * 0.6, 8);
-        this.knot.translate(0, BUNDLE.radius * (2 * BUNDLE.squash + 0.2), 0);
-        this.cloth = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.95 });
-        this.leather = new THREE.MeshStandardMaterial({ color: 0x5e3a1e, roughness: 0.8 });
-        this.tie = new THREE.MeshStandardMaterial({ color: 0x5a3f22, roughness: 0.9 });
+        // The glowing ring under a thing (lying flat), and its glow in each rarity's colour
+        this.ring = new THREE.PlaneGeometry(RING.radius * 2, RING.radius * 2).rotateX(-Math.PI / 2);
+        this.ringPicture = ringPicture();
+        this.glows = Object.fromEntries(Object.entries(RARITY_GLOW).map(([grade, color]) => [grade, new THREE.MeshBasicMaterial({ color, map: this.ringPicture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: RING.glow[1] })]));
         this.chest = chestParts();
         this.wood = new THREE.MeshStandardMaterial({ color: 0x6a4527, roughness: 0.85 });
         this.iron = new THREE.MeshStandardMaterial({ color: 0x3b3936, roughness: 0.45, metalness: 0.7 });
@@ -131,32 +155,47 @@ export class Drops {
 
             seen.add(dropped.id);
 
+            // (Drawn again when what's in it changes: some of it taken)
+            const drawn = this.drawn.get(dropped.id);
+
+            if (drawn && !drawn.chest && drawn.contents !== contentsOf(dropped)) {
+                this.#undraw(dropped.id);
+            }
+
             if (!this.drawn.has(dropped.id)) {
                 this.#draw(dropped, x, z);
             }
         }
 
-        for (const [id, drawn] of this.drawn) {
+        for (const id of [...this.drawn.keys()]) {
             if (!seen.has(id)) {
-                this.group.remove(drawn.object);
-                drawn.icon?.material.dispose();
-                this.drawn.delete(id);
+                this.#undraw(id);
             }
         }
     }
 
-    /** Bob and turn the icons, and open the chests opening (time: seconds). */
+    /** Bob the icons, the rings' glow breathing, and open the chests opening (time: seconds). */
     update(time) {
         const step = this.time === null ? 0 : Math.max(0, time - this.time);
 
         this.time = time;
 
-        for (const { icon, seed, above, mixer } of this.drawn.values()) {
+        for (const { icon, things, seed, above, mixer } of this.drawn.values()) {
             if (icon) {
                 icon.position.y = above + Math.sin(time * 2.2 + seed) * ICON.bob;
             }
 
+            for (const thing of things) {
+                thing.icon.position.y = thing.icon.userData.ground + FLOAT.size / 2 + FLOAT.lift + Math.sin(time * FLOAT.pace + thing.seed) * FLOAT.bob;
+            }
+
             mixer?.update(step);
+        }
+
+        const breath = (Math.sin(time * FLOAT.pace * 0.5) + 1) / 2;
+
+        for (const glow of Object.values(this.glows)) {
+            glow.opacity = RING.glow[0] + (RING.glow[1] - RING.glow[0]) * breath;
         }
     }
 
@@ -170,15 +209,14 @@ export class Drops {
         let best = null;
         let bestDistance = radius;
 
-        for (const [id, { object }] of this.drawn) {
-            const middle = _box.setFromObject(object).getCenter(_middle);
-            const foot = toScreen(_point.set(middle.x, _box.min.y, middle.z));
-            const top = toScreen(_point.set(middle.x, _box.max.y, middle.z));
-            const distance = foot && top ? fromLine(clientX, clientY, foot, top) : Infinity;
+        for (const [id, { object, things = [] }] of this.drawn) {
+            for (const [foot, top] of spansOf(object, things, toScreen)) {
+                const distance = foot && top ? fromLine(clientX, clientY, foot, top) : Infinity;
 
-            if (distance < bestDistance) {
-                best = id;
-                bestDistance = distance;
+                if (distance < bestDistance) {
+                    best = id;
+                    bestDistance = distance;
+                }
             }
         }
 
@@ -187,11 +225,9 @@ export class Drops {
 
     dispose() {
         this.scene.remove(this.group);
-        this.bundle.dispose();
-        this.knot.dispose();
-        this.cloth.dispose();
-        this.leather.dispose();
-        this.tie.dispose();
+        this.ring.dispose();
+        this.ringPicture.dispose();
+        Object.values(this.glows).forEach((glow) => glow.dispose());
         Object.values(this.chest).forEach((geometry) => geometry.dispose());
         this.model?.scene.traverse((node) => {
             if (node.isMesh) {
@@ -207,47 +243,78 @@ export class Drops {
             part.dispose();
         }
 
-        for (const { icon } of this.drawn.values()) {
-            icon?.material.dispose();
+        for (const id of [...this.drawn.keys()]) {
+            this.#undraw(id);
         }
-
-        this.drawn.clear();
     }
 
     #draw(dropped, x, z) {
         const object = new THREE.Group();
         const chest = dropped.chest || dropped.from === "chest";
-        const shown = dropped.chest ? null : dropped.bundle ? (dropped.bundle.items[0]?.id ?? "gold") : dropped.item.id;
-        const icon = shown ? new THREE.Sprite(new THREE.SpriteMaterial({ map: this.picture(shown), transparent: true, depthWrite: false })) : null;
         const seed = [...dropped.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-        const above = (chest ? CHEST.height + CHEST.depth * 0.5 * CHEST.rise : BUNDLE.radius) + ICON.above;
-
+        const sprite = (id) => new THREE.Sprite(new THREE.SpriteMaterial({ map: this.picture(id), transparent: true, depthWrite: false }));
+        const things = [];
+        let icon = null;
         let mixer = null;
+        let above = 0;
 
         if (chest) {
             const made = this.#chest(!dropped.chest);
 
             object.add(made.chest);
             mixer = made.mixer;
+
+            // (A chest's share: its first thing's icon over it)
+            if (!dropped.chest) {
+                above = CHEST.height + CHEST.depth * 0.5 * CHEST.rise + ICON.above;
+                icon = sprite(dropped.bundle.items[0]?.id ?? "gold");
+                icon.scale.set(ICON.size, ICON.size, 1);
+                icon.position.y = above;
+                object.add(icon);
+            }
         } else {
-            const bundle = new THREE.Mesh(this.bundle, dropped.bundle ? this.leather : this.cloth);
+            // Each thing floating over its ring, round where it lies (one alone, just there), each
+            // on the ground where it is
+            const shown = shownOf(dropped);
 
-            bundle.castShadow = true;
-            object.add(bundle, new THREE.Mesh(this.knot, this.tie));
-        }
+            shown.forEach(({ id, grade }, k) => {
+                const angle = seed + (k * Math.PI * 2) / shown.length;
+                const out = shown.length > 1 ? FLOAT.apart * (shown.length > 4 ? 1.4 : 1) : 0;
+                const [dx, dz] = [Math.cos(angle) * out, Math.sin(angle) * out];
+                const lift = this.groundAt(x + dx, z + dz) - this.groundAt(x, z);
+                const thing = { icon: sprite(id), ring: new THREE.Mesh(this.ring, this.glows[grade] ?? this.glows.common), seed: seed + k * 1.7 };
 
-        if (icon) {
-            icon.scale.set(ICON.size, ICON.size, 1);
-            icon.position.y = above;
-            object.add(icon);
+                thing.icon.scale.set(FLOAT.size, FLOAT.size, 1);
+                thing.icon.position.set(dx, FLOAT.size / 2 + FLOAT.lift, dz);
+                thing.icon.renderOrder = 1;
+                thing.ring.position.set(dx, lift + RING.above, dz);
+                thing.icon.position.y += lift;
+                thing.icon.name = `${id}:${grade}`;
+                // (The bob from where it stands, the ground under it)
+                thing.icon.userData.ground = lift;
+                object.add(thing.ring, thing.icon);
+                things.push(thing);
+            });
         }
 
         object.position.set(x, this.groundAt(x, z), z);
-        // (A chest square to the square; a bundle any way)
-        object.rotation.y = chest ? 0 : seed;
         object.name = dropped.id;
         this.group.add(object);
-        this.drawn.set(dropped.id, { object, icon, x, z, seed, above, chest, mixer });
+        this.drawn.set(dropped.id, { object, icon, things, x, z, seed, above, chest, mixer, contents: contentsOf(dropped) });
+    }
+
+    // Something no longer drawn: its icons let go (their pictures kept, shared)
+    #undraw(id) {
+        const drawn = this.drawn.get(id);
+
+        this.group.remove(drawn.object);
+        drawn.icon?.material.dispose();
+
+        for (const { icon } of drawn.things) {
+            icon.material.dispose();
+        }
+
+        this.drawn.delete(id);
     }
 
     // The chest's model read: its meshes casting shadows, and the chests drawn till now drawn again
@@ -262,11 +329,9 @@ export class Drops {
 
         this.model = { scene, clip: THREE.AnimationClip.findByName(animations, CHEST_MODEL.clip) };
 
-        for (const [id, drawn] of this.drawn) {
+        for (const [id, drawn] of [...this.drawn]) {
             if (drawn.chest) {
-                this.group.remove(drawn.object);
-                drawn.icon?.material.dispose();
-                this.drawn.delete(id);
+                this.#undraw(id);
             }
         }
     }
@@ -338,6 +403,49 @@ export class Drops {
 
         return chest;
     }
+}
+
+// Where something lying on the ground is on the screen, to be tapped: each thing floating, from
+// the ground under it to its icon's top; else (a chest) the whole of it, from its foot to its top.
+// [[foot, top]] (screen points, or null behind the camera)
+function spansOf(object, things, toScreen) {
+    if (things.length) {
+        return things.map(({ icon }) => {
+            const at = icon.getWorldPosition(_middle);
+            const ground = at.y - icon.position.y + icon.userData.ground;
+
+            return [toScreen(_point.set(at.x, ground, at.z)), toScreen(_point.set(at.x, at.y + FLOAT.size / 2, at.z))];
+        });
+    }
+
+    const middle = _box.setFromObject(object).getCenter(_middle);
+
+    return [[toScreen(_point.set(middle.x, _box.min.y, middle.z)), toScreen(_point.set(middle.x, _box.max.y, middle.z))]];
+}
+
+// The ring's glow (white, coloured by its material): a bright band fading softly either side, and
+// a faint pool inside it; made here, no page needed
+function ringPicture(size = 64) {
+    const data = new Uint8Array(size * size * 4);
+
+    for (let j = 0; j < size; j++) {
+        for (let i = 0; i < size; i++) {
+            const r = Math.hypot(i + 0.5 - size / 2, j + 0.5 - size / 2) / (size / 2);
+            const band = Math.exp(-(((r - 0.72) / 0.13) ** 2));
+            const pool = r < 0.72 ? 0.18 * (1 - r / 0.72) + 0.06 : 0;
+            const alpha = r >= 1 ? 0 : Math.min(1, band + pool);
+
+            data.set([255, 255, 255, Math.round(alpha * 255)], (j * size + i) * 4);
+        }
+    }
+
+    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+
+    return texture;
 }
 
 // A chest's parts, made once: its body (standing on the ground), its lid (a flattened half-round

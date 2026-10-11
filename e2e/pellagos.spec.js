@@ -1489,6 +1489,212 @@ test("in a fight, a message is moved clear of those fighting, taps going through
     expect(placed.after).toBe("");
 });
 
+test("a message has a little X at its top right, clear of its words: tapped, the message is put away at once (kept for the journal), the game not tapped through it; the next has it too, an Undo's beside it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const told = "The Lizard-folk reserve is in the field near you, 58 strong.";
+    const banner = page.locator("#banner");
+    const close = page.locator("#banner .banner-close");
+
+    const shown = await page.evaluate((text) => {
+        const { game } = window.pellagos;
+        const banner = document.querySelector("#banner");
+
+        game.stop();
+        game.hud.message(text, 60);
+        banner.getAnimations().forEach((animation) => animation.finish());
+
+        const box = banner.getBoundingClientRect();
+        const x = banner.querySelector(".banner-close").getBoundingClientRect();
+        const words = document.createRange();
+
+        words.selectNodeContents(banner.firstChild);
+
+        return {
+            box: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+            x: { left: x.left, top: x.top, right: x.right, bottom: x.bottom },
+            overWords: [...words.getClientRects()].some((line) => line.left < x.right && x.left < line.right && line.top < x.bottom && x.top < line.bottom),
+            label: banner.querySelector(".banner-close").getAttribute("aria-label"),
+        };
+    }, told);
+
+    // Its words only its own (the X drawn, not a letter)
+    await expect(banner).toHaveText(told);
+    await expect(close).toBeVisible();
+    expect(shown.label).toBe("Dismiss");
+    expect(shown.overWords).toBe(false);
+    // (In the top right corner, inside the box; a finger's target)
+    expect(shown.x.right).toBeLessThanOrEqual(shown.box.right + 0.5);
+    expect(shown.x.right).toBeGreaterThan(shown.box.right - 8);
+    expect(shown.x.top).toBeGreaterThanOrEqual(shown.box.top - 0.5);
+    expect(shown.x.top).toBeLessThan(shown.box.top + 8);
+    expect(shown.x.right - shown.x.left).toBeGreaterThanOrEqual(28);
+
+    // Tapped: gone at once, though it had a minute to go; still in the journal's messages; the
+    // player not sent anywhere by the tap
+    const before = await page.evaluate(() => ({ ...window.pellagos.game.battle.actor("player").square }));
+
+    await close.click();
+    await expect(banner).toBeHidden();
+
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { kept: game.messages.map(({ text }) => text), square: { ...player.square }, path: player.path?.length ?? 0, order: player.order ?? null };
+    });
+
+    expect(after.kept).toContain(told);
+    expect(after.square).toEqual(before);
+    expect(after.path).toBe(0);
+    expect(after.order).toBe(null);
+
+    // The next message has its X too, and an Undo's button beside it still works
+    const undone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.undone = false;
+        game.hud.offer("Thrown away: a stick.", "Undo", () => (window.undone = true));
+
+        return document.querySelectorAll("#banner .banner-close").length;
+    });
+
+    expect(undone).toBe(1);
+    await expect(banner).toHaveText("Thrown away: a stick. Undo");
+    await page.locator("#banner .banner-action").click();
+    expect(await page.evaluate(() => window.undone)).toBe(true);
+    await expect(banner).toBeHidden();
+});
+
+test("auto-snag, off to start with, turned on in Game options, picks up the player's spoils of a fight as they come within reach of them, and only what it's set to take on its own page under the switch, the rest left to tap", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (A wolf's spoils for the player, at their feet or a few squares off; a frame played. The
+    // game left running: the menu's only opened on a game that is)
+    const lay = (id, away = 0) => page.evaluate(([id, away]) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.host.ground.set(id, { id, bundle: { gold: 7, items: [{ id: "sword", count: 1, quality: "legendary" }, { id: "wolfPelt", count: 1 }] }, for: game.me, from: "wolf", map: me.map, square: [me.square[0] + away, me.square[1]], until: game.battle.time + 600000 });
+        game.advance(0.1);
+
+        return game.host.ground.get(id)?.bundle ?? null;
+    }, [id, away]);
+    const left = (id) => page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        game.advance(0.1);
+
+        return game.host.ground.get(id)?.bundle ?? null;
+    }, id);
+    // (Legendary swords in the pack: stacked, alike)
+    const legendaries = () => page.evaluate(() => window.pellagos.game.progress.pack.filter((stack) => stack?.id === "sword" && stack.quality === "legendary").reduce((sum, { count }) => sum + count, 0));
+
+    // Off to start with: left there to tap
+    expect((await lay("snag-1")).items).toHaveLength(2);
+
+    // Turned on: what it takes under its switch (everything, to start with), and the sack at the
+    // player's feet taken
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await expect(page.locator("#snagswitch")).not.toBeChecked();
+    await expect(page.locator("#snagbutton")).toBeHidden();
+    await page.locator("label:has(#snagswitch)").click();
+    await expect(page.locator("#snagbutton")).toBeVisible();
+    await expect(page.locator("#snagsummary")).toHaveText("Everything");
+    expect(await left("snag-1")).toBe(null);
+    expect(await legendaries()).toBe(1);
+
+    // Set to take legendary weapons alone, on its own page: each rarity in its colour
+    await page.locator("#snagbutton").click();
+    await expect(page.locator("#menusnag")).toBeVisible();
+    await expect(page.locator("#snaggrades input")).toHaveCount(6);
+    await expect(page.locator("#snagkinds input")).toHaveCount(9);
+    await expect(page.locator("#snaggrades .rarity-legendary")).toHaveText("Legendary");
+
+    for (const box of await page.locator("#snaggrades input:not([value=legendary]), #snagkinds input:not([value=weapon])").all()) {
+        await box.click();
+    }
+
+    await page.locator("#snagback").click();
+    await expect(page.locator("#snagsummary")).toHaveText("Legendary; Weapons");
+
+    // At their feet: the legendary sword taken, its gold and the pelt left in the sack
+    expect(await lay("snag-2")).toEqual({ gold: 7, items: [{ id: "wolfPelt", count: 1 }] });
+    expect(await legendaries()).toBe(2);
+
+    // A few squares off: left till they're within reach of it
+    expect((await lay("snag-3", 3)).items).toHaveLength(2);
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        Object.assign(me, { x: me.x + 3, square: [me.square[0] + 3, me.square[1]] });
+    });
+    expect((await left("snag-3")).items).toEqual([{ id: "wolfPelt", count: 1 }]);
+
+    // Set to take everything again: what it left looked at again, and taken
+    await page.locator("#snagbutton").click();
+    await page.locator("#snagall").click();
+    await expect(page.locator("#snaggrades input:checked")).toHaveCount(6);
+    expect(await left("snag-3")).toBe(null);
+
+    // Remembered
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")))).toMatchObject({ autoSnag: true, snagGrades: null, snagKinds: null });
+});
+
+test("the first time a fight leaves a character something, they're told what to do with it; never again, their loot floating where it fell over its rarity's glow, and what they pick up rising over them, not said across the screen", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (A wolf's spoils for the player at their feet, and the host telling of it; a frame played)
+    const leave = (id) => page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.stop();
+        game.host.ground.set(id, { id, bundle: { gold: 3, items: [{ id: "ring", count: 1, quality: "rare" }] }, for: game.me, from: "wolf", map: me.map, square: [...me.square], until: game.battle.time + 600000 });
+        game.host.events.push({ type: "spoils", id: game.me, ground: id, from: "wolf-1", creature: "wolf" });
+        game.advance(0.1);
+
+        const banner = document.querySelector("#banner");
+        const drawn = game.drops.drawn.get(id);
+
+        return { told: banner.hidden ? "" : banner.textContent, once: [...game.toldOnce], things: drawn?.things.map(({ icon, ring }) => ({ name: icon.name, glow: ring.material.color.getHexString() })) };
+    }, id);
+
+    const first = await leave("loot-1");
+
+    expect(first.told).toContain("The wolf left something where it fell.");
+    expect(first.told).toContain("Auto-snag");
+    expect(first.once).toEqual(["spoils"]);
+    // (Its gold and its rare ring, each over its glow: the rare violet)
+    expect(first.things).toEqual([{ name: "gold:common", glow: "e9e1d0" }, { name: "ring:rare", glow: "b07cff" }]);
+
+    // The next time: nothing said, the loot there all the same
+    await page.locator("#banner .banner-close").click();
+
+    const second = await leave("loot-2");
+
+    expect(second.told).not.toContain("left something");
+    expect(second.things).toHaveLength(2);
+
+    // Picked up: what's taken rising over the player, kept for the journal, not said across the screen
+    const picked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.command(game.me, { type: "pickUp", ground: "loot-2" });
+        game.advance(0.1);
+
+        const banner = document.querySelector("#banner");
+
+        return { said: banner.hidden ? "" : banner.textContent, rising: [...document.querySelectorAll("#floaters .damage.loot")].map(({ textContent }) => textContent), kept: game.messages.at(-1)?.text };
+    });
+
+    expect(picked.said).not.toContain("You take");
+    expect(picked.rising).toContain("+3 gold, a rare ring");
+    expect(picked.kept).toBe("You take 3 gold, a rare ring.");
+});
+
 test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -5765,7 +5971,20 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack.locator(".pack-peeked")).toHaveCount(1);
     await ware("Tankard of ale").locator(".pack-peek").click();
     await expect(pack.locator(".pack-peeked")).toHaveCount(0);
+
+    // Bought once they've said they're sure: asked first, what it costs and what they'd have
+    // left; cancelled, nothing spent
+    const ask = pack.locator(".pack-ask");
+
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await expect(ask).toBeVisible();
+    await expect(ask.locator(".pack-ask-title")).toHaveText("Buy Tankard of ale?");
+    await expect(ask.locator(".pack-ask-text")).toHaveText("For 2 gold: you'd have 28 gold left.");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toBeHidden();
+    await expect(pack.locator(".pack-gold")).toHaveText("30 gold");
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await ask.getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
     await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
 
@@ -5783,6 +6002,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion"]);
     await modes.getByRole("tab", { name: "Buy" }).click();
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await ask.getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("27 gold");
     await page.locator("#packbutton").click();
     await expect(pack).toBeHidden();
@@ -5986,11 +6206,13 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
     const cost = Number((await first.locator(".pack-price").textContent()).split(" ")[0]);
 
     await first.getByRole("button", { name: /^Buy / }).click();
+    await pack.locator(".pack-ask").getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost} gold`);
     await expect(first.locator(".pack-left")).toHaveText(left > 1 ? `${left - 1} left` : "Sold out");
 
     // The special bought: paid for, and gone for the day
     await special.getByRole("button", { name: /^Buy today's special/ }).click();
+    await pack.locator(".pack-ask").getByRole("button", { name: "Buy", exact: true }).click();
     await expect(pack.locator(".pack-gold")).toHaveText(`${20000 - cost - Number(price)} gold`);
     await expect(special.locator(".pack-left")).toHaveText("Sold out");
     await expect(special.getByRole("button", { name: /^Buy today's special/ })).toBeDisabled();
@@ -6273,8 +6495,11 @@ test("the pack stacks things alike: dragged together, split by how many, held fo
         return session.view.toScreen(drawn.object.position.clone());
     });
 
+    // (What's picked up rising over the player, no message across the screen: kept for the
+    // journal all the same)
     await page.mouse.click(bundle.x, bundle.y);
-    await expect(page.locator("#banner")).toHaveText("You pick up a tankard of ale.");
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.messages.at(-1)?.text)).toBe("You pick up a tankard of ale.");
+    await expect(page.locator("#banner")).not.toHaveText("You pick up a tankard of ale.");
     expect(await page.evaluate(() => ({ ground: window.pellagos.game.host.ground.size, ale: window.pellagos.game.progress.count("ale") }))).toEqual({ ground: 0, ale: 1 });
 });
 

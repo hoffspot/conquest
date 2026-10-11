@@ -55,7 +55,7 @@ import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, RELEVANCE, SAFETY, SHOP_REACH, SHOPKEEPERS, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, RELEVANCE, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -448,6 +448,10 @@ const DISGUISES = Object.freeze({
 });
 
 // Some of a thing, in words: "a healing draught", "3 healing draughts"
+// The first time a fight leaves the character something (game.js #once), what's to be done about
+// it; never said again
+const SPOILS_HINT = "Each thing there glows the colour of how rare it is: tap one to take them all, or turn on Auto-snag in Game options to pick things up as you come to them.";
+
 function thingsOf({ id, quality, count = 1 }) {
     const name = itemLabel({ id, quality }).toLowerCase();
 
@@ -661,8 +665,11 @@ export class Game {
      * @param {Array} [options.messages] - The last messages the player was told across the screen,
      *     as kept (save.js loadMessages: journal.js keepMessage), for the journal.
      * @param {Function} [options.onMessages] - Hears them whenever another's kept (to keep them).
+     * @param {string[]} [options.told] - What the character's been told once and needn't be again
+     *     (save.js loadTold: `#once`).
+     * @param {Function} [options.onTold] - Hears them whenever there's another (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -674,6 +681,8 @@ export class Game {
         // hears of them: each heard from the HUD as it's told
         this.messages = messages;
         this.onMessages = onMessages;
+        this.toldOnce = new Set(told);
+        this.onTold = onTold;
         hud.onMessage = (text, seconds) => this.#told(text, seconds);
 
         // Those attacking the player, an icon each down the right side: since when each has been
@@ -887,6 +896,16 @@ export class Game {
 
         /** Whether another player asking this one to their party is let go unanswered, not asked (Game options). */
         this.refuseInvites = false;
+
+        /**
+         * Whether the player's spoils of a fight are picked up as they come within reach of them,
+         * not left for a tap (Game options: Auto-snag; host.js `snaggable`); what of them it takes
+         * (`snagFilter`); and those tried, each once (one there's no room for is left for a tap,
+         * not asked for again and again; all tried again when what it takes is changed).
+         */
+        this.autoSnag = false;
+        this.snagOnly = null;
+        this.snagTried = new Set();
 
         /**
          * Party chat (core/netplay.js CHAT): what's been said in the player's party, and its comings
@@ -5654,7 +5673,14 @@ export class Game {
         } else if (event.type === "picked" && event.bundle) {
             const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
 
-            this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
+            // (Over the player as it's taken, not a message across the screen; but what there was
+            // no room for, said)
+            this.#gained(things, `You take ${things.join(", ")}.`);
+
+            if (event.full) {
+                this.hud.message("There's no room in your pack for the rest: it's still there.", 2.5);
+            }
+
             this.sound?.play(event.bundle.gold ? "coinPickup" : "pickup");
 
             // (A chest emptied, its lid shut)
@@ -5662,13 +5688,17 @@ export class Game {
                 this.sound?.play("chestClose", { delay: 0.35 });
             }
         } else if (event.type === "picked") {
-            this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
+            this.#gained([thingsOf(event.item)], `You pick up ${thingsOf(event.item)}.`);
             this.sound?.play("pickup");
         } else if (event.type === "spoils" && event.given) {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
             this.sound?.play("drop");
         } else if (event.type === "spoils" && event.creature === "convoy") {
-            this.hud.message("Your share of the convoy's goods, in gold: tap the sack to take it.", 3);
+            // (Told the first time something's left for the character, never again: #once)
+            if (this.#once("spoils")) {
+                this.hud.message(`Your share of the convoy's goods, in gold, lies where it fell. ${SPOILS_HINT}`, 6);
+            }
+
             this.sound?.play("coins");
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
@@ -5678,7 +5708,10 @@ export class Game {
             this.sound?.play("lockpick");
             this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {
-            this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
+            if (this.#once("spoils")) {
+                this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something where it fell. ${SPOILS_HINT}`, 6);
+            }
+
             this.sound?.play("drop");
         } else if (event.type === "bought" || event.type === "sold") {
             this.sound?.play("coins");
@@ -6467,6 +6500,26 @@ export class Game {
         });
     }
 
+    // Whether the character's yet to be told something told only once (`what`: "spoils", the first
+    // time a fight leaves them something): true the first time, kept from then on (save.js saveTold)
+    #once(what) {
+        if (this.toldOnce.has(what)) {
+            return false;
+        }
+
+        this.toldOnce.add(what);
+        this.onTold([...this.toldOnce]);
+
+        return true;
+    }
+
+    // What the player's picked up (`things`, in words), rising over them rather than said across
+    // the screen in the middle of a fight; `said` kept for the journal all the same
+    #gained(things, said) {
+        this.hud.damage(this.#screenAbove(this.me), `+${things.join(", ")}`, { kind: "loot" });
+        this.#told(said, 2.5);
+    }
+
     // A message told the player across the screen (hud.js message): kept for the journal if it's
     // news (journal.js keepMessage), and shown there at once if it's open on them
     #told(text, seconds) {
@@ -6896,6 +6949,46 @@ export class Game {
         } else if (picking && picking.map === me.map && Math.hypot(me.x - picking.square[0] - 0.5, me.y - picking.square[1] - 0.5) <= PICK_REACH) {
             this.picking = null;
             this.#packCommand({ type: "pickUp", ground: picking.id });
+        }
+
+        this.#snag(me);
+    }
+
+    /**
+     * What auto-snag takes (Game options, Auto-snag: { grades, kinds }, host.js SNAG_GRADES,
+     * SNAG_KINDS): only things as rare as these and of these kinds. Changed, what it's left is
+     * looked at again.
+     */
+    set snagFilter(only) {
+        this.snagOnly = snagChoice(only);
+        this.snagTried.clear();
+    }
+
+    get snagFilter() {
+        return this.snagOnly;
+    }
+
+    // Auto-snag (Game options): the player's own spoils of a fight picked up as they come within
+    // reach of them (what of them it's set to take), each tried once
+    #snag(me) {
+        if (!this.autoSnag || me.dead) {
+            return;
+        }
+
+        for (const dropped of this.host.ground.values()) {
+            if (!this.snagTried.has(dropped.id) && snaggable(dropped, me, this.me, this.snagOnly)) {
+                this.snagTried.add(dropped.id);
+                this.#packCommand({ type: "pickUp", ground: dropped.id, ...(this.snagOnly && { only: this.snagOnly }) });
+            }
+        }
+
+        // (Those gone forgotten, now and then)
+        if (this.snagTried.size > 32) {
+            for (const id of this.snagTried) {
+                if (!this.host.ground.has(id)) {
+                    this.snagTried.delete(id);
+                }
+            }
         }
     }
 

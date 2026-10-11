@@ -725,9 +725,11 @@ hurt enough, it fights as any other.
 whose leash reaches them, goes for them before anyone else (`#drawnTo`), so long as there's room
 on them: at most 6 of their enemies up close and 4 shooting or casting at once (`#roomOn`, from
 who's on each player as the step begins, `#mustered`, and anyone newly set on them since). The
-same holds however they'd come to be on them: the nearest enemy, an alarm raised, or turning on
-whoever struck them (`#turnOn`). The rest fight whoever else is near: a player in a battle of
-hundreds has a fight, not a crowd, on them.
+same holds for the nearest enemy and an alarm raised, but not for one the player's struck (or
+stunned, or cast at): set on, an enemy always turns on whoever did it (`#turnOn`), however many
+are on them already (the user: "make sure any unit that is attacked attempts to defend itself").
+The rest fight whoever else is near: a player in a battle of hundreds has a fight, not a crowd,
+on them.
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
   ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds
@@ -3332,7 +3334,11 @@ each one it crossed, bigger and worse. The kind is the attack's reaction:
 A blow lands facing the way it came from (the most facing of a few dozen random points on the
 body), at its kind's height (fists higher), never on the hands or head. Healed back above a
 threshold, that stage's wounds and marks go (and the arrows in them); at full health, all of
-them; coming back to life, all of them.
+them; coming back to life, all of them. An arrow in a mark (a lesser hit, no threshold crossed)
+falls out half a minute after their last blow (`LOOSE`), its mark still painted; an arrow in a
+wound stays till it's healed. (Health doesn't come back by itself, so without that a scratch at
+83 of 85 would leave a player walking about with eight arrows in them till they next drank or
+slept: the user, "check how long arrows that hit the player stay stuck in them".)
 
 A character's damage is one 512-texel texture over the body's UV map, which its clothes share:
 red for blood, green for bruising, blue for charring, alpha for cuts. It's made at the first blow
@@ -4422,7 +4428,10 @@ it.
    Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
   requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
-  (but for an Undo's button) to whoever's under them. In a fight they're kept clear of those
+  (but for an Undo's button) to whoever's under them. A little X at a message's top right puts it
+  away at once (a target bigger than it looks, for a finger; drawn, not a letter, so a message's
+  words are only its own: the user, "Provide a little X in the top right of the box to dismiss
+  them"); it's still kept for the journal. In a fight they're kept clear of those
   fighting, the player, who they're fighting and whoever's after them, each where they are on
   the screen with their name and bar over them (game.js `#clearOfFight`, `MESSAGE_CLEAR`): where
   a message would cover one of them, it's moved up under the buttons along the top (and the
@@ -4440,7 +4449,9 @@ it.
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
    Medium, High) and the Adaptive switch (Keeping up, above), a switch for full screen while
-   playing (below), a switch for the minimap (off, the compass in its place: above), a switch that turns all the sound
+   playing (below), a switch for the minimap (off, the compass in its place: above), the
+   Auto-snag switch (off to start with) and under it, while it's on, what it takes (its own
+   page: docs/WILDS.md *What they leave*), a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
    actions pages. Back (or Escape) returns to the menu.
@@ -4476,8 +4487,9 @@ played }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eye
 and beside it, under `pellagos.<id>.` too, what they've grown into and carry (`progress`), what's
 been said (`talks`), what they've found of the world (`explored`), where they stand (`standing`),
 their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), the last
-messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), and their world's
-war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
+messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), what they've been
+told once and needn't be again (`told`: `["spoils"]`, the first loot a fight left them: docs/WILDS.md
+*What they leave*), and their world's war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
 last. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
 controls) are in `pellagos.settings`, the same whoever's played.
 
@@ -4878,6 +4890,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
+  a lesser hit's arrow falling out half a minute after the last blow (struck again, the wait
+  starting again) and a wound's kept till it's healed,
   and the body's and garments' materials mixing it in (skin's own lines kept, its roughness under
   the blood's wetness).
 - `test/gpumemory.test.js`: what the graphics card's been given to hold: buffers given data or a

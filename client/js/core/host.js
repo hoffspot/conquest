@@ -24,7 +24,7 @@ import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
-import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
@@ -371,6 +371,49 @@ export const SPOILS_REACH = 30;
 export const GROUND_MS = 5 * 60 * 1000;
 export const PICK_REACH = 1.6;
 
+// (Spoils of a fight that aren't a creature's: a supply wagon's or a convoy's gold)
+const FOUGHT_FOR = new Set(["supply", "convoy"]);
+
+/**
+ * What auto-snag can be set to take (Game options, Auto-snag: app/save.js `snagGrades`,
+ * `snagKinds`): things as rare as these (progress.js QUALITIES, `gradeOf`), and of these kinds
+ * (gold, and progress.js WARE_KINDS, `wareKind`).
+ */
+export const SNAG_GRADES = Object.freeze(Object.keys(QUALITIES));
+export const SNAG_KINDS = Object.freeze(["gold", ...Object.keys(WARE_KINDS)]);
+
+/**
+ * Auto-snag's choice, as asked for (`only`: { grades, kinds }, from a player: anything else
+ * there left out), or null for none (everything taken).
+ */
+export function snagChoice(only) {
+    if (!only || typeof only !== "object") {
+        return null;
+    }
+
+    const known = (list, from) => (Array.isArray(list) ? from.filter((each) => list.includes(each)) : []);
+
+    return { grades: known(only.grades, SNAG_GRADES), kinds: known(only.kinds, SNAG_KINDS) };
+}
+
+/** Whether auto-snag's choice (`only`: snagChoice, or null for everything) takes a thing (`item`; null: gold). */
+export function snags(only, item) {
+    return !only || (item ? only.grades.includes(gradeOf(item)) && only.kinds.includes(wareKind(item.id)) : only.kinds.includes("gold"));
+}
+
+/**
+ * Whether auto-snag (Game options: app/game.js `autoSnag`) picks up something on the ground for
+ * a player (`playerId`, their `actor`) as they come within reach of it: their own spoils of a
+ * fight (a fallen foe's bundle, a wagon's gold), not a chest's share, something given them with
+ * no room for it in their pack, or anything a player dropped; and with something in it it's set
+ * to take (`only`: snagChoice, or null for everything).
+ */
+export function snaggable(dropped, actor, playerId, only = null) {
+    const { bundle } = dropped;
+
+    return Boolean(bundle) && dropped.for === playerId && (dropped.from in CREATURES || FOUGHT_FOR.has(dropped.from)) && !dropped.locked && dropped.map === actor.map && hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) <= PICK_REACH && ((bundle.gold > 0 && snags(only, null)) || bundle.items.some((item) => snags(only, item)));
+}
+
 /**
  * Trading face to face (docs/WILDS.md): how near (m) two players must be to begin, and how far
  * apart they can get before it's off; how long (ms) asking to trade waits for an answer.
@@ -531,6 +574,7 @@ export const REFUSALS = Object.freeze({
     shop: "They've nothing like that to sell.",
     soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
     full: "Your pack is full.",
+    unwanted: "There's nothing there auto-snag's set to take.",
     locked: "It's locked fast, and its guardians still hold the place.",
     guarded: "It's locked fast, and those keeping it are still about.",
     kept: "It's locked fast, and the one who keeps it still stands.",
@@ -1343,7 +1387,7 @@ export class Host {
             case "drop":
                 return this.#drop(player, actor, command.index, command.count);
             case "pickUp":
-                return this.#pickUp(player, actor, command.ground);
+                return this.#pickUp(player, actor, command.ground, snagChoice(command.only));
             case "ability":
                 return this.#ability(player, actor, command.ability, command.target ?? null);
             case "abandon":
@@ -2559,8 +2603,10 @@ export class Host {
         return { ok: true, ground: id };
     }
 
-    // Something on the ground picked up, from near it, into the pack (if there's room)
-    #pickUp(player, actor, id) {
+    // Something on the ground picked up, from near it, into the pack (if there's room); from a
+    // bundle, only what auto-snag's set to take, if it's auto-snag picking it up (`only`:
+    // snagChoice), the rest left in it
+    #pickUp(player, actor, id, only = null) {
         const dropped = this.ground.get(id);
 
         // (Someone else's spoils: not there, for them)
@@ -2587,26 +2633,31 @@ export class Host {
         }
 
         // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
-        // there isn't stays in it)
+        // there isn't stays in it, and what auto-snag isn't set to take)
         if (dropped.bundle) {
             const { gold, items } = dropped.bundle;
-            const got = items.filter((item) => player.progress.stow(item, item.count));
+            const wanted = items.filter((item) => snags(only, item));
+            const taken = snags(only, null) ? gold : 0;
+            const got = wanted.filter((item) => player.progress.stow(item, item.count));
             const left = items.filter((item) => !got.includes(item));
 
-            if (!gold && !got.length) {
-                return refuse("full");
+            if (!taken && !got.length) {
+                return refuse(wanted.length ? "full" : "unwanted");
             }
 
-            player.progress.gold += this.#fortune(player, gold);
-            dropped.bundle = { gold: 0, items: left };
+            player.progress.gold += this.#fortune(player, taken);
+            dropped.bundle = { gold: gold - taken, items: left };
 
-            if (!left.length) {
+            const over = left.length + (dropped.bundle.gold ? 1 : 0);
+
+            if (!over) {
                 this.ground.delete(id);
             }
 
-            this.#event("picked", { id: player.id, ground: id, bundle: { gold, items: got }, left: left.length, from: dropped.from ?? null });
+            // (`full`: something it would have taken, but there was no room for)
+            this.#event("picked", { id: player.id, ground: id, bundle: { gold: taken, items: got }, left: over, full: got.length < wanted.length, from: dropped.from ?? null });
 
-            return left.length ? { ok: true, left: left.length } : OK;
+            return over ? { ok: true, left: over } : OK;
         }
 
         if (!player.progress.stow(dropped.item, dropped.item.count)) {
