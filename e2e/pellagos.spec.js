@@ -2851,6 +2851,49 @@ test("tapping an enemy sets the player on them where they stand; tapped twice, t
     expect(taps.halted.walking).toBe(false);
 });
 
+test("a bar stays on the head it's over as the camera turns, however fast: put where the camera that draws the frame sees it, not a frame behind", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The orc a couple of steps from the player; the camera swung round by a big step each frame
+    // (played on without drawing, so the camera's only ever placed, never drawn from)
+    const off = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor(game.me);
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 2, player.square[1] + 1];
+        const offs = [];
+
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, target: null });
+        game.avatars.get("orc").place(orc.x, orc.y, 0);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+
+        for (let k = 0; k < 12; k++) {
+            game.cameraFollow.yaw += 0.25;
+            game.cameraFollow.turning = 0;
+            game.advance(1 / 60);
+
+            const plate = game.hud.tracked.get("orc");
+            const [, x, y] = /translate3d\(([-\d.]+)px, ([-\d.]+)px/.exec(plate.style.transform);
+
+            // (Where this frame's camera sees its head)
+            session.view.camera.updateMatrixWorld();
+
+            const head = session.view.toScreen(game.avatars.get("orc").point(1.08));
+
+            if (head && !plate.hidden) {
+                offs.push(Math.hypot(Number(x) - head.x, Number(y) - head.y));
+            }
+        }
+
+        return offs;
+    });
+
+    expect(off.length).toBeGreaterThan(4);
+    expect(Math.max(...off)).toBeLessThan(1);
+});
+
 test("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

@@ -3554,6 +3554,7 @@ export class Game {
             camera.position.x += (Math.random() - 0.5) * this.shaking;
             camera.position.y += (Math.random() - 0.5) * this.shaking * 0.6;
             camera.position.z += (Math.random() - 0.5) * this.shaking;
+            camera.updateMatrixWorld();
             this.shaking *= Math.exp(-SHAKE_DIES * dt);
         } else {
             this.shaking = 0;

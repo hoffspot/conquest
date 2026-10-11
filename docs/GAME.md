@@ -4354,7 +4354,12 @@ it.
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
    player sees there (light.js `sightAt`, as the battle has it: 30 m where they see half as far;
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
-   the nearer the camera are drawn over the farther, and all of them under the buttons. Messages
+   the nearer the camera are drawn over the farther, and all of them under the buttons. Each bar
+   is put where the camera that draws the frame sees its head: the camera's matrices made as it's
+   placed (view.js `#place`, and again as the greater spells shake it), not only as it's drawn, so
+   a bar no longer trails its character by a frame as the camera turns (it shook, the more the
+   faster the turn and the nearer the character: a companion at the player's side worst).
+   Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
   requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
   (but for an Undo's button) to whoever's under them. In a fight they're kept clear of those
