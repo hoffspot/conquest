@@ -208,7 +208,8 @@ describe("a hill citadel walked (core/setpieces/citadel.js citadelWays)", () => 
         for (const seed of [1, 7, 23]) {
             const citadel = layoutCitadel({ seed });
             const { decks, solid, door } = citadelWays(citadel);
-            const [way, ...stairs] = decks;
+            const [way, ...rest] = decks;
+            const stairs = rest.slice(0, 10);
 
             assert.deepEqual([way.from, way.to], [0, 0]);
             assert.ok(way.a[1] > moatReach(citadel, "face") && way.b[1] < citadel.wards[0].apothem - citadel.wards[0].thick, "from the glacis to inside the outer gate");
@@ -224,6 +225,38 @@ describe("a hill citadel walked (core/setpieces/citadel.js citadelWays)", () => 
             }
 
             assert.ok(solidAt({ solid }, door.at), "the keep stands in the way");
+        }
+    });
+
+    it("walks up the keep's steps to its door, at their heights as the art builds them: from their foot through each tread's middle to the top one's, and level from there to the door's sill", () => {
+        const { count, rise, tread, wide } = CITADEL.keep.steps;
+        const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+        for (const seed of [1, 7, 23]) {
+            const citadel = layoutCitadel({ seed });
+            const { decks, door } = citadelWays(citadel);
+            const [slope, top] = decks.slice(-2);
+            const ward = citadel.wards.at(-1).rise;
+            // (How far out a point is from the keep's middle, the way its door faces)
+            const out = ([u, v]) => (u - door.at[0]) * Math.cos(door.turn) + (v - door.at[1]) * Math.sin(door.turn);
+            // (How high the decks are at so far out from the door)
+            const at = (from) => {
+                const deck = from >= tread / 2 ? slope : top;
+                const t = (out(deck.a) - (door.y + from)) / (out(deck.a) - out(deck.b));
+
+                return deck.from + (deck.to - deck.from) * t;
+            };
+
+            assert.deepEqual(citadelParts(citadel).find(({ part }) => part === "keep").steps, CITADEL.keep.steps, "built as they're walked");
+            assert.ok(near(door.floor, count * rise), "up to the door's sill");
+            assert.deepEqual([slope.half, top.half], [wide / 2, wide / 2]);
+            assert.ok(near(out(slope.a), door.y + count * tread) && near(out(top.b), door.y), "from their foot to the door");
+            assert.deepEqual(slope.b, top.a);
+            assert.ok(near(top.from, ward + door.floor) && near(top.to, ward + door.floor), "level on the top step");
+
+            for (let k = 1; k <= count; k++) {
+                assert.ok(near(at((count - k + 0.5) * tread), ward + k * rise), `seed ${seed}: the middle of step ${k}`);
+            }
         }
     });
 });
@@ -391,6 +424,10 @@ describe("a hill citadel set down (core/sites.js)", () => {
         const out = [Math.floor(set.x + far * Math.sin(set.facing)), Math.floor(set.y + far * Math.cos(set.facing))];
         const levels = set.citadel.wards.map(({ rise }) => Math.round((set.level + rise) / HEIGHT_STEP) * HEIGHT_STEP);
         const heights = new Set();
+        // (How high over the inner ward it stood within 3 metres of the keep's door: up its steps,
+        // not in them at the ward's level, as it was)
+        const door = set.entrance.door;
+        let sill = 0;
 
         assert.equal(keep.kind, "keep");
         assert.equal(keep.people, "human");
@@ -405,10 +442,16 @@ describe("a hill citadel set down (core/sites.js)", () => {
             const h = land.heightAt(me.x, me.y);
 
             heights.add(levels.findIndex((level) => Math.abs(h - level) < 0.2));
+
+            if (Math.hypot(me.x - door.x, me.y - door.z) < 3) {
+                sill = Math.max(sill, h - levels.at(-1));
+            }
         }
 
         assert.equal(me.map, keep.maps[0]);
         assert.ok([0, 1, 2].every((ward) => heights.has(ward)), `stood on every ward's terrace: ${[...heights]}`);
+        // (Gone in from the square before its door: a step or two up, never over its sill)
+        assert.ok(sill > CITADEL.keep.steps.rise && sill <= door.floor + 1e-6, `up the keep's steps towards its sill: ${sill.toFixed(2)} m over the inner ward`);
         assert.match(host.folk.get(`${keep.key}/ruler`).title, new RegExp(`^(Lord|Lady) of ${keep.name}$`));
     });
 

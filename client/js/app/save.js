@@ -54,10 +54,12 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     squares: false,
     navigation: false,
     minimap: true,
-    // The thumb stick in the bottom left corner to walk with (app/steering.js): off until it's
-    // asked for, since tapping is how the game has always been walked. W, A, S, D steer whether
-    // it's shown or not
-    stick: false,
+    // The thumb stick in the bottom left corner to walk with (app/steering.js): on to start with
+    // (tapping still walks, anywhere but on its circle), and which defaults it was saved under:
+    // saved under the first (when it was off till asked for) it's forgotten, for today's. W, A, S, D
+    // steer whether it's shown or not
+    stick: true,
+    stickDefaults: 2,
     // (And whether it springs up under the thumb wherever it lands in the bottom left, rather than
     // waiting in its corner)
     stickFloats: false,
@@ -523,6 +525,11 @@ export function loadSettings() {
     if (saved.cameraDefaults !== SETTINGS_DEFAULTS.cameraDefaults) {
         delete saved.cameraFollows;
         delete saved.cameraDefaults;
+    }
+
+    if (saved.stickDefaults !== SETTINGS_DEFAULTS.stickDefaults) {
+        delete saved.stick;
+        delete saved.stickDefaults;
     }
 
     return { ...SETTINGS_DEFAULTS, ...saved };
