@@ -380,6 +380,11 @@ const TOGETHER = Object.freeze({
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
+// How many of those coming into sight (someone new, or someone come into the player's building
+// or near them) have their pictures sent to the graphics card each frame, each hidden till then
+// (#sending): a skin's 5 MB or so, not all of a building's folk's in the one frame
+const SENDING = Object.freeze({ every: 2 });
+
 // Soldiers in their crowds (world/crowd.js): a battle's, with more than `from` of them about the
 // player (a town's own guards are never so many), those nearest, and whoever's fighting the
 // player, drawn in full (as many as QUALITY soldiers' `full`) and the rest in the crowd, as their
@@ -816,6 +821,9 @@ export class Game {
             };
         };
         this.thronged = new Map();
+
+        // (Those about to be drawn whose pictures are still to be sent, this frame: #sending)
+        this.unsent = [];
         this.throngCount = { crowdable: 0, inFull: 0 };
 
         /** Heard when it draws a level, or a share of the pixels, it didn't (Adaptive): ({ quality, scale }). */
@@ -1483,6 +1491,23 @@ export class Game {
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
+
+        // (And every picture of what's shown sent to the graphics card now, not in the first
+        // frames drawn: those in sight with the rest)
+        await time("pictures", () => {
+            const mine = this.battle.actor(this.me);
+
+            for (const [id, avatar] of this.avatars) {
+                const actor = this.battle.actor(id);
+
+                if (avatar.sent === false && actor && this.#inSight(actor, mine)) {
+                    this.unsent.push(avatar);
+                }
+            }
+
+            this.#sending(this.unsent, Infinity);
+            view.upload();
+        });
         done = steps;
         report("Ready");
 
@@ -1599,7 +1624,7 @@ export class Game {
     // A character for someone, built a step at a time (Character.building); null (and thrown away)
     // if they've gone from the battle meanwhile, or been drawn some other way
     *#built(actor, options) {
-        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), ...options });
+        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), release: true, ...options });
 
         if (this.#drawnInFull(actor.id) || !this.battle.actor(actor.id)) {
             character.dispose();
@@ -1702,7 +1727,7 @@ export class Game {
     *#addingBeast(actor) {
         const seed = this.#seedOf(actor);
         const weapon = WEAPONS[actor.weapon];
-        const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null });
+        const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null, release: true });
 
         // (Gone from the battle, or drawn some other way, while it was being built)
         if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
@@ -1800,13 +1825,37 @@ export class Game {
         }
 
         // (Its shaders compiled before it's first drawn, hidden till then (#update), so that a
-        // kind of creature, or garment, not drawn before doesn't stall a frame compiling them)
+        // kind of creature, or garment, not drawn before doesn't stall a frame compiling them;
+        // and its pictures sent first, once it's about to be seen: #sending. Not a fortification,
+        // drawn by world/forts3d.js)
         const ready = () => (avatar.compiling = false);
 
         avatar.compiling = true;
         this.view.prepare(character.object).then(ready, ready);
 
+        if (!(avatar instanceof FortAvatar)) {
+            avatar.sent = false;
+            character.object.visible = false;
+        }
+
         return avatar;
+    }
+
+    // Whether someone's drawn: on the player's map, and out in the world, near them
+    #inSight(actor, mine) {
+        return actor.map === this.mapId && !(mine && actor !== mine && (Math.abs(actor.x - mine.x) > DRAW_REACH || Math.abs(actor.y - mine.y) > DRAW_REACH));
+    }
+
+    // Those about to be drawn whose pictures haven't been sent to the graphics card (`unsent`),
+    // `every` of them sent, the rest kept hidden till a later frame's: someone new, or a building's
+    // folk as the player comes in, don't hold one frame up sending all their skins at once
+    #sending(unsent, every = SENDING.every) {
+        for (let k = 0; k < Math.min(every, unsent.length); k++) {
+            this.view.upload([unsent[k].object], { hidden: true });
+            unsent[k].sent = true;
+        }
+
+        unsent.length = 0;
     }
 
     /** Start playing: the battle and the drawing run, and taps and clicks are listened to. */
@@ -1830,6 +1879,7 @@ export class Game {
         this.lastFrame = performance.now();
         this.steppedAt = this.lastFrame;
         telemetry.playing = true;
+        telemetry.graphics = this.view.renderer.info;
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
@@ -2485,7 +2535,7 @@ export class Game {
 
             // (Only those on the player's map are seen, and moved; and out in the world, only
             // those near them)
-            if (actor.map !== this.mapId || (mine && actor !== mine && (Math.abs(actor.x - mine.x) > DRAW_REACH || Math.abs(actor.y - mine.y) > DRAW_REACH))) {
+            if (!this.#inSight(actor, mine)) {
                 avatar.object.visible = false;
 
                 if (this.thronged.has(actor.id)) {
@@ -2536,9 +2586,13 @@ export class Game {
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
 
-            // (Not shown till its shaders are ready: #register)
-            if (avatar.compiling) {
+            // (Not shown till its shaders are ready and its pictures sent: #register, #sending)
+            if (avatar.compiling || avatar.sent === false) {
                 avatar.object.visible = false;
+            }
+
+            if (avatar.sent === false) {
+                this.unsent.push(avatar);
             }
 
             this.#grounded(actor, avatar);
@@ -2547,6 +2601,7 @@ export class Game {
         }
 
         this.contacts?.end();
+        this.#sending(this.unsent);
         bodies.crowd = this.crowds?.draw(view.camera, pixels) ?? 0;
         bodies.standing = this.thronged.size;
         telemetry.mark(PHASE.bodies);

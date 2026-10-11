@@ -2247,12 +2247,28 @@ function sample(times, values, n, time) {
     return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 }
 
-const COMPILED = new Map([
-    ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
-    ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
-    ...Object.entries(EMOTE_WAYS).map(([name, ways]) => [`emote:${name}`, ways.map(({ keys, settle, scaled }) => compile(keys, { settle, scaled }))]),
-    ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [compile(draw.keys)]], [`sheathe:${name}`, [compile(sheathe.keys)]]]),
+// Each action's ways (by name: [{ keys, settle, scaled }]), compiled the first time each's done
+// (tracksOf): most never are in a game, and all of them at once came to megabytes
+const WAYS = new Map([
+    ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants]),
+    ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests]),
+    ...Object.entries(EMOTE_WAYS).map(([name, ways]) => [`emote:${name}`, ways]),
+    ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [{ keys: draw.keys }]], [`sheathe:${name}`, [{ keys: sheathe.keys }]]]),
 ]);
+const COMPILED = new Map();
+
+// One of an action's ways' tracks (the `way`th of `name`'s), compiled the first time it's asked for
+function tracksOf(name, way) {
+    const compiled = COMPILED.get(name) ?? COMPILED.set(name, []).get(name);
+
+    if (!compiled[way]) {
+        const { keys, settle, scaled } = WAYS.get(name)[way];
+
+        compiled[way] = compile(keys, { settle, scaled });
+    }
+
+    return compiled[way];
+}
 // (A guard's pelvis offset, its knees bent, isn't among them: it's let go of walking)
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, { offset: _offset, ...guard }]) => [name, compile([[0, guard]])]));
 
@@ -2603,7 +2619,7 @@ export class Actions {
         // (One cast with a staff or war hammer in the right hand: held upright out of the way)
         const upright = Boolean(attack.cast && holds.Right && ITEMS[this.character.equipment?.get("mainHand")]?.haft);
 
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) || righted, arms, upright, face: attack.face };
+        this.attack = { name, variant: way, tracks: tracksOf(name, way), start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) || righted, arms, upright, face: attack.face };
 
         return way;
     }
@@ -2629,7 +2645,7 @@ export class Actions {
 
         const { hitAt = how.hitAt, duration = how.duration, mirror = false } = ways[way];
 
-        this.attack = { name: key, variant: way, tracks: COMPILED.get(key)[way], start: this.time, hitAt, duration, mirror, emote: name, face: how.face, stopping: null };
+        this.attack = { name: key, variant: way, tracks: tracksOf(key, way), start: this.time, hitAt, duration, mirror, emote: name, face: how.face, stopping: null };
 
         return way;
     }
@@ -2664,7 +2680,7 @@ export class Actions {
 
         this.#swapped();
         this.variety.last.set(name, way);
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: false, rest: true, stopping: null };
+        this.attack = { name, variant: way, tracks: tracksOf(name, way), start: this.time, hitAt, duration, mirror: false, rest: true, stopping: null };
 
         return way;
     }
@@ -2705,7 +2721,7 @@ export class Actions {
 
         const action = `${on ? "draw" : "sheathe"}:${name}`;
 
-        this.attack = { name: action, variant: 0, tracks: COMPILED.get(action)[0], start: this.time, hitAt: how.hitAt, duration: how.duration, mirror: false, swap: on ? "draw" : "sheathe", settle: how.settle, shield, sling, then };
+        this.attack = { name: action, variant: 0, tracks: tracksOf(action, 0), start: this.time, hitAt: how.hitAt, duration: how.duration, mirror: false, swap: on ? "draw" : "sheathe", settle: how.settle, shield, sling, then };
     }
 
     // The weapons put away (`away`) or into the hand, or the shield (`shield`) slung or onto the

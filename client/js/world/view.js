@@ -552,7 +552,36 @@ export class View {
         return this.renderer.compileAsync(object, this.camera, this.scene);
     }
 
-    /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
+    /**
+     * Send every picture what's shown in the scenes (or under `roots`; `hidden` too, if asked) is
+     * drawn with to the graphics card now (while the game's loading, or a character before it's
+     * shown: app/game.js #sending), rather than in the first frame it's drawn in, which would wait
+     * on it (on a phone, a long pause as play starts). Those already sent aren't sent again, and
+     * what's hidden isn't given room on the graphics card till it's wanted. Returns how many there
+     * are.
+     */
+    upload(roots = [this.scene, this.far.scene], { hidden = false } = {}) {
+        const sent = new Set();
+        const send = (value) => {
+            if (value?.isTexture && !sent.has(value)) {
+                sent.add(value);
+                this.renderer.initTexture(value);
+            }
+        };
+
+        for (const root of roots) {
+            send(root.environment);
+            root[hidden ? "traverse" : "traverseVisible"]((node) => {
+                for (const material of [node.material ?? []].flat()) {
+                    Object.values(material).forEach(send);
+                    Object.values(material.uniforms ?? {}).forEach((uniform) => send(uniform?.value));
+                }
+            });
+        }
+
+        return sent.size;
+    }
+
     /** Draw this share of the pixels the quality level and render scale would (app/governor.js). */
     adapt(scale) {
         this.adaptiveScale = scale;
@@ -560,6 +589,7 @@ export class View {
         this.resize();
     }
 
+    /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
     setRenderScale(scale) {
         this.renderScale = scale;
         this.setQuality(this.qualityName);
