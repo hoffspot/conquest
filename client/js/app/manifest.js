@@ -133,7 +133,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/afflictions.js", 3987],
             ["js/core/aqueducts.js", 12827],
             ["js/core/arches.js", 9655],
-            ["js/core/battle.js", 198779],
+            ["js/core/battle.js", 200310],
             ["js/core/caches.js", 11087],
             ["js/core/creatures.js", 22532],
             ["js/core/daytime.js", 3977],

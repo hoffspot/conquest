@@ -725,9 +725,11 @@ hurt enough, it fights as any other.
 whose leash reaches them, goes for them before anyone else (`#drawnTo`), so long as there's room
 on them: at most 6 of their enemies up close and 4 shooting or casting at once (`#roomOn`, from
 who's on each player as the step begins, `#mustered`, and anyone newly set on them since). The
-same holds however they'd come to be on them: the nearest enemy, an alarm raised, or turning on
-whoever struck them (`#turnOn`). The rest fight whoever else is near: a player in a battle of
-hundreds has a fight, not a crowd, on them.
+same holds for the nearest enemy and an alarm raised, but not for one the player's struck (or
+stunned, or cast at): set on, an enemy always turns on whoever did it (`#turnOn`), however many
+are on them already (the user: "make sure any unit that is attacked attempts to defend itself").
+The rest fight whoever else is near: a player in a battle of hundreds has a fight, not a crowd,
+on them.
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
   ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds

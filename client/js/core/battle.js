@@ -22,7 +22,8 @@
 //    its (within SIGHT squares, with nothing in the way, and within its leash of its post or its
 //    round), or one of its own it can see is fighting one, it chases them and attacks whenever
 //    they're within reach, giving up and going back to its patrol if it loses sight of them for
-//    GIVE_UP_MS.
+//    GIVE_UP_MS. Struck, it (and a creature's whole pack) goes after whoever did it, beyond its
+//    leash and unseen, till DEFEND_MS after the last blow (#provoke).
 //
 // Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
 // speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
@@ -2418,7 +2419,10 @@ export class Battle {
         const wild = actor.wild;
         const home = actor.spawn;
         const provoked = (enemy) => (actor.foes[enemy.id] ?? -Infinity) > this.time;
-        const leashed = (other) => distanceBetween(home, other.square) <= wild.leash;
+        // (Struck by them lately, it or its pack: after them however far, unseen or not, till
+        // DEFEND_MS after the last blow. Else not beyond its leash of home)
+        const struck = (other) => (actor.struckBy?.[other.id] ?? -Infinity) > this.time;
+        const leashed = (other) => struck(other) || distanceBetween(home, other.square) <= wild.leash;
         const rouses = (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
         const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
 
@@ -2434,7 +2438,7 @@ export class Battle {
         } else if (actor.target !== null) {
             const chased = this.actor(actor.target);
 
-            if (!chased || chased.dead || chased.map !== actor.map || this.time - actor.lastSeen > GIVE_UP_MS || !leashed(chased)) {
+            if (!chased || chased.dead || chased.map !== actor.map || (this.time - actor.lastSeen > GIVE_UP_MS && !struck(chased)) || !leashed(chased)) {
                 actor.target = null;
                 actor.path = [];
                 actor.pathGoal = null;
@@ -4446,10 +4450,11 @@ export class Battle {
         return damage;
     }
 
-    // A creature or a guard turned on whoever set on it (`lastSeen`: as if seen till then); on a
-    // player only if there's room for one more on them (AGGRO), or it fights on as it was
+    // A creature or a guard turned on whoever set on it (`lastSeen`: as if seen till then): set on,
+    // it defends itself, however many are on a player already (AGGRO keeps back only those who
+    // haven't been: the user, "make sure any unit that is attacked attempts to defend itself")
     #turnOn(actor, attacker, lastSeen) {
-        if ((actor.ai !== "patrol" && actor.ai !== "wild") || !this.#roomOn(actor, attacker)) {
+        if (actor.ai !== "patrol" && actor.ai !== "wild") {
             return;
         }
 
@@ -4474,21 +4479,31 @@ export class Battle {
         // (Struck while it waited, holding a place: it fights back at once)
         target.waryUntil = 0;
 
-        // (After whoever did it, beyond its leash if need be, a while: the rest forgotten)
+        // (After whoever did it, beyond its leash if need be, a while)
         if (attacker !== target) {
-            target.struckBy ??= {};
-
-            for (const id in target.struckBy) {
-                if (target.struckBy[id] <= this.time) {
-                    delete target.struckBy[id];
-                }
-            }
-
-            target.struckBy[attacker.id] = this.time + DEFEND_MS;
+            this.#struckBy(target, attacker);
         }
 
         if (turn) {
             this.#turnOn(target, attacker, this.time);
+        }
+
+        // (One of a pack of the wild's: the rest of its pack after whoever did it too, wherever
+        // they are and whether they saw or not, as if it howled; those fighting someone already
+        // fighting on)
+        const pack = target.wild?.pack;
+
+        if (pack && attacker !== target && attacker.team !== target.team) {
+            for (const other of this.actors) {
+                if (other !== target && other.wild?.pack === pack && !other.dead && other.map === target.map) {
+                    this.#struckBy(other, attacker);
+                    other.foes[attacker.id] = this.time + FOE_MS;
+
+                    if (turn && other.target === null) {
+                        this.#turnOn(other, attacker, this.time);
+                    }
+                }
+            }
         }
 
         if (target.spared?.[attacker.id]) {
@@ -4512,6 +4527,20 @@ export class Battle {
                 }
             }
         }
+    }
+
+    // Struck by `attacker` (or one of its pack was): after them, beyond its leash if need be, till
+    // DEFEND_MS after (the rest it was struck by forgotten, once that's past)
+    #struckBy(actor, attacker) {
+        actor.struckBy ??= {};
+
+        for (const id in actor.struckBy) {
+            if (actor.struckBy[id] <= this.time) {
+                delete actor.struckBy[id];
+            }
+        }
+
+        actor.struckBy[attacker.id] = this.time + DEFEND_MS;
     }
 
     #die(actor, killer) {

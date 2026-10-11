@@ -12,7 +12,7 @@ import { LOOKS } from "../client/js/beasts/looks.js";
 import { elitePrize } from "../client/js/core/caches.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { CHARMS } from "../client/js/core/goods.js";
-import { Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { AGGRO, Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
 import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, snagChoice, snaggable, SNAG_GRADES, SNAG_KINDS, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -425,6 +425,78 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(progress.gold, before + bundle.gold);
         assert.ok(bundle.items.every(({ id, count }) => progress.pack.some((stack) => stack?.id === id && stack.count >= count)));
         assert.ok(!host.ground.has(mine.id) && host.ground.has(theirs.id));
+    });
+
+    it("a creature struck from beyond its sight and its leash comes for whoever did it, its pack with it, however many are on the player already, till 10 s after the last blow", () => {
+        const { host, me } = outside(hosted());
+
+        run(host, 600);
+
+        for (const beast of about(host)) {
+            host.battle.remove(beast.id);
+            host.wild.delete(beast.id);
+        }
+
+        // (A pack of two wolves, defensive: they set on no one who hasn't set on them; 15 and 18
+        // squares off the player, the way the player can see 15 squares, beyond the wolves' sight,
+        // and their leash 4 squares of home)
+        const wolf = (id, square) => {
+            host.wild.set(id, { creature: "wolf", tier: 1, pack: "test-pack", camp: null, lair: null, master: false });
+            host.battle.add({ id, kind: "beast", name: "Wolf", weapon: "wolf", team: WILD, square, ai: "wild", hp: 5000, speed: 1, chase: 3, wild: { creature: "wolf", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 4, pack: "test-pack", leader: null, menace: false } });
+
+            return host.battle.actor(id);
+        };
+        const along = (angle, out) => [me.square[0] + Math.round(Math.cos(angle) * out), me.square[1] + Math.round(Math.sin(angle) * out)];
+        const struck = wolf("test-wolf-a", along(0, 15));
+        const angle = Array.from({ length: 16 }, (_, k) => (k * Math.PI) / 8).find((each) => {
+            put(struck, along(each, 15));
+
+            return host.battle.canSee(me, struck, 20);
+        });
+
+        put(struck, along(angle, 15));
+
+        const packmate = wolf("test-wolf-b", along(angle, 18));
+        const away = (actor) => Math.hypot(actor.x - me.x, actor.y - me.y);
+
+        assert.ok(15 > (struck.wild.sight ?? SIGHT));
+
+        // The player already as set upon as they can be (AGGRO): others' places on them all taken
+        for (let k = 0; k < AGGRO.melee + AGGRO.ranged; k++) {
+            host.battle.add({ id: `test-foe-${k}`, kind: "beast", name: "Rat", weapon: "rat", team: WILD, square: [me.square[0] - 2 - k, me.square[1] + 3], ai: "wild", hp: 5000, speed: 0.01, chase: 0.01, wild: { creature: "rat", tier: 1, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: `test-rats-${k}`, leader: null, menace: false } });
+        }
+
+        run(host, 1500);
+        assert.ok(host.battle.actors.filter((actor) => actor.target === HOST_PLAYER && !actor.dead).length >= AGGRO.melee, "the player as set upon as they can be");
+
+        // A spell from far off: the one struck, and the rest of its pack, come for the player
+        const before = [away(struck), away(packmate)];
+
+        assert.deepEqual(host.battle.cast(HOST_PLAYER, "burn", struck.id), { ok: true });
+
+        const events = run(host, 1500);
+
+        assert.ok(events.some(({ type, id, target, landed }) => type === "spell" && id === HOST_PLAYER && target === struck.id && landed), "the spell landed");
+        assert.equal(struck.target, HOST_PLAYER, "the one struck");
+        assert.equal(packmate.target, HOST_PLAYER, "its pack");
+        events.push(...run(host, 2500));
+        assert.ok(away(struck) < before[0] - 3 && away(packmate) < before[1] - 3, `coming: ${before.map(Math.round)} m then ${[away(struck), away(packmate)].map(Math.round)} m`);
+
+        // Struck no more (the player stunned, striking back no longer): 10 s after the last blow
+        // on either of them they give up, beyond their leash, and go home
+        Object.assign(me, { stunnedUntil: host.battle.time + 60000, target: null, attack: null, order: null, casting: null });
+
+        let gaveUp = null;
+
+        for (let t = 0; t < 15000 && gaveUp === null; t += STEP_MS) {
+            events.push(...host.advance(STEP_MS));
+            gaveUp = struck.target === null && packmate.target === null ? host.battle.time : null;
+        }
+
+        const lastBlow = Math.max(...events.filter(({ type, by, id }) => type === "hit" && by === HOST_PLAYER && (id === struck.id || id === packmate.id)).map(({ time }) => time));
+
+        assert.ok(Number.isFinite(lastBlow), "struck");
+        assert.ok(gaveUp !== null && gaveUp >= lastBlow + 10000 - 2 * STEP_MS && gaveUp <= lastBlow + 10000 + 1000, `gave up ${gaveUp - lastBlow} ms after the last blow`);
     });
 
     it("auto-snag takes a player's own spoils of a fight in reach, and of them only what it's set to take, the rest left in the sack to tap (host.js snaggable, snagChoice)", () => {

@@ -388,7 +388,11 @@ whoever holds the town, and whom they fight is as their peoples stand.
 - **Defending itself.** Struck (or cast at) by someone beyond its leash, a soldier goes after them
   all the same, till 10 seconds after they last did it (`DEFEND_MS`), or it's lost sight of them
   3 seconds; then back to its post or its round. Before, one shot at from beyond its leash stood
-  there to be shot down.
+  there to be shot down. A creature of the wild does the same, and keeps after them unseen till
+  then too (a spell reaches 16 to 20 metres, further than a creature sees: struck from out of
+  its sight, it comes looking), and the rest of its pack with it, wherever they are, as if it
+  howled (battle.js `#wild`, `#provoke`, `#struckBy`; the user: "It's possible to hit an enemy
+  with an offensive spell at maximum range and they don't notice you").
 - **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
   the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life.
 - **Relief.** A minute after one of a town's soldiers is taken away, another of its garrison takes
