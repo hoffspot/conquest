@@ -9048,6 +9048,9 @@ test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
     test("turned on its side and back, the world's drawn the shape of the screen, never stretched: even told it's resized while it's still turning, as Chrome on Android tells it", async ({ page }) => {
+        // (Full screen while playing off: the browser here can't be turned, resized, while it's
+        // full screen, as a phone can)
+        await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ fullscreen: false })));
         await playing(page, "/?play&seed=1");
 
         // How the world's drawn against the canvas it's drawn on: the drawing's shape and the
