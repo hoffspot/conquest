@@ -240,7 +240,7 @@ it's gone.
 ### A ceiling
 
 Every machine in a game draws everyone near a fight, so there's a body budget there
-(`BODIES`): forty at most of the side's and the wild's within 80 m of where foes are put out.
+(`BODIES`): sixty at most of the side's and the wild's within 80 m of where foes are put out.
 
 - **Foes give way first.** Past it, what more of a pack there'd have been goes into the hit
   points of those there are instead (six there for nine wanted, each half as tough again), never
@@ -264,6 +264,14 @@ So many near a fight are drawn for less (`app/game.js` `MANY`):
   creatures and the beasts are drawn in their kind's crowd, as a battle's soldiers are, a few at a
   time, and drawn in full again a few at a time once there's time to spare (docs/GAME.md *Standing
   in*; *In a crowd*, below).
+
+Why sixty: with all but the nearest few standing in their crowds, sixty about a fight cost less to
+draw than forty all in full did before there were crowds (docs/GAME.md *Standing in*: the update
+under half, a third fewer draws), and even with Adaptive off (all in full), sixty take 326 draws to
+forty's 259. Each body more takes about 4 MB (its own skin, garments and pose, past the first of
+its kind), so eighty waits on the game taking less memory first. What the world's rules cost about
+one fight hardly grows with it: 0.34 ms a frame for forty, 0.41 for sixty, 0.48 for eighty, all
+fighting (the host's battle step, in Node).
 
 ### What the more leave
 

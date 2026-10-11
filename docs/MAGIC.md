@@ -297,7 +297,7 @@ same for everyone playing (docs/GAME.md: hosting and joining):
   as Zombify's (*Growing*, above: one to five each, so ten at most); one more called or raised
   than that, and the oldest of that kind goes to make room for it ("Your wolf goes, to make room
   for another.", host.js `#companion`). And where there are already as many about as the body
-  budget near a fight has room for (forty within 80 m: docs/WILDS.md *A ceiling*), the oldest of
+  budget near a fight has room for (sixty within 80 m: docs/WILDS.md *A ceiling*), the oldest of
   theirs, called or raised, goes for the new one, short of what their levels allow. It keeps up as a follower does (docs/WAR.md *Following*: at its player's pace,
   a sprint as they sprint, faster the further behind), and one left more than 20 metres behind
   (stuck, or on another floor) is brought quietly to a few squares behind them (`FOLLOW.lost`,
