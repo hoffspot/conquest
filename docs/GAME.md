@@ -3304,7 +3304,11 @@ each one it crossed, bigger and worse. The kind is the attack's reaction:
 A blow lands facing the way it came from (the most facing of a few dozen random points on the
 body), at its kind's height (fists higher), never on the hands or head. Healed back above a
 threshold, that stage's wounds and marks go (and the arrows in them); at full health, all of
-them; coming back to life, all of them.
+them; coming back to life, all of them. An arrow in a mark (a lesser hit, no threshold crossed)
+falls out half a minute after their last blow (`LOOSE`), its mark still painted; an arrow in a
+wound stays till it's healed. (Health doesn't come back by itself, so without that a scratch at
+83 of 85 would leave a player walking about with eight arrows in them till they next drank or
+slept: the user, "check how long arrows that hit the player stay stuck in them".)
 
 A character's damage is one 512-texel texture over the body's UV map, which its clothes share:
 red for blood, green for bruising, blue for charring, alpha for cuts. It's made at the first blow
@@ -4373,7 +4377,10 @@ it.
    Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
   requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
-  (but for an Undo's button) to whoever's under them. In a fight they're kept clear of those
+  (but for an Undo's button) to whoever's under them. A little X at a message's top right puts it
+  away at once (a target bigger than it looks, for a finger; drawn, not a letter, so a message's
+  words are only its own: the user, "Provide a little X in the top right of the box to dismiss
+  them"); it's still kept for the journal. In a fight they're kept clear of those
   fighting, the player, who they're fighting and whoever's after them, each where they are on
   the screen with their name and bar over them (game.js `#clearOfFight`, `MESSAGE_CLEAR`): where
   a message would cover one of them, it's moved up under the buttons along the top (and the
@@ -4777,6 +4784,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
+  a lesser hit's arrow falling out half a minute after the last blow (struck again, the wait
+  starting again) and a wound's kept till it's healed,
   and the body's and garments' materials mixing it in (skin's own lines kept, its roughness under
   the blood's wetness).
 - `test/gpumemory.test.js`: what the graphics card's been given to hold: buffers given data or a

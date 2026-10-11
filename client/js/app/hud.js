@@ -171,6 +171,12 @@ export class Hud {
         this.floaters = root.querySelector("#floaters");
         this.banner = root.querySelector("#banner");
         this.top = root.querySelector(".hud-top");
+
+        // (A message's little X, at its top right: tapped, it's put away; no words of its own)
+        this.bannerClose = element("button", "banner-close");
+        this.bannerClose.type = "button";
+        this.bannerClose.setAttribute("aria-label", "Dismiss");
+        this.bannerClose.addEventListener("click", () => this.message(""));
         this.quick = root.querySelector(".quickbar");
 
         // (Which of the places a message can go it's at in a fight, or null: where it goes as a rule)
@@ -557,13 +563,17 @@ export class Hud {
         this.floaters.append(number);
     }
 
-    /** A message across the middle of the screen, for `seconds` (or until the next one). */
+    /**
+     * A message across the middle of the screen, for `seconds` (or until the next one, or till its
+     * little X is tapped).
+     */
     message(text, seconds = 3) {
         clearTimeout(this.bannerTimer);
         this.banner.textContent = text;
         this.banner.hidden = !text;
 
         if (text) {
+            this.banner.append(this.bannerClose);
             this.onMessage(text, seconds);
         }
 

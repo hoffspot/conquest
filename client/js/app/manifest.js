@@ -44,7 +44,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/gearinfo.js", 13995],
             ["js/app/governor.js", 6668],
             ["js/app/heroes.js", 7619],
-            ["js/app/hud.js", 41405],
+            ["js/app/hud.js", 41847],
             ["js/app/icons.js", 79796],
             ["js/app/journey.js", 4183],
             ["js/app/mapicons.js", 26728],
@@ -343,7 +343,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/water.js", 23384],
             ["js/world/wind.js", 4057],
             ["js/world/windowpools.js", 6382],
-            ["js/world/wounds.js", 33184],
+            ["js/world/wounds.js", 34003],
         ],
     },
     {

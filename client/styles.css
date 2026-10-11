@@ -3408,6 +3408,47 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     fill: rgba(236, 200, 130, 0.35);
 }
 
+/* A message's little X, at its top right: tapped, the message is put away (hud.js message). A
+   bigger target than it looks, for a finger. */
+#banner .banner-close {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--gold);
+    opacity: 0.8;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+#banner .banner-close::before,
+#banner .banner-close::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#banner .banner-close::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#banner .banner-close:hover,
+#banner .banner-close:focus-visible {
+    opacity: 1;
+    color: var(--gold-bright);
+}
+
 /* A message's button (Undo) */
 #banner .banner-action {
     margin-left: 12px;
@@ -4115,7 +4156,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     top: 28%;
     transform: translateX(-50%);
     max-width: calc(100% - 32px);
-    padding: 12px 22px;
+    /* (Room either side for its little X, at the top right, the words kept in the middle) */
+    padding: 12px 34px;
     border-radius: 12px;
     background: var(--panel);
     border: 1px solid var(--panel-border);

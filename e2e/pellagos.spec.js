@@ -1484,6 +1484,83 @@ test("in a fight, a message is moved clear of those fighting, taps going through
     expect(placed.after).toBe("");
 });
 
+test("a message has a little X at its top right, clear of its words: tapped, the message is put away at once (kept for the journal), the game not tapped through it; the next has it too, an Undo's beside it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const told = "The Lizard-folk reserve is in the field near you, 58 strong.";
+    const banner = page.locator("#banner");
+    const close = page.locator("#banner .banner-close");
+
+    const shown = await page.evaluate((text) => {
+        const { game } = window.pellagos;
+        const banner = document.querySelector("#banner");
+
+        game.stop();
+        game.hud.message(text, 60);
+        banner.getAnimations().forEach((animation) => animation.finish());
+
+        const box = banner.getBoundingClientRect();
+        const x = banner.querySelector(".banner-close").getBoundingClientRect();
+        const words = document.createRange();
+
+        words.selectNodeContents(banner.firstChild);
+
+        return {
+            box: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+            x: { left: x.left, top: x.top, right: x.right, bottom: x.bottom },
+            overWords: [...words.getClientRects()].some((line) => line.left < x.right && x.left < line.right && line.top < x.bottom && x.top < line.bottom),
+            label: banner.querySelector(".banner-close").getAttribute("aria-label"),
+        };
+    }, told);
+
+    // Its words only its own (the X drawn, not a letter)
+    await expect(banner).toHaveText(told);
+    await expect(close).toBeVisible();
+    expect(shown.label).toBe("Dismiss");
+    expect(shown.overWords).toBe(false);
+    // (In the top right corner, inside the box; a finger's target)
+    expect(shown.x.right).toBeLessThanOrEqual(shown.box.right + 0.5);
+    expect(shown.x.right).toBeGreaterThan(shown.box.right - 8);
+    expect(shown.x.top).toBeGreaterThanOrEqual(shown.box.top - 0.5);
+    expect(shown.x.top).toBeLessThan(shown.box.top + 8);
+    expect(shown.x.right - shown.x.left).toBeGreaterThanOrEqual(28);
+
+    // Tapped: gone at once, though it had a minute to go; still in the journal's messages; the
+    // player not sent anywhere by the tap
+    const before = await page.evaluate(() => ({ ...window.pellagos.game.battle.actor("player").square }));
+
+    await close.click();
+    await expect(banner).toBeHidden();
+
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { kept: game.messages.map(({ text }) => text), square: { ...player.square }, path: player.path?.length ?? 0, order: player.order ?? null };
+    });
+
+    expect(after.kept).toContain(told);
+    expect(after.square).toEqual(before);
+    expect(after.path).toBe(0);
+    expect(after.order).toBe(null);
+
+    // The next message has its X too, and an Undo's button beside it still works
+    const undone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.undone = false;
+        game.hud.offer("Thrown away: a stick.", "Undo", () => (window.undone = true));
+
+        return document.querySelectorAll("#banner .banner-close").length;
+    });
+
+    expect(undone).toBe(1);
+    await expect(banner).toHaveText("Thrown away: a stick. Undo");
+    await page.locator("#banner .banner-action").click();
+    expect(await page.evaluate(() => window.undone)).toBe(true);
+    await expect(banner).toBeHidden();
+});
+
 test("those attacking the player have an icon each down the right side, a likeness in a red frame with a line of their health, whoever the player's set on glowing; tapped, set on them where the player stands (on whoever they're set on, stopping); tapped twice, running up to them; held, walking up to them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
