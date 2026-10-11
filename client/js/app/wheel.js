@@ -341,9 +341,12 @@ export class ActionWheel {
      * if `flip`. `counts` says how many of each thing to use there are, and `off` which slices
      * can't be used as things are (a blow for another kind of weapon, a thing all used up).
      * `looks` gives what's in the slices their own labels and icons, and `hub` an icon for its
-     * middle (drawWheel).
+     * middle (drawWheel). Its middle's right at `x`, `y`: under the finger that opened it, however
+     * near the screen's edge (its slices are flicked into by the way the finger goes from there,
+     * not touched, so one past the edge is flicked into all the same); or, `onScreen` (a wheel
+     * whose slices are clicked), kept wholly on the screen.
      */
-    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [], looks = null, hub = null } = {}) {
+    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [], looks = null, hub = null, onScreen = false } = {}) {
         const size = 2 * OUTER + 8;
         const half = OUTER + 4;
 
@@ -354,9 +357,8 @@ export class ActionWheel {
             slice.classList.toggle("off", off.includes(slice.dataset.direction));
         }
 
-        // Kept on the screen, however near its edge the target is
-        const left = Math.min(innerWidth - half - 4, Math.max(half + 4, x));
-        const top = Math.min(innerHeight - half - 4, Math.max(half + 4, y));
+        const left = onScreen ? Math.min(innerWidth - half - 4, Math.max(half + 4, x)) : x;
+        const top = onScreen ? Math.min(innerHeight - half - 4, Math.max(half + 4, y)) : y;
 
         this.element.style.left = `${left}px`;
         this.element.style.top = `${top}px`;

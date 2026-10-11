@@ -1441,8 +1441,8 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   glowing, and the heals and wards in the quick actions cast on them (a spell that can be cast on
   a friend, `forFriends`; anything else on the player as ever); tapped again, the player's own
   again; gone (fallen, dismissed, their time up), let go. **Tapped twice** in quick succession,
-  the player runs to them (an `approach` order with `run`). **Held**, the unit wheel opens under
-  the finger, steered by it from wherever it's lifted (`#openMemberWheel`: the page's own
+  the player runs to them (an `approach` order with `run`). **Held**, the unit wheel opens right
+  under where the finger went down, steered by it from wherever it's lifted (`#openMemberWheel`: the page's own
   pointer events for that pointer), as held on one of the party in the world does: Attack my
   target (N), Follow me (E), Wait here (W), Dismiss (SW), what they're doing already greyed
   (`WHEELS.unit`, the `unit:` actions: core/host.js `order` commands, `#orderUnit`, `NET_VERSION`
@@ -4122,10 +4122,13 @@ never says have ended can't use them up.
 ### The action wheel (app/wheel.js)
 
 Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
-(SVG, 264 pixels across, kept on the screen) opens round them, cut into eight slices like a
-compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and flick: as soon as the
-finger is 30 pixels from where it opened, the slice it's in is tried, lit gold if it's used;
-letting go before then does nothing.
+(SVG, 264 pixels across) opens with its middle right under where the finger went down, cut into
+eight slices like a compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and
+flick: as soon as the finger is 30 pixels from where it went down, the slice it's in is tried,
+lit gold if it's used; letting go before then does nothing. So the wheel's always drawn round
+the point it's flicked from, wherever on someone the finger landed (it opened round their
+middle once, so the slice the finger seemed to go into wasn't always the one it did); near the
+screen's edge it goes past it, the slices past the edge flicked into all the same.
 
 **Two sides.** S (`FLIP`) turns the wheel over: flicked into, the wheel's other side (wheel two,
 and from there back to wheel one) opens again under the finger, to flick from there. Its hub

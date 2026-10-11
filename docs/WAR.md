@@ -757,7 +757,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     wheel (the first empty slice of the player's own; a spell scroll's, an enemy's for a spell
     cast on one); E to split the stack (asked how many); SE
     to sell it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how
-    many). Held, a flick chooses; right-clicked, a click.
+    many). Held, a flick chooses, the wheel's middle right under where the finger went down;
+    right-clicked, a click, the wheel over the thing and kept on the screen.
   - **Dragged** onto another slot, a stack moves there: onto a stack alike, the two are put
     together; onto something else, they swap (`arrange`). A piece dragged onto the paperdoll
     goes on there (the slots it can go in lit as it's picked up; a ring onto either hand), and

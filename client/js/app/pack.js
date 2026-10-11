@@ -1308,12 +1308,15 @@ export class PackPanel {
             looks[key] = { label: key === "sell" ? "Sell" : key === "offer" ? "Offer" : label, icon: key === "use" ? iconOf(stack) : ICONS[key] };
         }
 
+        // (Held, its middle right under where the finger went down, which the way it's flicked is
+        // measured from; right-clicked, over the thing, kept on the screen to be clicked on)
         const box = press.place.element.getBoundingClientRect();
+        const [x, y] = press.clicked ? [box.left + box.width / 2, box.top + box.height / 2] : [press.x, press.y];
 
         press.mode = "wheel";
         press.done = false;
         this.wheelFor = press.place.index;
-        this.wheel.show(box.left + box.width / 2, box.top + box.height / 2, stack.id, slots, { looks, hub: iconOf(stack) });
+        this.wheel.show(x, y, stack.id, slots, { looks, hub: iconOf(stack), onScreen: Boolean(press.clicked) });
         this.wheel.element.classList.toggle("clickable", Boolean(press.clicked));
         this.#select(press.place, { card: false });
         globalThis.navigator?.vibrate?.(12);

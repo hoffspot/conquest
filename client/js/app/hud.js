@@ -63,7 +63,8 @@ export function partyFit(count, room) {
 }
 
 // Taps and holds on an icon (an attacker's, one of the party's), each told `onPress` (gesture "tap"
-// or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels, pointerId }):
+// or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels (held, where it
+// went down: a wheel opened by the hold goes right under it), pointerId }):
 // held HOLD_MS, not moving off it (HOLD_MOVE), a hold; let go before then, a tap; pressed from the
 // keyboard, a tap
 function pressable(root, onPress) {
@@ -76,18 +77,16 @@ function pressable(root, onPress) {
     root.addEventListener("pointerdown", (event) => {
         letGo();
 
-        const press = { x: event.clientX, y: event.clientY, at: [event.clientX, event.clientY], done: false };
+        const press = { x: event.clientX, y: event.clientY, done: false };
 
         press.timer = setTimeout(() => {
             press.done = true;
-            onPress("hold", { time: performance.now(), x: press.at[0], y: press.at[1], pointerId: event.pointerId });
+            onPress("hold", { time: performance.now(), x: press.x, y: press.y, pointerId: event.pointerId });
         }, HOLD_MS);
         held = press;
     });
     root.addEventListener("pointermove", (event) => {
         if (held && !held.done) {
-            held.at = [event.clientX, event.clientY];
-
             if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
                 letGo();
             }
