@@ -298,9 +298,12 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
     const freeze = kept.find(({ kind }) => kind === "freeze");
     const error = kept.find(({ kind }) => kind === "error");
 
-    expect(freeze).toMatchObject({ where: "frame", map: "town" });
-    expect(freeze.ms).toBeGreaterThanOrEqual(600);
-    expect(freeze.draw).toBeGreaterThanOrEqual(600);
+    // (What else was kept said, should the frame held up not be the one)
+    const all = JSON.stringify(kept.map(({ kind, where, ms, draw }) => ({ kind, where, ms, draw })));
+
+    expect(freeze, all).toMatchObject({ where: "frame", map: "town" });
+    expect(freeze.ms, all).toBeGreaterThanOrEqual(600);
+    expect(freeze.draw, all).toBeGreaterThanOrEqual(600);
     expect(freeze.recent).toBeGreaterThan(0);
 
     // (With what the game held then: the graphics card's, told at the calls that give it things)

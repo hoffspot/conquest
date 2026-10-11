@@ -6193,12 +6193,19 @@ export class Game {
     // Someone's likeness for their icon (view.js portrait), into `cache` (by id: null while it's
     // drawn, then an ImageData), once they've been drawn in full (not one of a crowd) for
     // LIKENESS_AFTER: drawn the moment they're built, they'd come out blank (the picture all the
-    // paperdoll's dark), and any that does is drawn again as long after
+    // paperdoll's dark), and any that does is drawn again as long after. Their pictures are sent
+    // first if they haven't been (out of the camera's view, they'd be kept hidden: #sending)
     #likeness(cache, id) {
         const avatar = this.avatars.get(id);
 
         if (cache.has(id) || !avatar || avatar instanceof CrowdAvatar) {
             return;
+        }
+
+        if (avatar.sent === false) {
+            this.view.upload([avatar.object], { hidden: true });
+            avatar.sent = true;
+            this.likenessSince.set(id, this.clock);
         }
 
         if (!this.likenessSince.has(id)) {
