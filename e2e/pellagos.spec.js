@@ -8910,7 +8910,7 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On your foe");
     await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("On yourself");
     await page.locator('#quicksetup .wheels-choice[data-action="rumble"]').click();
-    expect(await page.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(["vigor", "stun", "rumble", "item:potion"]);
+    expect(await page.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(["vigor", "stun", "rumble", "item:potion", null, null]);
     await expect(page.locator('#quicksetup .quick-slot[data-slot="2"] .quick-label')).toHaveText("Rumble");
     await page.locator("#quickback").click();
     await expect(page.locator("#menu")).not.toBeVisible();
@@ -8924,6 +8924,124 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 1");
     await page.locator("#quickback").click();
     await expect(page.locator("#menuoptions")).toBeVisible();
+});
+
+test("six quick actions across (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
+    test.setTimeout(180000);
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+    const shown = () => page.evaluate(() => [...document.querySelectorAll(".quickbar .quick-slot")].filter((each) => !each.hidden).length);
+    const quick = () => page.evaluate(() => window.pellagos.game.wheels.quick);
+
+    // A finger down on a slot, moved up or down a little way (more than a tap's stray), and lifted
+    const flick = async (n, way) => {
+        const at = await slot(n).boundingBox();
+        const [x, y] = [at.x + at.width / 2, at.y + at.height / 2];
+
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x + 3, y + (way === "up" ? -40 : 40), { steps: 4 });
+        await page.mouse.up();
+    };
+
+    // Four, as ever, till Six across is switched on in Game options (Quick actions)
+    await expect.poll(shown).toBe(4);
+    await page.evaluate(() => {
+        const switched = document.querySelector("#quicksixswitch");
+
+        switched.checked = true;
+        switched.dispatchEvent(new Event("change"));
+    });
+    expect(await shown()).toBe(6);
+    await expect(bar).toHaveClass(/six/);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).quickSix)).toBe(true);
+
+    // The player knows Healing up to Detraumatize; Mend Wounds in the first slot; the orc set on
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 3, player.square[1] - 2];
+
+        game.stop();
+        game.progress.schools.healing = 700;
+        game.setQuick(["mendWounds", "stun", "burn", "item:potion", null, null]);
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.command("player", { type: "engage", target: "orc" });
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+
+    // Upright, six across and within the screen: only their icons, bigger
+    const upright = await page.evaluate(() => {
+        const box = document.querySelector(".quickbar").getBoundingClientRect();
+        const first = document.querySelector('.quickbar .quick-slot[data-slot="0"]');
+
+        return { left: box.left, right: box.right, label: getComputedStyle(first.querySelector(".quick-label")).display, icon: first.querySelector(".quick-icon").getBoundingClientRect().width };
+    });
+
+    expect(upright.left).toBeGreaterThanOrEqual(0);
+    expect(upright.right).toBeLessThanOrEqual(402);
+    expect(upright.label).toBe("none");
+    expect(upright.icon).toBeGreaterThanOrEqual(29);
+
+    // Flicked down: Mend Wounds rolls out, Vigor in, its name said over it a moment; kept
+    await flick(0, "down");
+    expect(await quick()).toEqual(["vigor", "stun", "burn", "item:potion", null, null]);
+    await expect(slot(0)).toHaveAttribute("data-action", "vigor");
+    await expect(bar.locator(".quick-name")).toHaveText("Vigor");
+    await expect(bar.locator(".quick-name")).toHaveClass(/said/);
+    // (The reel's gone once it's rolled)
+    await expect(slot(0).locator(".quick-ghost")).toHaveCount(0);
+
+    // Down again: Vigor's the first of its school; it bounces, still Vigor
+    await flick(0, "down");
+    expect(await quick()).toEqual(["vigor", "stun", "burn", "item:potion", null, null]);
+
+    // Up, and up: Mend Wounds, then Detraumatize; up again, Renewal not known yet: Detraumatize
+    await flick(0, "up");
+    await expect(slot(0)).toHaveAttribute("data-action", "mendWounds");
+    await flick(0, "up");
+    await expect(slot(0)).toHaveAttribute("data-action", "detraumatize");
+    await flick(0, "up");
+    expect((await quick())[0]).toBe("detraumatize");
+
+    // Stun's no school's (a hex): it bounces, still Stun; a slid finger (across) is neither
+    await flick(1, "up");
+    expect((await quick())[1]).toBe("stun");
+
+    // Kept as if chosen in Quick actions: there, six, Detraumatize in the first
+    await page.evaluate(() => window.pellagos.game.advance(0.1));
+    expect(await page.evaluate(() => window.pellagos.game.quickSetup().quick)).toEqual(["detraumatize", "stun", "burn", "item:potion", null, null]);
+
+    // On its side: six across, their names shown
+    await page.setViewportSize({ width: 874, height: 402 });
+    await page.evaluate(() => window.pellagos.game.advance(0.1));
+
+    const side = await page.evaluate(() => {
+        const box = document.querySelector(".quickbar").getBoundingClientRect();
+        const label = document.querySelector('.quickbar .quick-slot[data-slot="0"] .quick-label');
+
+        return { left: box.left, right: box.right, display: getComputedStyle(label).display, text: label.textContent };
+    });
+
+    expect(side.display).not.toBe("none");
+    expect(side.text).toBe("Detraumatize");
+    expect(side.left).toBeGreaterThanOrEqual(0);
+    expect(side.right).toBeLessThanOrEqual(874);
+
+    // The keys 1 to 6 tap them: 5, an empty one, asks what's to go in it
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("5");
+    await expect(page.locator("#menuquick")).toBeVisible();
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 5");
+    expect(await page.evaluate(() => [...document.querySelectorAll("#quicksetup .quick-slot")].filter((each) => !each.hidden).length)).toBe(6);
 });
 
 test("a spell tapped on a foe out of reach says so, flashes its slot red and starts nothing cooling down", async ({ page }) => {

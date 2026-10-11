@@ -8,7 +8,7 @@ import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { memberKind, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
-import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
+import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
@@ -373,7 +373,7 @@ describe("saving (save.js)", () => {
         useStorage();
 
         const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
-        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], quick: ["stun", null, "item:ale", "vigor"], version: 2 };
+        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], quick: ["stun", null, "item:ale", "vigor", "hold", null], version: 2 };
 
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
@@ -790,7 +790,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const self = [{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" }];
 
         assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], provoke: [{ n: "fight" }], unit: [{ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" }] });
-        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"], version: 2 });
+        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 2 });
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
@@ -813,7 +813,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         // (What one of the party's told, on the wheel held on them: never set by the player, nor a quick action)
         assert.deepEqual(actionOf("unit:assist"), { label: "Attack my target", unit: "assist", on: "unit" });
         assert.ok(!assignable("self", {}).some((key) => key.startsWith("unit:")) && !assignable("quick", {}).some((key) => key.startsWith("unit:")));
-        assert.deepEqual(readWheels({ quick: ["unit:wait", null, null, null] }).quick, [null, null, null, null]);
+        assert.deepEqual(readWheels({ quick: ["unit:wait", null, null, null] }).quick, [null, null, null, null, null, null]);
 
         // (Every emote on the player's own wheel, by its name)
         for (const [name, { label }] of Object.entries(EMOTES)) {
@@ -875,7 +875,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
         assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], quick: [...QUICK], version: 2 });
-        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], quick: [null, null, null, null], version: 2 });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], quick: [null, null, null, null, null, null], version: 2 });
     });
 
     it("puts Attack at the top of an enemy's wheel kept from before it was, what was there moved to the first empty slice; once: taken off after, it stays off", () => {
@@ -895,16 +895,45 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.deepEqual(readWheels({ enemy: [{ n: "stun" }, {}], version: 2 }).enemy, [{ n: "stun" }, {}]);
     });
 
-    it("starts the quick actions with Vigor, Stun, Burn and a draught; reads them as kept, four, each something either wheel can hold", () => {
-        assert.deepEqual(QUICK, ["vigor", "stun", "burn", "item:potion"]);
+    it("starts the quick actions with Vigor, Stun, Burn and a draught, and two empty for six across; reads them as kept, six, each something either wheel can hold", () => {
+        assert.deepEqual(QUICK, ["vigor", "stun", "burn", "item:potion", null, null]);
+        assert.deepEqual(QUICK_SHOWN, { four: 4, six: 6 });
 
-        // (Heal as kept before it was renamed, Vigor now; a fight to pick, gear, nonsense and a
-        // fifth left out)
-        const kept = { self: [], enemy: [], quick: ["heal", "fight", "item:sword", "powerStrike", "item:ale"] };
+        // (Heal as kept before it was renamed, Vigor now; a fight to pick, gear, nonsense; a
+        // fifth and a sixth kept, a seventh left out)
+        const kept = { self: [], enemy: [], quick: ["heal", "fight", "item:sword", "powerStrike", "item:ale", "hold", "burn"] };
 
-        assert.deepEqual(readWheels(kept).quick, ["vigor", null, null, "powerStrike"]);
+        assert.deepEqual(readWheels(kept).quick, ["vigor", null, null, "powerStrike", "item:ale", "hold"]);
         assert.deepEqual(readWheels({ quick: "nonsense" }).quick, [...QUICK], "kept wrongly: as they start");
-        assert.deepEqual(readWheels({ quick: [null, "item:potion"] }).quick, [null, "item:potion", null, null]);
+        assert.deepEqual(readWheels({ quick: [null, "item:potion"] }).quick, [null, "item:potion", null, null, null, null]);
+
+        // (Four kept from before there were six: the two more empty)
+        assert.deepEqual(readWheels({ quick: ["vigor", "stun", "burn", "item:potion"] }).quick, [...QUICK]);
+    });
+
+    it("flicks a school's spell up to the next of its school the player knows, and down to the one before; nothing further at either end, nor for anything else", () => {
+        const known = ["vigor", "mendWounds", "detraumatize", "burn", "fireball", "stun"];
+
+        assert.equal(flicked("mendWounds", "down", known), "vigor");
+        assert.equal(flicked("mendWounds", "up", known), "detraumatize");
+        assert.equal(flicked("vigor", "down", known), null, "the first of its school");
+        assert.equal(flicked("detraumatize", "up", known), null, "the last the player knows (Renewal not yet)");
+        assert.equal(flicked("burn", "up", known), "fireball");
+
+        // (Tiers not known passed over: Fireball known, Burstflame not, Immolate known)
+        assert.equal(flicked("fireball", "up", ["burn", "fireball", "immolate"]), "immolate");
+        assert.equal(flicked("immolate", "down", ["burn", "fireball", "immolate"]), "fireball");
+
+        // (In a slot though not known yet, Burn's tome unread: flicked among those that are)
+        assert.equal(flicked("burn", "up", ["fireball"]), "fireball");
+
+        // (Kept under an old name: Heal is Vigor)
+        assert.equal(flicked("heal", "up", known), "mendWounds");
+
+        for (const key of ["stun", "hold", "resistFire", "teleport", "powerStrike", "item:potion", null, "nonsense"]) {
+            assert.equal(flicked(key, "up", [...known, "hold", "resistFire", "teleport"]), null, String(key));
+            assert.equal(flicked(key, "down", [...known, "hold", "resistFire", "teleport"]), null, String(key));
+        }
     });
 
     it("uses a quick action on the foe if it's an attack, a hex or a blow, and anything else (healing, a ward, a thing to use) on the player", () => {

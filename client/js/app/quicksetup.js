@@ -1,5 +1,6 @@
 // The Quick actions options (Game options, Quick actions; or a quick action held on in a fight):
-// the four quick actions (app/quickbar.js), drawn as they rise in a fight. A slot tapped (or
+// the quick actions (app/quickbar.js), four or six as they're shown, drawn as they rise in a
+// fight. A slot tapped (or
 // chosen with the keyboard) lists what can go in it: the spells, blows and things to use that can
 // go on either action wheel, each saying who it's used on. The one chosen goes in (or it's
 // emptied).
@@ -8,7 +9,7 @@
 
 import { useDefs } from "./icons.js";
 import { fillSlot, quickSlot } from "./quickbar.js";
-import { actionOf, iconOf, offensive, QUICK } from "./wheel.js";
+import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -36,6 +37,7 @@ export class QuickSetup {
             return slot;
         });
         this.row.append(...this.slots);
+        this.shown = QUICK_SHOWN.four;
         this.heading = element("h3", "wheels-heading");
         this.list = element("div", "wheels-choices");
         this.list.setAttribute("role", "listbox");
@@ -54,9 +56,18 @@ export class QuickSetup {
         this.#pick(slot);
     }
 
-    // Another slot
+    /** Show four of them or six (`count`: QUICK_SHOWN), as the quick actions are. */
+    showCount(count) {
+        this.shown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
+        this.row.classList.toggle("six", this.shown === QUICK_SHOWN.six);
+        this.row.style.setProperty("--quick-count", String(this.shown));
+        this.slots.forEach((slot, index) => (slot.hidden = index >= this.shown));
+        this.#pick(this.slot);
+    }
+
+    // Another slot (one of those shown)
     #pick(slot) {
-        this.slot = Math.max(0, Math.min(QUICK.length - 1, slot));
+        this.slot = Math.max(0, Math.min(this.shown - 1, slot));
         this.#draw();
     }
 

@@ -440,7 +440,12 @@
             </div>
             <div class="menupage" id="menuquick" hidden>
                 <h2 id="quicktitle">Quick actions</h2>
-                <p class="wheels-note">In a fight, these four rise from the bottom of the screen. Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it. Tap a slot here to choose what's in it.</p>
+                <p class="wheels-note">In a fight, these rise from the bottom of the screen. Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it, or flick a spell up or down for the next or last spell of its school. Tap a slot here to choose what's in it.</p>
+                <label class="switch option">
+                    <span class="text">Six across<small>Six quick actions, not four with their names; on a narrow screen their names are smaller, or only their icons show</small></span>
+                    <input type="checkbox" id="quicksixswitch" role="switch">
+                    <span class="track" aria-hidden="true"></span>
+                </label>
                 <div id="quicksetup"></div>
                 <div class="menu">
                     <button type="button" class="button" id="quickback">Back</button>

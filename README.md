@@ -331,8 +331,11 @@ the bottom of the screen, your name and the zoom buttons lifted above them. Tap 
 in it at once: an attack, a hex or a blow on the enemy you're fighting, and anything else (Vigor,
 a ward, a draught) on yourself. Attacks are greyed while no enemy's set on, and each is greyed
 over while it cools down, as on the wheels. You start with Vigor, Stun, Burn and a healing
-draught; hold a slot (or go to **Game options, Quick actions**) to choose what's in it. On a
-keyboard, 1 to 4 tap them.
+draught; hold a slot (or go to **Game options, Quick actions**) to choose what's in it. Flick a
+spell up or down to turn it to the next or last spell of its school that you know (Mend Wounds
+down to Vigor, up to Detraumatize); it rolls round like a slot machine's reel, and bounces at
+either end. **Six across**, in Quick actions, shows six slots instead of four, with smaller
+names, or only their icons on a phone held upright. On a keyboard, 1 to 4 (or 6) tap them.
 
 **Magic.** Each school grows with its spells that land, bringing its next spell at each tier:
 Healing up to **Astral Heal** at the fifth, and each element up to its seventh (**Hellfire**,
@@ -431,7 +434,7 @@ remembered.
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
 | Fold the minimap into a compass, and back | Tap the compass button on its top left corner; tap the compass to open it again | Click them |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
-| Quick action (in a fight) | Tap one of the four along the bottom; hold one to change it | Click one, or press 1 to 4 |
+| Quick action (in a fight) | Tap one of the four (or six) along the bottom; hold one to change it; flick a spell up or down for the next or last of its school | Click one, or press 1 to 4 (or 6); drag a spell up or down |
 | Pause, Game options | The menu button | The menu button or Escape |
 
 **Playing together.** Anyone playing can open their world to others: in the menu, **Invite

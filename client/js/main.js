@@ -419,6 +419,7 @@ $("#resistswitch").checked = settings.resistSummons;
 $("#refuseswitch").checked = settings.refuseInvites;
 $("#followswitch").checked = settings.cameraFollows;
 $("#battlecamswitch").checked = settings.battleCam;
+$("#quicksixswitch").checked = settings.quickSix;
 $("#invertswitch").checked = settings.invertTilt;
 $("#shakeswitch").checked = settings.shake;
 $("#fullscreenswitch").checked = settings.fullscreen;
@@ -616,6 +617,7 @@ async function playing(save) {
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");
     game.start();
@@ -749,8 +751,14 @@ async function openQuick(slot = 0, { fromFight = false } = {}) {
     state.quickFromFight = fromFight;
     $("#quickback").textContent = fromFight ? "Back to the game" : "Back";
     state.quickSetup.onChange = (quick) => state.game?.setQuick(quick);
+    state.quickSetup.showCount(quickShown());
     state.quickSetup.show(game.quickSetup(), slot);
     menuPage("quick");
+}
+
+// How many quick actions are shown: four (with their names), or six across (Game options, Quick actions)
+function quickShown() {
+    return settings.quickSix ? 6 : 4;
 }
 
 // A quick action held on in a fight (or an empty one tapped): paused, its slot chosen to change
@@ -1499,6 +1507,7 @@ async function playingJoined(save, welcome, joining) {
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");
     game.start();
@@ -1579,6 +1588,7 @@ $("#resistswitch").addEventListener("change", (event) => applySetting("resistSum
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
+$("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
 $("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
@@ -1750,6 +1760,9 @@ function applySetting(key, value) {
         floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
+    } else if (key === "quickSix") {
+        state.game?.showQuick(quickShown());
+        state.quickSetup?.showCount(quickShown());
     } else if (key === "resistSummons" || key === "refuseInvites") {
         if (state.game) {
             state.game[key] = value;

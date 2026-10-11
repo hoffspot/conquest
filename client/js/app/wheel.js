@@ -15,14 +15,16 @@
 // While a slice's action is cooling down, the slice is greyed out over as much of it as the
 // cooldown has left, sweeping back as it passes. A thing to use shows how many there are.
 //
-// The quick actions (app/quickbar.js) are kept with the wheels: four slots, each holding what a
-// wheel's slice can (QUICK), rising from the bottom of the screen in a fight.
+// The quick actions (app/quickbar.js) are kept with the wheels: six slots (four shown, or all six:
+// Game options), each holding what a wheel's slice can (QUICK), rising from the bottom of the
+// screen in a fight; a school's spell in one flicked up or down to the next of its school or the
+// last (flicked).
 //
 // The wheel is SVG over the game; the game (game.js) follows the finger and says what to do.
 
 import { EMOTES } from "../core/emotes.js";
 import { ITEMS } from "../core/progress.js";
-import { RENAMED, SPELLS } from "../core/spells.js";
+import { RENAMED, SCHOOLS, SPELLS } from "../core/spells.js";
 import { ICONS, ITEM_ICONS, useDefs } from "./icons.js";
 
 /** The directions, clockwise from the top, and where each slice's middle points (radians). */
@@ -165,9 +167,32 @@ function withAttack(sides) {
 
 /**
  * The quick actions until the player changes them, left to right: Vigor and Stun (known from the
- * start), Burn (once its tome's read) and a healing draught (once they carry one).
+ * start), Burn (once its tome's read) and a healing draught (once they carry one); and two empty,
+ * shown with six across (Game options: QUICK_SHOWN).
  */
-export const QUICK = Object.freeze(["vigor", "stun", "burn", "item:potion"]);
+export const QUICK = Object.freeze(["vigor", "stun", "burn", "item:potion", null, null]);
+
+/** How many of the quick actions are shown: four, with their names, or six across. */
+export const QUICK_SHOWN = Object.freeze({ four: 4, six: 6 });
+
+/**
+ * What a quick action that's a school's spell (core/spells.js SCHOOLS: Healing, Fire, Earth, Air,
+ * Water) becomes flicked `way`: "up", the next of its school's tiers the player knows (`known`:
+ * spell ids); "down", the one before (Mend Wounds up to Detraumatize, down to Vigor). Null if it's
+ * no school's spell, or the player knows none further that way.
+ */
+export function flicked(key, way, known = []) {
+    const spell = actionOf(key)?.spell;
+    const school = SCHOOLS[SPELLS[spell]?.school];
+
+    if (!school) {
+        return null;
+    }
+
+    const family = school.tiers.filter((id) => id === spell || known.includes(id));
+
+    return family[family.indexOf(spell) + (way === "up" ? 1 : -1)] ?? null;
+}
 
 // Whether an action can be a quick action: anything a wheel's slice can hold but a fight picked
 // (or what one of the party's told)
@@ -182,7 +207,7 @@ export const offensive = (key) => actionOf(key)?.on === "enemy";
 /**
  * The player's wheels as kept (or nothing kept: the WHEELS they start with), made safe: each of
  * their own and an enemy's, two sides, each slice holding something that goes on that wheel; their
- * quick actions (`quick`: QUICK's four slots, each something that can be one, or null); and which
+ * quick actions (`quick`: QUICK's six slots, each something that can be one, or null); and which
  * wheels they are (`version`: WHEELS_VERSION, kept from before brought up to it).
  */
 export function readWheels(kept) {
