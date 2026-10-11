@@ -24,7 +24,7 @@ const ROSTER_KEY = "pellagos.characters";
 const SETTINGS_KEY = "pellagos.settings";
 
 // What's kept of each character, each under its own key
-const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages"]);
+const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages", "told"]);
 
 // A character's id: eight letters and digits
 const ID = /^[a-z0-9]{8}$/;
@@ -72,6 +72,12 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)
     refuseInvites: false,
+    // (Auto-snag: the player's spoils of a fight picked up as they come within reach of them, not
+    // left for a tap; off to start with, as it always was. And what of them it takes: the
+    // rarities and kinds ticked (host.js SNAG_GRADES, SNAG_KINDS), or null for everything)
+    autoSnag: false,
+    snagGrades: null,
+    snagKinds: null,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
     // walk (off: it stays turned the way it's left); whether in a fight it frames it, three-
     // quarters on and clear of what stands round (the battle cam); how far a drag turns and tilts
@@ -441,6 +447,18 @@ export function loadMessages(save) {
 /** Keep the last messages the character was told, in a saved game. */
 export function saveMessages(save, messages) {
     return save?.id ? write(keyOf(save, "messages"), { created: save.created, seed: save.seed, messages }) : false;
+}
+
+/** What the character's been told once and needn't be again (app/game.js `#once`: "spoils"), in a saved game. */
+export function loadTold(save) {
+    const kept = own(save, "told");
+
+    return Array.isArray(kept?.told) ? kept.told.filter((each) => typeof each === "string") : [];
+}
+
+/** Keep what the character's been told once, in a saved game. */
+export function saveTold(save, told) {
+    return save?.id ? write(keyOf(save, "told"), { created: save.created, seed: save.seed, told }) : false;
 }
 
 /**

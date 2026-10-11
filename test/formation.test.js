@@ -341,14 +341,17 @@ describe("enemies near a player go for them first (battle.js AGGRO)", () => {
 
         const orcs = battle.actors.filter(({ team }) => team === "orcs");
         const shoots = (orc) => orc.weapon === "bow";
+        // (One the player's struck lately always turns on them, however many are on them already:
+        // battle.js #turnOn. The rest only so many)
+        const struck = (orc) => (orc.struckBy?.[player.id] ?? -Infinity) > battle.time;
         const most = { melee: 0, ranged: 0 };
 
         run(battle, 8000, () => {
-            const on = orcs.filter(({ target }) => target === player.id);
+            const drawn = orcs.filter((orc) => orc.target === player.id && !struck(orc));
 
-            most.melee = Math.max(most.melee, on.filter((orc) => !shoots(orc)).length);
-            most.ranged = Math.max(most.ranged, on.filter(shoots).length);
-            assert.ok(on.filter((orc) => !shoots(orc)).length <= AGGRO.melee && on.filter(shoots).length <= AGGRO.ranged, `at ${battle.time}`);
+            most.melee = Math.max(most.melee, drawn.filter((orc) => !shoots(orc)).length);
+            most.ranged = Math.max(most.ranged, drawn.filter(shoots).length);
+            assert.ok(drawn.filter((orc) => !shoots(orc)).length <= AGGRO.melee && drawn.filter(shoots).length <= AGGRO.ranged, `at ${battle.time}`);
         });
 
         assert.deepEqual(most, { melee: AGGRO.melee, ranged: AGGRO.ranged }, "as many as can be");
