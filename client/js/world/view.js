@@ -1026,6 +1026,12 @@ export class View {
             camera.rotateX(tilted - looking);
         }
 
+        // (Its matrices made now, not only as it's drawn: what's put on the screen over the world
+        // after it's placed and before it's drawn, the bars over heads above all, goes where this
+        // frame's camera sees it, not where the last frame's did, a frame behind and shaking as
+        // the camera turns, the more the faster: toScreen)
+        camera.updateMatrixWorld();
+
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
         // in view (the further out, the more), moved in whole shadow texels so they don't shimmer;
         // cast from the sun's way only as it's moved on in steps, so its texels stay put between
