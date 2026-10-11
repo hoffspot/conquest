@@ -199,6 +199,10 @@ export function arachnid(look, random, key = null) {
 
     return {
         object,
+        /** How far through its stride it is (0 to 1): its moves recorded a stride at a time (herd.js). */
+        get phase() {
+            return phase;
+        },
         height: size * (scorpion ? 1.4 : 1.1),
         length: size * 2,
         joints: { torso, head: torso, jaw: fangs, mouth: fangs, body },

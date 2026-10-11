@@ -1567,7 +1567,8 @@ the pixels"), and debug mode shows it on the quality line. Not under automation
 mustn't change.
 
 **A crowded fight first** (Adaptive too; `app/throng.js`). With more than 10 about who can be drawn
-in their kind's crowd (hired adventurers and the wild's people-shaped creatures within 80 metres),
+in their kind's crowd (hired adventurers, and the wild's people-shaped creatures and beasts, within
+80 metres),
 frames slower than 48 a second (the middle of 1.5 seconds' worth) put the 4 least seen of them in
 their crowds, and so on every 3 seconds or so while it stays slow, never fewer than 6 left in full
 (*Standing in*, below). Meanwhile the steps above wait (`Governor.hold`), so those far off are
@@ -3164,8 +3165,9 @@ frame's JavaScript spends its time on. A crowd's figure's drawn with the fewer t
 ### Standing in (app/game.js #thronging, app/throng.js)
 
 With Adaptive on, a crowded fight that comes too slowly (*A crowded fight first*, above) has those
-least seen of the players' hired adventurers and the wild's people-shaped creatures (bandits,
-goblins, cultists, trolls...) drawn in their kind's crowd, as the soldiers are, as many as the
+least seen of the players' hired adventurers, the wild's people-shaped creatures (bandits,
+goblins, cultists, trolls...) and its beasts (wolves, boars, bears, spiders, serpents, frogs,
+skeletons...: WILDS.md *In a crowd*) drawn in their kind's crowd, as the soldiers are, as many as the
 throng leaves in full (`Throng.full`; all of them without Adaptive). Looked at a couple of times a
 second (`MARSHAL.every`), and at once when the throng changes:
 
@@ -3176,19 +3178,25 @@ second (`MARSHAL.every`), and at once when the throng changes:
   kind's figure's made.
 - **Their kinds.** A hired adventurer's their own (as they look, with their weapon: there are a
   few, named, on the party's icons); a creature's as one of its kind looks (`humanoidLook`: a bandit's or cultist's sex), holding its
-  weapon, drawn as big as it is (`CrowdAvatar.size`). Made a step at a time as a soldier's kind is.
+  weapon, drawn as big as it is (`CrowdAvatar.size`); a beast's as the one of the three of its kind
+  it's built as (`beasts/herd.js`), as big as it is. Made a step at a time as a soldier's kind is.
 - **Their bodies kept.** Each stays the game's avatar, following its actor, struck, healed and
   killed as ever, but neither posed nor seen: what's drawn of it is put on a layer no camera sees
   (`OFFSTAGE`, so casting no shadow either), as is whatever it takes up meanwhile. A stand-in
   (`CrowdAvatar`, `standIn`) is drawn where it is, the way it faces, going as fast as it goes
   (`track`), told whatever it's told to do: a blow, a cast, a flinch, a fall, getting up
-  (`echo`); already down, lying there. Drawn in full again, its body's seen and posed again at
-  once (for no more than a moment's time), its stand-in gone: nothing to build either way.
+  (`echo`: what it doesn't do, a beast's dodge, isn't told); already down, lying there. Its stride
+  is kept as long as it is big, and it runs from a pace the smaller the smaller it is, as a beast
+  does. Drawn in full again, its body's seen and posed again at once (for no more than a moment's
+  time), its stand-in gone: nothing to build either way.
 
 In headless Chromium on "medium", 30 bandits, goblins, cultists and trolls and 8 hired adventurers
 about the player, each walking a little circle: all drawn in full, a frame's update took 12.6 ms
 and 340 draws; with all but 9 standing in, 5.7 ms and 181 draws, as many triangles (the debug
-overlay's bodies line: "10 in crowds (29 standing in)", those in view).
+overlay's bodies line: "10 in crowds (29 standing in)", those in view). With wolves, boars, cave
+spiders, skeletons, bears and dire wolves instead, a frame's update took about the same either way
+(5.4 ms in full, 5.7 standing in: a beast's cheap to pose), but its draws went from 227 to 174 and
+its triangles from 765,000 to 674,000: what a beast saves in a crowd is the graphics card's.
 
 ### The paperdoll (app/pack.js, world/view.js)
 
@@ -4619,7 +4627,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   changes what's drawn. `test/crowd.test.js` also: a stand-in drawn where the one it stands for
   is, as big, going as it goes, told what it's told (its own actions put back after, a class's or
   its own), lying if it's down; what's drawn of the one in full kept from being seen and seen again
-  as it was.
+  as it was. `test/herd.test.js` (WILDS.md *In a crowd*): beasts in their crowds. E2E: a crowded
+  fight told it's too slow, those least seen of its bandits, wolves and spiders standing in, kept
+  but unseen, and drawn in full again told there's time to spare.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.

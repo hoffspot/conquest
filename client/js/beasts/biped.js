@@ -338,6 +338,10 @@ export function biped(look, random, key = null) {
 
     return {
         object,
+        /** How far through its stride it is (0 to 1): its moves recorded a stride at a time (herd.js). */
+        get phase() {
+            return phase;
+        },
         height: H * (treant ? 1.12 : 0.93),
         length: H * 0.3,
         joints: { torso: chest, head, jaw, mouth: arms.right.hand, left: arms.left.hand, body },

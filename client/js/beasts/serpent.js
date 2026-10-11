@@ -95,6 +95,10 @@ export function serpent(look, random, key = null) {
 
     return {
         object,
+        /** How far through its stride it is (0 to 1): its moves recorded a stride at a time (herd.js). */
+        get phase() {
+            return (wave / (Math.PI * 2)) % 1;
+        },
         height: thickness * 4,
         length,
         joints: { torso: beads[2], head, jaw, mouth: head, body },
