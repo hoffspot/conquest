@@ -1816,7 +1816,8 @@ describe("the yards behind the houses (kits/yards.js)", () => {
             const looks = Array.from({ length: 4 }, (_, k) => lookGeometry(kind, "garden", k));
 
             for (const geometry of looks) {
-                const { color, sway } = geometry.attributes;
+                // (How much each vertex sways: the first of its `wild`, kits/wilds.js Mesher.geometry)
+                const { color, wild } = geometry.attributes;
                 let green = 0;
 
                 for (let i = 0; i < color.count; i++) {
@@ -1826,7 +1827,7 @@ describe("the yards behind the houses (kits/yards.js)", () => {
                 // (Green leaves and stems, the leafy crops nearly all leaf; moving most at their tips; as
                 // tall as it grows)
                 assert.ok(green / color.count > (LEAFY.includes(kind) ? 0.6 : 0.2), `${kind}: ${green} of ${color.count} green`);
-                assert.ok(sway.array.some((value) => value > 0.1), `${kind} sways`);
+                assert.ok(Array.from({ length: wild.count }, (_, i) => wild.getX(i)).some((value) => value > 0.1), `${kind} sways`);
                 assert.equal(geometry.boundingBox.max.y > 1, TALL.includes(kind), `${kind}: ${geometry.boundingBox.max.y.toFixed(2)} tall`);
             }
 

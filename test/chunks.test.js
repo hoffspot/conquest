@@ -24,13 +24,14 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const { buildWorld, CHUNK } = await import("../client/js/core/overworld.js");
-const { Chunks, DETAIL_NEAR, REACH } = await import("../client/js/world/chunks3d.js");
+const { Chunks, DETAIL_NEAR, REACH, UNDERGROWTH } = await import("../client/js/world/chunks3d.js");
 const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
 const { AHEAD, Layouts } = await import("../client/js/world/layouts.js");
 const { splatOf, splatting } = await import("../client/js/world/ground.js");
-const { GARDEN_KINDS, sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { GARDEN_KINDS, sowing, TILE, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { WILDS } = await import("../client/js/world/art/engine/atlas.js");
 const { plantsOf } = await import("../client/js/world/art/kits/yards.js");
 const { QUALITY } = await import("../client/js/world/view.js");
 
@@ -272,7 +273,8 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         const drawn = [...chunks.drawn.values()].find(({ cx, cy }) => cx === Math.floor(x / CHUNK) && cy === Math.floor(z / CHUNK));
         let frames = 0;
 
-        while (!drawn.undergrowth) {
+        // (All of the player's own chunk near enough to be built)
+        while (!drawn.undergrowth || drawn.growth) {
             chunks.update(x, z, { budget: 1 });
             frames++;
         }
@@ -285,6 +287,55 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         assert.ok(drawn.undergrowth.length >= 1 && drawn.undergrowth.every((mesh) => mesh.parent === drawn.object));
         assert.equal(drawn.undergrowth.length, whole.length);
         assert.equal(count(drawn.undergrowth), count(whole));
+        chunks.dispose();
+    });
+
+    it("builds each tile of the undergrowth only once the player's near enough to see it soon, and more as they come nearer", () => {
+        const chunks = new Chunks(world, { undergrowth: 1 });
+        const [x, z] = world.spawns.player.map((v) => v + 0.5);
+        // (How far from the player the nearest edge of a tile is: within `reach`, it's to be built)
+        const off = ([tx, tz], px, pz) => Math.hypot(Math.max(tx - px, 0, px - (tx + TILE)), Math.max(tz - pz, 0, pz - (tz + TILE)));
+        const reach = WILDS.fade.value.y + UNDERGROWTH.ahead;
+        // (The player at (px, pz) until all there is to do there's done: what's built, and what's not)
+        const settled = (px, pz) => {
+            chunks.update(px, pz, { budget: 50 });
+
+            for (let k = 0; k < 20000 && chunks.busy; k++) {
+                chunks.update(px, pz, { budget: 50 });
+            }
+
+            const tiles = { built: [], waiting: [], shown: 0 };
+
+            for (const drawn of chunks.drawn.values()) {
+                for (const mesh of drawn.undergrowth ?? []) {
+                    tiles.built.push(off(mesh.userData.tile, px, pz));
+                    tiles.shown += mesh.visible ? 1 : 0;
+                    assert.equal(mesh.visible, off(mesh.userData.tile, px, pz) < WILDS.fade.value.y);
+                }
+
+                tiles.waiting.push(...[...(drawn.sown?.tiles ?? [])].map(({ at }) => off(at, px, pz)));
+            }
+
+            return tiles;
+        };
+
+        chunks.fill(x, z);
+
+        // (Those near built, and drawn if they can be seen; those further off, in chunks whose
+        // undergrowth's grown, not)
+        const here = settled(x, z);
+
+        assert.ok(here.built.length > 4 && here.shown > 4, `${here.built.length} built, ${here.shown} drawn`);
+        assert.ok(here.built.every((d) => d <= reach), here.built.join());
+        assert.ok(here.waiting.length > 0 && here.waiting.every((d) => d > reach), here.waiting.join());
+
+        // (Walked 40 metres east: those come near enough built too, and still none further)
+        const there = settled(x + 40, z);
+        const near = (tiles) => [...tiles.built, ...tiles.waiting].filter((d) => d <= reach).length;
+
+        assert.ok(there.built.length > here.built.length, `${here.built.length} built, then ${there.built.length}`);
+        assert.equal(there.built.filter((d) => d <= reach).length, near(there));
+        assert.ok(there.waiting.every((d) => d > reach), there.waiting.join());
         chunks.dispose();
     });
 
