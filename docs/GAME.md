@@ -2388,8 +2388,10 @@ its door (told to go through it), at it (6 metres from it: `DOORSTEP`, app/game.
 or inside, a piece of work each after its floors; and let go of again (their characters thrown
 away, skins and all) once the player's 20 metres from it outside, though the building's still
 got ready, its floors kept: standing in the start town's square, its tavern's, smithy's,
-church's and hall's doors 11 to 16 metres off, all their folk were dressed and kept before, 26 of
-the 40 bodies about thirty seconds in, each holding its skin on the page and the graphics card. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+church's and hall's doors 11 to 16 metres off, all their folk were dressed and kept before, 25 of
+the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card; now
+16 are (headless Chromium, High, seed 1: the bodies' own copies 348 MB before and 110 MB after, the
+page's heap 748 MB and 464 MB, all told 988 MB and 715 MB). A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
@@ -4613,11 +4615,11 @@ coordinates are), and the moves' compiled tracks only once a move's first played
 actions.js `tracksOf`: 7.5 MB of them for every attack, rest, emote, draw and put-away, compiled
 before as the page loaded); and the triangles hidden under what a body wears are a byte each, not
 a set of their numbers (14 MB for 34 bodies before). Thirty seconds into the start town (headless
-Chromium, High, seed 1) the bodies' own copies on the page were 322 MB before and 244 MB after, the
-page's heap 731 MB and 625 MB, and the graphics card's 200 MB and 249 MB (the pictures of what's
-shown sent while loading, not when first looked at), what the game holds all told 970 MB and
-913 MB; most of what's left on the page are the skins of the folk dressed inside buildings the
-player isn't in, kept till they're seen. And Recast's WebAssembly (the navigation meshes) starts with
+Chromium, High, seed 1) the bodies' own copies on the page were 348 MB before and 307 MB after, the
+page's heap 748 MB and 687 MB, and the graphics card's 201 MB and 209 MB (the pictures of what the
+camera sees sent while loading, not when first looked at), what the game holds all told 988 MB and
+935 MB; most of what's left on the page are the skins of the folk dressed inside buildings the
+player isn't in, kept till they're seen (no longer dressed: *Getting buildings ready*). And Recast's WebAssembly (the navigation meshes) starts with
 16 MB, not the 64 MB it was built with: its static data and stack are under 100 KB, and it grows as
 the meshes want more, in the page and in the navigation worker both (scripts/vendor-recast.js
 patches the vendored module's memory section: scripts/wasm-memory.js). Turning the camera all the
@@ -4672,8 +4674,8 @@ Everything that can be is built once: the town is merged, shaders are compiled w
 (the far land's and the sky's with the rest's, drawn first as they are; and a character,
 creature, wyvern or dragon that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
-start, so their shader's the one compiled while loading), the pictures of what's shown are sent to
-the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
+start, so their shader's the one compiled while loading), the pictures of what the camera sees are
+sent to the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
 each in the first frame it's drawn in, and the first frames wait on them all), and the loading
 waits till the graphics card has them (`View.settled`, a fence looked at between frames: what's
 sent is only on its way, the browser's graphics work being done in a process of its own, and

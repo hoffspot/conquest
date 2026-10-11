@@ -327,6 +327,10 @@ const _centre = new THREE.Vector3();
 const _down = new THREE.Vector3();
 const _colour = new THREE.Color();
 
+// (What the camera sees, for what's sent to the graphics card: View.upload)
+const _sent = new THREE.Frustum();
+const _sentMatrix = new THREE.Matrix4();
+
 export class View {
     /**
      * @param {HTMLCanvasElement} canvas
@@ -553,14 +557,14 @@ export class View {
     }
 
     /**
-     * Send every picture what's shown in the scenes (or under `roots`; `hidden` too, if asked) is
-     * drawn with to the graphics card now (while the game's loading, or a character before it's
-     * shown: app/game.js #sending), rather than in the first frame it's drawn in, which would wait
-     * on it (on a phone, a long pause as play starts). Those already sent aren't sent again, and
-     * what's hidden isn't given room on the graphics card till it's wanted. Returns how many there
-     * are.
+     * Send every picture what's shown is drawn with to the graphics card now (while the game's
+     * loading, or a character before it's shown: app/game.js #sending), rather than in the first
+     * frame it's drawn in, which would wait on it (on a phone, a long pause as play starts): what
+     * the camera sees of the scene, and the far scene's (or all under `roots`, `hidden` too if
+     * asked). Those already sent aren't sent again, and what's hidden or out of the camera's view
+     * isn't given room on the graphics card till it's drawn. Returns how many there are.
      */
-    upload(roots = [this.scene, this.far.scene], { hidden = false } = {}) {
+    upload(roots = null, { hidden = false } = {}) {
         const sent = new Set();
         const send = (value) => {
             if (value?.isTexture && !sent.has(value)) {
@@ -569,9 +573,20 @@ export class View {
             }
         };
 
-        for (const root of roots) {
+        // (What the camera sees, as three.js has it: what it'd cull isn't sent)
+        this.camera.updateMatrixWorld();
+        _sent.setFromProjectionMatrix(_sentMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse), this.camera.coordinateSystem);
+
+        const each = roots ? roots.map((root) => [root, null]) : [[this.scene, _sent], [this.far.scene, null]];
+        const culled = (node, frustum) => frustum && node.frustumCulled && (node.isMesh || node.isLine || node.isPoints) && !frustum.intersectsObject(node);
+
+        for (const [root, frustum] of each) {
             send(root.environment);
             root[hidden ? "traverse" : "traverseVisible"]((node) => {
+                if (culled(node, frustum)) {
+                    return;
+                }
+
                 for (const material of [node.material ?? []].flat()) {
                     Object.values(material).forEach(send);
                     Object.values(material.uniforms ?? {}).forEach((uniform) => send(uniform?.value));
