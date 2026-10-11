@@ -1391,6 +1391,29 @@ export class Sound {
         return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate, variant, made });
     }
 
+    /**
+     * What the sounds hold (bytes): the browser's decoded copies (outside the page's heap, so the
+     * browser's heap size never shows them) and the samples and recordings kept to make them (the
+     * debug overlay and log: app/telemetry.js).
+     */
+    memory() {
+        const seen = new Set();
+        let bytes = 0;
+
+        for (const kept of [this.samples, this.recordings, this.buffers, this.instruments, this.decoded]) {
+            for (const value of kept.values()) {
+                for (const each of [value].flat()) {
+                    if (each && !seen.has(each)) {
+                        seen.add(each);
+                        bytes += each.byteLength ?? (each.length ?? 0) * (each.numberOfChannels ?? 1) * 4;
+                    }
+                }
+            }
+        }
+
+        return bytes;
+    }
+
     // Keep a sound's samples, and give the browser a copy if it's started
     #receive({ name, variant, samples }) {
         if (this.context) {

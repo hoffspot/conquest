@@ -20,6 +20,7 @@ import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 import { bakeEnvironments, SkyLight } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
+import { GpuMemory } from "./gpumemory.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
@@ -340,6 +341,9 @@ export class View {
         this.qualityName = quality;
         this.quality = QUALITY[quality];
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality.antialias, powerPreference: "high-performance" });
+
+        /** What the graphics card's been given to hold (the debug overlay and log: gpumemory.js). */
+        this.gpuMemory = new GpuMemory().watch(this.renderer.getContext());
         // (Seeing far, graded as the land the player's in has it: ACES, then the grade, fog.js)
         this.renderer.toneMapping = far ? THREE.CustomToneMapping : THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = EXPOSURE;
@@ -396,7 +400,10 @@ export class View {
          */
         this.onLost = null;
         this.onRestored = null;
-        canvas.addEventListener("webglcontextlost", () => this.onLost?.());
+        canvas.addEventListener("webglcontextlost", () => {
+            this.gpuMemory.reset();
+            this.onLost?.();
+        });
         canvas.addEventListener("webglcontextrestored", () => {
             this.#restore();
             this.onRestored?.();

@@ -2,8 +2,9 @@
 // on, on every screen, until switched off):
 //  - frame rate, a graph of recent frame times, and how long updating and drawing take
 //  - what's drawn: draw calls, triangles, geometries, textures, shader programs
-//  - memory (where the browser tells), the screen, the drawing buffer, the GPU (and its time for a
-//    frame, where the browser can say: world/gputimer.js) and device
+//  - memory: what the graphics card holds, the sounds, the heap (where the browser tells) and how
+//    much of the world is kept (memoryLines); the screen, the drawing buffer, the GPU (and its
+//    time for a frame, where the browser can say: world/gputimer.js) and device
 //  - the battle: its time, characters, orders and projectiles; how strong the player's side is,
 //    as the wild weighs it (core/strength.js: S, and the opposition F set against it)
 //  - how long each group of files took to download, and each part of the world to build
@@ -97,6 +98,29 @@ export function bodiesLine(bodies) {
     const { drawn, posed, shadows, crowd, standing = 0 } = bodies;
 
     return `Bodies ${drawn} drawn  ${posed} posed  ${shadows} shadows  ${crowd} in crowds${standing ? ` (${standing} standing in)` : ""}`;
+}
+
+/**
+ * What the game holds (app/game.js memoryNow; else, before a game, what the graphics card's been
+ * given: world/gpumemory.js report): all of it, the graphics card's (buffers, pictures, render
+ * targets), the sounds', the page's heap where the browser tells, and how many of what's kept for
+ * the world.
+ */
+export function memoryLines(memory, gpu = memory?.gpu ?? null) {
+    const card = gpu ? `graphics ${gpu.totalMB} MB (buffers ${gpu.buffersMB}, pictures ${gpu.texturesMB}, targets ${gpu.targetsMB})` : "graphics not told";
+
+    if (!memory) {
+        const heap = globalThis.performance?.memory;
+
+        return [`Memory ${card}${heap ? `  JS heap ${formatBytes(heap.usedJSHeapSize)} of ${formatBytes(heap.jsHeapSizeLimit)}` : ""}`];
+    }
+
+    const { totalMB, heapMB, limitMB, soundMB, held } = memory;
+
+    return [
+        `Memory ${totalMB} MB held: ${card}, sound ${soundMB} MB, JS heap ${heapMB === null ? "not told by this browser" : `${heapMB} of ${limitMB} MB`}`,
+        `Held ${held.avatars} bodies  ${held.chunks} chunks  ${held.interiors} interiors  ${held.crowds} crowd kinds`,
+    ];
 }
 
 /**
@@ -234,11 +258,7 @@ export class Debug {
             lines.push(`GPU draw ${!timer.available ? "not told by this browser" : timer.ms === null ? "…" : ms(timer.ms)}`);
         }
 
-        const heap = performance.memory;
-
-        if (heap) {
-            lines.push(`JS heap ${formatBytes(heap.usedJSHeapSize)} of ${formatBytes(heap.jsHeapSizeLimit)}`);
-        }
+        lines.push(...memoryLines(game?.memoryNow() ?? null, view?.gpuMemory?.report() ?? null));
 
         lines.push(`Screen ${innerWidth}×${innerHeight} @${(devicePixelRatio || 1).toFixed(2)}  ${navigator.hardwareConcurrency ?? "?"} cores${navigator.deviceMemory ? `, ${navigator.deviceMemory} GB` : ""}${matchMedia("(pointer: coarse)").matches ? ", touch" : ""}`);
 

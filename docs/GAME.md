@@ -4457,6 +4457,56 @@ fight beside them; the others are everyone's enemies. It's for seeing how many t
 and plays smoothly, out on open ground: in the world, and only in a world the player opened (not
 one they've joined).
 
+## The debug log
+
+Game options' **Debug log** (app/telemetry.js) keeps the last five times the game froze, slowed,
+hit an error or crashed, the newest first, each with what was going on then, to be copied and sent
+to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser's storage
+(`pellagos.debuglog`), and across loads, till it's cleared.
+
+- **A freeze**: 200 ms or more without a frame, while playing and in view. Either a frame's own
+  work took that long, kept with where its time went (its phases, marked as the frame goes:
+  the battle's steps, setting up, everyone moved and posed, the effects and the HUD, the world
+  round the player, the buildings' insides and their folk, the bars over heads, drawing); or the
+  time went between frames, the page busy with something else (collecting its garbage, a worker's
+  word handled, the browser held up), kept with the frame before's phases.
+- **Slow going**: the middle of 3 seconds' frames under 30 a second, with each phase's time on
+  average over them.
+- **An error** no one caught, a frame's work failing (app/game.js `#fault`) or a promise refused,
+  with its stack; or **the picture lost** (WebGL's context taken back, as a phone short of memory
+  does).
+- **A crash**: while playing, in view, a few notes of how it's going are written every 2 seconds
+  (`pellagos.alive`: how it's going, the frames before, the slow work and errors lately), and
+  marked closed when the page is closed, hidden, or the game's paused. Loading again and finding
+  them unclosed, the game fell over (a phone's browser loads the page again when it runs out of
+  memory): kept as a crash, with those notes, what the game held then among them.
+- **Memory**: what the game holds passing 768 MB, 1 GB, 1.5 GB, 2 GB or 3 GB, once each, or the
+  page's heap past 80% of its limit (where the browser tells), with what holds it.
+
+Each event says how it was going (`Game.telemetryState`: where the player is, the quality and
+share of pixels drawn, how many drawn in full, the bodies drawn, posed and standing in, the
+actors and avatars, draw calls, triangles, geometries, textures and shader programs, the frame
+rate and update and drawing times, playing together or not, what the game holds, and the
+device), the last 60 frames' times, and the slowest work done a step at a
+time lately: each step of one taking over 20 ms is named (core/steps.js `Steps.slow`: a crowd's
+figure, a character dressed, a building got ready, the minimap painted, a beast sculpted). Where
+the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
+longest first: each one's file and place in it, its function and what called it; that's the
+nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch
+doesn't fill the log. It costs a frame a dozen clock readings; the rest is only done when
+something's kept, or every 2 seconds for the notes.
+
+**What the game holds** (`Game.memoryNow`, in each event and in the debug overlay's *Memory* and
+*Held* lines): the page's JavaScript heap where the browser tells (Chromium's; Safari tells
+nothing), what the graphics card's been given (world/gpumemory.js: buffers, pictures with their
+levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
+give it them and take them back, wrapped on the context; never a frame's draws, so it costs
+nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
+(audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of), all of
+them together, and how many bodies, chunks, interiors and crowd kinds are kept. On a phone the
+graphics card shares the phone's memory, and what the page has given it counts against the page:
+on an iPhone, where the browser tells nothing of the heap, it's most of what can be seen.
+
 ## Performance
 
 A frame draws the town (the blocks of it in view: a draw call or two each), the ground (one draw
@@ -4639,6 +4689,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
   and the body's and garments' materials mixing it in (skin's own lines kept, its roughness under
   the blood's wetness).
+- `test/gpumemory.test.js`: what the graphics card's been given to hold: buffers given data or a
+  size, given again and given back; pictures by format, levels and faces (given whole, by size, as
+  storage, compressed, with their mipmaps), given back; render targets with their samples; each
+  format's bytes a texel; nothing once the drawing's lost.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
@@ -4650,6 +4704,16 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
   keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
   quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
+- `test/telemetry.test.js`: the debug log: a frame's own work held up, kept with where its time
+  went; the time gone between two quick frames, with the frame before's phases; slow going, with
+  each phase's time on average; the slowest work done a step at a time named, and a step that takes
+  long told by name (core/steps.js); what the browser says ran, the longest first; an error with its
+  stack, the same once so often; the picture lost; a crash found on loading from a game's unclosed
+  notes, none if it was closed; memory past each mark once, and the heap near its limit, a crash
+  keeping what was held; each kind kept at most so often, the newest five, across loads, and
+  cleared; the log as text to copy; and the debug overlay's memory lines. E2E: a crash found from
+  the last game's notes; a frame held up (with what the graphics card held) and an error thrown,
+  each kept; the Debug log in Game options showing them, copied and cleared.
 - `test/throng.test.js`: a crowded fight that keeps up, or one with few about however slow, left
   as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
   spare a while, a few back at a time, all in the end; more drawn in full that made it too slow

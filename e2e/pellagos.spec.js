@@ -237,6 +237,106 @@ test.describe("drawn at the screen's own pixels", () => {
     });
 });
 
+test("the debug log (Game options): a crash found from the last game's notes, a frame held up kept with where its time went and what was held, an error with its stack; shown, copied and cleared", async ({ page }) => {
+    test.setTimeout(180000);
+
+    // (The last game fell over while playing: its notes left behind, never closed)
+    await page.addInitScript(() => {
+        if (!sessionStorage.getItem("noted")) {
+            sessionStorage.setItem("noted", "yes");
+            localStorage.setItem("pellagos.alive", JSON.stringify({ at: Date.now() - 30000, build: "earlier", closed: false, state: { map: "town", bodies: { drawn: 61 } }, recent: [16, 17, 950], jobs: [{ label: "crowd figure herd:wolf:1", ms: 70 }], errors: [] }));
+        }
+    });
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
+    await playing(page, "/?play&seed=2");
+
+    const crash = await page.evaluate(() => window.pellagos.telemetry.events.find(({ kind }) => kind === "crash"));
+
+    expect(crash).toMatchObject({ build: "earlier", state: { map: "town", bodies: { drawn: 61 } }, jobs: [{ label: "crowd figure herd:wolf:1" }] });
+    expect(crash.summary).toContain("loaded again");
+
+    // A frame held up while playing (its drawing, 600 ms longer than it is), and an error no one
+    // caught: each kept, the log cleared first so nothing before stands in their way
+    const kept = await page.evaluate(async () => {
+        const { game, telemetry } = window.pellagos;
+        const render = game.view.render.bind(game.view);
+        let held = false;
+
+        game.start();
+        game.view.render = (...args) => {
+            if (!held) {
+                held = true;
+                telemetry.clear();
+
+                const until = performance.now() + 600;
+
+                while (performance.now() < until) {
+                    // (held up)
+                }
+            }
+
+            return render(...args);
+        };
+
+        for (let k = 0; k < 600 && !telemetry.events.some(({ kind }) => kind === "freeze"); k++) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+
+        // (As the browser tells the page of one no one caught: thrown for real, it'd fail the test)
+        window.dispatchEvent(new ErrorEvent("error", { error: new Error("A test's error, thrown on purpose"), message: "A test's error, thrown on purpose" }));
+        game.view.render = render;
+
+        return telemetry.events.map(({ kind, where, ms, phases, error, state, recent }) => ({ kind, where, ms, draw: phases?.draw, stack: error?.stack, map: state?.map, memory: state?.memory, recent: recent?.length }));
+    });
+    const freeze = kept.find(({ kind }) => kind === "freeze");
+    const error = kept.find(({ kind }) => kind === "error");
+
+    expect(freeze).toMatchObject({ where: "frame", map: "town" });
+    expect(freeze.ms).toBeGreaterThanOrEqual(600);
+    expect(freeze.draw).toBeGreaterThanOrEqual(600);
+    expect(freeze.recent).toBeGreaterThan(0);
+
+    // (With what the game held then: the graphics card's, told at the calls that give it things)
+    expect(freeze.memory.gpu.totalMB).toBeGreaterThan(10);
+    expect(freeze.memory.gpu.texturesMB).toBeGreaterThan(0);
+    expect(freeze.memory.held.avatars).toBeGreaterThan(0);
+    expect(error.stack).toContain("A test's error, thrown on purpose");
+
+    // Game options (the menu pausing the game: nothing more kept meanwhile): the Debug log, each
+    // kept, the newest first, opening on what was going on
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#logbutton").click();
+    await expect(page.locator("#menulog")).toBeVisible();
+
+    const shown = await page.evaluate(() => window.pellagos.telemetry.events.map(({ kind }) => kind));
+
+    expect(shown).toEqual(expect.arrayContaining(["freeze", "error"]));
+    await expect(page.locator("#logentries .log-entry")).toHaveCount(shown.length);
+    await expect(page.locator("#logentries")).toContainText("Error: A test's error, thrown on purpose");
+    await expect(page.locator("#logentries")).toContainText("freeze in a frame's work");
+    await page.locator("#logentries .log-entry", { hasText: "Freeze" }).locator("summary").click();
+    await expect(page.locator("#logentries .log-entry", { hasText: "Freeze" }).locator("pre")).toContainText('"draw"');
+
+    // (Copied, as text to send on: what's given the clipboard kept here, a headless browser's
+    // clipboard not to be read back)
+    await page.evaluate(() => Object.defineProperty(navigator.clipboard, "writeText", { value: async (text) => (window.copied = text) }));
+    await page.locator("#logcopy").click();
+    await expect(page.locator("#logstatus")).toContainText("Copied");
+
+    const copied = JSON.parse(await page.evaluate(() => window.copied));
+
+    expect(copied.events.map(({ kind }) => kind)).toEqual(shown);
+    expect(copied.build, "which release it was (catalog.js's)").toMatch(/^[0-9a-f]{6,}$/);
+
+    // (Cleared: nothing kept, here or the next time)
+    await page.locator("#logclear").click();
+    await expect(page.locator("#logentries")).toContainText("Nothing kept");
+    expect(await page.evaluate(() => localStorage.getItem("pellagos.debuglog"))).toBeNull();
+    await page.locator("#logback").click();
+    await expect(page.locator("#menuoptions")).toBeVisible();
+});
+
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {
     // Every step draws the character, which takes a while without a GPU
     test.setTimeout(180000);

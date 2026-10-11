@@ -470,6 +470,13 @@ drawn, posed and casting shadows), and how long each part took to download and b
 scale and shadows, and show the squares characters walk on and their paths. See
 [docs/GAME.md](docs/GAME.md#debug-mode).
 
+**Debug log.** Game options' Debug log keeps the last five times the game froze, slowed, hit an
+error, crashed into reloading or held more memory than it should, each with what was going on:
+where the frame's time went, what the browser says ran, the slowest work being built, the error's
+stack, what was drawn, what the game held (the graphics card's, the sounds', the heap), and the
+device. Copy it to send to whoever's looking into it. It's kept on the device, never sent. Debug
+mode shows what the game holds too. See [docs/GAME.md](docs/GAME.md#the-debug-log).
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org/) 22 or newer.
@@ -627,6 +634,8 @@ client/                 The game (static files served to the browser)
                         compass it folds into; mapicons.js the buildings' icons
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
+    telemetry.js        The debug log: the last freezes, slowdowns, errors, crashes and memory
+                        passing its marks, with what was going on (Game options: Debug log)
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: the player live on a paperdoll, a slot for each part of them;
                         two pages of stacks (dragged, held, split, dropped, thrown away,
@@ -722,6 +731,7 @@ client/                 The game (static files served to the browser)
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
+    gpumemory.js        What the graphics card's been given to hold, for the debug overlay and log
     ground.js           The ground: textures blended square by square, in each land's colours
                         and each people's homeland its own ground
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,

@@ -460,7 +460,7 @@ export class Flyers {
     #hatch(kind, up) {
         const seed = this.#seed();
 
-        this.hatching = { kind, steps: new Steps(sculpting(() => new BeastAvatar(kind, { seed }))), up };
+        this.hatching = { kind, steps: new Steps(sculpting(() => new BeastAvatar(kind, { seed })), `sculpting ${kind}`), up };
     }
 
     // The one being built, built on a little (HATCHING), and sent up once it's built
