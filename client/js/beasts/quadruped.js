@@ -930,6 +930,10 @@ export function quadruped(look, random, key = null) {
 
     return {
         object,
+        /** How far through its stride it is (0 to 1): its moves recorded a stride at a time (herd.js). */
+        get phase() {
+            return phase;
+        },
         height: box.max.y,
         length: box.max.z - box.min.z,
         joints: { torso, head, jaw, body, mouth: jaw, quills },

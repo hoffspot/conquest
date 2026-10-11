@@ -260,9 +260,10 @@ So many near a fight are drawn for less (`app/game.js` `MANY`):
 - **The players' allies past the nearest four** (hired adventurers, creatures called or raised in
   people's shape) are drawn at the middle level of detail (`characters/lod.js`), with their
   contact shadow and not the sun's, and so posed seldom out of view.
-- **Too slow even so** (Adaptive), those least seen of the hired adventurers and the people-shaped
-  creatures are drawn in their kind's crowd, as a battle's soldiers are, a few at a time, and drawn
-  in full again a few at a time once there's time to spare (docs/GAME.md *Standing in*).
+- **Too slow even so** (Adaptive), those least seen of the hired adventurers, the people-shaped
+  creatures and the beasts are drawn in their kind's crowd, as a battle's soldiers are, a few at a
+  time, and drawn in full again a few at a time once there's time to spare (docs/GAME.md *Standing
+  in*; *In a crowd*, below).
 
 ### What the more leave
 
@@ -655,3 +656,33 @@ drawn: every creature near the player was drawn, and cast its shadow, wherever t
   out of view went from 0.6 ms to under 0.02.
 - `test/beast-culling.test.js`: every kind stays in its sphere through all it does, its cape too,
   and the cape's left as it is out of view and blown about again once seen.
+
+### In a crowd (beasts/herd.js)
+
+In a crowded fight that comes too slowly, those least seen are drawn in their kind's crowd
+(docs/GAME.md *Standing in*), beasts as well as people. A beast's kind's figure is made once for
+each of the three it's built as (`seed % 3`), at its kind's size, each drawn at its own:
+
+- **Its figure.** Its sculpted body and its folded pieces merged into one mesh as they're bound to
+  its bones (`figureOf`, as a soldier's), coloured by its corners (its pictures 32 pixels square,
+  all white). Its pieces are a triangle apart each (`fold`), so corners alike are welded first:
+  a skeleton's 59,000 become 11,000, and its fewer triangles near and far (lod.js) have something
+  to take away.
+- **Its moves.** Standing, walking, running, its first way of attacking (0.8 s, struck at 0.4), a
+  flinch and its fall, each played on it once (`pose`) and recorded 20 times a second. Its walk and
+  run are recorded a stride each (its body's `phase`: a quadruped's, a biped's, a spider's legs, a
+  serpent's wave, a frog's hop), the oftener for a quick one, so a stride has 16 moments at least
+  (a rat's and a porcupine's run, 0.2 s a stride). What's played over and over has its end eased
+  into its start over a quarter of a second, as its breathing and looking about aren't in step with
+  its stride.
+- **Which.** Those whose bodies move by their bones alone and aren't seen through (`herds`):
+  four-legged beasts, skeletons and treants, spiders and scorpions, snakes, bog frogs. Not a slime
+  (its body squashed as a whole), bats (a swarm), a wisp, a ghost or wraith, the black shuck or the
+  shadow stalker (seen through), a wyvern or dragon (wings), nor the wight lord (its cape).
+- In a crowd, a beast doesn't rest (it stands), and bites with its first way of attacking whatever
+  it does in full; a special (a spit, a breath) is a bite too.
+- `test/herd.test.js`: which are drawn in a crowd; a wolf's figure, posed as its bones are walking
+  and biting, every corner where its own body's is (within half a centimetre); every kind's moves
+  recorded, its walk and run a stride each, every one played over and over going round without a
+  jump; a stand-in for a beast told its bites, flinches and falls and not a dodge, and its actions
+  as they were after; a stand-in twice its kind's size taking a stride in twice the ground.

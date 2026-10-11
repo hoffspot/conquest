@@ -415,9 +415,11 @@ export function figureOf(character, size = 256) {
 
 // --- Its moves ---
 
-// Each of a skeleton's bones' skinning now, in its body's space, as three rows (12 numbers a
-// bone) written into `into` at `at`
-function recordPose(character, into, at) {
+/**
+ * Each of a skeleton's bones' skinning now, in its body's space (`character`: its `object`, and its
+ * `rig.skeleton`), as three rows (12 numbers a bone) written into `into` at `at`.
+ */
+export function recordPose(character, into, at) {
     const object = character.object;
     const skeleton = character.rig.skeleton;
 
@@ -776,40 +778,50 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
         yield;
 
         const recorded = yield* recordingMoves(character, { walk: look.walk, guard, attack, reaction, cast });
-        const moves = new THREE.DataTexture(recorded.data, recorded.width, recorded.rows, THREE.RGBAFormat, THREE.FloatType);
 
-        moves.needsUpdate = true;
-
-        const template = { key, geometry, nearIndex: null, farIndex: null, picture, moves, table: recorded.moves, height };
-
-        // (Fewer triangles near, and fewer still far off: made elsewhere, waited for a while; drawn
-        // as merged till they come)
-        if (kit.lods) {
-            const lowering = ["near", "far"].map((level) =>
-                kit.lods
-                    .of(`crowd:${key}@${level}`, () => ({ indices: geometry.index.array, positions: geometry.attributes.position.array, uvs: geometry.attributes.uv.array, share: CROWD[level].share, error: CROWD[level].error, flags: ["Permissive", "Prune"] }))
-                    .then(
-                        (lower) => {
-                            if (!template.disposed) {
-                                template[`${level}Index`] = new THREE.BufferAttribute(geometry.index.array instanceof Uint32Array ? Uint32Array.from(lower) : Uint16Array.from(lower), 1);
-                            }
-                        },
-                        () => {},
-                    ),
-            );
-            let lowered = false;
-
-            Promise.all(lowering).then(() => (lowered = true));
-
-            for (let k = 0; k < CROWD.wait && !lowered; k++) {
-                yield WAITING;
-            }
-        }
-
-        return template;
+        return yield* templateFrom(kit, key, { geometry, picture, height, recorded });
     } finally {
         character.dispose();
     }
+}
+
+/**
+ * A kind's figure (figureOf's `geometry`, `picture` and `height`) and its moves as they were
+ * recorded (`recorded`: recordingMoves'), made a template to draw (makingTemplate's), its fewer
+ * triangles near and far waited for a while (each a yield).
+ */
+export function* templateFrom(kit, key, { geometry, picture, height, recorded }) {
+    const moves = new THREE.DataTexture(recorded.data, recorded.width, recorded.rows, THREE.RGBAFormat, THREE.FloatType);
+
+    moves.needsUpdate = true;
+
+    const template = { key, geometry, nearIndex: null, farIndex: null, picture, moves, table: recorded.moves, height };
+
+    // (Fewer triangles near, and fewer still far off: made elsewhere, waited for a while; drawn
+    // as merged till they come)
+    if (kit.lods) {
+        const lowering = ["near", "far"].map((level) =>
+            kit.lods
+                .of(`crowd:${key}@${level}`, () => ({ indices: geometry.index.array, positions: geometry.attributes.position.array, uvs: geometry.attributes.uv.array, share: CROWD[level].share, error: CROWD[level].error, flags: ["Permissive", "Prune"] }))
+                .then(
+                    (lower) => {
+                        if (!template.disposed) {
+                            template[`${level}Index`] = new THREE.BufferAttribute(geometry.index.array instanceof Uint32Array ? Uint32Array.from(lower) : Uint16Array.from(lower), 1);
+                        }
+                    },
+                    () => {},
+                ),
+        );
+        let lowered = false;
+
+        Promise.all(lowering).then(() => (lowered = true));
+
+        for (let k = 0; k < CROWD.wait && !lowered; k++) {
+            yield WAITING;
+        }
+    }
+
+    return template;
 }
 
 /**
@@ -836,7 +848,10 @@ export class Crowd {
         this.members = new Set();
     }
 
-    /** A kind's figure if it's made (and asked for, if not yet: `spec` as makingTemplate takes it), else null. */
+    /**
+     * A kind's figure if it's made (and asked for, if not yet: `spec` as makingTemplate takes it, or
+     * as its own `make` does, made as that has it: beasts/herd.js), else null.
+     */
     template(key, spec) {
         const kind = this.kinds.get(key);
 
@@ -844,7 +859,7 @@ export class Crowd {
             return kind.template ?? null;
         }
 
-        this.kinds.set(key, { making: new Steps(makingTemplate(this.kit, key, { size: this.size, ...spec })) });
+        this.kinds.set(key, { making: new Steps((spec.make ?? makingTemplate)(this.kit, key, { size: this.size, ...spec })) });
         this.waiting.push(key);
 
         return null;
@@ -1130,15 +1145,16 @@ export class CrowdAvatar {
         const move = this.#gait(table);
 
         if (move) {
-            this.stride = (this.stride + moved / move.stride) % 1;
+            this.stride = (this.stride + moved / (move.stride * this.size)) % 1;
         }
     }
 
-    // Walking or running, the move it's drawn with (null standing)
+    // Walking or running, the move it's drawn with (null standing): running sooner the smaller it
+    // is (as a beast does: beasts/beast.js)
     #gait(table) {
         const speed = Math.hypot(this.follow.vx, this.follow.vz);
 
-        return !table || speed < CROWD.still ? null : speed > CROWD.pace ? table.run : table.walk;
+        return !table || speed < CROWD.still ? null : speed > CROWD.pace * Math.sqrt(this.size) ? table.run : table.walk;
     }
 
     /** How fast the quickest of it is going (metres a second), as avatar.js's. */
@@ -1188,7 +1204,7 @@ export class CrowdAvatar {
         const move = this.#gait(this.crowd.kinds.get(this.key)?.template?.table);
 
         if (move) {
-            this.stride = (this.stride + moved / move.stride) % 1;
+            this.stride = (this.stride + moved / (move.stride * this.size)) % 1;
         }
     }
 
@@ -1207,6 +1223,11 @@ export class CrowdAvatar {
 
         for (const name of names) {
             const own = actions[name];
+
+            // (Not one it does: a beast doesn't dodge)
+            if (typeof own !== "function") {
+                continue;
+            }
 
             // (Its own, if it was one of its own, put back after: else what it is again)
             before.set(name, Object.hasOwn(actions, name) ? own : null);
