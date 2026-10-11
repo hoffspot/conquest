@@ -28,6 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
+import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
@@ -3040,10 +3041,11 @@ export class Game {
     }
 
     // Those within THRONGING.near of the player who can be drawn in their kind's crowd: the players'
-    // hired adventurers, the wild's people-shaped creatures (not a boss, a mini-boss nor an elite);
-    // the first to be drawn in full first (`first`: whoever's fighting the player or the player's
-    // fighting, the players' allies nearest (#allying), one thrown by a blast), then the biggest on
-    // the screen (those out of view last)
+    // hired adventurers, the wild's creatures (not a boss, a mini-boss nor an elite): the
+    // people-shaped, and the beasts that move by their bones alone (beasts/herd.js herds); the first
+    // to be drawn in full first (`first`: whoever's fighting the player or the player's fighting,
+    // the players' allies nearest (#allying), one thrown by a blast), then the biggest on the screen
+    // (those out of view last)
     #crowdable(me) {
         const pixels = this.view.pixelsPerMetre();
         const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
@@ -3051,9 +3053,11 @@ export class Game {
 
         for (const actor of this.battle.actors) {
             const avatar = this.avatars.get(actor.id);
-            const people = actor.kind === "beast" && CREATURE_LOOKS[actor.wild?.creature]?.body === "humanoid" && !actor.wild.champion && !actor.wild.elite;
+            const creature = actor.kind === "beast" && !actor.wild?.champion && !actor.wild?.elite ? actor.wild?.creature : null;
+            const people = CREATURE_LOOKS[creature]?.body === "humanoid";
+            const crowdable = actor.kind === "follower" || people ? avatar instanceof Avatar : herds(creature) && avatar instanceof BeastAvatar;
 
-            if (!(avatar instanceof Avatar) || !(actor.kind === "follower" || people) || actor.map !== me.map || Math.hypot(actor.x - me.x, actor.y - me.y) > THRONGING.near) {
+            if (!crowdable || actor.map !== me.map || Math.hypot(actor.x - me.x, actor.y - me.y) > THRONGING.near) {
                 continue;
             }
 
@@ -3067,8 +3071,16 @@ export class Game {
 
     // The crowd one's drawn in for now (#thronging), and what its kind's figure's made from
     // (world/crowd.js makingTemplate): a hired adventurer as they look, carrying their weapon; one of the wild's people-shaped creatures as one of its kind looks (beasts/looks.js
-    // humanoidLook: a bandit's or a cultist's sex), holding its weapon, drawn as big as it is (`size`)
+    // humanoidLook: a bandit's or a cultist's sex), holding its weapon, drawn as big as it is (`size`);
+    // a beast as the one of three it's built as is (beasts/herd.js makingHerdTemplate), as big as it is
     #throngKind(actor) {
+        if (actor.kind === "beast" && CREATURE_LOOKS[actor.wild.creature]?.body !== "humanoid") {
+            const { creature } = actor.wild;
+            const seed = this.#seedOf(actor);
+
+            return { key: `herd:${creature}:${seed % 3}`, size: sizeOf(creature, seed), spec: { make: makingHerdTemplate, id: creature, seed: seed % 3 } };
+        }
+
         const weapon = actor.weapon;
         const fights = { guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null };
 

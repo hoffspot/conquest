@@ -9084,12 +9084,13 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(lying.row).toBeLessThan(lying.to);
 });
 
-test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
+test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits, wolves and spiders stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
     test.setTimeout(240000);
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "low" })));
     await playing(page, "/?play&seed=2");
 
-    // (Out of town, a dozen bandits about the player, holding back, and four hired adventurers by them)
+    // (Out of town, a dozen bandits about the player, holding back, wolves and cave spiders further
+    // off, and four hired adventurers by them)
     const ids = await page.evaluate(() => {
         const { game } = window.pellagos;
         const { host, battle, world } = game;
@@ -9110,6 +9111,16 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
 
             host.wild.set(id, { creature: "bandit", tier: 2, pack: `throng-${k}`, camp: null, lair: null, master: false });
             battle.add({ id, kind: "beast", name: "Bandit", weapon: "sword", team: "beasts", square: [Math.floor(x0 + Math.sin(angle) * r), Math.floor(y0 + Math.cos(angle) * r)], ai: "wild", hp: 1e6, speed: 1.2, chase: 2, wild: { creature: "bandit", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: `throng-${k}`, leader: null, menace: false } });
+            out.push(id);
+        }
+
+        for (const [k, creature] of ["wolf", "wolf", "wolf", "wolf", "caveSpider", "caveSpider"].entries()) {
+            const id = `throng-beast-${k}`;
+            const angle = Math.PI + (k / 6 - 0.5) * 2;
+            const r = 26 + (k % 2) * 4;
+
+            host.wild.set(id, { creature, tier: 2, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: creature, weapon: creature, team: "beasts", square: [Math.floor(x0 + Math.sin(angle) * r), Math.floor(y0 + Math.cos(angle) * r)], ai: "wild", hp: 1e6, speed: 1.2, chase: 2, wild: { creature, tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: id, leader: null, menace: false } });
             out.push(id);
         }
 
@@ -9138,7 +9149,7 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
         game.throng.full = 6;
     });
 
-    expect(await playUntil(page, () => window.pellagos.game.thronged.size >= 5 && !window.pellagos.game.crowds?.busy, { seconds: 90 })).toBe(true);
+    expect(await playUntil(page, () => [...window.pellagos.game.thronged.keys()].filter((id) => id.startsWith("throng-beast")).length >= 4 && !window.pellagos.game.crowds?.busy, { seconds: 90 })).toBe(true);
 
     const standing = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -9149,7 +9160,9 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
 
         return {
             count: entries.length,
-            bandits: entries.every(([id]) => id.startsWith("throng-") && !id.startsWith("throng-hired")),
+            wild: entries.every(([id]) => id.startsWith("throng-") && !id.startsWith("throng-hired")),
+            // (Beasts too, each in its kind's crowd, as big as it is)
+            beasts: entries.filter(([id, { standIn }]) => id.startsWith("throng-beast") && standIn.key.startsWith("herd:") && Math.abs(standIn.character.height - game.avatars.get(id).character.height) < 0.01).length,
             // (Still the game's own avatar, posed no more, all of it unseen)
             kept: entries.every(([id, { avatar }]) => game.avatars.get(id) === avatar && avatar.every === Infinity),
             unseen: entries.every(([, { avatar }]) => {
@@ -9165,7 +9178,8 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
         };
     });
 
-    expect(standing).toMatchObject({ bandits: true, kept: true, unseen: true, placed: true });
+    expect(standing).toMatchObject({ wild: true, kept: true, unseen: true, placed: true });
+    expect(standing.beasts).toBeGreaterThanOrEqual(4);
     expect(standing.counted).toBe(standing.count);
     await expect(page.locator("#debugbody")).toContainText(`(${standing.count} standing in)`);
 

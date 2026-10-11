@@ -232,6 +232,10 @@ export function frog(look, random, key = null) {
 
     return {
         object,
+        /** How far through its stride it is (0 to 1): its moves recorded a stride at a time (herd.js). */
+        get phase() {
+            return hop;
+        },
         height: size * 1.1,
         length: size * 1.6,
         joints: { torso: body, head, mouth: tongue, jaw, body },
