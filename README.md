@@ -609,7 +609,8 @@ client/                 The game (static files served to the browser)
   sound-studio.html     The sound studio: every sound described and played (with sound-studio.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
-                        navigation meshes (core/navigation.js)
+                        navigation meshes (core/navigation.js); its memory starting with 16 MB
+                        (scripts/wasm-memory.js)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
     loader.js           Downloads everything, counting every byte; manifest.js lists it
@@ -733,6 +734,8 @@ client/                 The game (static files served to the browser)
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
     gpumemory.js        What the graphics card's been given to hold, for the debug overlay and log
+    release.js          The page letting go of its copies of meshes and pictures once they're
+                        on the graphics card
     ground.js           The ground: textures blended square by square, in each land's colours
                         and each people's homeland its own ground
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
@@ -820,7 +823,8 @@ server/                 A static file server for playing locally (npm start: par
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
-                        build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js,
+                        build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js (with
+                        wasm-memory.js: how much memory a WebAssembly module starts with),
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests),
                         balance.js (the wild against sides of each size, rules alone: npm run balance)
 utilities/blenderpipeline/  Turns .blend files into game-ready GLB models, animations and all
@@ -989,7 +993,8 @@ asset out of this public repository.
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT
-  license), in `client/vendor/recast-navigation-0.43.1/` with both licences.
+  license), in `client/vendor/recast-navigation-0.43.1/` with both licences (its WebAssembly's
+  memory made to start with 16 MB, not 64: noted there).
 
 This repository began as a modernization of Last Colony, the real-time strategy game from
 [*Pro HTML5 Games*](https://www.apress.com/9781484229095) by Aditya Ravi Shankar. Pellagos has

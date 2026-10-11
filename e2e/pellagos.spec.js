@@ -462,7 +462,7 @@ test("makes a character of another people: a cat folk's ears, tail and fur, thei
     expect({ ...played, saved: (await keptOf(page, "save")).hero.race }).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
 });
 
-test("carries on with the saved character, in the same world", async ({ page }) => {
+test("carries on with the saved character, in the same world; and again after the picture is lost", async ({ page }) => {
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
     await title(page);
     await expect(page.locator("#continuebutton")).toHaveText("Continue as Wren");
@@ -473,15 +473,21 @@ test("carries on with the saved character, in the same world", async ({ page }) 
 
     expect(game).toEqual({ seed: 4242, weapon: "staff", name: "Wren" });
 
-    // The picture lost (as a phone short of memory does): the game paused, the player told; given
-    // back, made again, and carried on
+    // The picture lost (as a phone short of memory does): the game paused, where the player is
+    // kept, and the player told; given back, the page loaded again (what it let go of once the
+    // graphics card had it, world/release.js, isn't there to give it again), to carry on
+    await page.waitForFunction(() => window.pellagos.released(), null, { timeout: 30000 });
     await page.evaluate(() => window.pellagos.session.view.renderer.forceContextLoss());
     await expect(page.locator("#menu")).toBeVisible();
     await expect(page.locator("#banner")).toContainText("picture was lost");
+
+    const loaded = page.waitForEvent("load");
+
     await page.evaluate(() => window.pellagos.session.view.renderer.forceContextRestore());
-    await expect(page.locator("#banner")).toBeHidden({ timeout: 60000 });
-    await page.locator("#resumebutton").click();
-    await expect(page.locator("#menu")).toBeHidden();
+    await loaded;
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Wren", { timeout: 60000 });
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
     // The menu pauses, and goes back to the title
     await page.locator("#menubutton").click();
@@ -1704,7 +1710,8 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(chosen.healed).toBe(true);
     expect(chosen.player).toBeCloseTo(0.5, 1);
 
-    // Held: the wheel opens under the finger; flicked W, told to wait where it is
+    // Held: the wheel opens with its middle right under the finger (the icon's by the screen's
+    // edge: past it, not pulled in off the finger); flicked W, told to wait where it is
     const box = await member.boundingBox();
     const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
 
@@ -1712,7 +1719,14 @@ test("the player's party: a creature called to their side has an icon down the l
     await page.mouse.down();
     await page.waitForTimeout(700);
 
-    const opened = await page.evaluate(() => ({ open: Boolean(window.pellagos.game.wheel.open), slots: { ...window.pellagos.game.wheel.slots } }));
+    const opened = await page.evaluate(() => {
+        const { wheel } = window.pellagos.game;
+        const at = wheel.element.getBoundingClientRect();
+
+        return { open: Boolean(wheel.open), slots: { ...wheel.slots }, middle: { x: at.x + at.width / 2, y: at.y + at.height / 2 } };
+    });
+
+    expect(Math.hypot(opened.middle.x - cx, opened.middle.y - cy)).toBeLessThan(1);
 
     await page.mouse.move(Math.max(1, cx - 34), cy, { steps: 4 });
     await page.mouse.up();
@@ -8475,7 +8489,7 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     const left = wheel.locator('.slice[data-direction="w"]');
 
     // The orc standing a few squares from the player, who's hurt (to the right and a little ahead,
-    // clear of the minimap along the top)
+    // clear of the minimap along the top), held low on its body, well off its middle
     const orcAt = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const { battle } = game;
@@ -8489,12 +8503,17 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
         player.hp = 20;
         game.advance(0.1);
 
-        return session.view.toScreen(game.avatars.get("orc").point(0.5));
+        return session.view.toScreen(game.avatars.get("orc").point(0.25));
     });
+    // (Held: the wheel's middle right under where the finger went down, which it's flicked from)
     const hold = async ({ x, y }) => {
         await page.mouse.move(x, y);
         await page.mouse.down();
         await expect(wheel).toBeVisible();
+
+        const at = await wheel.evaluate((element) => element.getBoundingClientRect());
+
+        expect(Math.hypot(at.x + at.width / 2 - x, at.y + at.height / 2 - y)).toBeLessThan(1);
     };
     const flickUp = async ({ x, y }) => {
         await page.mouse.move(x, y - 25, { steps: 2 });

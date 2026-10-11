@@ -22,6 +22,7 @@ import { CHUNK } from "../../../core/overworld.js";
 import { GROUND } from "../../../core/setpieces/pieces.js";
 import { allAtOnce } from "../../../core/steps.js";
 import { leafCards, leafTexture } from "../engine/leafcards.js";
+import { releaseGeometry } from "../../release.js";
 import { leaf } from "./trees.js";
 
 /**
@@ -352,7 +353,8 @@ export function* hedgeBuilding(runs, [ox, oy], groundAt, { sprigs = 1 } = {}) {
         geometry.setIndex(lists.index);
         geometry.computeBoundingSphere();
 
-        const mesh = new THREE.Mesh(geometry, material);
+        // (Let go of on the page once it's on the graphics card: what stands in the way is `boxes`)
+        const mesh = new THREE.Mesh(releaseGeometry(geometry), material);
 
         mesh.name = name;
         mesh.position.set(ox, 0, oy);
