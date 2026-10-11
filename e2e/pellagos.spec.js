@@ -1698,10 +1698,17 @@ test("the first time a fight leaves a character something, they're told what to 
 test("a foe the player slays: its fall rising off its body in red as it lands, as what's picked up rises over the player, not said across the screen nor kept for the journal; its body off the screen, over the player; a foe of note (an elite) said across the screen, as ever", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // (What rises, as it's put up: where, and where the orc's body and the player's head are then)
+    // (What rises, as it's put up: where, and where the orc's body (its hips) and the player's head
+    // are then)
     await page.evaluate(() => {
         const { game } = window.pellagos;
         const [damage, message] = [game.hud.damage.bind(game.hud), game.hud.message.bind(game.hud)];
+
+        window.hips = () => {
+            const bone = game.avatars.get("orc").character.rig.bone("Hips");
+
+            return game.view.toScreen(bone.getWorldPosition(bone.position.clone()));
+        };
 
         window.risen = [];
         window.said = [];
@@ -1710,10 +1717,10 @@ test("a foe the player slays: its fall rising off its body in red as it lands, a
             message(text, seconds);
         };
         game.hud.damage = (point, text, options = {}) => {
-            const at = (id, share) => game.view.toScreen(game.avatars.get(id).point(share));
+            const head = game.view.toScreen(game.avatars.get(game.me).point(0.95));
 
             damage(point, text, options);
-            window.risen.push({ point, text, kind: options.kind ?? "", body: at("orc", 0.3), head: at(game.me, 0.95), drawn: document.querySelector("#floaters").lastElementChild?.className });
+            window.risen.push({ point, text, kind: options.kind ?? "", body: window.hips(), head, drawn: document.querySelector("#floaters").lastElementChild?.className });
         };
     });
 
@@ -1736,8 +1743,8 @@ test("a foe the player slays: its fall rising off its body in red as it lands, a
 
     const fell = await slain();
 
-    // (Risen once, in red, off where its body lies, not over the player; not said across the
-    // screen, nor kept)
+    // (Risen once, in red, off where its body lies (its hips, thrown down from where it stood),
+    // not over the player; not said across the screen, nor kept)
     expect(fell.risen).toHaveLength(1);
     expect(fell.risen[0].text).toBe("The orc is slain!");
     expect(fell.risen[0].drawn).toBe("damage slain");
@@ -1755,7 +1762,7 @@ test("a foe the player slays: its fall rising off its body in red as it lands, a
         const away = [[-160, 0], [160, 0], [0, -160], [0, 160]].find(([dx, dy]) => {
             avatar.place(me.x + dx, me.y + dy, 0);
 
-            const at = game.view.toScreen(avatar.point(0.3));
+            const at = window.hips();
 
             return !at || at.x < 0 || at.y < 0 || at.x > innerWidth || at.y > innerHeight;
         });

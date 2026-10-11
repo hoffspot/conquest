@@ -174,7 +174,8 @@ const RINGING = new Set(["slash", "hack", "cleave", "chop"]);
 // How long after trading blows with the player a death's still theirs to be told of (s: #ours)
 const FOUGHT = 30;
 
-// How far up a fallen foe's height their fall's said from, rising off their body (#slain)
+// How far up a fallen foe's height their fall's said from, rising off their body, if it has no
+// bones to find its hips by (#slain, #lying)
 const SLAIN_RISES = 0.3;
 
 // How long after a body hits the ground what it fought with clatters down after it (s)
@@ -9071,11 +9072,21 @@ export class Game {
         }
 
         this.#after(avatar.lands ?? 0, () => {
-            const at = this.avatars.get(id) ? this.view.toScreen(this.avatars.get(id).point(SLAIN_RISES)) : null;
+            const body = this.avatars.get(id);
+            const at = body ? this.view.toScreen(this.#lying(body)) : null;
             const seen = at && at.x >= 0 && at.y >= 0 && at.x <= globalThis.innerWidth && at.y <= globalThis.innerHeight;
 
             this.hud.damage(seen ? at : this.#screenAbove(this.me), said, { kind: "slain" });
         });
+    }
+
+    // Where a fallen body lies in the world: its hips (a beast's, its body), as it's thrown down
+    // from where it stood; one drawn in a crowd, without bones, SLAIN_RISES of its height over
+    // where it stood
+    #lying(avatar) {
+        const hips = avatar.character?.rig?.bone?.("Hips");
+
+        return hips?.getWorldPosition ? hips.getWorldPosition(new THREE.Vector3()) : avatar.point(SLAIN_RISES);
     }
 
     // --- Taps, clicks and zooming ---
