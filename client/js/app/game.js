@@ -9303,7 +9303,8 @@ export class Game {
         return best;
     }
 
-    // The finger's been held on someone: open the wheel round them, at its first side
+    // The finger's been held on someone: open the wheel at its first side, its middle right under
+    // where the finger went down, which the way it's flicked is measured from
     #openWheel(pointer, { actor, wheel }) {
         const player = this.battle.actor(this.me);
 
@@ -9311,14 +9312,8 @@ export class Game {
             return;
         }
 
-        const centre = this.view.toScreen(this.avatars.get(actor.id).point(0.55));
-
-        if (!centre) {
-            return;
-        }
-
-        pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, kind: wheel, side: 0, refused: null, done: false };
-        this.#showWheel(pointer.wheel, centre.x, centre.y);
+        pointer.wheel = { originX: pointer.startX, originY: pointer.startY, target: wheel === "self" ? "self" : actor.id, kind: wheel, side: 0, refused: null, done: false };
+        this.#showWheel(pointer.wheel, pointer.startX, pointer.startY);
         this.sound?.play("wheel");
         globalThis.navigator?.vibrate?.(12);
     }
