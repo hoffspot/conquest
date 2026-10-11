@@ -4653,10 +4653,12 @@ seen before doesn't stall the frame it appears in; the birds each have their own
 start, so their shader's the one compiled while loading), the pictures of what's shown are sent to
 the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
 each in the first frame it's drawn in, and the first frames wait on them all), and someone coming
-into sight (made, or come into the player's building or near them) is kept hidden till theirs are
-sent, two a frame (`SENDING`, app/game.js `#sending`: a skin and its bumps are 5 MB, and a
-building's dozen folk all sent in the one frame held it up; those out of sight, a building's folk
-the player's outside, aren't given room on the graphics card till they're wanted). In headless
+into view (made, come into the player's building or near them, or the camera turned to them) is
+kept hidden till theirs are sent, two a frame (`SENDING`, app/game.js `#sending`: a skin and its
+bumps are 5 MB, and a building's dozen folk all sent in the one frame held it up); those out of
+sight (a building's folk the player's outside), or out in the world out of the camera's view (3
+metres round them, for their shadows), aren't given room on the graphics card till they're
+wanted. In headless
 Chromium (High, seed 1) the draws before play begins took 9.2 s before and 3.8 s after, with
 0.6 s more of loading sending the pictures, particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,

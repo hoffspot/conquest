@@ -380,10 +380,13 @@ const TOGETHER = Object.freeze({
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
-// How many of those coming into sight (someone new, or someone come into the player's building
-// or near them) have their pictures sent to the graphics card each frame, each hidden till then
-// (#sending): a skin's 5 MB or so, not all of a building's folk's in the one frame
-const SENDING = Object.freeze({ every: 2 });
+// How many of those coming into view (someone new, or someone come into the player's building or
+// near them, the camera turned to them) have their pictures sent to the graphics card each frame,
+// each hidden till then (#sending): a skin's 5 MB or so, not all of a building's folk's in the one
+// frame, nor, out in the world, those out of the camera's view given room on the graphics card;
+// and how far round someone (metres, at least, or as tall as they are) counts as in view (their
+// shadow, too)
+const SENDING = Object.freeze({ every: 2, round: 3 });
 
 // Soldiers in their crowds (world/crowd.js): a battle's, with more than `from` of them about the
 // player (a town's own guards are never so many), those nearest, and whoever's fighting the
@@ -589,6 +592,10 @@ const _corner = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 const _lit = new THREE.Vector3();
+// (What the camera sees, and round someone, for whose pictures to send: #sending)
+const _seen = new THREE.Frustum();
+const _seenMatrix = new THREE.Matrix4();
+const _round = new THREE.Sphere();
 
 export class Game {
     #begin = null;
@@ -1846,13 +1853,31 @@ export class Game {
         return actor.map === this.mapId && !(mine && actor !== mine && (Math.abs(actor.x - mine.x) > DRAW_REACH || Math.abs(actor.y - mine.y) > DRAW_REACH));
     }
 
-    // Those about to be drawn whose pictures haven't been sent to the graphics card (`unsent`),
-    // `every` of them sent, the rest kept hidden till a later frame's: someone new, or a building's
-    // folk as the player comes in, don't hold one frame up sending all their skins at once
+    // Those about to be drawn whose pictures haven't been sent to the graphics card (`unsent`):
+    // `every` of those in the camera's view sent, the rest kept hidden till a later frame's
+    // (someone new, or a building's folk as the player comes in, don't hold one frame up sending
+    // all their skins at once), and out in the world, those out of its view till they're in it
+    // (inside, in a room or two, all of them: a turn of the camera sees any of them)
     #sending(unsent, every = SENDING.every) {
-        for (let k = 0; k < Math.min(every, unsent.length); k++) {
-            this.view.upload([unsent[k].object], { hidden: true });
-            unsent[k].sent = true;
+        const camera = this.view.camera;
+        const outside = !this.interiors.has(this.mapId);
+        let sent = 0;
+
+        camera.updateMatrixWorld();
+        _seen.setFromProjectionMatrix(_seenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem);
+
+        for (const avatar of unsent) {
+            const height = avatar.character?.height ?? 1.8;
+
+            _round.center.copy(avatar.object.position);
+            _round.center.y += height / 2;
+            _round.radius = Math.max(SENDING.round, height);
+
+            if (sent < every && (!outside || _seen.intersectsSphere(_round))) {
+                this.view.upload([avatar.object], { hidden: true });
+                avatar.sent = true;
+                sent++;
+            }
         }
 
         unsent.length = 0;
