@@ -65,9 +65,11 @@ export const CITADEL = Object.freeze({
      * The great keep (metres): how wide (square: at least and at most), how high its walls stand
      * over the inner ward; its two needle towers on opposite corners, how big round and how far
      * over its walls, their spires as tall as `spire` times their radius; its bartizans on the
-     * other two (radius, how tall), and how far it's kept from the ward's walls.
+     * other two (radius, how tall), and how far it's kept from the ward's walls; the steps up to
+     * its door (how many, each one's rise and tread, how wide: walked up, citadelWays; it had one
+     * step, knee high, walked through at the ward's level)
      */
-    keep: Object.freeze({ size: Object.freeze([16, 19]), high: Object.freeze([34, 40]), needle: 2.5, over: 13, spire: 6.5, bartizan: 1.5, turret: 4, clear: 2.5 }),
+    keep: Object.freeze({ size: Object.freeze([16, 19]), high: Object.freeze([34, 40]), needle: 2.5, over: 13, spire: 6.5, bartizan: 1.5, turret: 4, clear: 2.5, steps: Object.freeze({ count: 3, rise: 0.2, tread: 0.8, wide: 4 }) }),
     /**
      * Its moat round the outer ward (metres; Bodiam's, Caerlaverock's, Kirby Muxloe's): round, how
      * wide its water at the least (out past the outer towers' faces); how deep its bed lies under
@@ -164,6 +166,7 @@ export function layoutCitadel({ seed }) {
         spire: CITADEL.keep.spire,
         bartizan: CITADEL.keep.bartizan,
         turret: CITADEL.keep.turret,
+        steps: CITADEL.keep.steps,
     };
     const { hall, chapel } = CITADEL;
     // (The chapel from in front of the keep to near the gate's wall: along its side, the gate's
@@ -512,7 +515,8 @@ function framedRect(at, turn, [x0, z0, x1, z1]) {
  * high at a and at b, over the outer ward) }: the way in from the glacis through the gate tower,
  * over the moat and through the outer gate; and up each stair to an inner gate, its lower flight,
  * the landing it turns on, its upper flight, the landing before the gate and the passage through
- * the wall onto the ward's terrace); and its keep's door (`door`: { at ([u, v]: the keep's middle),
+ * the wall onto the ward's terrace; and up the keep's steps to its door); and its keep's door
+ * (`door`: { at ([u, v]: the keep's middle),
  * turn (the way its door faces), x, y (the door's middle in the keep's own frame, y out), width,
  * height, floor (its sill over the inner ward) }).
  */
@@ -611,5 +615,17 @@ export function citadelWays(citadel) {
         );
     }
 
-    return { solid, decks, door: { at: keep.at, turn: keep.turn, x: 0, y: front, width: 2.6, height: 3.2, floor: 0.6 } };
+    // Up the keep's steps to its door (art/kits/citadel.js keepInto): from their foot through the
+    // middle of each tread to the middle of the top one, and level from there to the door, over
+    // the inner ward (the steps' heights over the innermost terrace: sites.js)
+    const { count, rise, tread, wide } = CITADEL.keep.steps;
+    const up = framed(keep.at, keep.turn);
+    const ward = wards.at(-1).rise;
+
+    decks.push(
+        { a: up(0, front + count * tread), b: up(0, front + tread / 2), half: wide / 2, from: ward + rise / 2, to: ward + count * rise },
+        { a: up(0, front + tread / 2), b: up(0, front), half: wide / 2, from: ward + count * rise, to: ward + count * rise },
+    );
+
+    return { solid, decks, door: { at: keep.at, turn: keep.turn, x: 0, y: front, width: 2.6, height: 3.2, floor: count * rise } };
 }

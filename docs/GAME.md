@@ -2018,7 +2018,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     crown of machicolations round its top and a steep slate roof behind; on two opposite corners a
     needle tower 2.5 m round rising 13 m over it under a spire 6.5 times as tall as it's round, a
     flag at each point; on the other two a bartizan corbelled out under a little cone; its door in
-    a forebuilding up a few steps, torches either side. **Lean-to ranges** along the lower wards'
+    a forebuilding up three steps (`CITADEL.keep.steps`: 0.2 m each, 0.8 m deep, 4 m wide; it had
+    one, knee high, walked through at the ward's level), torches either side. **Lean-to ranges** along the lower wards'
     walls: stone under a slate roof sloping down from the wall, windows, a door, chimneys.
   - **Cost:** about 37,000 triangles a citadel near (walls 17,000, towers 11,500, the keep
     2,400, the moat's far side 1,500, the gate tower and bridge 1,000), each chunk building its own parts a piece at a time as
@@ -2033,7 +2034,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   - **Walked** (WORLD.md *Hill citadels*): over the bridge and through the gate tower and the
     gate on their decks, the player standing at their height; up each stair flight by flight,
     step by step (`CITADEL.stair` the rules' match for the look's `CITADEL_LOOK.stair`); its wards'
-    open ground paved; the keep gone into by its forebuilding's door (`citadelWays` `door`).
+    open ground paved; up the keep's steps, on their decks, and in by its forebuilding's door
+    (`citadelWays` `door`).
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
