@@ -3,6 +3,7 @@
 // anything that finds ways is used.
 
 let loading = null;
+let loaded = null;
 
 /** Recast's core, its WebAssembly ready: the same module every time. */
 export function loadRecast() {
@@ -17,9 +18,18 @@ export function loadRecast() {
         const wasmBinary = node ? await (await import("node:fs/promises")).readFile(new URL("../../../vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", import.meta.url)) : undefined;
 
         await recast.init(() => factory(wasmBinary ? { wasmBinary } : {}));
+        loaded = recast;
 
         return recast;
     })();
 
     return loading;
+}
+
+/**
+ * How much memory Recast's WebAssembly holds (bytes: it grows as the navigation tiles are baked,
+ * and never gives any back), or 0 before it's loaded. For the debug log (app/game.js memoryNow).
+ */
+export function wasmBytes() {
+    return loaded?.Raw?.Module?.HEAPU8?.buffer?.byteLength ?? 0;
 }

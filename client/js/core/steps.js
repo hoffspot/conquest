@@ -59,11 +59,18 @@ export class Steps {
     /** How long a step may take (ms) before Steps.slow's told. */
     static SLOW = 20;
 
+    /**
+     * Told as work with a label takes its first step, with its label (app/telemetry.js: written
+     * down at once, so a crash in the middle of it says what it was doing), if anything's listening.
+     */
+    static begun = null;
+
     constructor(steps, label = null) {
         this.steps = steps;
         this.label = label;
         this.done = false;
         this.value = undefined;
+        this.begun = false;
 
         /** Whether the last step taken is waiting on work done elsewhere. */
         this.waiting = false;
@@ -72,6 +79,14 @@ export class Steps {
     /** Take steps till `until`; whether they're all taken. */
     take(until = Infinity, { wait = until !== Infinity } = {}) {
         let now = performance.now();
+
+        if (!this.begun) {
+            this.begun = true;
+
+            if (this.label !== null) {
+                Steps.begun?.(this.label);
+            }
+        }
 
         while (!this.done && now < until) {
             const step = this.steps.next(this.waiting && !wait ? NOW : undefined);

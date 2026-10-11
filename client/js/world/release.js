@@ -47,3 +47,53 @@ export function releaseTexture(texture, also = null) {
 
     return texture;
 }
+
+/**
+ * How many bytes of the page's own copies some objects (and all under them) hold: their meshes'
+ * attributes, morphs and indices, and their pictures' pixels (a picture's data, or a canvas's or a
+ * bitmap's four bytes a pixel), each counted once however many share it, and none let go of. For
+ * the debug log (app/game.js memoryNow): where the browser tells nothing of the page's heap
+ * (Safari), the least of what's in it.
+ */
+export function heldOnPage(roots) {
+    const seen = new Set();
+    let bytes = 0;
+    const count = (thing, size) => {
+        if (thing && !seen.has(thing)) {
+            seen.add(thing);
+            bytes += size;
+        }
+    };
+    const picture = (texture) => {
+        const image = texture?.isTexture ? texture.image : null;
+
+        // (A picture of data is its data, none once it's let go of; a canvas or a bitmap, its size)
+        if (image && "data" in image) {
+            count(image.data, image.data?.byteLength ?? 0);
+        } else if (image?.width > 0 && image?.height > 0) {
+            count(image, image.width * image.height * 4);
+        }
+    };
+
+    for (const root of roots) {
+        root?.traverse?.((node) => {
+            const geometry = node.geometry;
+
+            if (geometry) {
+                for (const attribute of [...Object.values(geometry.attributes ?? {}), ...Object.values(geometry.morphAttributes ?? {}).flat(), geometry.index]) {
+                    count(attribute?.array, attribute?.array?.byteLength ?? 0);
+                }
+            }
+
+            for (const material of [node.material].flat()) {
+                for (const value of Object.values(material ?? {})) {
+                    picture(value);
+                }
+            }
+
+            picture(node.skeleton?.boneTexture);
+        });
+    }
+
+    return bytes;
+}
