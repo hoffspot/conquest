@@ -2333,6 +2333,29 @@ world server runs has no `HOST_PLAYER`: its time passes only once everyone in it
 (docs/GAME.md *Passing the time*), and its debug commands are its owners' (a player's `role`, as
 they come in: owner, trusted or player), or no one's.
 
+**The soak** (scripts/soak.js, core/bot.js; generated/world_server_plan.md §3.3). Proof that a
+world run on Node plays the same in every browser that joins it. A world with no host player, run
+on Node as the world server will run it (the runner stepping it as time goes by, and only while
+someone's in it; what's round its players made ahead), is opened through the relay, and players
+who play by themselves (`Bot`) join it: one in Node, in a process of its own, and one in each of
+Chromium, WebKit and Firefox, each in their own people's town (human, elf, orc, cat). Each sends
+itself about near where it came in, starts a field battle every four minutes (they're all owners:
+the world's `Hosting.roleOf`, which the world server will answer by the key each came with) and
+goes for its foes. One more in Node does nothing at all, to be marked away at 10 minutes and sent
+out at 30. Every copy is checked against the host's as any joined game's is (a checksum every 5
+seconds, everyone's motion with each sending). The soak fails if any copy is sent the world again
+once a player-hour or more, or sees the one doing nothing marked away or sent out at another step
+than the host does. It runs by hand on GitHub (Actions, Soak) and for three minutes on any pull
+request that changes it.
+- **Measured** (seed 2, 32 minutes, Node and Chromium): no copy went astray or was sent the world
+  again (each about 38,600 steps, 386 checksums and 9,600 motion checks, all matching); the one
+  doing nothing marked away at step 12,000 and sent out at step 36,000 on the host and every copy.
+  The host's steps took 2.4 ms on the mean and 7 ms at the 99th percentile, with 16 field battles
+  fought round two towns, and a few over 50 ms (the worst 143 ms), which the soak lists (when, how
+  many were in the world, what happened in the step) to be chased down. And on GitHub's runner
+  (three minutes, all four peoples' towns): Node, Chromium 153, WebKit 26.6 and Firefox 155, each
+  playing the host's every step with every check matching, and none sent the world again.
+
 **Parties** (core/host.js `PARTY`, the `party` command; the party menu, docs/GAME.md *The
 party*). Players play together as a party of up to four (`PARTY.most`):
 - **Asked.** Anyone in a party, or in none, asks another player who's in none (`invite`). The one

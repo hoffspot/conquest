@@ -103,6 +103,13 @@ minutes a try).
 (<https://hoffspot.github.io/conquest/>); its build is ended at 20 minutes and its deploy at 15.
 Whatever is merged to `main` goes live, so `main` must always be green.
 
+`.github/workflows/soak.yml` is the cross-engine soak (`npm run soak`, below). It's run by hand
+from the Actions tab (Soak, Run workflow: how many minutes, the seed, which browsers), and for
+three minutes on a pull request that changes the soak itself (`scripts/soak.js`,
+`client/js/core/bot.js` or the workflow). It installs Chromium, WebKit and Firefox with their
+system libraries, keeps its report with the run as `soak-report`, and is ended at 30 minutes on a
+pull request and 4 hours by hand. It isn't a required check: most pull requests never run it.
+
 ### Every npm script
 
 | Script | When to run it |
@@ -116,6 +123,7 @@ Whatever is merged to `main` goes live, so `main` must always be green.
 | `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
 | `npm run balance` | Changes to how the wild answers the players' side, or to how strong players, hirelings or creatures are: the balance runner (docs/WILDS.md, *Tuning it*), each side's fights at tiers 2, 5 and 8. A few minutes; `-- --tiers 5 --sides solo,four` for less |
 | `npm run step-budget` | Changes to the rules' steps, the navigation, or what's made ahead on the world server (`server/ahead.js`): a world stepped on Node as the world server will step it, four players walking about in four peoples' towns, every step timed. It fails if any step takes longer than a step (50 ms). About half a minute; `-- --seconds 600` for longer, `-- --no-ahead` to compare without making anything ahead |
+| `npm run soak` | Changes to how the copies of a world keep to its host's: the rules' steps, netplay, the runner, what's made ahead (generated/world_server_plan.md §3.3). A world on Node with no host player, and players who play by themselves joined to it (`client/js/core/bot.js`) in Node, Chromium, WebKit and Firefox, each in their own people's town, starting fights; and one doing nothing, to be marked away and sent out. It fails if any copy is sent the world again once a player-hour or more, or sees anyone marked away or sent out at another step than the host. 32 minutes by default; `-- --minutes 5 --browsers chromium` for a quick look, `-- --browsers none` for Node's alone. WebKit and Firefox need `npx playwright install webkit firefox` first; `CHROMIUM_PATH` uses a Chromium you have. Its report is written to `test-results/soak/report.json` |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
