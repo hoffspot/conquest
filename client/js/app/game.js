@@ -5675,9 +5675,12 @@ export class Game {
             this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, ability ? 5 : 3);
             this.sound?.play("levelUp");
         } else if (event.type === "loot") {
+            // (What a felled soldier or the town's orc had on them, straight into the pack: rising
+            // over the player as what's picked up does, not said across the screen; kept for the
+            // journal all the same)
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
-            this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+            this.#gained(things, `You find ${things.join(", ")}.`);
             this.sound?.play(event.gold ? "coins" : "pickup");
         } else if (event.type === "picked" && event.bundle) {
             const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
@@ -6522,8 +6525,9 @@ export class Game {
         return true;
     }
 
-    // What the player's picked up (`things`, in words), rising over them rather than said across
-    // the screen in the middle of a fight; `said` kept for the journal all the same
+    // What the player's picked up, or found on a foe they felled (`things`, in words), rising over
+    // them rather than said across the screen in the middle of a fight; `said` kept for the journal
+    // all the same
     #gained(things, said) {
         this.hud.damage(this.#screenAbove(this.me), `+${things.join(", ")}`, { kind: "loot" });
         this.#told(said, 2.5);
