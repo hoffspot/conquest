@@ -2453,6 +2453,20 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **Catching up:** when a copy falls more than 6 behind what it means to keep (`PACE`), it plays
     up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone catching up
     doesn't make the frame so long that it falls further behind.
+  - **Too far behind** (`PACE.tooFar`): more than 100 steps (5 s of the host's), as after its page
+    has been hidden a while, a long load, or a slow phone in a long fight, it doesn't catch up step
+    by step. It plays none of them, asks for the world as it now is, as a copy gone astray does,
+    and carries on from that (`Joining.farBehind`; the HUD says "Catching up with the world…"
+    meanwhile, and the debug overlay counts them). A step with a fight costs some 2 ms on a desktop
+    and 10 on a phone; the world sent again, some 120 KB and 20 ms to take in (100 on a phone). So
+    a phone hidden 30 s was back to the present 9.5 s after it was shown, fast-forwarding through
+    what it missed, and now is in half a second (a modelled run; a desktop, 2.4 s against 0.2).
+  - **Drawn after the world's sent again** (`game.rehost`): whoever's moved is drawn going there
+    from where they were drawn, as bodies always follow where they are (`world/avatar.js`), unless
+    it's further than 3 m (`PREDICT.far`, as for the player's own hero: through a door, by magic,
+    or a long while behind), when they're put straight there. What happened meanwhile wasn't
+    played, so wasn't seen: anyone who died is seen falling then, anyone who came back to life
+    gets up, and the player's taken to the map they're on if it's another.
   - **Slow frames:** a joined copy plays as much of the host's time as has gone by since its last
     frame (up to a second), however slowly its frames come. Playing alone, a frame counts for no
     more than a tenth of a second, so a slow frame makes a slower world rather than a jump. A copy

@@ -391,7 +391,7 @@ function judge({ rows, host }) {
         if (!row.steps) {
             failures.push(`${row.name} never played the world`);
         } else if (!row.idle && row.rate >= SOAK.rate) {
-            failures.push(`${row.name} was sent the world again ${row.resyncs} times in ${(row.hours * 60).toFixed(0)} minutes (${row.desyncs} found astray): ${row.rate.toFixed(1)} a player-hour`);
+            failures.push(`${row.name} was sent the world again ${row.resyncs} times in ${(row.hours * 60).toFixed(0)} minutes (${row.desyncs} found astray, ${row.skips ?? 0} too far behind): ${row.rate.toFixed(1)} a player-hour`);
         }
 
         for (const error of row.errors) {
