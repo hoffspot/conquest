@@ -278,6 +278,15 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
      set aside, not misread; or, where it can be, moved to the new one, as version 1's one
      character is (save.js `migrate`). Players keep their characters.
+   - The world server's data, which must never be lost on an upgrade
+     (`generated/world_server_plan.md` §5.1). Each version has a step forward beside it, a
+     function taking what an older server kept to the next version; a newer server's is refused.
+     `test/storage.test.js` checks the steps.
+     - `LAYOUT_VERSION` (`server/storage/folder.js`): where things are in the server's data
+       folder. Add a step to `LAYOUT_STEPS` that moves them.
+     - `CONFIG_VERSION` (`server/storage/settings.js`): what a setting in `server.json` is called
+       or means. Add a step to `SETTINGS_STEPS`. A new setting needs no bump: give it a schema in
+       `SETTINGS`, and its default fills it in.
    - The caches' versions (the `-v2` in `client/sw.js`): never for a release. Data is kept by the
      hash of its bytes, so a changed model, body or image needs nothing. Change the shell's
      (`SHELL`) only to let go of code no release uses any more, such as an old Three.js's
@@ -413,6 +422,7 @@ moves first, update the branch again.
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
 | `NET_VERSION`, `SNAPSHOT_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
 | `WAR_VERSION` | If both sides bumped it, take the higher number and add one, and keep both sides' steps in `War.restore`, the older side's first, each for a war kept before the merged number. |
+| `LAYOUT_VERSION`, `CONFIG_VERSION` | If both sides bumped one, take the higher number and add one, and keep both sides' steps (`LAYOUT_STEPS`, `SETTINGS_STEPS`), one after the other, each numbered for the version it starts from. |
 | `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |
 
 **Claude sessions merging their own pull requests** (only where the owner has said so): bring the
