@@ -1695,7 +1695,7 @@ test("the first time a fight leaves a character something, they're told what to 
     expect(picked.kept).toBe("You take 3 gold, a rare ring.");
 });
 
-test("a foe the player slays: its fall rising off its body in red as it lands, as what's picked up rises over the player, not said across the screen nor kept for the journal; its body off the screen, over the player; a foe of note (an elite) said across the screen, as ever", async ({ page }) => {
+test("a foe the player slays: its fall rising off its body in red as it lands, as what's picked up rises over the player, not said across the screen nor kept for the journal, and what it had on it rising over the player (kept); its body off the screen, over the player; a foe of note (an elite) said across the screen, as ever", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // (What rises, as it's put up: where, and where the orc's body (its hips) and the player's head
@@ -1752,6 +1752,20 @@ test("a foe the player slays: its fall rising off its body in red as it lands, a
     expect(Math.hypot(fell.risen[0].point.x - fell.risen[0].head.x, fell.risen[0].point.y - fell.risen[0].head.y)).toBeGreaterThan(20);
     expect(fell.said).toEqual([]);
     expect(fell.kept).toEqual([]);
+
+    // (What it had on it, its gold at least, straight into the pack: rising over the player, not
+    // said across the screen; kept for the journal)
+    const found = await page.evaluate(() => ({
+        risen: window.risen.filter(({ kind }) => kind === "loot"),
+        said: window.said.filter((text) => text.startsWith("You find")),
+        kept: window.pellagos.game.messages.map(({ text }) => text).filter((text) => text.startsWith("You find")),
+    }));
+
+    expect(found.risen).toHaveLength(1);
+    expect(found.risen[0].text).toMatch(/^\+\d+ gold/);
+    expect(Math.hypot(found.risen[0].point.x - found.risen[0].head.x, found.risen[0].point.y - found.risen[0].head.y)).toBeLessThan(2);
+    expect(found.said).toEqual([]);
+    expect(found.kept).toEqual([`You find ${found.risen[0].text.slice(1)}.`]);
 
     // Its body off the screen (far behind the camera) as it falls: over the player instead
     await page.evaluate(() => {

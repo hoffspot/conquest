@@ -4448,7 +4448,7 @@ it.
    faster the turn and the nearer the character: a companion at the player's side worst).
    Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
-  requests, loot, spells learnt, standing and rank), 28% of the way down; taps go through them
+  requests, spells learnt, standing and rank), 28% of the way down; taps go through them
   (but for an Undo's button) to whoever's under them. A little X at a message's top right puts it
   away at once (a target bigger than it looks, for a finger; drawn, not a letter, so a message's
   words are only its own: the user, "Provide a little X in the top right of the box to dismiss
@@ -4476,6 +4476,11 @@ it.
   a perilous place's own or a site's or lair's master, a wyvern) is still told across the screen
   and kept, as before (the user: "Keep the full popup for major enemies such as elites, sub
   bosses, and bosses").
+  **What a felled foe had on it** (a soldier's or the town orc's gold and things, straight into the
+  pack: host.js `#loot`) rises over the player as what's picked up does ("+9 gold, healing
+  draught", game.js `#gained`), not said across the screen, and is kept for the journal ("You find
+  9 gold, healing draught."; the user: "Make the gold loot message from soldiers and the town orc
+  rise up over the character as well").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
