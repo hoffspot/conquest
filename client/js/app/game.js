@@ -451,11 +451,12 @@ const DISGUISES = Object.freeze({
     known: (people) => `You've shown yourself for what you are: the ${people} soldiers know you now.`,
 });
 
-// Some of a thing, in words: "a healing draught", "3 healing draughts"
-// The first time a fight leaves the character something (game.js #once), what's to be done about
-// it; never said again
-const SPOILS_HINT = "Each thing there glows the colour of how rare it is: tap one to take them all, or turn on Auto-snag in Game options to pick things up as you come to them.";
+// The first time a fight leaves the character something (#once, kept with the character), what's
+// to be done about it, short enough to read at a glance; never said again. How long it's shown (s)
+const SPOILS_HINT = "Tap it to take it all, or turn on Auto-snag in Game options.";
+const SPOILS_TOLD = 5;
 
+// Some of a thing, in words: "a healing draught", "3 healing draughts"
 function thingsOf({ id, quality, count = 1 }) {
     const name = itemLabel({ id, quality }).toLowerCase();
 
@@ -5708,7 +5709,7 @@ export class Game {
         } else if (event.type === "spoils" && event.creature === "convoy") {
             // (Told the first time something's left for the character, never again: #once)
             if (this.#once("spoils")) {
-                this.hud.message(`Your share of the convoy's goods, in gold, lies where it fell. ${SPOILS_HINT}`, 6);
+                this.hud.message(`Your share of the convoy's gold lies where it fell. ${SPOILS_HINT}`, SPOILS_TOLD);
             }
 
             this.sound?.play("coins");
@@ -5721,7 +5722,7 @@ export class Game {
             this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {
             if (this.#once("spoils")) {
-                this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something where it fell. ${SPOILS_HINT}`, 6);
+                this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} dropped something. ${SPOILS_HINT}`, SPOILS_TOLD);
             }
 
             this.sound?.play("drop");

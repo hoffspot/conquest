@@ -4267,7 +4267,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     left: 50%;
     top: 28%;
     transform: translateX(-50%);
-    max-width: calc(100% - 32px);
+    /* (As wide as its words, up to the screen's width but a margin (no wider than a comfortable
+    line): left at 50%, it would otherwise wrap at half the screen, a tall column on a phone) */
+    width: max-content;
+    max-width: min(100% - 32px, 640px);
     /* (Room either side for its little X, at the top right, the words kept in the middle) */
     padding: 12px 34px;
     border-radius: 12px;

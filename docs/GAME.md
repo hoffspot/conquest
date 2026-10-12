@@ -4457,7 +4457,10 @@ it.
    faster the turn and the nearer the character: a companion at the player's side worst).
    Messages
   are told across the middle of the screen for a few seconds (hud.js `message`: news of the war,
-  requests, spells learnt, standing and rank), 28% of the way down; taps go through them
+  requests, spells learnt, standing and rank), 28% of the way down, as wide as their words up to
+  the screen's width but 16 px a side (and 640 px), so a phone held upright reads a few full lines
+  rather than a tall column of two or three words to each (styles.css `#banner`; it once wrapped
+  at half the screen); taps go through them
   (but for an Undo's button) to whoever's under them. A little X at a message's top right puts it
   away at once (a target bigger than it looks, for a finger; drawn, not a letter, so a message's
   words are only its own: the user, "Provide a little X in the top right of the box to dismiss
