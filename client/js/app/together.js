@@ -7,7 +7,7 @@
 
 import { Hosting, Joining } from "../core/netplay.js";
 
-export { NET_REFUSALS } from "../core/netplay.js";
+export { NET_KICKS, NET_REFUSALS } from "../core/netplay.js";
 
 /** How long to wait for the relay to answer (ms). */
 const RELAY_TIMEOUT = 8000;
@@ -426,6 +426,8 @@ export async function openWorld(game, { address = relayAddress(), onChange = () 
 
     hosting.onJoin = () => onChange();
     hosting.onLeave = () => onChange();
+    // (One sent out, told why: their place at the relay closed after it)
+    hosting.onKick = (peer) => link.kick(peer);
     hosting.onChat = (line) => game.chatHeard(line);
     link.onFrom = (peer, text) => hosting.hear(peer, text);
     link.onGone = (peer) => hosting.gone(peer);

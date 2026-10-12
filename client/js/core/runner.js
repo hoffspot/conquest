@@ -135,7 +135,9 @@ export class WorldRunner {
         return steps;
     }
 
-    // One step of the world (timed, if they're to be), the war's turns told of
+    // One step of the world (timed, if they're to be), the war's turns told of, and anyone away
+    // too long sent out of it (core/host.js AFK: every copy knows it at this step; the world's
+    // own sends them, and their going's recorded as any going is)
     #step() {
         const started = this.clock?.();
         const events = this.host.advance(STEP_MS);
@@ -144,11 +146,11 @@ export class WorldRunner {
             this.times.add(this.clock() - started, this.host.battle.time);
         }
 
-        if (this.onTurn) {
-            for (const event of events) {
-                if (event.type === "turn") {
-                    this.onTurn(this.host.war);
-                }
+        for (const event of events) {
+            if (event.type === "turn") {
+                this.onTurn?.(this.host.war);
+            } else if (event.type === "afk") {
+                this.hosting?.kick(event.id, "afk");
             }
         }
 

@@ -1257,7 +1257,11 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   slept: "You sleep by the fire for 8 hours, 20 minutes gone."), the war's turns meanwhile all
   played as they would have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
   camp's does (seen as by day within 14 m). In a world shared with others only the host passes
-  the time, everyone woken with them; anyone else who sleeps just rests.
+  the time, everyone woken with them; anyone else who sleeps just rests. A world with no host
+  player (a world server's: core/host.js `RULES` rest "everyone") passes it only once everyone in
+  it is resting, by the shortest of their rests, each woken and told; one resting before the rest
+  is told how many are still up ("You rest. Time passes once everyone's resting: 1 still up."),
+  and getting up (going anywhere, fighting, casting, trading) ends their rest. Docs/WAR.md M11.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 

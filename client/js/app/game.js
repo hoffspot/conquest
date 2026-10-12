@@ -599,7 +599,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "boon", "safety", "townsfolk", "emote", "party"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -5537,8 +5537,10 @@ export class Game {
 
     #slept({ id, where, passed, until = null }) {
         const mine = id === this.me;
+        const together = this.host.rules?.rest === "everyone";
 
-        if (!passed && !mine) {
+        // (Everyone woken together, where everyone rests: each told of their own sleep alone)
+        if (!mine && (!passed || together)) {
             return;
         }
 
@@ -5559,8 +5561,20 @@ export class Game {
         const hours = until?.hours;
         const long = hours ? ` for ${hours} hour${hours === 1 ? "" : "s"}` : ` till ${until === "sundown" ? "sundown" : until === "morning" || morning ? "the sun's up" : "evening"}`;
 
-        this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : `You rest${how}: the time's the host's to pass.`, 3.5);
+        this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : together ? `You rest${how}.` : `You rest${how}: the time's the host's to pass.`, 3.5);
         this.onWar?.(this.host.war);
+    }
+
+    // A player marked away (core/host.js AFK: no command for a while), or back: "AFK" by their
+    // name, while there are others in the world to see it; this player told why, if it's them
+    #away({ id, away }) {
+        const shown = away && this.host.players.size > 1;
+
+        this.hud.setAway(id, shown);
+
+        if (shown && id === this.me) {
+            this.hud.message(id === HOST_PLAYER ? "You're marked away (AFK) till you do something." : "You're marked away (AFK) till you do something. After 30 minutes away you'll be sent out of the world.", 5);
+        }
     }
 
     // The players' camps out in the world (core/host.js campfires), drawn while their fires burn:
@@ -8151,6 +8165,10 @@ export class Game {
             case "join":
             case "leave":
                 // (Someone else come into the world, or gone from it: docs/WAR.md M11)
+                if (event.type === "leave") {
+                    this.hud.setAway(event.id, false);
+                }
+
                 if (event.id !== this.me && event.name) {
                     this.hud.message(event.type === "join" ? `${event.name} has come into the world, of the ${peopleOf(event.realm)}.` : `${event.name} has left the world.`, 3);
                 }
@@ -8410,6 +8428,22 @@ export class Game {
                 break;
             case "slept":
                 this.#slept(event);
+                break;
+            case "resting":
+                // (Resting in a world where everyone rests at once: core/host.js RULES rest)
+                if (event.ids.includes(this.me)) {
+                    this.hud.message(`You rest. Time passes once everyone's resting: ${event.waiting} still up.`, 3.5);
+                }
+
+                break;
+            case "rose":
+                if (event.id === this.me) {
+                    this.hud.message("You're up, and no longer resting.", 2);
+                }
+
+                break;
+            case "away":
+                this.#away(event);
                 break;
             case "safety":
                 this.#safety(event);

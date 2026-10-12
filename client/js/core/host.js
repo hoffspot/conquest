@@ -334,10 +334,48 @@ export const REINFORCE = Object.freeze({ grown: 1, from: 10 });
  * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
  * camping out in the world (no camp within a settlement, nor with anything hostile within `clear`
  * metres), to the next sunrise or sunset at least `least` ms of play off; the camp's fire burning
- * on `burns` ms of the battle's time after, lighting what's round it as a war camp's does. Only
- * the world's host passes the time (everyone's woken with them); anyone else just rests.
+ * on `burns` ms of the battle's time after, lighting what's round it as a war camp's does. Who
+ * passes the time is the world's rule (RULES rest): its host (everyone's woken with them; anyone
+ * else just rests), or everyone in it resting at once.
  */
 export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 60000 });
+
+/**
+ * A world's rules (generated/world_server_plan.md §3.2), kept with it (its snapshot), so every copy
+ * of it plays by them:
+ *  - `rest`: who passes its time by resting: "host" (its host's player, HOST_PLAYER: a world a
+ *    browser hosts), or "everyone" (only once every player in it is resting, at an inn or in camp,
+ *    the time passed the shortest of their rests: a world with no host player, a world server's);
+ *  - `debug`: who may use the debug commands (a field battle called up): "host" (its host's
+ *    player), "owner" (its owners: Host.join's `role`), or "none".
+ */
+export const RULES = Object.freeze({ rest: "host", debug: "host" });
+
+// A world's rules as given (RULES), anything unknown left as RULES has it
+function rulesOf(rules = {}) {
+    return Object.freeze({
+        rest: ["host", "everyone"].includes(rules?.rest) ? rules.rest : RULES.rest,
+        debug: ["host", "owner", "none"].includes(rules?.debug) ? rules.debug : RULES.debug,
+    });
+}
+
+/**
+ * A player who's given no command for a while (ms of the world's time, which stands still while
+ * the world's stopped): marked away (AFK, by their name, seen by everyone) after `mark`, and sent
+ * out of the world after `out` (any but the host's own player: they're the world). Kept in the
+ * world, so every copy marks them at the same step (generated/world_server_plan.md §4).
+ */
+export const AFK = Object.freeze({ mark: 10 * 60000, out: 30 * 60000 });
+
+/**
+ * A player's role in a world (generated/world_server_plan.md §7.4), as they came into it (Host.join):
+ * its owner, trusted, or a player.
+ */
+export const PLAYER_ROLES = Object.freeze(["owner", "trusted", "player"]);
+
+// What a player does that gets them up from resting (waiting on the rest to rest too: RULES rest
+// "everyone"): going somewhere, fighting, casting, trading
+const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle"]);
 
 /**
  * How long a camp's slept by, as the player chooses (host.js `#camp`'s `until`): so many of the
@@ -505,7 +543,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 26;
+export const SNAPSHOT_VERSION = 27;
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -683,9 +721,14 @@ export class Host {
      *     tavern's folk) are put in now; else by `populate()`, after whoever joins first.
      * @param {object} [options.war] - The war as it was kept (War snapshot), to carry on from;
      *     else it starts afresh (in a world with a plan: buildWorld's).
+     * @param {object} [options.rules] - The world's rules (RULES): those of a world a browser
+     *     hosts, to begin with.
      */
-    constructor(world, { seed = world.seed ?? 1, populate = true, war = null } = {}) {
+    constructor(world, { seed = world.seed ?? 1, populate = true, war = null, rules = RULES } = {}) {
         this.world = world;
+
+        /** The world's rules (RULES). */
+        this.rules = rulesOf(rules);
 
         /**
          * Told of everything done to the world, as it's done (docs/WAR.md M11: a world opened to
@@ -1005,12 +1048,14 @@ export class Host {
     /**
      * A player comes into the world: { id, hero, talks, explored } (their character, as kept:
      * app/save.js), at `square` on `map` (the world's start, to begin with; the nearest free
-     * square to it). Returns their record (players).
+     * square to it), in their `role` in it (PLAYER_ROLES: an owner, trusted, or a player). Returns their
+     * record (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town" }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player" }) {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
+        const as = PLAYER_ROLES.includes(role) ? role : "player";
 
-        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map }]);
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map, ...(as === "player" ? {} : { role: as }) }]);
 
         if (this.players.has(id)) {
             return this.players.get(id);
@@ -1031,6 +1076,15 @@ export class Host {
             offers: {},
             // A Scroll of Safety being read ({ until }: SAFETY), or none
             safety: null,
+            role: as,
+            // When they last gave a command (the battle's time), whether they're marked away
+            // for it (AFK), and whether they're to be sent out for it
+            lastCommand: this.battle.time,
+            away: false,
+            out: false,
+            // Resting, waiting on everyone else to rest too ({ where, until }: RULES rest
+            // "everyone"), or not
+            resting: null,
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -1181,6 +1235,9 @@ export class Host {
         this.players.delete(id);
         this.#event("leave", { id, name: player.hero.name });
 
+        // (Everyone left resting, waiting on them: their time passed now)
+        this.#restTogether();
+
         return character;
     }
 
@@ -1244,6 +1301,7 @@ export class Host {
      */
     command(playerId, command) {
         this.recorder?.(["c", playerId, structuredClone(command)]);
+        this.#active(playerId, command);
 
         try {
             const result = this.#command(playerId, command);
@@ -1419,7 +1477,7 @@ export class Host {
             case "table":
                 return this.#atTable(player, actor, command);
             case "fieldBattle":
-                return playerId === HOST_PLAYER ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
+                return this.debugs(playerId) ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             default:
                 return refuse("command");
         }
@@ -1471,7 +1529,8 @@ export class Host {
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
      * "close", "explored", "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
-     * once each of its turns is over).
+     * once each of its turns is over; "away", a player marked away or back, and "afk", one to be
+     * sent out of the world for it: AFK).
      */
     advance(ms) {
         this.recorder?.(["a", ms]);
@@ -1490,6 +1549,7 @@ export class Host {
         }
 
         this.#keepUp();
+        this.#idle();
 
         // (Asked to a party, and no answer in time: lapsed, the one who asked told)
         for (const [id, asked] of [...this.invites]) {
@@ -1880,6 +1940,7 @@ export class Host {
         return {
             version: SNAPSHOT_VERSION,
             seed: this.world.seed ?? null,
+            rules: { ...this.rules },
             made: [...(this.world.interiors?.order ?? [])],
             open: [...this.open.keys()],
             lookAt: this.lookAt,
@@ -1932,7 +1993,7 @@ export class Host {
             soldiers: [...this.soldiers.entries()],
             fielded: this.fielded,
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -1944,7 +2005,7 @@ export class Host {
     static restore(world, snapshot) {
         Host.#readable(snapshot);
 
-        const host = new Host(world, { seed: snapshot.battle.seed, populate: false, war: snapshot.war });
+        const host = new Host(world, { seed: snapshot.battle.seed, populate: false, war: snapshot.war, rules: snapshot.rules });
 
         host.#load(snapshot);
 
@@ -2007,6 +2068,7 @@ export class Host {
 
         host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b) });
         host.#wire();
+        host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
         host.worksOut = new Map(structuredClone(snapshot.worksOut ?? []));
@@ -2080,11 +2142,11 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety } of snapshot.players) {
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety, role, lastCommand, away, out, resting } of snapshot.players) {
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept) });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting) });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -8277,17 +8339,122 @@ export class Host {
     // A player asleep (at an inn, or by their camp's fire): if they're the world's host, its time
     // passed (as long as they chose to camp: CAMP_HOURS; else to the next sunrise or sunset at
     // least REST.least off; the war's turns meanwhile all played, as they would have been), and
-    // everyone told (each woken); anyone else just rests
+    // everyone told (each woken); anyone else just rests. In a world where everyone rests (RULES
+    // rest "everyone"), they rest till everyone in it is resting too (#restTogether)
     #sleep(player, actor, where, until = null) {
+        if (this.rules.rest === "everyone") {
+            player.resting = { where, until };
+            this.#restTogether();
+
+            return;
+        }
+
         const host = player.id === HOST_PLAYER;
-        const elapsed = elapsedOf(this.war);
-        const passed = host && this.war ? (until !== null ? campFor(elapsed, until) : untilWaking(elapsed, REST.least)) : 0;
+        const passed = host ? this.#restFor(until) : 0;
 
         if (passed) {
             this.#warOn(passed);
         }
 
         this.#event("slept", { id: actor.id, where, passed, ...(until !== null ? { until } : {}) });
+    }
+
+    // How long a rest passes the world's time (ms): as long as was chosen camping (CAMP_HOURS:
+    // `until`), else to the next sunrise or sunset at least REST.least off; none, with no war
+    #restFor(until) {
+        const elapsed = elapsedOf(this.war);
+
+        return this.war ? (until !== null ? campFor(elapsed, until) : untilWaking(elapsed, REST.least)) : 0;
+    }
+
+    // Everyone in the world resting at once (RULES rest "everyone"): its time passed by the
+    // shortest of their rests, and each woken, told how long it was (the rest that ended it); else
+    // those resting told how many they're waiting on
+    #restTogether() {
+        const players = [...this.players.values()];
+        const resting = players.filter(({ resting }) => resting);
+
+        if (!resting.length) {
+            return;
+        }
+
+        if (resting.length < players.length) {
+            this.#event("resting", { ids: resting.map(({ id }) => id), waiting: players.length - resting.length });
+
+            return;
+        }
+
+        const rests = resting.map(({ resting: rest }) => ({ ...rest, passed: this.#restFor(rest.until) }));
+        const shortest = rests.reduce((least, rest) => (rest.passed < least.passed ? rest : least));
+
+        if (shortest.passed) {
+            this.#warOn(shortest.passed);
+        }
+
+        resting.forEach((player, k) => {
+            player.resting = null;
+            this.#event("slept", { id: player.id, where: rests[k].where, passed: shortest.passed, ...(shortest.until !== null ? { until: shortest.until } : {}) });
+        });
+    }
+
+    /**
+     * Whether a player (by id) may use the debug commands (a field battle called up), by the
+     * world's rules (RULES debug): its host's player, its owners, or no one.
+     */
+    debugs(id) {
+        const player = this.players.get(id);
+
+        switch (this.rules.debug) {
+            case "host":
+                return id === HOST_PLAYER && Boolean(player);
+            case "owner":
+                return player?.role === "owner";
+            default:
+                return false;
+        }
+    }
+
+    // A player's command, whatever it is: they're not away (back, if they were marked so); and
+    // one that gets them up (STIRS) ends their rest
+    #active(id, command) {
+        const player = this.players.get(id);
+
+        if (!player) {
+            return;
+        }
+
+        player.lastCommand = this.battle.time;
+        player.out = false;
+
+        if (player.away) {
+            player.away = false;
+            this.#event("away", { id, away: false });
+        }
+
+        if (player.resting && STIRS.has(command?.type)) {
+            player.resting = null;
+            this.#event("rose", { id });
+        }
+    }
+
+    // Players who've given no command for a while (AFK): marked away, then (any but the host's
+    // own player) to be sent out of the world, everyone told (core/runner.js sends them out)
+    #idle() {
+        const now = this.battle.time;
+
+        for (const player of this.players.values()) {
+            const idle = now - player.lastCommand;
+
+            if (!player.away && idle >= AFK.mark) {
+                player.away = true;
+                this.#event("away", { id: player.id, away: true, name: player.hero.name });
+            }
+
+            if (!player.out && idle >= AFK.out && player.id !== HOST_PLAYER) {
+                player.out = true;
+                this.#event("afk", { id: player.id, name: player.hero.name });
+            }
+        }
     }
 
     // --- Standing in their people (core/standing.js) ---

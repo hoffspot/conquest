@@ -191,6 +191,9 @@ export class Hud {
         this.partyButton = root.querySelector("#partybutton");
         this.tracked = new Map();
 
+        /** The players marked away (AFK: core/host.js), by id: marked by their names. */
+        this.away = new Set();
+
         /** The id of the player the plate's for (this game's own: app/game.js me). */
         this.playerId = "player";
         this.bannerTimer = null;
@@ -289,6 +292,11 @@ export class Hud {
         if (level) {
             plate.querySelector(".name").append(element("span", "level", String(level)));
         }
+
+        if (this.away.has(id)) {
+            this.#markAway(plate, true);
+        }
+
         this.floaters.append(plate);
         this.tracked.set(id, plate);
         this.setHealth(id, hp, maxHp);
@@ -992,6 +1000,38 @@ export class Hud {
 
     #plateOf(id) {
         return this.tracked.get(id) ?? (id === this.playerId ? this.plate : null);
+    }
+
+    /**
+     * Mark a player away (AFK: core/host.js), or back: "AFK" by their name, on the player's own
+     * card or over another's bar (kept, for a bar shown later).
+     */
+    setAway(id, away) {
+        if (away) {
+            this.away.add(id);
+        } else {
+            this.away.delete(id);
+        }
+
+        const plate = this.#plateOf(id);
+
+        if (plate) {
+            this.#markAway(plate, away);
+        }
+    }
+
+    #markAway(plate, away) {
+        const name = plate.querySelector(".name");
+        const mark = name?.querySelector(".afk");
+
+        if (away && name && !mark) {
+            const afk = element("span", "afk", "AFK");
+
+            afk.title = "Away from the game";
+            name.append(afk);
+        } else if (!away) {
+            mark?.remove();
+        }
     }
 
     #setBar(plate, hp, maxHp) {

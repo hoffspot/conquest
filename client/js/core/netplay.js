@@ -26,6 +26,10 @@
 // the host found them, and taken by a joined copy rather than found again: what each copy has of
 // the meshes (made as each has needed them) doesn't matter.
 //
+// A player who's given no command for a long while is sent out of it (core/host.js AFK: their
+// copy, and everyone's, knows it at the same step; the host sends them out, and that's recorded
+// as any leaving is: Hosting.kick).
+//
 // What's said in a party (party chat) isn't done to the world, and isn't for everyone in it: a
 // line goes to the host, which sends it on to those in the sayer's party alone (Hosting.chat),
 // so no one else's game ever has it.
@@ -46,6 +50,7 @@
 //                    { kind: "refused", reason }
 //                    { kind: "chat", from, name, text }        (a line said in their party)
 //                    { kind: "unsaid", reason }                (one of theirs not said: CHAT_REFUSED)
+//                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long)
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
@@ -57,7 +62,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 111;
+export const NET_VERSION = 112;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -88,6 +93,11 @@ export const NET_REFUSALS = Object.freeze({
     version: "That world's being played in another version of the game.",
     full: "That world's full.",
     character: "Your character couldn't be brought into that world.",
+});
+
+/** Why a player was sent out of a world (Hosting.kick), as they're told it. */
+export const NET_KICKS = Object.freeze({
+    afk: "Disconnected for being away.",
 });
 
 /**
@@ -185,6 +195,9 @@ export class Hosting {
         /** Told when a player comes (id, peer) or goes (id, peer, their character as it's to be kept). */
         this.onJoin = () => {};
         this.onLeave = () => {};
+
+        /** Told when one's sent out (peer), once they've been told why: to close their link. */
+        this.onKick = () => {};
 
         /** Told each line said in the host's own player's party: { from, name, text }. */
         this.onChat = () => {};
@@ -473,6 +486,26 @@ export class Hosting {
         }
     }
 
+    /**
+     * One who'd joined (by their player's id) sent out of the world, told why (`reason`: "afk",
+     * away too long: core/host.js AFK), after all that's been done till now; then gone, as if
+     * they'd left. Returns whether they were here.
+     */
+    kick(id, reason) {
+        const peer = [...this.players].find(([, player]) => player === id)?.[0];
+
+        if (peer === undefined) {
+            return false;
+        }
+
+        this.flush();
+        this.#send(peer, "kicked", encode({ kind: "kicked", reason }));
+        this.gone(peer);
+        this.onKick(peer);
+
+        return true;
+    }
+
     /** One who'd joined has gone: out of the world. */
     gone(peer) {
         const id = this.players.get(peer);
@@ -554,10 +587,14 @@ export class Joining {
         /** Whether the host's world is stopped (its page hidden), as the host's said. */
         this.paused = false;
 
-        /** Told when the world's come (the welcome), come again (the state), or they're turned away (a reason). */
+        /**
+         * Told when the world's come (the welcome), come again (the state), or they're turned away
+         * (a reason); and when they're sent out of it (a reason: "afk").
+         */
         this.onWelcome = () => {};
         this.onState = () => {};
         this.onRefused = () => {};
+        this.onKicked = () => {};
 
         /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
         this.onPong = () => {};
@@ -638,6 +675,9 @@ export class Joining {
                 break;
             case "refused":
                 this.onRefused(message.reason);
+                break;
+            case "kicked":
+                this.onKicked(message.reason);
                 break;
             case "chat": {
                 const text = chatLine(message.text);

@@ -2296,6 +2296,22 @@ second of its time; and has the navigation round each player baked ahead. The wo
 run its worlds with the same code, a timer giving the time, so the two can't drift apart. It can
 time each step (mean, worst, 99th percentile), for the server's health page.
 
+**Away from the game** (core/host.js `AFK`; generated/world_server_plan.md §4). A player who's
+given no command for 10 minutes of the world's time is marked away: "AFK" by their name, over
+their head and on their own card, while there's anyone else in the world to see it; it goes as
+soon as they do anything. After 30 minutes they're sent out of the world ("Disconnected for being
+away.", `NET_KICKS`), their hero leaving as on any exit; never the host's own player, who is the
+world. Each player's last command is kept in the world (its snapshot), so every copy marks them
+at the same step; the host sends them out (`Hosting.kick`, from core/runner.js), and their going
+is recorded as any going is. (`SNAPSHOT_VERSION` 27; `NET_VERSION` 112.)
+
+**Worlds with no host player** (core/host.js `RULES`; generated/world_server_plan.md §3.2). A
+world keeps its rules with it, so every copy plays by them. A world a browser hosts has today's:
+its host's player passes the time by sleeping, and may call up a field battle (debug). A world a
+world server runs has no `HOST_PLAYER`: its time passes only once everyone in it is resting
+(docs/GAME.md *Passing the time*), and its debug commands are its owners' (a player's `role`, as
+they come in: owner, trusted or player), or no one's.
+
 **Parties** (core/host.js `PARTY`, the `party` command; the party menu, docs/GAME.md *The
 party*). Players play together as a party of up to four (`PARTY.most`):
 - **Asked.** Anyone in a party, or in none, asks another player who's in none (`invite`). The one
