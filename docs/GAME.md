@@ -3186,7 +3186,15 @@ about a minute to come). So with a battle's soldiers about the player (more than
 own guards never are: `MARSHAL.from`), those nearest, and whoever's fighting the player, are drawn
 in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10), and the
 rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the crowd
-only once it's 3 places past the last drawn in full):
+only once it's 3 places past the last drawn in full). Fewer soldiers than a battle's are drawn in
+their crowds too once there's no room for them in full: a phone holds only so many bodies drawn
+in full, each about ten megabytes between the page and its graphics card (an iPhone's tab was
+let go with 54 of them on Low, by a capital's guards and townsfolk and a caravan's escort passing;
+steady at 40), so the soldiers about are drawn in full only as far as the quality's budget leaves
+room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on Low and Medium,
+24 on High, its skins four times the pixels; never fewer than `soldiers.full`), the rest in
+their crowds, their bodies in full let go. The debug log says how many soldiers were about and
+how many had room (`soldiers`):
 
 - **One figure for each kind.** A soldier of each people, sex and weapon (`human:m:sword`) is
   built once, as a template: a character as any soldier is (`soldierLook`), its weapon drawn. Its

@@ -852,6 +852,8 @@ export class Game {
                 pixels: view.adaptiveScale,
                 adaptive: view.adaptive,
                 inFull: Number.isFinite(this.throng.full) ? this.throng.full : "all",
+                // (The soldiers about, and how many of them the bodies' budget left room for in full: #marshal)
+                soldiers: this.marshalled ? { ...this.marshalled, room: Number.isFinite(this.marshalled.room) ? this.marshalled.room : "all" } : null,
                 bodies: { ...this.stats.bodies },
                 actors: this.battle.actors.length,
                 avatars: this.avatars.size,
@@ -3111,11 +3113,28 @@ export class Game {
         return Boolean(avatar) && !(avatar instanceof CrowdAvatar);
     }
 
+    // How many bodies are held in full (drawn as themselves, on any map, a building's folk too) or
+    // being built so, of those `counted` (by id): what the memory holds most of (QUALITY bodies)
+    #heldInFull(counted = () => true) {
+        const held = new Set([...this.enlisting, ...this.enlistees.keys()].filter(counted));
+
+        for (const [id, avatar] of this.avatars) {
+            if (!(avatar instanceof CrowdAvatar) && counted(id)) {
+                held.add(id);
+            }
+        }
+
+        return held.size;
+    }
+
     // The soldiers about drawn in full or in the crowds (world/crowd.js, MARSHAL): with a battle's
     // near the player (more than MARSHAL.from), those nearest (whoever's fighting the player
     // first) in full (QUALITY soldiers), the rest in their kind's crowd once its figure's made;
-    // one waiting on its kind's figure not drawn meanwhile, nor built in full (but where it can't
-    // be made). A couple of times a second
+    // fewer, as many as there's room for in full (QUALITY bodies: a phone's memory holds only so
+    // many, each ten megabytes or so, page and graphics card), as many as the quality's budget
+    // leaves beside everyone else drawn in full (a capital's guards and townsfolk, and a caravan's
+    // escort passing: #heldInFull), never fewer than a battle's. One waiting on its kind's figure
+    // not drawn meanwhile, nor built in full (but where it can't be made). A couple of times a second
     #marshal(dt) {
         if ((this.marshalClock = (this.marshalClock ?? 0) - dt) > 0) {
             return;
@@ -3132,10 +3151,18 @@ export class Game {
 
         const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
         const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+        const ids = new Set(soldiers.map(({ id }) => id));
+        // (How many of them can be drawn in full: in a battle the quality's own, else as many as
+        // the bodies' budget has room for beside everyone else drawn in full, or to be)
+        const room = soldiers.length > MARSHAL.from ? full : Math.max(full, (this.view.quality.bodies ?? Infinity) - this.#heldInFull((id) => !ids.has(id)));
 
-        if ((soldiers.length <= MARSHAL.from || soldiers.length <= full) && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
+        if (soldiers.length <= room && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
+            this.marshalled = { soldiers: soldiers.length, room };
+
             return;
         }
+
+        this.marshalled = { soldiers: soldiers.length, room };
 
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
@@ -3146,7 +3173,7 @@ export class Game {
             const avatar = this.avatars.get(actor.id);
             const crowded = avatar instanceof CrowdAvatar;
 
-            if (place < full) {
+            if (place < room) {
                 // (In full: built, the crowd's in its place till it is)
                 if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                     this.enlisting.push(actor.id);
@@ -3155,7 +3182,7 @@ export class Game {
                 return;
             }
 
-            if (crowded || (avatar && place < full + MARSHAL.margin)) {
+            if (crowded || (avatar && place < room + MARSHAL.margin)) {
                 return;
             }
 
@@ -3184,7 +3211,7 @@ export class Game {
 
             if (!actor || this.avatars.has(id)) {
                 this.crowdWaiting.delete(id);
-            } else if (this.crowds.failed(this.#crowdKind(actor).key) || !ranked.some(([, each], place) => each === actor && place >= full)) {
+            } else if (this.crowds.failed(this.#crowdKind(actor).key) || !ranked.some(([, each], place) => each === actor && place >= room)) {
                 this.crowdWaiting.delete(id);
 
                 if (!this.enlisting.includes(id) && !this.enlistees.has(id)) {

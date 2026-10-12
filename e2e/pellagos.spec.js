@@ -9997,6 +9997,102 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(lying.row).toBeLessThan(lying.to);
 });
 
+test("soldiers about the player past the bodies the quality's memory can hold in full (fewer than a battle's), the nearest drawn in full and the rest in their crowds, their full bodies let go; the debug log says how many had room", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // (Out of town on open ground, as the field battle's; a budget with room for five soldiers in
+    // full beside everyone else held so, where a phone's might be full with a capital's townsfolk)
+    const ground = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const squares = game.world.maps?.town?.squares ?? game.world.squares;
+        const open = (x0, y0) => {
+            for (let y = y0 - 50; y < y0 + 10; y += 2) {
+                for (let x = x0 - 20; x < x0 + 20; x += 2) {
+                    if (squares.blocked(x, y) || squares.opaque(x, y)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let r = 60; r < 1500; r += 20) {
+            for (let a = 0; a < 24; a++) {
+                const [x, y] = [Math.round(me.x + r * Math.cos((a * Math.PI) / 12)), Math.round(me.y + r * Math.sin((a * Math.PI) / 12))];
+
+                if (open(x, y)) {
+                    game.host.battle.place(game.me, "town", [x, y], { facing: Math.PI });
+
+                    return [x, y];
+                }
+            }
+        }
+
+        return null;
+    });
+
+    expect(ground).not.toBeNull();
+    await playUntil(page, () => false, { seconds: 3 });
+
+    const most = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const quality = session.view.quality;
+        const others = [...game.avatars.values()].filter((avatar) => avatar.constructor.name !== "CrowdAvatar").length;
+
+        session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 5 };
+
+        // (Two lines of six: twelve soldiers, fewer than a battle's 24, all drawn in full till now)
+        game.fieldBattle(6);
+        window.held = {};
+
+        for (const [id, { to, advance }] of Object.entries(game.battle.formations)) {
+            window.held[id] = { to, advance };
+            game.battle.formation(id, { to: null, advance: false });
+        }
+
+        return 5;
+    });
+
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const building = [...game.enlisting, ...game.enlistees.keys()].some((id) => game.battle.actor(id)?.kind === "soldier");
+
+        return fielded.length === 12 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building && game.crowdWaiting.size === 0;
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 150 })).toBe(true);
+
+    const seen = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const crowd = (id) => game.avatars.get(id)?.constructor.name === "CrowdAvatar";
+        // (Every soldier about whom the budget counts: the field's and any of a place nearby)
+        const about = game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && !dead && game.host.soldiers.has(id) && game.avatars.has(id));
+
+        return { soldiers: fielded.length, crowded: fielded.filter(({ id }) => crowd(id)).length, inFull: about.filter(({ id }) => !crowd(id)).length, logged: game.telemetryState().soldiers };
+    });
+
+    // (Room for as many as the budget leaves beside everyone else held in full or to be: five at
+    // most, never fewer than the quality's own two; the nearest of them in full (and up to 3 more
+    // drawn so already, let go only once they're further: app/game.js MARSHAL), the rest in their
+    // kind's crowd, their full bodies let go)
+    const { room } = seen.logged;
+
+    expect(seen.soldiers).toBe(12);
+    expect(seen.logged.soldiers).toBeGreaterThanOrEqual(12);
+    expect(room).toBeGreaterThanOrEqual(2);
+    expect(room).toBeLessThanOrEqual(most);
+    expect(seen.inFull).toBeLessThanOrEqual(room + 3);
+    expect(seen.crowded).toBeGreaterThanOrEqual(12 - room - 3);
+});
+
 test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits, wolves and spiders stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
     test.setTimeout(240000);
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "low" })));
