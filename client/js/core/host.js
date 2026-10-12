@@ -1559,6 +1559,12 @@ export class Host {
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
 
+            // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
+            // has a share of it once it's opened, wherever they are by then: #cacheFell)
+            if ((event.type === "hit" || event.type === "death") && event.by) {
+                this.#foughtFor(this.wild.get(event.id)?.cache, event.by);
+            }
+
             if (event.type === "death" && event.id === "orc" && !this.players.has(event.by) && !this.followers.has(event.by) && !this.companions.has(event.by)) {
                 const orc = this.battle.actor("orc");
 
@@ -6351,18 +6357,20 @@ export class Host {
     }
 
     // A place's chest (`kind`: "chest", or a dragon's "hoard"; or an adventurers' "cache") opened:
-    // in its stead, a share of what's in it for each player at the place (core/progress.js LOOT:
+    // in its stead, a share of what's in it for each player at the place, and each who `fought` for
+    // it wherever they are (told so: `away`) (core/progress.js LOOT:
     // the gear in it of the place's `people`, a human's at the ruins and the caves; more gold the
     // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
     // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
     // alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, tier, relic = false }) {
+    #opened(id, kind, { at, maps, map, square, people, tier, relic = false, fought = [] }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
+            const there = Boolean(actor) && this.#atPlace(actor, at, maps);
 
-            if (!actor || actor.dead || !this.#atPlace(actor, at, maps)) {
+            if (!actor || actor.dead || (!there && !fought.includes(player.id))) {
                 continue;
             }
 
@@ -6376,7 +6384,7 @@ export class Host {
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map, square: [...square], until: this.battle.time + GROUND_MS });
             // (Told of the relic in it by name, if there's one: the last thing in it)
-            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(kind === "cache" ? { cache: true } : {}), ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(kind === "cache" ? { cache: true } : {}), ...(there ? {} : { away: true }), ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
         }
     }
 
@@ -6538,7 +6546,9 @@ export class Host {
     }
 
     // One of a cache's guards fallen: once every one of them is, it's opened, a share of what's in
-    // it for each player near
+    // it for each player near, and for each who fought its guards (`fought`), however far they
+    // drew them off it (the user: "I kited off the bandit chief and killed him fairly far from the
+    // adventurer's cache and killed his bandit companions and no chest showed up at the mark")
     #cacheFell(id) {
         const cache = this.caches.get(id);
 
@@ -6547,8 +6557,20 @@ export class Host {
         }
 
         cache.opened = true;
-        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier });
+        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier, fought: cache.fought ?? [] });
         this.#event("cache", { cache: id, change: "opened" });
+    }
+
+    // A player, or one of theirs (`by`: a follower, a creature called or raised), fighting a
+    // cache's guards (cache `id`): kept with it (`fought`, by player), a share theirs once it's opened
+    #foughtFor(id, by) {
+        const cache = id ? this.caches.get(id) : null;
+        const actor = cache ? this.battle.actor(by) : null;
+        const owner = actor ? this.#ownerOf(actor) : null;
+
+        if (owner && this.players.has(owner) && !cache.fought?.includes(owner)) {
+            (cache.fought ??= []).push(owner);
+        }
     }
 
     // --- The dungeons (core/dungeons: docs/DUNGEONS.md) ---

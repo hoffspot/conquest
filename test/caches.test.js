@@ -286,6 +286,38 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: share.id }).ok, true);
     });
 
+    it("its guards drawn off and put down far from it: opened all the same, a share for each who fought them waiting at it, told so", () => {
+        const context = hosted();
+        const { host, me } = context;
+
+        walk(context);
+
+        const [cache] = host.caches.values();
+        const leader = host.battle.actor(cache.ids[0]);
+
+        // (Their leader struck: the player kept with it as having fought for it)
+        put(me, [Math.floor(leader.x) - 1, Math.floor(leader.y)]);
+        assert.equal(host.command(HOST_PLAYER, { type: "engage", target: leader.id }).ok, true);
+        assert.ok(run(host, 3000).some((event) => event.type === "hit" && event.by === HOST_PLAYER && event.id === leader.id), "struck");
+        assert.deepEqual(cache.fought, [HOST_PLAYER]);
+
+        // Drawn off well past its reach (the user kited the bandit chief off it), and all put down there
+        put(me, [Math.floor(cache.at[0] + 120), Math.floor(cache.at[1])]);
+
+        for (const id of cache.ids) {
+            host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        const events = run(host, 3000);
+        const told = events.find((event) => event.type === "spoils" && event.cache);
+        const share = host.ground.get(told?.ground);
+
+        assert.ok(cache.opened, "opened");
+        assert.equal(told?.away, true, "told it waits at the cache");
+        assert.ok(share && share.for === HOST_PLAYER && share.bundle.gold > 0, "a share for the one who fought for it");
+        assert.deepEqual(share.square, cache.chest, "where the cache stood");
+    });
+
     it("is as strong as a mighty player near it; let go, guards and all, once every player's far", () => {
         const context = hosted();
         const { host, me } = context;
