@@ -2709,8 +2709,17 @@ from them to the camera (`INTERIOR_CUT`: the player's position, the direction to
 the floor's bounds, set each frame by `cutFor`). In it, the walls (and what's on them: posts,
 beams, lintels, doorway curtains, windows, sconces, the chimney breast and the door) come down to
 their stone footing (built apart, and never cut), a whole square's length at a time, as each
-square's middle is in the strip or not (the walls round the edge counting as the square inside
-them), so a wall is never sliced along its length; and anything else above head height (1.7
+square's middle is in the strip or not (a square round the edge judged where the edge runs
+through it), so a wall is never sliced along its length. Only what of a wall stands between the
+player and the camera comes down, so a wall behind them stays however near it they stand,
+whichever way the camera looks from in front of them: a wall through the floor (upstairs, between
+the bedrooms and the hallway: cut as `wall` "x" or "z", the way it runs) where it stands across its
+run between them; the walls round the edge, and whatever's in a square along them (a hearth, the
+shelves, a quest board, a banner, a pillar by the wall), where it stands further in from the
+edge than the camera and less far than the player (counted as at least 0.1 metres in, in a
+doorway, say), so with the camera beyond a wall all of it in the strip comes down, and with the
+camera in the room only what stands out from the wall further than the player does; and anything
+else above head height (1.7
 metres: bed canopies, the shelves over the barrels) that's no more than half a metre over the line
 from the camera to the player's head, so looking up from low down, a wheel of candles overhead
 stays. Every other wall stands full height, so the

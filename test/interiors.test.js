@@ -759,14 +759,15 @@ describe("seeing the player indoors (interiors3d.js)", () => {
     it("takes down the walls in front of the player, a strip about five metres wide from them to the camera, and leaves every other wall standing", () => {
         standing();
 
-        // The hallway's south wall, just in front of them: down, from the floor up
-        assert.equal(cutsAway(at(10.5, 0.5, 9.5), { wall: true }), true);
-        assert.equal(cutsAway(at(10.5, 2.8, 9.5), { wall: true }), true);
+        // The hallway's south wall (through the floor, along x), just in front of them: down,
+        // from the floor up
+        assert.equal(cutsAway(at(10.5, 0.5, 9.5), { wall: "x" }), true);
+        assert.equal(cutsAway(at(10.5, 2.8, 9.5), { wall: "x" }), true);
 
         // Off to the side, behind them, or level with them: standing
-        assert.equal(cutsAway(at(16.5, 1.5, 9.5), { wall: true }), false, "6 metres to the side");
-        assert.equal(cutsAway(at(10.5, 1.5, 5.5), { wall: true }), false, "behind them");
-        assert.equal(cutsAway(at(8.5, 1.5, 7.5), { wall: true }), false, "level with them");
+        assert.equal(cutsAway(at(16.5, 1.5, 9.5), { wall: "x" }), false, "6 metres to the side");
+        assert.equal(cutsAway(at(10.5, 1.5, 5.5), { wall: "x" }), false, "behind them");
+        assert.equal(cutsAway(at(8.5, 1.5, 7.5), { wall: "z" }), false, "level with them");
     });
 
     it("takes a wall down a whole square at a time, never slicing along one", () => {
@@ -775,18 +776,113 @@ describe("seeing the player indoors (interiors3d.js)", () => {
         // Square 12 of the wall (its middle 2 metres to the side) is in the strip, all of it;
         // square 13 (3 metres) isn't, none of it
         for (const x of [12.05, 12.5, 12.95]) {
-            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: true }), true, `${x}`);
+            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: "x" }), true, `${x}`);
         }
 
         for (const x of [13.05, 13.5, 13.95]) {
-            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: true }), false, `${x}`);
+            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: "x" }), false, `${x}`);
         }
 
-        // Round the edge: the outer wall's inside face, middle and outside face count as one
-        // square (the one inside it)
+        // Round the edge, the camera beyond the south wall: its inside face, middle and outside
+        // face count as one square (judged where the edge runs through it)
+        cutFor(upstairs, new THREE.Vector3(ox + 10.5, 0, oz + 7.5), new THREE.Vector3(ox + 10.5, 7, oz + 18));
+
         const outer = [upstairs.height, upstairs.height + 0.15, upstairs.height + 0.3].map((z) => cutsAway(at(10.5, 1.5, z), { wall: true }));
 
         assert.deepEqual(outer, [true, true, true]);
+    });
+
+    it("leaves a wall behind the player standing, however near it they stand and whichever way the camera looks from in front of them", () => {
+        // A hall the guild's size, the player close to its north wall (where the guild's shelves
+        // and banners are), the camera anywhere to the south of them, in the hall or out of it
+        const hall = { origin: [5000, 300], width: 20, height: 16 };
+        const [hx, hz] = hall.origin;
+        const player = new THREE.Vector3(hx + 9.4, 0, hz + 0.3);
+
+        for (let turn = -75; turn <= 75; turn += 15) {
+            for (const far of [4, 7, 20]) {
+                const angle = (turn * Math.PI) / 180;
+
+                cutFor(hall, player, new THREE.Vector3(player.x + far * Math.sin(angle), 6, player.z + far * Math.cos(angle)));
+
+                for (let x = 5.05; x < 15; x += 0.3) {
+                    // The wall, its inside face, and a banner on it
+                    for (const z of [-0.3, -0.15, 0, 0.06]) {
+                        assert.equal(cutsAway([hx + x, 1.5, hz + z], { wall: true }), false, `${turn}° ${far} m: ${x.toFixed(2)}, ${z}`);
+                    }
+                }
+            }
+        }
+
+        // Nor the wall they walk along with the camera behind them in the hall
+        const along = new THREE.Vector3(hx + 0.3, 0, hz + 8);
+
+        cutFor(hall, along, new THREE.Vector3(along.x + 0.5, 6, along.z + 6));
+
+        for (let z = 2.05; z < 16; z += 0.5) {
+            assert.equal(cutsAway([hx - 0.15, 1.5, hz + z], { wall: true }), false, `${z.toFixed(2)}`);
+        }
+
+        // Turned round, the camera beyond that north wall: the squares in front of them are down
+        cutFor(hall, player, new THREE.Vector3(player.x, 6, player.z - 6));
+
+        for (const x of [8.5, 9.5, 10.5]) {
+            assert.equal(cutsAway([hx + x, 1.5, hz - 0.15], { wall: true }), true, `${x}`);
+        }
+    });
+
+    it("takes down the wall in front of a player pressed against it, all its thickness, and in a doorway too", () => {
+        const hall = { origin: [5000, 300], width: 20, height: 16 };
+        const [hx, hz] = hall.origin;
+
+        // Close to the south wall, the camera beyond it: the square just in front of them is down
+        cutFor(hall, new THREE.Vector3(hx + 9.5, 0, hz + 15.7), new THREE.Vector3(hx + 9.5, 6, hz + 22));
+        assert.equal(cutsAway([hx + 9.5, 1.5, hz + 16.15], { wall: true }), true);
+
+        // In the doorway, the camera beyond the wall off to one side: the wall beside them, its
+        // inside face and its outside face alike
+        cutFor(hall, new THREE.Vector3(hx + 10, 0, hz + 16.15), new THREE.Vector3(hx + 13, 6, hz + 21.2));
+
+        for (const x of [11.5, 12.5]) {
+            const faces = [16.05, 16.15, 16.25].map((z) => cutsAway([hx + x, 1.5, hz + z], { wall: true }));
+
+            assert.deepEqual(faces, [true, true, true], `${x}`);
+        }
+    });
+
+    it("cuts what stands out from a wall where it's further in than the player, between them and the camera", () => {
+        // A hearth on the east wall (0.9 metres deep), the player just north of it close to the
+        // wall, the camera to the south in the hall: its front's down, the wall behind it isn't
+        const hall = { origin: [5000, 300], width: 20, height: 16 };
+        const [hx, hz] = hall.origin;
+
+        cutFor(hall, new THREE.Vector3(hx + 19.7, 0, hz + 5.3), new THREE.Vector3(hx + 18.7, 6, hz + 12));
+        assert.equal(cutsAway([hx + 19.1, 1.5, hz + 7], { wall: true }), true, "the hearth's front");
+        assert.equal(cutsAway([hx + 19.9, 1.5, hz + 7], { wall: true }), false, "its back, nearer the wall than they are");
+        assert.equal(cutsAway([hx + 20.15, 1.5, hz + 7], { wall: true }), false, "the wall");
+    });
+
+    it("takes down a wall through the floor only where it stands between the player and the camera", () => {
+        // Close to the hallway's north wall (row 5), the camera off to the south-east: none of it
+        // comes down
+        cutFor(upstairs, new THREE.Vector3(ox + 12.5, 0, oz + 5.95), new THREE.Vector3(ox + 15.5, 6, oz + 11.95));
+
+        for (const x of [12.5, 13.5, 14.5]) {
+            for (const z of [5.41, 5.59]) {
+                assert.equal(cutsAway(at(x, 1.5, z), { wall: "x" }), false, `${x}, ${z}`);
+            }
+        }
+
+        // In the bedroom over it, close to the north wall, the camera off to the east beyond the
+        // wall between the bedrooms: all of that wall's down in front of them, the end of it
+        // meeting the north wall too; the north wall behind them isn't
+        cutFor(upstairs, new THREE.Vector3(ox + 11.5, 0, oz + 0.4), new THREE.Vector3(ox + 18.5, 6, oz + 0.4));
+
+        for (const z of [0.05, 0.5, 1.5]) {
+            assert.equal(cutsAway(at(13.41, 1.5, z), { wall: "z" }), true, `${z}`);
+        }
+
+        assert.equal(cutsAway(at(12.5, 1.5, -0.15), { wall: true }), false, "the north wall");
     });
 
     it("cuts anything else in front of them only above head height", () => {

@@ -18,9 +18,10 @@
 // is lower than the camera isn't drawn: so from under it, all of it, and from over it, none).
 // What stands in front of the player (INTERIOR_CUT, set each frame by the game: a strip from them
 // towards the camera) is cut away: walls down to their stone footing, a whole square's length at a
-// time, and anything else above head height that's in the way of seeing them, so the player is
-// always in view whichever way the camera looks, and every other wall stands full height; where a
-// cut shows the inside of something, it's dark wood, as if solid.
+// time (only those standing between the player and the camera), and anything else above head
+// height that's in the way of seeing them, so the player is always in view whichever way the
+// camera looks, and every other wall stands full height; where a cut shows the inside of
+// something, it's dark wood, as if solid.
 //
 // The rooms are lit by what would light them: the daylight through their windows (open to it,
 // leaded panes in them, the view's sun shining in through the windows on the sunny side, beams
@@ -50,12 +51,14 @@ export const STOREY = 3;
  * of them (more than `margin` metres nearer the camera than they are, and less than `width` metres
  * to either side of the line from them to it) is cut away: walls (above their footing, which is
  * built apart and never cut) altogether, a square at a time (whether each square's middle is in
- * front of them: the walls round the edge, the square inside them, within `bounds`, the floor
- * shown: x0, z0, x1, z1 in world metres), and everything else above `height` metres that's no
- * higher than `over` metres above the line from the camera to the player's head (`head` metres
- * up: what's higher than that is above the player as seen, and hides nothing of them); where the
- * inside of something cut shows, it's `cap`. The ceilings aren't cut so, but where they're lower
- * than the camera (seen from above) aren't drawn at all.
+ * front of them, within `bounds`, the floor shown: x0, z0, x1, z1 in world metres; a square round
+ * the edge by where the edge runs through it), and only what of them stands between the player
+ * and the camera (as cutsAway has it: so a wall behind the player stays, however near it they
+ * stand); and everything else above `height` metres that's no higher than `over` metres above the
+ * line from the camera to the player's head (`head` metres up: what's higher than that is above
+ * the player as seen, and hides nothing of them); where the inside of something cut shows, it's
+ * `cap`. The ceilings aren't cut so, but where they're lower than the camera (seen from above)
+ * aren't drawn at all.
  */
 export const INTERIOR_CUT = Object.freeze({
     player: { value: new THREE.Vector3() },
@@ -80,10 +83,20 @@ export function cutFor(map, player, camera) {
     INTERIOR_CUT.bounds.value.set(ox, oz, ox + map.width, oz + map.height);
 }
 
+// How far in from the edge the player's counted as standing, at least (in a doorway, say), as the
+// walls round it are cut: so what stands proud of a wall by less (its posts and beam, the door's
+// frame) goes with it
+const INSIDE = 0.1;
+
 /**
  * Whether a point (world metres) is cut away, as the interior materials' shaders decide it:
  * `wall` for a wall's (a square at a time, from the floor up), `ceiling` for a ceiling's (lower
  * than the camera), else anything else's (above head height, in the way of seeing the player).
+ * A wall's cut only where it stands between the player and the camera: one through the floor
+ * (`wall` "x" or "z", the way it runs) as where it stands across its run is; one round the edge,
+ * and anything else in a square on the edge (`wall` true: what's on the wall, a hearth, a pillar
+ * by it), as how far in from the edge it stands is (the nearest edge its square's on), its square
+ * judged where the edge runs through it; any other (a pillar, rock) wherever it is.
  * Pure maths on INTERIOR_CUT, for tests.
  */
 export function cutsAway([x, y, z], { wall = false, ceiling = false } = {}) {
@@ -93,25 +106,60 @@ export function cutsAway([x, y, z], { wall = false, ceiling = false } = {}) {
         return y < camera.value.y;
     }
 
-    const inside = (value, least, most) => Math.min(most - 0.001, Math.max(least + 0.001, value));
-    const [px, pz] = wall ? [Math.floor(inside(x, bounds.value.x, bounds.value.z)) + 0.5, Math.floor(inside(z, bounds.value.y, bounds.value.w)) + 0.5] : [x, z];
-    const [dx, dz] = [px - player.value.x, pz - player.value.z];
+    const [x0, z0, x1, z1] = bounds.value.toArray();
+    const [px, pz, kx, kz] = [player.value.x, player.value.z, camera.value.x, camera.value.z];
+    const between = (at, from, to) => (at - from) * (at - to) < 0;
+    let [ax, az] = [x, z];
+    let inWay = true;
+
+    if (wall) {
+        const inside = (value, least, most) => Math.min(most - 0.001, Math.max(least + 0.001, value));
+        const [sx, sz] = [Math.floor(inside(x, x0, x1)), Math.floor(inside(z, z0, z1))];
+
+        [ax, az] = [sx + 0.5, sz + 0.5];
+
+        if (wall === "x" || wall === "z") {
+            inWay = wall === "x" ? between(z, pz, kz) : between(x, px, kx);
+        } else {
+            // The edges its square's on: how far in from each it stands, the player (at least
+            // INSIDE) and the camera, and where along it the square's judged; the nearest (the
+            // first, if two are as near)
+            const edges = [
+                [sx < x0 + 0.5, x - x0, px - x0, kx - x0, [x0, az]],
+                [sz < z0 + 0.5, z - z0, pz - z0, kz - z0, [ax, z0]],
+                [sx > x1 - 1.5, x1 - x, x1 - px, x1 - kx, [x1, az]],
+                [sz > z1 - 1.5, z1 - z, z1 - pz, z1 - kz, [ax, z1]],
+            ].filter(([on]) => on);
+            const edge = edges.reduce((nearest, next) => (next[1] < nearest[1] ? next : nearest), edges[0]);
+
+            if (edge) {
+                const [, at, from, to, judged] = edge;
+
+                inWay = between(at, Math.max(INSIDE, from), to);
+                [ax, az] = judged;
+            }
+        }
+    }
+
+    const [dx, dz] = [ax - px, az - pz];
     const [tx, tz] = [toCamera.value.x, toCamera.value.y];
     const along = dx * tx + dz * tz;
     const across = Math.abs(-dx * tz + dz * tx);
     const [eye, top] = [player.value.y + head.value, camera.value.y];
-    const sight = eye + (top - eye) * Math.min(1, along / Math.max(0.01, Math.hypot(camera.value.x - player.value.x, camera.value.z - player.value.z)));
-    const low = wall || y < sight + over.value;
+    const sight = eye + (top - eye) * Math.min(1, along / Math.max(0.01, Math.hypot(kx - px, kz - pz)));
+    const low = Boolean(wall) || y < sight + over.value;
 
-    return y - player.value.y > (wall ? 0 : height.value) && along > margin.value && across < width.value && low;
+    return inWay && y - player.value.y > (wall ? 0 : height.value) && along > margin.value && across < width.value && low;
 }
 
 const M = 5;
 const m = (metres) => metres * M;
 
-// What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT), or of a
-// ceiling (never cut, but not drawn lower than the camera)
+// What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT): one round
+// the edge, or what's on it or by it (WALL), or one through the floor, running along x or z
+// (THROUGH); or of a ceiling (never cut, but not drawn lower than the camera)
 const WALL = Object.freeze({ wall: true });
+const THROUGH = Object.freeze({ x: Object.freeze({ wall: "x" }), z: Object.freeze({ wall: "z" }) });
 const CEILING = Object.freeze({ ceiling: true });
 
 // What each thing inside is drawn as (by name, the art's: engine/materials.js), and the same
@@ -129,9 +177,9 @@ let palette = null;
 let framed = true;
 let lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
-// How each of a thing's cuts is known (its material's and its mesh's): a wall's, a ceiling's, or
-// anything else's
-const cutOf = ({ wall = false, ceiling = false } = {}) => (wall ? "wall" : ceiling ? "ceiling" : "");
+// How each of a thing's cuts is known (its material's and its mesh's): a wall's round the edge
+// ("wall"), through the floor ("wall-x", "wall-z"), a ceiling's, or anything else's
+const cutOf = ({ wall = false, ceiling = false } = {}) => (wall === true ? "wall" : wall ? `wall-${wall}` : ceiling ? "ceiling" : "");
 
 function material(asked, how = {}) {
     const name = palette?.[asked] ?? asked;
@@ -205,8 +253,9 @@ function atlasInside(cut = "") {
 }
 
 // Cut away what stands in front of the player (INTERIOR_CUT, as cutsAway): a wall's squares whole
-// (`cut` "wall"), a ceiling under the camera ("ceiling"), anything else above head height; drawn
-// both sides, the inside of whatever's cut showing as solid (the cap colour)
+// (`cut` "wall" round the edge, "wall-x" or "wall-z" through the floor), a ceiling under the
+// camera ("ceiling"), anything else above head height; drawn both sides, the inside of whatever's
+// cut showing as solid (the cap colour)
 function cutAway(target, cut) {
     target.side = THREE.DoubleSide;
     target.onBeforeCompile = (shader) => {
@@ -227,14 +276,17 @@ function cutAway(target, cut) {
 // (The cut, in three.js's own shader for a material, as onBeforeCompile is given it; and the
 // room's flames lighting it, if it's lit: roomlight.js)
 function cutShader(shader, cut) {
+    const walled = cut.startsWith("wall");
+
     Object.assign(shader.uniforms, {
         cutPlayer: INTERIOR_CUT.player,
         cutCamera: INTERIOR_CUT.camera,
         cutToCamera: INTERIOR_CUT.toCamera,
-        cutHeight: cut === "wall" ? { value: 0 } : INTERIOR_CUT.height,
+        cutHeight: walled ? { value: 0 } : INTERIOR_CUT.height,
         cutHead: INTERIOR_CUT.head,
-        cutOver: cut === "wall" ? { value: 1000 } : INTERIOR_CUT.over,
-        cutSquares: { value: cut === "wall" ? 1 : 0 },
+        cutOver: walled ? { value: 1000 } : INTERIOR_CUT.over,
+        cutSquares: { value: walled ? 1 : 0 },
+        cutRun: { value: { "wall-x": 1, "wall-z": 2 }[cut] ?? 0 },
         cutCeiling: { value: cut === "ceiling" ? 1 : 0 },
         cutMargin: INTERIOR_CUT.margin,
         cutWidth: INTERIOR_CUT.width,
@@ -245,18 +297,55 @@ function cutShader(shader, cut) {
         .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
         .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec3 cutCamera;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutHead;\nuniform float cutOver;\nuniform float cutSquares;\nuniform float cutCeiling;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec3 cutCamera;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutHead;\nuniform float cutOver;\nuniform float cutSquares;\nuniform float cutRun;\nuniform float cutCeiling;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
         .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
 if (cutCeiling > 0.5) {
     if (vCutWorld.y < cutCamera.y) discard;
 } else {
-    vec2 cutAt = (cutSquares > 0.5 ? floor(clamp(vCutWorld.xz, cutBounds.xy + 0.001, cutBounds.zw - 0.001)) + 0.5 : vCutWorld.xz) - cutPlayer.xz;
+    vec2 cutAt = vCutWorld.xz;
+    bool cutInWay = true;
+
+    if (cutSquares > 0.5) {
+        vec2 cutSquare = floor(clamp(vCutWorld.xz, cutBounds.xy + 0.001, cutBounds.zw - 0.001));
+
+        cutAt = cutSquare + 0.5;
+
+        if (cutRun > 1.5) {
+            cutInWay = (vCutWorld.x - cutPlayer.x) * (vCutWorld.x - cutCamera.x) < 0.0;
+        } else if (cutRun > 0.5) {
+            cutInWay = (vCutWorld.z - cutPlayer.z) * (vCutWorld.z - cutCamera.z) < 0.0;
+        } else {
+            // How far in from each edge (west, north, east, south) it stands, the player (at least
+            // INSIDE) and the camera; and the edges its square's on, the nearest of them judged
+            vec4 cutIn = vec4(vCutWorld.xz - cutBounds.xy, cutBounds.zw - vCutWorld.xz);
+            vec4 cutFromIn = max(vec4(${INSIDE.toFixed(2)}), vec4(cutPlayer.xz - cutBounds.xy, cutBounds.zw - cutPlayer.xz));
+            vec4 cutToIn = vec4(cutCamera.xz - cutBounds.xy, cutBounds.zw - cutCamera.xz);
+            vec4 cutOn = vec4(step(cutSquare, cutBounds.xy + 0.5), step(cutBounds.zw - 1.5, cutSquare));
+            float cutNearest = 1000.0;
+            float cutFrom = 0.0;
+            float cutTo = 0.0;
+            vec2 cutEdge = cutAt;
+
+            if (cutOn.x > 0.5 && cutIn.x < cutNearest) { cutNearest = cutIn.x; cutFrom = cutFromIn.x; cutTo = cutToIn.x; cutEdge = vec2(cutBounds.x, cutAt.y); }
+            if (cutOn.y > 0.5 && cutIn.y < cutNearest) { cutNearest = cutIn.y; cutFrom = cutFromIn.y; cutTo = cutToIn.y; cutEdge = vec2(cutAt.x, cutBounds.y); }
+            if (cutOn.z > 0.5 && cutIn.z < cutNearest) { cutNearest = cutIn.z; cutFrom = cutFromIn.z; cutTo = cutToIn.z; cutEdge = vec2(cutBounds.z, cutAt.y); }
+            if (cutOn.w > 0.5 && cutIn.w < cutNearest) { cutNearest = cutIn.w; cutFrom = cutFromIn.w; cutTo = cutToIn.w; cutEdge = vec2(cutAt.x, cutBounds.w); }
+
+            if (cutNearest < 1000.0) {
+                cutInWay = (cutNearest - cutFrom) * (cutNearest - cutTo) < 0.0;
+                cutAt = cutEdge;
+            }
+        }
+    }
+
+    cutAt -= cutPlayer.xz;
+
     float cutAlong = dot(cutAt, cutToCamera);
     float cutAcross = abs(dot(cutAt, vec2(-cutToCamera.y, cutToCamera.x)));
     float cutEye = cutPlayer.y + cutHead;
     float cutSight = cutEye + (cutCamera.y - cutEye) * min(1.0, cutAlong / max(0.01, distance(cutCamera.xz, cutPlayer.xz)));
 
-    if (vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth && vCutWorld.y < cutSight + cutOver) discard;
+    if (cutInWay && vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth && vCutWorld.y < cutSight + cutOver) discard;
 }`)
         .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
     roomLit(shader);
@@ -820,20 +909,22 @@ function rug(solid, x0, z0, x1, z1) {
 // --- Walls ---
 
 // A stretch of wall from (x0, z0) to (x1, z1) (along x or z), `thick` pixels thick, from the
-// floor to the ceiling; plaster over a stone footing, with posts every so often and a beam
-function wall(solid, x0, z0, x1, z1, thick, finish) {
+// floor to the ceiling; plaster over a stone footing, with posts every so often and a beam; cut
+// as one round the edge, or as one through the floor (`through`)
+function wall(solid, x0, z0, x1, z1, thick, finish, through = false) {
     const along = x1 - x0 > z1 - z0 ? "x" : "z";
+    const cut = through ? THROUGH[along] : WALL;
     const [ax0, az0, ax1, az1] = along === "x" ? [x0, z0 - thick / 2, x1, z0 + thick / 2] : [x0 - thick / 2, z0, x0 + thick / 2, z1];
     const top = m(STOREY);
 
     solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm"));
-    solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish, WALL));
+    solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish, cut));
 
     if (!framed) {
         return;
     }
 
-    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL), { under: material("timber", WALL) });
+    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", cut), { under: material("timber", cut) });
 
     const length = along === "x" ? x1 - x0 : z1 - z0;
     const posts = Math.max(1, Math.round(length / m(2)));
@@ -844,11 +935,11 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
         if (along === "x") {
             const x = x0 + (x1 - x0) * t;
 
-            solid.box(x - 0.6, m(0.35), az0 - 0.2, x + 0.6, top, az1 + 0.2, material("timber", WALL));
+            solid.box(x - 0.6, m(0.35), az0 - 0.2, x + 0.6, top, az1 + 0.2, material("timber", cut));
         } else {
             const z = z0 + (z1 - z0) * t;
 
-            solid.box(ax0 - 0.2, m(0.35), z - 0.6, ax1 + 0.2, top, z + 0.6, material("timber", WALL));
+            solid.box(ax0 - 0.2, m(0.35), z - 0.6, ax1 + 0.2, top, z + 0.6, material("timber", cut));
         }
     }
 }
@@ -1171,19 +1262,19 @@ function innerWalls(solid, map, finish, curtain = "velvet") {
             // To each neighbour, or to the map's edge, or on through the square where a run of
             // wall stops (at a doorway)
             if (east || x + 1 === map.width || (west && !south && !north)) {
-                wall(solid, cx, cz, m(x + 1), cz, thick, finish);
+                wall(solid, cx, cz, m(x + 1), cz, thick, finish, true);
             }
 
             if (west || x === 0 || (east && !south && !north)) {
-                wall(solid, m(x), cz, cx, cz, thick, finish);
+                wall(solid, m(x), cz, cx, cz, thick, finish, true);
             }
 
             if (south || y + 1 === map.height || (north && !east && !west)) {
-                wall(solid, cx, cz, cx, m(y + 1), thick, finish);
+                wall(solid, cx, cz, cx, m(y + 1), thick, finish, true);
             }
 
             if (north || y === 0 || (south && !east && !west)) {
-                wall(solid, cx, m(y), cx, cz, thick, finish);
+                wall(solid, cx, m(y), cx, cz, thick, finish, true);
             }
         }
     }
@@ -1196,20 +1287,20 @@ function innerWalls(solid, map, finish, curtain = "velvet") {
         if (along === "x") {
             const [a, b, cz] = [m(x0), m(x0 + length), m(y0 + 0.5)];
 
-            solid.box(a, lintel, cz - thick / 2, b, m(STOREY), cz + thick / 2, material(finish, WALL));
-            solid.box(a - 0.4, lintel - 0.8, cz - thick / 2 - 0.3, b + 0.4, lintel, cz + thick / 2 + 0.3, material("timber", WALL));
+            solid.box(a, lintel, cz - thick / 2, b, m(STOREY), cz + thick / 2, material(finish, THROUGH[along]));
+            solid.box(a - 0.4, lintel - 0.8, cz - thick / 2 - 0.3, b + 0.4, lintel, cz + thick / 2 + 0.3, material("timber", THROUGH[along]));
 
             for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
-                solid.box(c0, m(0.1), cz - 0.3, c1, lintel - 0.8, cz + 0.3, material(curtain, WALL));
+                solid.box(c0, m(0.1), cz - 0.3, c1, lintel - 0.8, cz + 0.3, material(curtain, THROUGH[along]));
             }
         } else {
             const [a, b, cx] = [m(y0), m(y0 + length), m(x0 + 0.5)];
 
-            solid.box(cx - thick / 2, lintel, a, cx + thick / 2, m(STOREY), b, material(finish, WALL));
-            solid.box(cx - thick / 2 - 0.3, lintel - 0.8, a - 0.4, cx + thick / 2 + 0.3, lintel, b + 0.4, material("timber", WALL));
+            solid.box(cx - thick / 2, lintel, a, cx + thick / 2, m(STOREY), b, material(finish, THROUGH[along]));
+            solid.box(cx - thick / 2 - 0.3, lintel - 0.8, a - 0.4, cx + thick / 2 + 0.3, lintel, b + 0.4, material("timber", THROUGH[along]));
 
             for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
-                solid.box(cx - 0.3, m(0.1), c0, cx + 0.3, lintel - 0.8, c1, material(curtain, WALL));
+                solid.box(cx - 0.3, m(0.1), c0, cx + 0.3, lintel - 0.8, c1, material(curtain, THROUGH[along]));
             }
         }
     }
