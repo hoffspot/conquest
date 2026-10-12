@@ -2289,6 +2289,13 @@ can leave, and the world goes on. When the host closes the world to others (or l
 still in it go back to their title screen and are told. Menus and the world map don't pause the
 world while anyone else is in it (rule 6, M0).
 
+**The runner** (core/runner.js `WorldRunner`; generated/world_server_plan.md §3.1). What moves a
+world a game plays itself on, in the battle's 50 ms steps as the frames give the time (what's left
+over kept for the next frame), and sends what's done to those who've joined every tenth of a
+second of its time; and has the navigation round each player baked ahead. The world server will
+run its worlds with the same code, a timer giving the time, so the two can't drift apart. It can
+time each step (mean, worst, 99th percentile), for the server's health page.
+
 **Parties** (core/host.js `PARTY`, the `party` command; the party menu, docs/GAME.md *The
 party*). Players play together as a party of up to four (`PARTY.most`):
 - **Asked.** Anyone in a party, or in none, asks another player who's in none (`invite`). The one

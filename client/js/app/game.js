@@ -61,6 +61,7 @@ import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { shopPrice } from "../core/stock.js";
 import { CHAT, PACE } from "../core/netplay.js";
+import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
@@ -244,11 +245,6 @@ const DRAG_TILT = 60;
 // A wyvern or dragon put out this near the player (metres) is seen coming down out of the sky
 const ARRIVE_WITHIN = 140;
 
-// The navigation tiles baked ahead round each player out in the world (metres: three tiles each
-// way, the ways they and those near them find staying among baked tiles), asked for again once
-// they've gone this far
-const BAKE_AHEAD = Object.freeze({ reach: 96, again: 16 });
-
 // The way to the world map's pin: found again at most this often (seconds), once the player's
 // moved this far (metres), or (while the way over the navigation mesh is short of where it's
 // wanted: its tiles still to come) this often anyway; over the mesh for as far along it as can
@@ -369,9 +365,6 @@ const FLOORS = Object.freeze({ near: RELEVANCE.near, far: 40 });
 // dressed, `budget` ms a frame (their skins painted elsewhere meanwhile), for `most` seconds at
 // most (the rest come in as they're dressed after), rather than all of them in the one frame
 const ENTERING = Object.freeze({ budget: 30, most: 3 });
-
-// How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
-const FLUSH_EVERY = 0.1;
 
 // Joined to another's world, the most of its time played in a frame (s): frames coming slowly,
 // the time between them all the same (playing alone, a slow frame's a slower world instead)
@@ -729,15 +722,17 @@ export class Game {
         this.host = host ?? new Host(world, { populate: false, war });
         this.onWar = onWar;
 
+        // Playing its own world: what moves it on, step by step as the frames give the time, and
+        // sends what's done to those who've joined it, if it's opened to others (core/runner.js)
+        this.runner = remote ? null : new WorldRunner(this.host);
+
         /**
          * Playing together (docs/WAR.md M11): joined to a world someone else hosts, how this game
          * plays its copy of it on and sends its player's commands (core/netplay.js Joining; its
          * player's already in it); or hosting one opened to others, what sends them what's done
-         * (Hosting: set by whoever opens it).
+         * (Hosting: set by whoever opens it, kept by the runner: hosting).
          */
         this.remote = remote;
-        this.hosting = null;
-        this.flushedAt = 0;
         this.pingedAt = 0;
 
         /** A joined game's hero, drawn going where they're sent before the host's heard (app/predict.js). */
@@ -2302,24 +2297,7 @@ export class Game {
             return;
         }
 
-        const baker = this.#navBaker();
-
-        this.bakedAround ??= new Map();
-
-        for (const actor of this.battle.actors) {
-            if (actor.kind !== "player" || actor.map !== "town" || actor.dead) {
-                continue;
-            }
-
-            const at = this.bakedAround.get(actor.id);
-
-            if (!at || Math.abs(actor.x - at[0]) > BAKE_AHEAD.again || Math.abs(actor.y - at[1]) > BAKE_AHEAD.again) {
-                this.bakedAround.set(actor.id, [actor.x, actor.y]);
-                baker.around(actor.x, actor.y, BAKE_AHEAD.reach);
-            }
-        }
-
-        baker.pump();
+        this.runner.bakeAhead(this.#navBaker());
     }
 
     // The navigation meshes round the player, if they're shown (afresh when they've gone a tile)
@@ -2338,6 +2316,20 @@ export class Game {
         if (on && (!this.navigationAt || Math.abs(player.x - this.navigationAt[0]) > 8 || Math.abs(player.y - this.navigationAt[1]) > 8)) {
             this.navigationAt = [player.x, player.y];
             view.around(player.x, player.y);
+        }
+    }
+
+    /**
+     * Hosting a world opened to others: what sends them what's done (core/netplay.js Hosting, set
+     * by app/together.js as it's opened and closed), or null. The runner sends it as it's due.
+     */
+    get hosting() {
+        return this.runner?.hosting ?? null;
+    }
+
+    set hosting(hosting) {
+        if (this.runner) {
+            this.runner.hosting = hosting;
         }
     }
 
@@ -2505,6 +2497,27 @@ export class Game {
         return [...found];
     }
 
+    // Where everyone and everything in the air was, before a step: drawn between that and where the
+    // step leaves them, as the frames come
+    #remember() {
+        for (const actor of this.battle.actors) {
+            const previous = this.previous.get(actor.id);
+
+            if (previous) {
+                previous.x = actor.x;
+                previous.y = actor.y;
+            }
+        }
+
+        for (const projectile of this.battle.projectiles) {
+            const flight = this.flights.get(projectile.id);
+
+            if (flight) {
+                flight.previous.set(projectile.x, projectile.y);
+            }
+        }
+    }
+
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
     #tick(dt, elapsed = dt) {
         // (Joined: the host's steps played a little slower or faster, to keep a few in hand; and
@@ -2512,7 +2525,9 @@ export class Game {
         // frame), or the host would leave it behind)
         const played = this.remote ? Math.min(JOINED_FRAME, elapsed) : dt;
 
-        this.accumulator += played * 1000 * (this.remote ? this.remote.pace(played * 1000) : 1);
+        if (this.remote) {
+            this.accumulator += played * 1000 * this.remote.pace(played * 1000);
+        }
 
         // (What was put off till now: a spark off the anvil at each blow)
         if (this.later.length && this.later[0].at <= this.clock) {
@@ -2527,36 +2542,27 @@ export class Game {
 
         let steps = 0;
 
-        while (this.accumulator >= STEP_MS) {
-            for (const actor of this.battle.actors) {
-                const previous = this.previous.get(actor.id);
+        if (this.remote) {
+            while (this.accumulator >= STEP_MS) {
+                this.#remember();
 
-                if (previous) {
-                    previous.x = actor.x;
-                    previous.y = actor.y;
+                // (Joined to another's world: its steps as the host played them, when they've come)
+                const events = this.remote.step();
+
+                if (!events) {
+                    this.accumulator = Math.min(this.accumulator, STEP_MS);
+
+                    break;
                 }
+
+                this.#handle(events);
+                this.accumulator -= STEP_MS;
+                steps++;
             }
-
-            for (const projectile of this.battle.projectiles) {
-                const flight = this.flights.get(projectile.id);
-
-                if (flight) {
-                    flight.previous.set(projectile.x, projectile.y);
-                }
-            }
-
-            // (Joined to another's world: its steps as the host played them, when they've come)
-            const events = this.remote ? this.remote.step() : this.host.advance(STEP_MS);
-
-            if (!events) {
-                this.accumulator = Math.min(this.accumulator, STEP_MS);
-
-                break;
-            }
-
-            this.#handle(events);
-            this.accumulator -= STEP_MS;
-            steps++;
+        } else {
+            // (Playing its own world: the runner moves it on, and sends what's done to any who've
+            // joined it as that's due)
+            steps = this.runner.advance(played * 1000, { before: () => this.#remember(), after: (events) => this.#handle(events) });
         }
 
         telemetry.mark(PHASE.steps);
@@ -2581,19 +2587,13 @@ export class Game {
             steps++;
         }
 
-        // (Hosting: what's been done, to those who've joined, every so often)
-        if (this.hosting && this.clock - this.flushedAt >= FLUSH_EVERY) {
-            this.flushedAt = this.clock;
-            this.hosting.flush();
-        }
-
         // (Joined: how long a word takes to the host and back, now and then)
         if (this.remote && this.clock - this.pingedAt >= PING_EVERY) {
             this.pingedAt = this.clock;
             this.remote.ping();
         }
 
-        this.#update(dt, this.accumulator / STEP_MS);
+        this.#update(dt, (this.remote ? this.accumulator : this.runner.lag) / STEP_MS);
         telemetry.mark(PHASE.bars);
 
         return steps;
