@@ -6,7 +6,12 @@
 //
 // The game has the tiles round each player baked so (around, then pump each frame: one tile's
 // triangles worked out a frame), so the ways the battle finds near them (core/battle.js) seldom
-// wait for a tile to be baked.
+// wait for a tile to be baked; and those the ways of anyone else are waiting for (want: the
+// navigation's later), after them, so a creature or a soldier further off never holds a step up
+// while the world under its way is made and baked.
+
+/** How many tiles ways are waiting for are kept waiting at most (the longest waiting let go). */
+export const WANTED = 256;
 
 export class NavBaker {
     /** @param {object} navigation - The Navigation (core/navigation.js) the tiles are for. */
@@ -16,8 +21,10 @@ export class NavBaker {
         this.worker = null;
         this.onBaked = null;
 
-        // The tiles waiting to be sent off (around), nearest first
+        // The tiles waiting to be sent off (around), nearest first; and those ways are waiting
+        // for (want), the longest waiting first
         this.queue = [];
+        this.wanted = [];
 
         if (typeof Worker === "undefined") {
             return;
@@ -84,17 +91,45 @@ export class NavBaker {
     }
 
     /**
-     * Send off the next `most` tiles waiting (each frame): those whose ground has been made (the
-     * world's chunks, made as they're drawn: making them here, for a tile, would take a frame's
-     * time several times over), the others left waiting.
+     * Have a tile baked that a way's waiting for (core/navigation.js later), after those round
+     * the players, if it isn't in or asked for or waiting already. At most WANTED wait (the
+     * longest waiting let go: a way still waiting for it asks again).
+     */
+    want(tx, ty) {
+        if (this.navigation.has(tx, ty) || this.asked.has(`${tx} ${ty}`) || this.wanted.some(([x, y]) => x === tx && y === ty)) {
+            return;
+        }
+
+        this.wanted.push([tx, ty]);
+
+        if (this.wanted.length > WANTED) {
+            this.wanted.shift();
+        }
+    }
+
+    /**
+     * Send off the next `most` tiles waiting (each frame), those round the players first: those
+     * whose ground has been made (the world's chunks, made as they're drawn: making them here,
+     * for a tile, would take a frame's time several times over), the others left waiting.
      */
     pump(most = 1) {
+        let sent = 0;
+
+        for (const list of [this.queue, this.wanted]) {
+            sent += this.#send(list, most - sent);
+        }
+    }
+
+    // Send off up to `most` of a list's tiles whose ground has been made, the rest left in it as
+    // they were. Returns how many were sent
+    #send(list, most) {
         const { tile, border } = this.navigation.measures;
         const world = this.navigation.world;
         const waiting = [];
+        let sent = 0;
 
-        for (let sent = 0; sent < most && this.queue.length; ) {
-            const [tx, ty] = this.queue.shift();
+        while (sent < most && list.length) {
+            const [tx, ty] = list.shift();
 
             if (this.navigation.has(tx, ty) || this.asked.has(`${tx} ${ty}`)) {
                 continue;
@@ -109,7 +144,9 @@ export class NavBaker {
             sent++;
         }
 
-        this.queue.push(...waiting);
+        list.unshift(...waiting);
+
+        return sent;
     }
 
     /** Stop baking off the page's thread. */
@@ -118,5 +155,6 @@ export class NavBaker {
         this.worker = null;
         this.asked.clear();
         this.queue = [];
+        this.wanted = [];
     }
 }

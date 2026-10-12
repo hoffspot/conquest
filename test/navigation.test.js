@@ -4,6 +4,7 @@ import { AREA, KEEP_TILES, Navigation, navigatorOf, ROOMS, squaresNavigation, TI
 import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
+import { NavBaker, WANTED } from "../client/js/world/navbaker.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { LAGOON } from "../client/js/core/lagoons.js";
 import { propOutlines } from "../client/js/core/setpieces/standing.js";
@@ -517,6 +518,73 @@ describe("navigation meshes (navigation.js)", () => {
 
             assert.deepEqual(forwards.path(from, to), backwards.path(from, to), `way ${k}`);
         }
+    });
+
+    it("waits for the tiles a way wants that aren't in yet, where they can be made elsewhere, baking none itself, and finds it once they're in", () => {
+        const navigation = new Navigation(recast, town);
+        const sent = [];
+        const [from, to] = [[middle[0] + 26, middle[1] - 26], [middle[0] - 2, middle[1] + 22]];
+
+        navigation.later = (tx, ty) => sent.push([tx, ty]);
+
+        // (None till they're in, and none baked for it)
+        assert.deepEqual(navigation.path(from, to, { wait: true }), []);
+        assert.equal(navigation.baked, 0);
+        assert.ok(sent.length > 0);
+
+        // (Made, as the game's worker makes them: the way, as it would have been)
+        for (const [tx, ty] of sent) {
+            navigation.ensure(tx, ty);
+        }
+
+        const waited = navigation.path(from, to, { wait: true });
+
+        assert.ok(waited.length > 1);
+        assert.deepEqual(waited, new Navigation(recast, town).path(from, to));
+
+        // (A way that doesn't wait, a player's, has them made here and now, as ever)
+        const now = new Navigation(recast, town);
+
+        now.later = () => assert.fail("sent on");
+        assert.deepEqual(now.path(from, to), waited);
+        assert.ok(now.baked > 0);
+    });
+
+    it("bakes the tiles round the players first, then those ways are waiting for, a few of each kept waiting at most (navbaker.js)", () => {
+        const navigation = new Navigation(recast, town);
+        const baker = new NavBaker(navigation);
+        const [tx, ty] = tileOf(...middle);
+
+        // (Their ground made, as it is once it's drawn; and no worker here: each baked as it's
+        // sent off, one a pump)
+        for (let dx = -1; dx <= 4; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                tileInput(town, tx + dx, ty + dy);
+            }
+        }
+
+        baker.want(tx + 3, ty);
+        baker.want(tx + 3, ty);
+        baker.around(...middle, 1);
+
+        assert.deepEqual(baker.wanted, [[tx + 3, ty]]);
+
+        baker.pump();
+        assert.ok(navigation.has(tx, ty) && !navigation.has(tx + 3, ty), "round the player first");
+
+        while (baker.queue.length) {
+            baker.pump();
+        }
+
+        baker.pump();
+        assert.ok(navigation.has(tx + 3, ty), "then what a way's waiting for");
+
+        for (let k = 0; k < WANTED + 10; k++) {
+            baker.want(tx + 10 + (k % 40), ty + 10 + Math.floor(k / 40));
+        }
+
+        assert.equal(baker.wanted.length, WANTED);
+        assert.deepEqual(baker.wanted[0], [tx + 20, ty + 10], "the longest waiting let go");
     });
 
     it("bakes and finds ways within its budgets", () => {

@@ -392,7 +392,7 @@ const GATE_RUN = 5;
  */
 function wagonWay(map, from, to) {
     const navigation = navigatorOf(map);
-    const way = navigation.path(from, to);
+    const way = navigation.path(from, to, { wait: true });
     const corners = [from, ...way];
     const [xs, ys] = [corners.map(([x]) => x), corners.map(([, y]) => y)];
 
@@ -3248,14 +3248,16 @@ export class Battle {
     }
 
     // Find the way to a square (to `point` on it: its middle, unless said), over the map's
-    // navigation mesh; a wagon's through a town's gate along its middle (wagonWay)
+    // navigation mesh; a wagon's through a town's gate along its middle (wagonWay). Anyone but a
+    // player waits for the mesh's tiles not in yet, where the game has them made off the page's
+    // thread (navigation.js later), rather than hold the step up making them
     #pathTo(actor, goal, point = [goal[0] + 0.5, goal[1] + 0.5]) {
         // (Somewhere else: how near it's got starts again)
         if (!same(actor.pathGoal, goal)) {
             actor.progress = null;
         }
 
-        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point)));
+        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait: actor.kind !== "player" })));
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;

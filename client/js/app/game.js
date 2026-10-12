@@ -2276,8 +2276,18 @@ export class Game {
     }
 
     // The overworld's navigation mesh's baker (the battle's mesh: core/navigation.js navigatorOf)
+    // (The ways anyone but a player finds wait for the tiles not in yet, made off the page's
+    // thread: navigation.js later, core/battle.js #pathTo)
     #navBaker() {
-        this.navBaker ??= new NavBaker(navigatorOf(this.world.maps.town));
+        if (!this.navBaker) {
+            const navigation = navigatorOf(this.world.maps.town);
+
+            this.navBaker = new NavBaker(navigation);
+
+            if (this.navBaker.worker) {
+                navigation.later = (tx, ty) => this.navBaker.want(tx, ty);
+            }
+        }
 
         return this.navBaker;
     }
