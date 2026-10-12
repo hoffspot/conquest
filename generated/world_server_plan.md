@@ -325,7 +325,8 @@ identical across the gap. A wall-clock wait in between (simulated) changes nothi
 ```
 VERSION                        the data folder's layout version (see §5.1)
 server.json                    the server's settings, with configVersion (written only by the server)
-secrets.json         (0600)    admin-key hash, creator-key hashes, session-signing key
+secrets.json         (0600)    admin-key hash, creator-key hashes, the key world keys are
+                               sealed with, the salt short codes are hashed with
 identity.key         (0600)    the server's identity key pair (§7.6)
 certificates/        (0700)    ACME account key, certificates and their keys
 worlds/<world-id>/
@@ -472,12 +473,17 @@ today.
 **A long key's form.** 30 Crockford base-32 characters in six groups, for example
 `KQ2M9-XD4RT-AH3PW-C8NVB-7J2KQ-M9XDA`.
 
-- **The first group** names the key, so the server can look it up.
+- **The first four characters** name the key, so the server can look it up.
 - **The other 26 characters (130 bits)** are the secret. That meets OWASP's 128-bit minimum for
   generated secrets.
 - **Storage.** High-entropy keys, tickets and sessions are stored as SHA-256 and compared in constant
   time (`timingSafeEqual`). Slow hashing only matters for guessable secrets, so short codes get
-  scrypt (N=2¹⁷, r=8, p=1, OWASP's minimum) as well as their short life.
+  scrypt (N=2¹⁷, r=8, p=1, OWASP's minimum: about 0.4 s a guess) as well as their short life. The
+  salt is the server's own, so a guess is one hash, looked up, not one for every live code.
+- **Shown again.** A world's keys are also sealed (AES-256-GCM, with a key in `secrets.json`), so
+  the owner can be shown one again as a link or QR code. The admin and creator keys are shown once.
+- **Sessions** are kept in memory only. After a restart the game enters again with its key and
+  ticket.
 - **Typing.** Keys are mainly shared as links and QR codes, but typing is forgiving: case doesn't
   matter, dashes are optional, and O reads as 0 and I or L as 1.
 
@@ -505,10 +511,13 @@ plain-`http` pages on the Wi-Fi, which have no WebCrypto, the ticket alone does.
 3. **First visit:** the server issues a return ticket. The game keeps it with the server's address
    in `pellagos.servers`.
 4. **Later visits:** the same key and ticket bring the same player back, with the same hero (in
-   kept mode) and the same role.
+   kept mode) and the same role. The ticket alone does too, while the key they last came by still
+   works.
 5. **The key keeps working** until the world's owner revokes it, replaces it, or it reaches an
-   expiry or use count they set. Replacing a key ends every session that entered with it, as
-   changing a password does in Satisfactory.
+   expiry or use count they set. The use count limits new players only: those it let in come back.
+   Replacing a key ends every session that entered with it, as changing a password does in
+   Satisfactory. Its players then need a key that works, and their ticket keeps them the same
+   player, with the same heroes.
 
 **Many keys per world** follow Enshrouded's user groups and Realms' invite links:
 
@@ -576,10 +585,11 @@ admits(principal, world, character) → { yes, why, character }
   heroes carry over.
 
 **Limits.**
-- **Short codes.** Wrong guesses are counted per code and per world, not only per address, because
-  many homes behind one CGNAT address share an IP. They back off exponentially from 1 s, doubling to
-  5 minutes, with the same answer and timing whatever was wrong. After 20 failures in an hour the
-  code is burned and the page shows it.
+- **Short codes.** Wrong guesses are counted across the server, not per address, because many
+  homes behind one CGNAT address share an IP (and a wrong guess names no code or world). They back
+  off exponentially from 1 s, doubling to 5 minutes, with the same answer and timing whatever was
+  wrong. After 20 failures in an hour (about as fast as the backoff allows) every short code is
+  burned and the page shows it.
 - **Long keys.** 130 bits can't be guessed, so they're limited only by the general per-address caps
   ([§13](#13-security)).
 - **Logs.** Keys, codes and tickets never appear in logs. The journal records the key's name only.
@@ -592,7 +602,9 @@ player meant, as SSH does with host keys and Syncthing with device ids.
 
 - **The key pair.** Each server makes an Ed25519 key pair on first start (`identity.key`). Its id is
   a fingerprint of the public key, shown on the management page and carried in invite links.
-- **The proof.** The game's first message carries a random nonce. The server's answer signs it.
+- **The proof.** The game's first message carries a random nonce. The server's answer carries its
+  public key and signs `pellagos.hi.1` and the nonce with it. The game checks that the key's
+  fingerprint is the id it pinned, and the signature.
   - **In secure contexts** the game checks the signature with WebCrypto.
   - **On plain-`http` pages**, which have no WebCrypto, it uses a small vendored verifier
     (`noble-ed25519`, MIT, about 5 KB).
@@ -1001,7 +1013,7 @@ heartbeat, backoff and grace carry over unchanged. Only the place lines differ.
 
 | Today (relay) | Server world |
 |---|---|
-| (nothing) | `hi NONCE` → `hi SERVER-ID SIGNATURE`: the server proves its identity before anything secret is sent ([§7.6](#76-the-servers-identity)) |
+| (nothing) | `hi NONCE` → `hi SERVER-ID PUBLIC-KEY SIGNATURE`: the server proves its identity before anything secret is sent ([§7.6](#76-the-servers-identity)) |
 | `join CODE` → `joined pN TOKEN` | `enter WORLD SESSION` → `entered pN TOKEN` |
 | `rejoin CODE PEER TOKEN` | `reenter WORLD PEER TOKEN` |
 | `data\n…` to the host | `data\n…` to the world worker |
@@ -1232,3 +1244,4 @@ questions go here as they come up.
 | 2026-10-12 | **S1a built:** the data folder (`server/storage/folder.js`: `VERSION`, laid out anew a step at a time with a copy made first, and refused from a newer server, naming the server it needs), the server's settings (`server/storage/settings.js`: a schema for each, checked before writing, keys it doesn't know kept), atomic writes (`files.js`), and the platform layer's folders (`server/platform/`: macOS, Linux's XDG folders, Windows). contribution.md's version rules gained `LAYOUT_VERSION` and `CONFIG_VERSION`. | §5.1's framework comes first, so that the world saves of S1b are versioned from the start. |
 | 2026-10-12 | **S1b built:** worlds kept in `worlds/<id>/` (`server/storage/worlds.js`): `world.json` with formatVersion and the world's settings (a schema each, as the server's have), each save moving the last five down a ring before the new one's written whole, a latest that won't read passed over for the newest that will (the journal says which), and refused only if none reads; the heroes a world keeps, six for each player (`heroes.js`, at the browser's `SAVE_VERSION`); and `server/keeper.js`, saving a running world on each war turn and whenever it's asked. | S1's proof: a world saved, the process started again, restored with the same checksum, and the same 200 steps later (`test/world-store.test.js`). |
 | 2026-10-12 | **S1c built, and S1 with it:** `Host.forward` brings a snapshot kept by an older version forward a step at a time (`SNAPSHOT_STEPS`, from 26), and `Host.restore` uses it; a fixture of each version from 26 (`npm run snapshot-fixture`) is brought forward and played on by `test/snapshots.test.js`. `server/reopen.js`: a kept world opened (refused, naming the server it needs, if a newer version kept it), started afresh from its seed if it can't be carried on (a copy made first, its war and kept heroes kept), and a player's solo world brought in (`app/save.js` exportCharacter, read back through importCharacter as the game reads its own). contribution.md's rule for `SNAPSHOT_VERSION` says so. | §5.1's last pieces for S1. The step from 26 fills in the world's rules and each player's role, last command and away state, as S0b added them. |
+| 2026-10-12 | **S2a built:** `server/access/`: long keys, short codes, return tickets and sessions (`tokens.js`, `sessions.js`), the server's secrets (`secrets.js`: the admin key made at the first start and shown once, creator keys) and each world's keys, codes, players and bans (`world.js`, `access.json`), the access hooks (`policy.js` KeyPolicy: identify, allows, on, admits) over them (`index.js`), the limits (`limits.js`), home addresses (`addresses.js`) and the server's identity (`identity.js`). Settled while building: a key's first four characters name it (26 left for the secret's 130 bits); world keys are sealed as well as hashed, so the owner can show one again; short codes are hashed with the server's own salt and their wrong guesses counted across the server; a ticket alone works while the key its player last came by does; the server's `hi` carries its public key. contribution.md's version rules gained `FORMAT_VERSION`, `SECRETS_VERSION` and `ACCESS_VERSION`. | §7 as the plan had it couldn't be built as written in places: a hashed key can't be shown again as a QR code, a wrong short code says nothing of which code or world it was for, and a fingerprint alone can't check a signature. |

@@ -293,6 +293,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      - `CONFIG_VERSION` (`server/storage/settings.js`): what a setting in `server.json` is called
        or means. Add a step to `SETTINGS_STEPS`. A new setting needs no bump: give it a schema in
        `SETTINGS`, and its default fills it in.
+     - `FORMAT_VERSION` (`server/storage/worlds.js`): what a world's `world.json` holds. Add a step
+       to `FORMAT_STEPS`.
+     - `SECRETS_VERSION` (`server/access/secrets.js`) and `ACCESS_VERSION`
+       (`server/access/world.js`): what the server's `secrets.json` and a world's `access.json`
+       hold (keys, codes, players, bans). Add a step to `SECRETS_STEPS` or `ACCESS_STEPS`.
+       Never keep a key, code, ticket or session as it is: only its hash (`server/access/tokens.js`).
    - The caches' versions (the `-v2` in `client/sw.js`): never for a release. Data is kept by the
      hash of its bytes, so a changed model, body or image needs nothing. Change the shell's
      (`SHELL`) only to let go of code no release uses any more, such as an old Three.js's
@@ -429,7 +435,7 @@ moves first, update the branch again.
 | `NET_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
 | `SNAPSHOT_VERSION` | If both sides bumped it, take the higher number and add one, keep both sides' steps in `SNAPSHOT_STEPS` (renumbered one after the other, the older side's first), and run `npm run snapshot-fixture` on the merged code for the new number's fixture. Keep both sides' older fixtures. |
 | `WAR_VERSION` | If both sides bumped it, take the higher number and add one, and keep both sides' steps in `War.restore`, the older side's first, each for a war kept before the merged number. |
-| `LAYOUT_VERSION`, `CONFIG_VERSION` | If both sides bumped one, take the higher number and add one, and keep both sides' steps (`LAYOUT_STEPS`, `SETTINGS_STEPS`), one after the other, each numbered for the version it starts from. |
+| `LAYOUT_VERSION`, `CONFIG_VERSION`, `FORMAT_VERSION`, `SECRETS_VERSION`, `ACCESS_VERSION` | If both sides bumped one, take the higher number and add one, and keep both sides' steps (`LAYOUT_STEPS`, `SETTINGS_STEPS`, `FORMAT_STEPS`, `SECRETS_STEPS`, `ACCESS_STEPS`), one after the other, each numbered for the version it starts from. |
 | `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |
 
 **Claude sessions merging their own pull requests** (only where the owner has said so): bring the
