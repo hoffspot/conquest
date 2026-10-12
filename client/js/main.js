@@ -1578,6 +1578,8 @@ async function playingJoined(save, welcome, joining) {
         wheels: loadWheels(save),
         onWheels: (wheels) => saveWheels(save, wheels),
         onWorldMap: openWorldMap,
+        told: loadTold(save),
+        onTold: (told) => saveTold(save, told),
     });
 
     state.worldMap?.dispose();
