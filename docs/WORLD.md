@@ -947,7 +947,9 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
   player baked so, nearest first, a tile sent off a frame, and only once the world's chunks under
   it have been made (as they're drawn: making them for a tile would take several frames' time).
-  The ways anyone but a player looks for (a creature, a soldier, a wagon: `path`'s `wait`) don't
+  The ways anyone but a player looks for (a creature, a soldier, a wagon: `path`'s `wait`), but
+  for someone within 48 m of a player going somewhere as near one (battle.js `WAIT_BEYOND`: a
+  fight beside a player never waits, its tiles mostly in already as they're baked ahead), don't
   have their tiles baked where they're wanted: those not in yet are sent off after the players'
   (`want`, the navigation's `later`; at most 256 kept waiting), and the way's none till they're
   in, looked for again half a second later. A patrol or a creature a few hundred metres off,

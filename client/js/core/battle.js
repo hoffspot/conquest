@@ -338,6 +338,15 @@ const ROUND_REST = [1500, 3500];
 // How often a chase finds a new path to a target that has moved (ms)
 const REPATH_MS = 500;
 
+/**
+ * How near a player someone and where they're going must both be for their way to be found at
+ * once, any navigation tiles it wants made there and then (metres): a fight beside a player
+ * never waits. Further off, the way waits for its tiles (#pathTo). So near, they're the tiles
+ * the game bakes ahead round a player (app/game.js BAKE_AHEAD) and mostly in already, but for
+ * one just come there.
+ */
+export const WAIT_BEYOND = 48;
+
 // A move order's goal: the nearest free square this many squares or less from where it's asked
 // for; or, none there (open water), the first free one back towards the walker, no further back
 // than this (so a tap far out to sea makes no more of the world than that)
@@ -388,11 +397,12 @@ const GATE_RUN = 5;
  * A wagon's way from one point to another over a map's mesh: anyone's way, but through a town's
  * gate (a gatehouse whose middle the way crosses: the map's gatesNear) along the middle of its way
  * through, from GATE_RUN metres before the gatehouse to as far past it, rather than wherever
- * there's room for someone on foot. As anyone's where there's no straight way along it.
+ * there's room for someone on foot. As anyone's where there's no straight way along it, and
+ * (`wait`) waiting as anyone's does for the tiles it wants (#pathTo).
  */
-function wagonWay(map, from, to) {
+function wagonWay(map, from, to, { wait = true } = {}) {
     const navigation = navigatorOf(map);
-    const way = navigation.path(from, to, { wait: true });
+    const way = navigation.path(from, to, { wait });
     const corners = [from, ...way];
     const [xs, ys] = [corners.map(([x]) => x), corners.map(([, y]) => y)];
 
@@ -3249,15 +3259,19 @@ export class Battle {
 
     // Find the way to a square (to `point` on it: its middle, unless said), over the map's
     // navigation mesh; a wagon's through a town's gate along its middle (wagonWay). Anyone but a
-    // player waits for the mesh's tiles not in yet, where the game has them made off the page's
-    // thread (navigation.js later), rather than hold the step up making them
+    // player, or someone with a player near them and where they're going (WAIT_BEYOND), waits for
+    // the mesh's tiles not in yet, where the game has them made off the page's thread
+    // (navigation.js later), rather than hold the step up making them
     #pathTo(actor, goal, point = [goal[0] + 0.5, goal[1] + 0.5]) {
         // (Somewhere else: how near it's got starts again)
         if (!same(actor.pathGoal, goal)) {
             actor.progress = null;
         }
 
-        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait: actor.kind !== "player" })));
+        const near = ([x, y]) => this.#players.some((player) => player.map === actor.map && hypot(player.x - x, player.y - y) <= WAIT_BEYOND);
+        const wait = actor.kind !== "player" && !(near([actor.x, actor.y]) && near(point));
+
+        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
