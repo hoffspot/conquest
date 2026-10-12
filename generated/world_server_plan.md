@@ -23,7 +23,8 @@ It keeps one or more Pellagos worlds and runs them without a browser.
 - **Screens and protocol.** The server has its own management page and the game has a matching
   worlds screen. Both speak one documented protocol.
 - **Heroes.** Each world chooses whether the server keeps the heroes or players bring their own.
-- **Reach.** Friends on the same Wi-Fi and friends across the internet, without paid hosting.
+- **Reach.** Anyone on the same Wi-Fi or across the internet, by typing the server's DNS name or IP
+  address and port. No paid hosting.
 
 **What it's measured against.** The self-hosted servers players already know:
 
@@ -41,28 +42,30 @@ from.
 
 ## 0. Decisions
 
+These come from the user's brief and two rounds of questions on 12 October 2026. The change log
+records both.
+
 | Question | Decision | Why |
 |---|---|---|
-| Who reaches a world | **Wi-Fi and internet.** Friends on the same Wi-Fi open the game from the Mac itself. Friends elsewhere come in through a free route with a real certificate: Tailscale Funnel (works even behind CGNAT), a router port with a free DuckDNS name and Let's Encrypt, or a quick tunnel. No paid hosting. | User's choice. Port forwarding and CGNAT are the commonest complaint about home servers, and Safari won't open plain `ws://` from an HTTPS page. So the server tests its own reachability and says plainly what works ([§9](#9-reaching-the-server)). |
-| Where listings come from | **The server's own list, plus nearby Macs, plus players running the game.** No central directory. Each server lists its worlds. Servers find each other on the Wi-Fi with Bonjour. Players running the game in a browser show up through the servers they use, and the server brokers WebRTC between them. Players can also type a DNS name or IP address and port, and the game remembers it. | User's choice ([§8](#8-finding-worlds)). |
-| Where heroes live | **Chosen per world.** Either the server keeps each player's hero for that world, or players bring their own hero from their device, as they do today. | User's choice ([§6](#6-heroes-kept-by-the-world-or-brought-in)). |
-| The server's display | **A management page the server serves itself,** opened in any browser on the Mac, or from a phone on the Wi-Fi with the admin key. A small menu-bar launcher comes later. | User's choice. Free to ship: no Apple notarization needed ([§10](#10-the-servers-management-page)). |
+| Who reaches a world | **Anyone on the internet or the Wi-Fi, by DNS name or IP address and port.** The server opens one port, 8480 by default, to the internet. Players type `name:8480` or `ip:8480`, or follow an invite link. From the internet only TLS is accepted, with a free certificate every browser trusts: a DuckDNS name (suggested first), the owner's own domain, or the IP address itself. On the Wi-Fi the Mac also serves the game over plain http. Behind CGNAT, where no port can be opened, Tailscale Funnel is the fallback. No paid hosting. | User's choice. Safari won't open plain `ws://` from an HTTPS page, and an open port has to be safe ([§9](#9-reaching-the-server), [§13](#13-security)). |
+| What strangers see | **The server's card and its listed worlds,** with player counts and hero names, as in Minecraft's server list. New worlds start unlisted, so only key holders see them until the owner lists them. | User's choice ([§8.1](#81-servers-the-player-knows)). |
+| Where listings come from | **The server's own list, plus nearby Macs, plus players running the game.** No central directory. Each server lists its worlds. Servers find each other on the Wi-Fi with Bonjour. Players can also type a DNS name or IP address and port, and the game remembers it. | User's choice ([§8](#8-finding-worlds)). |
+| Worlds hosted in a browser | **Kept, through the broker.** Today's "Invite others" stays: friends connect point to point, with any world server brokering the WebRTC connection. A browser world is listed as joinable once it has shown it can be reached directly. Otherwise it's listed as "through the server" when that server allows relaying, and hidden when it doesn't. Today's relay rooms, which nobody hosts, are retired. | User's choice ([§8.3](#83-players-running-the-game)). |
+| Where heroes live | **Chosen per world.** Either the server keeps the heroes, up to 6 per player in each world, or players bring their own from their device as today. In kept worlds the owner decides whether a first hero must be new or may be brought in once. The owner can switch modes later, after a warning and a backup. | User's choice ([§6](#6-heroes-kept-by-the-world-or-brought-in)). |
+| Players | **8 per world,** as today (`MOST_PLAYERS`). | Encounter scaling, bandwidth and snapshots are tuned for it. |
+| Who makes worlds | **The server's admin, and anyone holding a creator key** the admin issues. Whoever makes a world owns it. | User's choice ([§7](#7-keys-identity-and-the-access-hooks)). |
+| The server's display | **A management page the server serves itself.** On the Mac it needs no key. From the home network it needs the admin key. It's never reachable from the internet. A small menu-bar app comes later. | User's choice. Free to ship: no Apple notarisation needed ([§10](#10-the-servers-management-page)). |
 | What runs a world | **The game's own rules (`core/`), unchanged, in Node.** Each running world gets its own `worker_thread`. The server speaks today's host protocol (`netplay.js`) to players, so joining needs almost no new game code. | `core/` already runs headless: the unit tests run the host, battle, war and navigation in Node, and `test/together.test.js` already hosts a world from Node on the real relay ([§1](#1-where-we-start)). |
-| Time | **Stepped only while someone is in the world.** The clock freezes the moment the last player leaves, and the world is saved and set aside soon after. When the first player has finished loading back in, the clock starts again from exactly where it stopped. There's no catching up for time away. | User's requirement. It's also the industry norm (Factorio, Satisfactory, Terraria, Vintage Story); worlds that keep running unattended draw "came back to a ruin" complaints (Palworld). |
-| What's saved | **The whole world.** Today only the war and each player's character survive a reload. The server saves the host's full snapshot, with rotating autosaves and tiered backups. | A shared world has to come back exactly as it was left ([§5](#5-saving-the-whole-world)). |
-| Keys | **World keys, each with a role, plus a per-player return ticket.** A key gets you into a world and keeps working until its owner revokes or replaces it. The ticket brings your hero back. Both are stored hashed. All checks go through an access-policy hook, so passkeys or other sign-ins can be added later without touching worlds ([§7](#7-keys-identity-and-the-access-hooks)). | User's requirement, shaped by Satisfactory's claim and token rules, Enshrouded's role passwords and Realms' invite links. |
-| Packaging | **Phase 1: `npm run world-server` from Terminal.** Terminal launches are exempt from macOS's Local Network prompt. **Phase 2: a free, ad-hoc-signed menu-bar app** that bundles arm64 Node. A Developer ID ($99/year) is optional and needs the owner's approval ([§11](#11-on-the-mac)). | Nothing that costs money without approval. |
-| Rollout | **Playable milestone PRs**, as in the terrain plan. Main stays shippable, and today's browser hosting keeps working throughout ([§15](#15-milestones)). | Others contribute too. |
-
-**How the brief reads in one place.** "Discovery should show just people running the game who can
-connect point to point" is taken to mean two things:
-
-- people running the game appear in the listing, not only servers;
-- a browser-hosted world is listed as joinable only once it has shown it can be reached directly.
-
-A world that can't be reached directly is listed as "through the server" when the server allows
-relaying. Otherwise it isn't listed. [§16](#16-risks-and-open-questions) asks the user to confirm
-this.
+| Time | **Stepped only while someone is in the world.** The clock freezes the moment the last player leaves. It starts again from exactly where it stopped once the first player back has finished loading, with no catching up for time away. It also freezes while every player's tab is hidden (a world setting, on by default). Sleeping or camping passes time only when everyone present is resting. | User's requirement. It's also the industry norm (Factorio, Satisfactory, Terraria, Vintage Story); worlds that keep running unattended draw "came back to a ruin" complaints (Palworld). |
+| Idle players | **An "AFK" icon over the hero's head after 10 minutes without a command, and a kick after 30.** Until the kick they still count as present, so the world runs on around them. | User's choice ([§4](#4-a-worlds-life-and-its-time)). |
+| Worlds at once | **2 running worlds by default,** changeable on the management page. The page recommends a maximum from the Mac's memory and CPU. An empty world is saved and unloaded after 2 minutes. | User's choice ([§10](#10-the-servers-management-page)). |
+| What's saved | **The whole world.** Today only the war and each player's character survive a reload. The server saves the host's full snapshot, keeping 5 autosaves, 12 hourly backups and 7 daily ones, plus one before every update, migration or restore. | A shared world has to come back exactly as it was left ([§5](#5-saving-the-whole-world)). |
+| Keys | **Long world keys with roles, short spoken codes, and a return ticket per player.** A key keeps working until its owner revokes or replaces it. A short code is valid 15–60 minutes and is traded once for a key. Trusted players may issue keys if the world allows it. A ban follows the player's ticket for good and their internet address for 24 hours. The game pins each server's identity on first contact. Every check goes through an access-policy hook, so passkeys or other sign-ins can follow ([§7](#7-keys-identity-and-the-access-hooks)). | User's choices, shaped by Satisfactory's claim and token rules, Enshrouded's role passwords, Realms' invite links and SSH's host keys. |
+| Packaging | **From Terminal first (`npm run world-server`), then a free, ad-hoc-signed menu-bar app.** No Apple Developer ID. | User's choice. Terminal launches avoid macOS's Local Network prompt; nothing costs money ([§11](#11-on-the-mac)). |
+| Other platforms and upgrades | **macOS first, built so Linux and Windows need little change.** Everything platform-specific sits behind one small layer. Settings and data carry version numbers with migrations, are backed up before each one, and are never opened by an older server, so an upgrade never loses data ([§5.1](#51-settings-versions-and-upgrades), [§11](#11-on-the-mac)). | User's choice. |
+| Updates | **The page says when a new version is out, and the owner clicks to update.** Never while players are in, and always after a backup. | User's choice. |
+| Keeping the Mac awake | **Automatic while players are in,** released when the last one leaves. A warning shows on battery or if the lid may close. | User's choice. |
+| Rollout | **Playable milestone PRs:** server worlds on the Wi-Fi, then the open internet port, then browser worlds through the broker, then the menu-bar app. Main stays shippable throughout ([§15](#15-milestones)). | User's choice. Others contribute too. |
 
 ---
 
@@ -150,29 +153,45 @@ These facts come from reading `origin/main` at 6aed84c, with measurements in Nod
  │  world server (Node 24 → 26 LTS)                            │
  │                                                             │
  │  supervisor (main thread)                                   │
- │   ├─ HTTP: game client, /admin page, /api/v1                │
- │   ├─ WebSocket /play    ── players in server worlds         │
- │   ├─ WebSocket /broker  ── presence, WebRTC signalling,     │
- │   │                        relay fallback                   │
- │   ├─ worlds registry, keys, tickets, sessions               │
- │   ├─ storage: saves, backups (Application Support)          │
- │   └─ Bonjour, port mapping, keep-awake, reachability test   │
+ │   ├─ one port (8480): TLS from anywhere, plain http/ws      │
+ │   │   only from home addresses                              │
+ │   │    ├─ HTTP: game client, /api/v1, /admin (home only)    │
+ │   │    ├─ WebSocket /play    ── players in server worlds    │
+ │   │    └─ WebSocket /broker  ── presence, WebRTC signalling,│
+ │   │                             relay fallback              │
+ │   ├─ admin listener 127.0.0.1:8481 (the Mac only, no key)   │
+ │   ├─ worlds registry, keys, tickets, sessions, identity key │
+ │   ├─ storage: settings, saves, backups (versioned)          │
+ │   ├─ certificates (ACME), port mapping, reachability test   │
+ │   └─ platform layer: Bonjour, keep-awake, folders, secrets  │
  │                                                             │
  │  world worker × N (worker_threads, one per running world)   │
  │   └─ Host + Hosting + the runner (steps, flushes, bakes)    │
  └─────────────────────────────────────────────────────────────┘
-        ▲ ws/wss                      ▲ ws/wss (signalling)
-        │                             │
+        ▲ wss (internet) / ws (Wi-Fi)   ▲ wss/ws (signalling)
+        │                               │
    players' browsers  ◄── WebRTC data channel ──►  a player hosting
    (the same client)                               in their browser
 ```
 
 **The supervisor** owns everything durable:
 - the worlds and their settings, keys, players and heroes;
-- the network edge (HTTP, the two sockets, Bonjour, port mapping);
+- the network edge (the one port, the two sockets, certificates, Bonjour, port mapping);
 - power: keeping the Mac awake while players are in.
 
 It never steps a world.
+
+**The platform layer** (`server/platform/`) holds everything that differs between operating
+systems, behind one small interface:
+- where data, logs and caches go;
+- keeping the machine awake;
+- advertising on the network (Bonjour);
+- storing secrets;
+- running at login.
+
+`darwin.js` comes first. A `linux.js` or `win32.js` later fills in the same functions, and nothing
+else in the server changes. Bonjour, for example, becomes Avahi on Linux, and `caffeinate` becomes
+`systemd-inhibit` or `SetThreadExecutionState`.
 
 **A world worker** owns one running world. It starts when someone enters a stored world and ends
 after the world has been saved with nobody in it.
@@ -222,7 +241,7 @@ assume one get a world rule:
 
 | Today | In a server world |
 |---|---|
-| Only the host passes time by sleeping or camping (`#sleep`). | **A rest quorum.** Time passes when every player in the world is resting, at an inn or in camp. The share is a world setting (default 100%, like Minecraft's `playersSleepingPercentage`). A player resting alone just rests, as joiners do today. |
+| Only the host passes time by sleeping or camping (`#sleep`). | **Everyone rests.** Time passes only when every player in the world is resting, at an inn or in camp, as Minecraft does by default. The jump is the shortest of the rests chosen. A player resting alone among others just rests, as joiners do today. Browser-hosted worlds keep today's rule (the host passes time). |
 | `fieldBattle` is host-only. | Owner-only, and only when the world's "debug commands" setting is on. |
 | Chat delivered locally to `HOST_PLAYER`. | Not needed: everyone hears through their socket. |
 
@@ -274,15 +293,22 @@ It moves only in `running`, and `running` means at least one player is present.
 - **Dropped connections.** A player whose connection drops keeps their place for 30 s, as with
   today's relay grace. If no other player is present, the world freezes during those 30 s, so a hero
   isn't left fighting alone. If they come back within the grace, they carry on where they were.
-- **Hidden tabs.** "Pause when everyone is away" is on by default. If every present player's tab is
-  hidden, the world freezes, as a solo world does today when its tab is hidden. Clients already
-  report visibility (`paused`). Server worlds send it to the server.
-- **Idle players.** An optional AFK rule (off by default, like Factorio's `afk_autokick_interval`)
-  moves a player who hasn't sent a command for N minutes to "away". An idle player then doesn't keep
-  the world running on their own.
-- **Setting the world aside.** After "set aside" minutes (default 2) in `empty`, the worker ends and
-  the world goes back to `stored`. A stored world costs no CPU and no memory. Entering it again
+- **Hidden tabs.** "Pause when everyone's tab is hidden" is a world setting, on by default. If
+  every present player's tab is hidden (they switched app or locked their phone), the world freezes,
+  as a solo world does today when its tab is hidden. Clients already report visibility (`paused`).
+  Server worlds send it to the server.
+- **Idle players.** A player who hasn't sent a command for **10 minutes** gets an **AFK** icon
+  over their hero's head, beside their name card, seen by everyone. The icon goes as soon as they
+  act. After **30 minutes** idle they're disconnected, with "Disconnected for being away", and their
+  hero leaves the world as on any exit. Until then they count as present, so the world runs on around
+  them. This works the same in browser-hosted worlds, where the host's game runs the timer. The
+  rules carry each player's last-command step, so every replica draws the icon at the same moment.
+- **Setting the world aside.** After **2 minutes** in `empty` (a server setting), the worker ends
+  and the world goes back to `stored`. A stored world costs no CPU and no memory. Entering it again
   starts a worker and restores the snapshot. The clock carries on from exactly where it was.
+- **How many run at once.** By default **2 worlds** may be running or loading at once. A third
+  entry waits with "The server is busy: 2 worlds are running" until one is set aside. The owner
+  changes the number on the management page, which recommends a maximum ([§10](#10-the-servers-management-page)).
 - **The management page** shows each world's state in words: for example "Running: 3 players, day
   14, dusk" or "Asleep since 21:40, day 9, morning".
 
@@ -296,23 +322,28 @@ identical across the gap. A wall-clock wait in between (simulated) changes nothi
 **What's kept**, under `~/Library/Application Support/io.github.hoffspot.pellagos-server/`:
 
 ```
-server.json                    the server's settings (written only by the server)
-secrets.json         (0600)    admin-key hash, session-signing key
+VERSION                        the data folder's layout version (see §5.1)
+server.json                    the server's settings, with configVersion (written only by the server)
+secrets.json         (0600)    admin-key hash, creator-key hashes, session-signing key
+identity.key         (0600)    the server's identity key pair (§7.6)
+certificates/        (0700)    ACME account key, certificates and their keys
 worlds/<world-id>/
   world.json                   name, description, seed, home people, created, creator,
                                heroes mode, settings, time played, world time, versions, state
   state/now.json.gz            the latest full snapshot
   state/auto-1..5.json.gz      rotating autosaves
-  heroes/<player-id>.json      kept heroes: hero, progress, standing, talks, followers,
-                               wheels, explored, place, vitals, pin, messages, told
-  access.json                  keys (hashed), players (ticket hashes, roles, bans, last seen)
+  heroes/<player-id>/<n>.json  kept heroes, up to 6 per player: hero, progress, standing, talks,
+                               followers, wheels, explored, place, vitals, pin, messages, told
+  access.json                  keys and short codes (hashed), players (ticket hashes, roles,
+                               bans, last seen)
   journal.log                  who came and went, keys issued and revoked, admin actions
 backups/<world-id>/<stamp>-<why>.pellagos-world   (one gzip'd bundle per backup)
 ```
 
 The world id is fixed, while its name can be changed, so links and backups survive a rename (as
 with Foundry's data path). Logs go to `~/Library/Logs/io.github.hoffspot.pellagos-server/`.
-Directories are `0700` and files `0600`.
+Directories are `0700` and files `0600`. These folders come from the platform layer
+([§2](#2-the-shape-of-it)), so on Linux they'd follow the XDG folders and on Windows `%APPDATA%`.
 
 **When it saves**
 - On each war turn (every 60 s of world time).
@@ -329,22 +360,13 @@ Directories are `0700` and files `0600`.
   back to.
 
 **Backups**
-- **The ladder.** Hourly, keeping 12, and daily, keeping 7, counted in wall-clock time while the
-  world runs. A copy is also made before every version migration and before every restore. This is
-  Palworld's ladder, shortened, and Foundry's backup-before-migrate.
+- **The ladder.** 5 rotating autosaves, then hourly backups (keeping 12) and daily ones (keeping 7),
+  counted in wall-clock time while the world runs. A copy is also made before every update, every
+  version migration and every restore. This is Palworld's ladder, shortened, and Foundry's
+  backup-before-migrate. A large world's backups come to roughly 10–30 MB in all.
 - **What the owner can do.** List, restore and download backups, and make one by hand.
 - **Corruption.** A corrupt `now.json.gz` falls back to the newest autosave that reads, and the
   journal says so.
-
-**Versions: the new duty.** Today an old snapshot throws.
-
-- **For server worlds.** Every bump of `SNAPSHOT_VERSION` now needs a migration from the previous
-  version, the same rule `WAR_VERSION` already follows. `test/` keeps a fixture snapshot for each
-  version and loads each one through the chain. contribution.md's version rules gain this line.
-- **The safety net.** If a migration is missing or fails, the server offers a "fresh start from the
-  seed". It keeps the war, the kept heroes and the world's time, and rebuilds the rest, which is
-  exactly what a reload does today. It never does this silently: it makes a backup first and asks
-  the owner.
 
 **Importing and exporting**
 - **Export.** A world's whole folder, as one `.pellagos-world` bundle. It can be imported on another
@@ -356,18 +378,55 @@ Directories are `0700` and files `0600`.
   - The rest of the world starts from the seed, as a reload does today, because the browser never
     kept it.
 
+### 5.1 Settings, versions and upgrades
+
+Upgrades must never lose data, and moving to another platform must need little change. Everything
+the server writes carries a version, and every version has a way forward.
+
+| What | Its version | How it moves forward |
+|---|---|---|
+| The data folder's layout | `VERSION` at its root | A migration per step (files moved or split), run on start before anything else |
+| Server settings | `configVersion` in `server.json` | Migrations fill in new settings with defaults and rename old ones. Every setting has a schema; unknown keys are kept, not dropped, so a newer server's settings survive a trip through an older one. |
+| A world's metadata | `formatVersion` in `world.json` | Migrations per step |
+| A world's snapshot | `SNAPSHOT_VERSION` (26 today) | **New rule:** every bump ships a migration from the previous version, as `WAR_VERSION` already does. `test/` keeps a fixture snapshot for each version and loads it through the whole chain. contribution.md's version rules gain this line. |
+| The war | `WAR_VERSION` (9 today) | Its existing migrations |
+| Kept heroes | `SAVE_VERSION`, shared with the browser's saves | Read through the same code the browser uses (`Progress.fromJSON` and the like), which already accepts older shapes. Anything new gets a migration in `core/`, used by both. |
+| The protocol | `NET_VERSION` and the sockets' subprotocols | No migration. A server serves its own matching game, and a mismatched client is told to update or open the game from the server ([§12](#12-the-protocol)). |
+| The server itself | semver (`2.x.y`) | Shown on the page and in status; the update check compares it |
+
+**Rules that keep data safe**
+- **Backup first.** Before any migration, the server backs up what it is about to change.
+- **Never silently.** The management page lists what will be migrated and asks before an update
+  installs.
+- **Forward only, and never by an older server.** A server refuses to open a data folder, settings
+  file or world written by a newer version. It says which version is needed rather than guessing,
+  so a rollback can't corrupt anything. Rolling back means restoring the backup made before the
+  upgrade, which the page offers.
+- **Atomic writes everywhere.** A temp file, then `fsync`, then `rename`, for settings as well as
+  saves.
+- **Settings changes are validated** against the schema before they're written. A bad value is
+  refused with the reason.
+
+**The safety net for worlds.** If a snapshot migration is missing or fails, the server offers a
+"fresh start from the seed". It keeps the war, the kept heroes and the world's time, and rebuilds the
+rest, which is exactly what a reload does today. It never does this silently: it makes a backup
+first and asks the owner.
+
+**Updating** follows these rules, with the steps in [§11](#11-on-the-mac): the owner clicks, nothing
+updates while players are in, everything is backed up first, and a failed update goes back to the
+old version and its backups.
+
 ---
 
 ## 6. Heroes: kept by the world or brought in
 
-The world's creator picks the mode when making the world. The owner can change it later, after a
-warning.
+The world's creator picks the mode when making the world.
 
 | | **Kept by the world** | **Brought in** |
 |---|---|---|
-| Where the hero lives | On the server, in `heroes/<player-id>.json`, one hero per player per world | On the player's device (localStorage), as today |
-| First time in | Make a new hero for this world in the game's character maker. Or, if the world allows "bring one in on the first visit", bring an existing hero once, after which it belongs to the world. | Pick one of your saved heroes |
-| Coming back | The return ticket ([§7](#7-keys-identity-and-the-access-hooks)) brings back the same hero, where they left, with their pack, gold and wounds | Bring any hero again |
+| Where the hero lives | On the server, in `heroes/<player-id>/`, **up to 6 heroes per player in each world** (as the game keeps 6 on a device) | On the player's device (localStorage), as today |
+| First time in | Depends on the world's "first hero" setting, chosen by its owner: **new heroes only** (made in the game's character maker), or **may bring one in on the first visit**, after which it belongs to the world. Further heroes, up to 6, are always made new. | Pick one of your saved heroes |
+| Coming back | The return ticket ([§7](#7-keys-identity-and-the-access-hooks)) lists the player's heroes in that world. They pick one, and it comes back where they left it, with its pack, gold and wounds. | Bring any hero again |
 | On leaving | `host.leave` returns the character, and the server saves it | The client saves from its replica's events, as today. The server keeps only a last-seen line. |
 | Can it be edited on a device? | No. The server is the only copy. | Yes. `characterFrom` still cleans it up, but gold and pack are trusted. |
 | Listing badge | "Heroes stay here" | "Bring your hero" |
@@ -381,6 +440,14 @@ example, refusing heroes above a level or carrying more than some amount of gold
 
 **Moving a kept hero to another device** uses the return ticket, which can be shown as a code or a
 QR code.
+
+**Switching a world's mode.** The owner can switch, after a warning, and a backup is made first.
+- **Kept → brought in:** the next time each player enters, the server hands them their kept heroes
+  to save on their device. The game asks which to keep if they'd go over its 6 slots. From then on
+  heroes come from devices.
+- **Brought in → kept:** the heroes in the world at the switch become kept heroes. Players who come
+  later bring one in on their next visit, whatever the "first hero" setting says, and from then on
+  the world keeps it.
 
 Browser-hosted worlds, where a player opens their own world to friends, stay "brought in", as
 today.
@@ -397,7 +464,7 @@ today.
 | **Admin key** | The Mac's owner | Manages the server from any device other than the Mac itself, and creates worlds. Made at first start and shown on the management page on the Mac. | A long key, as below |
 | **Creator key** (optional) | People the owner lets make worlds | Makes worlds from the game. The maker becomes that world's owner. | A long key |
 | **World key** | Anyone the world's owner shares it with | Gets into one world, with the key's role: owner, trusted or player | A long key |
-| **Short code** (optional) | Someone being told a code aloud | Exchanged once for the world key and a ticket. Lasts 15–60 minutes and N uses, and the owner can revoke it. | 8 Crockford characters (40 bits) |
+| **Short code** | Someone being told a code aloud, at a table or over voice chat | Made by the owner, or by trusted players if the world allows. Exchanged once for the world key and a ticket. Lasts 15–60 minutes and N uses, and can be revoked. | 8 Crockford characters (40 bits) |
 | **Return ticket** | Each player, per world | Says "this is me again": brings back a kept hero, a role and bans | 128 random bits, base64url |
 | **Session** | The game, while connected | Reconnects without asking again; ends when its key is revoked or replaced, and has idle and absolute time limits | 128 random bits, short-lived |
 
@@ -419,14 +486,14 @@ land in a log:
 ```
 http://studio-mac.local:8480/#join=K7Q2MXD4RT.KQ2M9-XD4RT-AH3PW-C8NVB-7J2KQ-M9XDA
 https://pellagos-sam.duckdns.org:8480/#join=…                (internet, with TLS)
-https://hoffspot.github.io/conquest/#server=…&join=…          (from GitHub Pages; §9.4)
+https://hoffspot.github.io/conquest/#server=…&join=…          (from GitHub Pages; §9.5)
 ```
 
-**Where the game would rather prove than present.** Where the game runs in a secure context (rung
-1, rung 3 or GitHub Pages), it also makes a non-extractable Ed25519 key pair with WebCrypto (in
-every major browser since 2025) and registers its public key with the ticket. Coming back then
-signs the server's nonce instead of sending a reusable secret. On plain-`http` LAN pages, which
-have no WebCrypto, the ticket alone does.
+**Where the game would rather prove than present.** Where the game runs in a secure context (on the
+Mac itself, at a TLS address, or from GitHub Pages), it also makes a non-extractable Ed25519 key
+pair with WebCrypto (in every major browser since 2025) and registers its public key with the
+ticket. Coming back then signs the server's nonce instead of sending a reusable secret. On
+plain-`http` pages on the Wi-Fi, which have no WebCrypto, the ticket alone does.
 
 ### 7.2 How a key is used
 
@@ -456,11 +523,16 @@ have no WebCrypto, the ticket alone does.
   Foundry's administrator access key.
 - **On the Mac itself**, the management page needs no key. It has its own listener,
   `127.0.0.1:8481`, that nothing else reaches. Being at the Mac is the proof.
-  - **Why a second port.** Tunnels such as Tailscale Funnel and cloudflared deliver internet traffic
-    to the play port *from* `localhost`. So "came from localhost" can never mean "is the owner" on
-    the play port.
+  - **Why a second port.** Tunnels such as Tailscale Funnel deliver internet traffic to the play
+    port *from* `localhost`. So "came from localhost" can never mean "is the owner" on the play port.
   - **Guards.** The admin listener is also protected against DNS rebinding and cross-site requests
     ([§13](#13-security)).
+- **From the home network**, the page is at `/admin` on the play port and needs the admin key. It
+  answers only requests from home addresses (private IPv4, IPv6 unique-local and link-local) that
+  reached the server directly, never through a tunnel.
+- **From the internet, never,** whatever key is offered. Making worlds with a creator key, and
+  managing one's own world as its owner, go through the game's own screens and `/api/v1`, which
+  are open to the internet over TLS. The server-wide page isn't.
 - **Forgotten admin key.** The owner makes a new one from the page on the Mac. Physical access is
   the recovery, as deleting the settings file is in Satisfactory.
 
@@ -469,10 +541,11 @@ have no WebCrypto, the ticket alone does.
 | Role | Can |
 |---|---|
 | **owner** (of a world) | Everything for that world: settings, keys, players, backups, export, delete, start and stop. Owner-only commands. |
-| **trusted** | Play, and issue player keys (if the owner allows) |
+| **trusted** | Play. Issue player keys and short codes, if the world's "trusted may invite" setting is on. |
 | **player** | Play |
-| **banned** | Nothing. Bans follow the return ticket, and optionally the address for 24 hours. |
-| **admin** (of the server) | Everything on the server, including every world |
+| **banned** | Nothing. A ban follows the player's return ticket for good, and the internet address they last came from for 24 hours, to slow a comeback with a fresh key. The owner can lift either. |
+| **creator** (of the server) | Make worlds, and so own them. Holders of a creator key. |
+| **admin** (of the server) | Everything on the server, including every world, and creator keys |
 
 ### 7.5 The access hooks
 
@@ -510,6 +583,27 @@ admits(principal, world, character) → { yes, why, character }
   ([§13](#13-security)).
 - **Logs.** Keys, codes and tickets never appear in logs. The journal records the key's name only.
 
+### 7.6 The server's identity
+
+A typed IP address can change hands: the home's provider may give it to someone else tomorrow. So
+the game never sends a key or ticket to an address until the server has proved it is the one the
+player meant, as SSH does with host keys and Syncthing with device ids.
+
+- **The key pair.** Each server makes an Ed25519 key pair on first start (`identity.key`). Its id is
+  a fingerprint of the public key, shown on the management page and carried in invite links.
+- **The proof.** The game's first message carries a random nonce. The server's answer signs it.
+  - **In secure contexts** the game checks the signature with WebCrypto.
+  - **On plain-`http` pages**, which have no WebCrypto, it uses a small vendored verifier
+    (`noble-ed25519`, MIT, about 5 KB).
+- **Pinned on first use.** The first time, the game pins the id, or takes it from the invite link,
+  which is better. From then on:
+  - a different id at a remembered address stops everything, with "This isn't the server you
+    played on before";
+  - no key or ticket is sent;
+  - the player can re-pin only by following a fresh invite link.
+- **On top of TLS.** A certificate proves the name or IP; the identity proves the *server*.
+  Together they cover an IP that has moved to someone else with their own valid certificate.
+
 ---
 
 ## 8. Finding worlds
@@ -523,20 +617,20 @@ The game's **Worlds** screen merges three sources.
   `[fd00::20]:8480` or `pellagos.example.duckdns.org:8480`.
 - **Remembering.** The game remembers each server with its name, its keys and tickets, and when it
   was last seen. They are kept in localStorage under `pellagos.servers`, and can be exported and
-  imported as a code ([§9.4](#94-from-the-browser) explains why).
-- **Status.** Each known server is checked with `GET /api/v1/status`, which needs no key. It
-  returns:
-  - the server's name and version, `NET_VERSION`, the snapshot version and the build;
-  - the listed worlds: name, description, home people, players in now and the most allowed, state,
-    heroes mode, whether a key is needed, and the world's age and time played;
+  imported as a code ([§9.5](#95-from-the-github-pages-copy) explains why).
+- **Status: what anyone may see.** Each known server is checked with `GET /api/v1/status`, which
+  needs no key and is rate-limited. As in Minecraft's server list, it returns:
+  - **the server's card:** its name, id, version, `NET_VERSION`, the snapshot version and the build;
+  - **its listed worlds:** name, description, home people, state, heroes mode, whether a key is
+    needed, the world's age and time played, the players in now out of the most allowed, and their
+    hero names;
   - nearby servers;
   - listed players' worlds;
   - the round-trip time.
-
-  This follows Minecraft's server list ping and Satisfactory's save headers.
+- **Unlisted worlds,** the default for new worlds, appear only to players who hold a key or ticket
+  for them, in an authenticated `GET /api/v1/worlds`. The owner lists a world from its settings.
 - **Version mismatch.** A server whose `NET_VERSION` differs is greyed out. It offers "Open the game
   from this server", which always matches.
-- **Unlisted worlds** appear only for players who hold a key or ticket for them.
 
 ### 8.2 Nearby Macs
 
@@ -577,140 +671,169 @@ server: "List my world on: ☑ Studio Mac ☐ Sam's server".
 - **Where the code changes.** `RelayLink` becomes one of two `Link`s: a relayed one and a peer one.
   `Hosting` and `Joining` don't change.
 
-[§9.5](#95-webrtc-between-browsers) covers STUN, the iPhone's quirks and how often direct
+[§9.6](#96-webrtc-between-browsers) covers STUN, the iPhone's quirks and how often direct
 connections succeed.
 
 ---
 
 ## 9. Reaching the server
 
-What browsers allow in 2026 decides most of this section. These are the facts it rests on (the
-research notes cite each one):
+**The model** (the user's): the server opens one port to the internet. Any player types a DNS name
+or an IP address plus that port, or follows an invite link, and their game reaches the server
+directly, across the internet or across the Wi-Fi.
 
-- **Safari blocks plain `ws://` from an HTTPS page.** On the Mac and iPhone, a `ws://` connection to
-  `localhost` or a home address from an HTTPS page such as GitHub Pages is still blocked as mixed
-  content (WebKit bug 171934, open since 2017).
+What browsers allow in 2026 decides how to make that safe. The research notes cite each of these:
+
+- **Safari blocks plain `ws://` from an HTTPS page.** On the Mac and iPhone, an HTTPS page such as
+  GitHub Pages can't open `ws://` to `localhost` or a home address (WebKit bug 171934, open since
+  2017).
 - **Chrome and Firefox allow it, with a prompt.** Chrome 147 and later allow `ws://` to a private
   IP or a `.local` name from an HTTPS page, after a "local network" permission prompt. Firefox is
   rolling out the same prompt from 151.
-- **The reliable path.** A page *served by the Mac itself* (`http://studio-mac.local:8480`) talking
-  to the same Mac triggers no prompt and no mixed-content block in any browser. Chrome 154's new
-  "HTTPS by default" warning leaves private addresses alone.
-- **The cost of that path.** Such a page isn't a secure context, so it gets no WebCrypto, service
-  worker, passkeys or async clipboard. The game already copes: `fetcher.js` checks for
-  `crypto.subtle`, the service worker registers only in secure contexts, and copying falls back.
-- **From outside, a real certificate is needed.** Reaching the Mac from outside the home network
-  needs `wss://` with a certificate every browser trusts. Self-signed certificates won't do on an
-  iPhone without installing a profile.
+- **Pages the Mac serves itself work everywhere.** A page served by the Mac
+  (`http://studio-mac.local:8480`) talking to the same Mac triggers no prompt and no mixed-content
+  block in any browser. Chrome 154's "HTTPS by default" warning leaves private addresses alone.
+- **The cost of those pages.** They aren't secure contexts: no WebCrypto, service worker, passkeys
+  or async clipboard. The game already copes: `fetcher.js` checks for `crypto.subtle`, the service
+  worker registers only in secure contexts, and copying falls back.
+- **From the internet, a certificate every browser trusts.** Self-signed certificates won't do on
+  an iPhone without installing a profile. Free ones are available by name or by IP
+  ([§9.2](#92-free-certificates)).
 
-### 9.1 The ladder
+### 9.1 One port, two kinds of connection
 
-The management page shows each rung with its address, a QR code and whether it works right now.
+The server listens on port **8480** (changeable) on every IPv4 and IPv6 address. It looks at the
+first byte of each connection: a TLS handshake (`0x16`) is handled as HTTPS/WSS, anything else as
+plain HTTP/WS.
 
-| Rung | Address players use | Works for | Needs | Cost |
+| From | Plain `http`/`ws` | TLS `https`/`wss` |
+|---|---|---|
+| **A home address:** private IPv4 (`10/8`, `172.16/12`, `192.168/16`), link-local, IPv6 unique-local (`fc00::/7`) or link-local | Accepted | Accepted |
+| **The internet:** every other address, including the CGNAT range `100.64/10` | **Refused.** A page load is redirected to `https://`. A socket is closed with "Use the server's secure address". | Accepted, if a certificate is set up. Without one the server doesn't answer the internet at all, and the page says opening to the internet isn't finished. |
+
+**Two more listeners on loopback only**, never reachable from outside:
+- `127.0.0.1:8481` for the management page on the Mac ([§7.3](#73-the-owner-and-claiming-the-server));
+- `127.0.0.1:8482` for a tunnel ([§9.4](#94-behind-cgnat)). Everything arriving there is treated
+  as internet traffic, because a tunnel delivers it from `localhost`.
+
+**What a player types, and what happens:**
+
+| Typed | Game opened from | What happens |
+|---|---|---|
+| `pellagos-sam.duckdns.org:8480` | anywhere | `wss://`, with the name's certificate. Works in every browser, anywhere. |
+| `203.0.113.7:8480` or `[2001:db8::7]:8480` | anywhere | `wss://`, with an IP certificate ([§9.2](#92-free-certificates)) |
+| `studio-mac.local:8480` or `192.168.1.20:8480` | the server's own page | `ws://`, no prompt |
+| the same | GitHub Pages | Chrome and Firefox: `ws://` after their prompt. Safari: a hand-off to the server's own page ([§9.5](#95-from-the-github-pages-copy)). |
+
+**Home and away under one name.** The server's status lists all its addresses. The game remembers
+them with the server's id ([§7.6](#76-the-servers-identity)) and tries the home address first when
+the public address matches its own, then the internet address. So a laptop that moves between home
+and a café keeps working. It also gets round routers that can't loop a public name back inside
+(no "hairpin NAT").
+
+### 9.2 Free certificates
+
+The server carries an ACME client (RFC 8555, on `node:crypto`, no native add-ons). It keeps the
+account key and certificates in `certificates/` (`0600`) and renews them itself. Setup offers three
+routes, in this order:
+
+| Route | Players type | How it's proved | Renewal | Trade-offs |
 |---|---|---|---|---|
-| **1. This Mac** | `http://localhost:8480` | The owner, on the Mac | Nothing | Free |
-| **2. Same Wi-Fi** | `http://studio-mac.local:8480` or `http://192.168.1.20:8480`. The game is served by the Mac. | Every browser, iPhone included | Nothing. macOS asks no permission to accept connections. | Free |
-| **3a. Internet through Tailscale Funnel** | `https://studio-mac.<tailnet>.ts.net` (also 8443 or 10000) | Every browser, anywhere, **including behind CGNAT**, with no router changes | The owner installs Tailscale (the open-source client on macOS) and allows Funnel. The server runs `tailscale funnel --bg 8480`. | Free (the Personal plan counts the owner, not visitors). Funnel's bandwidth cap is unpublished, but play needs about 2 KB/s per player. |
-| **3b. Internet through the router, with a free name** | `https://pellagos-sam.duckdns.org:8480` | Every browser, anywhere | Port mapping ([§9.2](#92-port-mapping-and-the-reachability-test)) or a manual forward. A DuckDNS name and token. A Let's Encrypt certificate through DNS-01 using DuckDNS's TXT API ([§9.3](#93-tls-without-paying)). Not behind CGNAT. | Free |
-| **3c. Internet through the router, by IP** | `https://203.0.113.7:8480` | Every browser, until the home IP changes | Port mapping, including 443 for validation. A Let's Encrypt *IP certificate*, 6-day "shortlived", renewed every 3 days. | Free |
-| **3d. For tonight only** | `https://<random>.trycloudflare.com` | Every browser | `cloudflared tunnel --url http://localhost:8480`, no account. The name changes every run, so keys must be re-shared. | Free |
-| **4. Players' browser worlds** | Through the broker on any server they know ([§8.3](#83-players-running-the-game)) | Every browser | WebRTC, falling back to relaying | Free |
+| **1. A free DuckDNS name** (suggested first) | `pellagos-sam.duckdns.org:8480` | DNS-01: the server sets `_acme-challenge` through DuckDNS's `&txt=` API. Works on any port. | 30 days before expiry. Let's Encrypt lifetimes are shrinking from 90 to 45 days over the next few years, and the client follows. | Needs a free DuckDNS account and token. The server also keeps the name pointed at the home's address, checking every 5 minutes, so links survive IP changes. **Unknown:** whether `duckdns.org` is on the Public Suffix List. If it isn't, all DuckDNS users share Let's Encrypt's 50 certificates a week, and route 2 or 3 is the fallback. |
+| **2. The owner's own domain** | `pellagos.example.com:8480` | DNS-01 through the domain's DNS host's API (a token the owner pastes in) | As route 1 | For owners who already have a domain. Nothing is bought for this. |
+| **3. The IP address** | `203.0.113.7:8480` or `[2001:db8::7]:8480` | TLS-ALPN-01 on port 443 (or HTTP-01 on 80). The router maps external 443 to 8480, and the server answers the `acme-tls/1` challenge on its own port. | The "shortlived" profile (160 hours), renewed every 3 days | No account at all. But the certificate, and every shared link, breaks when the home's IP changes. The server re-issues automatically for the new IP, and the page warns that links must be re-shared. |
 
-**Not used:**
-- **ngrok's free tier** puts a warning page in front of all browser traffic.
-- **playit.gg's free tier** has no HTTPS.
-- **Steam Datagram Relay and PlayFab** need native SDKs.
-- **Cloudflare TURN** costs $0.05 per GB.
+**Not offered:**
+- plain `ws://` from the internet;
+- self-signed certificates, which browsers warn about and iPhones refuse without a profile;
+- Cloudflare quick tunnels, ngrok and playit.gg: random names, warning pages or paid HTTPS.
 
-**Not assumed: a shared public relay.** The networking research's own first recommendation is a
-public relay that every Mac dials out to, following the Home Assistant cloud and Syncthing relays.
-It would work behind CGNAT with nothing to install. But someone has to host it, and today no relay
-is hosted anywhere. That would be paid hosting, which the user ruled out. If the owner later finds
-free hosting they're happy with, the broker protocol of [§12.3](#123-websocket-broker-subprotocol-pellagosbroker1)
-is already the relay's protocol: a Mac would announce its worlds there as a browser host does.
+**Later: WebTransport** with `serverCertificateHashes` (Baseline 2026, Safari 26.4) would let a page
+reach a self-signed server by its certificate's hash. It needs an HTTP/3 server, which Node doesn't
+yet offer in a stable form. Revisit when it does.
 
-### 9.2 Port mapping and the reachability test
+### 9.3 Opening the router
 
-- **Asking the router.** When "Open to the internet" is chosen without a tunnel, the server asks the
-  router for a mapping. It tries PCP (RFC 6887) first, then NAT-PMP (RFC 6886: UDP 5351, a 2-hour
-  lifetime renewed at half-life; it's in Apple's own routers), then UPnP-IGD. It maps TCP 8480,
-  plus 443 when an IP certificate is in use. Mappings are renewed while the server runs and removed
-  on stop. This follows Foundry, which turns UPnP on by default.
-  - **Permission.** Talking to the router counts as reaching the local network, so a LaunchAgent or
-    app needs macOS's permission; a Terminal launch doesn't ([§11](#11-on-the-mac)). If it's
-    refused, the page says so and explains how to forward the port by hand.
-- **Finding the public address.** The router's answer, and a STUN request to `stun.cloudflare.com`
-  or `stun.l.google.com`. These are free and public, but come with no service promise.
-- **Spotting CGNAT.** The router's external address falls in `100.64.0.0/10` or differs from the
-  STUN answer. The page then says plainly: "Your internet provider shares one address between many
-  homes, so friends can't reach this Mac directly. Use Tailscale Funnel (free) or a tunnel."
-- **Proving it from outside.** No central checker is assumed.
-  - **On the Mac:** the server tries its own public address through the router (hairpin). Success
-    proves the port is open. Failure proves nothing, because many routers don't hairpin.
-  - **From outside:** the definitive test is the game's **"Test this server"** button on any device
-    on another network (a phone on cellular), which reports the result back to the server's page.
-  - **Free extra proof:** a Let's Encrypt IP certificate can only be issued if the port is
-    reachable.
+- **Asking the router.** When the owner turns on **Open to the internet**, the server asks the
+  router for a mapping. It tries, in order:
+  - PCP (RFC 6887);
+  - NAT-PMP (RFC 6886: UDP 5351, a 2-hour lifetime renewed at half-life; it's in Apple's own
+    routers);
+  - UPnP-IGD.
 
-### 9.3 TLS without paying
+  It maps TCP 8480, plus 443 for an IP certificate.
+- **IPv6.** Addresses need no mapping, but home routers firewall inbound IPv6. The server asks for
+  a pinhole through PCP or UPnP-IGD v2's IPv6 firewall control where the router offers it.
+- **While running.** Mappings are renewed, and removed when the owner turns internet access off or
+  the server stops. **Close to the internet** is one switch on the page: the mapping goes, and
+  internet connections are refused from that moment.
+- **macOS permission.** Talking to the router counts as reaching the local network. A Terminal
+  launch is exempt; the Phase 2 app needs macOS's Local Network permission ([§11](#11-on-the-mac)).
+- **When the router won't.** The page shows manual steps: the router's admin address (the
+  gateway), the Mac's LAN address, and the ports to forward.
+- **Proving it works.**
+  - **Public address.** From the router's answer, and a STUN request to `stun.cloudflare.com` or
+    `stun.l.google.com`. These are free, with no service promise.
+  - **CGNAT.** Spotted when the router's external address falls in `100.64.0.0/10` or differs from
+    the STUN answer ([§9.4](#94-behind-cgnat)).
+  - **Hairpin check.** The server tries its own public address through the router. Success proves
+    the port is open; failure proves nothing, as many routers don't hairpin.
+  - **Free extra proof.** A Let's Encrypt IP certificate can only be issued if the port is reachable.
+  - **From outside.** The definitive test is the game's **"Test this server"** button on any device
+    on another network (a phone on cellular), which reports back to the server's page.
 
-- **The ACME client.** The server carries a small ACME client (RFC 8555, built on `node:crypto`)
-  and stores the account key and certificates in the data folder (`0600`).
-- **DuckDNS (rung 3b).**
-  - **The certificate.** DNS-01: the server sets `_acme-challenge` through DuckDNS's `&txt=` API,
-    and renews 30 days before expiry. Let's Encrypt is shortening certificate lifetimes from 90 to
-    45 days over the next few years.
-  - **The address.** The same DuckDNS token keeps the name pointed at the home's address.
-  - **Unknown: shared rate limits.** Whether `duckdns.org` is on the Public Suffix List decides
-    whether all DuckDNS users share Let's Encrypt's 50 certificates a week. The fallback is
-    another free DNS host with a TXT API, or rung 3a.
-- **IP certificates (rung 3c).**
-  - **The certificate.** The "shortlived" profile (160 hours), renewed every 3 days. Validation is
-    HTTP-01 or TLS-ALPN-01, never DNS-01, so 80 or 443 must reach the Mac.
-  - **When the address changes.** The certificate and links break when the home's IP changes, so
-    the page warns that this rung is best for a weekend.
-- **Tunnels (rungs 3a, 3d)** bring their own certificates, and the server needs none.
-- **The rule from [§13](#13-security):** an internet address is only ever offered with TLS. On the
-  Wi-Fi, plain `http`/`ws` is accepted, and the page says traffic there isn't encrypted.
-- **Later: WebTransport** with `serverCertificateHashes` (Baseline 2026, Safari 26.4) would let a
-  page reach a self-signed server by its certificate's hash, with no domain needed. It needs an
-  HTTP/3 server, which Node doesn't yet offer in a stable form. Revisit when it does.
+### 9.4 Behind CGNAT
 
-### 9.4 From the browser
+When the internet provider shares one public address between many homes, no router setting can
+open a port. The page says so plainly: "Your internet provider shares one address between many
+homes, so nobody can reach this Mac directly from the internet." It then offers two ways on:
+
+1. **Tailscale Funnel**, free.
+   - **Setup.** The owner installs Tailscale (on macOS, the open-source client) and allows Funnel.
+     The server runs `tailscale funnel --bg 8482`.
+   - **The address.** Players reach `https://studio-mac.<tailnet>.ts.net`, a stable name with
+     Tailscale's own certificate, on port 443, 8443 or 10000.
+   - **How it's treated.** Traffic arrives on the tunnel listener, `127.0.0.1:8482`, which the server
+     treats exactly as internet traffic: keys required, no management.
+   - **Bandwidth.** Funnel's cap is unpublished; play needs about 2 KB/s per player.
+2. **Players' browser worlds.** Friends elsewhere can still play together in a world hosted in one
+   of their browsers, through a broker that all of them can reach ([§8.3](#83-players-running-the-game)).
+   This Mac stays a Wi-Fi-only server.
+
+**Not assumed: a shared public relay.** The networking research's own first pick was a public relay
+that every Mac dials out to, as Home Assistant's cloud and Syncthing's relays work. That needs
+hosting, which is paid and was ruled out. If the owner ever finds free hosting they're happy with,
+the broker protocol of [§12.3](#123-websocket-broker-subprotocol-pellagosbroker1) can serve as that
+relay, with a Mac announcing its worlds there as a browser host does.
+
+### 9.5 From the GitHub Pages copy
 
 **Where the game comes from decides what it can reach:**
 
 | The game was opened from | It can reach |
 |---|---|
-| The server itself (`http://…:8480`, rungs 1–2) | That server always. Any `https://` server (rung 3). Browser-hosted worlds through that server's broker. |
-| GitHub Pages (`https://hoffspot.github.io/conquest/`) | Any server with a real certificate (rungs 3a–3d). A LAN server by `ws://` in Chrome or Firefox after their prompt (private IP or `.local` only), **never in Safari**. |
+| The server itself (`http://…:8480` on the Wi-Fi, or its `https://` address) | That server always. Any server with a certificate. Browser-hosted worlds through that server's broker. |
+| GitHub Pages (`https://hoffspot.github.io/conquest/`) | Any server with a certificate, by name or IP. A server on the Wi-Fi by `ws://` in Chrome or Firefox after their prompt (private IP or `.local` only), **never in Safari**. |
 
-**When a typed address can't be reached from this page,** the game says why and offers the way
-that works. For example: "Safari can't open an unencrypted connection to your home network from
-this page. Open the game from the server instead: http://studio-mac.local:8480".
-
-**Carrying a key across.** Following that link moves the player to the server's own page, carrying
-the world and key, and the ticket if there is one, in the fragment.
+**When a typed address can't be reached from this page,** the game says why and offers the way that
+works. For example: "Safari can't open an unencrypted connection to your home network from this
+page. Open the game from the server instead: http://studio-mac.local:8480". Following that link
+carries the world, the key and any ticket in the fragment.
 
 **Every origin has its own storage.** `https://hoffspot.github.io` and
 `http://studio-mac.local:8480` don't share localStorage. So:
-
 - invite links carry what's needed in the fragment;
-- **"My servers and tickets"** can be exported and imported as a code or QR, which also survives
+- **"My servers and tickets"** can be exported and imported as a code or QR code. That also survives
   Safari wiping a site's storage after 7 days without a visit;
-- a world's owner can **reissue** a lost player's ticket from the Players section, and the hero
-  comes back.
+- a world's owner can **reissue** a lost player's ticket from the Players section, and their heroes
+  come back.
 
 **Typed addresses.** The game accepts `host`, `host:port`, `ws(s)://…`, `[v6]:port` and invite
-links. It tries `wss://` first, then `ws://` where the browser allows it, then offers the server's
-own page.
+links. It tries `wss://` first, then `ws://` where the browser and address allow it, then offers the
+server's own page. It sends nothing secret until the server has proved its identity
+([§7.6](#76-the-servers-identity)).
 
-**Recognising a server again.** Each server has a key pair, and its id is the fingerprint of its
-public key, as Syncthing identifies devices. The game pins it on first contact, and warns if a
-remembered address starts answering with a different id.
-
-### 9.5 WebRTC between browsers
+### 9.6 WebRTC between browsers
 
 - **How often direct works.** About 10–25% of WebRTC connections need relaying. That figure comes
   from secondary estimates; Tailscale reports over 90% direct with basic STUN.
@@ -738,22 +861,40 @@ remembered address starts answering with a different id.
 
 ## 10. The server's management page
 
-On the Mac the page opens at `http://localhost:8481/`, the admin listener bound to `127.0.0.1`, and
-needs no key. Elsewhere it's at `/admin` on the play port (for example from a phone on the Wi-Fi),
-where it always needs the admin key. It uses the same `/api/v1` the game uses, and the same look as
-the game's menus, built from the game's CSS colours.
+**Where it opens:**
+- **On the Mac:** `http://localhost:8481/`, the admin listener bound to `127.0.0.1`. No key.
+- **From the home network:** `/admin` on the play port, for example from a phone on the Wi-Fi. Needs
+  the admin key.
+- **From the internet:** never, whatever key is offered ([§7.3](#73-the-owner-and-claiming-the-server)).
+
+It uses the same `/api/v1` the game uses, and the same look as the game's menus, built from the
+game's CSS colours.
 
 | Section | What it shows and does |
 |---|---|
-| **Overview** | The server's name. Its addresses: `localhost`, `name.local`, the LAN IP, the internet address with its reachability test result, and any tunnel URL. QR codes for each. Version and uptime. Whether the Mac is being kept awake, and a warning when on battery or with the lid likely to close. |
-| **Worlds** | A card per world. **Shows:** name, home people, seed, created, time played, world day and hour, state in words, players in now, heroes mode, size on disk. **Buttons:** Play (opens the game into this world), Start, Set aside, Keys, Players, Backups, Settings, Export, Delete. Delete needs the world's name typed, as Foundry does. Worlds are sorted by most recently played. |
-| **New world** | **Settings:** name, description, seed (random, or typed), home people, heroes mode, most players (up to 8), listed or unlisted. **Rules:** rest quorum, hold while joining, pause when everyone's away, AFK minutes, debug commands. **Then:** issues the first owner key and a player key. |
-| **Keys** | Per world: label, role, created, last used, uses, expiry. Issue, show (as text, link and QR), revoke, replace. |
-| **Players** | Per world, who's in now and everyone who has been. **For each:** name, hero, role, first and last seen, and time in the world. **Buttons:** kick, ban, unban, change role. |
-| **Backups** | Per world: the ladder and autosaves, with when, why and size. Restore (a backup is made first), download, make one now. |
-| **Server settings** | **Network:** port, listen addresses, Bonjour, port mapping, TLS, broker, relaying. **World making:** who may make worlds (admin only, holders of creator keys, or anyone). **Running:** autosave and set-aside timings, most worlds running at once (default 2), keep the Mac awake while players are in, data folder. |
-| **Activity** | The journal: entries, exits, keys, refusals, admin actions, saves and their times. |
+| **Overview** | **Addresses:** the server's name and every address, each with a QR code: `localhost`, `name.local`, the LAN IP, the internet name or IP, and any Tailscale Funnel name. **Internet:** whether it's open to the internet, with its certificate, its renewal date and the last reachability test. **About:** version and uptime, and whether a new version is out. **Power:** whether the Mac is being kept awake, with a warning on battery or with the lid likely to close. |
+| **Worlds** | A card per world, sorted by most recently played. **Shows:** name, home people, seed, created, time played, world day and hour, state in words, players in now (with AFK marks), heroes mode, listed or unlisted, size on disk. **Buttons:** Play (opens the game into this world), Start, Set aside, Keys, Players, Backups, Settings, Export, Delete. Delete needs the world's name typed, as Foundry does. |
+| **New world** | **Basics:** name, description, seed (random, or typed), home people, most players (up to 8), listed or unlisted (**unlisted** by default). **Heroes:** kept or brought in; for kept worlds, "first hero" new only or may be brought in once. **Rules:** pause when every tab is hidden (on), hold the world while someone joins (off), AFK icon after 10 minutes and kick after 30, trusted players may invite (off), debug commands (off). Resting always needs everyone present. **Then:** issues the first owner key and a player key. |
+| **Keys** | Per world: label, role, created, last used, uses, expiry. Issue, show (as text, link and QR), revoke, replace. Short codes: make one (15–60 minutes, N uses), see its uses, revoke. |
+| **Players** | Per world, who's in now and everyone who has been. **For each:** name, heroes, role, first and last seen, time in the world, AFK. **Buttons:** kick, ban (ticket for good, address for 24 hours), unban, change role, reissue ticket. |
+| **Backups** | Per world: the autosaves and the ladder (5 autosaves, 12 hourly, 7 daily, plus before every update, migration and restore), with when, why and size. Restore (a backup is made first), download, make one now. |
+| **Server settings** | **Network:** port (8480), Open to the internet, certificate route (DuckDNS name, own domain, or IP), router mapping, Tailscale Funnel, Bonjour, broker, relaying for browser worlds. **World making:** creator keys (issue, revoke). **Running:** worlds at once (default 2, with the recommended maximum beside it), set-aside delay (2 minutes), keep the Mac awake while players are in (on), data folder. **Updates:** check daily (on), update. |
+| **Activity** | The journal: entries, exits, AFK kicks, keys, refusals, admin actions, certificate renewals, saves and their times. |
 | **Health** | Per running world: step time (mean and p99), the worst step and what made it, memory, snapshot size, players, bandwidth. The server's CPU and memory. Like Satisfactory's `HealthCheck`, a world is "slow" when its steps fall behind. |
+
+**The recommended maximum of worlds at once** is worked out from what this machine has and what its
+worlds really use:
+
+- **Memory.** Usable memory is the machine's total less a reserve for macOS and the owner's own
+  apps: the larger of 4 GB and a quarter of the total. Divide that by the largest memory a world has
+  used here, or 250 MB until one has run.
+- **CPU.** One world per performance core, less one core for the server and the owner. The count
+  comes from `os.availableParallelism()`; on Apple Silicon, `sysctl hw.perflevel0.physicalcpu` gives
+  performance cores through the platform layer.
+- **Shown.** The smaller of the two, with its reasons. For example: "Recommended: up to 6 (memory
+  allows 22, CPU allows 6)".
+- **Above the recommendation.** The owner may set more. The page then warns, and the Health section
+  shows when steps fall behind.
 
 **Stopping the server** from the page or with Ctrl+C saves every world first. Valheim's "closing
 the window may leave it running" is a known trap. The page says when it's safe to quit.
@@ -770,9 +911,9 @@ cite Apple's TN3179 and the macOS 27 release notes.
 | macOS 27 runs only on Apple Silicon. Rosetta isn't restored on upgrade, and Intel code stops running in macOS 28. | Ship arm64 Node and nothing x86. |
 | Accepting incoming TCP connections needs **no** Local Network permission. Bonjour, connecting to LAN hosts, sending UDP, and connecting to the router for port mapping all **do**. | **Play needs no permission:** HTTP and WebSocket on one port. Bonjour, port mapping and the STUN reply are extras that can fail cleanly. |
 | Programs run from Terminal (and their children) and launchd daemons are exempt. LaunchAgents and apps are not. The permission follows the code signature, and Node's BSD sockets have been seen failing with `EHOSTUNREACH` and no prompt. A supported reset arrives in 27.2. | Phase 1 runs from Terminal. The page names the failure ("macOS refused Bonjour: open System Settings › Privacy & Security › Local Network"). The server retries rather than quitting. |
-| The application firewall identifies programs by their signature. Ad-hoc or unsigned builds are asked again after each update. | Tell the owner once. A Developer ID would fix it, but costs $99 a year. |
+| The application firewall identifies programs by their signature. Ad-hoc or unsigned builds are asked again after each update. | Tell the owner before each update. A Developer ID would fix it, but costs $99 a year, and the owner chose not to. |
 | launchd no longer loads plists carrying the quarantine attribute. | Never write LaunchAgent plists from a download. Phase 2 registers its agent from inside the app bundle with `SMAppService`. |
-| Sleep stops the server. | Hold a power assertion only while players are in: `caffeinate -i -w <pid>`, started on the first entry and ended on the last exit. Warn on battery and with the lid closed. Never change `pmset` for the owner. |
+| Sleep stops the server. | Automatically hold a power assertion while players are in: `caffeinate -i -w <pid>`, started on the first entry and ended on the last exit. Warn on battery and with the lid closed. Never change `pmset` for the owner. |
 | `ProcessType` unset means launchd throttles the job. | The Phase 2 agent sets `ProcessType=Interactive`. |
 
 **Phase 1: from Terminal** (milestone S2)
@@ -792,15 +933,34 @@ cite Apple's TN3179 and the macOS 27 release notes.
   - Quit, which saves first.
 - **What it bundles.** Node arm64 and the server, with the game's client inside the bundle.
 - **Info.plist.** `NSLocalNetworkUsageDescription` and `NSBonjourServices = [_pellagos._tcp]`.
-- **Signing.** Ad-hoc, distributed as a zip with a one-page guide to "Open Anyway" in Privacy &
-  Security. Control-click › Open no longer bypasses Gatekeeper since macOS 15.
-- **Updates.** "Check for updates" opens the releases page. Sparkle needs a Developer ID to work
-  reliably.
-- **Optional, needs approval.** A Developer ID ($99 a year) for notarisation, permissions that stick
-  across updates, and Sparkle. Not assumed.
+- **Signing.** Ad-hoc and free: no Apple Developer ID (the owner's decision). It's distributed as a
+  zip with a one-page guide to "Open Anyway" in Privacy & Security, since Control-click › Open no
+  longer bypasses Gatekeeper from macOS 15. The firewall asks again after each update, and the page
+  says so before an update.
 
-**Other platforms.** Nothing in the server is Mac-only except Bonjour, the keep-awake call and the
-menu-bar app, so Linux and Windows hosts come almost free. They aren't promised.
+**Updating** (both phases). The owner clicks; nothing updates itself.
+1. Once a day the server checks the project's GitHub releases (free; can be turned off). The page
+   then shows "Version 2.4.0 is out", with its notes.
+2. **Update** downloads the release archive and checks it against the release's signature: an
+   Ed25519 key belonging to the project, whose public half ships with the server. Free, and no Apple
+   signing involved.
+3. It waits until no players are in, or the owner tells players and sets worlds aside.
+4. It backs up every world and the settings ([§5.1](#51-settings-versions-and-upgrades)).
+5. It unpacks the new version beside the old one, and restarts into it. Migrations run on first
+   start.
+6. If the new version fails to start or migrate, the server goes back to the old version and the
+   backups, and says why. The previous version stays until the next update.
+
+A server run from a git checkout shows the commands to update instead.
+
+**Other platforms.** macOS comes first. Everything platform-specific sits in the platform layer
+([§2](#2-the-shape-of-it)): folders, keep-awake, Bonjour, secrets and running at login.
+
+- **Linux or Windows** later means one more file in `server/platform/`, plus notes for its firewall
+  and service manager.
+- **A Docker image** for home servers and NAS boxes is a small step after Linux.
+- **Nothing outside the platform layer** may call a macOS-only command. A test checks that by
+  running the whole server suite on Linux in CI.
 
 ---
 
@@ -814,22 +974,24 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 
 | Method and path | Needs | Does |
 |---|---|---|
-| `GET /status` | nothing (rate-limited) | The server's card, its listed worlds, nearby servers, listed players' worlds and versions ([§8.1](#81-servers-the-player-knows)) |
+| `GET /status` | nothing (rate-limited) | The server's card and addresses, its listed worlds with player counts and hero names, nearby servers, listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
 | `GET /health` | nothing | `ok` or `slow` |
-| `POST /enter` `{world, key?, ticket?}` | a key or ticket | `{session, ticket?, role, world, heroes, hero?}` with the hero in kept worlds. Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version`, `wait n` |
+| `POST /enter` `{world, key?, ticket?}` | a key or ticket | `{session, ticket?, role, world, heroes}`, where `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `busy` (too many worlds running), `locked`, `version`, `wait n` |
+| `POST /codes/redeem` `{code}` | a short code | Trades it, once, for `{world, key}`, then as `/enter` |
 | `GET /worlds` | a session or the admin key | Listed worlds, plus unlisted worlds the caller holds keys for |
-| `POST /worlds` | `world.create` | Make a world. Returns `{world, ownerKey, playerKey}` |
+| `POST /worlds` | a creator key or the admin key | Make a world (unlisted). Returns `{world, ownerKey, playerKey}` |
 | `PATCH /worlds/:id`, `DELETE /worlds/:id {confirm}` | owner | Change settings, or delete (with the world's name typed) |
 | `POST /worlds/:id/start`, `/aside`, `/save` | owner | Lifecycle |
-| `GET`, `POST`, `DELETE` `/worlds/:id/keys[/:key]`; `POST …/keys/:key/replace` | owner, or trusted for player keys | Keys |
-| `GET /worlds/:id/players`; `POST …/players/:p/kick`, `/ban`, `/unban`, `/role` | owner | Players |
+| `GET`, `POST`, `DELETE` `/worlds/:id/keys[/:key]`; `POST …/keys/:key/replace`; `POST …/codes` | owner, or trusted if the world allows | Keys and short codes |
+| `GET /worlds/:id/players`; `POST …/players/:p/kick`, `/ban`, `/unban`, `/role`, `/ticket` | owner | Players, including reissuing a lost ticket |
 | `GET`, `POST` `/worlds/:id/backups`; `POST …/backups/:b/restore`; `GET …/export`; `POST /worlds/import` | owner (import: `world.create`) | Backups and moving worlds |
-| `GET`, `PATCH` `/server`; `GET /server/journal`, `/server/health` | admin | Settings and health |
+| `GET`, `PATCH` `/server`; `GET /server/journal`, `/server/health`; `GET`, `POST`, `DELETE` `/server/creators`; `POST /server/update` | admin, from the Mac or the home network only | Settings, health, creator keys and updating |
 
 - **Authorisation.** `Authorization: Bearer <session>`.
 - **Errors.** `{error: code, message}`.
-- **CORS.** Only `/status`, `/enter` and `/worlds` answer cross-origin, so the game can use them
-  from GitHub Pages. Management calls answer only to the server's own origin.
+- **CORS.** The calls the game makes answer cross-origin, so they work from GitHub Pages: `/status`,
+  `/enter`, `/codes/redeem`, `/worlds` and a world owner's calls. Server management answers only to
+  the server's own origin, and only from the Mac or the home network.
 
 ### 12.2 WebSocket `/play` (subprotocol `pellagos.play.1`)
 
@@ -838,17 +1000,22 @@ heartbeat, backoff and grace carry over unchanged. Only the place lines differ.
 
 | Today (relay) | Server world |
 |---|---|
+| (nothing) | `hi NONCE` → `hi SERVER-ID SIGNATURE`: the server proves its identity before anything secret is sent ([§7.6](#76-the-servers-identity)) |
 | `join CODE` → `joined pN TOKEN` | `enter WORLD SESSION` → `entered pN TOKEN` |
 | `rejoin CODE PEER TOKEN` | `reenter WORLD PEER TOKEN` |
 | `data\n…` to the host | `data\n…` to the world worker |
-| `away`, `back`, `closed` | `away` and `back` (the world is restarting), `closed REASON` (`kicked`, `banned`, `key-revoked`, `world-deleted`, `server-stopping`) |
+| `away`, `back`, `closed` | `away` and `back` (the world is restarting), `closed REASON` (`kicked`, `afk`, `banned`, `key-revoked`, `world-deleted`, `server-stopping`) |
 
 - **What's inside is unchanged.** `data` carries today's netplay messages: `hello`, `welcome`,
   `ops`, `motion`, `state`, `paused`, `ping`, `pong`, `chat`.
 - **Two new message kinds**, joiner to host: `ready` (finished loading, which starts a frozen
   clock) and `away {hidden}` (tab hidden or shown).
-- **`hello` gains a field:** `ticket` for kept heroes. In kept worlds the hero comes from the server
-  and the client's `character` is ignored.
+- **`hello` gains fields:** `ticket`, and `hero` (which of the player's kept heroes, or `new`). In
+  kept worlds the hero comes from the server, and the client's `character` is ignored unless the
+  world allows bringing one in on the first visit.
+- **AFK lives in the rules.** Each player's last-command step is part of the host's state, so every
+  replica shows the AFK icon at the same step. The 30-minute kick is a recorded leave op, so replay
+  stays exact.
 - **`NET_VERSION` bumps** with these changes.
 - **Limits.** Joins are throttled: at most 2 welcomes (full snapshots) sent at once, as Factorio's
   `max_upload_slots` does.
@@ -875,19 +1042,26 @@ connection attempt, and checks `Origin` ([§13](#13-security)).
 A Node server opened to the internet needs these from its first day.
 
 **Who may talk to it**
+- **Plain only at home.** Plain `http`/`ws` is accepted only from home addresses. From the internet,
+  TLS only ([§9.1](#91-one-port-two-kinds-of-connection)).
+- **Management never from the internet.** Key-free management lives only on `127.0.0.1:8481`
+  ([§7.3](#73-the-owner-and-claiming-the-server)). The admin key works only from home addresses that
+  reached the server directly. Tunnel traffic arrives on `127.0.0.1:8482` and is always treated as
+  internet traffic.
+- **The server proves itself first.** No key or ticket is sent until the server has proved its
+  pinned identity ([§7.6](#76-the-servers-identity)).
 - **Origin checks** on both sockets and on cross-origin API calls, as an exact allowlist with no
   wildcards and `null` refused. Allowed: the server's own origins, `https://hoffspot.github.io`, and
   any origins the owner adds. This stops cross-site WebSocket hijacking; it doesn't stop bots, which
   is what keys are for.
-- **The admin listener.** Key-free management lives only on `127.0.0.1:8481`
-  ([§7.3](#73-the-owner-and-claiming-the-server)). It is never on the play port, which tunnels
-  reach from `localhost`.
-- **Guarding against DNS rebinding** on both listeners. Requests whose `Host` isn't one of the
+- **Guarding against DNS rebinding** on every listener. Requests whose `Host` isn't one of the
   server's own names or addresses are refused.
 - **Guarding against cross-site requests.** Management calls also need a custom header and a
   same-site cookie, so another website open on the Mac can't drive them.
 - **Sign-in comes first.** Authentication is in the first message, never in a URL's query string.
   A socket that hasn't entered within 10 s is closed.
+- **What strangers see** is only the rate-limited status card and the worlds the owner has listed
+  ([§8.1](#81-servers-the-player-knows)).
 
 **How much it will take**
 - **Size caps.** 4 MiB for `welcome` and `state` (the snapshots), and 64 KB for every other message
@@ -898,6 +1072,9 @@ A Node server opened to the internet needs these from its first day.
   - 3 sockets per ticket;
   - 32 per address, set high because CGNAT shares addresses;
   - 64 players across the server.
+- **Temporary blocks.** An address with 20 refused entries or bad requests in 10 minutes is blocked
+  for 15 minutes. The block grows on repeats and shows on the page.
+- **Bans** follow the player's ticket for good and their address for 24 hours ([§7.4](#74-roles)).
 - **Other guards.**
   - Slow-request and idle timeouts on HTTP;
   - a fuzz test for the hand-written WebSocket parser;
@@ -906,9 +1083,12 @@ A Node server opened to the internet needs these from its first day.
 **Keys and secrets**
 - **Storage.** Keys and tickets are stored hashed, never logged, and carried in URL fragments
   rather than query strings.
-- **The internet needs TLS.** An internet address is offered only with TLS, from the server or a
-  tunnel ([§9.3](#93-tls-without-paying)). On the Wi-Fi, plain `http`/`ws` is accepted, and the
-  page says so.
+- **The internet needs TLS,** from the server's own certificate ([§9.2](#92-free-certificates)) or
+  Tailscale Funnel's. On the Wi-Fi, plain `http`/`ws` is accepted, and the page says traffic there
+  isn't encrypted.
+- **Certificates and keys on disk** (`certificates/`, `identity.key`, `secrets.json`) are `0600`.
+  The DuckDNS or DNS-host token is a secret too: it lives in the platform's secret store (the macOS
+  Keychain through `/usr/bin/security`) where there is one, otherwise in `secrets.json`.
 
 **What the server trusts**
 - **Players' input.** Only commands. In kept worlds the hero comes from disk.
@@ -931,22 +1111,22 @@ A Node server opened to the internet needs these from its first day.
 | Remote world lifecycle (create, list with save details, load, upload, download, delete) | Satisfactory HTTPS API | `/api/v1/worlds…` ([§12.1](#121-http-apiv1)) |
 | Claim the server; admin vs player passwords; changing a password ends sessions | Satisfactory | The admin key, world keys, replacing ends sessions ([§7](#7-keys-identity-and-the-access-hooks)) |
 | The password picks the role | Enshrouded user groups | Each key carries a role |
-| Invite links with expiry and a limit | Minecraft Realms (7-day default, 5 links) | Optional expiry and use counts, up to 10 live keys |
+| Invite links with expiry and a limit | Minecraft Realms (7-day default, 5 links) | Optional expiry and use counts, up to 10 live keys; short spoken codes that last 15–60 minutes |
 | Stable invite codes (not new on every restart) | Valheim's join codes change each restart and players complain | Keys last until revoked |
 | Characters kept on the server | Factorio, Satisfactory, V Rising, Foundry; Valheim needs mods | "Kept by the world" mode ([§6](#6-heroes-kept-by-the-world-or-brought-in)) |
 | A reconnect window that keeps your place | V Rising `SafeReconnectTime` | 30 s grace, frozen if alone |
 | Throttle full-map downloads | Factorio `max_upload_slots` | 2 welcomes at once |
-| Status ping with version, players and description | Minecraft server list ping | `GET /status` |
+| Status ping with version, players and description | Minecraft server list ping (with its player sample) | `GET /status`: the card and listed worlds, with player counts and hero names |
 | Rotating autosaves and tiered backups | Factorio (5 slots); Palworld (30 s, 10 min, hourly, daily); V Rising SmartKeep | 5 autosaves, 12 hourly, 7 daily ([§5](#5-saving-the-whole-world)) |
 | Back up before migrating a world to a new version | Foundry; Valheim 1.0 | Always |
-| Admin API on localhost by default; TLS and tokens when exposed | Minecraft management protocol; Palworld's "don't expose the REST API" | Management only on the Mac without a key; internet only with TLS |
-| UPnP on by default, with a reachability check | Foundry `upnp: true` | [§9.2](#92-port-mapping-and-the-reachability-test) |
+| Admin API on localhost by default; TLS and tokens when exposed | Minecraft management protocol; Palworld's "don't expose the REST API" | Management on the Mac without a key, from the home network with the admin key, never from the internet; play from the internet only over TLS |
+| UPnP on by default, with a reachability check | Foundry `upnp: true` | Router mapping and "Test this server" ([§9.3](#93-opening-the-router)) |
 | Serve the matching client | Foundry (players need only a browser link) | The server serves its own build |
 | Graceful stop that saves | Valheim's "closing the window leaves it running" trap | Stop saves; the page says when it's safe |
-| AFK kick | Factorio `afk_autokick_interval` | Optional "away" after N minutes |
-| Sleep needs everyone (or a share) | Minecraft `playersSleepingPercentage` | The rest quorum ([§3.2](#3-running-a-world-without-a-browser)) |
-| A browser reaches a home server securely | Plex's per-server certificates under `plex.direct` (needs a paid CA partnership and trips routers' DNS-rebinding guards); Home Assistant's relay (paid) | The free rungs of [§9.1](#91-the-ladder): the Mac's own page on the Wi-Fi, Tailscale Funnel, DuckDNS with Let's Encrypt |
-| Devices known by a key's fingerprint, pinned on first use | Syncthing device ids | The server's id is its key's fingerprint ([§9.4](#94-from-the-browser)) |
+| AFK kick | Factorio `afk_autokick_interval` | An AFK icon at 10 minutes, a kick at 30 |
+| Sleep needs everyone | Minecraft's sleep rule (`playersSleepingPercentage`, 100% by default) | Time passes when everyone present rests ([§3](#3-running-a-world-without-a-browser)) |
+| A browser reaches a home server securely | Plex's per-server certificates under `plex.direct` (needs a paid CA partnership and trips routers' DNS-rebinding guards); Home Assistant's relay (paid) | The free routes of [§9](#9-reaching-the-server): the Mac's own page on the Wi-Fi, free Let's Encrypt certificates by DuckDNS name or by IP, and Tailscale Funnel behind CGNAT |
+| Devices known by a key's fingerprint, pinned on first use | Syncthing device ids; SSH host keys | The server's id is its key's fingerprint, checked before any key is sent ([§7.6](#76-the-servers-identity)) |
 | "Same network" from the same public address | Philips Hue bridge discovery | The broker's "probably on your network" hint ([§8.2](#82-nearby-macs)) |
 | Signalling broker with peers relaying when direct fails | PeerJS PeerServer (listing off by default); Syncthing relays | The broker, with relaying over its WebSocket ([§8.3](#83-players-running-the-game)) |
 
@@ -957,24 +1137,31 @@ The sources for each row are in `research_notes/Standalone world server hosting/
 
 ## 15. Milestones
 
-Each one is a pull request that leaves the game playable. Each lists what proves it.
+Each one is a pull request that leaves the game playable, and each lists what proves it. They come
+in the user's order:
+
+1. server worlds on the Wi-Fi (S0–S5);
+2. the open internet port (S6);
+3. browser worlds through the broker (S7);
+4. the menu-bar app (S8);
+5. running it for real (S9).
 
 | # | Milestone | Proven by |
 |---|---|---|
-| **S0** | **The runner and host-free worlds.** `core/runner.js` takes the glue out of `game.js`, and the browser game uses it. There is a rule for worlds with no `HOST_PLAYER` (rest quorum, owner-only debug). Baking happens ahead in workers on Node. Plus the cross-engine soak. | Existing e2e unchanged. New: a Node runner with a Node joiner for 10 min with no resyncs. The soak: under 1 resync per player-hour in Chromium, WebKit and Firefox. No step over 50 ms in the 4-town run. |
-| **S1** | **The whole world saved.** Snapshot save and load via the runner, gzip, atomic writes, the heroes store, the `SNAPSHOT_VERSION` migration chain with fixtures, the "fresh start from the seed" fallback, and the solo-world import. | Save, restart the process, restore: identical checksum. Every fixture loads. A corrupt file falls back to an autosave. |
-| **S2** | **The server.** The supervisor, world workers, the registry, the lifecycle of [§4](#4-a-worlds-life-and-its-time), `/api/v1` (status, enter, worlds, create), `/play`, keys, tickets, sessions, the access policy, limits, `npm run world-server`. | Node clients over real sockets: make a world, enter with a key, leave (frozen: the war's clock identical), come back (same hero, same place), revoke the key (closed `key-revoked`). Two worlds at once. Ending a worker frees its memory. Fuzz the socket. |
-| **S3** | **The game's Worlds screen.** Known servers, adding a server by address, status, entering keys, making a world, kept or brought-in heroes, invite links with the server in them, version mismatch handling, the in-game World panel (who's here, keys, leave). | e2e against a local world server: two browser contexts, one makes a world and shares the key; the other enters, plays and leaves; the world freezes; the second comes back to its hero. |
-| **S4** | **The management page.** Every section of [§10](#10-the-servers-management-page), the Mac-only rule, the admin key from other devices, DNS-rebinding and CSRF guards. | e2e of the page: make, set aside, back up, restore, delete. A test that a foreign `Host` or `Origin` is refused. |
+| **S0** | **The runner and host-free worlds.** `core/runner.js` takes the glue out of `game.js`, and the browser game uses it. Worlds with no `HOST_PLAYER` get their rules: resting passes time when everyone present rests; debug is owner-only. AFK goes into the rules: the last-command step, the icon over the head at 10 minutes, the kick at 30. Baking happens ahead in workers on Node. Plus the cross-engine soak. | Existing e2e unchanged. New: a Node runner with a Node joiner for 10 min with no resyncs. The soak: under 1 resync per player-hour in Chromium, WebKit and Firefox. No step over 50 ms in the 4-town run. AFK icon and kick at the same step on every replica. |
+| **S1** | **The whole world saved, and versions.** Snapshot save and load via the runner, gzip, atomic writes, the heroes store (up to 6 per player). The version framework of [§5.1](#51-settings-versions-and-upgrades): the data folder, settings with schemas, the `SNAPSHOT_VERSION` migration chain with fixtures, refusing newer data. The "fresh start from the seed" fallback, and the solo-world import. | Save, restart the process, restore: identical checksum. Every fixture loads. A corrupt file falls back to an autosave. An older server refuses a newer folder, with the version it needs. |
+| **S2** | **The server on the Wi-Fi.** The supervisor, world workers, the registry and the lifecycle of [§4](#4-a-worlds-life-and-its-time), with 2 worlds at once and the recommended maximum. The platform layer, macOS first. The one port, plain at home only. `/api/v1` (status, enter, worlds, create), `/play` and the server's identity. Keys, short codes, tickets, sessions, creator keys and the access policy. Limits, temporary blocks and bans. Keeping the Mac awake. `npm run world-server`. | Node clients over real sockets: make a world, enter with a key, leave (frozen: the war's clock identical), come back (same hero, same place), revoke the key (closed `key-revoked`). A short code redeems once. A third world waits while two run. Ending a worker frees its memory. Fuzz the socket. The whole server suite also runs on Linux in CI. |
+| **S3** | **The game's Worlds screen.** Known servers, adding a server by address, status with listed worlds, entering keys and short codes, making a world. Heroes kept (choosing among up to 6, the first-hero rule, mode switching) or brought in. Identity pinning, invite links with the server in them, version mismatch handling. Exporting and importing "my servers and tickets". The in-game World panel: who's here, keys, leave. | e2e against a local world server: two browser contexts, one makes a world and shares the key; the other enters, plays and leaves; the world freezes; the second comes back to its hero. A changed server identity stops the game sending its key. |
+| **S4** | **The management page.** Every section of [§10](#10-the-servers-management-page), the Mac-only listener, the admin key from home addresses (and never from the internet), DNS-rebinding and CSRF guards. | e2e of the page: make, set aside, back up, restore, delete, reissue a ticket. Tests that a foreign `Host` or `Origin`, and the admin key from a public address, are refused. |
 | **S5** | **Nearby Macs.** Bonjour advertising and browsing, `nearby` in status, the page's addresses and QR codes, clean failure when macOS refuses. | Unit tests with a fake responder. A manual check on two Macs on macOS 27.0.1. |
-| **S6** | **The broker and players' worlds.** Presence, signalling, the WebRTC `Link` for browser-hosted worlds, the reachability check, relay fallback, the client's "Players" list. Today's `/relay` kept for one release, then removed. | e2e: two browser contexts on loopback connect over WebRTC through the broker. Forcing ICE to fail falls back to relaying. Announcement expiry. |
-| **S7** | **Internet reach.** Port mapping (PCP, NAT-PMP, UPnP), the CGNAT check, "Test this server", the ACME client (DuckDNS DNS-01; IP certificates), helpers for Tailscale Funnel and Cloudflare quick tunnels, and the GitHub Pages path with the "open from the server" hand-off ([§9](#9-reaching-the-server)). | Unit tests against a fake router and a fake ACME server (Pebble). A manual check from a phone on cellular through each rung, in Safari and Chrome. |
-| **S8** | **The Mac app.** The menu-bar wrapper, bundled Node, the `SMAppService` agent, keep-awake, plist keys, ad-hoc signing, the "Open Anyway" guide, the Homebrew tap. | A manual check on macOS 27.0.1: first launch, firewall prompt, Local Network prompt, run at login, sleep while idle, kept awake while players are in. |
-| **S9** | **Running it for real.** Backup ladder, export and import of bundles, update flow (never while players are in; backup and migrate on first start), AFK, the journal, `docs/SERVER.md`, contribution.md, README "Playing together" rewritten. | A 2-hour soak with 8 Node players: memory flat after the first hour, p99 step under 50 ms. Restore from each backup kind. |
+| **S6** | **The open internet port.** TLS on the one port, refusing plain connections from the internet. The ACME client: a DuckDNS name (suggested first), the owner's own domain, or the IP. Router mapping (PCP, NAT-PMP, UPnP) and IPv6 pinholes. The CGNAT check and the Tailscale Funnel helper with the tunnel listener. "Test this server", "Close to the internet", home-and-away addresses, and the GitHub Pages hand-off ([§9](#9-reaching-the-server)). | Unit tests against a fake router and a fake ACME server (Pebble). Plain `ws://` from a public address is refused. A manual check from a phone on cellular, in Safari and Chrome, by DuckDNS name and by IP. |
+| **S7** | **The broker and players' worlds.** Presence, signalling, the WebRTC `Link` for browser-hosted worlds, the reachability check, the listing rule (direct, or "through the server" when relaying is allowed, or hidden), relay fallback, and the game's "Players" list. Today's `/relay` kept for one release, then removed. | e2e: two browser contexts on loopback connect over WebRTC through the broker. Forcing ICE to fail falls back to relaying, or hides the world when relaying is off. Announcement expiry. |
+| **S8** | **The Mac app.** The menu-bar wrapper, bundled Node, the `SMAppService` agent, plist keys, ad-hoc signing, the "Open Anyway" guide, the Homebrew tap. | A manual check on macOS 27.0.1: first launch, firewall prompt, Local Network prompt, run at login, sleeps when idle, kept awake while players are in. |
+| **S9** | **Running it for real.** The backup ladder, export and import of world bundles, the update flow with signed releases and rollback ([§11](#11-on-the-mac)), the journal, `docs/SERVER.md`, contribution.md, and README's "Playing together" rewritten. | A 2-hour soak with 8 Node players: memory flat after the first hour, p99 step under 50 ms. Restore from each backup kind. An update from the previous release migrates every fixture world, and a forced failure rolls back. |
 
-**For the repository's owner.** S2 adds a `server` job to CI, and every CI job is a required check,
-so the owner will need to add it to the `main` ruleset. That PR will spell out the steps
-(contribution.md, section 6).
+**For the repository's owner.** S2 adds a `server` job to CI (with its Linux run), and every CI job
+is a required check, so the owner will need to add it to the `main` ruleset. That PR will spell out
+the steps (contribution.md, section 6).
 
 ---
 
@@ -984,32 +1171,22 @@ so the owner will need to add it to the `main` ruleset. That PR will spell out t
 |---|---|
 | Joiners in other browsers drift from a Node host | Measured first (S0's soak). Resync already recovers; drift above the target blocks S2. |
 | `SNAPSHOT_VERSION` bumps often (26 so far), and every bump now needs a migration | Fixtures plus a test that fails when a bump has no migration. The "fresh start from the seed" fallback, never silent. |
-| A home Mac behind CGNAT can't be reached however the router is set | The reachability test says so plainly and offers the free tunnel route ([§9](#9-reaching-the-server)). |
+| An open port invites strangers | Only TLS from the internet, an identity proof before any secret, nothing but the status card without a key, caps, temporary blocks, a socket fuzz test, and one switch to close it ([§13](#13-security)). |
+| A home Mac behind CGNAT can't be reached however the router is set | The reachability test says so plainly and offers Tailscale Funnel, or browser worlds ([§9.4](#94-behind-cgnat)). |
+| Whether `duckdns.org` is on the Public Suffix List, and so whether DuckDNS users share Let's Encrypt's weekly limit, is unverified | Checked at the start of S6. The own-domain and IP routes don't depend on it. |
+| IP certificates and IP links break when the home's IP changes | The server re-issues automatically and the page warns; the DuckDNS name, suggested first, avoids it. |
 | macOS Local Network bugs (Bonjour, port mapping) on 27.0.x | Play doesn't depend on them. Each failure says what to do. A supported reset arrives in 27.2. |
-| Pages (HTTPS) can't open `ws://` to a LAN address in Safari (Chrome and Firefox only after a prompt) | Every server serves the game itself; the Pages build hands players over to it ([§9.4](#94-from-the-browser)). |
-| Whether `duckdns.org` is on the Public Suffix List, and so whether DuckDNS users share Let's Encrypt's weekly limit, is unverified | Rung 3a (Tailscale Funnel) doesn't depend on it. Checked before S7 picks DuckDNS as the default. |
-| Tailscale Funnel's bandwidth cap is unpublished | Players load the game from GitHub Pages and use Funnel only for the socket (about 2 KB/s each). |
-| Whether Chrome's local-network prompt also covers WebRTC is contradicted in Chrome's own sources | Tested in S6. Relaying through the broker is the fallback either way. |
+| Pages (HTTPS) can't open `ws://` to a LAN address in Safari (Chrome and Firefox only after a prompt) | Every server serves the game itself, and the Pages build hands players over to it ([§9.5](#95-from-the-github-pages-copy)). With a certificate, Pages reaches the server's TLS address directly. |
+| Tailscale Funnel's bandwidth cap is unpublished | Players load the game from GitHub Pages and use Funnel only for the socket, about 2 KB/s each. |
+| Whether Chrome's local-network prompt also covers WebRTC is contradicted in Chrome's own sources | Tested in S7. Relaying through the broker is the fallback either way. |
 | A browser world hosted on an iPhone vanishes when Safari is backgrounded | Marked "temporary"; announcements expire after 45 s. |
-| Heroes, tickets and known servers live per browser origin, so `http://studio-mac.local:8480` and `https://hoffspot.github.io` don't share them | Export and import of "my servers and tickets" as a code. A kept hero comes back with its ticket on any origin. |
-| An internet-facing Node server | [§13](#13-security) from S2 on, and a fuzz test on the WebSocket parser. |
+| Heroes, tickets and known servers live per browser origin, and Safari may wipe a site's storage after 7 days unvisited | Export and import of "my servers and tickets" as a code; owners can reissue tickets; a kept hero comes back with its ticket on any origin. |
+| Hero names are shown to anyone who checks the server, for listed worlds | Only for worlds the owner lists, and new worlds start unlisted. Names are heroes' names, not players'. |
 | Worlds with no host player hide other assumptions | S0 runs long host-free soaks. |
 | Recast's wasm heap grows over long sessions | One worker per world, ended when the world is set aside. Memory is shown on the page. |
 
-**For the user to confirm** (sensible defaults are in the plan already):
-
-1. "Discovery shows just people running the game who can connect point to point." The plan lists
-   browser-hosted worlds only once they have shown they can be reached directly, or as "through
-   the server" when relaying is allowed. Is that the intent?
-2. Defaults:
-   - set a world aside after 2 minutes empty;
-   - "pause when everyone is away" on;
-   - AFK off;
-   - rest quorum 100%;
-   - up to 2 worlds running at once;
-   - port 8480.
-3. Kept heroes: one hero per player per world. Should a player be able to keep several heroes in one
-   world?
+Every question the first version asked the user has been answered (§0 and the change log). New
+questions go here as they come up.
 
 ---
 
@@ -1032,3 +1209,4 @@ so the owner will need to add it to the `main` ruleset. That PR will spell out t
 | Date | Change | Why |
 |---|---|---|
 | 2026-10-12 | First version, from a survey of `origin/main` (6aed84c) and three research notes: dedicated servers, networking and access, and hosting on macOS 27. | The user asked for a plan, no implementation: a standalone world server on macOS 27.0.1 with drop-in play, worlds that freeze when empty, keys, listings and research into similar servers. Their answers: Wi-Fi and internet; server lists plus nearby Macs plus players reachable point to point, with the server brokering WebRTC and addresses typed by hand; heroes chosen per world; a web management page. |
+| 2026-10-12 | **Decisions from the user's questions and answers.** The internet model became one port that anyone can reach by DNS name or IP and port, safe by TLS-only from the internet, free certificates (DuckDNS name first, own domain, or IP), the server's pinned identity, and Tailscale Funnel behind CGNAT. The public card shows listed worlds with player counts and hero names; new worlds start unlisted. Management works from the home network with the admin key, never from the internet. Browser worlds stay through the broker; 8 players a world; up to 6 kept heroes per player; creator keys; resting needs everyone; empty worlds unload after 2 minutes; hidden tabs freeze; AFK icon at 10 minutes and a kick at 30; 2 worlds at once with a recommended maximum. The first hero is the owner's choice per world, the mode can be switched, and solo worlds can be imported. Short codes; trusted may invite if allowed; bans by ticket and by address for 24 hours. Terminal first, then a free menu-bar app with no Developer ID. macOS first behind a platform layer, with versioned settings and data so upgrades lose nothing. Owner-clicked signed updates, keep-awake automatic, 5/12/7 backups, port 8480. Rollout: Wi-Fi, internet, broker, Mac app. Added §5.1 (settings, versions and upgrades) and §7.6 (the server's identity); rewrote §9 (one port, certificates, router, CGNAT, Pages) and §15 (the milestones in the new order). | The user asked for a Q&A to settle every open question, and said they pictured a port opened to the internet that any host can reach by name or IP and port. |
