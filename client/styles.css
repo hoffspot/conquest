@@ -1673,6 +1673,21 @@ body[data-minimap="off"] #party {
     letter-spacing: 0.04em;
 }
 
+/* (By a player's name, marked away: core/host.js AFK) */
+.plate .afk {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 14px;
+    vertical-align: middle;
+    color: #1d1a14;
+    background: #e8c35a;
+}
+
 .floater.hostile .bar .fill {
     background: linear-gradient(180deg, #e8735c, var(--hostile));
 }

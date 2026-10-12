@@ -1457,7 +1457,7 @@ async function join(event) {
     playedSave(save);
     state.save = save;
 
-    const { joinWorld, RELAY_ERRORS, NET_REFUSALS } = await import("./app/together.js");
+    const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS } = await import("./app/together.js");
 
     $("#joingo").disabled = true;
     $("#joinstatus").textContent = "Joining…";
@@ -1495,6 +1495,10 @@ async function join(event) {
         setTogether(null);
         $("#joingo").disabled = false;
         $("#joinstatus").textContent = NET_REFUSALS[reason] ?? "You couldn't join that world.";
+    };
+    joined.joining.onKicked = (reason) => {
+        joined.close();
+        leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
     };
     joined.joining.onWelcome = (welcome) => playJoined(save, welcome, joined.joining);
     joined.joining.onState = () => {
