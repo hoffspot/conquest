@@ -20,6 +20,7 @@
 // all), or any page failed.
 import { fork } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -30,7 +31,8 @@ import { AFK, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { StepTimes, WorldRunner } from "../client/js/core/runner.js";
 import { Ahead } from "../server/ahead.js";
-import { createServer } from "../server/index.js";
+import { attachRelay } from "../server/relay.js";
+import { createStaticHandler } from "../server/static.js";
 import { installWorkers } from "../server/workers.js";
 
 export const SOAK = Object.freeze({
@@ -57,6 +59,35 @@ const LEEWAY = 30000;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT = path.join(ROOT, "test-results/soak/report.json");
+
+// The page a browser's player is played on: empty, but the game's own server's, so its modules
+// load from there and its link to the relay is to the place the page came from (one a browser
+// made up itself, Chromium takes to be from the internet, and keeps from the machine's own relay)
+const PAGE = "<!doctype html><meta charset=utf-8><title>Soak</title>";
+
+// The game's server as `npm start` runs it (its files, and the relay on /relay), with the empty
+// page at /soak besides: { httpServer, close() }
+function soakServer() {
+    const files = createStaticHandler(path.join(ROOT, "client"));
+    const httpServer = http.createServer((request, response) => {
+        if (new URL(request.url, "http://soak").pathname === "/soak") {
+            response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(PAGE);
+        } else {
+            files(request, response);
+        }
+    });
+    const relay = attachRelay(httpServer);
+
+    return {
+        httpServer,
+        close: () =>
+            new Promise((resolve) => {
+                relay.close();
+                httpServer.closeAllConnections?.();
+                httpServer.close(() => resolve());
+            }),
+    };
+}
 
 /** A character to bring into the world: as Host.join takes it (core/netplay.js characterFrom). */
 export function characterOf(name, race) {
@@ -203,7 +234,7 @@ async function nodePlayer({ address, code, name, race, seed, idle }) {
 }
 
 // A player in a browser (`engine`: chromium, webkit or firefox), on a page of the game's server
-// with nothing on it but the player: { name, engine, report(), stop() }
+// with nothing on it but the player (PAGE): { name, engine, report(), stop() }
 async function browserPlayer({ base, code, name, race, seed, engine }) {
     const playwright = await import("@playwright/test");
     const executablePath = engine === "chromium" ? process.env.CHROMIUM_PATH : undefined;
@@ -212,7 +243,6 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
     const errors = [];
 
     page.on("pageerror", (error) => errors.push(String(error)));
-    await page.route(`${base}/soak`, (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><meta charset=utf-8><title>Soak</title>" }));
     await page.goto(`${base}/soak`);
     await page.evaluate(
         async ({ code, character, seed, tick }) => {
@@ -261,7 +291,7 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
  * rate, errors }], failures: [why] }).
  */
 export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chromium", "webkit", "firefox"], idle = true, log = console.log } = {}) {
-    const server = createServer();
+    const server = soakServer();
 
     await new Promise((resolve) => server.httpServer.listen(0, "127.0.0.1", resolve));
 
@@ -306,7 +336,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
             await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
-        log(`Everyone in, and what's round them made, after ${Math.round((performance.now() - arriving) / 1000)} s; playing ${minutes} minutes`);
+        log(`Everyone in, and what's round them made, after ${Math.round((performance.now() - arriving) / 1000)} s; playing ${minutes} minute${minutes === 1 ? "" : "s"}`);
 
         const started = performance.now();
 
