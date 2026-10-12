@@ -57,6 +57,9 @@ export const SOAK = Object.freeze({
 // their being marked away, or sent out, to be looked for)
 const LEEWAY = 30000;
 
+// The browsers' names, as their players are called
+const ENGINES = { chromium: "Chromium", webkit: "WebKit", firefox: "Firefox" };
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT = path.join(ROOT, "test-results/soak/report.json");
 
@@ -312,7 +315,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
 
         const joining = [
             ...Array.from({ length: nodes }, (_, k) => ({ name: `Node${nodes > 1 ? k + 1 : ""}`, engine: "node" })),
-            ...browsers.map((engine) => ({ name: engine[0].toUpperCase() + engine.slice(1), engine })),
+            ...browsers.map((engine) => ({ name: ENGINES[engine] ?? engine, engine })),
         ];
 
         for (const [k, { name, engine }] of joining.entries()) {

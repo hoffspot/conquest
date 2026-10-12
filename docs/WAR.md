@@ -2352,7 +2352,9 @@ request that changes it.
   doing nothing marked away at step 12,000 and sent out at step 36,000 on the host and every copy.
   The host's steps took 2.4 ms on the mean and 7 ms at the 99th percentile, with 16 field battles
   fought round two towns, and a few over 50 ms (the worst 143 ms), which the soak lists (when, how
-  many were in the world, what happened in the step) to be chased down.
+  many were in the world, what happened in the step) to be chased down. And on GitHub's runner
+  (three minutes, all four peoples' towns): Node, Chromium 153, WebKit 26.6 and Firefox 155, each
+  playing the host's every step with every check matching, and none sent the world again.
 
 **Parties** (core/host.js `PARTY`, the `party` command; the party menu, docs/GAME.md *The
 party*). Players play together as a party of up to four (`PARTY.most`):
