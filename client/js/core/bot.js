@@ -165,14 +165,15 @@ export class Bot {
     #foe(me) {
         const { battle } = this.host;
         let best = null;
-        let nearest = this.timing.foeNear ** 2;
+        let nearest = this.timing.foeNear * this.timing.foeNear;
 
         for (const actor of battle.actors) {
             if (actor === me || actor.dead || actor.map !== me.map) {
                 continue;
             }
 
-            const far = (actor.x - me.x) ** 2 + (actor.y - me.y) ** 2;
+            const [dx, dy] = [actor.x - me.x, actor.y - me.y];
+            const far = dx * dx + dy * dy;
 
             if (far < nearest && battle.hostile(me, actor) && this.host.canFight(me, actor)) {
                 best = actor;
