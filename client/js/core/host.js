@@ -655,10 +655,11 @@ const isSquare = (value) => Array.isArray(value) && value.length === 2 && value.
 const refuse = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
 
-// The charms that count in someone's pack (progress.js charms), as a key to tell a change by
+// The charms that count in someone's pack (progress.js charms), as a key to tell a change by:
+// each one's kind, make and what was rolled on it
 const charmsOf = (progress) =>
-    Object.entries(progress.charms())
-        .map(([id, quality]) => `${id}:${quality}`)
+    Object.values(progress.charms())
+        .map(({ id, quality, bonuses = {} }) => `${id}:${quality}:${JSON.stringify(Object.entries(bonuses).sort())}`)
         .sort()
         .join();
 

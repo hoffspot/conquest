@@ -6,11 +6,16 @@ import { describe, it } from "node:test";
 import { actionOf, assignable, iconOf } from "../client/js/app/wheel.js";
 import { ITEM_ICONS } from "../client/js/app/icons.js";
 import { Battle, KINDS, STAMINA_DRAIN, STEP_MS } from "../client/js/core/battle.js";
-import { BREWS, CHARM_GRADE, CHARMS, charmOf, SCROLL_SPELLS, SCROLLS, scrollOf } from "../client/js/core/goods.js";
+import { charmRolledOf, charmWords, describe as describeThing } from "../client/js/app/gearinfo.js";
+import { elitePrize } from "../client/js/core/caches.js";
+import { ROLLS } from "../client/js/core/gear.js";
+import { BREWS, CHARM_GRADE, CHARM_KIN, CHARM_ROLLS, CHARMS, charmOf, charmStats, rollCharm, SCROLL_SPELLS, SCROLLS, scrollOf } from "../client/js/core/goods.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { comesInMakes, gradeOf, ITEMS, MAKES, priceOf, Progress, QUALITIES, wareKind } from "../client/js/core/progress.js";
+import { createRandom } from "../client/js/core/random.js";
 import { SCHOOLS, SPELLS } from "../client/js/core/spells.js";
+import { madeOf } from "../client/js/core/stock.js";
 import { parseGrid } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -263,9 +268,130 @@ describe("the charms (goods.js CHARMS)", () => {
         const bare = new Progress({}).bonuses();
         const carrying = new Progress({ pack: [{ id: "wolfTooth" }, { id: "wolfTooth", quality: "rare" }, { id: "wolfTooth", quality: "fine" }, { id: "emberStone", quality: "veryRare" }, { id: "sword" }] });
 
-        assert.deepEqual(carrying.charms(), { wolfTooth: "rare", emberStone: "veryRare" });
+        assert.deepEqual(carrying.charms(), { wolfTooth: { id: "wolfTooth", quality: "rare" }, emberStone: { id: "emberStone", quality: "veryRare" } });
         assert.equal(Math.round((carrying.bonuses().melee - bare.melee) * 10000) / 10000, charmOf("wolfTooth", "rare").melee, "the best, not all three");
         assert.equal(carrying.bonuses().wardFire, 0.16);
+    });
+
+    it("rolls more goods on a fine charm or better as it's made: as many as gear of its make has, each different and not its own, in its make's span, most often those that suit it", () => {
+        const random = createRandom(7);
+        const tally = { kin: 0, all: 0 };
+
+        for (const [id, { charm, kin }] of Object.entries(CHARMS)) {
+            assert.equal(kin.length, 3, id);
+            assert.ok(kin.every((stat) => CHARM_ROLLS[stat] && !(stat in charm)), `${id}'s kin are goods a charm can have rolled, not its own`);
+            assert.deepEqual(rollCharm(id, "common", random), { id, quality: "common" }, "a common one has none");
+
+            for (const quality of ["fine", "masterwork", "rare", "veryRare", "legendary"]) {
+                const { count, strength } = ROLLS[quality];
+
+                for (let k = 0; k < 30; k++) {
+                    const made = rollCharm(id, quality, random);
+                    const stats = Object.keys(made.bonuses);
+
+                    assert.equal(stats.length, count, `${id}, ${quality}`);
+
+                    for (const stat of stats) {
+                        const [least, most] = CHARM_ROLLS[stat];
+                        const close = Number.isInteger(least) ? 0.5 : 0.005;
+
+                        assert.ok(!(stat in charm), `${id}: never its own good again`);
+                        assert.ok(made.bonuses[stat] >= least * strength - close && made.bonuses[stat] <= most * strength + close, `${id}, ${quality}: ${stat} ${made.bonuses[stat]}`);
+                        tally.kin += kin.includes(stat) ? 1 : 0;
+                        tally.all += 1;
+                    }
+                }
+            }
+        }
+
+        // (The first of them suits it three times in four, or by chance; the rest less often, as
+        // what suits it is used up)
+        assert.ok(tally.kin / tally.all > 0.6 && tally.kin / tally.all < 0.85, `${tally.kin} of ${tally.all} suit their charm`);
+        assert.ok(CHARM_KIN > 0.5);
+        assert.deepEqual(rollCharm("stormGlass", "rare", createRandom(3)), rollCharm("stormGlass", "rare", createRandom(3)), "the same for the same roll");
+
+        // (Made as it's bought, and as an elite's prize)
+        assert.equal(Object.keys(madeOf({ id: "stormGlass", quality: "veryRare" }, createRandom(4)).bonuses).length, 3);
+        assert.deepEqual(madeOf({ id: "stormGlass" }, createRandom(4)), { id: "stormGlass", quality: "common" });
+
+        const prizes = Array.from({ length: 400 }, () => elitePrize(3, random)).filter(({ id }) => CHARMS[id]);
+
+        assert.ok(prizes.length > 50);
+        assert.ok(prizes.every(({ quality, bonuses = {} }) => Object.keys(bonuses).length === ROLLS[quality].count), JSON.stringify(prizes.slice(0, 3)));
+    });
+
+    it("counts what was rolled on a charm carried, its own good too; keeps it in the pack and a save (but what no charm can have); and of two as well made, the first counts", () => {
+        const glass = { id: "stormGlass", quality: "veryRare", bonuses: { wardWater: 0.1, stamina: 9 } };
+        const other = { id: "stormGlass", quality: "veryRare", bonuses: { endurance: 0.15, hp: 10, wardMagic: 0.06 } };
+        const bare = new Progress({}).bonuses();
+        const carrying = new Progress({ pack: [glass, other] });
+
+        assert.deepEqual(charmStats(glass), { wardAir: 0.16, wardWater: 0.1, stamina: 9 });
+        assert.deepEqual(charmStats({ id: "stormGlass", quality: "veryRare", bonuses: { melee: 0.02, nonsense: 1, hp: "lots" } }), { wardAir: 0.16, melee: 0.02 });
+        assert.deepEqual(carrying.charms(), { stormGlass: glass }, "the first of two as well made");
+
+        const bonuses = carrying.bonuses();
+
+        assert.equal(bonuses.wardAir, 0.16);
+        assert.equal(bonuses.wardWater, 0.1);
+        assert.equal(bonuses.stamina - bare.stamina, 9);
+        assert.equal(bonuses.hp, bare.hp, "not the second's");
+
+        // Two rolled unlike don't stack, alike they do; kept as they are, but for what no charm can have
+        const pack = new Progress({});
+
+        assert.ok(pack.stow(glass) && pack.stow(other) && pack.stow(glass));
+        assert.deepEqual(
+            pack.pack.filter(Boolean).map(({ bonuses: rolled, count }) => ({ rolled, count })),
+            [
+                { rolled: glass.bonuses, count: 2 },
+                { rolled: other.bonuses, count: 1 },
+            ],
+        );
+
+        const kept = new Progress(JSON.parse(JSON.stringify(new Progress({ pack: [{ ...glass, bonuses: { ...glass.bonuses, armor: 0.5, melee: "x" } }] }).toJSON())));
+
+        assert.deepEqual(kept.pack[0], { ...glass, count: 1 });
+    });
+
+    it("says what a charm does, its own good and what was rolled on it, and what a shop's could have rolled on it as it's bought", () => {
+        const glass = { id: "stormGlass", quality: "veryRare", bonuses: { wardWater: 0.1, stamina: 9 } };
+        const progress = new Progress({ pack: [glass] });
+
+        assert.deepEqual(charmWords(glass), ["−16% air's harm", "−10% water's harm", "+9 stamina"]);
+        assert.deepEqual(charmWords({ id: "stormGlass", quality: "veryRare" }), ["−16% air's harm"]);
+
+        const carried = describeThing(progress.pack[0], progress, { index: 0, label: "Very rare storm glass" });
+
+        assert.equal(carried.kind, "Charm");
+        assert.deepEqual(
+            carried.lines.map(({ text, tone }) => [tone, text]),
+            [
+                ["note", "Wind and lightning hurt you a little less"],
+                ["base", "−16% air's harm"],
+                ["bonus", "−10% water's harm"],
+                ["bonus", "+9 stamina"],
+                ["note", "Carried in the pack: of each kind, the best made counts (of two as well made, the first)"],
+            ],
+        );
+        assert.equal(carried.rolls, null);
+
+        // (A shop's: what could be rolled on it, the goods that suit it first, as strong as its make can)
+        const ware = describeThing({ id: "stormGlass", quality: "veryRare" }, progress, { label: "Very rare storm glass", ware: true });
+
+        assert.deepEqual(ware.rolls, charmRolledOf({ id: "stormGlass", quality: "veryRare" }));
+        assert.deepEqual(ware.rolls, {
+            count: 3,
+            title: "Comes with 3 more goods, each different, rolled as it's bought:",
+            choices: [
+                { name: "Likely", text: "−6–11% water's harm" },
+                { name: "Likely", text: "−8–17% running's toll" },
+                { name: "Likely", text: "+6–11 stamina" },
+                { name: "Now and then", text: "any other a charm can give" },
+            ],
+        });
+        assert.equal(charmRolledOf({ id: "luckyCoin", quality: "fine" }).title, "Comes with one more good, rolled as it's bought:");
+        assert.equal(charmRolledOf({ id: "luckyCoin", quality: "common" }), null);
     });
 
     it("counts a charm as soon as it's carried, and no more once it's gone: a heart of oak's hit points", () => {
@@ -275,6 +401,14 @@ describe("the charms (goods.js CHARMS)", () => {
         assert.equal(player.maxHp, KINDS.player.hp + 12);
         assert.ok(host.command(HOST_PLAYER, { type: "drop", index: 0, count: 1 }).ok);
         assert.equal(player.maxHp, KINDS.player.hp);
+
+        // (And what was rolled on one: a storm glass's stamina and hit points, its wards in the fight)
+        const plain = hosted({ pack: [{ id: "stormGlass", quality: "veryRare" }] }).battle.actor(HOST_PLAYER);
+        const rolled = hosted({ pack: [{ id: "stormGlass", quality: "veryRare", bonuses: { stamina: 9, hp: 10, wardWater: 0.1 } }] }).battle.actor(HOST_PLAYER);
+
+        assert.equal(rolled.maxStamina - plain.maxStamina, 9);
+        assert.equal(rolled.maxHp - plain.maxHp, 10);
+        assert.deepEqual([plain.wards.air, plain.wards.water, rolled.wards.air, rolled.wards.water], [0.16, 0, 0.16, 0.1]);
     });
 
     it("has fire hurt less with an ember stone carried, and every spell with a witch's eye (no more than half off)", () => {

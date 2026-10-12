@@ -722,15 +722,30 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - **Spell scrolls** (`SCROLLS`, under "Tomes and scrolls"): each casts its spell once, though
     it's never been learnt (docs/MAGIC.md *Spell scrolls*).
   - **Charms** (`CHARMS`, 13, under "Charms"): carried, not worn; each does its good while it's
-    in the pack, the best made of each kind counting, never two alike (`Progress.charms`, counted
-    in `bonuses`; the host counts them again whenever they change, `#charmed`). A charm's made in
-    any make, the better the stronger (`CHARM_GRADE`: ×1, ×1.25, ×1.5, ×1.75, ×2 and ×2.5):
-    a rabbit's foot (+3% haggling), a lucky coin (+8% gold found on the fallen), a wolf-tooth, a
+    in the pack, the best made of each kind counting, never two alike, and of two as well made
+    the first in the pack (`Progress.charms`, counted in `bonuses`; the host counts them again
+    whenever they change, what was rolled on them too, `#charmed`). A charm's made in any make,
+    the better the stronger (`CHARM_GRADE`: ×1, ×1.25, ×1.5, ×1.75, ×2 and ×2.5): a rabbit's
+    foot (+3% haggling), a lucky coin (+8% gold found on the fallen), a wolf-tooth, a
     hawk-feather and a moonstone charm (+3% to blows, shots and spells), a heart of oak (+8 hit
     points), a swiftwind charm (running tires 12% less), a saint's token (+5% healing); and the
     ember stone, rime stone, storm glass and hag stone (fire, water, air and earth's spells and
     blows hurt 8% less) and the witch's eye (every spell 5% less). What wards off harm adds up,
     a stone's and the witch's eye's, but never takes more than half off (battle.js `charmed`).
+  - **What's rolled on a charm.** A fine charm or better has more goods besides its own, rolled
+    as it's made (`rollCharm`: bought, as gear's are, or an elite's prize), as many as a piece of
+    gear of its make (`ROLLS`: fine one, masterwork two, rare and up three), each a different
+    one and stronger the better made (×1 to ×1.5). Each is from half to all of what a common
+    charm whose own good it is gives (`CHARM_ROLLS`: +1.5–3% to blows, shots, spells or
+    haggling, +2.5–5% healing, +4–8 hit points or stamina, +4–8% gold found, running's toll
+    6–12% less, an element's harm 4–8% less, every spell's 2.5–5% less); three times in four
+    (`CHARM_KIN`) one of the three that suit it (its `kin`: a storm glass's water's harm,
+    running's toll and stamina; a lucky coin's haggling, every spell's harm and hit points; a
+    wolf tooth's hit points, stamina and running's toll), else any other. So two very rare
+    storm glasses can differ. A shop's charm says what could be rolled on it, and one carried
+    what was; one made before they were has only its own good. Like gear's, what's rolled on
+    a charm doesn't change its price. (`NET_VERSION` 111: both ends of a game must agree on what
+    a charm does.)
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
 - **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape

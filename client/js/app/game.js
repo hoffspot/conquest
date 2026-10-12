@@ -501,9 +501,9 @@ export function aboutOf({ id, quality, bonuses }) {
         return worth.trim();
     }
 
-    // (A charm: what it's for, and how much, as well made as it is)
+    // (A charm: what it's for, and how much, as well made as it is, with what was rolled on it)
     if (ITEMS[id].charm) {
-        return `${ITEMS[id].about.replace(/\.$/, "")} (${charmWords(id, quality).join(", ")}). Carried in the pack: the best made of each kind counts.`;
+        return `${ITEMS[id].about.replace(/\.$/, "")} (${charmWords({ id, quality, bonuses }).join(", ")}). Carried in the pack: the best made of each kind counts.`;
     }
 
     // (Gear: what it does is told piece by piece, app/gearinfo.js; here, what it gives worn, or
@@ -6871,7 +6871,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
@@ -6899,11 +6899,11 @@ export class Game {
                       affordable: ask(stock.special, true) <= progress.gold,
                       left: stock.specialLeft,
                       about: aboutOf(stock.special),
-                      info: ITEMS[stock.special.id]?.slot ? describe(stock.special, progress, { label: itemLabel(stock.special), haggle }) : null,
+                      info: ITEMS[stock.special.id]?.slot || ITEMS[stock.special.id]?.charm ? describe(stock.special, progress, { label: itemLabel(stock.special), haggle }) : null,
                   }
                 : null,
             unwanted: this.shopping.shop === "guild" ? null : "They buy only their own line: the adventurers' guild buys everything.",
-            preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
+            preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot || ITEMS[item.id]?.charm ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
         };
 
         const trade = this.#tradeNow();
@@ -6911,7 +6911,7 @@ export class Game {
         // (What each offers, each thing with what it is: gear as if it were carried)
         const offer = (side) => ({
             gold: side?.gold ?? 0,
-            items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item), about: aboutOf(item), info: ITEMS[item.id]?.slot ? describe(item, progress, { label: itemLabel(item), haggle, outside: true }) : null })),
+            items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item), about: aboutOf(item), info: ITEMS[item.id]?.slot || ITEMS[item.id]?.charm ? describe(item, progress, { label: itemLabel(item), haggle, outside: true }) : null })),
         });
 
         this.pack.show({

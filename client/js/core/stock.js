@@ -9,6 +9,7 @@
 // Pure data and arithmetic, no DOM.
 
 import { rollGear, UNIFORM_PEOPLES } from "./gear.js";
+import { rollCharm } from "./goods.js";
 import { comesInMakes, gradeOf, ITEMS, priceOf, rollBoost, SHOPS } from "./progress.js";
 import { createRandom } from "./random.js";
 
@@ -41,10 +42,11 @@ function mix(seed, key, day) {
 
 /**
  * A thing made (random.js random): gear with what's rolled on it (core/gear.js), its people's for
- * a uniform's piece; a wand or a grimoire with its boost; anything else as it is.
+ * a uniform's piece; a wand or a grimoire with its boost; a charm with what's rolled on it
+ * (core/goods.js rollCharm); anything else as it is.
  */
 export function madeOf({ id, quality = "common", people = null }, random) {
-    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people }) : { id, quality };
+    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people }) : ITEMS[id]?.charm ? rollCharm(id, quality, random) : { id, quality };
 
     return ITEMS[id]?.magic ? { ...made, boost: rollBoost(random) } : made;
 }

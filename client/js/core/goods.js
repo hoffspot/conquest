@@ -4,10 +4,12 @@
 //
 // How rare each is (`rarity`, a progress.js QUALITIES make: the colour it's shown in, and which
 // shops keep it) is its own: a draught or a scroll is only ever as it was made. A charm comes in
-// every make, as gear does, the better made the stronger (CHARM_GRADE).
+// every make, as gear does, the better made the stronger (CHARM_GRADE), and with more goods
+// rolled on it besides (rollCharm).
 //
-// Pure data, no DOM.
+// Pure, no DOM.
 
+import { ROLLS } from "./gear.js";
 import { SCHOOLS, SPELLS } from "./spells.js";
 
 // A boon in a bottle (host.js #use: on the drinker a while, one of each at a time)
@@ -55,26 +57,52 @@ export const BREWS = Object.freeze({
  * (CHARM_GRADE). Some add to what gear can (blows, shots, spells, hit points, healing,
  * haggling), some to what only a charm can: the gold found on the fallen (`fortune`), how little
  * running tires (`endurance`), and how much less an element's spells and blows hurt (`wardFire`,
- * `wardWater`, `wardAir`, `wardEarth`; every spell, `wardMagic`).
+ * `wardWater`, `wardAir`, `wardEarth`; every spell, `wardMagic`). A fine one or better has more
+ * goods rolled on it as it's made (rollCharm), most likely those that suit it (`kin`).
  */
 export const CHARMS = Object.freeze({
-    rabbitsFoot: { label: "Rabbit's foot", about: "Luck in a bargain.", charm: { haggle: 0.03 }, price: 50, look: "foot" },
-    luckyCoin: { label: "Lucky coin", about: "More gold found on the fallen.", charm: { fortune: 0.08 }, price: 70, look: "coin" },
-    wolfTooth: { label: "Wolf-tooth charm", about: "A hunter's bite in your blows.", charm: { melee: 0.03 }, price: 70, look: "tooth" },
-    hawkFeather: { label: "Hawk-feather charm", about: "A hawk's eye for your shots.", charm: { ranged: 0.03 }, price: 70, look: "feather" },
-    moonstone: { label: "Moonstone charm", about: "Your spells a little stronger.", charm: { spell: 0.03 }, price: 80, look: "moonstone" },
-    oakHeart: { label: "Heart of oak", about: "A sliver of an old oak's heart: more hit points.", charm: { hp: 8 }, price: 60, look: "oak" },
-    swiftwind: { label: "Swiftwind charm", about: "Running tires you less.", charm: { endurance: 0.12 }, price: 60, look: "whistle" },
-    saintsToken: { label: "Saint's token", about: "Your healing a little stronger.", charm: { heal: 0.05 }, price: 60, look: "token" },
-    emberStone: { label: "Ember stone", about: "Fire hurts you a little less.", charm: { wardFire: 0.08 }, price: 65, look: "ember" },
-    rimeStone: { label: "Rime stone", about: "Water and frost hurt you a little less.", charm: { wardWater: 0.08 }, price: 65, look: "rime" },
-    stormGlass: { label: "Storm glass", about: "Wind and lightning hurt you a little less.", charm: { wardAir: 0.08 }, price: 65, look: "storm" },
-    hagStone: { label: "Hag stone", about: "Stone and earth hurt you a little less.", charm: { wardEarth: 0.08 }, price: 65, look: "hag" },
-    witchEye: { label: "Witch's eye", about: "Every spell hurts you a little less.", charm: { wardMagic: 0.05 }, price: 110, look: "eye" },
+    rabbitsFoot: { label: "Rabbit's foot", about: "Luck in a bargain.", charm: { haggle: 0.03 }, kin: ["fortune", "endurance", "stamina"], price: 50, look: "foot" },
+    luckyCoin: { label: "Lucky coin", about: "More gold found on the fallen.", charm: { fortune: 0.08 }, kin: ["haggle", "wardMagic", "hp"], price: 70, look: "coin" },
+    wolfTooth: { label: "Wolf-tooth charm", about: "A hunter's bite in your blows.", charm: { melee: 0.03 }, kin: ["hp", "stamina", "endurance"], price: 70, look: "tooth" },
+    hawkFeather: { label: "Hawk-feather charm", about: "A hawk's eye for your shots.", charm: { ranged: 0.03 }, kin: ["endurance", "wardAir", "stamina"], price: 70, look: "feather" },
+    moonstone: { label: "Moonstone charm", about: "Your spells a little stronger.", charm: { spell: 0.03 }, kin: ["heal", "wardMagic", "wardWater"], price: 80, look: "moonstone" },
+    oakHeart: { label: "Heart of oak", about: "A sliver of an old oak's heart: more hit points.", charm: { hp: 8 }, kin: ["heal", "wardEarth", "stamina"], price: 60, look: "oak" },
+    swiftwind: { label: "Swiftwind charm", about: "Running tires you less.", charm: { endurance: 0.12 }, kin: ["stamina", "ranged", "wardAir"], price: 60, look: "whistle" },
+    saintsToken: { label: "Saint's token", about: "Your healing a little stronger.", charm: { heal: 0.05 }, kin: ["hp", "wardMagic", "spell"], price: 60, look: "token" },
+    emberStone: { label: "Ember stone", about: "Fire hurts you a little less.", charm: { wardFire: 0.08 }, kin: ["wardEarth", "stamina", "melee"], price: 65, look: "ember" },
+    rimeStone: { label: "Rime stone", about: "Water and frost hurt you a little less.", charm: { wardWater: 0.08 }, kin: ["wardAir", "hp", "endurance"], price: 65, look: "rime" },
+    stormGlass: { label: "Storm glass", about: "Wind and lightning hurt you a little less.", charm: { wardAir: 0.08 }, kin: ["wardWater", "endurance", "stamina"], price: 65, look: "storm" },
+    hagStone: { label: "Hag stone", about: "Stone and earth hurt you a little less.", charm: { wardEarth: 0.08 }, kin: ["wardMagic", "wardFire", "hp"], price: 65, look: "hag" },
+    witchEye: { label: "Witch's eye", about: "Every spell hurts you a little less.", charm: { wardMagic: 0.05 }, kin: ["spell", "wardFire", "wardWater"], price: 110, look: "eye" },
 });
 
 /** How much stronger a charm is for each make (progress.js QUALITIES), than a common one. */
 export const CHARM_GRADE = Object.freeze({ common: 1, fine: 1.25, masterwork: 1.5, rare: 1.75, veryRare: 2, legendary: 2.5 });
+
+/**
+ * The goods that can be rolled on a charm besides its own (rollCharm), each as much as [least,
+ * most] on a fine one, more on a better made one (gear.js ROLLS `strength`): from half of what a
+ * common charm whose own good it is gives to all of it.
+ */
+export const CHARM_ROLLS = Object.freeze({
+    melee: [0.015, 0.03],
+    ranged: [0.015, 0.03],
+    spell: [0.015, 0.03],
+    heal: [0.025, 0.05],
+    hp: [4, 8],
+    stamina: [4, 8],
+    haggle: [0.015, 0.03],
+    fortune: [0.04, 0.08],
+    endurance: [0.06, 0.12],
+    wardFire: [0.04, 0.08],
+    wardWater: [0.04, 0.08],
+    wardAir: [0.04, 0.08],
+    wardEarth: [0.04, 0.08],
+    wardMagic: [0.025, 0.05],
+});
+
+/** How likely each good rolled on a charm is one that suits it (its `kin`), while one's left. */
+export const CHARM_KIN = 0.75;
 
 /**
  * A charm's good (its CHARMS `charm`, as strong as its make: CHARM_GRADE): { stat: value }, each
@@ -84,6 +112,54 @@ export function charmOf(id, quality = "common") {
     const grade = CHARM_GRADE[quality] ?? 1;
 
     return Object.fromEntries(Object.entries(CHARMS[id]?.charm ?? {}).map(([stat, value]) => [stat, Number.isInteger(value) ? Math.round(value * grade) : Math.round(value * grade * 1000) / 1000]));
+}
+
+/**
+ * A charm as it's made (random.js random): { id, quality, bonuses ({ stat: value }) }. A fine one
+ * or better has as many goods rolled on it besides its own as a piece of gear of its make has
+ * (gear.js ROLLS: one, two, three), each a different one, and stronger the better made: most
+ * likely one that suits it (its `kin`, CHARM_KIN of the time), else any (CHARM_ROLLS). Each share
+ * to a whole percent, each number whole.
+ */
+export function rollCharm(id, quality = "common", random) {
+    const def = CHARMS[id];
+    const item = { id, quality };
+    const { count, strength } = ROLLS[quality] ?? ROLLS.common;
+
+    if (!def || !count) {
+        return item;
+    }
+
+    const bonuses = {};
+
+    for (let k = 0; k < count; k++) {
+        const open = Object.keys(CHARM_ROLLS).filter((stat) => !(stat in def.charm) && !(stat in bonuses));
+        const kin = def.kin.filter((stat) => open.includes(stat));
+        const from = random.next() < CHARM_KIN && kin.length ? kin : open;
+        const stat = from[Math.floor(random.next() * from.length) % from.length];
+        const [least, most] = CHARM_ROLLS[stat];
+        const value = (least + random.next() * (most - least)) * strength;
+
+        bonuses[stat] = Number.isInteger(least) ? Math.round(value) : Math.max(0.01, Math.round(value * 100) / 100);
+    }
+
+    return { ...item, bonuses };
+}
+
+/**
+ * All a charm does carried (`bonuses`: what was rolled on it, rollCharm): its own good, as strong
+ * as its make (charmOf), and what was rolled on it. { stat: value }.
+ */
+export function charmStats({ id, quality = "common", bonuses = null }) {
+    const stats = charmOf(id, quality);
+
+    for (const [stat, value] of Object.entries(bonuses ?? {})) {
+        if (CHARM_ROLLS[stat] && Number.isFinite(value)) {
+            stats[stat] = (stats[stat] ?? 0) + value;
+        }
+    }
+
+    return stats;
 }
 
 // A school spell's scroll by its tier: how rare it is, and what it costs

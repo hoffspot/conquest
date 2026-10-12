@@ -617,8 +617,9 @@ describe("a hero's kit (game.js, creator.js)", () => {
         assert.equal(aboutOf({ id: "ale" }), "Fills your stamina.");
     });
 
-    it("says what a charm does, and how much as well made as it is: never what armour takes off a blow", () => {
+    it("says what a charm does, and how much as well made as it is, with what was rolled on it: never what armour takes off a blow", () => {
         assert.equal(aboutOf({ id: "stormGlass", quality: "veryRare" }), "Wind and lightning hurt you a little less (−16% air's harm). Carried in the pack: the best made of each kind counts.");
+        assert.equal(aboutOf({ id: "stormGlass", quality: "veryRare", bonuses: { wardWater: 0.1, endurance: 0.15, stamina: 9 } }), "Wind and lightning hurt you a little less (−16% air's harm, −10% water's harm, −15% running's toll, +9 stamina). Carried in the pack: the best made of each kind counts.");
         assert.equal(aboutOf({ id: "luckyCoin", quality: "fine" }), "More gold found on the fallen (+10% gold found). Carried in the pack: the best made of each kind counts.");
         assert.equal(aboutOf({ id: "oakHeart" }), "A sliver of an old oak's heart: more hit points (+8 hit points). Carried in the pack: the best made of each kind counts.");
 

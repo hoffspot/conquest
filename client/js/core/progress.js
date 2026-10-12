@@ -20,7 +20,7 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
-import { BREWS, CHARMS, charmOf, SCROLLS, STARTING_SCROLLS } from "./goods.js";
+import { BREWS, CHARM_ROLLS, CHARMS, charmStats, SCROLLS, STARTING_SCROLLS } from "./goods.js";
 import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
@@ -369,8 +369,8 @@ export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?
  */
 export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && sameGear(a, b);
 
-// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, and (gear) whose make
-// it is, what was rolled on it and its own name
+// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear) whose make it
+// is, what was rolled on it and its own name, and (a charm) what was rolled on it
 function thingOf(item) {
     const def = ITEMS[item.id];
     const quality = QUALITIES[item.quality] ? item.quality : "common";
@@ -380,11 +380,14 @@ function thingOf(item) {
         thing.people = UNIFORM_PEOPLES.includes(item.people) ? item.people : "human";
     }
 
-    if (def?.slot && item.bonuses && typeof item.bonuses === "object") {
-        const bonuses = Object.entries(item.bonuses).filter(([stat, value]) => STATS[stat] && Number.isFinite(value));
+    if ((def?.slot || def?.charm) && item.bonuses && typeof item.bonuses === "object") {
+        const bonuses = Object.entries(item.bonuses).filter(([stat, value]) => (def.charm ? CHARM_ROLLS[stat] : STATS[stat]) && Number.isFinite(value));
 
         if (bonuses.length) {
             thing.bonuses = Object.fromEntries(bonuses);
+        }
+
+        if (bonuses.length && def.slot) {
             thing.affixes = Array.isArray(item.affixes) ? item.affixes.filter((key) => typeof key === "string") : [];
         }
     }
@@ -818,9 +821,10 @@ export class Progress {
             totals[stat] += value;
         }
 
-        // The charms carried (goods.js CHARMS): each kind's best made, never two alike
-        for (const [id, quality] of Object.entries(this.charms())) {
-            for (const [stat, value] of Object.entries(charmOf(id, quality))) {
+        // The charms carried (goods.js CHARMS): each kind's best made, never two alike, its own
+        // good and what was rolled on it
+        for (const charm of Object.values(this.charms())) {
+            for (const [stat, value] of Object.entries(charmStats(charm))) {
                 totals[stat] += value;
             }
         }
@@ -833,7 +837,11 @@ export class Progress {
         return totals;
     }
 
-    /** The charms carried that count (goods.js CHARMS): each kind's best made ({ id: quality }). */
+    /**
+     * The charms carried that count (goods.js CHARMS): each kind's best made, the first in the
+     * pack of those as well made ({ id: { id, quality, bonuses } }, `bonuses` what was rolled on
+     * it, if anything).
+     */
     charms() {
         const makes = Object.keys(QUALITIES);
         const best = {};
@@ -841,8 +849,8 @@ export class Progress {
         for (const stack of this.pack) {
             const quality = QUALITIES[stack?.quality] ? stack.quality : "common";
 
-            if (stack && ITEMS[stack.id]?.charm && makes.indexOf(quality) > makes.indexOf(best[stack.id] ?? null)) {
-                best[stack.id] = quality;
+            if (stack && ITEMS[stack.id]?.charm && makes.indexOf(quality) > makes.indexOf(best[stack.id]?.quality ?? null)) {
+                best[stack.id] = { id: stack.id, quality, ...(stack.bonuses ? { bonuses: { ...stack.bonuses } } : {}) };
             }
         }
 
