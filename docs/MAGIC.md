@@ -76,7 +76,8 @@ Vigor (they were 12.3, five and a half times, with cooldowns of 6, 9, 14 and 45 
 creatures set on someone together aren't beaten by healing alone, but by fighting them, stunning
 one and healing between: in the battle's own play, three of a player's own tier killed a player
 who only fought and healed more often than not by the middle of the game, and almost never one
-who stunned one of them as well (`Stun`'s 3 seconds every 3 can hold one of three out of it).
+who stunned one of them as well (`Stun`'s 3 seconds every 3, as it was then, could hold one of
+three out of it; it's every 5 now, the user: "Add increasing stun cooldown by two seconds").
 
 ### The elements
 
@@ -129,7 +130,7 @@ strike each other's.
 
 ### Hexes
 
-The Hexes skill's (core/progress.js): **Stun** (an enemy within 9 metres, 400 ms, a 3 s
+The Hexes skill's (core/progress.js): **Stun** (an enemy within 9 metres, 400 ms, a 5 s
 cooldown: it can't move, fight, cast or think for 3 seconds, and turns on whoever did it) and,
 once the skill brings it, **Hold** (600 ms, 6 s cooldown, 6 seconds).
 

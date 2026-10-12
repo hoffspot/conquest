@@ -925,8 +925,11 @@ describe("the battle (battle.js)", () => {
         assert.ok(amounts.size >= 4, `rolled ${[...amounts].sort()}`);
     });
 
-    it("stuns an enemy it can see within reach: it can't move or attack for three seconds", () => {
+    it("stuns an enemy it can see within reach: it can't move or attack for three seconds, and it's five before it can be cast again", () => {
         const battle = new Battle(open(20, 5), { seed: 3 });
+
+        // (Two seconds longer than it lasts: the user, "Add increasing stun cooldown by two seconds")
+        assert.deepEqual([SPELLS.stun.stun, SPELLS.stun.cooldown], [3000, 5000]);
 
         battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
 

@@ -158,7 +158,7 @@ export const SPELLS = Object.freeze({
     absoluteZero: attack("water", 7, "Absolute Zero", { about: "Cold beyond cold: everyone near's frozen solid, then slowed.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 3, stun: 1500, stunChance: 1, effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "arcane" }),
 
     // --- Hexes (the Hexes skill: core/progress.js) ---
-    stun: { label: "Stun", about: "Stuns an enemy a few moments.", target: "enemy", castTime: 400, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 3000, stun: 3000 },
+    stun: { label: "Stun", about: "Stuns an enemy a few moments.", target: "enemy", castTime: 400, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 5000, stun: 3000 },
     hold: { label: "Hold", about: "Holds an enemy fast a good while.", target: "enemy", castTime: 600, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 6000, stun: 6000, like: "stun" },
 
     // --- Learnt from tomes (each once found or given: progress.js TOMES) ---
