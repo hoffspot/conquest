@@ -35,8 +35,20 @@ export const KEEP_TILES = 1024;
 const KEEP_ROOM_TILES = 64;
 const MAX_POLYS = 4096;
 
-/** How many maps of squares keep their meshes at once (the longest unused let go of first). */
-const KEEP_ROOMS = 16;
+/**
+ * How many maps of squares keep their meshes at once (the longest unused let go of first): enough
+ * for the buildings round one player in a browser; a world server, with players in several towns
+ * at once, keeps more (keepRooms), or their insides' meshes would be let go of and baked again
+ * in its steps over and over.
+ */
+export const KEEP_ROOMS = 16;
+
+let keptRooms = KEEP_ROOMS;
+
+/** Keep the meshes of `most` maps of squares at once (KEEP_ROOMS, to begin with). */
+export function keepRooms(most) {
+    keptRooms = Math.max(1, Math.floor(most));
+}
 
 /** How far a point may be from the mesh, each way (metres: across, and up or down), to be on it. */
 const NEAR = Object.freeze({ across: 2, up: 4 });
@@ -81,7 +93,7 @@ export function navigatorOf(map) {
         rooms.delete(map);
         rooms.add(map);
 
-        while (rooms.size > KEEP_ROOMS) {
+        while (rooms.size > keptRooms) {
             const oldest = rooms.values().next().value;
 
             rooms.delete(oldest);
@@ -173,6 +185,15 @@ export class Navigation {
          * and now.
          */
         this.later = null;
+
+        /**
+         * Whether the tiles further round a way that falls short (path: WIDER) are only sent on
+         * to be made (later), even for a way that's not to wait: a world server's (server/
+         * ahead.js), whose players' surroundings are made ahead, and whose steps no one's way
+         * should hold up making tiles beyond them. The way as far as it goes is walked meanwhile,
+         * and looked for on from there.
+         */
+        this.widenLater = false;
     }
 
     /** Whether a tile is in. */
@@ -377,7 +398,7 @@ export class Navigation {
 
             // (Tiles round it still to come: the way as it is, for now, looked for further again
             // once they're in)
-            if (this.#cover(...box, 0, wait)) {
+            if (this.#cover(...box, 0, wait || this.widenLater)) {
                 break;
             }
 
