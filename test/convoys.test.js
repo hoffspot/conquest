@@ -22,6 +22,7 @@ const context = () =>
 
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
+const THREE = await import("three");
 const { STEP_MS } = await import("../client/js/core/battle.js");
 const { CONVOY_NEAR, HOST_PLAYER, Host } = await import("../client/js/core/host.js");
 const { buildWorld } = await import("../client/js/core/overworld.js");
@@ -117,6 +118,14 @@ describe("convoys on the roads near a player (host.js, war.js)", () => {
             assert.equal(host.wagons.get(id).load, "wood");
         }
 
+        // (Strung out along the road a wagon's spacing apart, met just setting out on it (its first
+        // point): none heaped on another, an ox's nose never at the wagon ahead; and so on the move)
+        const apart = () => met.wagons.slice(1).map((id, k) => Math.hypot(host.battle.actor(id).x - host.battle.actor(met.wagons[k]).x, host.battle.actor(id).y - host.battle.actor(met.wagons[k]).y));
+
+        assert.ok(apart().every((metres) => metres > CONVOY_NEAR.apart - 1.5), `met ${apart().map((metres) => metres.toFixed(1))} m apart`);
+        run(host, 10000);
+        assert.ok(apart().every((metres) => metres > CONVOY_NEAR.apart - 2), `on the move ${apart().map((metres) => metres.toFixed(1))} m apart`);
+
         assert.equal(host.soldiers.get(met.ids[0]).convoy, convoy.id);
         assert.match(host.battle.actor(met.ids[0]).name, /convoy captain$/);
         assert.ok(met.ids.every((id) => host.battle.actor(id).team === "human"));
@@ -153,7 +162,9 @@ describe("convoys on the roads near a player (host.js, war.js)", () => {
             furthest = Math.max(furthest, Math.hypot(wagon.x - from[0], wagon.y - from[1]));
         }
 
-        assert.ok(furthest > 30, `on along the road: ${furthest.toFixed(1)} m`);
+        // (As far as its 40 m road takes it, its captain a wagon's spacing ahead of it and in once
+        // they're within `past` of its end)
+        assert.ok(furthest > 40 - CONVOY_NEAR.apart - CONVOY_NEAR.past, `on along the road: ${furthest.toFixed(1)} m`);
         assert.ok(events.some(({ type, convoy: id, over, cargo }) => type === "convoyed" && id === convoy.id && over === "arrived" && cargo?.wood === 60));
         assert.equal(war.realm("human").stores.wood, stores + 60);
         assert.ok(war.log.some(({ type, force }) => type === "delivered" && force === convoy.id));
@@ -458,6 +469,26 @@ describe("a convoy's wagon drawn (art/kits/wagon.js)", () => {
 
         assert.ok(avatar.object.children.includes(wagon.object));
         assert.ok(wagon.wheels.every((wheel) => wheel.position.z < 0 && Math.abs(wheel.position.y - WAGON.wheel) < 1e-9));
+
+        // (Nose to tail-board, the biggest of oxen, shorter than a convoy's wagons are apart by
+        // more than half a metre: one's nose never at the wagon ahead)
+        avatar.update(0.05, 0, 0, 0);
+        avatar.object.updateMatrixWorld(true);
+
+        const along = (object, skip = new Set()) => {
+            const box = new THREE.Box3();
+
+            object.traverse((node) => node.isMesh && !skip.has(node) && box.union(node.geometry.boundingBox ?? (node.geometry.computeBoundingBox(), node.geometry.boundingBox).clone().applyMatrix4(node.matrixWorld)));
+
+            return box;
+        };
+        const drawn = new Set();
+
+        wagon.object.traverse((node) => drawn.add(node));
+
+        const long = (along(avatar.object, drawn).max.z - along(wagon.object).min.z) * (LOOKS.ox.scale[1] / avatar.scale);
+
+        assert.ok(long > 5 && long < CONVOY_NEAR.apart - 0.5, `${long.toFixed(2)} m nose to tail-board`);
 
         // (Going on 2 m, its wheels turned as far)
         const before = wagon.wheels[0].rotation.x;
