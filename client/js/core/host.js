@@ -131,13 +131,16 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
 /**
  * A works' convoy on the road near a player (docs/WAR.md *Convoys*): met once a player's this
  * near (metres), let go once every player's this far. Its captain goes ahead, its wagons in a
- * column behind them `apart` metres apart, its guards beside the wagons, `beside` metres off the
+ * column behind them `apart` metres apart (an ox in its shafts is about 5.7 m nose to tail-board,
+ * art/kits/wagon.js: a metre or so of road between one's nose and the wagon ahead; the user: "this
+ * caravan wagon and ox is placed exactly at the rear of the one in front of it ... Space that out a
+ * touch"), its guards beside the wagons, `beside` metres off the
  * road; all at the wagons' pace (`pace`, metres a second); making for a mark `ahead` metres on along
  * its road at a time, a point on it passed once they're `past` metres from it. Beaten (every guard
  * down), its goods carried off, a share of what they're worth in gold for each player there (`worth`
  * of each of its goods); its wagons stand where they were left.
  */
-export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
+export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 7, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
 
 /**
  * An army's supply wagon on its way near a player (docs/WAR.md *Supply*): met once a player's this
@@ -1558,6 +1561,12 @@ export class Host {
 
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
+
+            // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
+            // has a share of it once it's opened, wherever they are by then: #cacheFell)
+            if ((event.type === "hit" || event.type === "death") && event.by) {
+                this.#foughtFor(this.wild.get(event.id)?.cache, event.by);
+            }
 
             if (event.type === "death" && event.id === "orc" && !this.players.has(event.by) && !this.followers.has(event.by) && !this.companions.has(event.by)) {
                 const orc = this.battle.actor("orc");
@@ -4848,13 +4857,18 @@ export class Host {
     }
 
     // Where a convoy's captain, wagons and guards are to be, its captain at `mark` on its road
-    // and the rest strung out behind them along it: { guards: [[x, y]...] (its captain's first),
-    // wagons: [[x, y]...] }
+    // and the rest strung out behind them along it, and past where it began (just setting out from
+    // a town or a works) on back the way it goes, never heaped on its first point: { guards: [[x,
+    // y]...] (its captain's first), wagons: [[x, y]...] }
     #column(convoy, mark) {
         const way = convoy.path.slice(0, convoy.leg + 1).concat([convoy.at]).reverse();
+        const [first, next = first] = convoy.path;
+        const going = hypot(next[0] - first[0], next[1] - first[1]);
         const back = (metres) => {
             let [x, y] = [mark[0] + 0.5, mark[1] + 0.5];
             let left = metres;
+            // (The way back last gone along: at first, back against the way its road goes)
+            let [bx, by] = going > 1e-6 ? [(first[0] - next[0]) / going, (first[1] - next[1]) / going] : [0, 1];
 
             for (const [px, py] of way) {
                 const d = hypot(px - x, py - y);
@@ -4863,10 +4877,14 @@ export class Host {
                     return [x + ((px - x) / Math.max(d, 1e-6)) * left, y + ((py - y) / Math.max(d, 1e-6)) * left, (px - x) / Math.max(d, 1e-6), (py - y) / Math.max(d, 1e-6)];
                 }
 
+                if (d > 1e-6) {
+                    [bx, by] = [(px - x) / d, (py - y) / d];
+                }
+
                 [x, y, left] = [px, py, left - d];
             }
 
-            return [x, y, 0, 1];
+            return [x + bx * left, y + by * left, bx, by];
         };
         const wagons = Array.from({ length: CONVOY.wagons }, (_, k) => back(CONVOY_NEAR.apart * (k + 1)));
         const beside = ([x, y, dx, dy], side) => [x - dy * side * CONVOY_NEAR.beside, y + dx * side * CONVOY_NEAR.beside];
@@ -6351,18 +6369,20 @@ export class Host {
     }
 
     // A place's chest (`kind`: "chest", or a dragon's "hoard"; or an adventurers' "cache") opened:
-    // in its stead, a share of what's in it for each player at the place (core/progress.js LOOT:
+    // in its stead, a share of what's in it for each player at the place, and each who `fought` for
+    // it wherever they are (told so: `away`) (core/progress.js LOOT:
     // the gear in it of the place's `people`, a human's at the ruins and the caves; more gold the
     // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
     // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
     // alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, tier, relic = false }) {
+    #opened(id, kind, { at, maps, map, square, people, tier, relic = false, fought = [] }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
+            const there = Boolean(actor) && this.#atPlace(actor, at, maps);
 
-            if (!actor || actor.dead || !this.#atPlace(actor, at, maps)) {
+            if (!actor || actor.dead || (!there && !fought.includes(player.id))) {
                 continue;
             }
 
@@ -6376,7 +6396,7 @@ export class Host {
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map, square: [...square], until: this.battle.time + GROUND_MS });
             // (Told of the relic in it by name, if there's one: the last thing in it)
-            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(kind === "cache" ? { cache: true } : {}), ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest", ...(kind === "cache" ? { cache: true } : {}), ...(there ? {} : { away: true }), ...(relic ? { relic: bundle.items.at(-1).name } : {}) });
         }
     }
 
@@ -6538,7 +6558,9 @@ export class Host {
     }
 
     // One of a cache's guards fallen: once every one of them is, it's opened, a share of what's in
-    // it for each player near
+    // it for each player near, and for each who fought its guards (`fought`), however far they
+    // drew them off it (the user: "I kited off the bandit chief and killed him fairly far from the
+    // adventurer's cache and killed his bandit companions and no chest showed up at the mark")
     #cacheFell(id) {
         const cache = this.caches.get(id);
 
@@ -6547,8 +6569,20 @@ export class Host {
         }
 
         cache.opened = true;
-        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier });
+        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier, fought: cache.fought ?? [] });
         this.#event("cache", { cache: id, change: "opened" });
+    }
+
+    // A player, or one of theirs (`by`: a follower, a creature called or raised), fighting a
+    // cache's guards (cache `id`): kept with it (`fought`, by player), a share theirs once it's opened
+    #foughtFor(id, by) {
+        const cache = id ? this.caches.get(id) : null;
+        const actor = cache ? this.battle.actor(by) : null;
+        const owner = actor ? this.#ownerOf(actor) : null;
+
+        if (owner && this.players.has(owner) && !cache.fought?.includes(owner)) {
+            (cache.fought ??= []).push(owner);
+        }
     }
 
     // --- The dungeons (core/dungeons: docs/DUNGEONS.md) ---
