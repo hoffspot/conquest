@@ -8,7 +8,7 @@
 
 import { AFFIXES, affixesFor, blockMost, disguiseOf, GEAR, GEAR_SLOTS, handsOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
-import { charmOf } from "../core/goods.js";
+import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
 import { BOOSTS, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { WEAPONS } from "../core/weapons.js";
 
@@ -34,18 +34,24 @@ export function gearWords({ id, quality = "common", bonuses = {} }) {
     return [...own, ...Object.entries(bonuses ?? {}).filter(([stat]) => STATS[stat]).map(([stat, value]) => worded(stat, value))];
 }
 
-/** What a charm (core/goods.js) does carried, as well made as it is, in words: ["−16% air's harm"]. */
-export function charmWords(id, quality = "common") {
-    return Object.entries(charmOf(id, quality)).map(([stat, value]) => worded(stat, value));
+/**
+ * What a charm (core/goods.js) does carried, as well made as it is, in words: its own good, then
+ * what was rolled on it (`bonuses`): ["−16% air's harm", "+6 stamina"].
+ */
+export function charmWords({ id, quality = "common", bonuses = null }) {
+    const rolled = Object.entries(bonuses ?? {}).filter(([stat, value]) => CHARM_ROLLS[stat] && Number.isFinite(value));
+
+    return [...Object.entries(charmOf(id, quality)), ...rolled].map(([stat, value]) => worded(stat, value));
 }
 
-// A bonus that could be anywhere from `least` to `most`, as shown: "+5–13% melee damage"
+// A bonus that could be anywhere from `least` to `most`, as shown: "+5–13% melee damage" (what's
+// less the better, less: "−4–8% fire's harm")
 function spanned(stat, least, most) {
-    const { label, share } = STATS[stat];
+    const { label, share, less } = STATS[stat];
     const [from, to] = share ? [Math.round(least * 100), Math.round(most * 100)] : [Math.round(least), Math.round(most)];
     const amount = `${from}–${to}${share ? "%" : ""}`;
 
-    return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `+${amount} ${label.toLowerCase()}`;
+    return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `${less ? "−" : "+"}${amount} ${label.toLowerCase()}`;
 }
 
 /** What kind of thing a piece of gear (core/gear.js) is, in words: "Ring", "One-handed weapon". */
@@ -85,15 +91,16 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const quality = item.quality ?? "common";
     const lines = [];
 
-    // (A charm, core/goods.js: what it does carried, as well made as it is)
+    // (A charm, core/goods.js: what it's for; what it does carried, as well made as it is, and
+    // what was rolled on it; or, a shop's, what could be as it's bought)
     if (!def && ITEMS[item.id]?.charm) {
-        for (const text of charmWords(item.id, quality)) {
-            lines.push({ text, tone: "base" });
-        }
+        const own = Object.keys(charmOf(item.id, quality)).length;
 
-        lines.push({ text: "Carried in the pack; the best made of each kind counts", tone: "base" });
+        lines.push({ text: ITEMS[item.id].about.replace(/\.$/, ""), tone: "note" });
+        charmWords(item).forEach((text, k) => lines.push({ text, tone: k < own ? "base" : "bonus" }));
+        lines.push({ text: "Carried in the pack: of each kind, the best made counts (of two as well made, the first)", tone: "note" });
 
-        return { label, rarity: quality, kind: "Charm", lines, rolls: null, compare: [], price: priceOf(item, { haggle, selling: true }) };
+        return { label, rarity: quality, kind: "Charm", lines, rolls: ware ? charmRolledOf(item) : null, compare: [], price: priceOf(item, { haggle, selling: true }) };
     }
 
     if (!def) {
@@ -209,6 +216,29 @@ export function rolledOf({ id, quality = "common" }) {
 
             return { name: prefix ?? suffix, text: spanned(stat, least * strength, most * strength) };
         }),
+    };
+}
+
+/**
+ * What's rolled on a charm of a make as it's bought (core/goods.js rollCharm: a shop's ware), or
+ * null for nothing: as rolledOf has it, the goods that suit it named "Likely", and any other
+ * charm's good "Now and then".
+ */
+export function charmRolledOf({ id, quality = "common" }) {
+    const { count, strength } = ROLLS[quality] ?? ROLLS.common;
+    const def = CHARMS[id];
+
+    if (!def || !count) {
+        return null;
+    }
+
+    const span = (stat) => spanned(stat, CHARM_ROLLS[stat][0] * strength, CHARM_ROLLS[stat][1] * strength);
+    const which = count === 1 ? "one more good" : `${count} more goods, each different`;
+
+    return {
+        count,
+        title: `Comes with ${which}, rolled as it's bought:`,
+        choices: [...def.kin.map((stat) => ({ name: "Likely", text: span(stat) })), { name: "Now and then", text: "any other a charm can give" }],
     };
 }
 
