@@ -1,0 +1,61 @@
+name: Soak
+
+# The cross-engine soak (scripts/soak.js; generated/world_server_plan.md §3.3): a world run on
+# Node as the world server runs it, players joined to it playing by themselves in Node, Chromium,
+# WebKit and Firefox, and how each copy of the world kept to the host's. Run by hand (Actions,
+# Soak, Run workflow) for as long as it's asked; and briefly on a pull request that changes the
+# soak itself or what it plays by, so the soak's known to run in every engine before it's needed
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: How long to play (minutes; past 30, the one doing nothing is sent out)
+        default: "32"
+      seed:
+        description: The world's seed
+        default: "2"
+      browsers:
+        description: The browsers to play in (comma-separated, or none)
+        default: chromium,webkit,firefox
+  pull_request:
+    paths:
+      - scripts/soak.js
+      - client/js/core/bot.js
+      - .github/workflows/soak.yml
+
+concurrency:
+  group: soak-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    # (A pull request's three minutes, and the rest, are well within half an hour; one run by hand
+    # may be asked to play for up to three and a half hours)
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 240 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # (WebKit and Firefox need system libraries the runner doesn't carry, as it does Chrome's:
+      # --with-deps, tried three times, as the e2e jobs try Chromium's)
+      - name: Install Chromium, WebKit and Firefox
+        run: for try in 1 2 3; do timeout 600 npx playwright install --with-deps chromium webkit firefox && exit 0; done; exit 1
+
+      - name: Soak
+        run: npm run soak -- --minutes ${{ github.event.inputs.minutes || '3' }} --seed ${{ github.event.inputs.seed || '2' }} --browsers ${{ github.event.inputs.browsers || 'chromium,webkit,firefox' }}
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-report
+          path: test-results/soak/report.json
+          retention-days: 30
+          if-no-files-found: ignore

@@ -199,6 +199,12 @@ export class Hosting {
         /** Told when one's sent out (peer), once they've been told why: to close their link. */
         this.onKick = () => {};
 
+        /**
+         * The part each who joins plays in the world (peer: core/host.js PLAYER_ROLES): a player,
+         * unless whoever runs it says otherwise (the world server, by the key they came with).
+         */
+        this.roleOf = () => "player";
+
         /** Told each line said in the host's own player's party: { from, name, text }. */
         this.onChat = () => {};
 
@@ -401,7 +407,7 @@ export class Hosting {
 
         // (What's been done so far, to those already in; then their coming)
         this.flush();
-        this.host.join({ id, ...brought, ...spawnFor(world, brought.hero.race) });
+        this.host.join({ id, ...brought, ...spawnFor(world, brought.hero.race), role: this.roleOf(peer) });
         this.flush();
         this.players.set(peer, id);
         this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
