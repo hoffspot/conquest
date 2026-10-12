@@ -40,6 +40,13 @@ async function playing(page) {
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
 }
 
+// How often a joined game's been sent the world again for anything but falling too far behind the
+// host to catch up (core/netplay.js PACE.tooFar: as after a long load): its copy gone astray, or
+// its link dropped
+async function sentAgain(page) {
+    return await page.evaluate(() => window.pellagos.game.remote.resyncs - window.pellagos.game.remote.skips);
+}
+
 test("a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
@@ -120,8 +127,8 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await expect.poll(() => host.evaluate(() => window.pellagos.game.battle.actor("guest-1").square), { timeout: 60000 }).toEqual(to);
     await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.actor("guest-1").square), { timeout: 60000 }).toEqual(to);
 
-    // (Their copy's kept as the host's: never sent again)
-    expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+    // (Their copy's kept as the host's: never sent again, unless it was too far behind once it had loaded)
+    expect(await sentAgain(guest)).toBe(0);
 
     // The host's page hidden (their phone gone to another app): the guest's told the host's paused
     // the game; shown again, on it goes
@@ -146,8 +153,22 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     // The guest's link drops (given up on, as when it goes quiet): back on a new link before long,
     // sent the world again, and walking on in both worlds alike
     await guest.evaluate(() => window.pellagos.together.link.socket.close(4000));
-    await expect.poll(() => guest.evaluate(() => window.pellagos.game.remote.resyncs), { timeout: 30000 }).toBe(1);
+    await expect.poll(() => sentAgain(guest), { timeout: 30000 }).toBe(1);
     await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+
+    // The guest's game stops a while (its page hidden, or a slow phone in a long fight): fallen too
+    // far behind the host to catch up a step at a time, it's sent the world as it now is instead,
+    // and carries on from it
+    const tooFar = await guest.evaluate(async () => (await import("/js/core/netplay.js")).PACE.tooFar);
+    const resent = () => guest.evaluate(() => [window.pellagos.game.remote.skips, window.pellagos.game.remote.resyncs]);
+    const [skips, resyncs] = await resent();
+
+    await guest.evaluate(() => window.pellagos.game.stop());
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.remote.behind), { timeout: 30000 }).toBeGreaterThan(tooFar);
+    await guest.evaluate(() => window.pellagos.game.start());
+    await expect.poll(resent, { timeout: 30000 }).toEqual([skips + 1, resyncs + 1]);
+    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+    expect(await guest.evaluate(() => window.pellagos.game.remote.behind)).toBeLessThan(tooFar);
 
     const onward = await guest.evaluate(() => {
         const { game } = window.pellagos;
@@ -291,7 +312,7 @@ test("two players side by side trade face to face: one asks, the other says yes,
         expect(held).toEqual([10, 2, 30, 0]);
     }
 
-    expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+    expect(await sentAgain(guest)).toBe(0);
 
     await hostContext.close();
     await guestContext.close();
@@ -441,7 +462,7 @@ test("two players make a party: one asks from the party menu, the other says no,
     await expect(menu.locator(".chat-line.system").last()).toHaveText("The party's no more: no one's left in it with you.");
     await expect(menu.getByRole("textbox", { name: "Something to say to your party" })).toBeDisabled();
 
-    expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+    expect(await sentAgain(guest)).toBe(0);
 
     await hostContext.close();
     await guestContext.close();
@@ -514,7 +535,7 @@ test("two players walk about a while: the joined copy's checked against the host
         const net = await guest.evaluate(() => {
             const { remote, predict } = window.pellagos.game;
 
-            return { desyncs: remote.desyncs, resyncs: remote.resyncs, checks: remote.motionChecks, pending: predict.pending, lag: predict.lag };
+            return { desyncs: remote.desyncs, resyncs: remote.resyncs - remote.skips, checks: remote.motionChecks, pending: predict.pending, lag: predict.lag };
         });
 
         expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: null });
@@ -557,7 +578,7 @@ test("two players walk about a while: the joined copy's checked against the host
     const guestWorld = await guest.evaluate(() => {
         const { game } = window.pellagos;
 
-        return { time: game.battle.time, sum: game.host.checksum(), at: game.battle.actors.map(({ id, x, y }) => `${id} ${x.toFixed(3)} ${y.toFixed(3)}`), desyncs: game.remote.desyncs, resyncs: game.remote.resyncs };
+        return { time: game.battle.time, sum: game.host.checksum(), at: game.battle.actors.map(({ id, x, y }) => `${id} ${x.toFixed(3)} ${y.toFixed(3)}`), desyncs: game.remote.desyncs, resyncs: game.remote.resyncs - game.remote.skips };
     });
 
     expect(guestWorld).toEqual({ ...hostWorld, desyncs: 0, resyncs: 0 });
