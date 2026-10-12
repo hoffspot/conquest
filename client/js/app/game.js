@@ -5744,7 +5744,7 @@ export class Game {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
             // (A dungeon's boss's hoard: a share of it for each player in the dungeon)
-            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? "The adventurer's cache is open, your share in it: tap it to take it." : event.hoard ? "The hoard is open, and your share of it lies before you: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic || event.hoard ? 4 : 3);
+            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? (event.away ? "The adventurer's cache is open: your share waits at its mark." : "The adventurer's cache is open, your share in it: tap it to take it.") : event.hoard ? "The hoard is open, and your share of it lies before you: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic || event.hoard ? 4 : 3);
             this.sound?.play("lockpick");
             this.sound?.play("chestOpen", { delay: 0.45 });
         } else if (event.type === "spoils") {

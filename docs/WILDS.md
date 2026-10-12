@@ -394,7 +394,12 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
   rest who see it come too.
 - **Its chest** is the places' chest (drawn by `world/drops3d.js`), locked while any of them stands
   ("It's locked fast, and those keeping it are still about."). Once the last falls it opens, a share
-  for each player within 39 m of it, theirs alone to take (`rollCache`): 20 to 45 gold, 35% more for
+  for each player within 39 m of it, and for each who struck or felled any of its band (or whose
+  follower or creature did: `fought`, host.js `#foughtFor`), however far off they drew them to do
+  it, told so ("The adventurer's cache is open: your share waits at its mark."; the user: "I
+  kited off the bandit chief and killed him fairly far from the adventurer's cache and killed his
+  bandit companions and no chest showed up at the mark on the ground"); theirs alone to take, at
+  the cache, for five minutes (`rollCache`): 20 to 45 gold, 35% more for
   each tier above the first; two or three pieces of gear (any but a people's uniform), as well made
   as the band was strong (`CACHE_MAKES`: mostly common and fine near home; masterwork, rare, very
   rare and legendary for the mightiest), a wand's or grimoire's boost rolled as a shop's is; and a healing
