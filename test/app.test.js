@@ -22,7 +22,7 @@ import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
-import { guardOf, heroEquipment } from "../client/js/app/game.js";
+import { aboutOf, guardOf, heroEquipment } from "../client/js/app/game.js";
 import { BOUGHT } from "../client/js/core/host.js";
 import { distanceLabel } from "../client/js/app/worldmap.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
@@ -594,6 +594,40 @@ describe("a hero's kit (game.js, creator.js)", () => {
         assert.deepEqual(heroEquipment("sword", [{ id: "helm", people: "elf" }, { id: "hauberk", people: "elf" }, { id: "ring" }], ["catEars"]), ["tunic", "trousers", "sword", "helm.elf", "mail.elf", "surcoat.elf", "catEars"]);
         assert.equal(guardOf("boots"), "kick");
         assert.equal(guardOf("gauntlets"), "punch");
+    });
+
+    it("says what each thing that's used does, in its own words where it has them: never a stamina draught's but for one", () => {
+        const used = Object.entries(ITEMS).filter(([, def]) => def.use && !def.tome);
+
+        for (const [id, def] of used) {
+            const about = aboutOf({ id });
+
+            assert.ok(about.length > 0, id);
+            assert.equal(about.includes("Fills your stamina."), Boolean(def.use.stamina && !def.use.heal && !def.about), `${id}: ${about}`);
+            assert.ok(!about.startsWith("Armour:"), `${id}: ${about}`);
+        }
+
+        // A spell's scroll says the spell it casts and what it does; a ward's draught, a bomb, the
+        // phoenix's, what they do; a plain draught, its hit points
+        assert.equal(aboutOf({ id: "scrollFlamefill" }), `Read it to cast Flamefill once, though you've never learnt it. ${SPELLS.flamefill.about}`);
+        assert.equal(aboutOf({ id: "elixirOfStormWarding" }), ITEMS.elixirOfStormWarding.about);
+        assert.match(aboutOf({ id: "goblinBomb" }), /^A clay pot of black powder/);
+        assert.equal(aboutOf({ id: "potion" }), "Heals 25 hit points.");
+        assert.equal(aboutOf({ id: "greaterPotion" }), "Heals 60 hit points.");
+        assert.equal(aboutOf({ id: "ale" }), "Fills your stamina.");
+    });
+
+    it("says what a charm does, and how much as well made as it is: never what armour takes off a blow", () => {
+        assert.equal(aboutOf({ id: "stormGlass", quality: "veryRare" }), "Wind and lightning hurt you a little less (−16% air's harm). Carried in the pack: the best made of each kind counts.");
+        assert.equal(aboutOf({ id: "luckyCoin", quality: "fine" }), "More gold found on the fallen (+10% gold found). Carried in the pack: the best made of each kind counts.");
+        assert.equal(aboutOf({ id: "oakHeart" }), "A sliver of an old oak's heart: more hit points (+8 hit points). Carried in the pack: the best made of each kind counts.");
+
+        // (Nor anything worn that takes nothing off a blow: what kind of thing it is)
+        assert.equal(aboutOf({ id: "ring", quality: "rare" }), "Ring.");
+        assert.equal(aboutOf({ id: "amulet" }), "Amulet.");
+        assert.equal(aboutOf({ id: "ring", quality: "rare", bonuses: { melee: 0.05 } }), "+5% melee damage.");
+        assert.equal(aboutOf({ id: "wizardHat" }), "+5% spell power.");
+        assert.equal(aboutOf({ id: "helm" }), `Armour: takes ${Math.round(ITEMS.helm.armor * 100)}% off each blow.`);
     });
 
     it("says what a weapon does, and with spiked boots too, how kicks mix in", () => {

@@ -132,6 +132,40 @@ describe("the debug log (telemetry.js)", () => {
         frame(gap, 500, { draw: 5 });
         assert.equal(gap.log.events[0].where, "between");
         assert.deepEqual(gap.log.events[0].made, { shaders: { MeshBasicMaterial: 1 }, textures: 2 });
+
+        // (What they were for, as the game says (madeFor, asked with the new ones only); its
+        // failing never losing the freeze)
+        const named = logOn();
+        const asked = [];
+
+        named.log.playing = true;
+        named.log.graphics = { programs: [], memory: { textures: 0, geometries: 0 } };
+        named.log.madeFor = (programs) => (asked.push(programs.map(({ id }) => id)), ["MeshStandardMaterial: body < home:guild-1/receptionist"]);
+        frame(named, 16, { draw: 4 });
+        named.time.now += 16;
+        named.log.begin(named.time.now);
+        named.log.graphics.programs.push({ id: 5, type: "MeshStandardMaterial", name: "" });
+        named.time.now += 300;
+        named.log.mark(PHASE.draw);
+        named.log.end(316, () => ({}));
+        assert.deepEqual(named.log.events[0].made, { shaders: { MeshStandardMaterial: 1 }, for: ["MeshStandardMaterial: body < home:guild-1/receptionist"] });
+        assert.deepEqual(asked, [[5]]);
+
+        const broken = logOn();
+
+        broken.log.playing = true;
+        broken.log.graphics = { programs: [], memory: { textures: 0, geometries: 0 } };
+        broken.log.madeFor = () => {
+            throw new Error("no scene");
+        };
+        frame(broken, 16, { draw: 4 });
+        broken.time.now += 16;
+        broken.log.begin(broken.time.now);
+        broken.log.graphics.programs.push({ id: 6, type: "MeshBasicMaterial", name: "" });
+        broken.time.now += 300;
+        broken.log.mark(PHASE.draw);
+        broken.log.end(316, () => ({}));
+        assert.deepEqual(broken.log.events[0].made, { shaders: { MeshBasicMaterial: 1 } });
     });
 
     it("keeps each kind at most so often, the newest five, across loads; and forgets them all when cleared", () => {

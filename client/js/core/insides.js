@@ -30,6 +30,7 @@ import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT, SHOP_LANDMARKS } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
+import { Steps } from "./steps.js";
 import { landAt, startFor } from "./worldplan/plan.js";
 import { RACES } from "./worldplan/races.js";
 
@@ -1575,8 +1576,18 @@ export class Interiors {
             return building;
         }
 
+        // (A dungeon's levels all made at once: told, if it's slow, to the debug log, as work done
+        // a step at a time is: steps.js Steps.slow)
         if (building.kind === "dungeon") {
-            return this.#makeDungeon(building);
+            const start = performance.now();
+            const made = this.#makeDungeon(building);
+            const ms = performance.now() - start;
+
+            if (ms > Steps.SLOW) {
+                Steps.slow?.(`making the dungeon ${building.name ?? key}`, ms);
+            }
+
+            return made;
         }
 
         const kind = KINDS[building.kind];

@@ -20,6 +20,7 @@ import { loadRecast } from "./navigation/recast.js";
 import { COSTS, OVERWORLD, ROOMS, TILE } from "./navigation/settings.js";
 import { squaresInput } from "./navigation/squares.js";
 import { tileInput } from "./navigation/tiles.js";
+import { Steps } from "./steps.js";
 import { WORLD_SIZE } from "./worldplan/plan.js";
 
 export { AGENT, AREA, OVERWORLD, ROOMS, TILE } from "./navigation/settings.js";
@@ -165,6 +166,13 @@ export class Navigation {
         this.tiles = new Map();
         this.baked = 0;
         this.added = 0;
+
+        /**
+         * Where a tile not in yet goes when a way's to wait for it (path's `wait`): to be baked off
+         * the page's thread ((tx, ty) => void: the game's NavBaker want), or null to bake it here
+         * and now.
+         */
+        this.later = null;
     }
 
     /** Whether a tile is in. */
@@ -281,16 +289,26 @@ export class Navigation {
         return { x, y: z ?? this.heightAt(x, y), z: y };
     }
 
-    // Make sure of every tile a box of the ground touches (and `ring` tiles round it)
-    #cover(x0, y0, x1, y1, ring = 0) {
+    // Make sure of every tile a box of the ground touches (and `ring` tiles round it); or, to
+    // `wait` for them (with somewhere to send them: later), send on those not in. Returns whether
+    // any were sent on
+    #cover(x0, y0, x1, y1, ring = 0, wait = false) {
         const [tx0, ty0] = this.tileOf(Math.min(x0, x1), Math.min(y0, y1));
         const [tx1, ty1] = this.tileOf(Math.max(x0, x1), Math.max(y0, y1));
+        let sent = false;
 
         for (let ty = ty0 - ring; ty <= ty1 + ring; ty++) {
             for (let tx = tx0 - ring; tx <= tx1 + ring; tx++) {
-                this.ensure(tx, ty);
+                if (wait && this.later && !this.tiles.has(key(tx, ty)) && this.#inside(tx, ty)) {
+                    this.later(tx, ty);
+                    sent = true;
+                } else {
+                    this.ensure(tx, ty);
+                }
             }
         }
+
+        return sent;
     }
 
     // The polygon nearest a point, within NEAR (a box `across` metres each way, if given):
@@ -307,15 +325,37 @@ export class Navigation {
      * if there's none. The tiles between them (a few metres round) are made sure of first; if
      * the way doesn't get there, the tiles round those too, and it's looked for again (a way
      * round something further out: making tiles far from anyone is dear, the world under them
-     * made first).
+     * made first). To `wait` (with somewhere to send them: later), the tiles not in yet aren't
+     * made here but sent on, and there's no way till they're in ([]: looked for again a moment
+     * later, core/battle.js REPATH_MS), so it never holds up the frame it's looked for in.
      */
-    path(from, to) {
+    path(from, to, { wait = false } = {}) {
+        const [baked, start] = [this.baked, performance.now()];
+        const way = this.#path(from, to, wait);
+        const ms = performance.now() - start;
+
+        // (Tiles baked here and now for it, slowly: told to the debug log, as work done a step at
+        // a time is: steps.js Steps.slow)
+        if (this.baked > baked && ms > Steps.SLOW) {
+            Steps.slow?.(`baking ${this.baked - baked} navigation tiles for a way ${Math.round(hypot(to[0] - from[0], to[1] - from[1]))} m long`, ms);
+        }
+
+        return way;
+    }
+
+    // (path's way, found)
+    #path(from, to, wait) {
         const [x0, y0, x1, y1] = [Math.min(from[0], to[0]), Math.min(from[1], to[1]), Math.max(from[0], to[0]), Math.max(from[1], to[1])];
         const [tx0, ty0] = this.tileOf(x0, y0);
         const [tx1, ty1] = this.tileOf(x1, y1);
         const { tile } = this.measures;
 
-        this.#cover(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN);
+        const sent = this.#cover(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN, 0, wait);
+
+        // (Tiles still to come: none till they're in)
+        if (sent) {
+            return [];
+        }
 
         let way = this.#way(from, to);
 
@@ -335,7 +375,11 @@ export class Navigation {
 
             const before = this.added;
 
-            this.#cover(...box);
+            // (Tiles round it still to come: the way as it is, for now, looked for further again
+            // once they're in)
+            if (this.#cover(...box, 0, wait)) {
+                break;
+            }
 
             if (this.added !== before) {
                 way = this.#way(from, to);

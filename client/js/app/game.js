@@ -58,7 +58,7 @@ import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, RELEVANCE, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
-import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { shopPrice } from "../core/stock.js";
 import { CHAT, PACE } from "../core/netplay.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
@@ -134,7 +134,7 @@ import { PHASE, telemetry } from "./telemetry.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Prediction } from "./predict.js";
-import { describe, totals } from "./gearinfo.js";
+import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, offensive, PLACES, QUICK_SHOWN, readWheels, SIDES, WHEELS } from "./wheel.js";
@@ -466,10 +466,9 @@ function thingsOf({ id, quality, count = 1 }) {
 // What a request's reward is, in words: its gold, and any tome besides ("your name in the rolls", for nothing)
 const rewardOf = ({ gold, tome }) => [gold ? `${gold} gold` : null, tome ? `the Tome of ${SPELLS[tome].label}` : null].filter(Boolean).join(", and ") || "your name in the rolls";
 
-// What a thing in the pack is, in words: what it does, and how well made it is
-function aboutOf({ id, quality }) {
-    const { use, slot, armor = 0, part = false, price, tome } = ITEMS[id];
-    const power = QUALITIES[quality]?.power ?? 1;
+/** What a thing in the pack or a shop is, in words: what it does (and, gear, how well made it is). */
+export function aboutOf({ id, quality, bonuses }) {
+    const { use, slot, part = false, price, tome } = ITEMS[id];
     const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
 
     if (tome && ITEMS[id].opens) {
@@ -488,11 +487,13 @@ function aboutOf({ id, quality }) {
         return `Cures what's ${label.toLowerCase()} at once. (${about})`;
     }
 
-    if (use?.boon || use?.safety) {
-        return ITEMS[id].about;
+    // (Anything else used that says what it does, in its own words: a boon, a spell's scroll, a
+    // ward's or a spell's draught, a bomb...)
+    if (use && ITEMS[id].about) {
+        return `${ITEMS[id].about}${worth}`;
     }
 
-    if (use) {
+    if (use?.heal || use?.stamina) {
         return `${use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina."}${worth}`;
     }
 
@@ -500,8 +501,20 @@ function aboutOf({ id, quality }) {
         return worth.trim();
     }
 
-    // (Gear: what it does is told piece by piece, app/gearinfo.js)
-    return slot === "mainHand" ? "A weapon." : `Armour: takes ${Math.round(armor * power * 100)}% off each blow.`;
+    // (A charm: what it's for, and how much, as well made as it is)
+    if (ITEMS[id].charm) {
+        return `${ITEMS[id].about.replace(/\.$/, "")} (${charmWords(id, quality).join(", ")}). Carried in the pack: the best made of each kind counts.`;
+    }
+
+    // (Gear: what it does is told piece by piece, app/gearinfo.js; here, what it gives worn, or
+    // if nothing yet (a ring before its bonuses are rolled), what kind of thing it is)
+    if (slot === "mainHand") {
+        return "A weapon.";
+    }
+
+    const gives = GEAR[id] ? gearWords({ id, quality, bonuses }) : [];
+
+    return gives.length ? `${gives.join(", ")}.` : `${GEAR[id] ? kindOf(id) : "Worn"}.`;
 }
 
 // What lingers on someone after some blows (core/afflictions.js), as it shows: rising off them
@@ -1963,6 +1976,7 @@ export class Game {
         this.steppedAt = this.lastFrame;
         telemetry.playing = true;
         telemetry.graphics = this.view.renderer.info;
+        telemetry.madeFor = (programs) => this.#madeFor(programs);
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
@@ -2263,8 +2277,18 @@ export class Game {
     }
 
     // The overworld's navigation mesh's baker (the battle's mesh: core/navigation.js navigatorOf)
+    // (The ways anyone but a player finds wait for the tiles not in yet, made off the page's
+    // thread: navigation.js later, core/battle.js #pathTo)
     #navBaker() {
-        this.navBaker ??= new NavBaker(navigatorOf(this.world.maps.town));
+        if (!this.navBaker) {
+            const navigation = navigatorOf(this.world.maps.town);
+
+            this.navBaker = new NavBaker(navigation);
+
+            if (this.navBaker.worker) {
+                navigation.later = (tx, ty) => this.navBaker.want(tx, ty);
+            }
+        }
 
         return this.navBaker;
     }
@@ -2454,6 +2478,31 @@ export class Game {
             console.error("A frame's work failed:", error);
             telemetry.error(error, "frame", this.telemetryState);
         }
+    }
+
+    // What some shaders just made (three.js's programs) were for, for the debug log: each
+    // material using one, by its type and name, and what it's on (the object and those it's in,
+    // a few, by name: "MeshStandardMaterial body < home:guild-1/receptionist")
+    #madeFor(programs) {
+        const fresh = new Set(programs);
+        const properties = this.view.renderer.properties;
+        const found = new Set();
+
+        this.view.scene.traverse((object) => {
+            for (const material of [object.material].flat()) {
+                if (material && fresh.has(properties.get(material).currentProgram)) {
+                    const chain = [];
+
+                    for (let at = object; at && chain.length < 3; at = at.parent) {
+                        chain.push(at.name || at.type);
+                    }
+
+                    found.add(`${material.type}${material.name ? ` ${material.name}` : ""}: ${chain.join(" < ")}`);
+                }
+            }
+        });
+
+        return [...found];
     }
 
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
@@ -7460,8 +7509,11 @@ export class Game {
         if (done || left || performance.now() >= arriving.until) {
             this.arriving = null;
 
-            // (Lit, if it's still dark: not again, if the player's come out and it's lit already)
+            // (Lit, if it's still dark: not again, if the player's come out and it's lit already;
+            // drawn once first while it's still dark, behind it, so the shaders it needs (the
+            // shadows' too) are made and its pictures sent then, not in the first frame seen)
             if (this.curtainHeld) {
+                this.view.render();
                 this.#curtain(false);
             }
         }

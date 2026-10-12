@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import { Battle, STEP_MS, WAIT_BEYOND } from "../client/js/core/battle.js";
 import { AREA, KEEP_TILES, Navigation, navigatorOf, ROOMS, squaresNavigation, TILE, tileOf } from "../client/js/core/navigation.js";
 import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
+import { NavBaker, WANTED } from "../client/js/world/navbaker.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { LAGOON } from "../client/js/core/lagoons.js";
 import { propOutlines } from "../client/js/core/setpieces/standing.js";
@@ -517,6 +519,106 @@ describe("navigation meshes (navigation.js)", () => {
 
             assert.deepEqual(forwards.path(from, to), backwards.path(from, to), `way ${k}`);
         }
+    });
+
+    it("waits for the tiles a way wants that aren't in yet, where they can be made elsewhere, baking none itself, and finds it once they're in", () => {
+        const navigation = new Navigation(recast, town);
+        const sent = [];
+        const [from, to] = [[middle[0] + 26, middle[1] - 26], [middle[0] - 2, middle[1] + 22]];
+
+        navigation.later = (tx, ty) => sent.push([tx, ty]);
+
+        // (None till they're in, and none baked for it)
+        assert.deepEqual(navigation.path(from, to, { wait: true }), []);
+        assert.equal(navigation.baked, 0);
+        assert.ok(sent.length > 0);
+
+        // (Made, as the game's worker makes them: the way, as it would have been)
+        for (const [tx, ty] of sent) {
+            navigation.ensure(tx, ty);
+        }
+
+        const waited = navigation.path(from, to, { wait: true });
+
+        assert.ok(waited.length > 1);
+        assert.deepEqual(waited, new Navigation(recast, town).path(from, to));
+
+        // (A way that doesn't wait, a player's, has them made here and now, as ever)
+        const now = new Navigation(recast, town);
+
+        now.later = () => assert.fail("sent on");
+        assert.deepEqual(now.path(from, to), waited);
+        assert.ok(now.baked > 0);
+    });
+
+    it("bakes the tiles round the players first, then those ways are waiting for, a few of each kept waiting at most (navbaker.js)", () => {
+        const navigation = new Navigation(recast, town);
+        const baker = new NavBaker(navigation);
+        const [tx, ty] = tileOf(...middle);
+
+        // (Their ground made, as it is once it's drawn; and no worker here: each baked as it's
+        // sent off, one a pump)
+        for (let dx = -1; dx <= 4; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                tileInput(town, tx + dx, ty + dy);
+            }
+        }
+
+        baker.want(tx + 3, ty);
+        baker.want(tx + 3, ty);
+        baker.around(...middle, 1);
+
+        assert.deepEqual(baker.wanted, [[tx + 3, ty]]);
+
+        baker.pump();
+        assert.ok(navigation.has(tx, ty) && !navigation.has(tx + 3, ty), "round the player first");
+
+        while (baker.queue.length) {
+            baker.pump();
+        }
+
+        baker.pump();
+        assert.ok(navigation.has(tx + 3, ty), "then what a way's waiting for");
+
+        for (let k = 0; k < WANTED + 10; k++) {
+            baker.want(tx + 10 + (k % 40), ty + 10 + Math.floor(k / 40));
+        }
+
+        assert.equal(baker.wanted.length, WANTED);
+        assert.deepEqual(baker.wanted[0], [tx + 20, ty + 10], "the longest waiting let go");
+    });
+
+    it("has someone near a player, going somewhere near one, find their way at once, its tiles made then; anyone further off waits for theirs (battle.js #pathTo)", () => {
+        const [from, to] = [[middle[0] + 26, middle[1] - 26], [middle[0] - 2, middle[1] + 22]];
+        const between = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+        const square = ([x, y]) => [Math.floor(x), Math.floor(y)];
+
+        // A soldier of the player's side told to walk there, the player between, or far off
+        const walked = (player) => {
+            const world = buildWorld({ seed: 1 });
+            const navigation = navigatorOf(world.maps.town);
+            const battle = new Battle(world, { seed: 3 });
+            const sent = [];
+
+            navigation.later = (tx, ty) => sent.push([tx, ty]);
+            battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: square(player) });
+            battle.add({ id: "soldier", kind: "soldier", weapon: "sword", team: "hero", square: square(from) });
+            battle.advance(STEP_MS);
+            battle.command("soldier", { type: "move", to: square(to) });
+
+            return { sent: sent.length, way: battle.actor("soldier").path.length };
+        };
+
+        const near = walked(between);
+
+        assert.ok(Math.hypot(between[0] - from[0], between[1] - from[1]) < WAIT_BEYOND);
+        assert.equal(near.sent, 0, "near a player: none sent to be made");
+        assert.ok(near.way > 1, "and found at once");
+
+        const far = walked([middle[0] + 300, middle[1] + 300]);
+
+        assert.ok(far.sent > 0, "far off: its tiles sent to be made");
+        assert.equal(far.way, 0, "and none till they're in");
     });
 
     it("bakes and finds ways within its budgets", () => {

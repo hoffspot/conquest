@@ -947,6 +947,15 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
   player baked so, nearest first, a tile sent off a frame, and only once the world's chunks under
   it have been made (as they're drawn: making them for a tile would take several frames' time).
+  The ways anyone but a player looks for (a creature, a soldier, a wagon: `path`'s `wait`), but
+  for someone within 48 m of a player going somewhere as near one (battle.js `WAIT_BEYOND`: a
+  fight beside a player never waits, its tiles mostly in already as they're baked ahead), don't
+  have their tiles baked where they're wanted: those not in yet are sent off after the players'
+  (`want`, the navigation's `later`; at most 256 kept waiting), and the way's none till they're
+  in, looked for again half a second later. A patrol or a creature a few hundred metres off,
+  where nothing's drawn, so never holds a step up while the world under its way is made (seen
+  replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
+  several times that on a phone), and stands where it is, unseen, till it can go.
   At most 1,024 tiles are kept (a kilometre square), the longest unused let go first.
 - **Maps of squares** (a building's floors, a town laid out on its own, a test's rows) have
   meshes of their own (`navigatorOf`, `squares.js`): flat, a square that isn't blocked two
@@ -959,7 +968,9 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
     one along it), up to 100 tiles (and never more than half a mesh keeps, or it would let go
     of the tiles it's searching): a river's crossing or a pass can be well off the straight
     way, and tiles far from anyone are dear to make (the world under them made first). A way
-    to somewhere it still can't get to ends as near as it gets;
+    to somewhere it still can't get to ends as near as it gets. With `wait` (and somewhere to
+    send them: `later`), tiles not in yet are sent on rather than made, and there's no way
+    (`[]`) till they're in; widening, it goes as far as the tiles in, and further next time;
   - `nearest(point)`, `walkable(x, y)`;
   - `raycast(from, to)`: how far straight towards a point before the mesh's edge;
   - `polygons(tx, ty)`: a tile's detail triangles, to draw.

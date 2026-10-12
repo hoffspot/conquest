@@ -4428,6 +4428,8 @@ dialog#worldmap {
     background: #1e1b16;
     color: var(--ink);
     overflow: hidden;
+    /* (No pinch or drag of the page anywhere on it: the map's own, on its canvas) */
+    touch-action: none;
 }
 
 dialog#worldmap::backdrop {
@@ -4546,6 +4548,7 @@ dialog#worldmap::backdrop {
     gap: 4px;
     min-height: 0;
     overflow-y: auto;
+    touch-action: pan-y;
     border-radius: 12px;
     border: 1px solid var(--panel-border);
     background: var(--panel);

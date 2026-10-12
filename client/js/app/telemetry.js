@@ -7,7 +7,8 @@
 //    else (the frame before's phases, for what was going on). With what the browser says ran then
 //    (Chromium's long animation frames: each script's source, function and place in it, and what
 //    called it), the slowest of the work done a step at a time then (core/steps.js, by name), and
-//    what the graphics card was given then (shaders made, by material; textures and geometries).
+//    what the graphics card was given then (shaders made, by material, and what each was for:
+//    the material and what it's on, by name; textures and geometries).
 //  - **Slow going**: the middle of TELEMETRY.slow.window ms of frames under TELEMETRY.slow.fps a
 //    second. With each phase's time on average over it, and what's being drawn.
 //  - **An error**: one no one caught (its stack), a frame's work failing (app/game.js #fault), or
@@ -135,6 +136,13 @@ export class Telemetry {
          * to say what its frame made. Read as each frame begins.
          */
         this.graphics = null;
+
+        /**
+         * What the shaders a freeze's frame made were for (set by the game: (programs) => [what
+         * each was for: "MeshStandardMaterial body < home:guild-1/receptionist"...]), asked only
+         * when one's kept: a shader's own name is only its material's, often none.
+         */
+        this.madeFor = null;
     }
 
     // --- Frames ---
@@ -190,17 +198,27 @@ export class Telemetry {
 
         const made = {};
         const shaders = {};
+        const fresh = (info.programs ?? []).filter((program) => program.id > given.newest);
 
-        for (const program of info.programs ?? []) {
-            if (program.id > given.newest) {
-                const name = [program.type, program.name].filter(Boolean).join(" ") || "unnamed";
+        for (const program of fresh) {
+            const name = [program.type, program.name].filter(Boolean).join(" ") || "unnamed";
 
-                shaders[name] = (shaders[name] ?? 0) + 1;
-            }
+            shaders[name] = (shaders[name] ?? 0) + 1;
         }
 
         if (Object.keys(shaders).length) {
             made.shaders = shaders;
+
+            // (And what they were for, if the game can say: the first few)
+            try {
+                const used = this.madeFor?.(fresh) ?? [];
+
+                if (used.length) {
+                    made.for = used.slice(0, TELEMETRY.scripts);
+                }
+            } catch {
+                // (Never the log's own fault that a freeze isn't kept)
+            }
         }
 
         for (const kind of ["textures", "geometries"]) {

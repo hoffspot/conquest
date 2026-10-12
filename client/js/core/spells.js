@@ -134,7 +134,7 @@ export const SPELLS = Object.freeze({
     rumble: attack("earth", 1, "Rumble", { about: "The ground shudders under them: may slow them.", castTime: 450, cooldown: 2500, damage: [9, 15], effect: { kind: "slow", chance: 0.2, look: "rubble" }, reaction: "crush" }),
     stoneCrush: attack("earth", 2, "Stone Crush", { about: "A stone slams into them, staggering them.", castTime: 600, cooldown: 3500, damage: [12, 18], stagger: 500, reaction: "crush" }),
     shatterstone: attack("earth", 3, "Shatterstone", { about: "Stone bursts into shards round them: they may bleed.", castTime: 700, cooldown: 5000, damage: [16, 24], area: 1.5, effect: { kind: "bleed", chance: 0.3 }, reaction: "pierce" }),
-    engulf: attack("earth", 4, "Engulf", { about: "The earth rises round them and holds them.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "slow", chance: 1, look: "earth" }, reaction: "crush" }),
+    engulf: attack("earth", 4, "Engulf", { about: "The earth rises round them and holds them back: they're slowed.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "slow", chance: 1, look: "earth" }, reaction: "crush" }),
     earthquake: attack("earth", 5, "Earthquake", { about: "The ground heaves: everyone near's thrown down.", castTime: 900, cooldown: 9000, damage: [26, 38], area: 3, knockdown: 1200, reaction: "crush" }),
     acidify: attack("earth", 6, "Acidify", { about: "Acid wells up round them, eating at them, and pools there a while.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "poison", chance: 1, look: "acid" }, hazard: { kind: "acid", ms: 5000, radius: 2 }, reaction: "arcane" }),
     disintegrate: attack("earth", 7, "Disintegrate", { about: "Unmakes them: a beam that grinds flesh and stone to dust, and all near it.", castTime: 1200, cooldown: 16000, damage: [48, 66], area: 1.5, stagger: 600, reaction: "crush" }),
@@ -150,7 +150,7 @@ export const SPELLS = Object.freeze({
 
     // --- Water: scalding, bleeding, freezing, rotting ---
     blister: attack("water", 1, "Blister", { about: "Scalding water: may leave them burning.", castTime: 450, cooldown: 2500, damage: [9, 15], effect: { kind: "burn", chance: 0.15, look: "scald" }, reaction: "arcane" }),
-    waterbolt: attack("water", 2, "Waterbolt", { about: "A bolt of water that knocks them back.", castTime: 600, cooldown: 3500, damage: [12, 18], stagger: 500, reaction: "punch" }),
+    waterbolt: attack("water", 2, "Waterbolt", { about: "A bolt of water that sends them reeling.", castTime: 600, cooldown: 3500, damage: [12, 18], stagger: 500, reaction: "punch" }),
     steamblast: attack("water", 3, "Steamblast", { about: "A blast of steam round them: it scalds all near.", castTime: 700, cooldown: 5000, damage: [16, 24], area: 1.5, effect: { kind: "burn", chance: 0.4, look: "scald" }, reaction: "arcane" }),
     bloodboil: attack("water", 4, "Bloodboil", { about: "Their blood boils in them: they bleed.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "bleed", chance: 1 }, reaction: "arcane" }),
     iceblade: attack("water", 5, "Iceblade", { about: "A blade of ice: it chills them, slowing them.", castTime: 900, cooldown: 9000, damage: [26, 38], effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "slash" }),

@@ -3698,9 +3698,13 @@ character only, as the talks are.
 
 Held on the minimap (or M on a keyboard), the whole screen becomes a map of the world, the game
 paused under it, until it's closed (the cross, Escape, or M again). It opens on the player, about
-900 metres across the screen's shorter side; drag to look about, pinch or scroll to zoom (from a
-quarter of a metre to a pixel out to the whole world), or use its buttons: where you are, zoom in,
-zoom out. Its key (each building's icon, the fog and the pin) is folded away to a "Key" button in
+900 metres across the screen's shorter side; drag one finger (or the mouse) to look about, spread
+two fingers apart to zoom in and bring them together to zoom out, or scroll (from a quarter of a
+metre to a pixel out to the whole world), or use its buttons: where you are, zoom in, zoom out. Two
+fingers on it carry the map with them as well as zooming it, what was under them kept under them
+(a phone tells of each finger's move on its own, so the middle between them is followed, not only
+how far apart they are); the page itself never pinches or scrolls under it (`touch-action: none`,
+and Safari's own pinch kept off). Its key (each building's icon, the fog and the pin) is folded away to a "Key" button in
 the bottom left corner, so the map's seen whole on a phone: tapped, the key opens above it; tapped
 again, it folds away. It stays as it was left till the game's loaded again. At the war table the
 same button holds the war's key.
@@ -4646,8 +4650,10 @@ to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser'
   card was given meanwhile (`made`, since the frame began, or the frame before for time between
   frames): the shaders made, how many of each by their material's type and name (three.js
   numbers each program as it's made, so the newest when a frame begins is all that's kept), and
-  how many more textures and geometries it holds; a frozen frame that made a dozen shaders, or
-  sent forty pictures, says so.
+  what they were for (`made.for`, the game asked only then, `madeFor`: each material using one,
+  and what it's on and in, by name: `MeshStandardMaterial: body < home:guild-1/receptionist`,
+  as a material's name is often none), and how many more textures and geometries it holds; a
+  frozen frame that made a dozen shaders, or sent forty pictures, says so.
 - **Slow going**: the middle of 3 seconds' frames under 30 a second, with each phase's time on
   average over them.
 - **An error** no one caught, a frame's work failing (app/game.js `#fault`) or a promise refused,
@@ -4675,8 +4681,9 @@ rate and update and drawing times, playing together or not, what the game holds,
 device), the last 60 frames' times, and the slowest work done a step at a
 time in the 30 seconds before it: each step of one taking over 20 ms is named (core/steps.js
 `Steps.slow`: a crowd's figure, a character dressed, a building got ready, the minimap painted, a
-beast sculpted; and the fortifications and stockades drawn, twice a second, when that's slow),
-with when (`at`, ms since the page loaded). Where
+beast sculpted; and the fortifications and stockades drawn, twice a second, when that's slow;
+and in the battle's steps, a player's way's navigation tiles baked on the spot, and a dungeon's
+levels made, as it's come near), with when (`at`, ms since the page loaded). Where
 the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
 longest first: each one's file and place in it, its function and what called it; that's the
 nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch
