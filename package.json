@@ -19,6 +19,7 @@
     "balance": "node scripts/balance.js",
     "step-budget": "node scripts/step-budget.js",
     "soak": "node scripts/soak.js",
+    "snapshot-fixture": "node scripts/snapshot-fixture.js",
     "vendor:three": "node scripts/vendor-three.js",
     "vendor:meshopt": "node scripts/vendor-meshopt.js",
     "build:manifest": "node scripts/build-manifest.js",

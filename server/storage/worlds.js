@@ -16,11 +16,11 @@
 // short, or spoilt), the newest that does is carried on from, and the journal says so.
 
 import { randomBytes } from "node:crypto";
-import { appendFile, readdir, rename } from "node:fs/promises";
+import { appendFile, cp, readdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { decode, encode } from "../../client/js/core/wire.js";
 import { RACE } from "../../client/js/core/worldplan/plan.js";
-import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, writeGzip, writeJSON } from "./files.js";
+import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip, writeJSON } from "./files.js";
 import { KeptHeroes } from "./heroes.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
@@ -88,10 +88,11 @@ async function readSnapshot(file) {
 export class StoredWorld {
     #saving = Promise.resolve();
 
-    constructor(folder, meta) {
-        /** Where it's kept, and what it is (world.json, as it was last written). */
+    constructor(folder, meta, writtenBy = SERVER_VERSION) {
+        /** Where it's kept, what it is (world.json, as it was last written), and the server that wrote that. */
         this.folder = folder;
         this.meta = meta;
+        this.writtenBy = writtenBy;
 
         /** The heroes it keeps for its players. */
         this.heroes = new KeptHeroes(path.join(folder, HEROES));
@@ -109,7 +110,53 @@ export class StoredWorld {
     static async open(folder) {
         const { formatVersion, writtenBy = null, ...meta } = await readJSON(path.join(folder, WORLD_FILE));
 
-        return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }));
+        return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }), writtenBy);
+    }
+
+    /** Its saves' files' names, newest first (now, then the autosaves). */
+    static get saves() {
+        return [NOW, ...Array.from({ length: AUTOSAVES }, (_, k) => autosaveName(k + 1))];
+    }
+
+    /**
+     * The newest of its saves that reads and passes `test` (a snapshot: true to take it), as
+     * { snapshot, from }, or null if none does.
+     */
+    async newest(test = () => true) {
+        for (const name of StoredWorld.saves) {
+            const file = this.#state(name);
+
+            if (!(await exists(file))) {
+                continue;
+            }
+
+            try {
+                const snapshot = await readSnapshot(file);
+
+                if (test(snapshot)) {
+                    return { snapshot, from: name };
+                }
+            } catch {
+                // (Spoilt: the next)
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A copy of everything kept of it, made before something's done to it that can't be undone:
+     * in the data folder's backups, backups/<id>/<when>-<why>/ (its journal says so). Returns
+     * where.
+     */
+    async backUp(why, when = new Date()) {
+        const into = path.join(path.dirname(path.dirname(this.folder)), BACKUPS, this.id, `${stampOf(when)}-${why}`);
+
+        await ensureFolder(path.dirname(into));
+        await cp(this.folder, into, { recursive: true });
+        await this.journal(`Backed up (${why}).`, when);
+
+        return into;
     }
 
     /** world.json written again, as `meta` now is (and changes, if any). */
@@ -174,7 +221,7 @@ export class StoredWorld {
     async load({ when = () => new Date() } = {}) {
         const passed = [];
 
-        for (const name of [NOW, ...Array.from({ length: AUTOSAVES }, (_, k) => autosaveName(k + 1))]) {
+        for (const name of StoredWorld.saves) {
             const file = this.#state(name);
 
             if (!(await exists(file))) {

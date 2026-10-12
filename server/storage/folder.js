@@ -13,7 +13,7 @@
 
 import { cp, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { ensureFolder, stampOf, writeAtomic } from "./files.js";
+import { BACKUPS, ensureFolder, stampOf, writeAtomic } from "./files.js";
 import { CONFIG_VERSION, Settings } from "./settings.js";
 import { checkVersion, SERVER_VERSION } from "./versions.js";
 import { WorldStore } from "./worlds.js";
@@ -27,7 +27,7 @@ export const LAYOUT_STEPS = Object.freeze({});
 /** What's at its root: the layout's version, the settings, and the backups. */
 export const VERSION_FILE = "VERSION";
 export const SETTINGS_FILE = "server.json";
-export const BACKUPS = "backups";
+export { BACKUPS };
 
 /** Where the copies made before the folder's brought forward go (in BACKUPS: a world's go by its id, which is never this). */
 export const SERVER_BACKUPS = "server";

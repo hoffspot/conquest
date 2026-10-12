@@ -122,6 +122,7 @@ pull request and 4 hours by hand. It isn't a required check: most pull requests 
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
 | `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
 | `npm run balance` | Changes to how the wild answers the players' side, or to how strong players, hirelings or creatures are: the balance runner (docs/WILDS.md, *Tuning it*), each side's fights at tiers 2, 5 and 8. A few minutes; `-- --tiers 5 --sides solo,four` for less |
+| `npm run snapshot-fixture` | After bumping `SNAPSHOT_VERSION` (section 4): a snapshot of a world as the new version keeps it, `test/fixtures/snapshots/<version>.json.gz`, for `test/snapshots.test.js` to bring forward and play on. A few seconds |
 | `npm run step-budget` | Changes to the rules' steps, the navigation, or what's made ahead on the world server (`server/ahead.js`): a world stepped on Node as the world server will step it, four players walking about in four peoples' towns, every step timed. It fails if any step takes longer than a step (50 ms). About half a minute; `-- --seconds 600` for longer, `-- --no-ahead` to compare without making anything ahead |
 | `npm run soak` | Changes to how the copies of a world keep to its host's: the rules' steps, netplay, the runner, what's made ahead (generated/world_server_plan.md §3.3). A world on Node with no host player, and players who play by themselves joined to it (`client/js/core/bot.js`) in Node, Chromium, WebKit and Firefox, each in their own people's town, starting fights; and one doing nothing, to be marked away and sent out. It fails if any copy is sent the world again once a player-hour or more, or sees anyone marked away or sent out at another step than the host. 32 minutes by default; `-- --minutes 5 --browsers chromium` for a quick look, `-- --browsers none` for Node's alone. WebKit and Firefox need `npx playwright install webkit firefox` first; `CHROMIUM_PATH` uses a Chromium you have. Its report is written to `test-results/soak/report.json` |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
@@ -271,7 +272,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another
      version can't join.
-   - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds.
+   - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
+     kept by an older version is carried on, not lost (the world server keeps worlds): add a step
+     from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
+     would have been, and once your change is in, `npm run snapshot-fixture` for the new
+     version's fixture (`test/fixtures/snapshots/`; keep the older ones). `test/snapshots.test.js`
+     brings every fixture forward through the steps and plays on from it.
    - `WAR_VERSION` (`client/js/core/war/war.js`): what the war's snapshot holds. A war kept by an
      older version is carried on, not set aside: `War.restore` fills in what it hadn't kept, a
      step for each version, so add yours there.
@@ -420,7 +426,8 @@ moves first, update the branch again.
 | `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |
-| `NET_VERSION`, `SNAPSHOT_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
+| `NET_VERSION`, `SAVE_VERSION` | If both sides bumped one, take the higher number and add one. The merged game is different from both. |
+| `SNAPSHOT_VERSION` | If both sides bumped it, take the higher number and add one, keep both sides' steps in `SNAPSHOT_STEPS` (renumbered one after the other, the older side's first), and run `npm run snapshot-fixture` on the merged code for the new number's fixture. Keep both sides' older fixtures. |
 | `WAR_VERSION` | If both sides bumped it, take the higher number and add one, and keep both sides' steps in `War.restore`, the older side's first, each for a war kept before the merged number. |
 | `LAYOUT_VERSION`, `CONFIG_VERSION` | If both sides bumped one, take the higher number and add one, and keep both sides' steps (`LAYOUT_STEPS`, `SETTINGS_STEPS`), one after the other, each numbered for the version it starts from. |
 | `docs/*.md`, the plans in `generated/` | Keep both sides' text. Change-log entries stay in date order. |

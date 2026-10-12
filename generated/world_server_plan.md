@@ -1,6 +1,6 @@
 # The world server: the plan
 
-A plan, being built: S0 is done and S1 is under way ([§15](#15-milestones)). It is a living
+A plan, being built: S0 and S1 are done, and S2 is next ([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -389,7 +389,7 @@ the server writes carries a version, and every version has a way forward.
 | The data folder's layout | `VERSION` at its root | A migration per step (files moved or split), run on start before anything else |
 | Server settings | `configVersion` in `server.json` | Migrations fill in new settings with defaults and rename old ones. Every setting has a schema; unknown keys are kept, not dropped, so a newer server's settings survive a trip through an older one. |
 | A world's metadata | `formatVersion` in `world.json` | Migrations per step |
-| A world's snapshot | `SNAPSHOT_VERSION` (26 today) | **New rule:** every bump ships a migration from the previous version, as `WAR_VERSION` already does. `test/` keeps a fixture snapshot for each version and loads it through the whole chain. contribution.md's version rules gain this line. |
+| A world's snapshot | `SNAPSHOT_VERSION` (27 today) | **New rule:** every bump ships a migration from the previous version, as `WAR_VERSION` already does. `test/` keeps a fixture snapshot for each version and loads it through the whole chain. contribution.md's version rules gain this line. |
 | The war | `WAR_VERSION` (9 today) | Its existing migrations |
 | Kept heroes | `SAVE_VERSION`, shared with the browser's saves | Read through the same code the browser uses (`Progress.fromJSON` and the like), which already accepts older shapes. Anything new gets a migration in `core/`, used by both. |
 | The protocol | `NET_VERSION` and the sockets' subprotocols | No migration. A server serves its own matching game, and a mismatched client is told to update or open the game from the server ([§12](#12-the-protocol)). |
@@ -1153,14 +1153,15 @@ in the user's order:
   Node, Chromium, WebKit and Firefox; AFK marked and sent out at the same step on every copy; no
   step over 50 ms walking about in the four towns. A field battle's first steps still reach
   140 ms now and then, and the soak lists them (docs/WAR.md, "The soak").
-- **S1, under way.** S1a: the data folder, its layout's and settings' versions, atomic writes and
-  the platform layer's folders (`server/storage/`, `server/platform/`). S1b: worlds kept
-  (`server/storage/worlds.js`: `world.json`, the snapshot and five autosaves, a spoilt save passed
-  over, the journal), the heroes a world keeps (`heroes.js`, six a player), and a running world
-  saved on each war turn and when asked (`server/keeper.js`): saved in one process and restored in
-  another, it has the same checksum, and 200 steps on it still has. Still to come: S1c, the
-  snapshot's migrations with a fixture for each version, the fresh start from the seed, and
-  bringing a solo world in.
+- **S1, done.** The data folder, its layout's and settings' versions, atomic writes and the
+  platform layer's folders (`server/storage/`, `server/platform/`); worlds kept (`worlds.js`:
+  `world.json`, the snapshot and five autosaves, a spoilt save passed over, the journal); the
+  heroes a world keeps (`heroes.js`, six a player); a running world saved on each war turn and
+  when asked (`server/keeper.js`); the snapshot's steps forward from version 26, with a fixture of
+  each version (`SNAPSHOT_STEPS`, `test/fixtures/snapshots/`); a world opened, refused if a newer
+  version kept it, or started afresh from its seed (`server/reopen.js`); and a solo world brought
+  in. Measured: saved in one process and restored in another, a world has the same checksum, and
+  200 steps on it still has.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1230,3 +1231,4 @@ questions go here as they come up.
 | 2026-10-12 | **Joiners too far behind** (docs/WAR.md, "Pace"): a joined game more than 100 steps (5 s) behind the host asks for the world as it now is rather than playing every step it missed, and everyone is drawn going to where it puts them (put straight there if that's further than 3 m). The soak counts these resyncs too. | The user asked for resyncs eased for players with lag, and a "too far gone" limit past which they're sent the world as it is. A phone hidden 30 s took 9.5 s to catch up step by step (modelled); it now takes half a second. |
 | 2026-10-12 | **S1a built:** the data folder (`server/storage/folder.js`: `VERSION`, laid out anew a step at a time with a copy made first, and refused from a newer server, naming the server it needs), the server's settings (`server/storage/settings.js`: a schema for each, checked before writing, keys it doesn't know kept), atomic writes (`files.js`), and the platform layer's folders (`server/platform/`: macOS, Linux's XDG folders, Windows). contribution.md's version rules gained `LAYOUT_VERSION` and `CONFIG_VERSION`. | §5.1's framework comes first, so that the world saves of S1b are versioned from the start. |
 | 2026-10-12 | **S1b built:** worlds kept in `worlds/<id>/` (`server/storage/worlds.js`): `world.json` with formatVersion and the world's settings (a schema each, as the server's have), each save moving the last five down a ring before the new one's written whole, a latest that won't read passed over for the newest that will (the journal says which), and refused only if none reads; the heroes a world keeps, six for each player (`heroes.js`, at the browser's `SAVE_VERSION`); and `server/keeper.js`, saving a running world on each war turn and whenever it's asked. | S1's proof: a world saved, the process started again, restored with the same checksum, and the same 200 steps later (`test/world-store.test.js`). |
+| 2026-10-12 | **S1c built, and S1 with it:** `Host.forward` brings a snapshot kept by an older version forward a step at a time (`SNAPSHOT_STEPS`, from 26), and `Host.restore` uses it; a fixture of each version from 26 (`npm run snapshot-fixture`) is brought forward and played on by `test/snapshots.test.js`. `server/reopen.js`: a kept world opened (refused, naming the server it needs, if a newer version kept it), started afresh from its seed if it can't be carried on (a copy made first, its war and kept heroes kept), and a player's solo world brought in (`app/save.js` exportCharacter, read back through importCharacter as the game reads its own). contribution.md's rule for `SNAPSHOT_VERSION` says so. | §5.1's last pieces for S1. The step from 26 fills in the world's rules and each player's role, last command and away state, as S0b added them. |

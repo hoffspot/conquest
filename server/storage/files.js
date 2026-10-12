@@ -10,6 +10,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { gunzip, gzip } from "node:zlib";
 
+/** The data folder's backups (folder.js lays it out; a world's go in a folder named by its id). */
+export const BACKUPS = "backups";
+
 /** Who may open what the server keeps: its owner alone. */
 export const FOLDER_MODE = 0o700;
 export const FILE_MODE = 0o600;
