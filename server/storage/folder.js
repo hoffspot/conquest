@@ -8,13 +8,15 @@
 //   VERSION                 the layout's version, and the server that laid it out
 //   server.json             the server's settings
 //   backups/server/         copies made before the folder or its settings were brought forward
-//   (worlds/ and the rest as generated/world_server_plan.md §5 has them, as they come)
+//   worlds/                 the worlds it keeps (worlds.js)
+//   (and the rest as generated/world_server_plan.md §5 has them, as they come)
 
 import { cp, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { ensureFolder, stampOf, writeAtomic } from "./files.js";
 import { CONFIG_VERSION, Settings } from "./settings.js";
 import { checkVersion, SERVER_VERSION } from "./versions.js";
+import { WorldStore } from "./worlds.js";
 
 /** How the data folder's laid out: bump it, with a step in LAYOUT_STEPS, when what's in it moves. */
 export const LAYOUT_VERSION = 1;
@@ -54,9 +56,10 @@ export async function readLayout(root) {
 
 export class DataFolder {
     constructor(root, settings) {
-        /** Where it is, and the server's settings in it. */
+        /** Where it is, the server's settings in it, and the worlds it keeps. */
         this.root = root;
         this.settings = settings;
+        this.worlds = new WorldStore(root);
     }
 
     /**

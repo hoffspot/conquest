@@ -1154,7 +1154,13 @@ in the user's order:
   step over 50 ms walking about in the four towns. A field battle's first steps still reach
   140 ms now and then, and the soak lists them (docs/WAR.md, "The soak").
 - **S1, under way.** S1a: the data folder, its layout's and settings' versions, atomic writes and
-  the platform layer's folders (`server/storage/`, `server/platform/`).
+  the platform layer's folders (`server/storage/`, `server/platform/`). S1b: worlds kept
+  (`server/storage/worlds.js`: `world.json`, the snapshot and five autosaves, a spoilt save passed
+  over, the journal), the heroes a world keeps (`heroes.js`, six a player), and a running world
+  saved on each war turn and when asked (`server/keeper.js`): saved in one process and restored in
+  another, it has the same checksum, and 200 steps on it still has. Still to come: S1c, the
+  snapshot's migrations with a fixture for each version, the fresh start from the seed, and
+  bringing a solo world in.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1223,3 +1229,4 @@ questions go here as they come up.
 | 2026-10-12 | **S0 built** (#361 to #364): the runner in `core/runner.js`, host-free worlds and AFK in the rules, made ahead on Node in worker threads, and the soak (`npm run soak`, `.github/workflows/soak.yml`). | S0's proofs met, as §15 says. What they found: a field battle's first steps can take 140 ms, so the soak lists every step over 50 ms for the work after S1. |
 | 2026-10-12 | **Joiners too far behind** (docs/WAR.md, "Pace"): a joined game more than 100 steps (5 s) behind the host asks for the world as it now is rather than playing every step it missed, and everyone is drawn going to where it puts them (put straight there if that's further than 3 m). The soak counts these resyncs too. | The user asked for resyncs eased for players with lag, and a "too far gone" limit past which they're sent the world as it is. A phone hidden 30 s took 9.5 s to catch up step by step (modelled); it now takes half a second. |
 | 2026-10-12 | **S1a built:** the data folder (`server/storage/folder.js`: `VERSION`, laid out anew a step at a time with a copy made first, and refused from a newer server, naming the server it needs), the server's settings (`server/storage/settings.js`: a schema for each, checked before writing, keys it doesn't know kept), atomic writes (`files.js`), and the platform layer's folders (`server/platform/`: macOS, Linux's XDG folders, Windows). contribution.md's version rules gained `LAYOUT_VERSION` and `CONFIG_VERSION`. | §5.1's framework comes first, so that the world saves of S1b are versioned from the start. |
+| 2026-10-12 | **S1b built:** worlds kept in `worlds/<id>/` (`server/storage/worlds.js`): `world.json` with formatVersion and the world's settings (a schema each, as the server's have), each save moving the last five down a ring before the new one's written whole, a latest that won't read passed over for the newest that will (the journal says which), and refused only if none reads; the heroes a world keeps, six for each player (`heroes.js`, at the browser's `SAVE_VERSION`); and `server/keeper.js`, saving a running world on each war turn and whenever it's asked. | S1's proof: a world saved, the process started again, restored with the same checksum, and the same 200 steps later (`test/world-store.test.js`). |

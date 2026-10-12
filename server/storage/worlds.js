@@ -1,0 +1,294 @@
+// The worlds the server keeps (generated/world_server_plan.md §5), each in a folder of its own,
+// named by an id that never changes (so links and backups outlive a rename):
+//
+//   worlds/<id>/
+//     world.json                 what it is: name, description, seed, home people, made when and
+//                                by whom, heroes kept or brought in, its settings, time played,
+//                                the world's time, the versions it was saved at (formatVersion)
+//     state/now.json.gz          the latest snapshot of it (core/host.js snapshot, as core/wire.js
+//                                writes it, gzipped)
+//     state/auto-1..5.json.gz    the five before it, newest first
+//     heroes/<player-id>/<n>.json   the heroes it keeps (heroes.js)
+//     journal.log                what's happened to it, a line each
+//
+// Every save first moves the snapshots kept down the ring (the oldest gone), then writes the new
+// one whole (files.js), so there are always five to go back to. If the latest won't read (cut
+// short, or spoilt), the newest that does is carried on from, and the journal says so.
+
+import { randomBytes } from "node:crypto";
+import { appendFile, readdir, rename } from "node:fs/promises";
+import path from "node:path";
+import { decode, encode } from "../../client/js/core/wire.js";
+import { RACE } from "../../client/js/core/worldplan/plan.js";
+import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, writeGzip, writeJSON } from "./files.js";
+import { KeptHeroes } from "./heroes.js";
+import { schemaReason } from "./settings.js";
+import { forward, SERVER_VERSION } from "./versions.js";
+
+/** world.json's version: bump it, with a step in FORMAT_STEPS, when what it holds changes. */
+export const FORMAT_VERSION = 1;
+
+/** The steps that bring an older server's world.json forward: [n] takes it from version n to n + 1. */
+export const FORMAT_STEPS = Object.freeze({});
+
+/** How many snapshots are kept before the latest. */
+export const AUTOSAVES = 5;
+
+/** The folders and files of the worlds (in the data folder), and of each. */
+export const WORLDS = "worlds";
+export const WORLD_FILE = "world.json";
+export const STATE = "state";
+export const NOW = "now.json.gz";
+export const HEROES = "heroes";
+export const JOURNAL = "journal.log";
+
+/** The autosave `n` (1, the newest, to AUTOSAVES)'s file. */
+export const autosaveName = (n) => `auto-${n}.json.gz`;
+
+/** Whose heroes a world keeps: the world's (kept), or the players' own, brought in each time. */
+export const HERO_MODES = Object.freeze(["kept", "brought"]);
+
+/** In a world that keeps them, a player's first hero there: made new, or one of theirs brought in. */
+export const FIRST_HEROES = Object.freeze(["new", "bring"]);
+
+/** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
+export const WORLD_SETTINGS = Object.freeze({
+    mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
+    listed: { kind: "boolean", default: false, about: "Shown to anyone who asks the server what worlds it has" },
+    pauseWhenHidden: { kind: "boolean", default: true, about: "Stopped while every player's page is hidden" },
+    holdWhileJoining: { kind: "boolean", default: false, about: "Stopped while someone's coming in" },
+    trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
+    debugCommands: { kind: "boolean", default: false, about: "Its owners may use the debug commands (a field battle, say)" },
+});
+
+// A world's id: ten letters and digits (made at random); never "server", whose backups are the server's own
+const ID = /^[a-z0-9]{10}$/;
+const LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+/** A new world's id, at random. */
+export function newWorldId() {
+    return [...randomBytes(10)].map((byte) => LETTERS[byte % LETTERS.length]).join("");
+}
+
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+// A snapshot as it's kept, read back: gunzipped and decoded, and something like a world's (else
+// it's taken to be spoilt)
+async function readSnapshot(file) {
+    const snapshot = decode(await readGzip(file));
+
+    if (!isObject(snapshot) || !Number.isInteger(snapshot.version) || !isObject(snapshot.battle)) {
+        throw new Error("it isn't a snapshot of a world");
+    }
+
+    return snapshot;
+}
+
+/** One world the server keeps. */
+export class StoredWorld {
+    #saving = Promise.resolve();
+
+    constructor(folder, meta) {
+        /** Where it's kept, and what it is (world.json, as it was last written). */
+        this.folder = folder;
+        this.meta = meta;
+
+        /** The heroes it keeps for its players. */
+        this.heroes = new KeptHeroes(path.join(folder, HEROES));
+    }
+
+    get id() {
+        return this.meta.id;
+    }
+
+    #state(name) {
+        return path.join(this.folder, STATE, name);
+    }
+
+    /** A world's folder opened: its world.json brought forward if an older server wrote it, refused if a newer one did. */
+    static async open(folder) {
+        const { formatVersion, writtenBy = null, ...meta } = await readJSON(path.join(folder, WORLD_FILE));
+
+        return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }));
+    }
+
+    /** world.json written again, as `meta` now is (and changes, if any). */
+    async writeMeta(changes = {}) {
+        Object.assign(this.meta, changes);
+        await writeJSON(path.join(this.folder, WORLD_FILE), { formatVersion: FORMAT_VERSION, writtenBy: SERVER_VERSION, ...this.meta });
+    }
+
+    /**
+     * The world as it now is kept (`snapshot`: core/host.js snapshot, taken between steps): the
+     * latest moved down the ring and this written in its place, then world.json (its world time,
+     * the versions it was saved at, when; `played`, the time it's been played in all, if it's
+     * said). `why` goes in the journal (not for a war turn's: there's one a minute). Saves go one
+     * at a time, in the order they're asked for; it's encoded as it's asked for, so the world
+     * can go on at once. Returns when it's on the disk.
+     */
+    save(snapshot, { why = "saved", played = null, when = () => new Date() } = {}) {
+        const text = encode(snapshot);
+        const saving = this.#saving.then(() => this.#write(text, snapshot, { why, played, when }));
+
+        this.#saving = saving.catch(() => {});
+
+        return saving;
+    }
+
+    async #write(text, snapshot, { why, played, when }) {
+        await ensureFolder(path.join(this.folder, STATE));
+
+        for (let n = AUTOSAVES - 1; n >= 1; n--) {
+            if (await exists(this.#state(autosaveName(n)))) {
+                await rename(this.#state(autosaveName(n)), this.#state(autosaveName(n + 1)));
+            }
+        }
+
+        if (await exists(this.#state(NOW))) {
+            await rename(this.#state(NOW), this.#state(autosaveName(1)));
+        }
+
+        await writeGzip(this.#state(NOW), text);
+
+        const at = when();
+
+        await this.writeMeta({
+            worldTime: snapshot.battle?.time ?? 0,
+            versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null },
+            savedAt: at.toISOString(),
+            ...(played === null ? {} : { played }),
+        });
+
+        if (why !== "turn") {
+            await this.journal(`Saved (${why}).`, at);
+        }
+    }
+
+    /**
+     * The latest snapshot of it that reads: { snapshot, from (its file's name), passed (those
+     * newer that didn't read: [{ name, reason }]) }, the journal told if it wasn't the latest;
+     * or { snapshot: null } if it's never been saved (a new world, made from its seed). Throws if
+     * it's been saved but none reads (generated/world_server_plan.md §5.1: its owner's offered a
+     * fresh start from the seed).
+     */
+    async load({ when = () => new Date() } = {}) {
+        const passed = [];
+
+        for (const name of [NOW, ...Array.from({ length: AUTOSAVES }, (_, k) => autosaveName(k + 1))]) {
+            const file = this.#state(name);
+
+            if (!(await exists(file))) {
+                continue;
+            }
+
+            try {
+                const snapshot = await readSnapshot(file);
+
+                if (passed.length) {
+                    await this.journal(`${passed.map(({ name: each, reason }) => `${each} couldn't be read (${reason})`).join("; ")}: carried on from ${name}.`, when());
+                }
+
+                return { snapshot, from: name, passed };
+            } catch (error) {
+                passed.push({ name, reason: error.message });
+            }
+        }
+
+        if (passed.length) {
+            await this.journal(`None of its saves could be read: ${passed.map(({ name, reason }) => `${name} (${reason})`).join("; ")}.`, when());
+
+            throw new Error(`None of world ${this.id}'s saves could be read: ${passed.map(({ name, reason }) => `${name} (${reason})`).join("; ")}.`);
+        }
+
+        return { snapshot: null, from: null, passed };
+    }
+
+    /** A line in its journal (when it was, then what). */
+    async journal(text, when = new Date()) {
+        await ensureFolder(this.folder);
+        await appendFile(path.join(this.folder, JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+    }
+}
+
+/** The worlds the server keeps (in its data folder's worlds/). */
+export class WorldStore {
+    /** @param {string} root - The data folder. */
+    constructor(root) {
+        this.folder = path.join(root, WORLDS);
+    }
+
+    #folderOf(id) {
+        if (typeof id !== "string" || !ID.test(id)) {
+            throw new Error(`Not a world's id: ${JSON.stringify(id)}`);
+        }
+
+        return path.join(this.folder, id);
+    }
+
+    /**
+     * A new world kept: its name, description, seed and home people (`race`), who made it (a
+     * player's id, if one did), whose heroes it keeps (HERO_MODES), a kept world's first heroes
+     * (FIRST_HEROES), and its settings (WORLD_SETTINGS: those not given, their defaults). Refused,
+     * with the reason, if any of it can't be. Not yet saved: it's made from its seed when it's
+     * first played.
+     */
+    async create({ name, description = "", seed, race, creator = null, heroes = "kept", firstHero = "new", settings = {} }, { id = newWorldId(), when = new Date() } = {}) {
+        const reasons = [
+            typeof name === "string" && name.trim() && name.trim().length <= 60 ? null : "A world needs a name, of 60 characters at most.",
+            typeof description === "string" && description.length <= 500 ? null : "A world's description is 500 characters at most.",
+            Number.isSafeInteger(seed) && seed >= 0 ? null : `A world's seed is a whole number, not ${JSON.stringify(seed)}.`,
+            RACE[race] ? null : `There's no people called ${JSON.stringify(race)}.`,
+            HERO_MODES.includes(heroes) ? null : `Heroes are kept or brought in, not ${JSON.stringify(heroes)}.`,
+            FIRST_HEROES.includes(firstHero) ? null : `A first hero is made new or brought in, not ${JSON.stringify(firstHero)}.`,
+            ...(isObject(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
+        ].filter(Boolean);
+
+        if (reasons.length) {
+            throw new Error(reasons.join(" "));
+        }
+
+        const folder = this.#folderOf(id);
+
+        if (await exists(folder)) {
+            throw new Error(`There's a world ${id} already.`);
+        }
+
+        const defaults = Object.fromEntries(Object.entries(WORLD_SETTINGS).map(([key, { default: value }]) => [key, value]));
+        const world = new StoredWorld(folder, {
+            id,
+            name: name.trim(),
+            description,
+            seed,
+            race,
+            created: when.toISOString(),
+            creator,
+            heroes,
+            firstHero,
+            settings: { ...defaults, ...settings },
+            played: 0,
+            worldTime: 0,
+            versions: null,
+            savedAt: null,
+        });
+
+        await ensureFolder(folder);
+        await world.writeMeta();
+        await world.journal(`Made${creator ? ` by ${creator}` : ""}: "${world.meta.name}", seed ${seed}, home people ${RACE[race].name}.`, when);
+
+        return world;
+    }
+
+    /** The ids of the worlds kept. */
+    async ids() {
+        if (!(await exists(this.folder))) {
+            return [];
+        }
+
+        return (await readdir(this.folder)).filter((name) => ID.test(name)).sort();
+    }
+
+    /** A world kept (StoredWorld.open: refused if a newer server wrote it). */
+    async open(id) {
+        return StoredWorld.open(this.#folderOf(id));
+    }
+}

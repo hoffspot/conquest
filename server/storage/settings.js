@@ -33,7 +33,15 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
 
 /** Why `value` can't be setting `key` (a sentence), or null if it can. */
 export function settingReason(key, value) {
-    const setting = Object.hasOwn(SETTINGS, key) ? SETTINGS[key] : null;
+    return schemaReason(SETTINGS, key, value);
+}
+
+/**
+ * Why `value` can't be `key` in `schema` (settings as SETTINGS has them: a world's are another),
+ * or null if it can.
+ */
+export function schemaReason(schema, key, value) {
+    const setting = Object.hasOwn(schema, key) ? schema[key] : null;
 
     if (!setting) {
         return `There's no setting called "${key}".`;
