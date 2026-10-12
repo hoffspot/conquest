@@ -3698,9 +3698,13 @@ character only, as the talks are.
 
 Held on the minimap (or M on a keyboard), the whole screen becomes a map of the world, the game
 paused under it, until it's closed (the cross, Escape, or M again). It opens on the player, about
-900 metres across the screen's shorter side; drag to look about, pinch or scroll to zoom (from a
-quarter of a metre to a pixel out to the whole world), or use its buttons: where you are, zoom in,
-zoom out. Its key (each building's icon, the fog and the pin) is folded away to a "Key" button in
+900 metres across the screen's shorter side; drag one finger (or the mouse) to look about, spread
+two fingers apart to zoom in and bring them together to zoom out, or scroll (from a quarter of a
+metre to a pixel out to the whole world), or use its buttons: where you are, zoom in, zoom out. Two
+fingers on it carry the map with them as well as zooming it, what was under them kept under them
+(a phone tells of each finger's move on its own, so the middle between them is followed, not only
+how far apart they are); the page itself never pinches or scrolls under it (`touch-action: none`,
+and Safari's own pinch kept off). Its key (each building's icon, the fog and the pin) is folded away to a "Key" button in
 the bottom left corner, so the map's seen whole on a phone: tapped, the key opens above it; tapped
 again, it folds away. It stays as it was left till the game's loaded again. At the war table the
 same button holds the war's key.

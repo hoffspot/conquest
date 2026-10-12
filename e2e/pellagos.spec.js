@@ -9848,6 +9848,89 @@ test.describe("on a phone", () => {
 
         expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);
     });
+
+    test("on the world map one finger drags it about, two spread apart zoom in and brought together zoom out, and two moved drag it, what's under them staying under them", async ({ page }) => {
+        await playing(page, "/?play&seed=1");
+        await page.keyboard.press("m");
+        await expect(page.locator("#worldmap")).toBeVisible();
+        await page.waitForFunction(() => window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+        // (Fingers on the screen as a phone's are: each moved from where it lands to where it's
+        // lifted in ten steps)
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type, fingers) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: fingers.map(([x, y], id) => ({ x, y, id })) });
+        const moved = async (from, to) => {
+            await touch("touchStart", from);
+
+            for (let k = 1; k <= 10; k++) {
+                await touch("touchMove", from.map(([x, y], i) => [x + ((to[i][0] - x) * k) / 10, y + ((to[i][1] - y) * k) / 10]));
+            }
+
+            await touch("touchEnd", []);
+        };
+
+        // How the map's shown, and where on it a point of the screen is (metres)
+        const view = () => page.evaluate(() => ({ ...window.pellagos.worldMap.view }));
+        const under = ([x, y]) =>
+            page.evaluate(([x, y]) => {
+                const { worldMap } = window.pellagos;
+                const rect = worldMap.canvas.getBoundingClientRect();
+
+                return worldMap.pointAt(x - rect.left, y - rect.top);
+            }, [x, y]);
+        const canvas = await page.locator("#worldmapcanvas").boundingBox();
+        const [cx, cy] = [canvas.x + canvas.width / 2, canvas.y + canvas.height / 2];
+        const start = await view();
+
+        // One finger dragged 100 pixels left and 80 up: the map goes with it
+        await moved([[cx, cy]], [[cx - 100, cy - 80]]);
+
+        const dragged = await view();
+
+        expect(dragged.scale).toBe(start.scale);
+        expect(dragged.x - start.x).toBeCloseTo(100 * start.scale, 3);
+        expect(dragged.z - start.z).toBeCloseTo(80 * start.scale, 3);
+
+        // Two fingers spread three times as far apart: zoomed in three times, what was between them
+        // still there
+        const middle = await under([cx, cy]);
+
+        await moved([[cx - 40, cy], [cx + 40, cy]], [[cx - 120, cy], [cx + 120, cy]]);
+
+        const spread = await view();
+
+        expect(spread.scale / dragged.scale).toBeCloseTo(1 / 3, 3);
+
+        for (const [k, at] of (await under([cx, cy])).entries()) {
+            expect(Math.abs(at - middle[k])).toBeLessThan(spread.scale);
+        }
+
+        // Brought together to a quarter as far apart: zoomed out four times
+        await moved([[cx - 120, cy], [cx + 120, cy]], [[cx - 30, cy], [cx + 30, cy]]);
+
+        const pinched = await view();
+
+        expect(pinched.scale / spread.scale).toBeCloseTo(4, 3);
+
+        // Spread twice as far apart as they're moved down: zoomed in twice, the map followed, what
+        // was between them where they started between them where they're lifted
+        const from = [[cx - 80, cy - 40], [cx - 20, cy - 40]];
+        const to = [[cx - 110, cy + 20], [cx + 10, cy + 20]];
+        const held = await under([cx - 50, cy - 40]);
+
+        await moved(from, to);
+
+        const both = await view();
+
+        expect(both.scale / pinched.scale).toBeCloseTo(1 / 2, 3);
+
+        for (const [k, at] of (await under([cx - 50, cy + 20])).entries()) {
+            expect(Math.abs(at - held[k])).toBeLessThan(both.scale);
+        }
+
+        // And none of it a tap, a double tap or a hold: no pin dropped, no journey, the map open
+        expect(await page.evaluate(() => ({ pin: window.pellagos.game.pin, journey: window.pellagos.game.journey, open: document.querySelector("#worldmap").open }))).toEqual({ pin: null, journey: null, open: true });
+    });
 });
 
 test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {

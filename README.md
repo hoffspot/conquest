@@ -300,7 +300,8 @@ the same, and either way it's remembered.)
 world opens full screen, the game paused under it. A fog lies over every 64-metre patch of the
 world you haven't set foot in, lifting as you walk into each; what you've seen is shown as the
 minimap shows it, with the names of the places you've been and the icons of the buildings you've
-gone into. Drag to look about, pinch or scroll to zoom, and close it with the cross, Escape or M.
+gone into. Drag a finger to look about, spread two fingers to zoom in and pinch them together to
+zoom out (or scroll), and close it with the cross, Escape or M.
 What you've found is saved with your character.
 
 **Pins and running far.** On the world map, hold your finger (or the mouse) somewhere you've been

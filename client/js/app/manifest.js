@@ -64,7 +64,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/together.js", 15784],
             ["js/app/wheel.js", 21294],
             ["js/app/wheelsetup.js", 6795],
-            ["js/app/worldmap.js", 51457],
+            ["js/app/worldmap.js", 52388],
             ["js/audio/ambience.js", 10886],
             ["js/audio/dsp.js", 7266],
             ["js/audio/footing.js", 2592],

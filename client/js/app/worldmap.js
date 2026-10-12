@@ -5,10 +5,11 @@
 // settlements; nearer in, each chunk they've been in as the minimap paints it, every square of it
 // (painted a few at a time as they come into view, and kept); the settlements' names; icons over
 // the buildings they've gone into (app/mapicons.js); and where they are, pointing the way they
-// face. Drag to look about, pinch or scroll to zoom, and tap the buttons to zoom or come back to
-// where they are. Hold a finger (or the mouse) down somewhere to drop a pin there (or on the pin,
-// to take it away), shown with the way there from where they are (the terrain plan's M7g) and how
-// far that is beside it; tap twice somewhere to run there.
+// face. Drag a finger (or the mouse) to look about; spread two fingers to zoom in and bring them
+// together to zoom out, what's under them staying under them as they move (or scroll); and tap
+// the buttons to zoom or come back to where they are. Hold a finger (or the mouse) down somewhere
+// to drop a pin there (or on the pin, to take it away), shown with the way there from where they
+// are (the terrain plan's M7g) and how far that is beside it; tap twice somewhere to run there.
 //
 // Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
 // of the buildings only the guild's branches open to the player, each however far out it's
@@ -306,6 +307,11 @@ export class WorldMap {
         listen("pointerup", (event) => this.#up(event));
         listen("pointercancel", (event) => this.#up(event));
         listen("wheel", (event) => this.#wheel(event), { passive: false });
+
+        // (Safari's own pinch, on a phone, kept off the map: it zooms the map, not the page)
+        for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+            listen(type, (event) => event.preventDefault(), { passive: false });
+        }
     }
 
     /**
@@ -1262,7 +1268,7 @@ export class WorldMap {
         if (this.pointers.size === 2) {
             const [a, b] = [...this.pointers.values()];
 
-            this.pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y) };
+            this.pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y), middle: [(a.x + b.x) / 2, (a.y + b.y) / 2] };
         }
     }
 
@@ -1282,16 +1288,25 @@ export class WorldMap {
             this.pressed.moved += Math.abs(dx) + Math.abs(dy);
         }
 
+        // (Two fingers: the map follows the middle between them as they move, and zooms about it as
+        // they spread, in, or come together, out, so what's under them stays under them)
         if (this.pointers.size === 2 && this.pinch) {
             const [a, b] = [...this.pointers.values()];
             const distance = Math.hypot(a.x - b.x, a.y - b.y);
+            const middle = [(a.x + b.x) / 2, (a.y + b.y) / 2];
             const rect = this.canvas.getBoundingClientRect();
 
+            this.view.x -= (middle[0] - this.pinch.middle[0]) * this.view.scale;
+            this.view.z -= (middle[1] - this.pinch.middle[1]) * this.view.scale;
+
             if (distance > 0 && this.pinch.distance > 0) {
-                this.#zoomAt(this.pinch.distance / distance, (a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top);
+                this.#zoomAt(this.pinch.distance / distance, middle[0] - rect.left, middle[1] - rect.top);
+            } else {
+                this.#clamp();
+                this.redraw();
             }
 
-            this.pinch.distance = distance;
+            this.pinch = { distance, middle };
 
             return;
         }
