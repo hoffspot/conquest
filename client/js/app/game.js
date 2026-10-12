@@ -1976,6 +1976,7 @@ export class Game {
         this.steppedAt = this.lastFrame;
         telemetry.playing = true;
         telemetry.graphics = this.view.renderer.info;
+        telemetry.madeFor = (programs) => this.#madeFor(programs);
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
@@ -2477,6 +2478,31 @@ export class Game {
             console.error("A frame's work failed:", error);
             telemetry.error(error, "frame", this.telemetryState);
         }
+    }
+
+    // What some shaders just made (three.js's programs) were for, for the debug log: each
+    // material using one, by its type and name, and what it's on (the object and those it's in,
+    // a few, by name: "MeshStandardMaterial body < home:guild-1/receptionist")
+    #madeFor(programs) {
+        const fresh = new Set(programs);
+        const properties = this.view.renderer.properties;
+        const found = new Set();
+
+        this.view.scene.traverse((object) => {
+            for (const material of [object.material].flat()) {
+                if (material && fresh.has(properties.get(material).currentProgram)) {
+                    const chain = [];
+
+                    for (let at = object; at && chain.length < 3; at = at.parent) {
+                        chain.push(at.name || at.type);
+                    }
+
+                    found.add(`${material.type}${material.name ? ` ${material.name}` : ""}: ${chain.join(" < ")}`);
+                }
+            }
+        });
+
+        return [...found];
     }
 
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
@@ -7483,8 +7509,11 @@ export class Game {
         if (done || left || performance.now() >= arriving.until) {
             this.arriving = null;
 
-            // (Lit, if it's still dark: not again, if the player's come out and it's lit already)
+            // (Lit, if it's still dark: not again, if the player's come out and it's lit already;
+            // drawn once first while it's still dark, behind it, so the shaders it needs (the
+            // shadows' too) are made and its pictures sent then, not in the first frame seen)
             if (this.curtainHeld) {
+                this.view.render();
                 this.#curtain(false);
             }
         }

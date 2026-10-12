@@ -4646,8 +4646,10 @@ to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser'
   card was given meanwhile (`made`, since the frame began, or the frame before for time between
   frames): the shaders made, how many of each by their material's type and name (three.js
   numbers each program as it's made, so the newest when a frame begins is all that's kept), and
-  how many more textures and geometries it holds; a frozen frame that made a dozen shaders, or
-  sent forty pictures, says so.
+  what they were for (`made.for`, the game asked only then, `madeFor`: each material using one,
+  and what it's on and in, by name: `MeshStandardMaterial: body < home:guild-1/receptionist`,
+  as a material's name is often none), and how many more textures and geometries it holds; a
+  frozen frame that made a dozen shaders, or sent forty pictures, says so.
 - **Slow going**: the middle of 3 seconds' frames under 30 a second, with each phase's time on
   average over them.
 - **An error** no one caught, a frame's work failing (app/game.js `#fault`) or a promise refused,
