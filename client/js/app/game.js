@@ -411,6 +411,17 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 
+// How far from the camera anyone with a crowd to be drawn in (the soldiers; the players' hired
+// adventurers and the wild's creatures: #thronging) is drawn in full at most (metres), however
+// quick the frames: further off, a body's at its lowest detail already (lod.js LODS: a person's
+// under 50 pixels tall on a phone held upright), and drawn in its kind's crowd it's posed on the
+// graphics card with the rest of them. Within it, as many in full as the frames and the bodies'
+// budget allow, the nearest the camera first (#marshal) or the biggest on the screen (#thronging);
+// one drawn in full goes to its crowd only once it's `slack` metres past it, so none goes back and
+// forth on the edge. Whoever's fighting the player, or the player's fighting, is drawn in full
+// wherever they are
+const DETAIL = Object.freeze({ reach: 45, slack: 10 });
+
 // The many near a fight drawn for less (docs/WILDS.md *A ceiling*): a creature too small on the
 // screen for its shadow to show casts none (under `shadow` drawing buffer pixels tall; again over
 // `again`), and is posed as seldom as a character that size would be (avatar.js posingEvery); of
@@ -419,13 +430,13 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // of detail (lod.js) with only their contact shadows, and posed seldom out of view
 const MANY = Object.freeze({ shadow: 40, again: 48, full: 4 });
 
-// Who can be drawn in their kind's crowd when a crowded fight comes too slowly (#thronging,
-// app/throng.js): the players' hired adventurers and the wild's people-shaped creatures (bandits,
-// goblins, trolls...), their bodies kept but not drawn nor posed meanwhile; never a dungeon's boss or
-// mini-boss, an elite, one thrown by a blast, nor whoever's fighting the player or the player's
-// fighting. Looked at as often as the soldiers are (MARSHAL), those within `near` metres of the
-// player only
-const THRONGING = Object.freeze({ near: DRAW_REACH / 2 });
+// Who can be drawn in their kind's crowd (#thronging): past DETAIL.reach from the camera, or when a
+// crowded fight comes too slowly (app/throng.js): the players' hired adventurers and the wild's
+// people-shaped creatures (bandits, goblins, trolls...), their bodies kept but not drawn nor posed
+// meanwhile; never a dungeon's boss or mini-boss, an elite, one thrown by a blast, nor whoever's
+// fighting the player or the player's fighting. Looked at as often as the soldiers are (MARSHAL),
+// those within `near` metres of the player only (as far as anyone's drawn)
+const THRONGING = Object.freeze({ near: DRAW_REACH });
 
 // How near (metres) an adventurers' cache has to be to be seen, and marked on the maps from then
 // on (core/caches.js: they're put out further off than this, ahead of the player)
@@ -3176,11 +3187,12 @@ export class Game {
         return held.size;
     }
 
-    // The soldiers about drawn in full or in the crowds (world/crowd.js, MARSHAL): with a battle's
-    // near the player (more than MARSHAL.from), those nearest (whoever's fighting the player
-    // first) in full (QUALITY soldiers), the rest in their kind's crowd once its figure's made;
-    // fewer, as many as there's room for in full (QUALITY bodies: a phone's memory holds only so
-    // many, each ten megabytes or so, page and graphics card), as many as the quality's budget
+    // The soldiers about drawn in full or in the crowds (world/crowd.js, MARSHAL): past DETAIL.reach
+    // from the camera, in their kind's crowd once its figure's made (but whoever's fighting the
+    // player); nearer, with a battle's near the player (more than MARSHAL.from), those nearest the
+    // camera (whoever's fighting the player first) in full (QUALITY soldiers), the rest in their
+    // crowd; fewer, as many as there's room for in full (QUALITY bodies: a phone's memory holds only
+    // so many, each ten megabytes or so, page and graphics card), as many as the quality's budget
     // leaves beside everyone else drawn in full (a capital's guards and townsfolk, and a caravan's
     // escort passing: #heldInFull), never fewer than a battle's. One waiting on its kind's figure
     // not drawn meanwhile, nor built in full (but where it can't be made). A couple of times a second
@@ -3204,37 +3216,30 @@ export class Game {
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
         const room = soldiers.length > MARSHAL.from ? full : Math.max(full, (this.view.quality.bodies ?? Infinity) - this.#heldInFull((id) => !ids.has(id)));
+        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
+        const inFull = (actor) => this.#drawnInFull(actor.id);
+        // (Past the reach from the camera: in their crowd, whatever room there is; the rest ranked
+        // by how near the camera they are)
+        const away = new Map(soldiers.map((actor) => [actor, this.#awayFromCamera(actor)]));
+        const far = new Set(soldiers.filter((actor) => !fighting(actor) && away.get(actor) > DETAIL.reach + (inFull(actor) ? DETAIL.slack : 0)));
+        const ranked = soldiers
+            .filter((actor) => !far.has(actor))
+            .map((actor) => [away.get(actor) - (fighting(actor) ? DRAW_REACH : 0), actor])
+            .sort((a, b) => a[0] - b[0]);
 
-        if (soldiers.length <= room && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
-            this.marshalled = { soldiers: soldiers.length, room };
+        this.marshalled = { soldiers: soldiers.length, room, far: far.size };
 
+        // (All of them with room in full, drawn so or to be: nothing to do; but any waiting on their
+        // kind's figure, come within the reach since, to be built in full, below)
+        if (!far.size && ranked.length <= room && !this.crowdWaiting.size && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
             return;
         }
 
-        this.marshalled = { soldiers: soldiers.length, room };
-
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const ranked = soldiers.map((actor) => [Math.hypot(actor.x - me.x, actor.y - me.y) - (fighting(actor) ? DRAW_REACH : 0), actor]).sort((a, b) => a[0] - b[0]);
-
-        ranked.forEach(([, actor], place) => {
+        // (One put in its crowd: once its kind's figure's made, its body in full let go)
+        const crowd = (actor) => {
             const avatar = this.avatars.get(actor.id);
-            const crowded = avatar instanceof CrowdAvatar;
-
-            if (place < room) {
-                // (In full: built, the crowd's in its place till it is)
-                if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
-                    this.enlisting.push(actor.id);
-                }
-
-                return;
-            }
-
-            if (crowded || (avatar && place < room + MARSHAL.margin)) {
-                return;
-            }
-
             const { key, spec } = this.#crowdKind(actor);
 
             if (this.crowds.failed(key)) {
@@ -3252,15 +3257,42 @@ export class Game {
             }
 
             this.#toCrowd(actor, key);
+        };
+
+        ranked.forEach(([, actor], place) => {
+            const avatar = this.avatars.get(actor.id);
+            const crowded = avatar instanceof CrowdAvatar;
+
+            if (place < room) {
+                // (In full: built, the crowd's in its place till it is)
+                if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+                    this.enlisting.push(actor.id);
+                }
+
+                return;
+            }
+
+            if (!crowded && !(avatar && place < room + MARSHAL.margin)) {
+                crowd(actor);
+            }
         });
 
-        // (Those waiting on a figure that couldn't be made, built in full after all; those gone, forgotten)
+        for (const actor of far) {
+            if (!(this.avatars.get(actor.id) instanceof CrowdAvatar)) {
+                crowd(actor);
+            }
+        }
+
+        // (Those waiting on a figure that couldn't be made, built in full after all; those gone,
+        // forgotten; those with room now, come nearer, built in full)
+        const waiting = (actor) => far.has(actor) || ranked.some(([, each], place) => each === actor && place >= room);
+
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
 
             if (!actor || this.avatars.has(id)) {
                 this.crowdWaiting.delete(id);
-            } else if (this.crowds.failed(this.#crowdKind(actor).key) || !ranked.some(([, each], place) => each === actor && place >= room)) {
+            } else if (this.crowds.failed(this.#crowdKind(actor).key) || !waiting(actor)) {
                 this.crowdWaiting.delete(id);
 
                 if (!this.enlisting.includes(id) && !this.enlistees.has(id)) {
@@ -3308,12 +3340,13 @@ export class Game {
         avatar.actions.setGuard(actor.armed);
     }
 
-    // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): as many
-    // as the throng has drawn in full (all, but with Adaptive in a crowded fight that comes too
-    // slowly), the first of them first (#crowdable); one in full put in its crowd only once it's
-    // MARSHAL.margin places past the last drawn in full, and once its kind's figure's made (a step at
-    // a time meanwhile, as the soldiers' are). A couple of times a second, and as soon as the throng
-    // changes how many
+    // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
+    // DETAIL.reach from the camera, in their crowd (but whoever's fighting the player, or the player's
+    // fighting); nearer, as many as the throng has drawn in full (all, but with Adaptive in a crowded
+    // fight that comes too slowly), the first of them first (#crowdable). One in full put in its crowd
+    // only once it's DETAIL.slack metres past the reach, or MARSHAL.margin places past the last drawn
+    // in full, and once its kind's figure's made (a step at a time meanwhile, as the soldiers' are). A
+    // couple of times a second, and as soon as the throng changes how many
     #thronging(dt) {
         if ((this.throngClock = (this.throngClock ?? 0) - dt) > 0) {
             return;
@@ -3325,17 +3358,16 @@ export class Game {
         const ranked = me ? this.#crowdable(me) : [];
         const full = this.view.adaptive ? this.throng.full : Infinity;
         const kept = new Set();
+        const far = new Set(ranked.filter(({ actor, first }) => !first && this.#awayFromCamera(actor) > DETAIL.reach + (this.thronged.has(actor.id) ? 0 : DETAIL.slack)));
+        const near = ranked.filter((each) => !far.has(each));
 
-        if (full !== Infinity) {
+        if (full !== Infinity || far.size) {
             this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
         }
 
-        ranked.forEach(({ actor, avatar, first }, place) => {
+        // (One put in its crowd, or kept in it: once its kind's figure's made)
+        const stand = ({ actor, avatar }) => {
             const thronged = this.thronged.get(actor.id);
-
-            if (first || place < full || (!thronged && place < full + MARSHAL.margin)) {
-                return;
-            }
 
             // (Still in its crowd: what's been put on it since, a torch taken up, not seen either)
             if (thronged?.avatar === avatar) {
@@ -3354,16 +3386,41 @@ export class Game {
             this.#unthrong(actor.id);
             this.#throng(actor, avatar, key, size);
             kept.add(actor.id);
-        });
+        };
 
-        // (Those drawn in full again: among the first, gone, out of reach)
+        near.forEach((each, place) => {
+            if (each.first || place < full || (!this.thronged.has(each.actor.id) && place < full + MARSHAL.margin)) {
+                return;
+            }
+
+            stand(each);
+        });
+        far.forEach(stand);
+
+        // (Those drawn in full again: among the first, come near, gone, out of reach)
         for (const id of [...this.thronged.keys()]) {
             if (!kept.has(id)) {
                 this.#unthrong(id);
             }
         }
 
-        this.throngCount = { crowdable: ranked.length, inFull: ranked.length - this.thronged.size };
+        // (What the throng judges by: those within the reach, of whom it says how many in full)
+        this.throngCount = { crowdable: near.length, inFull: near.filter(({ actor }) => !this.thronged.has(actor.id)).length };
+    }
+
+    // How far someone is from the camera (metres): where they're drawn, or (not drawn yet) where
+    // they are on the ground
+    #awayFromCamera(actor) {
+        const camera = this.view.camera.position;
+        const avatar = this.avatars.get(actor.id);
+
+        if (avatar) {
+            return camera.distanceTo(avatar.object.position);
+        }
+
+        const [ox, oz] = this.originOf(actor.map);
+
+        return Math.hypot(ox + actor.x - camera.x, oz + actor.y - camera.z);
     }
 
     // Those within THRONGING.near of the player who can be drawn in their kind's crowd: the players'

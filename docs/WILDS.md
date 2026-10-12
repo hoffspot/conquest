@@ -699,8 +699,8 @@ drawn: every creature near the player was drawn, and cast its shadow, wherever t
 
 ### In a crowd (beasts/herd.js)
 
-In a crowded fight that comes too slowly, those least seen are drawn in their kind's crowd
-(docs/GAME.md *Standing in*), beasts as well as people. A beast's kind's figure is made once for
+More than 45 metres from the camera, and in a crowded fight that comes too slowly those least
+seen, are drawn in their kind's crowd (docs/GAME.md *Standing in*), beasts as well as people. A beast's kind's figure is made once for
 each of the three it's built as (`seed % 3`), at its kind's size, each drawn at its own:
 
 - **Its figure.** Its sculpted body and its folded pieces merged into one mesh as they're bound to

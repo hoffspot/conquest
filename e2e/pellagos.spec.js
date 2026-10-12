@@ -4687,8 +4687,9 @@ test.describe("drawn at the screen's own pixels", () => {
         expect(tapped).toEqual({ order: "approach", talking: "player" });
 
         // Posed as often as each is seen (Avatar.every): the player, and the guard they're talking to,
-        // near (the camera in close), every frame; those out of view seldom; and so some less often
-        // than every frame
+        // near (the camera in close), every frame; those drawn in full out of view seldom; and so
+        // some less often than every frame (those in their crowd, past the reach from the camera,
+        // posed on the graphics card)
         const posing = await page.evaluate(async (id) => {
             const { game, session } = window.pellagos;
             const { POSING } = await import("/js/world/avatar.js");
@@ -4696,7 +4697,9 @@ test.describe("drawn at the screen's own pixels", () => {
             session.view.zoom(0.1);
             game.advance(0.25);
 
-            const shown = game.battle.actors.filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible).map((one) => game.avatars.get(one.id));
+            const shown = game.battle.actors
+                .filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible && game.avatars.get(one.id).constructor.name !== "CrowdAvatar")
+                .map((one) => game.avatars.get(one.id));
             const unseen = shown.filter(({ object, character }) => session.view.heightOnScreen(object.position, character.height) === 0);
 
             // (Posed in a frame with the view as it is now. Any not posed in it, gone or past where
@@ -10293,4 +10296,69 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
     }, ids);
 
     expect(back).toEqual({ seen: true, standing: 0, posed: true });
+});
+
+test("past 45 metres from the camera, a bandit's drawn in its kind's crowd however quick the frames, its body kept unseen; come near, in full again", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // (Adaptive off: all drawn in full but for the reach. Out in the open west of the start town,
+    // facing north, a bandit 8 metres ahead and one 70 or more, neither of them set on a fight)
+    const ids = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { host, battle, world } = game;
+        const [mx, my] = world.stamp.middle;
+        const [x0, y0] = [Math.floor(mx - 140), Math.floor(my - 20)];
+        const squares = world.maps?.town?.squares ?? world.squares;
+        const add = (id, square) => {
+            host.wild.set(id, { creature: "bandit", tier: 2, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: "Bandit", weapon: "sword", team: "beasts", square, ai: "wild", hp: 1e6, speed: 1.2, chase: 2, wild: { creature: "bandit", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: id, leader: null, menace: false } });
+        };
+        let far = 70;
+
+        while (far < 110 && (squares.blocked(x0, y0 - far) || squares.opaque(x0, y0 - far))) {
+            far += 2;
+        }
+
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [x0, y0], { facing: Math.PI });
+        add("reach-near", [x0 + 2, y0 - 8]);
+        add("reach-far", [x0, y0 - far]);
+        game.enlisting.push("reach-near", "reach-far");
+
+        return ["reach-near", "reach-far"];
+    });
+
+    expect(await playUntil(page, () => ["reach-near", "reach-far"].every((id) => window.pellagos.game.avatars.has(id)), { seconds: 60 })).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.thronged.has("reach-far") && !window.pellagos.game.crowds?.busy, { seconds: 90 })).toBe(true);
+
+    const apart = await page.evaluate(([near, far]) => {
+        const { game } = window.pellagos;
+        const away = (id) => game.view.camera.position.distanceTo(game.avatars.get(id).object.position);
+        const { avatar, standIn } = game.thronged.get(far);
+
+        return {
+            near: { away: away(near), thronged: game.thronged.has(near) },
+            far: { away: away(far), kept: game.avatars.get(far) === avatar, unposed: avatar.every === Infinity, crowded: game.crowds.members.has(standIn) && standIn.key.startsWith("wild:bandit") },
+            full: game.throng.full,
+        };
+    }, ids);
+
+    expect(apart.near.away).toBeLessThan(45);
+    expect(apart.near.thronged).toBe(false);
+    expect(apart.far.away).toBeGreaterThan(45);
+    expect(apart.far).toMatchObject({ kept: true, unposed: true, crowded: true });
+
+    // Come near: drawn in full again, its stand-in gone
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.host.battle.place("reach-far", "town", [Math.floor(me.x) - 2, Math.floor(me.y) - 6]);
+    });
+
+    expect(await playUntil(page, () => !window.pellagos.game.thronged.has("reach-far"), { seconds: 10 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.avatars.get("reach-far").every !== Infinity)).toBe(true);
 });
