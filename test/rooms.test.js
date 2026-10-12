@@ -353,7 +353,7 @@ describe("a guild's portal's veil (interiors3d.js veilShader)", () => {
         assert.match(shader.vertexShader, /vVeil = uv;/);
         assert.match(shader.fragmentShader, /vec4 diffuseColor = vec4\( veilAt\(vVeil \/ 5\.0\), opacity \);/);
         assert.doesNotMatch(shader.fragmentShader, /vec4\( diffuse, opacity \)/);
-        assert.match(shader.fragmentShader, /if \(vCutWorld\.y - cutPlayer\.y > cutHeight/);
+        assert.match(shader.fragmentShader, /if \(cutInWay && vCutWorld\.y - cutPlayer\.y > cutHeight/);
         assert.equal(shader.uniforms.veilTime, VEIL.time);
         assert.equal(shader.uniforms.cutSquares.value, 1);
         assert.match(veil.material.customProgramCacheKey(), /-veil$/);
