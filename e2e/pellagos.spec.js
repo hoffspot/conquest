@@ -1643,8 +1643,18 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")))).toMatchObject({ autoSnag: true, snagGrades: null, snagKinds: null });
 });
 
-test("the first time a fight leaves a character something, they're told what to do with it; never again, their loot floating where it fell over its rarity's glow, and what they pick up rising over them, not said across the screen", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
+test("the first time a fight leaves a character something, they're told in a line what to do with it; never again, not even after a restart, their loot floating where it fell over its rarity's glow, and what they pick up rising over them, not said across the screen", async ({ page }) => {
+    // (A character kept, carried on from the title: played twice, more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    };
+
+    await continued();
 
     // (A wolf's spoils for the player at their feet, and the host telling of it; a frame played)
     const leave = (id) => page.evaluate((id) => {
@@ -1664,9 +1674,10 @@ test("the first time a fight leaves a character something, they're told what to 
 
     const first = await leave("loot-1");
 
-    expect(first.told).toContain("The wolf left something where it fell.");
-    expect(first.told).toContain("Auto-snag");
+    expect(first.told).toBe("The wolf dropped something. Tap it to take it all, or turn on Auto-snag in Game options.");
     expect(first.once).toEqual(["spoils"]);
+    // (Kept with the character)
+    expect(await keptOf(page, "told")).toMatchObject({ told: ["spoils"] });
     // (Its gold and its rare ring, each over its glow: the rare violet)
     expect(first.things).toEqual([{ name: "gold:common", glow: "e9e1d0" }, { name: "ring:rare", glow: "b07cff" }]);
 
@@ -1675,7 +1686,7 @@ test("the first time a fight leaves a character something, they're told what to 
 
     const second = await leave("loot-2");
 
-    expect(second.told).not.toContain("left something");
+    expect(second.told).not.toContain("dropped something");
     expect(second.things).toHaveLength(2);
 
     // Picked up: what's taken rising over the player, kept for the journal, not said across the screen
@@ -1693,6 +1704,16 @@ test("the first time a fight leaves a character something, they're told what to 
     expect(picked.said).not.toContain("You take");
     expect(picked.rising).toContain("+3 gold, a rare ring");
     expect(picked.kept).toBe("You take 3 gold, a rare ring.");
+
+    // The game started again (back to the title, and carried on as the same character): still
+    // never said again
+    await continued();
+
+    const again = await leave("loot-3");
+
+    expect(again.once).toEqual(["spoils"]);
+    expect(again.told).not.toContain("dropped something");
+    expect(again.things).toHaveLength(2);
 });
 
 test("a foe the player slays: its fall rising off its body in red as it lands, as what's picked up rises over the player, not said across the screen nor kept for the journal, and what it had on it rising over the player (kept); its body off the screen, over the player; a foe of note (an elite) said across the screen, as ever", async ({ page }) => {
