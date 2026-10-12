@@ -134,7 +134,7 @@ import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
-import { Prediction } from "./predict.js";
+import { PREDICT, Prediction } from "./predict.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
@@ -388,6 +388,7 @@ const TOGETHER = Object.freeze({
     hosting: "Your world's link to the others dropped. Reconnecting…",
     away: "The host's connection dropped. Waiting for them…",
     paused: "The host has paused the game.",
+    behind: "Catching up with the world…",
     waiting: "Waiting for the host…",
 });
 
@@ -2612,6 +2613,8 @@ export class Game {
             status = TOGETHER.away;
         } else if (remote?.paused) {
             status = TOGETHER.paused;
+        } else if (remote?.farBehind) {
+            status = TOGETHER.behind;
         } else if (remote && now - this.steppedAt > WAITING_AFTER) {
             status = TOGETHER.waiting;
         }
@@ -6674,12 +6677,52 @@ export class Game {
     }
 
     /**
-     * The world as it now is, set right after it went astray (docs/WAR.md M11: a joined game's
-     * copy, sent again): everyone in it drawn as they now are, and the buildings got ready that
-     * weren't.
+     * The world as it now is, set right after it went astray, or fell too far behind the host's
+     * to catch up (docs/WAR.md M11: a joined game's copy, sent again): everyone in it drawn as
+     * they now are, and the buildings got ready that weren't. What happened meanwhile wasn't
+     * played here, so wasn't seen: anyone who died is seen falling now, and anyone who came back
+     * to life getting up; and the player's taken to the map they're on, if it's another.
      */
     rehost() {
         this.battle = this.host.battle;
+
+        for (const actor of this.battle.actors) {
+            const avatar = this.avatars.get(actor.id);
+
+            if (!avatar) {
+                continue;
+            }
+
+            // (Drawn going there from where they were, as their bodies follow where they are
+            // (world/avatar.js): unless that's further than it's drawn closing up to, when
+            // they're put straight there, as their hero is (app/predict.js))
+            const [ox, oz] = this.originOf(actor.map);
+            const { x, z } = avatar.object.position;
+
+            if (Math.hypot(x - ox - actor.x, z - oz - actor.y) > PREDICT.far) {
+                this.#place(actor);
+            } else {
+                this.previous.set(actor.id, { x: actor.x, y: actor.y });
+            }
+
+            if (actor.kind === "fort" || actor.kind === "stakes") {
+                continue;
+            }
+
+            if (actor.dead && !avatar.actions.fall && !avatar.actions.tossed?.dead) {
+                avatar.lands = avatar.actions.die() ?? FALL_LANDS;
+                avatar.deadFor = 0;
+            } else if (!actor.dead && (avatar.actions.fall || avatar.actions.tossed?.dead)) {
+                avatar.actions.revive();
+                avatar.deadFor = 0;
+            }
+        }
+
+        const me = this.battle.actor(this.me);
+
+        if (me && me.map !== this.mapId) {
+            this.#arrive(me);
+        }
 
         for (const actor of this.battle.actors) {
             if ((actor.kind === "soldier" || actor.kind === "wagon") && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {

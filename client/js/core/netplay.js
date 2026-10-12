@@ -19,8 +19,10 @@
 // a copy plays the same steps and compares, and one that's gone astray knows it at once. Each of
 // the host's sendings carries its step: a joined game keeps a few steps in hand behind it (more,
 // the less evenly they come), playing a little slower or faster to keep them, so that it doesn't
-// stop and start (Joining.pace). And it times how long a word takes to go to the host and back
-// (ping, pong), for the debug overlay.
+// stop and start (Joining.pace). One that's fallen too far behind to catch up step by step (its
+// page hidden a while, or a slow phone in a long fight) doesn't: it asks for the world as it now
+// is, as one gone astray does, and plays on from that (PACE.tooFar). And it times how long a word
+// takes to go to the host and back (ping, pong), for the debug overlay.
 //
 // The ways its characters find over the navigation meshes (core/battle.js) are recorded too, as
 // the host found them, and taken by a joined copy rather than found again: what each copy has of
@@ -74,9 +76,13 @@ export const MOST_PLAYERS = 8;
  * How far behind the host a joined game lets itself get (steps waiting to be played) before it
  * plays faster to catch up, how many more steps it plays in a frame at most, catching up, and
  * for how long (ms of the frame: on a slow phone, fewer steps a frame, so that catching up
- * doesn't make the frame so long it falls further behind).
+ * doesn't make the frame so long it falls further behind). And how far behind is too far to
+ * catch up step by step (5 s of the host's): the world as it now is asked for instead, and none
+ * of those steps played. (A step with a fight in it takes some 2 ms on a desktop and 10 on a
+ * phone, playing one more a frame at most; the world again, some 120 KB and 20 ms to take in on a
+ * desktop, 100 on a phone. So a phone 5 s behind would be fast-forwarding for 2 or 3 s more.)
  */
-export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8 });
+export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
 
 /**
  * How many of the host's steps a joined game keeps in hand (the delay): at least `least` (the host
@@ -548,6 +554,9 @@ export class Hosting {
 export class Joining {
     #last = null;
 
+    // How many of the host's steps are waiting to be played (in the queue)
+    #waiting = 0;
+
     constructor({ send, clock = () => 0 }) {
         this.send = send;
         this.clock = clock;
@@ -566,6 +575,14 @@ export class Joining {
         /** Whether it's gone astray from the host's, and asked for the world again. */
         this.astray = false;
         this.resyncs = 0;
+
+        /**
+         * Whether it fell too far behind the host to catch up step by step (PACE.tooFar), and
+         * asked for the world as it now is (none of its steps played till it's come); and how
+         * often it has.
+         */
+        this.farBehind = false;
+        this.skips = 0;
 
         /**
          * How often it's compared where the host's characters stood with its own (the motion
@@ -633,12 +650,17 @@ export class Joining {
             case "welcome":
                 this.me = message.id;
                 this.queue = [];
+                this.#waiting = 0;
                 this.#last = null;
                 this.onWelcome(message);
                 break;
             case "ops":
                 if (Array.isArray(message.ops)) {
-                    this.queue.push(...message.ops);
+                    for (const op of message.ops) {
+                        this.queue.push(op);
+                        this.#waiting += Array.isArray(op) && op[0] === "a" ? (op[2] ?? 1) : 0;
+                    }
+
                     this.#arrived(message.step);
                 }
 
@@ -662,9 +684,11 @@ export class Joining {
             case "state":
                 // (Everything waiting was done before it: in it already)
                 this.queue = [];
+                this.#waiting = 0;
                 this.#last = null;
                 this.host?.adopt(message.snapshot);
                 this.astray = false;
+                this.farBehind = false;
                 this.resyncs++;
 
                 for (const then of this.pending.values()) {
@@ -739,7 +763,7 @@ export class Joining {
 
     /** How many of the host's steps are waiting to be played. */
     get behind() {
-        return this.queue.reduce((sum, op) => sum + (op[0] === "a" ? (op[2] ?? 1) : 0), 0);
+        return this.#waiting;
     }
 
     /** Ask the host how long a word takes to it and back (rtt, once its pong comes). */
@@ -781,10 +805,26 @@ export class Joining {
 
     /**
      * Play what the host did, up to and including its next step: the events it made (as
-     * Host.advance gives them), or null if there's no step to play yet.
+     * Host.advance gives them), or null if there's no step to play yet. Or, fallen too far behind
+     * to catch up (PACE.tooFar), none: the world as it now is asked for, and played on from once
+     * it's come.
      */
     step() {
         if (!this.host) {
+            return null;
+        }
+
+        if (this.#waiting > PACE.tooFar && !this.farBehind) {
+            this.farBehind = true;
+            this.skips++;
+
+            // (Gone astray as well: the world's asked for already)
+            if (!this.astray) {
+                this.send(encode({ kind: "again" }));
+            }
+        }
+
+        if (this.farBehind) {
             return null;
         }
 
@@ -803,6 +843,8 @@ export class Joining {
                     } else {
                         this.queue.shift();
                     }
+
+                    this.#waiting--;
 
                     return this.host.advance(op[1]);
                 }

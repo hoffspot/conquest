@@ -59,7 +59,7 @@ export function netLine({ remote, hosting }, per) {
     if (remote) {
         const rtt = remote.rtt === null ? "…" : `${Math.round(remote.rtt)} ms`;
 
-        return `Net joined: RTT ${rtt}  in hand ${remote.behind}/${remote.delay} steps (jitter ${Math.round(remote.jitter)} ms)  checks ${remote.motionChecks} motion, ${remote.checks} sums, astray ${remote.desyncs}  resyncs ${remote.resyncs}  in ${rate(total(per))}`;
+        return `Net joined: RTT ${rtt}  in hand ${remote.behind}/${remote.delay} steps (jitter ${Math.round(remote.jitter)} ms)  checks ${remote.motionChecks} motion, ${remote.checks} sums, astray ${remote.desyncs}  resyncs ${remote.resyncs} (${remote.skips} too far behind)  in ${rate(total(per))}`;
     }
 
     if (hosting) {

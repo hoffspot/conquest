@@ -315,6 +315,46 @@ describe("playing together (netplay.js)", () => {
         assert.equal(joining.host.checksum(), host.checksum());
     });
 
+    it("asks for the world as it now is when it's fallen too far behind to catch up step by step (PACE.tooFar), plays none of those steps, and carries on from it", () => {
+        const { host, join, play, catchUp, deliver, post } = opened();
+        const { joining, peer } = join(guest("Bryn"));
+        const states = [];
+        const asked = () => post.filter(({ from, text }) => from === peer && decode(text).kind === "again").length;
+
+        joining.onState = () => states.push(joining.host.battle.time);
+
+        // (A little behind: caught up a step at a time, as ever)
+        play(PACE.tooFar);
+        assert.equal(joining.behind, PACE.tooFar);
+        catchUp(joining);
+        assert.equal(joining.behind, 0);
+        assert.deepEqual([joining.skips, joining.resyncs, states.length], [0, 0, 0]);
+
+        // Too far behind (its page hidden a while, say): none of it played, and the world asked for, once
+        play(PACE.tooFar + 1);
+
+        const time = joining.host.battle.time;
+
+        assert.equal(joining.step(), null);
+        assert.equal(joining.step(), null);
+        assert.equal(joining.farBehind, true);
+        assert.equal(joining.skips, 1);
+        assert.equal(joining.host.battle.time, time, "(none of the steps played)");
+        assert.equal(asked(), 1);
+
+        // (Sent it, at the host's step: what was waiting in it already, and on from there)
+        deliver();
+        assert.deepEqual(states, [host.battle.time]);
+        assert.deepEqual([joining.farBehind, joining.behind, joining.resyncs], [false, 0, 1]);
+        assert.equal(joining.host.checksum(), host.checksum());
+
+        play(CHECK_EVERY);
+        catchUp(joining);
+        assert.equal(joining.desyncs, 0);
+        assert.equal(joining.host.checksum(), host.checksum());
+        assert.deepEqual(positions(joining.host), positions(host));
+    });
+
     it("sends everyone the world again when the host's link comes back after a drop, what was sent meanwhile lost; one whose own came back asks for it", () => {
         const { host, hosting, join, play, catchUp, post, deliver } = opened();
         const bryn = join(guest("Bryn"));
