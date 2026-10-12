@@ -305,6 +305,10 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
     const players = [];
     const failures = [];
 
+    // (Each player's report as the soak's clock started: what came before, as they arrived, isn't
+    // counted against the play; a browser slow to load may be sent the world as it then is)
+    let before = [];
+
     log(`World ${seed} open as ${code} at ${base}`);
 
     try {
@@ -343,6 +347,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
 
         const started = performance.now();
 
+        before = await Promise.all(players.map((player) => player.report()));
         world.runner.times = new StepTimes();
         world.slow.length = 0;
 
@@ -354,7 +359,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
 
             log(
                 `${Math.round((performance.now() - started) / 60000)} min: steps mean ${mean.toFixed(1)} ms, p99 ${p99.toFixed(1)}, worst ${worst.toFixed(1)}; ${world.host.battle.actors.length} in the world; ` +
-                    players.map(({ name }, k) => `${name} ${reports[k] ? `${reports[k].resyncs}r/${reports[k].checks}c${reports[k].kicked ? " out" : ""}` : "?"}`).join(", "),
+                    players.map(({ name }, k) => `${name} ${reports[k] ? `${reports[k].resyncs - (before[k]?.resyncs ?? 0)}r/${reports[k].checks}c${reports[k].kicked ? " out" : ""}` : "?"}`).join(", "),
             );
         }
     } catch (error) {
@@ -371,11 +376,15 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
     world.stop();
     await server.close();
 
+    // (Resyncs, and how long they played, counted from the soak's clock; those as they arrived apart)
     const rows = players.map((player, k) => {
         const report = reports[k] ?? {};
-        const hours = (report.played ?? 0) / 3600000;
+        const was = before[k] ?? {};
+        const since = (key) => (report[key] ?? 0) - (was[key] ?? 0);
+        const hours = since("played") / 3600000;
+        const counted = { resyncs: since("resyncs"), desyncs: since("desyncs"), skips: since("skips") };
 
-        return { name: player.name, engine: player.engine, race: player.race, idle: player.idle, version: player.version, ...report, hours, rate: hours ? (report.resyncs ?? 0) / hours : null, errors: player.errors ?? [] };
+        return { name: player.name, engine: player.engine, race: player.race, idle: player.idle, version: player.version, ...report, ...counted, arriving: { resyncs: was.resyncs ?? 0, skips: was.skips ?? 0 }, hours, rate: hours ? counted.resyncs / hours : null, errors: player.errors ?? [] };
     });
 
     failures.push(...judge({ rows, host }));
@@ -459,7 +468,7 @@ function print(report) {
     for (const row of players) {
         console.log(
             `${row.name.padEnd(9)} ${`${row.engine}${row.version ? ` ${row.version}` : ""}`.padEnd(20)} ${row.race.padEnd(6)} ${String(row.steps ?? 0).padStart(6)} steps  ${(row.hours * 60).toFixed(1).padStart(5)} min  ` +
-                `resyncs ${row.resyncs ?? "?"} (${row.rate === null ? "-" : row.rate.toFixed(2)}/h)  astray ${row.desyncs ?? "?"}  checks ${row.checks ?? "?"}+${row.motionChecks ?? "?"}  ` +
+                `resyncs ${row.resyncs ?? "?"} (${row.rate === null ? "-" : row.rate.toFixed(2)}/h${row.arriving?.resyncs ? `; ${row.arriving.resyncs} arriving` : ""})  astray ${row.desyncs ?? "?"}  checks ${row.checks ?? "?"}+${row.motionChecks ?? "?"}  ` +
                 `fights ${row.fights ?? 0}, foes ${row.engaged ?? 0}${row.kicked ? `, sent out (${row.kicked.reason}) at ${row.kicked.step}` : ""}`,
         );
     }

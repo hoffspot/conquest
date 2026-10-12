@@ -2345,7 +2345,9 @@ goes for its foes. One more in Node does nothing at all, to be marked away at 10
 out at 30. Every copy is checked against the host's as any joined game's is (a checksum every 5
 seconds, everyone's motion with each sending). The soak fails if any copy is sent the world again
 once a player-hour or more, or sees the one doing nothing marked away or sent out at another step
-than the host does. It runs by hand on GitHub (Actions, Soak) and for three minutes on any pull
+than the host does. Its clock starts once everyone's in and their copies are made: a browser slow
+to load can be too far behind by then and sent the world as it is ("Pace" below), which is shown
+("arriving") but not counted. It runs by hand on GitHub (Actions, Soak) and for three minutes on any pull
 request that changes it.
 - **Measured** (seed 2, 32 minutes, Node and Chromium): no copy went astray or was sent the world
   again (each about 38,600 steps, 386 checksums and 9,600 motion checks, all matching); the one
