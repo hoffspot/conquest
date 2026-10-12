@@ -1035,7 +1035,12 @@ empty. The works' guards and bands out are kept in the host's snapshot.
 **Met.** A convoy on the road (one of the war's forces: a works' goods going to its people's
 seat, or its wagons going back for more) is met once a player's within 150 metres of it
 (`CONVOY_NEAR`), and let go once every player's more than 300 off:
-- **its wagons,** three of them, five metres apart along its road: each an ox in its shafts
+- **its wagons,** three of them, seven metres apart along its road (an ox in its shafts is about
+  5.7 m nose to tail-board: a metre or so of road between one's nose and the wagon ahead), and
+  met just setting out (its road behind it shorter than its column) strung out on back the way
+  its road goes, not heaped on its first point (host.js `#column`; the user: "this caravan wagon
+  and ox is placed exactly at the rear of the one in front of it so the ox's head is touched the
+  wagon in front. Space that out a touch"): each an ox in its shafts
   (`beasts/looks.js` `ox`), a four-wheeled wagon of boards behind it in its people's timber,
   laden with what its works yields (logs in two courses, squared and dressed stone, or iron in
   bars with red ore heaped by them), or empty going home (`art/kits/wagon.js`). No one fights a

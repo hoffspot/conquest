@@ -131,13 +131,16 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
 /**
  * A works' convoy on the road near a player (docs/WAR.md *Convoys*): met once a player's this
  * near (metres), let go once every player's this far. Its captain goes ahead, its wagons in a
- * column behind them `apart` metres apart, its guards beside the wagons, `beside` metres off the
+ * column behind them `apart` metres apart (an ox in its shafts is about 5.7 m nose to tail-board,
+ * art/kits/wagon.js: a metre or so of road between one's nose and the wagon ahead; the user: "this
+ * caravan wagon and ox is placed exactly at the rear of the one in front of it ... Space that out a
+ * touch"), its guards beside the wagons, `beside` metres off the
  * road; all at the wagons' pace (`pace`, metres a second); making for a mark `ahead` metres on along
  * its road at a time, a point on it passed once they're `past` metres from it. Beaten (every guard
  * down), its goods carried off, a share of what they're worth in gold for each player there (`worth`
  * of each of its goods); its wagons stand where they were left.
  */
-export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 5, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
+export const CONVOY_NEAR = Object.freeze({ near: 150, far: 300, apart: 7, beside: 2.5, pace: 1.1, ahead: 24, past: 6, worth: 0.3 });
 
 /**
  * An army's supply wagon on its way near a player (docs/WAR.md *Supply*): met once a player's this
@@ -4854,13 +4857,18 @@ export class Host {
     }
 
     // Where a convoy's captain, wagons and guards are to be, its captain at `mark` on its road
-    // and the rest strung out behind them along it: { guards: [[x, y]...] (its captain's first),
-    // wagons: [[x, y]...] }
+    // and the rest strung out behind them along it, and past where it began (just setting out from
+    // a town or a works) on back the way it goes, never heaped on its first point: { guards: [[x,
+    // y]...] (its captain's first), wagons: [[x, y]...] }
     #column(convoy, mark) {
         const way = convoy.path.slice(0, convoy.leg + 1).concat([convoy.at]).reverse();
+        const [first, next = first] = convoy.path;
+        const going = hypot(next[0] - first[0], next[1] - first[1]);
         const back = (metres) => {
             let [x, y] = [mark[0] + 0.5, mark[1] + 0.5];
             let left = metres;
+            // (The way back last gone along: at first, back against the way its road goes)
+            let [bx, by] = going > 1e-6 ? [(first[0] - next[0]) / going, (first[1] - next[1]) / going] : [0, 1];
 
             for (const [px, py] of way) {
                 const d = hypot(px - x, py - y);
@@ -4869,10 +4877,14 @@ export class Host {
                     return [x + ((px - x) / Math.max(d, 1e-6)) * left, y + ((py - y) / Math.max(d, 1e-6)) * left, (px - x) / Math.max(d, 1e-6), (py - y) / Math.max(d, 1e-6)];
                 }
 
+                if (d > 1e-6) {
+                    [bx, by] = [(px - x) / d, (py - y) / d];
+                }
+
                 [x, y, left] = [px, py, left - d];
             }
 
-            return [x, y, 0, 1];
+            return [x + bx * left, y + by * left, bx, by];
         };
         const wagons = Array.from({ length: CONVOY.wagons }, (_, k) => back(CONVOY_NEAR.apart * (k + 1)));
         const beside = ([x, y, dx, dy], side) => [x - dy * side * CONVOY_NEAR.beside, y + dx * side * CONVOY_NEAR.beside];
