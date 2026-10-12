@@ -2296,6 +2296,27 @@ second of its time; and has the navigation round each player baked ahead. The wo
 run its worlds with the same code, a timer giving the time, so the two can't drift apart. It can
 time each step (mean, worst, 99th percentile), for the server's health page.
 
+**Made ahead on the world server** (server/ahead.js, server/workers.js; generated/
+world_server_plan.md §3.1). A browser makes what's round its player as it draws it; the world
+server draws nothing, so it makes it ahead, between its steps, or its steps would make each chunk,
+settlement and navigation tile the moment someone first walked into it:
+- **Workers.** Node has no Web Workers, so the server gives it one on its own threads
+  (`ThreadWorker`), and the game's own workers run there unchanged: the navigation's tiles baked
+  (world/navworker.js) and settlements laid out (world/layout-worker.js), to the same bytes as here.
+- **Round each player** (`Ahead`): the chunks within 3 of their own made a few at a time between
+  steps (8 ms a time), nearest first; the settlements near laid out on a worker; the navigation's
+  tiles within 160 m baked on another, once their ground's made; and the insides of the buildings
+  open near them baked between steps, a tile at a time. A player arriving waits for all of it
+  (`settled`) before their world's clock starts.
+- **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
+  (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
+  round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
+- **Measured** (`npm run step-budget`: four players walking about in four peoples' towns, seed 2,
+  three minutes): a step takes 1.2 ms on the mean, 3.8 ms at the 99th percentile, and none over a
+  step's 50 ms. Without making ahead: 4.7 ms, 44 ms, and several over 50 ms. The dearest left is
+  a war turn mustering armies far from any player, which makes the chunks where they gather
+  (about 30 ms).
+
 **Away from the game** (core/host.js `AFK`; generated/world_server_plan.md §4). A player who's
 given no command for 10 minutes of the world's time is marked away: "AFK" by their name, over
 their head and on their own card, while there's anyone else in the world to see it; it goes as

@@ -165,7 +165,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/lore/taverns.js", 6121],
             ["js/core/motion.js", 5466],
             ["js/core/names.js", 3885],
-            ["js/core/navigation.js", 22060],
+            ["js/core/navigation.js", 23002],
             ["js/core/navigation/bake.js", 7429],
             ["js/core/navigation/recast.js", 1607],
             ["js/core/navigation/settings.js", 3223],
