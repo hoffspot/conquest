@@ -97,7 +97,7 @@ on to the next nearest enemy within 3 metres, so many times, each hit weaker.
 | Rumble | 1 | 450 ms | 2.5 s | 9–15 | may slow them (rubble) |
 | Stone Crush | 2 | 600 ms | 3.5 s | 12–18 | staggers them |
 | Shatterstone | 3 | 700 ms | 5 s | 16–24 | round them (1.5 m), may make them bleed |
-| Engulf | 4 | 800 ms | 7 s | 20–30 | the earth holds them (slowed) |
+| Engulf | 4 | 800 ms | 7 s | 20–30 | the earth holds them back (slowed) |
 | Earthquake | 5 | 900 ms | 9 s | 26–38 | round them (3 m), all thrown down |
 | Acidify | 6 | 1000 ms | 12 s | 34–50 | round them (2 m), poisoned; acid on the ground, 5 s |
 | Disintegrate | 7 | 1200 ms | 16 s | 48–66 | round them (1.5 m), staggering |
@@ -109,7 +109,7 @@ on to the next nearest enemy within 3 metres, so many times, each hit weaker.
 | Tornado | 6 | 1000 ms | 12 s | 34–50 | round them (3 m), all tossed (stunned) |
 | Ionize | 7 | 1200 ms | 16 s | 44–62 | round them (2 m), leaps on to four more, all stunned |
 | Blister | 1 | 450 ms | 2.5 s | 9–15 | may scald them (burning) |
-| Waterbolt | 2 | 600 ms | 3.5 s | 12–18 | knocks them back (staggered) |
+| Waterbolt | 2 | 600 ms | 3.5 s | 12–18 | sends them reeling (staggered) |
 | Steamblast | 3 | 700 ms | 5 s | 16–24 | round them (1.5 m), may scald them |
 | Bloodboil | 4 | 800 ms | 7 s | 20–30 | they bleed |
 | Iceblade | 5 | 900 ms | 9 s | 26–38 | chills them (slowed, frost) |

@@ -24,8 +24,8 @@ const MINUTES = 60000;
  * and the rarest, an alchemist's daily special: an Elixir of Heroes, a phoenix draught.
  */
 export const BREWS = Object.freeze({
-    greaterPotion: { label: "Greater healing draught", about: "Heals 60.", use: { heal: 60 }, price: 45, rarity: "fine", colour: "#d8203a" },
-    superiorPotion: { label: "Superior healing draught", about: "Heals 150.", use: { heal: 150 }, price: 120, rarity: "masterwork", colour: "#ff3a5a" },
+    greaterPotion: { label: "Greater healing draught", about: "Heals 60 hit points.", use: { heal: 60 }, price: 45, rarity: "fine", colour: "#d8203a" },
+    superiorPotion: { label: "Superior healing draught", about: "Heals 150 hit points.", use: { heal: 150 }, price: 120, rarity: "masterwork", colour: "#ff3a5a" },
     enduranceDraught: { label: "Draught of Endurance", about: "Your breath comes back half again as fast, ten minutes.", use: boon("endurance", "Enduring", 10 * MINUTES, { recoveryTimes: 1.6 }), price: 30, rarity: "fine", colour: "#e8a020" },
     elixirOfStrength: { label: "Elixir of Strength", about: "Your blows 15% stronger, ten minutes.", use: boon("strength", "Strength", 10 * MINUTES, { melee: 0.15 }), price: 55, rarity: "fine", colour: "#c83a1a" },
     elixirOfTheHawk: { label: "Elixir of the Hawk", about: "Your shots 15% stronger, ten minutes.", use: boon("hawk", "Hawk-eyed", 10 * MINUTES, { ranged: 0.15 }), price: 55, rarity: "fine", colour: "#d8c040" },

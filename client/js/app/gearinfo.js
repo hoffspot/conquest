@@ -24,6 +24,21 @@ function worded(stat, value) {
     return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `${value < 0 !== Boolean(less) ? "−" : "+"}${amount.replace("-", "")} ${label.toLowerCase()}`;
 }
 
+/**
+ * What a piece of gear (core/gear.js) does worn, as well made as it is, in words: its own bonuses
+ * (armour as what it takes off a blow) and those rolled on it (`bonuses`): ["+5% spell power"].
+ */
+export function gearWords({ id, quality = "common", bonuses = {} }) {
+    const own = Object.entries(statsOf({ id }, QUALITIES[quality]?.power ?? 1)).map(([stat, value]) => (stat === "armor" ? `Armour: takes ${Math.round(value * 100)}% off each blow` : worded(stat, value)));
+
+    return [...own, ...Object.entries(bonuses ?? {}).filter(([stat]) => STATS[stat]).map(([stat, value]) => worded(stat, value))];
+}
+
+/** What a charm (core/goods.js) does carried, as well made as it is, in words: ["−16% air's harm"]. */
+export function charmWords(id, quality = "common") {
+    return Object.entries(charmOf(id, quality)).map(([stat, value]) => worded(stat, value));
+}
+
 // A bonus that could be anywhere from `least` to `most`, as shown: "+5–13% melee damage"
 function spanned(stat, least, most) {
     const { label, share } = STATS[stat];
@@ -33,8 +48,8 @@ function spanned(stat, least, most) {
     return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `+${amount} ${label.toLowerCase()}`;
 }
 
-// What kind of thing a piece is, in words
-function kindOf(id) {
+/** What kind of thing a piece of gear (core/gear.js) is, in words: "Ring", "One-handed weapon". */
+export function kindOf(id) {
     const def = GEAR[id];
 
     if (def.slot === "mainHand") {
@@ -72,8 +87,8 @@ export function describe(item, progress, { index = null, label = item.id, haggle
 
     // (A charm, core/goods.js: what it does carried, as well made as it is)
     if (!def && ITEMS[item.id]?.charm) {
-        for (const [stat, value] of Object.entries(charmOf(item.id, quality))) {
-            lines.push({ text: worded(stat, value), tone: "base" });
+        for (const text of charmWords(item.id, quality)) {
+            lines.push({ text, tone: "base" });
         }
 
         lines.push({ text: "Carried in the pack; the best made of each kind counts", tone: "base" });
