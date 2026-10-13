@@ -1,0 +1,219 @@
+# The world server
+
+The world server keeps worlds that players come and go in. A world goes on being there when
+everyone's left: saved as it was, its war's clock stopped, and carried on when someone comes back.
+It runs on a computer at home (a Mac first), reached from the Wi-Fi and, once it's set up, from the
+internet. Up to 8 players are in a world at once. The game itself is served from it too, so a
+player only needs its address.
+
+This is the guide for whoever runs one. How it's built, and why, is in
+[generated/world_server_plan.md](../generated/world_server_plan.md). The Mac app has its own guide,
+[MAC_APP.md](MAC_APP.md).
+
+## Running it
+
+There are three ways, and each keeps its worlds in the same place on a computer, so run only one
+at a time.
+
+| How | Start it | Stop it |
+| --- | --- | --- |
+| **The Mac app** (menu bar) | Open **Pellagos Server** ([MAC_APP.md](MAC_APP.md): getting it, Open Anyway) | Its menu's **Stop** or **Quit** |
+| **Homebrew** | `brew install hoffspot/pellagos/pellagos-server`, then `pellagos-server`, or `brew services start pellagos-server` to run it at login | Ctrl-C, or `brew services stop pellagos-server` |
+| **A copy of this repository** | `npm run world-server` (Node 22 or newer) | Ctrl-C |
+
+Stopping it always saves every world first. From Terminal, `-- --port 9000 --data /tmp/worlds`
+(or, for Homebrew's, `pellagos-server --port 9000 --data /tmp/worlds`) gives another port and data
+folder, and `-- --admin 9001` another port for the management page.
+
+The first time it starts, it prints its **admin key**, once. Keep it somewhere safe: it manages the
+server from another device on the Wi-Fi, and makes worlds from the game. On the server's own
+computer the management page needs no key. If the key's lost, **Make a new admin key** on the
+page's Overview (on the computer itself) makes another, and the old one stops working.
+
+## The management page
+
+On the server's computer: <http://localhost:8481>. From another device on the Wi-Fi: the server's
+address with `/admin`, for example `http://my-mac.local:8480/admin`, and the admin key. It's never
+answered from the internet. Its tabs:
+
+- **Overview.** Its name, its id (players' games check it's the same server each time), its
+  addresses on the Wi-Fi with QR codes, how long it's been up, how many worlds it runs at once,
+  the admin key, and the internet (below).
+- **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved"), and
+  what can be done with it: start it, set it aside (everyone in it is sent out and it's saved),
+  save it now, its settings, keys, players and backups, export it, delete it (its name typed).
+- **New world.** Its name, seed and home people, whether heroes are kept by the world or brought
+  in by their players, its rules, and **Or bring a world in** (below).
+- **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
+  makes worlds of their own here, and owns them.
+- **Activity** (what's happened, the server's and each world's) and **Health** (each world's
+  steps and memory, and the server's).
+
+## Worlds and who comes in
+
+A world is reached with a **key**. Making one gives two: the **owner's** and the **players'**.
+Keys have a role:
+
+| Role | May |
+| --- | --- |
+| Owner | Everything: its settings, keys, players, backups; the debug commands, if its rules allow them |
+| Trusted | Play, and give others keys, if its rules allow it |
+| Player | Play |
+
+A world has at most 10 keys that work at once. A key can be revoked, and everyone who came in with
+it is sent out. Instead of a long key, a **short code** (8 letters and digits, for saying aloud or
+typing on a phone) works once. Whoever comes in is given a **ticket**, kept by their game, so they come back
+without the key. A lost ticket is given again from the world's Players tab; the old one stops
+working. A player can be banned (by their ticket, and their address for 24 hours) and let back.
+
+A world either **keeps** its players' heroes (up to 6 a player, made there, or one brought in the
+first time if its rules allow it), or players **bring** the heroes they have in their game. It can
+be switched while the world's set aside.
+
+A world with nobody in it waits 2 minutes, then it's saved and **set aside**: it uses nothing
+until someone comes in. Two worlds run at once by default (the page says how many the computer can
+take); a third waits its turn. While anyone's in a world, the computer is kept awake.
+
+Players add the server in the game's **Worlds on servers** (by its address, from an invite link or
+QR code, or from the servers found nearby on the Wi-Fi), then come into a world with its key or
+code, or make one with a creator key or the admin key.
+
+## Reaching it from the internet
+
+From the Wi-Fi, players use the addresses on the Overview. From the internet, the server answers
+over TLS alone, once it has a certificate and it's **Open to the internet** (the Overview's
+internet panel):
+
+1. **A way in.** A free certificate from Let's Encrypt, which the server gets and renews itself:
+   with a free DuckDNS name (the simplest), a domain of the owner's own on Cloudflare or deSEC, or
+   the home's IP address. Or a certificate of the owner's own. Or, for a home whose provider shares
+   its address (CGNAT), **Tailscale Funnel**, which needs Tailscale installed and signed in.
+2. **The router.** The server asks it to let players in (PCP, NAT-PMP or UPnP). If the router
+   won't, the page says which port to forward by hand.
+3. **Tested from outside.** The game's **Test this server**, from a phone on its mobile data,
+   tries every way in and tells the page how it went.
+
+**Close to the internet** stops answering it at once.
+
+## Players' own worlds
+
+A player who opens their own game's world to others (the game's **Invite others**) can list it on
+the server (its **broker**), and others join it point to point (WebRTC). When their games can't
+connect directly, the server relays them, about 2 KB/s for each player who's joined. The
+**broker** and **relaying** settings turn either off.
+
+## Keeping worlds safe
+
+Every world keeps:
+
+- **Its latest save** and the **5 before it** (autosaves), saved each war turn while it runs, when
+  it's set aside, and when the server stops. A save that won't read is passed over for the newest
+  that does, and the journal says so.
+- **Backups:** one an hour (the last 12 kept) and one a day (the last 7), and one before anything
+  that can't be undone: a restore, a fresh start, an update, a deletion. **Back up now** makes one
+  by hand. Those made by hand or before something are kept until they're deleted.
+
+A world is restored from any backup on its Backups tab: it's set aside, backed up as it is first
+(so a restore can be undone), then put back. Its keys, players and journal stay as they are now.
+
+**Export** (on the world) downloads it as one file, `<name>-<when>.pellagos.json.gz`: what it is,
+its latest save, and the heroes it keeps. **Or bring a world in** (New world) takes such a file, from
+this server or another, and makes it a new world here with keys of its own (the keys it had don't
+work here). A file from a newer server is refused, saying so; one bigger than 64 MB isn't read.
+
+A world kept by an older version of the game is brought forward when it's opened. One that can't
+be (none of its saves read) can be **started afresh** from its seed, keeping its war and its
+heroes, with a backup first.
+
+## Updating
+
+**Settings › Updates** says which version this is. Once a day (the **Check once a day** setting),
+the server asks the project's releases whether there's a newer one, and if so shows it with its
+notes. **Check now** asks at once. Nothing updates by itself.
+
+**Update** (on the Mac app's server, or one unpacked from a release):
+
+1. Waits for nobody to be in: it's refused while players are in. Set their worlds aside first.
+2. Downloads the new version and checks it's signed by the project (an Ed25519 key whose public
+   half comes with the server). One that isn't is never installed.
+3. Sets every world aside and backs it up, and backs up the server's settings, keys and
+   certificates.
+4. Unpacks the new version beside this one (in the data folder's `versions/`: the app itself is
+   never changed), then saves every world, stops, and starts again as the new version.
+5. The new version brings every world forward to itself before anyone's let in, then says it's
+   running.
+
+If the new version fails to start or to bring a world forward (or says nothing for 3 minutes), the
+server goes back to the version before, puts the settings and every world back from the backups
+made in step 3, and the page says why. The version before stays until the next update. The menu-bar
+app says **Updating** meanwhile. As it's the same Node, macOS's firewall shouldn't ask again; if
+it does, allow it.
+
+A server run from **a copy of the repository** shows the commands instead (`git pull`, then start
+it again), and **Homebrew's** shows `brew upgrade pellagos-server` and
+`brew services restart pellagos-server`.
+
+### Releasing
+
+For the project's owner. A version's archive is signed with the project's private key, which only
+the owner keeps:
+
+1. Once: `npm run release-key -- --new ~/pellagos-release-key.pem` makes the key pair: the private
+   half where it's told (never in the repository; keep a copy elsewhere too), and the public half
+   in `server/update/release-key.pem`, to commit. To have the **Mac app** workflow sign what it
+   builds, put the private half's text in the repository's Actions secret `PELLAGOS_RELEASE_KEY`.
+2. Each version: bump `package.json`'s version, run the **Mac app** workflow, and download its
+   `pellagos-server-mac` artifact (the app's zip, `pellagos-server-<version>.tar.gz` and its
+   `.sig`, and the Homebrew formula). Without the secret, sign it by hand:
+   `npm run release-key -- --sign pellagos-server-<version>.tar.gz --key ~/pellagos-release-key.pem`.
+3. Make a GitHub release tagged `server-v<version>` with the zip, the archive and its `.sig`
+   attached, and put the formula in the tap (MAC_APP.md, "Homebrew").
+
+Servers find it on their next check. A server without the public key (made before the key was)
+shows new versions but can't install them: install that one by hand.
+
+## Where things are
+
+The data folder is `~/Library/Application Support/io.github.hoffspot.pellagos-server` on a Mac,
+`~/.local/share/pellagos-server` on Linux (or under `$XDG_DATA_HOME`), and
+`%APPDATA%\Pellagos Server` on Windows.
+
+```
+VERSION                  how the folder's laid out, and the server that laid it out
+server.json              the settings
+secrets.json             the admin key's and creator keys' hashes (never a key as it is)
+identity.key             the server's identity (the key it proves its id with)
+certificates/            its certificates, and the DNS host's token where there's no Keychain
+journal.log              what's happened to the server
+worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
+                         access.json (its keys' hashes, players, bans), journal.log
+backups/<id>/            each world's backups; backups/server/ the server's own
+versions/                versions installed by updates (current.json, last.json)
+```
+
+Back it up with the rest of the computer. The Mac app's log is in
+`~/Library/Logs/io.github.hoffspot.pellagos-server/server.log`.
+
+## How it keeps up
+
+Each running world steps 20 times a second in a thread of its own, about 110 MB when it's started
+and more as its players go further. **Health** shows each world's steps (the mean, the 99th
+percentile over the last minute, the worst) and memory, and the server's. A step over 50 ms is
+a step late.
+
+`npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
+hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
+where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the
+players were all in. Run it with nothing else on the computer: the players' copies of the world
+share its cores.
+
+## When something's wrong
+
+| What | What to do |
+| --- | --- |
+| Players on the Wi-Fi can't reach it | macOS's firewall: allow "node" (System Settings › Network › Firewall). Use the address on the Overview, not `localhost` |
+| It's not in the game's Nearby list | Bonjour is off, or macOS refused Local Network (the page says so). Add it by address |
+| "The data folder … is at version N, written by Pellagos server X" | A newer server wrote it. Use that version or later, or restore the backup made before the upgrade |
+| A world "can't be carried on" | None of its saves read. Restore a backup, or start it afresh from its seed |
+| An update was rolled back | Settings › Updates says why. Everything is as it was; the journal (Activity) has it too |
+| The internet can't reach it | The internet panel's **Tested from outside**, and the router's state. Behind CGNAT, use Tailscale Funnel |

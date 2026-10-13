@@ -68,6 +68,9 @@ magic: the schools and how they grow, wands and grimoires, the tomes and their s
 the host works, the spellbook, and how every spell looks. [docs/MAC_APP.md](docs/MAC_APP.md) is
 the guide to Pellagos Server for the Mac, the menu-bar app that keeps worlds for players to come
 and go in: opening it the first time (Open Anyway), what macOS asks, its menu, and building it.
+[docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
+management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
+in, and updating it.
 
 ## How to play
 
@@ -440,33 +443,44 @@ remembered.
 | Quick action (in a fight) | Tap one of the four (or six) along the bottom; hold one to change it; flick a spell up or down for the next or last of its school | Click one, or press 1 to 4 (or 6); drag a spell up or down |
 | Pause, Game options | The menu button | The menu button or Escape |
 
-**Playing together.** Anyone playing can open their world to others: in the menu, **Invite
-others** gives a four-letter code, and a link with it in. Others choose **Join a world** on the
-title screen and type the code (or open the link), and come in with their saved character (or
-make one first). Each comes as one of their own people, by one of their people's towns if it
-isn't yours, so they're at peace or at war with you as your peoples are. Come and go as you
-like: the world goes on, and its menu no longer pauses it while anyone else is in it. The world is
-yours, the one who opened it: what others do is done in it, and when you close it to others (or
-leave), they're told, and go back to their title screen. A link that drops a moment (a phone
-moving from Wi-Fi to its mobile network) comes back by itself, and everyone's shown what's
-happening meanwhile: reconnecting, the host paused, or waiting for the host. What their
-characters grow into, carry and earn goes with them. Up to four can play as a **party**: ask
-another from the party menu (**Invite**), and they're asked to Accept, Decline (you're told), or
-Ignore it (let go unanswered after 30 seconds; with **Refuse party invites** in Game options you're
-never asked). In a party, you're never enemies, whatever your peoples; what any of you brings down
-within 40 metres of the others counts for you all (each finds their own loot on it, and a guild's
-request for it counts for each); and each other's icons head your party down the left, the
-leader's crowned. Anyone in it can ask others; its leader can put one out or make another
-leader, and when they leave, the one longest in it leads. The party menu's **Chat** tab is the
-party's own talk (no one outside it sees a word): type a line, or tap a quick phrase ("On my
-way!", "Help!"); Enter opens it ready to type. A chime and a red count on the Party button say
-how many lines you haven't seen. The wild answers how strong your side is, those with you and
-all (docs/WILDS.md, *A side's strength*): out in the wilds, players together find more of a pack
-and each a little tougher, an elite or a cache's chief tougher still; each of you faces a little
-less than you would alone, and those more than one alone would meet leave only their gold and
-their parts. Games play together through the relay on the game's server
-(`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
-See [docs/WAR.md](docs/WAR.md#playing-together-m11).
+**Playing together.** There are two ways.
+
+- **Worlds on a server.** A world server (a Mac at home, or any computer with Node) keeps worlds
+  that go on being there when everyone's left, and wait for them to come back: the title's
+  **Worlds on servers** adds a server by its address, an invite link or its QR code (or from those
+  found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one.
+  Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
+  keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
+  ([docs/MAC_APP.md](docs/MAC_APP.md)), with Homebrew, or with `npm run world-server`; how, and
+  what it keeps, is in [docs/SERVER.md](docs/SERVER.md).
+- **Your own world, opened to others.** In the menu, **Invite others** gives a code and a link;
+  others choose **Join a world** on the title screen and type the code (or open the link). With a
+  world server added, it can also be listed there for its players to join with a tap. Games
+  connect to each other directly, or through the server when they can't. The world is yours, the
+  one who opened it: what others do is done in it, and when you close it to others (or leave),
+  they're told, and go back to their title screen.
+
+Either way, each comes with their saved character (or makes one first), as one of their own
+people, by one of their people's towns if it isn't the world's, so they're at peace or at war
+with the others as their peoples are. Come and go as you like: the world goes on, and the menu
+doesn't pause it while anyone else is in it. A link that drops a moment (a phone moving from Wi-Fi
+to its mobile network) comes back by itself, and everyone's shown what's happening meanwhile.
+What characters grow into, carry and earn goes with them (or stays with the world, if it keeps
+its players' heroes). Up to four can play as a **party**: ask another from the party menu
+(**Invite**), and they're asked to Accept, Decline (you're told), or Ignore it (let go unanswered
+after 30 seconds; with **Refuse party invites** in Game options you're never asked). In a party,
+you're never enemies, whatever your peoples; what any of you brings down within 40 metres of the
+others counts for you all (each finds their own loot on it, and a guild's request for it counts
+for each); and each other's icons head your party down the left, the leader's crowned. Anyone in
+it can ask others; its leader can put one out or make another leader, and when they leave, the
+one longest in it leads. The party menu's **Chat** tab is the party's own talk (no one outside it
+sees a word): type a line, or tap a quick phrase ("On my way!", "Help!"); Enter opens it ready to
+type. A chime and a red count on the Party button say how many lines you haven't seen. The wild
+answers how strong your side is, those with you and all (docs/WILDS.md, *A side's strength*): out
+in the wilds, players together find more of a pack and each a little tougher, an elite or a
+cache's chief tougher still; each of you faces a little less than you would alone, and those more
+than one alone would meet leave only their gold and their parts. See
+[docs/WAR.md](docs/WAR.md#playing-together-m11).
 
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
 is running: frame rate and a graph of frame times, how long updating and drawing take, what's
