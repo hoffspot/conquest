@@ -990,7 +990,7 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 |---|---|---|
 | `GET /status` | nothing (rate-limited) | The server's card and addresses, its listed worlds with player counts and hero names, nearby servers, listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
 | `GET /health` | nothing | `ok` or `slow` |
-| `POST /enter` `{world, key?, ticket?, net?}` | a key or ticket | `{session, ticket?, role, world, player, heroes, life, position}`, where `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version` (`net` isn't the server's `NET_VERSION`), `wait n`. Too many worlds running isn't a refusal: `life` says `waiting` and `position` its place, and the play socket waits its turn |
+| `POST /enter` `{world, key?, ticket?, net?}` | a key or ticket | `{session, ticket?, role, world, card, player, heroes, life, position}`, where `card` is the world's as `/status` lists it (its heroes mode and first-hero rule among it) and `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version` (`net` isn't the server's `NET_VERSION`), `wait n`. Too many worlds running isn't a refusal: `life` says `waiting` and `position` its place, and the play socket waits its turn |
 | `POST /codes/redeem` `{code}` | a short code | Trades it, once, for `{world, key}`, then as `/enter` |
 | `GET /worlds` | a session or the admin key | Listed worlds, plus unlisted worlds the caller holds keys for |
 | `POST /worlds` | a creator key or the admin key | Make a world (unlisted). Returns `{world, ownerKey, playerKey}` |
