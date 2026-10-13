@@ -6,7 +6,8 @@
 //                    server's DNS names and IP addresses in its subjectAltName;
 //   selfSigned(...)  a certificate signed by its own key: TLS-ALPN-01's answer (RFC 8737, with the
 //                    critical acmeIdentifier extension), and the tests' stand-in;
-//   certificate(...) one signed by another key (the tests' own certificate authority).
+//   certificate(...) one signed by another key (the tests' own certificate authority, which is
+//                    one too: `ca`).
 //
 // Keys are ECDSA P-256, signed with SHA-256 (ecdsa-with-SHA256): every browser and ACME CA takes them.
 
@@ -20,6 +21,8 @@ const OID = Object.freeze({
     subjectAltName: "2.5.29.17",
     basicConstraints: "2.5.29.19",
     keyUsage: "2.5.29.15",
+    subjectKeyIdentifier: "2.5.29.14",
+    authorityKeyIdentifier: "2.5.29.35",
     extKeyUsage: "2.5.29.37",
     serverAuth: "1.3.6.1.5.5.7.3.1",
     acmeIdentifier: "1.3.6.1.5.5.7.1.31",
@@ -84,13 +87,29 @@ function altNames(names) {
 
 const extension = (id, value, critical = false) => der.sequence(der.oid(id), ...(critical ? [der.boolean(true)] : []), der.octets(value));
 
-/** The extensions a server's certificate carries: its names, not a CA, for signing, for TLS servers; and `more`. */
-function serverExtensions(names, more = []) {
+/** A key's identifier (RFC 5280 §4.2.1.2, method 1): the SHA-1 of its public key's bits (SPKI DER in). */
+export function keyIdOf(spki) {
+    return createHash("sha1").update(der.read(spki).children[1].content.subarray(1)).digest();
+}
+
+/**
+ * The extensions a certificate carries: a server's names, not a CA, for signing, for TLS servers;
+ * or a CA's, for signing certificates. Each names its key and its issuer's (key identifiers);
+ * and `more`.
+ */
+function extensionsOf(names, { ca = false, keyId, issuerKeyId, more = [] }) {
+    const identifiers = [extension(OID.subjectKeyIdentifier, der.octets(keyId)), extension(OID.authorityKeyIdentifier, der.sequence(der.implicit(0, issuerKeyId)))];
+
+    if (ca) {
+        return [extension(OID.basicConstraints, der.sequence(der.boolean(true)), true), extension(OID.keyUsage, der.tlv(0x03, Buffer.from([0x01, 0x06])), true), ...identifiers, ...more];
+    }
+
     return [
         extension(OID.subjectAltName, altNames(names)),
         extension(OID.basicConstraints, der.sequence(), true),
         extension(OID.keyUsage, der.tlv(0x03, Buffer.from([0x07, 0x80])), true),
         extension(OID.extKeyUsage, der.sequence(der.oid(OID.serverAuth))),
+        ...identifiers,
         ...more,
     ];
 }
@@ -112,10 +131,10 @@ export function request({ key, names: given }) {
 /**
  * A certificate (DER) for `publicKey` (a KeyObject or SPKI DER) naming `names`, signed by
  * `issuerKey` under `issuer` (a common name), valid from `notBefore` for `days`; `extensions`
- * more DER extensions.
+ * more DER extensions. `ca`: a certificate authority's (it signs others; `names[0]` its name).
  */
-export function certificate({ publicKey, names: given, issuer, issuerKey, notBefore = Date.now() - 60000, days = 90, hours = null, serial = randomBytes(16), extensions = [] }) {
-    const names = given.map(canonical);
+export function certificate({ publicKey, names: given, issuer, issuerKey, notBefore = Date.now() - 60000, days = 90, hours = null, serial = randomBytes(16), extensions = [], ca = false }) {
+    const names = given.map((name) => (ca ? name : canonical(name)));
     const spki = Buffer.isBuffer(publicKey) ? publicKey : spkiOf(publicKey);
     const notAfter = notBefore + (hours ?? days * 24) * 3600 * 1000;
     const tbs = der.sequence(
@@ -126,7 +145,7 @@ export function certificate({ publicKey, names: given, issuer, issuerKey, notBef
         der.sequence(der.time(notBefore), der.time(notAfter)),
         nameOf(names[0]),
         spki,
-        der.explicit(3, der.sequence(...serverExtensions(names, extensions))),
+        der.explicit(3, der.sequence(...extensionsOf(names, { ca, keyId: keyIdOf(spki), issuerKeyId: keyIdOf(spkiOf(issuerKey)), more: extensions }))),
     );
 
     return der.sequence(tbs, algorithm(), der.bits(sign("sha256", tbs, { key: issuerKey, dsaEncoding: "der" })));

@@ -4,8 +4,8 @@
 // - A world: what it is and how it is, in words; its settings changed (its heroes mode too, while
 //   nobody's in it); started, set aside, saved; its players sent out, banned, given another part or
 //   a new ticket; its backups listed, made, restored; exported; deleted (its name typed).
-// - The server: where it can be reached (the Wi-Fi, and the internet with its certificate), its
-//   settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
+// - The server: where it can be reached (the Wi-Fi, and the internet with its certificate: one of
+//   the owner's own, or a free one it gets and renews itself, certify.js), its settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
 //   each world's), and how it's keeping up.
 //
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
@@ -19,6 +19,8 @@ import { gzip } from "node:zlib";
 import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
+import { ROUTES, routeWords } from "./certify.js";
+import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip } from "./storage/files.js";
 import { schemaReason } from "./storage/settings.js";
@@ -555,6 +557,7 @@ export class Management {
         const certificate = server.certificate;
         const day = (when) => when.slice(0, 10);
         const open = on && Boolean(certificate);
+        const acme = server.certifier?.state() ?? null;
         const words = open
             ? `Answers the internet, over TLS alone, at ${server.secureAddresses().join(" and ")}. Its certificate, from ${certificate.issuer}, runs till ${day(certificate.notAfter)}. Plain http from the internet is refused; a page asked for that way is sent on to https.`
             : certificate
@@ -563,7 +566,71 @@ export class Management {
                 ? "“Answer the internet” is on, but the server has no certificate yet, so it can't be reached securely and the internet isn't answered."
                 : "Answers its own Wi-Fi alone: “Answer the internet” is off in Settings, and it has no certificate.";
 
-        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words };
+        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words, acme: acme && { ...acme, words: this.#acmeWords(acme) } };
+    }
+
+    // How getting free certificates stands, in words
+    #acmeWords({ names, label, working, renewAt, retryAt, last, issued, pointedAt }) {
+        const day = (when) => when.slice(0, 10);
+        const pointed = pointedAt ? ` The name points at ${pointedAt}.` : "";
+
+        if (working) {
+            return `Getting a certificate for ${names.join(", ")} from Let's Encrypt (${routeWords(label)})…`;
+        }
+
+        if (last && !last.ok) {
+            return `Couldn't get a certificate for ${names.join(", ")}: ${last.message} It tries again ${retryAt ? `at ${retryAt.slice(11, 16)} on ${day(retryAt)} (UTC)` : "later"}, or now if you ask.${pointed}`;
+        }
+
+        return issued
+            ? `Gets its certificate for ${names.join(", ")} from Let's Encrypt (${routeWords(label)}) and renews it itself: next about ${day(renewAt)}.${pointed}`
+            : `Set to get a certificate for ${names.join(", ")} from Let's Encrypt (${routeWords(label)}).${pointed}`;
+    }
+
+    /** What getting a free certificate needs, for the page's form: the routes, the DNS hosts (and where each's token comes from), the CA's terms of service. */
+    async acmeChoices() {
+        const terms = await this.server.certifier.terms();
+
+        return { routes: ROUTES, hosts: DNS_HOSTS, terms, tokens: this.server.certifier.tokens?.where ?? null };
+    }
+
+    /**
+     * A free certificate's route set up (certify.js setUp): checked, kept, and a certificate asked
+     * for at once. Refused, saying why, if it can't be (the token's never said back, nor journalled).
+     */
+    async setUpAcme(body, { by = null } = {}) {
+        const { route, name = null, host = null, token = null, address = null, email = null, agree = false } = body ?? {};
+        let state;
+
+        try {
+            state = await this.server.certifier.setUp({ route, name, host, token, address, email: email || null, agree });
+        } catch (error) {
+            throw new Refused(400, "acme", error.message);
+        }
+
+        await this.journal(`Free certificates from Let's Encrypt were set up (${routeWords(state.label)}) for ${state.names.join(", ")}${by ? ` by ${by}` : ""}.`);
+
+        return { internet: this.internet() };
+    }
+
+    /** A free certificate asked for now, not waiting for its time (or its next try). */
+    async renewAcme({ by = null } = {}) {
+        if (!this.server.certifier.state()) {
+            throw new Refused(409, "no-acme", "Free certificates aren't set up.");
+        }
+
+        this.server.certifier.renew({ force: true }).catch(() => {});
+        await this.journal(`A new certificate was asked for now${by ? ` by ${by}` : ""}.`);
+
+        return { internet: this.internet() };
+    }
+
+    /** Free certificates no longer got (the route and its token forgotten); the certificate there is stays till it runs out, or it's taken out. */
+    async forgetAcme({ by = null } = {}) {
+        await this.server.certifier.forget();
+        await this.journal(`Free certificates were no longer to be got${by ? ` (${by})` : ""}: the certificate there is stays till it runs out.`);
+
+        return { internet: this.internet() };
     }
 
     /** A certificate of the owner's own kept and taken up (PEM: its key, and its chain). Refused, saying why, if they can't be used together. */

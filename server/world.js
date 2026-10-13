@@ -7,8 +7,9 @@
 // no key; from the Wi-Fi at /admin, with the admin key), and, the first time, its admin key (shown
 // then alone: keep it). It shows itself to others on the Wi-Fi with Bonjour (its `bonjour`
 // setting), saying so, or why macOS refused. With a certificate and its `internet` setting on, it
-// says where the internet reaches it (over TLS alone). Ctrl-C, or Stop on the management page,
-// saves every world and stops.
+// says where the internet reaches it (over TLS alone); getting free certificates (certify.js), how
+// that stands, and each one got or refused. Ctrl-C, or Stop on the management page, saves every
+// world and stops.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -33,6 +34,15 @@ for (const address of server.addresses()) {
 for (const address of server.internetClosed ? [] : server.secureAddresses()) {
     console.log(`From the internet (over TLS alone): ${address}`);
 }
+
+// (Free certificates: how getting them stands, and each one got or refused, as it happens)
+const certificates = () => server.manage.internet().acme?.words;
+
+if (certificates()) {
+    console.log(certificates());
+}
+
+server.certifier.onChange = () => console.log(certificates() ?? "");
 
 console.log(`On this machine: http://localhost:${port}`);
 console.log(`Its management page, on this computer (no key needed): http://localhost:${adminPort}`);

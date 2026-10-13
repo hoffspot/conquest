@@ -3,11 +3,12 @@
 // changes from one to another. A file for each (darwin.js first; linux.js and win32.js fill in
 // the same functions), chosen by `process.platform`. For now, where the server keeps its data,
 // logs and caches, keeping the machine awake while players are in, the computer's own name, and
-// Bonjour (bonjour.js: what each system's tool shares); secrets and running at login come later
-// (S6, S8). Nothing outside this folder may run a command only one system has
-// (test/registry.test.js checks).
+// Bonjour (bonjour.js: what each system's tool shares), and where tokens for others' services are
+// kept (the Keychain on macOS); running at login comes later (S8). Nothing outside this folder may
+// run a command only one system has (test/registry.test.js checks).
 
 import os from "node:os";
+import { TokenFile } from "../storage/tokens.js";
 import * as darwin from "./darwin.js";
 import * as linux from "./linux.js";
 import * as win32 from "./win32.js";
@@ -57,4 +58,12 @@ export function computerName({ system = process.platform, ...options } = {}) {
  */
 export function bonjour({ system = process.platform, ...options } = {}) {
     return platformFor(system).bonjour(options);
+}
+
+/**
+ * Where the server keeps tokens for others' services (a DNS host's: §13): macOS's Keychain, or
+ * elsewhere `file` (storage/tokens.js, 0600). { where, get(name), set(name, token), remove(name) }.
+ */
+export function tokenStore({ system = process.platform, file, ...options } = {}) {
+    return system === "darwin" ? darwin.keychain(options) : new TokenFile(file);
 }

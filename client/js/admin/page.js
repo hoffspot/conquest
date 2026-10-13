@@ -326,6 +326,141 @@ function nearbyPanel({ bonjour, nearby }) {
  * certificate), its secure addresses, its certificate, and a certificate of the owner's own put in
  * (its key and chain, PEM) or taken out.
  */
+// Free certificates from Let's Encrypt (server/certify.js): how getting them goes, asked for again
+// or let go; or, if they aren't got yet, the form that sets it up (the routes, and the CA's terms,
+// asked of the server once it's opened)
+function acmePart(acme) {
+    const status = h("p", { class: "warning", role: "status" });
+
+    if (acme) {
+        return h(
+            "div",
+            { class: "acme" },
+            h("h3", {}, "Free certificates"),
+            h("p", { class: acme.last && !acme.last.ok ? "warning" : acme.issued ? "good" : "" }, acme.words),
+            facts([
+                ["How", acme.label],
+                ["For", acme.names.join(", ")],
+                acme.hostLabel ? ["DNS host", acme.hostLabel] : null,
+                ["Last got", when(acme.issued)],
+                acme.renewAt ? ["Renewed next", `about ${when(acme.renewAt)}`] : null,
+                acme.last && !acme.last.ok ? ["Last try", `${when(acme.last.at)}: ${acme.last.message}`] : null,
+            ]),
+            h(
+                "div",
+                { class: "actions" },
+                button(acme.working ? "Getting one…" : "Get one now", async () => {
+                    if (await doing(() => call("POST", "/server/certificate/acme/renew", {}), { status, done: "Asked: it takes a minute or so." })) {
+                        await renderOverview();
+                    }
+                }),
+                button(
+                    "Stop getting them",
+                    async () => {
+                        if (await confirmIt({ title: "Stop getting free certificates", note: "The server forgets how it got them, and the token it was given. The certificate it has stays till it runs out (or it's taken out).", go: "Stop" })) {
+                            if (await doing(() => call("DELETE", "/server/certificate/acme"), { status })) {
+                                await renderOverview();
+                            }
+                        }
+                    },
+                    "danger",
+                ),
+            ),
+            status,
+        );
+    }
+
+    const form = h("form", { class: "acme" }, h("p", { class: "muted small" }, "Asking Let's Encrypt for its terms…"));
+    const part = h(
+        "details",
+        { class: "acme" },
+        h("summary", {}, "A free certificate from Let's Encrypt"),
+        h("p", { class: "muted small" }, "The server gets one itself, and renews it before it runs out. Choose how it proves the name (or address) is yours."),
+        form,
+        status,
+    );
+
+    part.addEventListener("toggle", async () => {
+        if (!part.open || form.dataset.ready) {
+            return;
+        }
+
+        const choices = await doing(() => call("GET", "/server/certificate/acme"), { status });
+
+        if (choices) {
+            form.dataset.ready = "yes";
+            form.replaceChildren(...acmeForm(choices, status));
+        }
+    });
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const { route, name, host, token, address, email, agree } = form.elements;
+        const body = { route: route.value, name: name.value, host: route.value === "duckdns" ? "duckdns" : host.value, token: token.value, address: address.value, email: email.value || null, agree: agree.checked };
+
+        if (await doing(() => call("POST", "/server/certificate/acme", body), { status, done: "Set up: it's getting the certificate." })) {
+            await renderOverview();
+        }
+    });
+
+    return part;
+}
+
+// The free certificate's form: the route, then what that route needs (each shown for its route alone)
+function acmeForm({ routes, hosts, terms, tokens }, status) {
+    const route = select("route", Object.entries(routes).map(([id, { label }]) => [id, label]), "duckdns");
+    const host = select("host", Object.entries(hosts).filter(([, one]) => one.route === "dns").map(([id, { label }]) => [id, label]), "cloudflare");
+    const tokenLabel = h("span", {});
+    const notes = {
+        duckdns: "Sign in at duckdns.org, add a name, and paste the token shown at the top of the page there. The server keeps the name pointed at this home.",
+        dns: "Your domain's DNS must be with Cloudflare or deSEC: the token lets the server write the record that proves the domain's yours.",
+        ip: "The router must send the internet's port 443 to this server's port. Certificates for an address last under a week, so it renews one every couple of days.",
+    };
+    const note = h("p", { class: "muted small" });
+    const kept = tokens ? h("p", { class: "muted small" }, `A token's kept in ${tokens}, and never shown again.`) : null;
+    const fields = {
+        name: field("The name", h("input", { name: "name", type: "text", autocomplete: "off", spellcheck: "false", placeholder: "yourname.duckdns.org" })),
+        host: field("Its DNS host", host),
+        token: field(tokenLabel, h("input", { name: "token", type: "password", autocomplete: "off", spellcheck: "false" })),
+        address: field("This home's address, as the internet sees it", h("input", { name: "address", type: "text", autocomplete: "off", spellcheck: "false", placeholder: "203.0.113.7" })),
+    };
+    const shown = () => {
+        const which = route.value;
+        const kind = which === "duckdns" ? "duckdns" : host.value;
+
+        fields.name.hidden = which === "ip";
+        fields.name.querySelector("input").placeholder = which === "duckdns" ? "yourname.duckdns.org" : "play.example.com";
+        fields.host.hidden = which !== "dns";
+        fields.token.hidden = which === "ip";
+        fields.address.hidden = which !== "ip";
+
+        if (kept) {
+            kept.hidden = which === "ip";
+        }
+
+        tokenLabel.textContent = hosts[kind]?.token ?? "Its token";
+        note.textContent = notes[which];
+    };
+
+    route.addEventListener("change", shown);
+    host.addEventListener("change", shown);
+    shown();
+    status.textContent = "";
+
+    return [
+        field("How", route),
+        note,
+        fields.name,
+        fields.host,
+        fields.token,
+        fields.address,
+        field("An email for Let's Encrypt to write to, if it must (not needed)", h("input", { name: "email", type: "email", autocomplete: "email" })),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "agree" }), "I agree to Let's Encrypt's ", terms ? h("a", { href: terms, target: "_blank", rel: "noopener" }, "terms of service") : "terms of service"),
+        kept,
+        h("button", { type: "submit" }, "Get a certificate"),
+    ];
+}
+
 function internetPanel({ internet }) {
     const { certificate } = internet;
     const status = h("p", { class: "warning", role: "status" });
@@ -360,6 +495,7 @@ function internetPanel({ internet }) {
               ])
             : null,
         h("p", { class: "muted small" }, "On the Wi-Fi, plain http is still taken, and what's sent there isn't encrypted. From the internet, nothing but TLS: never the admin key, nor this page."),
+        acmePart(internet.acme),
         h(
             "details",
             {},
@@ -1322,7 +1458,8 @@ async function show(tab) {
 function refresh() {
     clearInterval(state.timer);
     state.timer = setInterval(() => {
-        if (document.hidden || $("#world").open || $("#confirm").open || $("#shown").open || !LIVE.has(state.tab)) {
+        // (Nor while a form on it's open: what's been typed or chosen there kept)
+        if (document.hidden || $("#world").open || $("#confirm").open || $("#shown").open || !LIVE.has(state.tab) || document.querySelector(`#${state.tab} details[open]`)) {
             return;
         }
 

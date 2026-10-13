@@ -3,12 +3,19 @@
 // awake while players are in by caffeinate, which ends itself if the server does. Bonjour through
 // dns-sd, macOS's own tool for its responder (mDNSResponder): run from Terminal it needs no Local
 // Network permission of its own (Terminal's children are exempt); refused, it says so with one of
-// DNSServiceErrorType's codes, which are named for the owner here.
+// DNSServiceErrorType's codes, which are named for the owner here. Tokens for others' services
+// (a DNS host's) in the login Keychain, through `security`.
 
 import { execFile as execFileProcess, spawn as spawnProcess } from "node:child_process";
 import path from "node:path";
+import { NAME_PATTERN, TOKEN_PATTERN } from "../storage/tokens.js";
 import { refusal, SERVICE, ToolHandle } from "./bonjour.js";
-import { APP_ID } from "./names.js";
+import { APP_ID, APP_NAME } from "./names.js";
+
+const SECURITY = "/usr/bin/security";
+
+// security's exit code for an item that isn't there (errSecItemNotFound)
+const NOT_FOUND = 44;
 
 const DNS_SD = "/usr/bin/dns-sd";
 
@@ -47,6 +54,46 @@ export function computerName({ execFile = execFileProcess } = {}) {
             resolve(null);
         }
     });
+}
+
+/**
+ * The login Keychain, for the server's tokens (§13): each a generic password under the app's
+ * name, by its own (acme:duckdns). A token goes in on `security`'s standard input (its
+ * interactive mode), never on a command line another process could read. Returns
+ * { where, get(name), set(name, token), remove(name) }, as storage/tokens.js's TokenFile.
+ */
+export function keychain({ spawn = spawnProcess, execFile = execFileProcess, service = APP_NAME } = {}) {
+    const run = (args) =>
+        new Promise((resolve, reject) => {
+            execFile(SECURITY, args, { timeout: 10000 }, (error, stdout) => (error && error.code !== NOT_FOUND ? reject(error) : resolve(error ? null : String(stdout))));
+        });
+
+    return {
+        where: "the Keychain",
+        async get(name) {
+            const found = await run(["find-generic-password", "-s", service, "-a", name, "-w"]);
+
+            return found === null ? null : found.replace(/\n$/, "");
+        },
+        set(name, token) {
+            if (!NAME_PATTERN.test(name) || !TOKEN_PATTERN.test(token)) {
+                return Promise.reject(new Error("That doesn't look like a token."));
+            }
+
+            return new Promise((resolve, reject) => {
+                const child = spawn(SECURITY, ["-i"], { stdio: ["pipe", "ignore", "pipe"] });
+                let said = "";
+
+                child.stderr.on("data", (part) => (said += part));
+                child.on("error", reject);
+                child.on("close", (code) => (code === 0 && !said.trim() ? resolve() : reject(new Error(`The Keychain refused: ${said.trim() || `security ended with ${code}`}`))));
+                child.stdin.end(`add-generic-password -U -s "${service}" -a "${name}" -w "${token}"\n`);
+            });
+        },
+        async remove(name) {
+            return (await run(["delete-generic-password", "-s", service, "-a", name])) !== null;
+        },
+    };
 }
 
 // dns-sd's refusals (dns_sd.h's DNSServiceErrorType): the Local Network permission's (PolicyDenied,

@@ -4,6 +4,7 @@ import path from "node:path";
 import { addressOf, inviteLink } from "../client/js/app/invites.js";
 import { newKey, pem, pemOfKey, selfSigned } from "../server/net/x509.js";
 import { WorldServer } from "../server/world-server.js";
+import { dnsHosts, FakeAcme, lookupOf, TOKENS } from "../test/fake-acme.js";
 import { expect, test } from "./fixtures.js";
 
 // The world server from the internet, over TLS (generated/world_server_plan.md §9.1, §15 S6): a
@@ -12,7 +13,8 @@ import { expect, test } from "./fixtures.js";
 // to https; the game, as the server serves it securely, follows an invite link into a world and
 // plays in it over wss; its management page isn't there to be had. And on the server's own
 // computer, the management page says how it stands with the internet, and takes a certificate of
-// the owner's own.
+// the owner's own, or sets the server up to get free ones from Let's Encrypt itself (here from a
+// certificate authority of the tests' own, DuckDNS's API faked).
 
 // (A world drawn without a GPU: more than the usual time)
 test.setTimeout(300000);
@@ -131,7 +133,7 @@ test("on the server's computer, the management page says how it stands with the 
     // (A certificate of the owner's own, put in from its files)
     const own = pair(["pellagos.example.com", "127.0.0.1"]);
 
-    await internet.locator("summary").click();
+    await internet.getByText("A certificate of your own").click();
     await internet.locator('input[name="key"]').setInputFiles({ name: "privkey.pem", mimeType: "application/x-pem-file", buffer: Buffer.from(own.key) });
     await internet.locator('input[name="cert"]').setInputFiles({ name: "fullchain.pem", mimeType: "application/x-pem-file", buffer: Buffer.from(own.cert) });
     await internet.getByRole("button", { name: "Use it" }).click();
@@ -154,4 +156,51 @@ test("on the server's computer, the management page says how it stands with the 
     await expect(open).toContainText("Answers the internet, over TLS alone");
     await expect(open).toContainText(`https://pellagos.example.com:${server.port}/`);
     expect(server.internetClosed).toBe(null);
+});
+
+test("on the server's computer, the management page sets it up to get free certificates (a DuckDNS name), shows how that goes, never the token, and stops it", async ({ page }) => {
+    const fake = await new FakeAcme().start();
+    const kept = new Map();
+    const tokens = { where: "the tests' memory", get: async (name) => kept.get(name) ?? null, set: async (name, token) => void kept.set(name, token), remove: async (name) => kept.delete(name) };
+    const server = await serve({ acme: { directory: fake.directory, fetch: dnsHosts(fake.dns).fetch, lookup: lookupOf(fake.dns), poll: 20 }, tokens });
+
+    try {
+        await server.listenAdmin(0);
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+        await page.goto(`http://localhost:${server.adminPort}/`);
+
+        const internet = () => page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+        // (Opened, the form asks the server what it takes: the routes, the CA's terms)
+        await internet().getByText("A free certificate from Let's Encrypt").click();
+        await expect(internet().locator('select[name="route"]')).toHaveValue("duckdns");
+        await expect(internet().getByRole("link", { name: "terms of service" })).toHaveAttribute("href", `${fake.base}/terms`);
+        await expect(internet().locator('input[name="address"]')).toBeHidden();
+        await internet().locator('input[name="name"]').fill("sam.duckdns.org");
+        await internet().locator('input[name="token"]').fill(TOKENS.duckdns);
+
+        // (Not without agreeing to the terms)
+        await internet().getByRole("button", { name: "Get a certificate" }).click();
+        await expect(internet().locator("details.acme [role=status]")).toHaveText("Getting a certificate means agreeing to Let's Encrypt's terms of service.");
+        await internet().getByLabel("I agree to Let's Encrypt's terms of service").check();
+        await internet().getByRole("button", { name: "Get a certificate" }).click();
+
+        // (Got, taken up, and said: the token never shown)
+        await expect(internet()).toContainText(/Gets its certificate for sam\.duckdns\.org from Let's Encrypt \(a free DuckDNS name\) and renews it itself/, { timeout: 20000 });
+        await expect(internet()).toContainText("It has a certificate for sam.duckdns.org");
+        expect(server.certificate.names).toEqual(["sam.duckdns.org"]);
+        expect(kept.get("acme:duckdns")).toBe(TOKENS.duckdns);
+        expect(await page.content()).not.toContain(TOKENS.duckdns);
+
+        // (Stopped: the route and its token forgotten, the certificate kept)
+        await internet().getByRole("button", { name: "Stop getting them" }).click();
+        await page.locator("#confirmgo").click();
+        await expect(internet().getByText("A free certificate from Let's Encrypt")).toBeVisible();
+        expect(kept.size).toBe(0);
+        expect(server.certificate.names).toEqual(["sam.duckdns.org"]);
+    } finally {
+        fake.close();
+    }
 });
