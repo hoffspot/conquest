@@ -11,12 +11,12 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
 import { guard, Refusal } from "../server/guards.js";
-import { clockOf, EXPORT_FORMAT } from "../server/manage.js";
+import { clockOf, EXPORT_FORMAT, IMPORT_LIMIT } from "../server/manage.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
 import { LADDER } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
@@ -91,6 +91,25 @@ async function mac(server) {
         cookie,
         call: (method, route, body) => raw(server.adminPort, { method, route: `/api/v1${route}`, headers: { Cookie: cookie, [ADMIN_HEADER]: ADMIN_VALUE }, body }),
     };
+}
+
+// A file sent as it is (bytes, not JSON), as the page sends a world's file: { status, json }
+function upload(port, route, bytes, headers = {}) {
+    return new Promise((resolve, reject) => {
+        const request = http.request({ host: "127.0.0.1", port, path: `/api/v1${route}`, method: "POST", headers: { Host: `localhost:${port}`, "Content-Type": "application/octet-stream", "Content-Length": bytes.length, ...headers } }, (response) => {
+            const parts = [];
+
+            response.on("data", (part) => parts.push(part));
+            response.on("end", () => {
+                const text = Buffer.concat(parts).toString("utf8");
+
+                resolve({ status: response.statusCode, json: text.startsWith("{") ? JSON.parse(text) : null });
+            });
+        });
+
+        request.on("error", (error) => (error.code === "EPIPE" || error.code === "ECONNRESET" ? resolve({ status: 413, json: null }) : reject(error)));
+        request.end(bytes);
+    });
 }
 
 // A call to the play port's API (from the Wi-Fi): { status, json }
@@ -391,6 +410,63 @@ describe("a world's management (server/manage.js)", () => {
         assert.equal(bundle.world.name, "Thornwick Vale");
         assert.equal(decode(bundle.snapshot).battle.time, timeBefore);
         assert.ok(!JSON.stringify(bundle).includes(world.playerKey), "no key in it");
+    });
+
+    it("restores it from each kind of backup: its latest save and autosaves, hourly, daily, by hand, and from before a restore", async () => {
+        const listed = (await admin.call("GET", `/worlds/${world.world}/backups`)).json.backups;
+        const kinds = new Map();
+
+        for (const backup of listed) {
+            kinds.set(backup.kind === "autosave" ? backup.id.replace(/-\d+$/, "") : backup.why, backup);
+        }
+
+        assert.deepEqual([...kinds.keys()].filter((kind) => ["now", "hourly", "daily", "by-hand", "before-restore"].includes(kind)).sort(), ["before-restore", "by-hand", "daily", "hourly", "now"]);
+
+        for (const [kind, backup] of kinds) {
+            const restored = await admin.call("POST", `/worlds/${world.world}/backups/${backup.id}/restore`, {});
+
+            assert.equal(restored.status, 200, `restored from ${kind} (${backup.id})`);
+            assert.equal(restored.json.id, world.world);
+        }
+    });
+
+    it("brings a world in from its file: a world of its own with its save, its time and its kept heroes, and new keys; refusing what isn't one, a newer one, one too big, and anyone who can't make worlds", async () => {
+        const exported = (await raw(server.adminPort, { route: `/api/v1/worlds/${world.world}/export`, headers: { Cookie: admin.cookie, [ADMIN_HEADER]: ADMIN_VALUE } })).body;
+        const bundle = JSON.parse(gunzipSync(exported).toString("utf8"));
+        const page = { Cookie: admin.cookie, [ADMIN_HEADER]: ADMIN_VALUE };
+        const brought = await upload(server.adminPort, "/worlds/import", exported, page);
+
+        assert.equal(brought.status, 200, JSON.stringify(brought.json));
+        assert.notEqual(brought.json.world, world.world, "an id of its own");
+        assert.equal(brought.json.name, bundle.world.name);
+        assert.match(brought.json.ownerKey, /^[0-9A-Z]{4}/);
+        assert.match(brought.json.playerKey, /^[0-9A-Z]{4}/);
+
+        const details = (await admin.call("GET", `/worlds/${brought.json.world}`)).json;
+
+        assert.equal(details.seed, bundle.world.seed);
+        assert.equal(server.metaOf(brought.json.world).worldTime, decode(bundle.snapshot).battle.time, "its time, from its save");
+        assert.ok((await admin.call("GET", `/worlds/${brought.json.world}/backups`)).json.backups.some((backup) => backup.id === "now"), "its save kept");
+        assert.ok((await readdir(path.join(server.root, "worlds", brought.json.world))).includes("journal.log"));
+
+        // (Its players come in by its own new keys: the old world's don't open it)
+        assert.equal((await wifi(server, "POST", "/enter", { body: { world: brought.json.world, key: world.playerKey } })).json.error, "key");
+        assert.equal((await wifi(server, "POST", "/enter", { body: { world: brought.json.world, key: brought.json.playerKey } })).status, 200);
+
+        // (Not a world's file; a newer server's; too big; and a player, who can't make worlds)
+        const refused = async (bytes, headers = page) => {
+            const answered = await upload(server.adminPort, "/worlds/import", bytes, headers);
+
+            return answered.json?.error ?? `status ${answered.status}`;
+        };
+
+        assert.equal(await refused(Buffer.from("not a world")), "not-a-world");
+        assert.equal(await refused(gzipSync(Buffer.from(JSON.stringify({ format: "pellagos.world.9", world: {} })))), "not-a-world");
+        assert.equal(await refused(gzipSync(Buffer.from(JSON.stringify({ ...bundle, snapshot: encode({ ...decode(bundle.snapshot), version: 9999 }) })))), "newer");
+        assert.match(await refused(Buffer.alloc(IMPORT_LIMIT + 1)), /^(too-big|status 413)$/);
+        assert.equal((await upload(server.port, "/worlds/import", exported, { Host: `127.0.0.1:${server.port}`, Authorization: `Key ${world.playerKey}` })).status, 401, "a player's key makes no worlds");
+        assert.equal(server.worlds.size, 2, "nothing left of those refused");
+        assert.equal((await admin.call("DELETE", `/worlds/${brought.json.world}`, { confirm: brought.json.name })).status, 200);
     });
 
     it("deletes it only with its name typed: everyone sent out, its backups kept", async () => {

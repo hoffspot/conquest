@@ -447,7 +447,12 @@ form.certificate {
     margin: 8px 0;
 }
 
-form.certificate input[type="file"] {
+fieldset.bring {
+    margin-top: 20px;
+}
+
+form.certificate input[type="file"],
+fieldset.bring input[type="file"] {
     color: var(--ink);
     max-width: 100%;
 }

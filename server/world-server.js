@@ -266,8 +266,14 @@ export class WorldServer {
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
      */
     async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", settings = {} }, { creator = null } = {}) {
-        const stored = await this.store.create({ name, description, seed, race, creator, heroes, firstHero, settings });
+        return this.adopt(await this.store.create({ name, description, seed, race, creator, heroes, firstHero, settings }), { creator });
+    }
 
+    /**
+     * A world kept in the store (made, or brought in: manage.js importWorld) taken on: its access
+     * opened, and an owner's key and a player's key made. Returns { world, ownerKey, playerKey }.
+     */
+    async adopt(stored, { creator = null } = {}) {
         await this.#add(stored);
 
         const owner = await this.access.issueKey(stored.id, { label: "The owner's key", role: "owner" }, { by: creator });

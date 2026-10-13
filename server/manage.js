@@ -11,12 +11,13 @@
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
 // it aside first, or is refused; whatever can't be undone is backed up before it's done.
 
-import { appendFile, cp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { appendFile, cp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { gzip } from "node:zlib";
+import { gunzipSync, gzip } from "node:zlib";
 import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
+import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
@@ -24,7 +25,7 @@ import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip } from "./storage/files.js";
 import { schemaReason } from "./storage/settings.js";
-import { SERVER_VERSION } from "./storage/versions.js";
+import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
 import { BACKUP_NAME, FIRST_HEROES, HERO_MODES, HEROES, JOURNAL, NOW, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
@@ -32,6 +33,10 @@ export const SERVER_JOURNAL = "journal.log";
 
 /** An export's (and a downloaded backup's) format: a world, its latest snapshot and its kept heroes, as one gzipped JSON file. */
 export const EXPORT_FORMAT = "pellagos.world.1";
+
+/** How big a world's file may be to be brought in (bytes: as sent, gzipped; and once unpacked). */
+export const IMPORT_LIMIT = 64 * 1024 * 1024;
+export const IMPORT_UNPACKED = 512 * 1024 * 1024;
 
 /** How much of the journals the Activity section's shown (lines). */
 export const ACTIVITY_LINES = 300;
@@ -511,6 +516,98 @@ export class Management {
         const safe = String(meta.name ?? id).replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/\s+/g, "-") || id;
 
         return { name: `${safe}-${backup ?? stampOf(new Date())}.pellagos.json.gz`, body };
+    }
+
+    /**
+     * A world brought in from a file another server (or this one) exported (EXPORT_FORMAT, as
+     * export() makes it, gzipped or not): a new world here, with an id of its own, its name,
+     * seed, home people, heroes mode and settings (those this server knows), its latest snapshot
+     * (read, brought forward and checked before it's kept) and the heroes it kept (for the players
+     * they were kept for where it came from). Nothing of who may come in comes with it: it gets an
+     * owner's key and a player's key, as a world made here does. Refused, with the reason, if it
+     * isn't such a file, or a newer server wrote it. `by` and `creator` as createWorld's. Returns
+     * { world, name, ownerKey, playerKey }.
+     */
+    async importWorld(bytes, { by = null, creator = null } = {}) {
+        const notAWorld = (why) => new Refused(400, "not-a-world", `That isn't a world exported from a Pellagos server${why ? `: ${why}` : ""}.`);
+        let bundle;
+
+        try {
+            const packed = bytes[0] === 0x1f && bytes[1] === 0x8b;
+
+            bundle = JSON.parse((packed ? gunzipSync(bytes, { maxOutputLength: IMPORT_UNPACKED }) : bytes).toString("utf8"));
+        } catch {
+            throw notAWorld(null);
+        }
+
+        if (bundle?.format !== EXPORT_FORMAT || !bundle.world || typeof bundle.world !== "object") {
+            throw notAWorld(typeof bundle?.format === "string" && bundle.format.startsWith("pellagos.world.") ? `it's in a newer format (${bundle.format}): it needs the server that made it, or a newer one` : null);
+        }
+
+        const { world } = bundle;
+        const settings = Object.fromEntries(Object.entries(world.settings ?? {}).filter(([key]) => key in WORLD_SETTINGS));
+        let stored;
+
+        try {
+            stored = await this.server.store.create({ name: world.name, description: world.description ?? "", seed: world.seed, race: world.race, creator, heroes: world.heroes ?? "kept", firstHero: world.firstHero ?? "new", settings });
+        } catch (error) {
+            throw notAWorld(error.message);
+        }
+
+        try {
+            if (bundle.snapshot !== null && bundle.snapshot !== undefined) {
+                await ensureFolder(path.join(stored.folder, STATE));
+                await writeGzip(path.join(stored.folder, STATE, NOW), typeof bundle.snapshot === "string" ? bundle.snapshot : JSON.stringify(bundle.snapshot));
+            }
+
+            let heroes = 0;
+
+            for (const [player, slots] of Object.entries(bundle.heroes ?? {})) {
+                for (const [file, kept] of Object.entries(slots ?? {})) {
+                    if (/^[A-Za-z0-9_-]{1,64}$/.test(player) && /^[1-9]\d*\.json$/.test(file) && kept && typeof kept === "object") {
+                        await ensureFolder(path.join(stored.folder, HEROES, player));
+                        await writeFile(path.join(stored.folder, HEROES, player, file), JSON.stringify(kept), { mode: FILE_MODE });
+                        heroes++;
+                    }
+                }
+            }
+
+            // (Its snapshot read as the server will read it, and its version one this server can
+            // carry on from: not newer, nor older than any step goes back to: reopen.js openWorld)
+            const { snapshot } = await stored.load();
+            const oldest = Math.min(SNAPSHOT_VERSION, ...Object.keys(SNAPSHOT_STEPS).map(Number));
+
+            if (snapshot && snapshot.version > SNAPSHOT_VERSION) {
+                throw new NewerDataError("Its save", { found: snapshot.version, reads: SNAPSHOT_VERSION, needs: bundle.exportedBy ?? null });
+            }
+
+            if (snapshot && snapshot.version < oldest) {
+                throw new Error(`it was kept by version ${snapshot.version} of the game, older than any this server can bring forward (${oldest})`);
+            }
+
+            await stored.writeMeta({
+                played: Number.isFinite(world.played) ? world.played : 0,
+                worldTime: snapshot?.battle?.time ?? 0,
+                elapsed: snapshot ? elapsedOf(snapshot.war) : 0,
+                versions: snapshot ? { snapshot: snapshot.version, war: snapshot.war?.version ?? null } : null,
+                savedAt: snapshot ? (world.savedAt ?? null) : null,
+            });
+            await stored.journal(`Brought in${by ? ` by ${by}` : ""} from a file Pellagos server ${bundle.exportedBy ?? "(unknown)"} exported${bundle.exported ? ` on ${bundle.exported}` : ""} (world ${world.id ?? "(unknown)"} there)${heroes ? `, with ${heroes} kept hero${heroes === 1 ? "" : "es"} for the players they were kept for there` : ""}.`);
+        } catch (error) {
+            await rm(stored.folder, { recursive: true, force: true });
+
+            if (error instanceof NewerDataError) {
+                throw new Refused(409, "newer", `That world was saved by a newer Pellagos server. ${error.message}`);
+            }
+
+            throw notAWorld(`its save couldn't be read (${error.message})`);
+        }
+
+        const adopted = await this.server.adopt(stored, { creator });
+
+        await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought in${by ? ` by ${by}` : ""}, from a file exported by Pellagos server ${bundle.exportedBy ?? "(unknown)"}.`);
+
+        return adopted;
     }
 
     // ---- The server

@@ -7,8 +7,8 @@ import { expect, test } from "./fixtures.js";
 // The world server's management page (generated/world_server_plan.md §10, §15 S4), in a browser, as
 // its owner uses it on the server's own computer: a world made, started and set aside, backed up by
 // hand and restored, a player's lost ticket reissued (the old one no longer works, the new one
-// does), and the world deleted with its name typed. And from the Wi-Fi, the page asks for the
-// admin key first.
+// does), exported, deleted with its name typed, and brought in again from its export. And from
+// the Wi-Fi, the page asks for the admin key first.
 
 test.describe.configure({ mode: "default" });
 
@@ -37,7 +37,7 @@ async function enter(body) {
     return { status: response.status, json: await response.json() };
 }
 
-test("the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, and deleted with its name typed", async ({ page }) => {
+test("the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, exported, deleted with its name typed, and brought in again", async ({ page }) => {
     test.setTimeout(240000);
 
     const errors = [];
@@ -139,6 +139,14 @@ test("the management page on the server's computer: a world made, started, set a
     await expect(page.locator("#activity")).toContainText("Restored from");
     await page.locator('[data-tab="worlds"]').click();
 
+    // Exported, to bring in again once it's gone
+    const exported = page.waitForEvent("download");
+    const file = path.join(folder, "ashby.pellagos.json.gz");
+
+    await card.getByRole("button", { name: "Export" }).click();
+    await (await exported).saveAs(file);
+    await expect(page.locator("#status")).toHaveText("Ashby exported: it's in your downloads.");
+
     // Deleted, its name typed (the wrong name first)
     await card.getByRole("button", { name: "Delete" }).click();
     await page.locator("#confirmname").fill("Ash");
@@ -153,6 +161,26 @@ test("the management page on the server's computer: a world made, started, set a
     // (The server's own journal keeps that it was)
     await page.locator('[data-tab="activity"]').click();
     await expect(page.locator("#activity")).toContainText('The world "Ashby"');
+
+    // Brought in again from its export: a new world, with keys of its own, as it was
+    await page.locator('[data-tab="new"]').click();
+    await page.locator("#importbutton").click();
+    await expect(page.locator("#importstatus")).toHaveText("Choose the exported file first (a .json.gz).");
+    await page.locator("#importfile").setInputFiles(file);
+    await page.locator("#importbutton").click();
+    await expect(shown.locator("#showntitle")).toHaveText("Ashby is brought in", { timeout: 30000 });
+
+    const [broughtOwner, broughtPlayer] = await shown.locator(".shown-value").allTextContents();
+
+    expect([broughtOwner, broughtPlayer]).not.toContain(playerKey);
+    await page.locator("#shownclose").click();
+
+    const brought = page.locator("#worlds .card", { hasText: "Ashby" });
+
+    await expect(brought).toBeVisible();
+    await expect(brought).toContainText("Brought in by their players");
+    expect(await brought.getAttribute("data-world")).not.toBe(world);
+    expect(server.metaOf(await brought.getAttribute("data-world")).seed).toBe(5);
 
     expect(errors).toEqual([]);
 });

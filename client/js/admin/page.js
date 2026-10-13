@@ -156,9 +156,9 @@ function say(text = "", { bad = false } = {}) {
 
 // ---- The API
 
-/** A call to the server's API: its answer (JSON), or the response itself for a download. Throws, saying why, if it's refused. */
-async function call(method, route, body, { key = null } = {}) {
-    const headers = { ...MANAGE, ...(body === undefined ? {} : { "Content-Type": "application/json" }) };
+/** A call to the server's API: its answer (JSON), or the response itself for a download. Throws, saying why, if it's refused. A `raw` body (a file) is sent as it is. */
+async function call(method, route, body, { key = null, raw = false } = {}) {
+    const headers = { ...MANAGE, ...(body === undefined ? {} : { "Content-Type": raw ? "application/octet-stream" : "application/json" }) };
 
     if (key) {
         headers.Authorization = `Key ${key}`;
@@ -169,7 +169,7 @@ async function call(method, route, body, { key = null } = {}) {
     let response;
 
     try {
-        response = await fetch(`${API}${route}`, { method, headers, credentials: "same-origin", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+        response = await fetch(`${API}${route}`, { method, headers, credentials: "same-origin", ...(body === undefined ? {} : { body: raw ? body : JSON.stringify(body) }) });
     } catch {
         throw Object.assign(new Error("The server isn't answering: is it still running?"), { status: 0 });
     }
@@ -1400,20 +1400,47 @@ function setUpNewWorld() {
         }
 
         form.reset();
-        showOnce({
-            title: `${made.name} is made`,
-            note: "Two keys to start with: the owner's (yours) and the players'. Both are shown again under the world's Keys while they work.",
-            more: [
-                h("h3", {}, "The owner's key"),
-                h("p", { class: "shown-value" }, made.ownerKey),
-                h("p", {}, h("a", { href: linkTo(made.world, { key: made.ownerKey }, playPage()), target: "_blank", rel: "noopener" }, "Play it now, as its owner")),
-                h("h3", {}, "The players' key"),
-                h("p", { class: "shown-value" }, made.playerKey),
-                h("div", { class: "address" }, qr(linkTo(made.world, { key: made.playerKey })), copyable(linkTo(made.world, { key: made.playerKey }), { link: true })),
-            ],
-        });
-        show("worlds");
+        showKeys(made, `${made.name} is made`);
     };
+
+    // (A world exported from a server, brought in: the file sent as it is, its keys shown as a new world's)
+    $("#importbutton").onclick = async () => {
+        const file = $("#importfile").files[0];
+        const status = $("#importstatus");
+
+        if (!file) {
+            status.textContent = "Choose the exported file first (a .json.gz).";
+            status.classList.add("bad");
+
+            return;
+        }
+
+        const brought = await doing(() => call("POST", "/worlds/import", file, { raw: true }), { status });
+
+        if (!brought?.world) {
+            return;
+        }
+
+        form.reset();
+        showKeys(brought, `${brought.name} is brought in`);
+    };
+}
+
+/** A world's first keys (made, or brought in), shown once; then the worlds. */
+function showKeys(made, title) {
+    showOnce({
+        title,
+        note: "Two keys to start with: the owner's (yours) and the players'. Both are shown again under the world's Keys while they work.",
+        more: [
+            h("h3", {}, "The owner's key"),
+            h("p", { class: "shown-value" }, made.ownerKey),
+            h("p", {}, h("a", { href: linkTo(made.world, { key: made.ownerKey }, playPage()), target: "_blank", rel: "noopener" }, "Play it now, as its owner")),
+            h("h3", {}, "The players' key"),
+            h("p", { class: "shown-value" }, made.playerKey),
+            h("div", { class: "address" }, qr(linkTo(made.world, { key: made.playerKey })), copyable(linkTo(made.world, { key: made.playerKey }), { link: true })),
+        ],
+    });
+    show("worlds");
 }
 
 // ---- The server's settings, and creator keys
