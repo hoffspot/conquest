@@ -585,7 +585,8 @@ smaller, its colour a little different, its markings its own.
   point to the nearest few, weighted by distance) so it bends where they do. The rest of its
   pieces (claws, teeth, horns, quills) are folded into a few meshes on the same bones (`fold`),
   so a creature's two to eight things to draw, 12,000 to 21,000 triangles. Both are made once
-  for each of a kind's three looks and shared by every one of it after.
+  for each of a kind's three looks and shared by every one of it after, until none of that look
+  has been drawn for three minutes (*Let go of when none is drawn*).
 - **Four-legged** (`quadruped.js`): a deep chest, a waist and haunch (sloping down behind for a
   hyena); a neck and head with a muzzle and jaw, or a cat's short face with whisker pads and
   whiskers, or a crocodile's long flat jaws with rows of teeth and its eyes and nostrils raised on
@@ -671,6 +672,30 @@ playing, its body is made a step at a time within the frame's budget, as everyon
 - **Folding** a creature's pieces gathers their points into arrays made once, counted first,
   rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
   folding, went from 54 to 102 ms to 17 to 47 (in Node).
+
+### Let go of when none is drawn
+
+A look's sculpted body and folded pieces (and its body's fewer triangles when it's drawn smaller,
+`lowerDetail`: *A ceiling*) were kept for the whole session once made, whether any of it was
+still about or not: every look of every kind met, never given back. Every beast's three looks
+(the convoys' ox among them), built in Node, hold 76.6 MB, and as much again on the graphics card
+once drawn. Now (`sculpt.js`):
+
+- **Held while drawn.** Each creature built holds its look's body (`hold`, as `BeastAvatar` is
+  made) and lets go of it when it's let go of itself (`release`, its `dispose`: gone from the
+  battle, a flier landed or gone, a crowd figure recorded), once however often it's disposed.
+- **Kept a while after** (`LINGER`, three minutes since the last of its look was let go of): a
+  kind met lately is likely met again, and another of it built meanwhile holds it again.
+- **Then let go of** (`forget`, every five seconds: the game's `FORGET_EVERY`): out of what's kept,
+  and its geometries disposed, so the graphics card lets go of them too, and its body's lower
+  levels with it. Not while it's being made again. One wanted after is sculpted again, a step at
+  a time, as the first was (45 to 170 ms of steps), the same as it was.
+- **Told** in the debug overlay and log, under *Held*: how many looks are kept, their arrays' size,
+  and how many of them none is drawn on (`kept`).
+
+So what's kept is the looks of the creatures about and those met in the last three minutes,
+rather than every look met since the game began: in Node, all 81 looks with something to keep
+(76.6 MB) built and let go of, then kept for three minutes, then none.
 
 ### Drawn only in view
 

@@ -483,6 +483,10 @@ describe("the debug log (telemetry.js)", () => {
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 0 } })[0],
             /sound 101\.3 MB, way-finding 16 MB, bodies' own copies 154\.5 MB, JS heap not told by this browser$/,
         );
+        assert.equal(
+            memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 2, beasts: { looks: 12, unheld: 3, MB: 9.4 } } })[1],
+            "Held 30 bodies  9 chunks  0 interiors  2 crowd kinds  12 beast looks (9.4 MB, 3 none drawn)",
+        );
         assert.match(memoryLines(null, gpu)[0], /^Memory graphics 540\.2 MB/);
     });
 

@@ -29,6 +29,7 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
+import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
@@ -411,6 +412,10 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // only once it's `margin` places past the last drawn in full. Each kind's figure made with `share`
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
+
+// How often (seconds) the beasts' bodies none of their look has been drawn on for a while
+// (beasts/sculpt.js LINGER) are let go of (forget)
+const FORGET_EVERY = 5;
 
 // How far from the camera anyone with a crowd to be drawn in (the soldiers; the players' hired
 // adventurers and the wild's creatures: #thronging) is drawn in full at most (metres), however
@@ -1108,6 +1113,7 @@ export class Game {
         const wasm = wasmBytes();
         const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
         const total = (heap?.usedJSHeapSize ?? bodies) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
+        const beasts = keptBodies();
 
         return {
             totalMB: megabytes(total),
@@ -1117,7 +1123,7 @@ export class Game {
             soundMB: megabytes(sound),
             wasmMB: megabytes(wasm),
             bodiesMB: megabytes(bodies),
-            held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0 },
+            held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) } },
         };
     }
 
@@ -2651,6 +2657,7 @@ export class Game {
         this.#allying();
         this.#thronging(dt);
         this.#crowding();
+        this.#forgetting(dt);
 
         const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
         this.#cheered();
@@ -3325,6 +3332,17 @@ export class Game {
 
         this.crowdWaiting.delete(actor.id);
         avatar.actions.setGuard(actor.armed);
+    }
+
+    // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
+    // (FORGET_EVERY)
+    #forgetting(dt) {
+        if ((this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
+            return;
+        }
+
+        this.forgetClock = FORGET_EVERY;
+        forgetBodies();
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
