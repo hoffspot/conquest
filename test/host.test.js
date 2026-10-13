@@ -406,9 +406,10 @@ describe("the host (host.js)", () => {
         assert.equal(new Host(generateWorld({ seed: 2 })).war, null, "(a town on its own has no war)");
     });
 
-    it("won't carry on from a world kept by another version of the game", () => {
+    it("won't carry on from a world kept by a version of the game it can't bring forward (test/snapshots.test.js: those it can)", () => {
         const kept = hosted().snapshot();
 
-        assert.throws(() => Host.restore(buildWorld({ seed: 2 }), { ...kept, version: 0 }), /another version/);
+        assert.throws(() => Host.restore(buildWorld({ seed: 2 }), { ...kept, version: 0 }), /older version of the game \(0\) than this one can carry on/);
+        assert.throws(() => Host.restore(buildWorld({ seed: 2 }), { ...kept, version: kept.version + 1 }), /newer version of the game/);
     });
 });

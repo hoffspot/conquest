@@ -542,8 +542,29 @@ export const OFFICIALS = Object.freeze({
 /** What's kept of the things done by talking (the last so many). */
 const KEEP_DONE = 50;
 
-/** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
+/**
+ * Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. Every bump comes
+ * with a step in SNAPSHOT_STEPS from the version before, and a fixture of the new version
+ * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
+ * (generated/world_server_plan.md §5.1).
+ */
 export const SNAPSHOT_VERSION = 27;
+
+/**
+ * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
+ * snapshot from version n to n + 1, filling in what that version came to keep as it would have
+ * been. Kept from version 26 on (when worlds came to be kept by the world server).
+ */
+export const SNAPSHOT_STEPS = Object.freeze({
+    // 27: the world's rules (a world a browser hosts: RULES), and each player's role in it, their
+    // last command (just now) and whether they're away or resting (they weren't)
+    26: (snapshot) => ({
+        ...snapshot,
+        version: 27,
+        rules: { ...RULES },
+        players: snapshot.players.map((player) => ({ role: "player", lastCommand: snapshot.battle.time, away: false, out: false, resting: null, ...player })),
+    }),
+});
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -2003,6 +2024,7 @@ export class Host {
      * buildings' insides made again in the same order, and everyone where they were.
      */
     static restore(world, snapshot) {
+        snapshot = Host.forward(snapshot);
         Host.#readable(snapshot);
 
         const host = new Host(world, { seed: snapshot.battle.seed, populate: false, war: snapshot.war, rules: snapshot.rules });
@@ -2044,6 +2066,40 @@ export class Host {
         if (snapshot?.version !== SNAPSHOT_VERSION) {
             throw new Error(`A world kept by another version of the game (${snapshot?.version})`);
         }
+    }
+
+    /**
+     * A snapshot kept by an older version of the game brought forward to this one, a step at a
+     * time (SNAPSHOT_STEPS); one of this version as it is. Throws if it was kept by a newer
+     * version, or one older than any step goes back to (it can't be carried on: a world server
+     * offers a fresh start from the seed).
+     */
+    static forward(snapshot) {
+        const version = snapshot?.version;
+
+        if (version === SNAPSHOT_VERSION) {
+            return snapshot;
+        }
+
+        if (!Number.isInteger(version)) {
+            throw new Error(`Not a world kept by any version of the game (${version})`);
+        }
+
+        if (version > SNAPSHOT_VERSION) {
+            throw new Error(`A world kept by a newer version of the game (${version}): this is version ${SNAPSHOT_VERSION}`);
+        }
+
+        let moved = snapshot;
+
+        for (let at = version; at < SNAPSHOT_VERSION; at++) {
+            if (!SNAPSHOT_STEPS[at]) {
+                throw new Error(`A world kept by an older version of the game (${version}) than this one can carry on`);
+            }
+
+            moved = SNAPSHOT_STEPS[at](moved);
+        }
+
+        return moved;
     }
 
     // Everything as a snapshot has it (the world made again from its seed, or this one)
