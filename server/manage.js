@@ -525,7 +525,7 @@ export class Management {
 
         return {
             id: server.identity.id,
-            name: server.hostname.replace(/\.local$/, ""),
+            name: server.name,
             version: SERVER_VERSION,
             started: new Date(this.started).toISOString(),
             uptime: Date.now() - this.started,
@@ -534,11 +534,33 @@ export class Management {
             adminKey: null,
             internet: { open: false, why: "Opening to the internet (a certificate, the router) comes later: for now the server answers its own Wi-Fi alone." },
             power: { keepAwake: server.settings.get("keepAwake"), holding: Boolean(server.registry.holding), platform: process.platform },
+            bonjour: this.bonjour(),
+            nearby: server.nearby.list(),
             worlds: { kept: server.worlds.size, going: server.registry.going.length, waiting: server.registry.queue.length, atOnce: server.settings.get("worldsAtOnce") },
             recommended: { ...advice, words: `Recommended: up to ${advice.most} at once (memory allows ${advice.memory}, the processor ${advice.cpu}).`, worldMemory: Math.max(this.largest, WORLD_MEMORY) },
             machine: { memory: os.totalmem(), cores: os.availableParallelism?.() ?? os.cpus().length },
             blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
         };
+    }
+
+    /**
+     * Whether it's shown to others on the Wi-Fi (nearby.js), in words (§8.2): { on (the setting),
+     * as (the name it's shown under), refused ({ code, message }), words }.
+     */
+    bonjour() {
+        const setting = this.server.settings.get("bonjour");
+        const { available, as, refused } = this.server.nearby.state();
+        const words = !available
+            ? "This server runs without Bonjour: players type its address."
+            : !setting
+              ? "Not shown to others on the Wi-Fi, nor looking for them: Bonjour is off in Settings. Players type the address."
+              : refused
+                ? refused.message
+                : as
+                  ? `Shown to others on the Wi-Fi as “${as}”, and looking for the servers near it.`
+                  : "Showing it to others on the Wi-Fi…";
+
+        return { on: setting && available, as, refused, words };
     }
 
     /** The server's settings, each with what it's for, its range and its default (storage/settings.js SETTINGS). */
@@ -555,6 +577,7 @@ export class Management {
         }
 
         this.server.registry.refill();
+        this.server.nearby.follow(this.server.settings.get("bonjour"));
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };

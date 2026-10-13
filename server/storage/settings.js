@@ -26,7 +26,7 @@ export const SETTINGS = Object.freeze({
     worldsAtOnce: { kind: "integer", min: 1, max: 64, default: 2, about: "How many worlds may be running or loading at once" },
     setAsideMinutes: { kind: "number", min: 0, max: 1440, default: 2, about: "How long a world with nobody in it waits before it's saved and set aside (minutes)" },
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },
-    bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi" },
+    bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
 });
 

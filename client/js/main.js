@@ -1818,8 +1818,63 @@ async function showWorlds() {
         }
     }
 
+    rows.push(...nearbyRows(NET_VERSION));
     $("#worldslist").replaceChildren(...rows);
     $("#worldsnote").hidden = rows.length > 0;
+}
+
+// The servers the known ones find near them on their Wi-Fi (their status's `nearby`: Bonjour, plan
+// §8.2), those not known here yet, each added with a tap: by its .local name when this page was
+// reached by one (as a phone's browser resolves them), else by its address on the Wi-Fi
+function nearbyRows(net) {
+    const known = state.servers.list();
+    const seen = new Set();
+    const rows = [];
+
+    for (const record of known) {
+        for (const near of serverCards.get(record.key)?.card?.nearby ?? []) {
+            const where = location.hostname.endsWith(".local") || !near.ip ? near.address : near.ip;
+
+            if (seen.has(near.id) || known.some((one) => one.id === near.id || one.key === where || one.key === near.address)) {
+                continue;
+            }
+
+            seen.add(near.id);
+
+            const row = document.createElement("li");
+            const matched = near.net === net;
+            const listed = Number.isFinite(near.worlds) ? ` · ${near.worlds === 1 ? "1 world" : `${near.worlds} worlds`} listed` : "";
+
+            row.className = "nearby";
+            row.dataset.nearby = near.id;
+            row.append(
+                worldCard({
+                    name: near.name ?? where,
+                    badge: "Nearby",
+                    about: `On the Wi-Fi with ${record.name ?? record.key}${listed}`,
+                    when: matched ? `Add it (${where})` : "Another version of the game",
+                    className: matched ? "" : "unmatched",
+                    disabled: !matched,
+                    onClick: () => addNearby(where, near),
+                }),
+            );
+            rows.push(row);
+        }
+    }
+
+    return rows;
+}
+
+// A nearby server added: known by the address it was found at, expected to prove the id it advertised
+async function addNearby(where, near) {
+    const { addressOf } = await serversOf();
+    const address = addressOf(where);
+
+    if (address) {
+        state.servers.remember(address, { id: near.id, name: near.name ?? null });
+        showWorlds();
+        refreshWorlds();
+    }
 }
 
 // A server added by its address, or an invite link followed

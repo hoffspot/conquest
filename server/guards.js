@@ -5,8 +5,9 @@
 //   machine itself); the internet gets TLS alone, which comes with S6, so until then it's refused.
 // - Its Host one of the server's own names or addresses, so a page on some other site can't reach
 //   it by pointing a name of its own at the server's address (DNS rebinding).
-// - Its Origin, if it's a browser's, the server's own, the game's on GitHub Pages, or one the owner
-//   adds: an exact list, no wildcards, and never `null` (cross-site WebSocket hijacking).
+// - Its Origin, if it's a browser's, the server's own, the game's on GitHub Pages, one the owner
+//   adds, or a Pellagos server's it's found near it on the Wi-Fi (nearby.js): each exactly, no
+//   wildcards, and never `null` (cross-site WebSocket hijacking).
 // - An address blocked a while for too many refusals (access/limits.js) refused.
 // - Bodies no bigger than LIMITS_HTTP.body, read within a time.
 
