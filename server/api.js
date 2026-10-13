@@ -3,7 +3,10 @@
 // string), and answers to the game's own calls given across origins to the pages allowed
 // (guards.js), so the game works from GitHub Pages as well as from the server.
 //
-//   GET    /status                          the server's card: its id, versions, addresses, listed worlds
+//   GET    /status                          the server's card: its id, versions, addresses (home and
+//                                           internet), where the caller seems to be (you), listed worlds
+//   POST   /reachability {results}          what a game found reaching it from elsewhere ("Test this
+//                                           server"): kept for the management page (manage.js report)
 //   GET    /health                          "ok", or "slow" if any world's steps are
 //   POST   /enter {world, key?, ticket?}    into a world: { session, ticket?, role, world, card (as
 //                                           /status lists it), player, heroes, life, position }
@@ -42,6 +45,7 @@
 //   POST   /server/certificate/acme {route, name?, host?, token?, address?, email?, agree}   a free one's
 //          route set up (certify.js), one asked for at once; POST …/acme/renew asks now; DELETE forgets it
 //   POST   /server/router                   the router asked again to let the internet in (router.js)
+//   POST   /server/funnel                   Tailscale Funnel asked for again (funnel.js)
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
@@ -54,7 +58,7 @@ import { RACE } from "../client/js/core/worldplan/plan.js";
 import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
-import { answer, bodyOf, guard, Refusal, urlOf } from "./guards.js";
+import { answer, bodyOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SETTINGS } from "./storage/settings.js";
@@ -64,8 +68,9 @@ import { WORLD_SETTINGS } from "./storage/worlds.js";
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
 
-/** How many times a minute one address may ask for the server's card. */
+/** How many times a minute one address may ask for the server's card, and report how reaching it went. */
 export const STATUS_PER_MINUTE = 60;
+export const REPORTS_PER_MINUTE = 6;
 
 /** The header every server-management call carries, and what it says (admin.js: a page on another site can't send it unasked). */
 export const MANAGE_HEADER = "x-pellagos";
@@ -104,6 +109,7 @@ export function apiHandler(server, { mac = false } = {}) {
     const { access, registry } = server;
     const { policy } = access;
     const status = new Rate(STATUS_PER_MINUTE);
+    const reports = new Rate(REPORTS_PER_MINUTE);
 
     // Who's asking (a principal: access/policy.js), from what they showed, or the admin on the computer itself
     const principalOf = (request, { world = null, body = {} } = {}) => {
@@ -221,13 +227,26 @@ export function apiHandler(server, { mac = false } = {}) {
 
             const listed = [...server.worlds.keys()].filter((id) => server.metaOf(id).settings.listed);
 
+            // (Where the caller seems to be: at the server's home if it came from there, or from the
+            // home's own public address the long way round; the game tries home addresses first then)
+            const router = server.router?.state();
+            const atHome = request.from === "home" || (!request.tunnel && Boolean(request.address) && [router?.external, router?.seen].includes(request.address));
+
             return {
                 server: { id: server.identity.id, name: server.name, publicKey: server.identity.publicKey, version: SERVER_VERSION, net: NET_VERSION, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } },
-                addresses: [...server.addresses(), ...(server.internetClosed ? [] : server.secureAddresses())],
+                addresses: [...server.addresses(), ...server.internetAddresses()],
+                you: { address: request.address, from: request.from, home: atHome },
                 worlds: listed.map(cardOf),
                 nearby: server.nearby.list(),
                 players: [],
             };
+        }],
+        ["POST", /^\/reachability$/, { game: true }, async (request, body) => {
+            if (!reports.allow(request.address)) {
+                throw refuse("wait", { message: "Reported too often: wait a moment." });
+            }
+
+            return doing(() => manage.report(body, { address: request.address, from: request.from, tunnel: request.tunnel }));
         }],
         ["GET", /^\/health$/, { game: true }, async () => {
             const slow = registry.going.some((entry) => (entry.thread?.state?.steps?.p99 ?? 0) > 50);
@@ -506,6 +525,11 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.askRouter());
         }],
+        ["POST", /^\/server\/funnel$/, { server: true }, async (request) => {
+            admin(request);
+
+            return doing(() => manage.askFunnel());
+        }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);
 
@@ -531,7 +555,7 @@ export function apiHandler(server, { mac = false } = {}) {
                 request.address = plainAddress(request.socket.remoteAddress);
                 request.from = "mac";
             } else {
-                ({ address: request.address, from: request.from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted) }, server));
+                ({ address: request.address, from: request.from, tunnel: request.tunnel } = guard(connectionOf(request, { origin }), server));
                 allowedOrigin = origin ?? null;
             }
 

@@ -18,7 +18,7 @@
 // meanwhile (world-worker.js), and can take it back with the token it was given.
 
 import { createHash } from "node:crypto";
-import { guard, Refusal, urlOf } from "./guards.js";
+import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
 import { hashOf, newToken, sameHash } from "./access/tokens.js";
 import { RECONNECTING, Socket } from "./relay.js";
@@ -169,7 +169,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
         const peer = `p${next++}`;
         const token = newToken();
-        const place = { world, peer, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, away: null };
+        const place = { world, peer, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null };
 
         places.set(placeKey(world, peer), place);
         thread.enter(peer, { player: place.player, role: place.role });
@@ -195,6 +195,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         place.socket = socket;
         place.address = address;
         place.from = socket.from;
+        place.tunnel = socket.tunnel;
 
         if (old !== socket && old.open) {
             old.onMessage = () => {};
@@ -262,9 +263,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const protocols = String(request.headers["sec-websocket-protocol"] ?? "").split(",").map((one) => one.trim());
         let address;
         let from;
+        let tunnel;
 
         try {
-            ({ address, from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: request.headers.origin, secure: Boolean(request.socket.encrypted) }, server));
+            ({ address, from, tunnel } = guard(connectionOf(request), server));
         } catch (error) {
             if (error instanceof Refusal) {
                 policy.on("refused", { why: error.error, address: request.socket.remoteAddress });
@@ -296,6 +298,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
         socket.address = address;
         socket.from = from;
+        socket.tunnel = tunnel;
         sockets.add(socket);
         welcome(socket, address);
     };

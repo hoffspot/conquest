@@ -5,6 +5,9 @@
 //   machine itself). The internet is answered only when the owner's turned on `internet` and the
 //   server has a certificate (storage/certificates.js), and then over TLS alone: plain from there
 //   is refused ("secure"; world-server.js sends a page load on to https://).
+// - A tunnel's (Tailscale Funnel's, on the tunnel listener: world-server.js) is the internet's,
+//   whatever loopback address it comes from: its TLS was the tunnel's, and where it's from is
+//   X-Forwarded-For's last address (the tunnel's own proxy adds it; earlier ones are anyone's say).
 // - Its Host one of the server's own names or addresses, so a page on some other site can't reach
 //   it by pointing a name of its own at the server's address (DNS rebinding).
 // - Its Origin, if it's a browser's, the server's own, the game's on GitHub Pages, one the owner
@@ -68,19 +71,34 @@ export function originsOf(hosts, extra = []) {
     return new Set([...[...hosts].flatMap((host) => [`http://${host}`, `https://${host}`]), ...GAME_ORIGINS, ...extra]);
 }
 
+/** What a request (or a socket's upgrade) says of where it's from, as guard() takes it: its Origin, unless `options.origin` is given (undefined: not checked). */
+export function connectionOf(request, options = {}) {
+    const origin = Object.hasOwn(options, "origin") ? options.origin : request.headers.origin;
+
+    return { address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted), tunnel: Boolean(request.socket.tunnel), forwarded: request.headers["x-forwarded-for"] };
+}
+
+// Where a tunnel's request is from: X-Forwarded-For's last address (the tunnel's proxy's own say)
+function forwardedFrom(forwarded) {
+    return plainAddress(String(forwarded ?? "").split(",").at(-1)?.trim() ?? "") ?? "tunnel";
+}
+
 /**
  * Whether a request (or a socket's upgrade) may be taken, before anything's read of it: from where
- * (`address`), over TLS or not (`secure`), to which Host, from which Origin. Returns { address
- * (as it's counted), from ("home" or "internet") }; throws a Refusal if not. The server says how
- * it stands: its `hosts`, `origins`, `blocks`, `isHome` (where's home) and `internetClosed` (why
- * the internet isn't answered, or null when it is).
+ * (`address`; or through a tunnel, `tunnel`, `forwarded` its X-Forwarded-For), over TLS or not
+ * (`secure`), to which Host, from which Origin. Returns { address (as it's counted), from ("home"
+ * or "internet"), tunnel }; throws a Refusal if not. The server says how it stands: its `hosts`
+ * (and `tunnelHosts`, the tunnel's), `origins`, `blocks`, `isHome` (where's home), and
+ * `internetClosed` and `tunnelClosed` (why the internet isn't answered, directly or through the
+ * tunnel, or null when it is).
  */
-export function guard({ address, host, origin, secure = false }, { hosts, origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED }) {
-    const plain = plainAddress(address);
-    const from = plain && home(plain) ? "home" : "internet";
+export function guard({ address, host, origin, secure = false, tunnel = false, forwarded = null }, { hosts, tunnelHosts = new Set(), origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED, tunnelClosed = INTERNET_CLOSED }) {
+    const plain = tunnel ? forwardedFrom(forwarded) : plainAddress(address);
+    const from = !tunnel && plain && home(plain) ? "home" : "internet";
+    const closed = tunnel ? tunnelClosed : internetClosed;
 
-    if (from === "internet" && (!plain || internetClosed)) {
-        throw new Refusal(403, "internet", internetClosed ?? INTERNET_CLOSED);
+    if (from === "internet" && (!plain || closed)) {
+        throw new Refusal(403, "internet", closed ?? INTERNET_CLOSED);
     }
 
     const blocked = blocks?.blockedFor(plain) ?? 0;
@@ -89,7 +107,7 @@ export function guard({ address, host, origin, secure = false }, { hosts, origin
         throw new Refusal(429, "wait", "Too many refused requests from here: try again later.", { wait: Math.ceil(blocked / 1000) });
     }
 
-    if (!host || !hosts.has(String(host).toLowerCase())) {
+    if (!host || !(tunnel ? tunnelHosts : hosts).has(String(host).toLowerCase())) {
         throw new Refusal(421, "host", "That isn't one of this server's names.");
     }
 
@@ -98,12 +116,13 @@ export function guard({ address, host, origin, secure = false }, { hosts, origin
         throw new Refusal(403, "origin", "Pages from there may not use this server.");
     }
 
-    // (From the internet, TLS alone: what's sent plain there can be read and changed on the way)
-    if (from === "internet" && !secure) {
+    // (From the internet, TLS alone: what's sent plain there can be read and changed on the way.
+    // A tunnel's came over the tunnel's TLS)
+    if (from === "internet" && !secure && !tunnel) {
         throw new Refusal(403, "secure", `From the internet this server answers over TLS alone: use its secure address, https://${String(host).toLowerCase()}`);
     }
 
-    return { address: plain, from };
+    return { address: plain, from, tunnel };
 }
 
 /** A request's body, as JSON (an object), refused if it's bigger than LIMITS_HTTP.body or isn't JSON. */

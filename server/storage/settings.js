@@ -29,6 +29,8 @@ export const SETTINGS = Object.freeze({
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
     internet: { kind: "boolean", default: false, about: "Answer the internet (over TLS alone, once the server has a certificate)" },
     router: { kind: "boolean", default: true, about: "Ask the router to let the internet in (PCP, NAT-PMP or UPnP), while the internet's answered" },
+    funnel: { kind: "boolean", default: false, about: "Let the internet in through Tailscale Funnel (for a home whose provider shares its address), while the internet's answered" },
+    tunnelPort: { kind: "integer", min: 1, max: 65535, default: 8482, about: "The port a tunnel (Tailscale Funnel) brings the internet to, on this computer alone" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
 });
 

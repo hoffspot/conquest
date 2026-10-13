@@ -8,7 +8,8 @@
 // then alone: keep it). It shows itself to others on the Wi-Fi with Bonjour (its `bonjour`
 // setting), saying so, or why macOS refused. With a certificate and its `internet` setting on, it
 // says where the internet reaches it (over TLS alone); getting free certificates (certify.js), how
-// that stands, and each one got or refused; and what the router forwards, or why it won't.
+// that stands, and each one got or refused; what the router forwards, or why it won't; and where
+// Tailscale Funnel brings the internet in, or why it won't.
 // Ctrl-C, or Stop on the management page, saves every world and stops.
 
 import path from "node:path";
@@ -56,6 +57,21 @@ if (server.router) {
         }
 
         routerSaid = saying ?? routerSaid;
+    };
+}
+
+// (Tailscale Funnel: where it brings the internet in, or why it won't, said as it changes)
+let funnelSaid = null;
+
+if (server.funnel) {
+    server.funnel.onChange = () => {
+        const saying = server.settings.get("funnel") ? server.manage.internet().funnel?.words : null;
+
+        if (saying && saying !== funnelSaid) {
+            console.log(saying);
+        }
+
+        funnelSaid = saying ?? funnelSaid;
     };
 }
 

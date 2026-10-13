@@ -1,8 +1,8 @@
 # The world server: the plan
 
 A plan, being built: S0 to S5 are done, and S6 is under way: TLS on the one port (S6a), the free
-certificates (S6b) and opening the router (S6c) are done, and the page's internet setup (S6d) is
-next ([§15](#15-milestones)). It is a living
+certificates (S6b), opening the router (S6c) and the page's internet setup with Tailscale Funnel
+(S6d) are done, and the game's side of reaching a server (S6e) is next ([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -744,8 +744,10 @@ server has a certificate; until then it's refused (`internet`, 403, saying which
 
 **Two more listeners on loopback only**, never reachable from outside:
 - `127.0.0.1:8481` for the management page on the Mac ([§7.3](#73-the-owner-and-claiming-the-server));
-- `127.0.0.1:8482` for a tunnel ([§9.4](#94-behind-cgnat)). Everything arriving there is treated
-  as internet traffic, because a tunnel delivers it from `localhost`.
+- `127.0.0.1:8482` for a tunnel ([§9.4](#94-behind-cgnat)), while Tailscale Funnel's on (its
+  `tunnelPort` setting). Everything arriving there is treated as internet traffic, because a tunnel
+  delivers it from `localhost`: where it's from is X-Forwarded-For's last address (the tunnel's own
+  proxy adds it), and it's taken plain, the TLS having been the tunnel's.
 
 **What a player types, and what happens:**
 
@@ -818,7 +820,9 @@ yet offer in a stable form. Revisit when it does.
     behind a provider's NAT.
   - **Free extra proof.** A Let's Encrypt IP certificate can only be issued if the port is reachable.
   - **From outside.** The definitive test is the game's **"Test this server"** button on any device
-    on another network (a phone on cellular), which reports back to the server's page.
+    on another network (a phone on cellular), which reports back to the server's page
+    (`POST /reachability`: what it tried at which of the server's own addresses, kept for the page,
+    the last 5; a report from the server's own Wi-Fi is said to prove nothing of the internet).
 
 ### 9.4 Behind CGNAT
 
@@ -827,12 +831,23 @@ open a port. The page says so plainly: "Your internet provider shares one addres
 homes, so nobody can reach this Mac directly from the internet." It then offers two ways on:
 
 1. **Tailscale Funnel**, free.
-   - **Setup.** The owner installs Tailscale (on macOS, the open-source client) and allows Funnel.
-     The server runs `tailscale funnel --bg 8482`.
+   - **Setup.** The owner installs Tailscale (on macOS, the app or Homebrew's open-source client)
+     and signs in, then turns on **Tailscale Funnel** on the page (the `funnel` setting). While the
+     server's open to the internet it runs `tailscale funnel --bg --https=443 --yes
+     http://127.0.0.1:8482` (`server/funnel.js`; the command found where each system keeps it,
+     `server/platform`), after checking with `tailscale status --json` that it's running and
+     signed in, and with `tailscale serve status --json` that nothing else is served there: the
+     owner's own use of Funnel is never taken over. A tailnet that hasn't allowed Funnel yet makes
+     Tailscale print where to allow it; the page shows that link, and **Ask Tailscale again**. It's
+     looked at again every 10 minutes, retried after 1, 5 and 30 minutes, and let go (`tailscale
+     funnel --https=443 off`, if it's still the server's) when the server's closed to the internet
+     or stops.
    - **The address.** Players reach `https://studio-mac.<tailnet>.ts.net`, a stable name with
      Tailscale's own certificate, on port 443, 8443 or 10000.
    - **How it's treated.** Traffic arrives on the tunnel listener, `127.0.0.1:8482`, which the server
-     treats exactly as internet traffic: keys required, no management.
+     treats exactly as internet traffic: keys required, no management. It needs no certificate of
+     the server's own (Tailscale's is used), so the internet's answered through Funnel as soon as
+     the server's open to it; whoever came that way is sent out when it's closed.
    - **Bandwidth.** Funnel's cap is unpublished; play needs about 2 KB/s per player.
 2. **Players' browser worlds.** Friends elsewhere can still play together in a world hosted in one
    of their browsers, through a broker that all of them can reach ([§8.3](#83-players-running-the-game)).
@@ -1012,8 +1027,9 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 
 | Method and path | Needs | Does |
 |---|---|---|
-| `GET /status` | nothing (rate-limited) | The server's card (its id, name, public key, version, `NET_VERSION`, play socket) and addresses, its listed worlds with player counts and hero names, nearby servers (`[{name, id, version, net, worlds, address, ip}]`: [§8.2](#82-nearby-macs)), listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
+| `GET /status` | nothing (rate-limited) | The server's card (its id, name, public key, version, `NET_VERSION`, play socket) and addresses (at home, and where the internet reaches it now), where the caller seems to be (`you: {address, from, home}`: home is from the Wi-Fi, or from the home's own public address the long way round), its listed worlds with player counts and hero names, nearby servers (`[{name, id, version, net, worlds, address, ip}]`: [§8.2](#82-nearby-macs)), listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
 | `GET /health` | nothing | `ok` or `slow` |
+| `POST /reachability` `{results: [{address, ok, ms, socket, error}]}` | nothing (rate-limited) | What a game found trying to reach the server from elsewhere ("Test this server"), at the server's own addresses alone, kept for its page (the last 5) |
 | `POST /enter` `{world, key?, ticket?, net?}` | a key or ticket | `{session, ticket?, role, world, card, player, heroes, life, position}`, where `card` is the world's as `/status` lists it (its heroes mode and first-hero rule among it) and `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version` (`net` isn't the server's `NET_VERSION`), `wait n`. Too many worlds running isn't a refusal: `life` says `waiting` and `position` its place, and the play socket waits its turn |
 | `POST /codes/redeem` `{code}` | a short code | Trades it, once, for `{world, key}`, then as `/enter` |
 | `GET /worlds` | a session or the admin key | Listed worlds, plus unlisted worlds the caller holds keys for |
@@ -1028,6 +1044,7 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 | `POST /server/session` | the admin key, from the home network | A session for the page from the Wi-Fi, kept in its tab alone |
 | `GET`, `PATCH` `/server`; `GET /server/worlds`, `/server/journal`, `/server/health`; `GET`, `POST`, `DELETE` `/server/creators`; `POST /server/update` (S9) | admin, from the Mac or the home network only | Settings, every world, the journal, health, creator keys and updating |
 | `PUT /server/certificate` `{key, cert}`, `DELETE /server/certificate` | admin, from the Mac or the home network only | A certificate of the owner's own (PEM: its key, and its chain), checked and kept in `certificates/`, taken up without a restart; or taken out (the internet's then no longer answered) |
+| `GET`, `POST`, `DELETE` `/server/certificate/acme`; `POST …/acme/renew`; `POST /server/router`; `POST /server/funnel` | admin, from the Mac or the home network only | Free certificates set up, asked for now, or forgotten ([§9.2](#92-free-certificates)); the router asked again ([§9.3](#93-opening-the-router)); Tailscale Funnel asked for again ([§9.4](#94-behind-cgnat)) |
 | `POST /server/admin-key`, `/server/stop` | the Mac's own listener alone | A new admin key (the old no longer works); stopped, every world saved |
 
 - **Authorisation.** `Authorization: Bearer <session>`; or `Authorization: Key <key>` for the admin key or a creator key (or the key in a POST's body). Nothing goes in a query string: a request with one is refused.
@@ -1312,6 +1329,30 @@ in the user's order:
   PCP and NAT-PMP on one UDP port, SSDP, the IGD's description and SOAP control, STUN), each
   protocol's fallback and refusal, the pinholes, 443's second port, and CGNAT, in unit tests and on
   the page in a browser. The manual check on a real router is the owner's.
+- **S6d, done.** The page's internet setup and Tailscale Funnel ([§9.4](#94-behind-cgnat)). The
+  internet panel opens with one switch, **Open to the internet** or **Close to the internet**
+  (closing lets the router's forwarding and Funnel go and sends out everyone in from the internet),
+  then **A way in**: a free certificate, one of the owner's own, or **Tailscale Funnel** (named the
+  way in when the router says the provider shares the address); then the router; then **Tested from
+  outside**. Funnel (`server/funnel.js`, Tailscale's command from the platform layer): asked for
+  while the server's open to the internet and the `funnel` setting's on, never taking over what the
+  owner serves already, each way it can't be had said (not installed, signed out, not allowed on the
+  tailnet with the link to allow it), looked at again every 10 minutes, let go when closed. The
+  tunnel listener (`127.0.0.1:8482`, the `tunnelPort` setting) opens with it: everything there is
+  the internet's (`server/guards.js`: from X-Forwarded-For's last address, by Funnel's name or the
+  tunnel's own address, plain since the TLS was Tailscale's), needs no certificate of the server's,
+  and is sent out when the internet's closed. `/status` lists where the internet reaches the server
+  now (its secure addresses and Funnel's) and where the caller seems to be (`you`); `POST
+  /reachability` keeps what games found testing it from outside, for the page. Measured against a
+  Tailscale of the tests' own (`test/fake-tailscale.js`): Funnel asked for and let go, each refusal,
+  the play socket through the tunnel, the reports; and the page in a browser. The manual check with
+  a real tailnet is the owner's.
+- **S6e, next.** The game's side ([§9.1](#91-one-port-two-kinds-of-connection),
+  [§9.5](#95-from-the-github-pages-copy)): **Test this server** (each of a server's internet
+  addresses tried, its status and play socket, and reported back), home-and-away addresses (a known
+  server's addresses kept with its id; home first when the last status said the player was at home,
+  else the internet's), typed addresses tried `wss://` first, and the hand-off to the server's own
+  page when this page can't reach it (Safari on GitHub Pages).
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1389,4 +1430,5 @@ questions go here as they come up.
 | 2026-10-13 | **S6a built:** TLS on the one port. `server/world-server.js` listens with a plain TCP listener that hands each connection, by its first byte, to an https half (its certificate set with `setSecureContext`, TLS 1.2 or later, a handshake given 5 s) or a plain http half, both answering alike; told they're listening so their own time limits run (checked every second); every connection closed with the port. Certificates: `server/net/der.js` (DER, written and read), `server/net/x509.js` (ECDSA P-256 keys, certificate requests, certificates signed by another key or their own, TLS-ALPN-01's acmeIdentifier, a certificate described), `server/storage/certificates.js` (kept, checked, `0600`). The `internet` setting (off at first); `guard()` returns where a request is from (`home` or `internet`; the tests make loopback the internet with the `home` option) and takes TLS into account: the internet refused while it's closed (no setting, or no certificate), and over TLS alone once it's open (`secure`; page loads sent on with 308). `api.js` and `play.js` carry where each is from to the access hooks, so the admin key is never taken from the internet; `/admin` is refused there too. Secure addresses (`https://name:port`, one per name the certificate carries) are listed in `/status` once the internet's answered, said in Terminal, and on the management page with the certificate's facts; an owner's own certificate is put in from the page (`PUT /server/certificate`) or its files. The game words `secure` and `internet-closed`. `test/x509.test.js`, `test/tls.test.js` and `e2e/secure.spec.js` are §15's proof so far. | §15's S6, its first part. The owner's own certificate wasn't one of §9.2's routes: it's the plainest way to the internet for an owner who already has one, and it's how the server's TLS is proved before ACME (S6b) gets certificates for it. |
 | 2026-10-13 | **S5 built:** nearby servers on the Wi-Fi. Bonjour in the platform layer: `server/platform/bonjour.js` (the service, the TXT record and its percent-encoded values, the refusals named for the owner, a tool's handle read a line at a time), `dns-sd -R/-B/-L` on macOS (`darwin.js`, with the computer's own name from `scutil`), `avahi-publish-service` and `avahi-browse -rpk` on Linux (`linux.js`), and a refusal on Windows. `server/nearby.js`: advertised under the server's name, advertised again when its TXT changes (at most every 10 s, looked at every 30 s), the others resolved (their IPv4 address looked up) and listed in `/status`'s `nearby`, never itself, lost when they go; refused or stopped, said and tried again a minute later; on and off with the `bonjour` setting. The status card carries the server's name. The guards let a nearby server's pages use the play routes, by exact address. The game's Worlds screen lists the servers a known one finds, "Nearby", added with a tap; the management page's overview says whether it's shown on the Wi-Fi (or why not) and lists the servers near it; `npm run world-server` says so in Terminal. `test/nearby.test.js` (a fake responder: `test/fake-bonjour.js`) and `e2e/nearby.spec.js` are §15's proof. | §15's S5. The nearby servers' origins weren't in the plan: without them, the game from one server's page couldn't use another's, though it found it. The manual check on two Macs needs macOS, so it's the owner's. |
 | 2026-10-13 | **S6b built:** free certificates. `server/net/acme.js` (RFC 8555 on `node:crypto`: ES256 JWS with jwk then kid, nonces and one retry of a stale one, POST-as-GET, orders with a profile and `replaces`, renewal information by RFC 9773's certificate id, TLS-ALPN-01's reverse names), `server/net/dns-hosts.js` (DuckDNS, Cloudflare and deSEC, each by its own API; a record waited for at its zone's own nameservers), `server/certify.js` (the three routes, the account key, `acme.json` without the token, renewal by the CA's window else a third of the life left, retries after 1, 6 and 24 hours, a DuckDNS name pointed home every 5 minutes), TLS-ALPN-01 answered on the one port (`answerChallenge`: SNI and ALPN callbacks on the https half), tokens in the Keychain through `security -i` on its standard input or `certificates/tokens.json`; x509.js's certificates name their key and their issuer's (subject and authority key identifiers), as a renewal's id needs. The API (`GET`, `POST`, `DELETE /server/certificate/acme`, `POST …/renew`), the page's form and how it goes, and Terminal's lines. The page's overview no longer refreshes over an open form. `test/fake-acme.js` is the CA the tests use, `test/acme.test.js` and a third case in `e2e/secure.spec.js` the proof. And the field battle's two crowd tests wait for a sort of the soldiers after everything's drawn: they could look in the half second before it and see more drawn in full than the margin (seen on CI, #372). | §15's S6, its second part. §9.2 had renewal "30 days before expiry" and "every 3 days": Let's Encrypt now says when (renewal information), and a third of the life left is the fallback. DuckDNS's place on the Public Suffix List was checked (§16). Pebble, named in §15, is a Go program: a CA in the tests' own JavaScript runs everywhere `npm test` does, checking the same things. |
+| 2026-10-13 | **S6d built:** the page's internet setup and Tailscale Funnel. The internet panel: **Open to the internet** / **Close to the internet**, then **A way in** (free certificates, one of the owner's own, **Tailscale Funnel**), the router, and **Tested from outside**. `server/funnel.js` (Tailscale's `status`, `serve status`, `funnel --bg --https=443 --yes`, `funnel --https=443 off`; never taking over the owner's own Funnel; the link to allow it), Tailscale's command in the platform layer, the tunnel listener on `127.0.0.1` (`funnel` and `tunnelPort` settings), the guards' tunnel (the internet's, from X-Forwarded-For's last address, by Funnel's name), `/status`'s internet addresses and `you`, `POST /reachability` and `POST /server/funnel`. `test/fake-tailscale.js`, `test/funnel.test.js` and a fifth case in `e2e/secure.spec.js` are the proof. | §15's S6, its fourth part. S6d was split: the game's side (Test this server's button, home-and-away addresses, typed addresses, the Pages hand-off) is S6e, so each PR stays one side. |
 | 2026-10-13 | **S6c built:** the router asked to let the internet in. `server/net/udp.js` (a UDP question asked again, 250 ms doubling, answered only from where it was asked; addresses as 16 bytes), `pcp.js` (MAP, its nonce kept; a NAT-PMP router answering told apart), `natpmp.js`, `upnp.js` (SSDP, the description's services, SOAP: AddPortMapping, AddAnyPortMapping on IGD v2, DeletePortMapping, GetExternalIPAddress, the IPv6 firewall's AddPinhole, UpdatePinhole and DeletePinhole), `stun.js` (binding requests, XOR-MAPPED-ADDRESS); `server/router.js` (the order, the mappings and their renewal, the pinhole, the checks, the words); the platform layer's `gateways()`; the world server's second port, its hairpin check, and the `router` setting; the page's **The router** and `POST /server/router`. `test/fake-router.js` and `test/router.test.js`, and a fourth case in `e2e/secure.spec.js`, are the proof. | §15's S6, its third part. Found while building: PCP and NAT-PMP forward one outside port to each inside one, so the IP certificate's 443 can't share the play port's mapping; a second listener takes it. |

@@ -503,9 +503,99 @@ function routerPart(router, on) {
     );
 }
 
+// Tailscale Funnel (server/funnel.js): the way in for a home whose provider shares its address. Not
+// asked for: what it is, and a button to use it (named the way in when the router says the
+// provider shares the address). Asked for: how it stands, where Tailscale says to put it right, asked again
+// or no longer used
+function funnelPart(funnel, { sharing = null } = {}) {
+    if (!funnel) {
+        return null;
+    }
+
+    const status = h("p", { class: "warning", role: "status" });
+    const use = (on) => doing(() => call("PATCH", "/server", { settings: { funnel: on } }), { status });
+
+    if (!funnel.asking) {
+        return h(
+            "details",
+            { class: "funnel" },
+            h("summary", {}, sharing ? "Tailscale Funnel: the way in when the provider shares the address" : "Tailscale Funnel"),
+            h("p", { class: "muted small" }, funnel.words),
+            h("p", { class: "muted small" }, "Install Tailscale on this computer (tailscale.com/download), sign in, and allow Funnel for it. Players then reach the server at this computer's name on your tailnet, with Tailscale's own certificate: no router, no certificate of the server's own."),
+            h(
+                "div",
+                { class: "actions" },
+                button("Use Tailscale Funnel", async () => {
+                    if (await use(true)) {
+                        await renderOverview();
+                    }
+                }),
+            ),
+            status,
+        );
+    }
+
+    return h(
+        "div",
+        { class: "acme" },
+        h("h3", {}, "Tailscale Funnel"),
+        h("p", { class: funnel.url ? "good" : funnel.error ? "warning" : "" }, funnel.words),
+        funnel.allow && !funnel.url ? h("p", {}, h("a", { href: funnel.allow, target: "_blank", rel: "noopener" }, "Put it right in Tailscale")) : null,
+        facts([funnel.url ? ["Players type", funnel.url.replace(/^https:\/\//, "")] : null, ["The tunnel, on this computer alone", `127.0.0.1:${funnel.port ?? "—"}`], funnel.checkedAt ? ["Looked", when(funnel.checkedAt)] : null]),
+        h(
+            "div",
+            { class: "actions" },
+            button(funnel.working ? "Asking…" : "Ask Tailscale again", async () => {
+                if (await doing(() => call("POST", "/server/funnel", {}), { status, done: "Asked." })) {
+                    await renderOverview();
+                }
+            }),
+            button(
+                "Stop using Funnel",
+                async () => {
+                    if (await confirmIt({ title: "Stop using Tailscale Funnel", note: "Tailscale stops bringing the internet to the server, and whoever came in that way is sent out.", go: "Stop" })) {
+                        if (await use(false)) {
+                            await renderOverview();
+                        }
+                    }
+                },
+                "danger",
+            ),
+        ),
+        status,
+    );
+}
+
+// What games found reaching the server from elsewhere ("Test this server"), the latest first
+function testsPart(tests) {
+    if (!tests) {
+        return null;
+    }
+
+    const latest = tests.reports[0];
+    const proved = latest && latest.from === "internet" && latest.results.some((one) => one.ok);
+
+    return h(
+        "div",
+        { class: "acme" },
+        h("h3", {}, "Tested from outside"),
+        h("p", { class: proved ? "good" : latest ? "warning" : "muted" }, tests.words),
+        tests.reports.length > 1
+            ? h(
+                  "details",
+                  {},
+                  h("summary", {}, "Earlier tests"),
+                  facts(tests.reports.slice(1).map((report) => [when(report.at), `from ${report.from === "home" ? "the Wi-Fi" : report.address}: ${report.results.map((one) => `${one.address} ${one.ok ? "reached" : "not reached"}`).join(", ")}`])),
+              )
+            : null,
+    );
+}
+
 function internetPanel({ internet }) {
     const { certificate } = internet;
     const status = h("p", { class: "warning", role: "status" });
+    const opening = (on) => doing(() => call("PATCH", "/server", { settings: { internet: on } }), { status });
+    const sharing = internet.router?.sharing ?? null;
     const own = h(
         "form",
         { class: "certificate" },
@@ -527,6 +617,28 @@ function internetPanel({ internet }) {
     return panel(
         "The internet",
         h("p", { class: internet.open ? "good" : "" }, internet.words),
+        h(
+            "div",
+            { class: "actions" },
+            internet.on
+                ? button(
+                      "Close to the internet",
+                      async () => {
+                          if (await confirmIt({ title: "Close to the internet", note: "From this moment the internet isn't answered: the router's forwarding and Tailscale Funnel are let go, and everyone in from the internet is sent out. The Wi-Fi carries on.", go: "Close it" })) {
+                              if (await opening(false)) {
+                                  await renderOverview();
+                              }
+                          }
+                      },
+                      "danger",
+                  )
+                : button("Open to the internet", async () => {
+                      if (await opening(true)) {
+                          await renderOverview();
+                      }
+                  }),
+        ),
+        status,
         internet.addresses.length ? h("div", { class: "addresses" }, internet.addresses.map((address) => h("div", { class: "address" }, qr(`${address}/`), copyable(`${address}/`, { link: true })))) : null,
         certificate
             ? facts([
@@ -537,7 +649,7 @@ function internetPanel({ internet }) {
               ])
             : null,
         h("p", { class: "muted small" }, "On the Wi-Fi, plain http is still taken, and what's sent there isn't encrypted. From the internet, nothing but TLS: never the admin key, nor this page."),
-        routerPart(internet.router, internet.on),
+        h("h3", { class: "way-in" }, "A way in"),
         acmePart(internet.acme),
         h(
             "details",
@@ -558,8 +670,10 @@ function internetPanel({ internet }) {
                       "danger",
                   )
                 : null,
-            status,
         ),
+        funnelPart(internet.funnel, { sharing }),
+        routerPart(internet.router, internet.on),
+        internet.on ? testsPart(internet.tests) : null,
     );
 }
 

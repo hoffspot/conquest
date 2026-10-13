@@ -177,3 +177,6 @@ export async function gateways({ readFile = readFileAsync } = {}) {
 
     return { v4, v6 };
 }
+
+/** Where Tailscale's command may be, in turn. */
+export const TAILSCALE = Object.freeze(["tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale"]);

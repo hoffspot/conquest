@@ -11,6 +11,11 @@
 // `internet` and the server has a certificate (storage/certificates.js), and over TLS alone
 // (guards.js); without a certificate, TLS isn't answered at all, but for a certificate
 // authority's TLS-ALPN-01 check while one's being got (certify.js).
+//
+// A tunnel (Tailscale Funnel: funnel.js) brings the internet another way, to the tunnel listener
+// on this computer alone (127.0.0.1:8482, while the internet's answered and the `funnel` setting's
+// on): its connections are the internet's, plain (the tunnel's TLS was Tailscale's), and need no
+// certificate of the server's own.
 
 import { randomBytes } from "node:crypto";
 import http from "node:http";
@@ -27,7 +32,8 @@ import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { Certifier, tokensFileOf } from "./certify.js";
-import { answer, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
+import { Funnel } from "./funnel.js";
+import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
 import { ACME_TLS, reverseNameOf } from "./net/acme.js";
@@ -77,7 +83,9 @@ export class WorldServer {
      * `hostname` and `name` (the machine's: its name is the computer's own, else its host name's),
      * `home` (which addresses are home: access/addresses.js isHome; the tests make loopback the
      * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
-     * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `clientDirectory`.
+     * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
+     * (router.js, funnel.js: false for none), `tunnelPort` (the tunnel listener's, 0 for any free
+     * one), `clientDirectory`.
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -94,7 +102,7 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
 
         /** Whether an address is at home (the guards ask it). */
@@ -154,6 +162,17 @@ export class WorldServer {
         /** The home's router, asked to let the internet in while it's answered (router.js; none if `router` is false, as most tests have it). */
         this.router = router === false ? null : new Router(this, router);
 
+        /** Tailscale Funnel, asked for while the internet's answered and the `funnel` setting's on (funnel.js; none if `funnel` is false); the tunnel listener it brings the internet to, on this computer alone, and its port. */
+        this.funnel = funnel === false ? null : new Funnel(this, funnel);
+        this.tunnel = null;
+        this.tunnelPort = null;
+        this.tunnelPortGiven = tunnelPort;
+        this.tunnelHosts = new Set();
+        this.tunnelError = null;
+
+        /** What games have said of reaching the server from elsewhere ("Test this server"), the latest first. */
+        this.reports = [];
+
         /** Hairpin checks waiting for their own connection to come back (router.js check). */
         this.hairpins = new Map();
         this.challenges = new Map();
@@ -196,6 +215,15 @@ export class WorldServer {
         return null;
     }
 
+    /** Why the internet isn't answered through the tunnel (a sentence), or null when it is: the `internet` and `funnel` settings on. */
+    get tunnelClosed() {
+        if (!this.settings.get("internet")) {
+            return INTERNET_CLOSED;
+        }
+
+        return this.settings.get("funnel") ? null : "This server isn't reached through a tunnel.";
+    }
+
     /** A world's world.json (as it was last written), or null. */
     metaOf(id) {
         return this.worlds.get(id)?.meta ?? null;
@@ -214,6 +242,11 @@ export class WorldServer {
     /** Where it can be reached securely: an https URL for each name its certificate carries (none without one). */
     secureAddresses() {
         return (this.certificate?.names ?? []).map((name) => `https://${name.includes(":") ? `[${name}]` : name}:${this.port}`);
+    }
+
+    /** Where the internet reaches it now: its secure addresses (with a certificate), and Funnel's (through the tunnel). */
+    internetAddresses() {
+        return [...(this.internetClosed ? [] : this.secureAddresses()), ...(!this.tunnelClosed && this.funnel?.url ? [this.funnel.url] : [])];
     }
 
     /** Where it can be reached at home (each of its home addresses, and its .local name): http URLs. */
@@ -289,6 +322,7 @@ export class WorldServer {
         this.certifier.start();
         this.certifier.renew().catch(() => {});
         this.followRouter();
+        this.followFunnel();
 
         if (!this.named) {
             this.name = (await computerName().catch(() => null)) ?? this.name;
@@ -315,14 +349,15 @@ export class WorldServer {
             socket.setTimeout(0);
 
             // (The server reaching itself by its public address: router.js check)
-            if (chunk.subarray(0, HAIRPIN.length).toString("latin1") === HAIRPIN) {
+            if (!socket.tunnel && chunk.subarray(0, HAIRPIN.length).toString("latin1") === HAIRPIN) {
                 this.hairpins.get(chunk.subarray(HAIRPIN.length).toString("latin1").trim())?.();
                 drop();
 
                 return;
             }
 
-            if (secure && !this.certificate && !this.challenges.size) {
+            // (A tunnel's are plain: its TLS was the tunnel's own)
+            if (secure && (socket.tunnel || (!this.certificate && !this.challenges.size))) {
                 drop();
 
                 return;
@@ -410,6 +445,71 @@ export class WorldServer {
         return this.second.address().port;
     }
 
+    /** Tailscale Funnel asked for, or let go, and the tunnel listener with it: while the internet's answered and the `funnel` setting's on. */
+    async followFunnel() {
+        const on = Boolean(this.settings.get("internet") && this.settings.get("funnel") && this.port !== null);
+
+        this.tunnelError = null;
+
+        if (on) {
+            await this.listenTunnel().catch((error) => {
+                this.tunnelError = error.code === "EADDRINUSE" ? `The tunnel's port on this computer (${this.tunnelPortGiven ?? this.settings.get("tunnelPort")}) is taken by something else: choose another in Settings.` : `The tunnel's listener couldn't open: ${error.message}`;
+            });
+        }
+
+        await this.funnel?.follow(on && this.tunnel !== null).catch(() => {});
+
+        if (!on) {
+            await this.closeTunnel();
+        }
+    }
+
+    /**
+     * The tunnel listener, on this computer alone (127.0.0.1, its `tunnelPort` setting unless given;
+     * 0 for any free one): where a tunnel brings the internet. Everything that comes there is the
+     * internet's. Returns its port.
+     */
+    async listenTunnel(port = this.tunnelPortGiven ?? this.settings.get("tunnelPort")) {
+        if (!this.tunnel) {
+            const tunnel = net.createServer((socket) => {
+                socket.tunnel = true;
+                this.#sort(socket);
+            });
+
+            await new Promise((resolve, reject) => {
+                tunnel.once("error", reject);
+                tunnel.listen(port, "127.0.0.1", resolve);
+            });
+            this.tunnel = tunnel;
+            this.tunnelPort = tunnel.address().port;
+            this.#reach();
+        }
+
+        return this.tunnelPort;
+    }
+
+    /** The tunnel listener closed, and everyone in through it sent out. */
+    async closeTunnel() {
+        if (this.tunnel) {
+            const tunnel = this.tunnel;
+
+            this.tunnel = null;
+            this.closePlaces((place) => place.tunnel, "internet-closed");
+            await new Promise((resolve) => tunnel.close(() => resolve()));
+
+            for (const socket of this.connections) {
+                if (socket.tunnel) {
+                    socket.destroy();
+                }
+            }
+        }
+    }
+
+    /** What it answers to has changed (Funnel's name came or went): its names and pages worked out again. */
+    reachChanged() {
+        this.#reach();
+    }
+
     /** Whether the server reaches itself at `address`:`port` (through the router, its public address) within `within` ms. */
     async hairpin(address, port, within = 3000) {
         const token = randomBytes(12).toString("base64url");
@@ -429,9 +529,12 @@ export class WorldServer {
         return reached;
     }
 
-    /** If the internet isn't answered now, everyone in from there sent out ("internet-closed"). Returns how many. */
+    /** If the internet isn't answered now (directly, or through the tunnel), everyone in from there that way sent out ("internet-closed"). Returns how many. */
     closeToInternet() {
-        return this.internetClosed ? this.closePlaces((place) => place.from === "internet", "internet-closed") : 0;
+        const direct = Boolean(this.internetClosed);
+        const tunnel = Boolean(this.tunnelClosed);
+
+        return direct || tunnel ? this.closePlaces((place) => place.from === "internet" && (place.tunnel ? tunnel : direct), "internet-closed") : 0;
     }
 
     // The names it answers to and the pages it answers (guards.js): its own, its certificate's, and
@@ -444,7 +547,13 @@ export class WorldServer {
 
         this.hosts = hostsOf(this.port, { names: [...this.names, ...(this.certificate?.names ?? [])], ...(this.interfaces ? { interfaces: this.interfaces } : {}), hostname: this.hostname });
 
-        const own = originsOf(this.hosts);
+        // (Through the tunnel: Funnel's name, as browsers send it on 443, or the tunnel's own
+        // address, should the tunnel not pass the name on)
+        const funnel = this.funnel?.name ?? null;
+
+        this.tunnelHosts = new Set([...(funnel ? [funnel, `${funnel}:443`] : []), ...(this.tunnelPort ? [`127.0.0.1:${this.tunnelPort}`, `localhost:${this.tunnelPort}`] : [])]);
+
+        const own = originsOf(this.hosts, funnel ? [`https://${funnel}`] : []);
 
         this.origins = { has: (origin) => own.has(origin) || this.nearby.allows(origin) };
     }
@@ -468,7 +577,7 @@ export class WorldServer {
         }
 
         try {
-            const { from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: undefined, secure: Boolean(request.socket.encrypted) }, this);
+            const { from } = guard(connectionOf(request, { origin: undefined }), this);
 
             if (pathname === undefined) {
                 throw new Refusal(400, "bad-request", "That isn't an address on this server.");
@@ -513,6 +622,8 @@ export class WorldServer {
         this.nearby.stop();
         await this.certifier.close();
         await this.router?.close();
+        await this.funnel?.close();
+        await this.closeTunnel();
         this.second?.close();
         this.play?.close("server-stopping");
         await this.registry.shutdown();
