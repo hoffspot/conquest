@@ -236,7 +236,7 @@ export function quadruped(look, random, key = null) {
     const eyes = skin(colours.eyes ?? 0x201810, { roughness: 0.1, glow: colours.glow ?? null, glowing: colours.glow ? 2.4 : 1 });
     const ivory = skin(colours.ivory ?? 0xe8dfc8, { roughness: 0.45 });
     const mouth = skin(0x4a1414, { roughness: 0.6 });
-    const earSkin = skin(colours.fur, { roughness: 0.9, clear, flat: scaly });
+    const earSkin = skin(colours.ears ?? colours.fur, { roughness: 0.9, clear, flat: scaly });
     const lowSlung = Boolean(look.lowSlung);
     const thick = look.legs ?? width * 0.3;
 
