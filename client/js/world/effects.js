@@ -46,12 +46,13 @@ const BURSTS = {
     steam: { count: 14, colours: [0xf2f2ee, 0xb8bcc0], size: [0.14, 0.28], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1.3, spread: 1.4, glow: false, opacity: 0.45, grow: 2.4 },
     ash: { count: 10, colours: [0x3a322c, 0x6a625a], size: [0.14, 0.3], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1, spread: 1.6, glow: false, opacity: 0.45, grow: 1.8 },
     // What the wild's creatures that don't bleed red spill when struck: a slime's gel, a spider's
-    // or scorpion's ichor, a treant's sap, chips of bone or stone
+    // or scorpion's ichor, a treant's sap, chips of bone or stone, a scarecrow's straw
     slimeSplash: { count: 16, colours: [0xc8ff9a, 0x4a9a2a], size: [0.04, 0.09], speed: [1.2, 3], life: [0.4, 0.7], gravity: 9.8, spread: 1, glow: false, opacity: 0.75, late: true, drag: 0.8 },
     ichor: { count: 16, colours: [0xe8e060, 0x7a8a10], size: [0.02, 0.05], speed: [1.4, 3.4], life: [0.4, 0.7], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8 },
     sap: { count: 14, colours: [0xf0a830, 0x7a4a08], size: [0.025, 0.05], speed: [1, 2.6], life: [0.45, 0.8], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8 },
     boneChips: { count: 12, colours: [0xf2ead0, 0xb8a888], size: [0.02, 0.045], speed: [1.6, 3.6], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
     stoneChips: { count: 14, colours: [0x9a8a78, 0x4a4038], size: [0.025, 0.05], speed: [1.8, 3.8], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
+    straw: { count: 14, colours: [0xf0d070, 0x9a7a30], size: [0.02, 0.05], speed: [1.2, 3], life: [0.5, 0.9], gravity: 4, spread: 1.4, glow: false, opacity: 1, late: true, drag: 1.2 },
     // Splinters off a camp's stakes hacked at (pale fresh wood and dark bark)
     woodChips: { count: 16, colours: [0xe2c48a, 0x5a3e22], size: [0.025, 0.06], speed: [1.6, 3.6], life: [0.4, 0.7], gravity: 9.8, spread: 1.3, glow: false, opacity: 1, late: true, drag: 0.5 },
     // Where the wild's creatures' own land: venom splashing, lava spattering, a web bursting,

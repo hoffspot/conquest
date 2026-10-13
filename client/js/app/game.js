@@ -600,6 +600,9 @@ const SPILLS = Object.freeze({
     pixies: ["wither"],
     magmaSlime: ["lavaSplash", "embers"],
     rockTusker: ["stoneChips", "dust"],
+    hodmedod: ["straw", "dust"],
+    draugr: ["boneChips", "dust"],
+    mare: ["shadows"],
 });
 
 // How each school's spells are cast (the caster's movements and the sound: effects.js LOOKS):

@@ -3,7 +3,8 @@
 // hooded shroud round a face worn to the bone (beasts/bones.js: its skull, the lights deep in its
 // sockets, its jaw), the bones of its arms dim through its sleeves; and a wraith, darker and
 // greater, nothing under its deep cowl but two cold lights, bony claws out of its sleeves, its
-// black robe torn to rags at the hem. Neither has legs: below the waist each is its shroud,
+// black robe torn to rags at the hem; and a mare, a wraith smaller and hunched, that sits on the
+// chests of sleepers and brings them bad dreams. None has legs: below the waist each is its shroud,
 // thinning (a ghost's) or flaring (a wraith's) into tatters, sculpted in one piece with the rest
 // of it (sculpt.js), so the whole of it is one thing to draw.
 //
@@ -24,14 +25,16 @@ const TAU = Math.PI * 2;
 const smooth = (u) => u * u * (3 - 2 * u);
 
 /**
- * Build a spectre from its look ({ kind: "ghost" or "wraith", height (m), colours: { shroud,
- * glow, bone, eyes } }): { object, height, length, joints, materials, pose(state) }. `key` shares
- * its body with every other built from the same look.
+ * Build a spectre from its look ({ kind: "ghost" or "wraith", height (m), `hunch` (how far it's
+ * bent forward, radians), colours: { shroud, glow, bone, eyes } }): { object, height, length,
+ * joints, materials, pose(state) }. `key` shares its body with every other built from the same
+ * look.
  */
 export function spectre(look, random, key = null) {
     const H = look.height;
     const s = H / 1.8;
     const wraith = look.kind === "wraith";
+    const hunch = look.hunch ?? 0;
     const colours = look.colours;
 
     // Its shroud: a ghost's pale, half see-through and faintly aglow; a wraith's black and dull
@@ -210,8 +213,9 @@ export function spectre(look, random, key = null) {
             body.rotation.set(0, 0, 0);
             skirt.rotation.set(0.32 * moving + Math.sin(t * 1.1 + phase) * 0.05, 0, Math.sin(t * 0.9) * 0.05);
             skirt.scale.set(1, 1, 1);
-            torso.rotation.set(0.2 * moving, 0, Math.sin(t * 0.7 + phase) * 0.04);
-            neck.rotation.set(0.08 - 0.1 * moving, Math.sin(t * 0.37 + phase) * (wraith ? 0.15 : 0.3) * (1 - moving), 0);
+            // (A mare bent forward, its head raised to look ahead)
+            torso.rotation.set(0.2 * moving + hunch, 0, Math.sin(t * 0.7 + phase) * 0.04);
+            neck.rotation.set(0.08 - 0.1 * moving - hunch * 0.85, Math.sin(t * 0.37 + phase) * (wraith ? 0.15 : 0.3) * (1 - moving), 0);
             head.rotation.set(0, 0, 0);
             jaw.rotation.x = wraith ? 0 : Math.max(0, Math.sin(t * 0.9 + phase)) * 0.08;
 
@@ -225,7 +229,7 @@ export function spectre(look, random, key = null) {
             for (const arm of Object.values(arms)) {
                 const lift = wraith ? -0.12 : -0.4 + Math.sin(t * 0.8 + arm.side) * 0.08;
 
-                arm.shoulder.rotation.set(lift * (1 - moving) + 0.35 * moving, 0, arm.side * (wraith ? 0.12 : 0.15));
+                arm.shoulder.rotation.set(lift * (1 - moving) + 0.35 * moving - hunch * 0.8, 0, arm.side * (wraith ? 0.12 : 0.15));
                 arm.elbow.rotation.set(wraith ? -0.3 : -0.4, 0, 0);
             }
 
