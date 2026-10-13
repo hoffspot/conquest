@@ -7,7 +7,9 @@
 // (the world's thread no more than SERVER_SOAK.growth above where it stood an hour in), whether
 // the steps' 99th percentile stayed under a step's time (STEP_MS) each minute once they were all
 // in, and whether every player stayed in. Nothing else should be running on the machine: the
-// players' copies of the world share its cores with the server's.
+// players' copies of the world share its cores with the server's, so they're run at a lower
+// priority (as if they were on devices of their own), and the world's thread's own CPU time is
+// noted each minute beside its steps, which are timed by the clock.
 //
 //     npm run soak:server                                # 2 hours, 8 players
 //     npm run soak:server -- --minutes 10 --players 4    # a quick look
@@ -39,6 +41,8 @@ export const SERVER_SOAK = Object.freeze({
     // How often (ms) each player plays a little, and how often the server's asked how it's going
     tick: 10,
     every: 60000,
+    // How far behind the server the players' processes are for the machine's cores (os.setPriority)
+    nice: 10,
 });
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -98,6 +102,14 @@ async function play({ port, world, key, name, race, seed }) {
 async function player(options) {
     const child = fork(fileURLToPath(import.meta.url), ["--join", JSON.stringify(options)], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     let answer = null;
+
+    // (Behind the server for the machine's cores, as a player's own device would be)
+    try {
+        os.setPriority(child.pid, SERVER_SOAK.nice);
+    } catch {
+        // (Not allowed here: they share the cores evenly)
+    }
+
     let last = null;
 
     child.on("message", (message) => {
@@ -189,20 +201,26 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         }
 
         const end = started + minutes * 60000;
+        let before = { at: performance.now(), cpu: null };
 
         for (let minute = 1; Date.now() < end; minute++) {
             await new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_SOAK.every, Math.max(0, end - Date.now()))));
 
             const health = await server.manage.health();
             const world = health.worlds.find((one) => one.id === made.world) ?? null;
+            const now = { at: performance.now(), cpu: world?.cpu ?? null };
+            // (The share of one core the world's thread had this minute)
+            const busy = now.cpu && before.cpu ? (now.cpu.user + now.cpu.system - before.cpu.user - before.cpu.system) / 1000 / (now.at - before.at) : null;
+
+            before = now;
             const sample = {
                 minute,
-                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors },
+                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors, busy },
                 server: health.server,
             };
 
             samples.push(sample);
-            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
+            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, its thread ${busy === null ? "?" : `${Math.round(busy * 100)}%`} busy, world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
         }
 
         const reports = [];

@@ -266,6 +266,9 @@ function report() {
         failed: keeper.failed ? { why: keeper.failed.why, message: keeper.failed.error.message } : null,
         steps: runner.times?.toJSON() ?? null,
         memory: { heap: memory.heapUsed, external: memory.external },
+        // (The CPU time this thread has had, µs, user and system: how busy it is, apart from the
+        // rest of the machine)
+        cpu: process.threadCpuUsage?.() ?? null,
         actors: host.battle.actors.length,
     });
 }
