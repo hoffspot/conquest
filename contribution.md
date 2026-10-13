@@ -114,14 +114,18 @@ pull request and 4 hours by hand. It isn't a required check: most pull requests 
 runners cost nothing): the menu-bar app (`mac/`, Swift), put in its bundle with Node and the server
 and signed ad hoc (`npm run build:mac`, below); then it opens the app, finds its item in the menu
 bar (`mac/ci/status-item.swift`), sees its server answer on port 8480, quits it and checks every
-world was saved first; and installs the Homebrew formula from a tap of its own and runs its test.
-It runs by hand (Mac app, Run workflow) and on a pull request that changes `mac/`,
-`scripts/build-mac-app.js`, how the server's started and updated (`server/world.js`, `serve.js`,
+world was saved first; runs the installer (`scripts/install-mac.sh`) as a Mac's owner would, each
+way it installs (a zip marked as downloaded, a release, built there), and takes the app away again;
+and installs the Homebrew formula from a tap of its own and runs its test. It runs by hand (Mac
+app, Run workflow) and on a pull request that changes `mac/`, `scripts/build-mac-app.js`,
+`scripts/install-mac.sh`, how the server's started and updated (`server/world.js`, `serve.js`,
 `launch.js`, `server/update/`), `server/platform/` or the workflow, keeps the zip, the server's
 archive (signed for releases with the project's key, when the repository has it as the Actions
 secret `PELLAGOS_RELEASE_KEY`: `npm run release-key`, below) and the formula with the run as
-`pellagos-server-mac` (and pictures of the screen, its menu open, as `mac-screen`), and is ended at
-30 minutes. It isn't a required check, but
+`pellagos-server-mac` (and pictures of the screen, its menu open and the app the installer put in,
+as `mac-screen`), and is ended at 30 minutes. `test/install-mac.test.js` runs the installer here,
+with stand-ins for the Mac's own tools (`curl`, `osascript`, `codesign`, `ditto`, ...) that note how
+they're asked; it never reaches the internet. It isn't a required check, but
 a pull request that runs it is merged only once it's green: nothing else compiles the Swift. This
 container has no Swift; the app's own checks on a Mac (first launch, the firewall's and Local
 Network's prompts, run at login, sleep) are the owner's (docs/MAC_APP.md).

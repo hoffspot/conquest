@@ -67,7 +67,8 @@ again once cleared, and how to add a theme. [docs/MAGIC.md](docs/MAGIC.md) descr
 magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
 the host works, the spellbook, and how every spell looks. [docs/MAC_APP.md](docs/MAC_APP.md) is
 the guide to Pellagos Server for the Mac, the menu-bar app that keeps worlds for players to come
-and go in: opening it the first time (Open Anyway), what macOS asks, its menu, and building it.
+and go in: installing it (`scripts/install-mac.sh`, one line in Terminal), what macOS asks, its
+menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
 in, and updating it.
@@ -452,7 +453,13 @@ remembered.
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
   keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
   ([docs/MAC_APP.md](docs/MAC_APP.md)), with Homebrew, or with `npm run world-server`; how, and
-  what it keeps, is in [docs/SERVER.md](docs/SERVER.md).
+  what it keeps, is in [docs/SERVER.md](docs/SERVER.md). On a Mac with Apple silicon, this line
+  in Terminal installs the menu-bar app and opens it (before the project's first release, end it
+  with `bash -s -- --build` to build the app on the Mac):
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash
+  ```
 - **Your own world, opened to others.** In the menu, **Invite others** gives a code and a link;
   others choose **Join a world** on the title screen and type the code (or open the link). With a
   world server added, it can also be listed there for its players to join with a tap. Games
