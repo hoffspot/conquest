@@ -1,0 +1,88 @@
+name: Mac app
+
+# The menu-bar app (mac/) built on a Mac, put in its bundle with Node and the server and signed ad
+# hoc (scripts/build-mac-app.js), then opened: its server answering on the usual port, and on Quit
+# every world saved before it goes; and the Homebrew formula installed from a tap of its own and
+# its test run (generated/world_server_plan.md §11, Phase 2; docs/MAC_APP.md). Run by hand
+# (Actions, Mac app, Run workflow), and on a pull request that changes the app, its bundle, or how
+# the server runs for it. A public repository's Mac runners cost nothing. The zip, the server's
+# archive and the formula are kept with the run, for a release; and a picture of the screen with
+# the app running
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - mac/**
+      - scripts/build-mac-app.js
+      - server/world.js
+      - server/platform/**
+      - .github/workflows/mac.yml
+
+concurrency:
+  group: mac-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  mac:
+    # (Apple Silicon, as macOS 27 runs on nothing else)
+    runs-on: macos-15
+    # (About 10 minutes: the Swift build, Node fetched, Homebrew's Node installed)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Build the menu-bar app
+        run: swift build -c release --arch arm64 --package-path mac
+
+      - name: Make the bundle, sign it ad hoc and zip it; the server's archive and the formula
+        run: node scripts/build-mac-app.js --executable "$(swift build -c release --arch arm64 --package-path mac --show-bin-path)/PellagosServer"
+
+      - name: Open the app, see its server answer, and quit it
+        run: |
+          log="$HOME/Library/Logs/io.github.hoffspot.pellagos-server/server.log"
+          open "dist/Pellagos Server.app"
+          for try in $(seq 1 60); do curl -sf http://localhost:8480/api/v1/health && break; sleep 1; done
+          curl -sf http://localhost:8480/api/v1/health
+          curl -sf http://localhost:8481/ > /dev/null
+          pgrep -f "Pellagos Server.app/Contents/Helpers/node"
+          sleep 2
+          screencapture -x dist/screen.png || true
+          # (Quit as the menu's Quit does, by Apple Event; if the runner won't send one, SIGTERM:
+          # the app goes at once, and its server, its pipe closed, saves and stops just the same)
+          perl -e 'alarm 30; exec @ARGV' osascript -e 'tell application id "io.github.hoffspot.pellagos-server" to quit' || pkill -TERM -x PellagosServer
+          for try in $(seq 1 60); do pgrep -f "Pellagos Server.app/Contents/Helpers/node" > /dev/null || break; sleep 1; done
+          ! pgrep -f "Pellagos Server.app/Contents/Helpers/node"
+          ! pgrep -x PellagosServer
+          grep -E "^@pellagos|Saving every world" "$log"
+          grep -q '"state":"stopped"' "$log"
+
+      - name: Install the formula from a tap of its own, and run its test
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          brew tap-new --no-git local/pellagos
+          sed "s|^  url .*|  url \"file://$PWD/dist/pellagos-server-$version.tar.gz\"|" dist/pellagos-server.rb > "$(brew --repository local/pellagos)/Formula/pellagos-server.rb"
+          brew install local/pellagos/pellagos-server
+          brew test local/pellagos/pellagos-server
+
+      - name: Keep the zip, the server's archive and the formula
+        uses: actions/upload-artifact@v4
+        with:
+          name: pellagos-server-mac
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/pellagos-server.rb
+          retention-days: 14
+
+      - name: Keep the picture of the screen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-screen
+          path: dist/screen.png
+          retention-days: 14
+          if-no-files-found: ignore

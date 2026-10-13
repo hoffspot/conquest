@@ -6,3 +6,4 @@ e2e-share.txt
 *.log
 .cache/
 client/motion-report.json
+dist/

@@ -1,8 +1,9 @@
 # The world server: the plan
 
-A plan, being built: S0 to S7 are done: the open internet port (S6: TLS, free certificates, the
-router, Tailscale Funnel, and the game reaching a server), and the broker with players' own worlds
-(S7). The Mac app (S8) is next ([§15](#15-milestones)). It is a living
+A plan, being built: S0 to S8 are done: the open internet port (S6: TLS, free certificates, the
+router, Tailscale Funnel, and the game reaching a server), the broker with players' own worlds
+(S7), and the Mac app (S8, its checks on a Mac the owner's). Running it for real (S9) is next
+([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -995,6 +996,16 @@ cite Apple's TN3179 and the macOS 27 release notes.
   zip with a one-page guide to "Open Anyway" in Privacy & Security, since Control-click › Open no
   longer bypasses Gatekeeper from macOS 15. The firewall asks again after each update, and the page
   says so before an update.
+- **As built (S8).** The app (`mac/`, Swift, macOS 13 or later) runs the bundle's Node on
+  `server/world.js --app`, which says how it stands on lines of its own (`@pellagos {state,
+  players, worlds, awake, page, play, version}`), saves every world and stops on SIGTERM (Stop,
+  Quit, logging out), and stops the same way when the app's pipe to it closes, so it never
+  outlives the app. Run at login registers the bundle's agent, which runs the app itself
+  (`BundleProgram`), with `KeepAlive` `{SuccessfulExit: false}`: started again if it fails, not
+  after Quit; a second copy opened leaves at once. Node keeps its own signature (the OpenJS
+  Foundation's); the app is signed ad hoc around it. `scripts/build-mac-app.js` makes the bundle
+  (`npm run build:mac`), and the macOS workflow (`.github/workflows/mac.yml`) builds, opens and
+  quits it on GitHub's Macs. The guide is docs/MAC_APP.md.
 
 **Updating** (both phases). The owner clicks; nothing updates itself.
 1. Once a day the server checks the project's GitHub releases (free; can be turned off). The page
@@ -1390,6 +1401,23 @@ in the user's order:
   relayed (no ICE getting through) with the world hidden once the server doesn't relay. Not yet:
   one world listed on several servers at once (one broker per world for now), and the server's
   own STUN responder (the free public ones, or none, as its owner says).
+- **S8, done.** The Mac app ([§11](#11-on-the-mac), docs/MAC_APP.md). `server/world.js --app`:
+  how the server stands, a line whenever it changes; stopped, every world saved, by SIGTERM or
+  its input closing. The menu-bar app (`mac/`, SwiftUI's `MenuBarExtra`): the dot (stopped;
+  running, nobody in, so the Mac may sleep; players in, kept awake; starting or stopping), **Open
+  the management page**, **Start**/**Stop**, **Run at login** (`SMAppService.agent`), **Quit**
+  (every world saved first), the server's output in its log. The bundle
+  (`scripts/build-mac-app.js`, `npm run build:mac`): `Info.plist` (`LSUIElement`,
+  `NSLocalNetworkUsageDescription`, `NSBonjourServices` `_pellagos._tcp`), the launch agent
+  (`ProcessType` Interactive, `KeepAlive`), Node 24.21.0 arm64 checked against its release's
+  `SHASUMS256.txt` and the hash kept, the server and the game, signed ad hoc and zipped; the
+  server's source archive and a Homebrew formula (a brew service, Interactive). The macOS
+  workflow builds it all on a Mac, opens the app, sees its server answer, quits it with every world
+  saved, and installs and tests the formula. Measured: `test/world-app.test.js` and
+  `test/mac-app.test.js` here (the bundle's server run from inside it as the app runs it), and the
+  workflow on GitHub's Macs. Not done here, as it needs a Mac and a person: the manual check
+  ([§15](#15-milestones)'s table, docs/MAC_APP.md's list), and publishing the tap and a release,
+  which are the owner's.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1406,6 +1434,9 @@ in the user's order:
 
 **For the repository's owner.** The server's tests run in `npm test`, so CI's `test` job (on
 Linux) runs them with everything else: no new job, and nothing to add to the `main` ruleset.
+The Mac app's workflow (`.github/workflows/mac.yml`, S8) runs on a Mac, by hand and on the pull
+requests that change the app or its bundle. It isn't a required check, as most pull requests
+never run it.
 
 ---
 
@@ -1467,6 +1498,7 @@ questions go here as they come up.
 | 2026-10-13 | **S6a built:** TLS on the one port. `server/world-server.js` listens with a plain TCP listener that hands each connection, by its first byte, to an https half (its certificate set with `setSecureContext`, TLS 1.2 or later, a handshake given 5 s) or a plain http half, both answering alike; told they're listening so their own time limits run (checked every second); every connection closed with the port. Certificates: `server/net/der.js` (DER, written and read), `server/net/x509.js` (ECDSA P-256 keys, certificate requests, certificates signed by another key or their own, TLS-ALPN-01's acmeIdentifier, a certificate described), `server/storage/certificates.js` (kept, checked, `0600`). The `internet` setting (off at first); `guard()` returns where a request is from (`home` or `internet`; the tests make loopback the internet with the `home` option) and takes TLS into account: the internet refused while it's closed (no setting, or no certificate), and over TLS alone once it's open (`secure`; page loads sent on with 308). `api.js` and `play.js` carry where each is from to the access hooks, so the admin key is never taken from the internet; `/admin` is refused there too. Secure addresses (`https://name:port`, one per name the certificate carries) are listed in `/status` once the internet's answered, said in Terminal, and on the management page with the certificate's facts; an owner's own certificate is put in from the page (`PUT /server/certificate`) or its files. The game words `secure` and `internet-closed`. `test/x509.test.js`, `test/tls.test.js` and `e2e/secure.spec.js` are §15's proof so far. | §15's S6, its first part. The owner's own certificate wasn't one of §9.2's routes: it's the plainest way to the internet for an owner who already has one, and it's how the server's TLS is proved before ACME (S6b) gets certificates for it. |
 | 2026-10-13 | **S5 built:** nearby servers on the Wi-Fi. Bonjour in the platform layer: `server/platform/bonjour.js` (the service, the TXT record and its percent-encoded values, the refusals named for the owner, a tool's handle read a line at a time), `dns-sd -R/-B/-L` on macOS (`darwin.js`, with the computer's own name from `scutil`), `avahi-publish-service` and `avahi-browse -rpk` on Linux (`linux.js`), and a refusal on Windows. `server/nearby.js`: advertised under the server's name, advertised again when its TXT changes (at most every 10 s, looked at every 30 s), the others resolved (their IPv4 address looked up) and listed in `/status`'s `nearby`, never itself, lost when they go; refused or stopped, said and tried again a minute later; on and off with the `bonjour` setting. The status card carries the server's name. The guards let a nearby server's pages use the play routes, by exact address. The game's Worlds screen lists the servers a known one finds, "Nearby", added with a tap; the management page's overview says whether it's shown on the Wi-Fi (or why not) and lists the servers near it; `npm run world-server` says so in Terminal. `test/nearby.test.js` (a fake responder: `test/fake-bonjour.js`) and `e2e/nearby.spec.js` are §15's proof. | §15's S5. The nearby servers' origins weren't in the plan: without them, the game from one server's page couldn't use another's, though it found it. The manual check on two Macs needs macOS, so it's the owner's. |
 | 2026-10-13 | **S6b built:** free certificates. `server/net/acme.js` (RFC 8555 on `node:crypto`: ES256 JWS with jwk then kid, nonces and one retry of a stale one, POST-as-GET, orders with a profile and `replaces`, renewal information by RFC 9773's certificate id, TLS-ALPN-01's reverse names), `server/net/dns-hosts.js` (DuckDNS, Cloudflare and deSEC, each by its own API; a record waited for at its zone's own nameservers), `server/certify.js` (the three routes, the account key, `acme.json` without the token, renewal by the CA's window else a third of the life left, retries after 1, 6 and 24 hours, a DuckDNS name pointed home every 5 minutes), TLS-ALPN-01 answered on the one port (`answerChallenge`: SNI and ALPN callbacks on the https half), tokens in the Keychain through `security -i` on its standard input or `certificates/tokens.json`; x509.js's certificates name their key and their issuer's (subject and authority key identifiers), as a renewal's id needs. The API (`GET`, `POST`, `DELETE /server/certificate/acme`, `POST …/renew`), the page's form and how it goes, and Terminal's lines. The page's overview no longer refreshes over an open form. `test/fake-acme.js` is the CA the tests use, `test/acme.test.js` and a third case in `e2e/secure.spec.js` the proof. And the field battle's two crowd tests wait for a sort of the soldiers after everything's drawn: they could look in the half second before it and see more drawn in full than the margin (seen on CI, #372). | §15's S6, its second part. §9.2 had renewal "30 days before expiry" and "every 3 days": Let's Encrypt now says when (renewal information), and a third of the life left is the fallback. DuckDNS's place on the Public Suffix List was checked (§16). Pebble, named in §15, is a Go program: a CA in the tests' own JavaScript runs everywhere `npm test` does, checking the same things. |
+| 2026-10-13 | **S8 built:** the Mac app. `server/world.js --app` (how it stands on `@pellagos` lines; stopped, every world saved, by SIGTERM or its input closing); the menu-bar app in SwiftUI (`mac/`: `ServerProcess.swift` runs the server and reads its lines, `LoginItem.swift` registers the bundle's agent with `SMAppService`); `scripts/build-mac-app.js` (`npm run build:mac`: Info.plist and the agent's plist, Node 24.21.0 arm64 checked against `SHASUMS256.txt` and a hash kept, the server and the game, ad-hoc signing, the zip, the source archive and the Homebrew formula); `.github/workflows/mac.yml`; docs/MAC_APP.md (Open Anyway, the prompts, the menu, the tap, the owner's checks). `test/world-app.test.js`, `test/mac-app.test.js` and the workflow are the proof. | §15's S8. The agent runs the app, not the server alone, so the menu and the server it runs are one, and Quit is Quit. Node inside keeps its own Developer ID signature rather than being signed ad hoc with the app. The tap and releases are published by hand: the workflow makes them and publishes nothing. |
 | 2026-10-13 | **S7 built:** the broker and players' own worlds. `server/broker.js` (`/broker`, the `broker` and `relaying` settings, 3 listings per address and 100 in all, 50 signals an attempt, 15 joiners a world), the status card's `players` and `server.broker`; `app/peer.js` (`BrokerHost`, `BrokerJoin`, 16 KB pieces, back-pressure, relay fallback after 10 s, ICE restart, the reachability check), `openWorld`/`joinWorld` through a broker, Invite others through the server the game came from (or a known one), **List it on**, `?join=CODE&at=`, and the Worlds screen's players' worlds. `test/broker.test.js`, `test/peer.test.js` (with `test/fake-rtc.js`) and `e2e/broker.spec.js` are the proof. | §15's S7. Listings carry `local` as well as `direct`, so a world reachable on its own network is listed to those on it when the server doesn't relay; a keep can list or unlist a world without a new code. The world listed on several servers at once, and the server's own STUN responder, are left for later. |
 | 2026-10-13 | **S6e built:** the game's side of reaching a server. `app/servers.js`: `homeHost`, `addressesOf` (a card's addresses, as the server says them), `candidatesOf` (the order they're tried in), `ServerClient.reach` (the first whose card answers, another server's passed over), `status` keeping the addresses, `you.home` and where it answered, and `test` (Test this server, reported to the server). The Worlds screen's **Test this server**, `#test` from the management page's code, bare addresses tried secure first, and the hand-off link from an https page. `test/servers.test.js`'s new cases and `e2e/reach.spec.js` are the proof. | §15's S6, its fifth and last part. |
 | 2026-10-13 | **S6d built:** the page's internet setup and Tailscale Funnel. The internet panel: **Open to the internet** / **Close to the internet**, then **A way in** (free certificates, one of the owner's own, **Tailscale Funnel**), the router, and **Tested from outside**. `server/funnel.js` (Tailscale's `status`, `serve status`, `funnel --bg --https=443 --yes`, `funnel --https=443 off`; never taking over the owner's own Funnel; the link to allow it), Tailscale's command in the platform layer, the tunnel listener on `127.0.0.1` (`funnel` and `tunnelPort` settings), the guards' tunnel (the internet's, from X-Forwarded-For's last address, by Funnel's name), `/status`'s internet addresses and `you`, `POST /reachability` and `POST /server/funnel`. `test/fake-tailscale.js`, `test/funnel.test.js` and a fifth case in `e2e/secure.spec.js` are the proof. | §15's S6, its fourth part. S6d was split: the game's side (Test this server's button, home-and-away addresses, typed addresses, the Pages hand-off) is S6e, so each PR stays one side. |
