@@ -122,6 +122,15 @@ export async function bodyOf(request, limit = LIMITS_HTTP.body) {
     }
 }
 
+/** A request's address (its target, as a URL), or null if it isn't one (`GET http://[` parses as no URL). */
+export function urlOf(target) {
+    try {
+        return new URL(target, "http://server");
+    } catch {
+        return null;
+    }
+}
+
 /** A JSON answer (with the CORS header for `origin`, if it's one allowed). */
 export function answer(response, status, value, { origin = null } = {}) {
     const text = JSON.stringify(value);

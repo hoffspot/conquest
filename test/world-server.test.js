@@ -347,6 +347,22 @@ describe("what the port refuses (server/guards.js)", () => {
             });
         }
 
+        // (Addresses that aren't addresses, and upgrades to anywhere but the play socket: refused, not thrown or left hanging)
+        const raw = (lines) =>
+            new Promise((resolve) => {
+                let heard = "";
+                const socket = net.connect(server.port, "127.0.0.1", () => socket.write(`${[...lines, `Host: 127.0.0.1:${server.port}`].join("\r\n")}\r\n\r\n`));
+
+                socket.setTimeout(5000, () => socket.destroy());
+                socket.on("data", (data) => (heard += data));
+                socket.on("error", () => {});
+                socket.on("close", () => resolve(heard.split("\r\n")[0]));
+            });
+        const upgrade = ["Connection: Upgrade", "Upgrade: websocket", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==", `Sec-WebSocket-Protocol: ${PLAY_PROTOCOL}`];
+
+        assert.match(await raw(["GET http://[ HTTP/1.1", "Connection: close"]), / 400 /);
+        assert.match(await raw(["GET http://[ HTTP/1.1", ...upgrade]), / 404 /);
+        assert.match(await raw(["GET /elsewhere HTTP/1.1", ...upgrade]), / 404 /);
         assert.equal((await server.call("GET", "/health")).status, 200);
     });
 });

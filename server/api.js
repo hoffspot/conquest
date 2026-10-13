@@ -24,7 +24,7 @@ import { NET_VERSION } from "../client/js/core/netplay.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
-import { answer, bodyOf, guard, Refusal } from "./guards.js";
+import { answer, bodyOf, guard, Refusal, urlOf } from "./guards.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 
@@ -260,12 +260,17 @@ export function apiHandler(server) {
             request.from = "home";
             allowedOrigin = origin ?? null;
 
-            const url = new URL(request.url, "http://server");
-            const route = url.pathname.slice(API_PATH.length) || "/";
+            const url = urlOf(request.url);
+
+            if (!url) {
+                throw new Refusal(400, "bad-request", "That isn't an address on this server.");
+            }
 
             if (url.search) {
                 throw new Refusal(400, "bad-request", "Nothing goes in an address's query here.");
             }
+
+            const route = url.pathname.slice(API_PATH.length) || "/";
 
             if (request.method === "OPTIONS") {
                 response.writeHead(204, {

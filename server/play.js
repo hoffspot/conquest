@@ -18,7 +18,7 @@
 // meanwhile (world-worker.js), and can take it back with the token it was given.
 
 import { createHash } from "node:crypto";
-import { guard, Refusal } from "./guards.js";
+import { guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
 import { hashOf, newToken, sameHash } from "./access/tokens.js";
 import { RECONNECTING, Socket } from "./relay.js";
@@ -247,11 +247,15 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
     };
 
     const upgrade = (request, raw, head) => {
-        if (new URL(request.url, "http://server").pathname !== PLAY_PATH) {
+        const refuse = (status, why) => raw.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+
+        // (Nothing but the play socket takes an upgrade: any other's refused, not left hanging)
+        if (urlOf(request.url)?.pathname !== PLAY_PATH) {
+            refuse(404, "Not Found");
+
             return;
         }
 
-        const refuse = (status, why) => raw.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
         const key = request.headers["sec-websocket-key"];
         const protocols = String(request.headers["sec-websocket-protocol"] ?? "").split(",").map((one) => one.trim());
         let address;

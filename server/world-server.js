@@ -14,7 +14,7 @@ import { isHome } from "./access/addresses.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
-import { answer, guard, hostsOf, LIMITS_HTTP, originsOf, Refusal } from "./guards.js";
+import { answer, guard, hostsOf, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
 import { createStaticHandler } from "./static.js";
@@ -160,9 +160,9 @@ export class WorldServer {
 
     // A request: the API's, or one of the game's own files (both behind the guards)
     #request(request, response) {
-        const { pathname } = new URL(request.url, "http://server");
+        const pathname = urlOf(request.url)?.pathname;
 
-        if (pathname === API_PATH || pathname.startsWith(`${API_PATH}/`)) {
+        if (pathname === API_PATH || pathname?.startsWith(`${API_PATH}/`)) {
             this.api(request, response);
 
             return;
@@ -170,6 +170,10 @@ export class WorldServer {
 
         try {
             guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: undefined }, this);
+
+            if (pathname === undefined) {
+                throw new Refusal(400, "bad-request", "That isn't an address on this server.");
+            }
         } catch (error) {
             if (error instanceof Refusal) {
                 answer(response, error.status, { error: error.error, message: error.message });
