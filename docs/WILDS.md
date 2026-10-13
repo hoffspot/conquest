@@ -48,6 +48,7 @@ two tiers above it, up to their most.
 | Wild bull | 56 | territorial | 1–2 | 2–6 | the humans' wilds only: meadow, farmland |
 | Rook flock | 24 | territorial | 1 | 1–4 | the humans' wilds only: farmland, meadow |
 | Knucker | 70 | territorial | 1 | 3–8 | the humans' wilds only: woods, marsh, meadow |
+| Hodmedod | 44 | aggressive | 1 | 2–7 | the humans' wilds only: farmland, at night |
 | Will-o'-wisp | 22 | aggressive | 1–2 | 1–7 | the elves' wilds only |
 | Blighted treant | 80 | territorial | 1 | 4–9 | the elves' wilds only |
 | Mandrake | 20 | defensive | 1–2 | 1–4 | the elves' wilds only: elfwood |
@@ -60,6 +61,8 @@ two tiers above it, up to their most.
 | Cave olm | 26 | territorial | 1–2 | 1–4 | the dark elves' wilds only |
 | Giant centipede | 26 | aggressive | 1–2 | 1–5 | the dark elves' wilds only |
 | Basilisk | 44 | territorial | 1 | 3–7 | the dark elves' wilds only |
+| Draugr | 72 | aggressive | 1–2 | 4–9 | the dark elves' wilds only |
+| Mare | 34 | aggressive | 1 | 2–6 | the dark elves' wilds only, at night |
 | Hyena | 22 | aggressive | 2–5 | 1–7 | the cat folk's wilds only |
 | Sand scorpion | 30 | territorial | 1–2 | 1–7 | the cat folk's wilds only |
 | Jackal | 18 | aggressive | 2–4 | 1–4 | the cat folk's wilds only |
@@ -96,8 +99,8 @@ their coils round whoever they're after (crushing and slowing them), a kelpie's 
 ahuizotl's tail-hand drag whoever they hold (slowing them), a chimera's serpent tail strikes
 (venomous) and it breathes fire as the dragon does, the
 will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
-spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
-whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
+spits webs, the dragon breathes fire, the wight lord and a draugr lay a curse, a mare sends
+nightmares (withering), a ghost wails (staggering whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
 as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws wither.
 The bog frog's tongue reaches two squares off. The rock tusker's charge, a Cape buffalo's, and a
 kelpie's hooves knock whoever they catch off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
@@ -121,8 +124,8 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
-buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, dragons, ghosts, wraiths, frost
-trolls: creatures.js
+buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, draugar, dragons, ghosts, wraiths,
+mares, frost trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
@@ -455,13 +458,14 @@ The caches and how far each player's crossed the wilds since the last are kept i
 The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own
 hours (`night` in `CREATURES`; the terrain plan's M7e-3):
 - **The night's own** (`night: "only"`): the bat swarms, the skeletons out in the open, the
-  will-o'-wisps, the black shuck and the shadow stalkers are out only after dark (from half through
+  will-o'-wisps, the black shuck, the shadow stalkers, the hodmedods and the mares are out only
+  after dark (from half through
   the dusk to half through the dawn, when the guards' torches are lit). At daybreak those out of
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
   put out by day. The skeletons of the undead camps and the ruined castles are always there.
 - **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions,
   badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies, giant centipedes, kelpies,
-  ahuizotls and cultists are met twice as often after dark, and the night's own three times
+  ahuizotls, draugar and cultists are met twice as often after dark, and the night's own three times
   (`NIGHT_WEIGHT`).
 - **More of them:** after dark the host keeps one more (`WILDS.night`) about each player out in
   the world, five in all.
@@ -499,11 +503,11 @@ an adder's near home.
 | Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
 | --- | --- | --- | --- | --- | --- |
 | Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom, a chimera's serpent tail | Cure poison draught, 12 gold |
-| Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, boggarts | Cure disease draught, 18 gold |
-| Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite, a wraith's claws and draining | Invigorating draught, 22 gold |
+| Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, draugar, boggarts | Cure disease draught, 18 gold |
+| Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse and a draugr's, the black shuck's bite, a wraith's claws and draining, a mare's nightmares | Invigorating draught, 22 gold |
 | Burning | 4 s | 1 every 0.8 s | | the dragon's fire and a chimera's, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
-| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, harts' antlers, ahuizotls, chimeras' claws, the dragon's bite... | Bandage, 5 gold |
-| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare, a kelpie's bite, an ahuizotl's tail-hand | Quickening draught, 10 gold |
+| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, harts' antlers, ahuizotls, chimeras' claws, a hodmedod's sickle, the dragon's bite... | Bandage, 5 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare, a kelpie's bite, an ahuizotl's tail-hand, a mare's weight | Quickening draught, 10 gold |
 
 Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
 **Diseased** too, for an hour: stamina comes back at 40%, but it doesn't hurt; the Cure disease
@@ -535,8 +539,9 @@ swirling, a wraith's draining green and dark, bursting in shadow; a mandrake's s
 ghost's wail does, a salamander's fire as lava, a death worm's acid as venom, a basilisk's glare
 as a curse. What doesn't bleed red spills its own when struck: a slime's gel, a spider's,
 scorpion's or centipede's ichor, a treant's or a
-mandrake's sap, a skeleton's and a wight lord's bone chips, a rock tusker's stone chips, lava from
-a magma slime, shadow from a black shuck or a shadow stalker or a wraith, a ghost's pale motes.
+mandrake's sap, a skeleton's, a draugr's and a wight lord's bone chips, a rock tusker's stone
+chips, a hodmedod's straw, lava from a magma slime, shadow from a black shuck, a shadow stalker, a
+wraith or a mare, a ghost's pale motes.
 
 ## What they leave
 
@@ -656,7 +661,8 @@ smaller, its colour a little different, its markings its own.
   basilisk's crown of spikes (`crest`); a knucker's great head with fins swept back from it, and
   a ridge of them down its back (`head`, `fins`); a giant centipede's pair of legs to each piece of
   its length, rippling as it goes, its feelers, and its footfalls a spider's skitter (`legs`,
-  `feet`).
+  `feet`). A snake narrows to a fine tail; a giant leech, a death worm and a centipede hardly at
+  all, blunt at both ends (`taper`).
 - **Eight-legged** (`arachnid.js`): each leg reaches for its own place on the ground, spread round
   the body like the spokes of a wheel so none crosses another or the body, and bends its two bones
   to reach it each moment (knee up); walking, the feet stay planted as the body goes over them,
@@ -677,8 +683,14 @@ smaller, its colour a little different, its markings its own.
   lowest floating; collarbones, shoulder blades, the pelvis; the forearm's and shin's two bones
   each, hands and feet of their many small bones. The wight lord's cape is cloth: a grid of points
   joined by threads, fastened across its shoulders, falling under its own weight, streaming back as
-  it walks, kept out of its legs, its hem torn. A treant's crown is boughs forking into branches
-  and twigs, sparse leaves at their tips.
+  it walks, kept out of its legs, its hem torn. A draugr's flesh is dried dark and shrunk onto its
+  bones (`flesh`: over its ribs, belly and hips, the top and back of its skull, its arms and legs;
+  its face's bone showing, lank hair hanging), and it wears rusted barrow mail to the knee, a belt
+  and an old helm (`mail`). A treant's crown is boughs forking into branches and twigs, sparse
+  leaves at their tips. A hodmedod is a scarecrow come alive (`kind: "scarecrow"`), sculpted in one
+  piece as a treant is: a sack for a head tied off at the neck, its eyes alight and its mouth
+  stitched, an old hat; a ragged, patched coat hanging in skirts below the waist, breeches and
+  boots; straw spilling out at the cuffs, the neck and the ankles; a sickle in its hand.
 - **The restless dead that never lay down** (`spectre.js`): no legs, a hooded shroud sculpted in
   one piece (sculpt.js) from the hood to the tatters it ends in, each tatter two joints that stir
   as it hangs and stream back as it glides; sleeves sculpted held out from the body, so each goes
@@ -691,7 +703,9 @@ smaller, its colour a little different, its markings its own.
   spread, brightening; resting, it drifts, mourns (head bowed, hands to its face) or fades almost
   away; struck, it flickers; dying, it sinks and fades to nothing. A wraith rakes with both claws,
   claws, or holds out its hand to drain; resting, it hovers, looms (rising tall, arms spread) or
-  turns slowly; dying, it collapses into its empty robe, its lights going out. A ghost is four
+  turns slowly; dying, it collapses into its empty robe, its lights going out. A **mare** is a
+  wraith smaller and hunched (`hunch`), bent forward with its head raised to look ahead, its arms
+  hanging long before it. A ghost is four
   things to draw and three soft lights, about 17,000 triangles; a wraith three and two, about
   14,000 (a skeleton's about 20,000).
 - **People-shaped** (bandits, cultists, goblins, boggarts, trolls, ogres, frost trolls) are built

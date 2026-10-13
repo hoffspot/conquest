@@ -140,7 +140,8 @@ export const LOOKS = Object.freeze({
     // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite; an
     // old badger, white-faced, holding its ground; a white wild bull of an old park's herd, dark
     // at the ears and muzzle, its horns sweeping out and up; a flock of rooks, black, pale-beaked;
-    // the knucker, the water dragon of the Sussex pools, a great dark serpent with a finned head)
+    // the knucker, the water dragon of the Sussex pools, a great dark serpent with a finned head; a
+    // hodmedod, a scarecrow come alive in the fields at night)
     blackShuck: {
         body: "quadruped",
         scale: [1, 1.1],
@@ -156,8 +157,8 @@ export const LOOKS = Object.freeze({
         scale: [0.9, 1.1],
         length: 0.8, height: 0.34, girth: 0.17, width: 0.17, chest: 1.05, haunch: 1.05, neck: 0.1, neckUp: 0.12,
         head: [0.08, 0.075, 0.11], snout: { length: 0.12, radius: 0.04, taper: 0.5 }, ears: "small", legs: 0.05, plantigrade: true, claws: 1.3,
-        tail: { length: 0.16, radius: 0.04, lift: -0.4 }, muzzleMarks: true,
-        colours: { fur: 0x5e5b56, saddle: 0x45423e, belly: 0x1a1816, dark: 0x100e0c, mask: 0xece8e0, eyes: 0x0a0806 },
+        tail: { length: 0.3, radius: 0.034, lift: -0.25, curl: 0.06, taper: 0.5 }, muzzleMarks: true,
+        colours: { fur: 0x5e5b56, tail: 0x8a8680, saddle: 0x45423e, belly: 0x1a1816, dark: 0x100e0c, mask: 0xece8e0, eyes: 0x0a0806 },
         attacks: ["bite", "shake", "swipe"], rests: ["sniff", "root", "scratch", "lie"],
     },
     wildBull: {
@@ -165,7 +166,7 @@ export const LOOKS = Object.freeze({
         scale: [0.95, 1.08],
         length: 2, height: 1.4, girth: 0.33, width: 0.27, chest: 1.2, haunch: 0.95, neck: 0.32, neckUp: 0.12,
         head: [0.13, 0.16, 0.24], snout: { length: 0.24, radius: 0.095, taper: 0.95, flat: 1.1 }, ears: "round", legs: 0.1, hooves: true,
-        horns: 0.5, hornSweep: "out", tail: { length: 0.8, radius: 0.026, lift: -1.4, curl: 0.05, taper: 0.5 }, tipColour: 0x2a2420,
+        horns: 0.5, hornSweep: "out", tail: { length: 1.05, radius: 0.028, lift: -1.45, curl: 0.04, taper: 0.5 }, tipColour: 0x2a2420,
         colours: { fur: 0xe8e2d4, belly: 0xdcd4c4, dark: 0x2a2420, mask: 0xd2c8b8, ears: 0x2a2420, ivory: 0xe0d4b8, eyes: 0x140c08 },
         attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie", "root"],
     },
@@ -182,6 +183,13 @@ export const LOOKS = Object.freeze({
         length: 5, thickness: 0.22, segments: 24, head: 1.5, fins: true,
         colours: { scales: 0x3a4a3a, bands: 0x2a3428, belly: 0x8a9a6a, fins: 0x5a7a5a, eyes: 0xe0c040 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
+    },
+    hodmedod: {
+        body: "biped",
+        scale: [0.95, 1.08],
+        kind: "scarecrow", height: 1.85, weapon: "sickle",
+        colours: { coat: 0x4a4a3a, breeches: 0x5e4c34, sack: 0xb89c6a, patch: 0x6a5a40, straw: 0xd8b860, twine: 0x8a7a50, hat: 0x2a241c, eyes: 0xffa020, dark: 0x1a140e, metal: 0x8a847a, handle: 0x6a4a2a },
+        attacks: ["slash", "thrust", "chop"], rests: ["slump", "rattle", "look"],
     },
     // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
     // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
@@ -229,7 +237,7 @@ export const LOOKS = Object.freeze({
         scale: [0.95, 1.08],
         length: 1.5, height: 1.3, girth: 0.21, width: 0.17, chest: 1.12, haunch: 1, neck: 0.42, neckUp: 0.8,
         head: [0.085, 0.095, 0.15], snout: { length: 0.2, radius: 0.05, taper: 0.7 }, ears: "big", legs: 0.045, hooves: true, antlers: 0.6,
-        tail: { length: 0.14, radius: 0.04, lift: -0.5, curl: 0.1 },
+        tail: { length: 0.3, radius: 0.045, lift: -0.65, curl: 0.06, taper: 0.6 }, tipColour: 0x3a2416,
         colours: { fur: 0x8a5634, belly: 0xc8a882, dark: 0x2a1a10, mask: 0x7a4c2e, saddle: 0x6a4228, ivory: 0xd8c8a4, eyes: 0x140c08 },
         attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie", "root"],
     },
@@ -238,13 +246,14 @@ export const LOOKS = Object.freeze({
         scale: [0.95, 1.08],
         length: 1.9, height: 1.6, girth: 0.3, width: 0.24, chest: 1.15, haunch: 1.05, neck: 0.62, neckUp: 0.85,
         head: [0.1, 0.12, 0.18], snout: { length: 0.34, radius: 0.075, taper: 0.85 }, ears: "pointed", legs: 0.07, hooves: true, mane: "horse",
-        tail: { length: 0.9, radius: 0.08, bushy: true, lift: -1.35, curl: 0.05 }, roughness: 0.35,
+        tail: { length: 1.25, radius: 0.08, bushy: true, lift: -1.45, curl: 0.04 }, roughness: 0.35,
         colours: { fur: 0x1e2422, belly: 0x262e2a, dark: 0x0a0c0a, mane: 0x2a5a3a, tail: 0x2a5a3a, mask: 0x1a201e, eyes: 0x70e0c0, glow: 0x50d0a0 },
         attacks: ["bite", "stamp", "toss"], rests: ["sniff", "shake", "root"],
     },
     // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
     // a blind cave salamander grown big, pale pink, its gills a frill behind its head; a giant
-    // centipede, red-brown, its yellow legs rippling; the basilisk, a small serpent crowned)
+    // centipede, red-brown, its yellow legs rippling; the basilisk, a small serpent crowned; a
+    // draugr, the barrow's dead risen in its mail; a mare, hunched, riding sleepers' dreams)
     caveSpider: {
         body: "arachnid",
         scale: [0.9, 1.15],
@@ -273,7 +282,7 @@ export const LOOKS = Object.freeze({
     centipede: {
         body: "serpent",
         scale: [0.9, 1.15],
-        length: 1.4, thickness: 0.06, segments: 16, legs: true, banded: true, feet: "legs",
+        length: 1.4, thickness: 0.06, segments: 16, legs: true, banded: true, feet: "legs", taper: 0.35,
         colours: { scales: 0x5a1a14, bands: 0x2a0c0a, belly: 0xa86030, legs: 0xd8a040, eyes: 0x0a0806 },
         attacks: ["strike", "double"], rests: ["coil", "bask"],
     },
@@ -283,6 +292,20 @@ export const LOOKS = Object.freeze({
         length: 1.3, thickness: 0.07, segments: 16, crest: 3, zigzag: true,
         colours: { scales: 0x3a4a2a, bands: 0x1a2214, belly: 0xa8b080, crown: 0xf0ecd8, eyes: 0xe8d040 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
+    },
+    draugr: {
+        body: "biped",
+        scale: [0.98, 1.08],
+        kind: "skeleton", height: 2.05, weapon: "sword", flesh: true, mail: true,
+        colours: { bone: 0x9a9284, flesh: 0x3e4650, hair: 0x2e2c28, mail: 0x6a6660, metal: 0x5a5448, eyes: 0x80b8ff, dark: 0x2c323a },
+        attacks: ["slash", "thrust", "chop"], rests: ["slump", "look"], specials: ["curse"],
+    },
+    mare: {
+        body: "spectre",
+        scale: [0.92, 1.05],
+        kind: "wraith", height: 1.4, hunch: 0.55,
+        colours: { shroud: 0x2a2430, glow: 0x4a2a6a, bone: 0x9a8a90, eyes: 0xd0a8ff },
+        attacks: ["rake", "claw"], rests: ["hover", "turn"], specials: ["drain"],
     },
     // (Cat folk: the hyena, in packs; the sand scorpion; the black-backed jackal, slight and big-
     // eared; the Cape buffalo, heavy-horned and near black; the Nandi bear, a great sloping beast
@@ -309,7 +332,7 @@ export const LOOKS = Object.freeze({
         scale: [0.9, 1.08],
         length: 0.85, height: 0.6, girth: 0.12, width: 0.105, chest: 1.12, haunch: 0.92, neck: 0.26, neckUp: 0.45,
         head: [0.085, 0.08, 0.1], snout: { length: 0.16, radius: 0.034, taper: 0.55 }, ears: "big", legs: 0.04,
-        tail: { length: 0.34, radius: 0.045, bushy: true, lift: -0.9, curl: 0.1 }, tipColour: 0x1a1410,
+        tail: { length: 0.36, radius: 0.034, bushy: true, lift: -1.05, curl: 0.1 }, tipColour: 0x1a1410,
         colours: { fur: 0xb47c42, saddle: 0x2a2420, belly: 0xe4ccaa, mask: 0xc8a070, dark: 0x1e1814, eyes: 0x8a5a20 },
         attacks: ["bite", "snap", "shake"], rests: ["sit", "lie", "sniff", "howl", "scratch"],
     },
@@ -318,7 +341,7 @@ export const LOOKS = Object.freeze({
         scale: [0.95, 1.08],
         length: 2.1, height: 1.4, girth: 0.44, width: 0.35, chest: 1.25, haunch: 1, neck: 0.28, neckUp: 0.05,
         head: [0.14, 0.17, 0.24], snout: { length: 0.22, radius: 0.1, taper: 0.95, flat: 1.15 }, ears: "big", legs: 0.11, hooves: true,
-        horns: 0.55, hornSweep: "out", tail: { length: 0.75, radius: 0.025, lift: -1.4, curl: 0.05, taper: 0.5 }, tipColour: 0x0e0c0a,
+        horns: 0.55, hornSweep: "out", tail: { length: 1, radius: 0.028, lift: -1.45, curl: 0.04, taper: 0.5 }, tipColour: 0x0e0c0a,
         colours: { fur: 0x2c2622, belly: 0x3a322c, dark: 0x120e0c, mask: 0x2a2420, ivory: 0x4a4238, eyes: 0x0a0806 },
         attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie"],
     },
@@ -367,7 +390,7 @@ export const LOOKS = Object.freeze({
     giantLeech: {
         body: "serpent",
         scale: [0.9, 1.2],
-        length: 0.75, thickness: 0.08, segments: 10, banded: true,
+        length: 0.75, thickness: 0.08, segments: 10, banded: true, taper: 0.25,
         colours: { scales: 0x2e3020, bands: 0x7a6a30, belly: 0x5a5236, eyes: 0x1a1a10 },
         attacks: ["strike", "double"], rests: ["coil", "bask"],
     },
@@ -399,7 +422,7 @@ export const LOOKS = Object.freeze({
         scale: [0.92, 1.1],
         length: 1, height: 0.42, girth: 0.13, width: 0.13, chest: 1.05, haunch: 1.05, neck: 0.16, neckUp: 0.2,
         head: [0.075, 0.065, 0.09], snout: { length: 0.08, radius: 0.042, taper: 0.8, flat: 1.25 }, ears: "small", legs: 0.042, claws: 1.2,
-        tail: { length: 0.8, radius: 0.045, lift: -0.25, curl: 0.04, taper: 0.45, hand: 0.11 }, roughness: 0.35,
+        tail: { length: 0.65, radius: 0.055, lift: -0.35, curl: 0.06, taper: 0.5, hand: 0.11 }, roughness: 0.35,
         colours: { fur: 0x16161a, belly: 0x222228, dark: 0x060608, mask: 0x1a1a1e, hand: 0x3a2c26, eyes: 0xd8a020 },
         attacks: ["bite", "snap", "tailSlap", "shake"], rests: ["sit", "lie", "sniff", "groom"],
     },
@@ -428,7 +451,7 @@ export const LOOKS = Object.freeze({
         scale: [0.9, 1.15],
         length: 0.75, height: 0.2, girth: 0.09, width: 0.13, chest: 1, haunch: 1, neck: 0.08, neckUp: 0, lowSlung: true, clearance: 1.4,
         head: [0.065, 0.05, 0.075], snout: { length: 0.06, radius: 0.045, taper: 0.9, flat: 1.3 }, ears: "none", legs: 0.035, fangs: false,
-        tail: { length: 0.3, radius: 0.06, lift: -0.1, curl: 0.02, taper: 0.7 }, stripes: 9, flat: true, roughness: 0.8,
+        tail: { length: 0.26, radius: 0.075, lift: -0.1, curl: 0.02, taper: 0.45 }, stripes: 9, flat: true, roughness: 0.8,
         colours: { fur: 0x2a1e18, belly: 0x3a2a20, dark: 0xe8845a, eyes: 0x0a0806 },
         attacks: ["bite", "shake"], rests: ["bask", "lie"],
     },
@@ -437,14 +460,14 @@ export const LOOKS = Object.freeze({
         scale: [0.9, 1.15],
         length: 1.1, height: 0.24, girth: 0.09, width: 0.13, chest: 1, haunch: 1, neck: 0.1, neckUp: 0, lowSlung: true, clearance: 1.5,
         head: [0.075, 0.05, 0.09], snout: { length: 0.08, radius: 0.045, taper: 0.85, flat: 1.35 }, ears: "none", legs: 0.035, fangs: false,
-        tail: { length: 0.55, radius: 0.06, lift: -0.1, curl: 0.03, taper: 0.9 }, spots: 26, flat: true, roughness: 0.3,
+        tail: { length: 0.85, radius: 0.06, lift: -0.1, curl: 0.03, taper: 0.8 }, spots: 26, flat: true, roughness: 0.3,
         colours: { fur: 0x1a1412, belly: 0x2a1e18, dark: 0xf0a020, eyes: 0xffa020, glow: 0xff7010 },
         attacks: ["bite", "tailSlap"], rests: ["bask", "lie"], specials: ["spit"],
     },
     deathWorm: {
         body: "serpent",
         scale: [0.9, 1.15],
-        length: 2.2, thickness: 0.13, segments: 16, banded: true,
+        length: 2.2, thickness: 0.13, segments: 16, banded: true, taper: 0.4,
         colours: { scales: 0xa83a2a, bands: 0x7a2418, belly: 0xd88a6a, eyes: 0x3a0a08 },
         attacks: ["strike", "double"], rests: ["coil", "bask"], specials: ["spit"],
     },

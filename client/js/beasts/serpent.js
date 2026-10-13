@@ -21,7 +21,8 @@ const smooth = (u) => u * u * (3 - 2 * u);
  * how wide a hood spreads beside its neck, as many times its body's width; `crest`, how many
  * spikes crown its head; `fins` on its head and down its back; `legs`, a pair to each piece of its
  * length; `head`, how much bigger its head is than a snake's; `rear`, how many times as high as a
- * snake's it holds its front up when it's still).
+ * snake's it holds its front up when it's still; `taper`, how much of its width it loses by its
+ * tail's end: a snake's most of it, a leech's or a worm's little, blunt at both ends).
  */
 export function serpent(look, random, key = null) {
     const { length, thickness } = look;
@@ -50,7 +51,7 @@ export function serpent(look, random, key = null) {
 
     // Its length: a bone every so far along, each with its piece of body, tapering to the tail
     for (let k = 0; k < count; k++) {
-        const taper = 1 - (k / count) ** 1.5 * 0.85;
+        const taper = 1 - (k / count) ** 1.5 * (look.taper ?? 0.85);
         const radius = thickness * taper * (k < 2 ? 0.8 + k * 0.1 : 1);
         const bead = joint(body, `bead-${k}`, [0, thickness * 0.85, -(k + 0.5) * spacing]);
 

@@ -3,9 +3,13 @@
 // spine's vertebrae, twelve pairs of ribs, collarbones and shoulder blades, a pelvis, the long
 // bones of the limbs, hands and feet), the wight lord (a skeleton in blackened armour, crowned, a
 // tattered cape hanging from its shoulders and moving as cloth does, cloth.js, with a greatsword),
-// and a treant (a trunk sculpted in one piece with its limbs, sculpt.js: a face in its bark,
-// branches for arms with twigs for fingers, roots for feet, and a crown of boughs forking into
-// branches and twigs, sparse leaves at their tips; blighted, grey and fungus-grown).
+// a draugr (a skeleton with its flesh dried black and shrunk onto its bones, lank hair, in rusted
+// barrow mail and an old helm), a treant (a trunk sculpted in one piece with its limbs,
+// sculpt.js: a face in its bark, branches for arms with twigs for fingers, roots for feet, and a
+// crown of boughs forking into branches and twigs, sparse leaves at their tips; blighted, grey and
+// fungus-grown), and a scarecrow come alive (a hodmedod: sculpted in one piece too, a sack for a
+// head with its eyes alight and its mouth stitched, an old hat, a ragged coat and breeches stuffed
+// with straw, straw spilling out at the cuffs, the neck and the boots; a sickle in its hand).
 //
 // Each walks and runs (legs swinging, knees lifting, arms swinging against them). A skeleton
 // slashes, thrusts or chops, and the wight lord lays a curse; resting, it slumps, rattles its jaw,
@@ -18,7 +22,7 @@ import * as THREE from "three";
 import { Sculpt } from "./sculpt.js";
 import { arm as armBones, leg as legBones, skull, trunk } from "./bones.js";
 import { Cloth } from "./cloth.js";
-import { aim, box, cone, ellipsoid, joint, limb, membrane, part, ring, shade, skin } from "./shapes.js";
+import { aim, box, cone, CONE_WAY, ellipsoid, joint, limb, membrane, part, ring, shade, skin } from "./shapes.js";
 
 const TAU = Math.PI * 2;
 const smooth = (u) => u * u * (3 - 2 * u);
@@ -30,16 +34,23 @@ const spineOf = (H, treant) => H * (treant ? 0.42 : 0.3);
 const LEAF = [[0, 0], [0.4, 0.25], [0.5, 0.6], [0.3, 0.95], [0, 1.25], [-0.3, 0.95], [-0.5, 0.6], [-0.4, 0.25]];
 
 /**
- * Build a biped from its look ({ kind: "skeleton" or "treant", height (m), colours, armour,
- * crown, cloak, weapon: "sword" or "greatsword", blight }).
+ * Build a biped from its look ({ kind: "skeleton", "treant" or "scarecrow", height (m), colours,
+ * armour, crown, cloak, weapon: "sword", "greatsword" or "sickle", blight; a skeleton's `flesh`
+ * dried on its bones and its `mail`, colours.flesh, hair and mail }).
  */
 export function biped(look, random, key = null) {
     const H = look.height;
     const treant = look.kind === "treant";
+    const scarecrow = look.kind === "scarecrow";
+    const sculpted = treant || scarecrow;
     const colours = look.colours;
-    const main = treant ? new THREE.MeshStandardMaterial({ roughness: 1 }) : skin(colours.bone ?? 0xd8cfb4, { roughness: 0.65 });
+    const main = sculpted ? new THREE.MeshStandardMaterial({ roughness: 1 }) : skin(colours.bone ?? 0xd8cfb4, { roughness: 0.65 });
     const bark = new THREE.Color(colours.bark ?? 0x4a4038);
-    const sculpt = treant ? new Sculpt({ blend: H * 0.04, grain: "bark", grainSize: H * 0.012, countershade: 0.05 }) : null;
+    const sculpt = treant
+        ? new Sculpt({ blend: H * 0.04, grain: "bark", grainSize: H * 0.012, countershade: 0.05 })
+        : scarecrow
+          ? new Sculpt({ blend: H * 0.025, grain: "fur", grainSize: H * 0.008, countershade: 0.08 })
+          : null;
     const dark = skin(colours.dark ?? shade(treant ? colours.bark : colours.bone ?? 0xd8cfb4, -0.6).getHex(), { roughness: 0.9 });
     const eyes = skin(colours.eyes ?? 0xff6020, { glow: colours.eyes ?? 0xff6020, glowing: 2.4 });
     const metal = skin(colours.metal ?? 0x6e6458, { roughness: 0.55, metalness: 0.6 });
@@ -52,6 +63,17 @@ export function biped(look, random, key = null) {
             part(parent, limb(...shape.limb, 6), main, { at, turn });
         } else {
             part(parent, ellipsoid(...shape.ellipsoid, 10), main, { at, turn });
+        }
+    };
+
+    // (A tuft of straw sticking out of a scarecrow, `way` it points, `long` each straw's length
+    // as a share of its height)
+    const straw = scarecrow ? skin(colours.straw ?? 0xd8b860, { roughness: 1 }) : null;
+    const tuft = (from, at, way, count, long) => {
+        for (let k = 0; k < count; k++) {
+            const spread = [way[0] + (random() - 0.5) * 1.2, way[1] + (random() - 0.5) * 0.6, way[2] + (random() - 0.5) * 1.2];
+
+            part(from, cone(H * long * (0.7 + random() * 0.6), H * 0.007, 3), straw, { at, turn: aim(spread, CONE_WAY), shadow: false });
         }
     };
 
@@ -179,6 +201,46 @@ export function biped(look, random, key = null) {
                 part(torso, ellipsoid(H * 0.035, H * 0.012, H * 0.035, 7), fungus, { at: [Math.sin(round) * H * 0.15, spine * (0.15 + random() * 0.7), Math.cos(round) * H * 0.15], turn: [0, 0, Math.sin(round) * 0.3], shadow: false });
             }
         }
+    } else if (scarecrow) {
+        // A stuffed body: breeches at the hips, a ragged coat over the belly and chest, broad at
+        // the shoulders and hanging in skirts below the waist; a sack for a head on a neck tied
+        // off with twine, straw sticking out under it; eyes alight, a mouth stitched shut, an
+        // old hat
+        const coat = new THREE.Color(colours.coat);
+        const sack = new THREE.Color(colours.sack);
+
+        sculpt.add(body, { ellipsoid: [H * 0.085, H * 0.06, H * 0.06] }, colours.breeches);
+        sculpt.add(torso, { ellipsoid: [H * 0.08, spine * 0.42, H * 0.058] }, coat, { at: [0, spine * 0.35, 0] });
+        sculpt.add(chest, { ellipsoid: [H * 0.095, spine * 0.32, H * 0.062] }, coat, { at: [0, spine * 0.15, 0] });
+        sculpt.add(chest, { ellipsoid: [shoulderWidth * 1.15, H * 0.032, H * 0.058] }, coat, { at: [0, spine * 0.4, 0] });
+        sculpt.add(body, { limb: [H * 0.17, H * 0.088, H * 0.105] }, coat, { at: [0, H * 0.04, 0] });
+        sculpt.add(neck, { limb: [neckLength * 1.1, H * 0.026, H * 0.03] }, sack, { turn: [Math.PI, 0, 0] });
+        sculpt.add(head, { ellipsoid: [H * 0.058, H * 0.068, H * 0.056] }, sack, { at: [0, H * 0.055, 0] });
+        sculpt.add(head, { ellipsoid: [H * 0.036, H * 0.026, H * 0.036] }, sack, { at: [H * 0.014, H * 0.112, -H * 0.012] });
+
+        // (Patches on the coat)
+        for (let k = 0; k < 3; k++) {
+            sculpt.paint(torso, [H * 0.03, H * 0.03, H * 0.06], colours.patch ?? shade(colours.coat, 0.25).getHex(), { at: [(random() - 0.5) * H * 0.12, spine * (0.2 + random() * 0.6), H * 0.03], soft: H * 0.004, strength: 0.9 });
+        }
+
+        part(neck, ring(H * 0.03, H * 0.005, TAU, 10), skin(colours.twine ?? 0x8a7a50, { roughness: 1 }), { at: [0, neckLength * 0.55, 0], turn: [Math.PI / 2, 0, 0], shadow: false });
+        tuft(neck, [0, neckLength * 0.4, 0], [0, -0.4, 0], 12, 0.06);
+
+        for (const side of [-1, 1]) {
+            part(head, ellipsoid(H * 0.013, H * 0.009, H * 0.006, 8), eyes, { at: [side * H * 0.023, H * 0.072, H * 0.054], shadow: false });
+        }
+
+        jaw = joint(head, "jaw", [0, H * 0.035, H * 0.05]);
+        part(jaw, box(H * 0.05, H * 0.004, H * 0.006), dark, { at: [0, 0, H * 0.004], shadow: false });
+
+        for (let k = 0; k < 5; k++) {
+            part(jaw, box(H * 0.003, H * 0.015, H * 0.004), dark, { at: [(k - 2) * H * 0.011, 0, H * 0.005], shadow: false });
+        }
+
+        const hat = skin(colours.hat ?? 0x2a241c, { roughness: 1 });
+
+        part(head, ellipsoid(H * 0.12, H * 0.006, H * 0.115, 16), hat, { at: [0, H * 0.112, -H * 0.004], turn: [0.1, 0, 0.08] });
+        part(head, ellipsoid(H * 0.056, H * 0.05, H * 0.056, 12), hat, { at: [0, H * 0.14, -H * 0.008], turn: [0.1, 0, 0.08] });
     } else {
         // Its bones (bones.js): the spine, ribs, shoulders and pelvis; the skull and its jaw
         const bone = colours.bone ?? 0xd8cfb4;
@@ -230,6 +292,38 @@ export function biped(look, random, key = null) {
             cloth = new Cloth({ columns: 9, rows: 13, width: shoulderWidth * 2.1, drop: spine * 0.95 + legLength * 0.8, flare: 0.6, colour: colours.cloak, random });
             object.add(cloth.mesh);
         }
+
+        // (A draugr's flesh, dried dark and shrunk onto its bones: over its ribs, its belly and
+        // hips and the top and back of its skull, the face's bone showing; lank hair hanging)
+        if (look.flesh) {
+            const dried = skin(colours.flesh, { roughness: 0.85 });
+            const hair = skin(colours.hair ?? 0x2a2a26, { roughness: 1 });
+
+            part(chest, ellipsoid(H * 0.07, spine * 0.34, H * 0.048, 12), dried, { at: [0, spine * 0.22, 0] });
+            part(torso, ellipsoid(H * 0.052, spine * 0.32, H * 0.038, 10), dried, { at: [0, spine * 0.28, 0] });
+            part(body, ellipsoid(H * 0.068, H * 0.045, H * 0.044, 10), dried);
+            part(head, ellipsoid(0.074 * s, 0.062 * s, 0.098 * s, 12), dried, { at: [0, 0.076 * s, -0.02 * s] });
+
+            for (let k = 0; k < 9; k++) {
+                const round = Math.PI * (0.55 + (k / 8) * 0.9);
+
+                part(head, cone(0.18 * s * (0.75 + random() * 0.4), 0.012 * s, 3), hair, { at: [Math.sin(round) * 0.068 * s, 0.07 * s, Math.cos(round) * 0.08 * s - 0.02 * s], turn: aim([Math.sin(round) * 0.25, -1, Math.cos(round) * 0.2], CONE_WAY), shadow: false });
+            }
+        }
+
+        // (Its barrow mail, rusted: a byrnie over chest and belly, its skirt to the knee, short
+        // sleeves; a belt; an old helm with a guard down over the nose)
+        if (look.mail) {
+            const mail = skin(colours.mail ?? 0x4e4a42, { roughness: 0.6, metalness: 0.7 });
+
+            part(chest, limb(spine * 0.72, H * 0.08, H * 0.072, 14), mail, { at: [0, spine * 0.44, 0], scale: [1, 1, 0.72] });
+            part(torso, limb(spine * 0.66, H * 0.072, H * 0.074, 12), mail, { at: [0, spine * 0.62, 0], scale: [1, 1, 0.72] });
+            part(body, limb(H * 0.16, H * 0.076, H * 0.092, 12), mail, { at: [0, H * 0.04, 0], scale: [1, 1, 0.78] });
+            part(torso, ring(H * 0.07, H * 0.008, TAU, 14), dark, { at: [0, spine * 0.05, 0], turn: [Math.PI / 2, 0, 0], scale: [1, 0.78, 1] });
+            part(head, ellipsoid(0.08 * s, 0.056 * s, 0.1 * s, 14), metal, { at: [0, 0.098 * s, -0.016 * s] });
+            part(head, ring(0.079 * s, 0.006 * s, TAU, 14), metal, { at: [0, 0.082 * s, -0.016 * s], turn: [Math.PI / 2, 0, 0], scale: [1, 1.24, 1] });
+            part(head, box(0.012 * s, 0.05 * s, 0.008 * s), metal, { at: [0, 0.06 * s, 0.086 * s], turn: [-0.15, 0, 0] });
+        }
     }
 
     // Arms and legs: shoulders and hips to elbows and knees to hands and feet
@@ -261,8 +355,21 @@ export function biped(look, random, key = null) {
 
                 part(elbow, membrane(LEAF), skin(colours.leaves, { roughness: 0.85, side: THREE.DoubleSide }), { at: [side * H * 0.03, -k * H * 0.02, 0], turn: [-0.6 + random() * 0.4, random() * TAU, side * 0.8], scale: [size, size, size], shadow: false });
             }
+        } else if (scarecrow) {
+            sculpt.add(shoulder, { limb: [upperArm, H * 0.034, H * 0.032] }, colours.coat, { blend: H * 0.015 });
+            sculpt.add(elbow, { limb: [foreArm * 0.85, H * 0.032, H * 0.04] }, colours.coat, { blend: H * 0.012 });
+            tuft(elbow, [0, -foreArm * 0.8, 0], [0, -1, 0], 12, 0.09);
         } else {
             armBones({ shoulder, elbow, hand }, s, { bone: main, upperArm, foreArm, side, grip: side > 0 && Boolean(look.weapon) });
+
+            if (look.flesh) {
+                part(shoulder, limb(upperArm, H * 0.026, H * 0.02, 6), skin(colours.flesh, { roughness: 0.85 }));
+                part(elbow, limb(foreArm * 0.9, H * 0.02, H * 0.015, 6), skin(colours.flesh, { roughness: 0.85 }));
+            }
+
+            if (look.mail) {
+                part(shoulder, limb(upperArm * 0.55, H * 0.034, H * 0.032, 8), skin(colours.mail ?? 0x4e4a42, { roughness: 0.6, metalness: 0.7 }));
+            }
         }
 
         arms[name] = { shoulder, elbow, hand, side };
@@ -280,15 +387,33 @@ export function biped(look, random, key = null) {
             for (let k = 0; k < 4; k++) {
                 sculpt.add(foot, { limb: [H * 0.14, H * 0.035, H * 0.012] }, bark, { at: [0, H * 0.01, 0], turn: [Math.PI / 2 - 0.25, (k - 1.5) * 0.55, 0], blend: H * 0.02 });
             }
+        } else if (scarecrow) {
+            sculpt.add(hip, { limb: [thigh, H * 0.046, H * 0.04] }, colours.breeches, { blend: H * 0.015 });
+            sculpt.add(knee, { limb: [shin * 0.9, H * 0.04, H * 0.044] }, colours.breeches, { blend: H * 0.012 });
+            part(foot, ellipsoid(H * 0.032, ankle * 0.55, H * 0.06, 10), dark, { at: [0, -ankle * 0.45, H * 0.02] });
+            tuft(knee, [0, -shin * 0.88, 0], [0, -0.6, 0], 9, 0.06);
         } else {
             legBones({ hip, knee, foot }, s, { bone: main, thigh, shin, side });
+
+            if (look.flesh) {
+                part(hip, limb(thigh, H * 0.034, H * 0.024, 6), skin(colours.flesh, { roughness: 0.85 }));
+                part(knee, limb(shin, H * 0.025, H * 0.017, 6), skin(colours.flesh, { roughness: 0.85 }));
+            }
         }
 
         legs[name] = { hip, knee, foot, side };
     }
 
-    // What it carries: a rusty sword, or the wight lord's greatsword
-    if (look.weapon) {
+    // What it carries: a rusty sword, or the wight lord's greatsword; a scarecrow's sickle, its
+    // blade curving out from the top of its handle
+    if (look.weapon === "sickle") {
+        const grip = joint(arms.right.hand, "weapon", [0, -H * 0.03, 0]);
+        const curve = H * 0.07;
+
+        grip.rotation.x = Math.PI / 2 - 0.35;
+        part(grip, box(H * 0.016, H * 0.12, H * 0.016), skin(colours.handle ?? 0x6a4a2a, { roughness: 0.9 }), { at: [0, H * 0.03, 0] });
+        part(grip, ring(curve, H * 0.008, Math.PI, 12), metal, { at: [0, H * 0.09, -curve], turn: [0, Math.PI / 2, 0], scale: [1, 1, 1.6] });
+    } else if (look.weapon) {
         const long = look.weapon === "greatsword" ? H * 0.62 : H * 0.42;
         const grip = joint(arms.right.hand, "weapon", [0, -H * 0.03, 0]);
 
@@ -298,7 +423,7 @@ export function biped(look, random, key = null) {
         part(grip, box(H * (look.weapon === "greatsword" ? 0.034 : 0.026), long, H * 0.007), metal, { at: [0, H * 0.047 + long / 2, 0] });
     }
 
-    if (treant) {
+    if (sculpted) {
         sculpt.build(object, main, key);
     }
 
