@@ -104,9 +104,14 @@ export const SETTINGS_DEFAULTS = Object.freeze({
 
 const VOLUMES = ["effectsVolume", "environmentVolume", "musicVolume"];
 
+// Where what's kept is read from: the browser's storage, or an export being read as if it were
+// (importCharacter)
+let reading = null;
+const storage = () => reading ?? globalThis.localStorage;
+
 function read(key) {
     try {
-        const text = globalThis.localStorage?.getItem(key);
+        const text = storage()?.getItem(key);
 
         return text ? JSON.parse(text) : null;
     } catch {
@@ -500,7 +505,7 @@ export function saveVitals(save, vitals) {
  */
 export function loadWorld(save) {
     try {
-        const text = save?.id ? globalThis.localStorage?.getItem(keyOf(save, "world")) : null;
+        const text = save?.id ? storage()?.getItem(keyOf(save, "world")) : null;
         const world = text ? decode(text) : null;
 
         return world && world.created === save.created && world.seed === save.seed ? world.war : null;
@@ -521,6 +526,82 @@ export function saveWorld(save, war) {
         return true;
     } catch {
         return false;
+    }
+}
+
+/** What a character's export says it is, and its version (exportCharacter). */
+export const SOLO_KIND = "pellagos-solo-world";
+export const SOLO_VERSION = 1;
+
+/**
+ * Everything kept of a character and their world, as one piece of plain data, for taking their
+ * world to a world server (generated/world_server_plan.md §5: "bring my world to the server"):
+ * { kind, version, saveVersion, save, talks, explored, progress, ..., world (its war) }, each as
+ * it's kept here (null where nothing is), or null for a character that isn't kept.
+ */
+export function exportCharacter(save) {
+    if (!save?.id || !own(save, "save")) {
+        return null;
+    }
+
+    const kept = Object.fromEntries(KINDS.filter((kind) => kind !== "world").map((kind) => [kind, read(keyOf(save, kind))]));
+    let world = null;
+
+    try {
+        const text = globalThis.localStorage?.getItem(keyOf(save, "world"));
+
+        world = text ? decode(text) : null;
+    } catch {
+        world = null;
+    }
+
+    return { kind: SOLO_KIND, version: SOLO_VERSION, saveVersion: SAVE_VERSION, ...kept, world };
+}
+
+/**
+ * A character and their world from an export (exportCharacter's), read by the same code the game
+ * reads what it keeps with (each kind brought forward as it is here): { save, hero, talks,
+ * explored, progress, standing, followers, wheels, pin, place, vitals, messages, told, war }; or
+ * null if it isn't an export, or is one from a newer version of the game.
+ */
+export function importCharacter(exported) {
+    const save = exported?.save;
+
+    if (exported?.kind !== SOLO_KIND || !Number.isInteger(exported.version) || exported.version > SOLO_VERSION || exported.saveVersion !== SAVE_VERSION) {
+        return null;
+    }
+
+    if (save?.version !== SAVE_VERSION || typeof save.id !== "string" || !ID.test(save.id) || !Number.isInteger(save.seed) || typeof save.created !== "string" || typeof save.hero?.name !== "string") {
+        return null;
+    }
+
+    const items = new Map(KINDS.filter((kind) => kind !== "world" && exported[kind]).map((kind) => [keyOf(save, kind), JSON.stringify(exported[kind])]));
+
+    if (exported.world) {
+        items.set(keyOf(save, "world"), encode(exported.world));
+    }
+
+    reading = { getItem: (key) => items.get(key) ?? null };
+
+    try {
+        return {
+            save: { id: save.id, seed: save.seed, created: save.created, played: save.played ?? save.created },
+            hero: structuredClone(save.hero),
+            talks: loadTalks(save),
+            explored: loadExplored(save),
+            progress: loadProgress(save),
+            standing: loadStanding(save),
+            followers: loadFollowers(save),
+            wheels: loadWheels(save),
+            pin: loadPin(save),
+            place: loadPlace(save),
+            vitals: loadVitals(save),
+            messages: loadMessages(save),
+            told: loadTold(save),
+            war: loadWorld(save),
+        };
+    } finally {
+        reading = null;
     }
 }
 
