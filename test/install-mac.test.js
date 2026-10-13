@@ -82,6 +82,8 @@ const TOOLS = {
         fs.rmSync(path.join(stub, args[1] === "-f" ? "serving" : "running"), { force: true });`,
     launchctl: ``,
     open: ``,
+    // (Waits noted, not waited)
+    sleep: ``,
     "xcode-select": `if (args[0] === "-p" && process.env.STUB_NO_TOOLS) { process.exit(2); }`,
     // (Swift's build: the menu-bar app's executable, where --show-bin-path says)
     swift: `
@@ -329,10 +331,12 @@ describe("the Mac installer", () => {
 
         assert.equal(status, 0, err);
         assert.match(out, /Stopping Pellagos Server \(every world is saved first\)/);
+        // (And between the two, a moment for the app to log the last its server said)
         assert.deepEqual(
-            calls.filter((call) => call[0] === "pkill" || call[0] === "launchctl"),
+            calls.filter((call) => call[0] === "pkill" || call[0] === "launchctl" || call[0] === "sleep"),
             [
                 ["pkill", "-TERM", "-f", `/${APP}/Contents/Helpers/node`],
+                ["sleep", "2"],
                 ["launchctl", "bootout", `gui/${process.getuid()}/${APP_ID}`],
                 ["pkill", "-TERM", "-x", EXECUTABLE],
             ],

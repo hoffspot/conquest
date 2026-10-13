@@ -117,13 +117,15 @@ jobs:
           # (Built here from this copy: Swift's build and Node's archive kept from the steps before)
           scripts/install-mac.sh --build --source . --to "$apps"
           answers
-          # (Taken away: stopped, every world saved, its worlds kept)
+          # (Taken away: stopped, every world saved, its data folder kept: settings, keys and any
+          # worlds; none are made here, so it has no worlds/ of its own)
           before=$(stops)
           scripts/install-mac.sh --uninstall --to "$apps"
           test ! -e "$app"
           if pgrep -x PellagosServer || pgrep -f "Pellagos Server.app/Contents/Helpers/node"; then echo "It's still running"; exit 1; fi
           [ "$(stops)" -gt "$before" ]
-          test -d "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/worlds"
+          test -f "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/server.json"
+          test -f "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/secrets.json"
 
       - name: Install the formula from a tap of its own, and run its test
         run: |

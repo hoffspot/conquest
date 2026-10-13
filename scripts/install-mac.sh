@@ -132,6 +132,8 @@ stop_app() {
     say "Stopping $APP_NAME (every world is saved first)..."
     pkill -TERM -f "$SERVING" >/dev/null 2>&1 || true
     until_not serving
+    # (A moment for the app to write the last of what its server said in its log, before it goes too)
+    if running; then sleep 2; fi
     launchctl bootout "gui/$(id -u)/$APP_ID" >/dev/null 2>&1 || true
     pkill -TERM -x "$EXECUTABLE" >/dev/null 2>&1 || true
     until_not running
