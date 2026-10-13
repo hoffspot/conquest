@@ -48,10 +48,11 @@ function split(text) {
 /**
  * The play socket on HTTP servers (`httpServers`: one, or several, as the one port's plain and TLS
  * halves). `server` gives what it needs: { access, registry, identity, and what guards.js asks,
- * metaOf(world) (its world.json, or null) }. Returns { places, close(), closeWhere(test, reason),
+ * metaOf(world) (its world.json, or null) }. `others`: the paths other sockets on the same servers
+ * answer (the broker's), left to them. Returns { places, close(), closeWhere(test, reason),
  * send(world, peer, text), kicked(world, peer, reason) }.
  */
-export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = Date.now } = {}) {
+export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = Date.now, others = [] } = {}) {
     const { registry, identity } = server;
     const { policy } = server.access;
 
@@ -252,9 +253,13 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     const upgrade = (request, raw, head) => {
         const refuse = (status, why) => raw.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 
-        // (Nothing but the play socket takes an upgrade: any other's refused, not left hanging)
-        if (urlOf(request.url)?.pathname !== PLAY_PATH) {
-            refuse(404, "Not Found");
+        // (Nothing but the play socket and `others` take an upgrade: any other's refused, not left hanging)
+        const path = urlOf(request.url)?.pathname;
+
+        if (path !== PLAY_PATH) {
+            if (!others.includes(path)) {
+                refuse(404, "Not Found");
+            }
 
             return;
         }

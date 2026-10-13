@@ -33,6 +33,7 @@ import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { Certifier, tokensFileOf } from "./certify.js";
 import { Funnel } from "./funnel.js";
+import { attachBroker, BROKER_PATH } from "./broker.js";
 import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
@@ -85,7 +86,7 @@ export class WorldServer {
      * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
      * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
      * (router.js, funnel.js: false for none), `tunnelPort` (the tunnel listener's, 0 for any free
-     * one), `clientDirectory`.
+     * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js).
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -102,8 +103,8 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
-        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, ice = null }) {
+        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, ice });
 
         /** Whether an address is at home (the guards ask it). */
         this.isHome = home;
@@ -147,6 +148,9 @@ export class WorldServer {
         this.https = null;
         this.play = null;
         this.port = null;
+
+        /** The broker (broker.js): players' own worlds listed, and their games helped to connect. */
+        this.broker = null;
 
         /** Every connection on the port, sorted or not (each closed with it: TLS's halves don't close the socket under them). */
         this.connections = new Set();
@@ -316,7 +320,8 @@ export class WorldServer {
         this.http.emit("listening");
         this.https.emit("listening");
         await this.loadCertificate();
-        this.play = attachPlay([this.http, this.https], this);
+        this.play = attachPlay([this.http, this.https], this, { others: [BROKER_PATH] });
+        this.broker = attachBroker([this.http, this.https], this, this.ice ? { ice: this.ice } : {});
         this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
         this.looking.unref?.();
         this.certifier.start();
@@ -495,6 +500,7 @@ export class WorldServer {
 
             this.tunnel = null;
             this.closePlaces((place) => place.tunnel, "internet-closed");
+            this.broker?.closeWhere((socket) => socket.tunnel);
             await new Promise((resolve) => tunnel.close(() => resolve()));
 
             for (const socket of this.connections) {
@@ -534,7 +540,15 @@ export class WorldServer {
         const direct = Boolean(this.internetClosed);
         const tunnel = Boolean(this.tunnelClosed);
 
-        return direct || tunnel ? this.closePlaces((place) => place.from === "internet" && (place.tunnel ? tunnel : direct), "internet-closed") : 0;
+        if (!direct && !tunnel) {
+            return 0;
+        }
+
+        const closing = (one) => one.from === "internet" && (one.tunnel ? tunnel : direct);
+
+        this.broker?.closeWhere(closing);
+
+        return this.closePlaces(closing, "internet-closed");
     }
 
     // The names it answers to and the pages it answers (guards.js): its own, its certificate's, and
@@ -626,6 +640,7 @@ export class WorldServer {
         await this.closeTunnel();
         this.second?.close();
         this.play?.close("server-stopping");
+        this.broker?.close();
         await this.registry.shutdown();
         await this.admin?.close();
 
