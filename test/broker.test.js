@@ -257,9 +257,15 @@ describe("the broker", () => {
         host.send(`to ${peer}\n${big}`);
         assert.equal(await joiner.next("data\n"), `data\n${big}`);
 
+        // (Too long for a game's command: not passed on)
+        joiner.send(`data\n${"x".repeat(70 * 1024)}`);
+
+        // (Put out: its link closed, the host told; not told the world's closed, its host has said why)
         host.send(`kick ${peer}`);
-        assert.equal(await joiner.next("closed"), "closed");
         assert.equal(await host.next("gone "), `gone ${peer}`);
+        await until(() => joiner.closed !== null, "the joiner's link closed");
+        assert.equal(joiner.count("closed"), 0);
+        assert.equal(host.count("from "), 1);
 
         // (The server not relaying: the asker told so)
         await server.manage.changeSettings({ relaying: false });

@@ -184,8 +184,9 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         watcher.send(`seen ${JSON.stringify(seen)}`);
     };
 
-    // An attempt to join over: its host told, its joiner's link closed
-    const endAttempt = (peer, { tellHost = true, close = true } = {}) => {
+    // An attempt to join over: its host told, its joiner's link closed (told the world's closed,
+    // unless it's been put out: its host has told it why, as the relay has it)
+    const endAttempt = (peer, { tellHost = true, close = true, say = true } = {}) => {
         const attempt = attempts.get(peer);
 
         if (!attempt) {
@@ -202,7 +203,10 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         }
 
         if (close) {
-            attempt.socket.send("closed");
+            if (say) {
+                attempt.socket.send("closed");
+            }
+
             attempt.socket.close(1000);
         }
     };
@@ -383,9 +387,9 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             const [line, rest] = split(text);
             const [what, peer] = line.split(" ");
 
-            // (Said before relaying's agreed, or too fast: dropped)
+            // (Said before relaying's agreed, too fast, or too long for a game's command: dropped)
             if (what === "data") {
-                if (attempt.relayed && commands.allow(attempt)) {
+                if (attempt.relayed && text.length <= limits.small && commands.allow(attempt)) {
                     attempt.listing.host?.send(`from ${attempt.peer}\n${rest}`);
                 }
             } else if (what === "signal" && peer === attempt.peer && text.length <= limits.small) {
@@ -471,7 +475,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
                 const attempt = ownAttempt(words[0]);
 
                 if (attempt) {
-                    endAttempt(attempt.peer, { tellHost: true });
+                    endAttempt(attempt.peer, { tellHost: true, say: false });
                 }
 
                 break;
