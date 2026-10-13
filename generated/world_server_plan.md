@@ -1,6 +1,6 @@
 # The world server: the plan
 
-A plan, being built: S0 and S1 are done, and S2 is next ([§15](#15-milestones)). It is a living
+A plan, being built: S0, S1 and S2 are done, and S3 is next ([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -717,7 +717,8 @@ What browsers allow in 2026 decides how to make that safe. The research notes ci
 
 The server listens on port **8480** (changeable) on every IPv4 and IPv6 address. It looks at the
 first byte of each connection: a TLS handshake (`0x16`) is handled as HTTPS/WSS, anything else as
-plain HTTP/WS.
+plain HTTP/WS. Until S6 brings TLS, the port answers home addresses alone and refuses the internet
+(`internet`, 403); the first-byte split comes with TLS.
 
 | From | Plain `http`/`ws` | TLS `https`/`wss` |
 |---|---|---|
@@ -989,7 +990,7 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 |---|---|---|
 | `GET /status` | nothing (rate-limited) | The server's card and addresses, its listed worlds with player counts and hero names, nearby servers, listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
 | `GET /health` | nothing | `ok` or `slow` |
-| `POST /enter` `{world, key?, ticket?}` | a key or ticket | `{session, ticket?, role, world, heroes}`, where `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `busy` (too many worlds running), `locked`, `version`, `wait n` |
+| `POST /enter` `{world, key?, ticket?, net?}` | a key or ticket | `{session, ticket?, role, world, player, heroes, life, position}`, where `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version` (`net` isn't the server's `NET_VERSION`), `wait n`. Too many worlds running isn't a refusal: `life` says `waiting` and `position` its place, and the play socket waits its turn |
 | `POST /codes/redeem` `{code}` | a short code | Trades it, once, for `{world, key}`, then as `/enter` |
 | `GET /worlds` | a session or the admin key | Listed worlds, plus unlisted worlds the caller holds keys for |
 | `POST /worlds` | a creator key or the admin key | Make a world (unlisted). Returns `{world, ownerKey, playerKey}` |
@@ -1000,7 +1001,7 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 | `GET`, `POST` `/worlds/:id/backups`; `POST …/backups/:b/restore`; `GET …/export`; `POST /worlds/import` | owner (import: `world.create`) | Backups and moving worlds |
 | `GET`, `PATCH` `/server`; `GET /server/journal`, `/server/health`; `GET`, `POST`, `DELETE` `/server/creators`; `POST /server/update` | admin, from the Mac or the home network only | Settings, health, creator keys and updating |
 
-- **Authorisation.** `Authorization: Bearer <session>`.
+- **Authorisation.** `Authorization: Bearer <session>`; or `Authorization: Key <key>` for the admin key or a creator key (or the key in a POST's body). Nothing goes in a query string: a request with one is refused.
 - **Errors.** `{error: code, message}`.
 - **CORS.** The calls the game makes answer cross-origin, so they work from GitHub Pages: `/status`,
   `/enter`, `/codes/redeem`, `/worlds` and a world owner's calls. Server management answers only to
@@ -1023,9 +1024,15 @@ heartbeat, backoff and grace carry over unchanged. Only the place lines differ.
   `ops`, `motion`, `state`, `paused`, `ping`, `pong`, `chat`.
 - **Two new message kinds**, joiner to host: `ready` (finished loading, which starts a frozen
   clock) and `away {hidden}` (tab hidden or shown).
-- **`hello` gains fields:** `ticket`, and `hero` (which of the player's kept heroes, or `new`). In
-  kept worlds the hero comes from the server, and the client's `character` is ignored unless the
-  world allows bringing one in on the first visit.
+- **`hello` gains a field:** `hero` (which of the player's kept heroes, by its slot, or `new`). Who
+  the player is comes from the session they entered with, so the ticket isn't sent again. In kept
+  worlds the hero comes from the server, and the client's `character` is ignored unless the world
+  allows bringing one in on the first visit; a new hero takes only its looks from it.
+- **Waiting its turn.** If the world isn't running and `worldsAtOnce` are, the server sends
+  `waiting N` (its place) until it is, then `entered`.
+- **Refusals** close the socket with `closed REASON`, the same reasons as `/enter`'s, and
+  `too-many` (more than 3 sockets on a ticket), `newer` (a newer version kept the world), `gone`
+  (a `reenter` too late).
 - **AFK lives in the rules.** Each player's last-command step is part of the host's state, so every
   replica shows the AFK icon at the same step. The 30-minute kick is a recorded leave op, so replay
   stays exact.
@@ -1174,6 +1181,14 @@ in the user's order:
   version kept it, or started afresh from its seed (`server/reopen.js`); and a solo world brought
   in. Measured: saved in one process and restored in another, a world has the same checksum, and
   200 steps on it still has.
+- **S2, done.** Keys, tickets, sessions, short codes, the access hooks and the server's identity
+  (`server/access/`); each running world in a thread of its own, its clock running only while
+  someone's present, and the registry setting worlds aside and holding a third while two run
+  (`server/world-worker.js`, `world-thread.js`, `registry.js`); the one port, home addresses only
+  until S6, with `/api/v1`, the play socket and the game's own files behind its guards
+  (`server/world-server.js`, `api.js`, `play.js`, `guards.js`); `npm run world-server`.
+  Measured: a world entered from stored in 3.7 s, its thread about 110 MB, given back when it's set
+  aside; the war's clock just where it stopped across a leave and a set-aside.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1188,9 +1203,8 @@ in the user's order:
 | **S8** | **The Mac app.** The menu-bar wrapper, bundled Node, the `SMAppService` agent, plist keys, ad-hoc signing, the "Open Anyway" guide, the Homebrew tap. | A manual check on macOS 27.0.1: first launch, firewall prompt, Local Network prompt, run at login, sleeps when idle, kept awake while players are in. |
 | **S9** | **Running it for real.** The backup ladder, export and import of world bundles, the update flow with signed releases and rollback ([§11](#11-on-the-mac)), the journal, `docs/SERVER.md`, contribution.md, and README's "Playing together" rewritten. | A 2-hour soak with 8 Node players: memory flat after the first hour, p99 step under 50 ms. Restore from each backup kind. An update from the previous release migrates every fixture world, and a forced failure rolls back. |
 
-**For the repository's owner.** S2 adds a `server` job to CI (with its Linux run), and every CI job
-is a required check, so the owner will need to add it to the `main` ruleset. That PR will spell out
-the steps (contribution.md, section 6).
+**For the repository's owner.** The server's tests run in `npm test`, so CI's `test` job (on
+Linux) runs them with everything else: no new job, and nothing to add to the `main` ruleset.
 
 ---
 
@@ -1246,3 +1260,4 @@ questions go here as they come up.
 | 2026-10-12 | **S1c built, and S1 with it:** `Host.forward` brings a snapshot kept by an older version forward a step at a time (`SNAPSHOT_STEPS`, from 26), and `Host.restore` uses it; a fixture of each version from 26 (`npm run snapshot-fixture`) is brought forward and played on by `test/snapshots.test.js`. `server/reopen.js`: a kept world opened (refused, naming the server it needs, if a newer version kept it), started afresh from its seed if it can't be carried on (a copy made first, its war and kept heroes kept), and a player's solo world brought in (`app/save.js` exportCharacter, read back through importCharacter as the game reads its own). contribution.md's rule for `SNAPSHOT_VERSION` says so. | §5.1's last pieces for S1. The step from 26 fills in the world's rules and each player's role, last command and away state, as S0b added them. |
 | 2026-10-12 | **S2a built:** `server/access/`: long keys, short codes, return tickets and sessions (`tokens.js`, `sessions.js`), the server's secrets (`secrets.js`: the admin key made at the first start and shown once, creator keys) and each world's keys, codes, players and bans (`world.js`, `access.json`), the access hooks (`policy.js` KeyPolicy: identify, allows, on, admits) over them (`index.js`), the limits (`limits.js`), home addresses (`addresses.js`) and the server's identity (`identity.js`). Settled while building: a key's first four characters name it (26 left for the secret's 130 bits); world keys are sealed as well as hashed, so the owner can show one again; short codes are hashed with the server's own salt and their wrong guesses counted across the server; a ticket alone works while the key its player last came by does; the server's `hi` carries its public key. contribution.md's version rules gained `FORMAT_VERSION`, `SECRETS_VERSION` and `ACCESS_VERSION`. | §7 as the plan had it couldn't be built as written in places: a hashed key can't be shown again as a QR code, a wrong short code says nothing of which code or world it was for, and a fingerprint alone can't check a signature. |
 | 2026-10-13 | **S2b built:** each running world in a thread of its own (`server/world-worker.js`, `world-thread.js`): made from its seed and carried on from its save, its clock running only while someone's present (their link up and their game loaded: the new `ready` message), stopped and saved in the step the last one goes, and stopped while every present player's page is hidden (the new `away` message) or, if the world says so, while someone's loading. In a kept world a player's hero comes from the disk: one of theirs by its slot, or a new one from the character maker's looks alone, playing as `<player>.<slot>`; a server stopped with players in puts them back in their slots from the world's last save. `server/registry.js` runs `worldsAtOnce` at once (the next waits its turn), sets aside a world empty for `setAsideMinutes` (its thread ended and its memory given back), keeps the machine awake while anyone's present (`server/platform/` keepAwake: caffeinate on macOS, a systemd inhibitor on Linux) and recommends a most (half the memory at §17's 250 MB a world, and the cores less one). `Host.join` takes where a player was and as they were (`place`, `vitals`), recorded with their join so every copy does the same, and `Host.placeOf` says where to come back to; `NET_VERSION` 113. | S2's worlds, before the port that lets players reach them (S2c). Measured: a world opens in a thread in 3.3 s here, takes about 110 MB, and gives it back when its thread ends. |
+| 2026-10-13 | **S2c built, and S2 with it:** the one port (`server/world-server.js`): the game's files, `/api/v1` (`api.js`: status, health, enter, codes/redeem, worlds, a world's keys and codes) and the play socket (`play.js`: `hi`, `enter`, `reenter`, `data`, `waiting`, `closed`), each behind the guards (`guards.js`: home addresses only until TLS, the server's own Host names, an exact list of Origins, blocked addresses, 64 KB bodies, nothing in query strings). A world someone's let into is held for them (`ARRIVAL`, 15 s) so it isn't set aside before they arrive; a world's thread writes its `world.json`, and the supervisor reads it again once the thread's ended. `npm run world-server` prints the addresses, the id and, the first time, the admin key. `test/world-server.test.js` is §15's proof over real sockets, with the socket fuzzed. The server's tests run in `npm test`, so no new CI job. | §15's S2. Where §12 changed: `/enter`'s too-many-worlds is a wait, not a refusal; `hello` gains `hero`, not `ticket` (the session says who); `Authorization: Key` for the admin and creator keys. |

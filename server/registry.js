@@ -15,6 +15,9 @@ import os from "node:os";
 import { keepAwake } from "./platform/index.js";
 import { WorldThread } from "./world-thread.js";
 
+/** How long a world's held for someone let into it to arrive (ms): it isn't set aside empty meanwhile. */
+export const ARRIVAL = 15000;
+
 /** A world's lives, as the management page names them. */
 export const LIFE = Object.freeze(["stored", "waiting", "loading", "running", "empty", "stopping"]);
 
@@ -68,7 +71,7 @@ export class Registry {
             const stored = await this.store.open(id);
 
             if (!this.entries.has(id)) {
-                this.entries.set(id, { id, stored, life: "stored", thread: null, opening: null, stopping: null, timer: null, waiters: [] });
+                this.entries.set(id, { id, stored, life: "stored", thread: null, opening: null, stopping: null, timer: null, waiters: [], holdUntil: 0 });
             }
         }
 
@@ -91,8 +94,15 @@ export class Registry {
             await entry.stopping;
         }
 
+        // (Held for them until they've arrived, or a while)
+        const held = (thread) => {
+            entry.holdUntil = Date.now() + ARRIVAL;
+
+            return thread;
+        };
+
         if (entry.thread) {
-            return entry.opening;
+            return entry.opening.then(held);
         }
 
         if (entry.life === "waiting" || this.going.length >= this.settings.get("worldsAtOnce")) {
@@ -104,10 +114,10 @@ export class Registry {
             onWaiting(this.queue.indexOf(id) + 1);
             this.onChange(id);
 
-            return new Promise((resolve, reject) => entry.waiters.push({ resolve, reject }));
+            return new Promise((resolve, reject) => entry.waiters.push({ resolve, reject })).then(held);
         }
 
-        return this.#start(entry);
+        return this.#start(entry).then(held);
     }
 
     /** Where a world is in the queue (1 first), or 0 if it isn't waiting. */
@@ -172,8 +182,20 @@ export class Registry {
         if (life === "running") {
             clearTimeout(entry.timer);
             entry.timer = null;
+            entry.holdUntil = 0;
         } else if (!entry.timer) {
-            entry.timer = setTimeout(() => this.setAside(entry.id), this.settings.get("setAsideMinutes") * 60000);
+            // (Empty for the set-aside delay, and no one let in on their way: set aside; else looked at again then)
+            const delay = Math.max(this.settings.get("setAsideMinutes") * 60000, entry.holdUntil - Date.now());
+
+            entry.timer = setTimeout(() => {
+                entry.timer = null;
+
+                if (entry.thread && entry.thread.state?.players.length === 0 && Date.now() >= entry.holdUntil) {
+                    this.setAside(entry.id);
+                } else {
+                    this.#state(entry, entry.thread?.state);
+                }
+            }, delay);
             entry.timer.unref?.();
         }
 
@@ -207,6 +229,7 @@ export class Registry {
         entry.life = "stored";
         clearTimeout(entry.timer);
         entry.timer = null;
+        entry.stored.reload?.().catch(() => {});
         entry.stored.journal(`Its thread ended unexpectedly (${error?.message ?? `code ${code}`}): stored, from its last save.`).catch(() => {});
         this.#next();
         this.#awake();
@@ -245,7 +268,11 @@ export class Registry {
         entry.timer = null;
         entry.life = "stopping";
         this.onChange(id);
-        entry.stopping = entry.thread.stop(why).finally(() => {
+        entry.stopping = entry.thread.stop(why).then(async (done) => {
+            await entry.stored.reload?.().catch(() => {});
+
+            return done;
+        }).finally(() => {
             entry.thread = null;
             entry.life = "stored";
             this.#next();

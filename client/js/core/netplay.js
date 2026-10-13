@@ -38,7 +38,9 @@
 //
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
-//   joiner -> host   { kind: "hello", version, character }   (character: as Host.join takes it)
+//   joiner -> host   { kind: "hello", version, character, hero }   (character: as Host.join takes
+//                                                    it; hero, on the world server: which of
+//                                                    the player's kept heroes, a slot, or "new")
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again)
 //                    { kind: "command", seq, command }

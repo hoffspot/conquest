@@ -116,6 +116,7 @@ pull request and 4 hours by hand. It isn't a required check: most pull requests 
 | --- | --- |
 | `npm start` | Serves the game and the multiplayer relay on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`) |
 | `npm run dev` | The same, restarting the server when its code changes |
+| `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi alone for now. `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once; make a world with it by `POST /api/v1/worlds` (it prints how) |
 | `npm test` | Every change. The unit tests take a few minutes |
 | `npm run lint` | Every change. ESLint must be clean |
 | `npm run check` | Lint and the unit tests together: run it before every push |

@@ -113,6 +113,17 @@ export class StoredWorld {
         return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }), writtenBy);
     }
 
+    /**
+     * What it is, read again from its world.json: while a world runs, its thread (world-worker.js)
+     * keeps it and writes it as it saves, so the supervisor reads it again once the thread's ended.
+     */
+    async reload() {
+        const fresh = await StoredWorld.open(this.folder);
+
+        this.meta = fresh.meta;
+        this.writtenBy = fresh.writtenBy;
+    }
+
     /** Its saves' files' names, newest first (now, then the autosaves). */
     static get saves() {
         return [NOW, ...Array.from({ length: AUTOSAVES }, (_, k) => autosaveName(k + 1))];

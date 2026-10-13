@@ -45,7 +45,7 @@ import { StoredWorld } from "./storage/worlds.js";
 import { installWorkers } from "./workers.js";
 
 /** How often the world's looked at (ms), how often it says how it is, and how long a player may take loading before they're taken to be present anyway. */
-export const WORKER = Object.freeze({ tick: 25, report: 5000, loading: 60000 });
+export const WORKER = Object.freeze({ tick: 25, report: 1000, loading: 60000 });
 
 const post = (message) => parentPort.postMessage(message);
 const clock = () => performance.now();
