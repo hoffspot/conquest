@@ -126,6 +126,21 @@ describe("the broker", () => {
         host.send(`keep ${id} ${token}\n${JSON.stringify({ players: 3 })}`);
         assert.equal(JSON.parse((await watcher.next("+ ", 1)).slice(2)).players, 3);
 
+        // (On the status card too, as each caller would see it; and the broker's said there)
+        const card = await (await fetch(`http://127.0.0.1:${server.port}/api/v1/status`)).json();
+
+        assert.deepEqual(card.server.broker, { path: "/broker", protocol: BROKER_PROTOCOL, relaying: true });
+        assert.deepEqual(
+            card.players.map((one) => [one.id, one.players]),
+            [[id, 3]],
+        );
+
+        // (Kept as for its code alone: no longer listed)
+        host.send(`keep ${id} ${token}\n${JSON.stringify({ visibility: "code" })}`);
+        assert.equal(await watcher.next("- ", 0), `- ${id}`);
+        host.send(`keep ${id} ${token}\n${JSON.stringify({ visibility: "listed" })}`);
+        await watcher.next("+ ", 2);
+
         // (A keep with the wrong token isn't one)
         host.send(`keep ${id} ${"x".repeat(token.length)}`);
         assert.equal(await host.next("error"), "error gone");
@@ -140,7 +155,7 @@ describe("the broker", () => {
         );
 
         host.send(`withdraw ${id}`);
-        assert.equal(await watcher.next("- ", 0), `- ${id}`);
+        assert.equal(await watcher.next("- ", 1), `- ${id}`);
         assert.equal(server.broker.listings.size, 0);
         [watcher, late, host].forEach((link) => link.close());
     });

@@ -10,7 +10,7 @@
 //                                                  -> "announced ID TOKEN" (ID: the world's code,
 //                                                     CODE_LENGTH letters; or "error busy",
 //                                                     "error too-many", "error bad")
-//                    "keep ID TOKEN[\n{players}]"  every 15 s, or it's gone after 45 s; from a new
+//                    "keep ID TOKEN[\n{players, visibility}]"  every 15 s, or it's gone after 45 s; from a new
 //                                                  link, it's the host's again -> "announced ID
 //                                                  TOKEN", "here pN pN..." (or "error gone")
 //                    "withdraw ID"                 taken down: those joined through it told "closed"
@@ -288,10 +288,14 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
 
         keep(listing);
 
-        const players = rest ? count(parse(rest)?.players, 64) : null;
+        // (What's changed: how many are in it, and whether it's listed)
+        const changes = rest ? parse(rest) : null;
+        const players = count(changes?.players, 64);
+        const visibility = ["listed", "code"].includes(changes?.visibility) ? changes.visibility : listing.said.visibility;
 
-        if (players !== null && players !== listing.said.players) {
-            listing.said.players = Math.min(players, listing.said.most);
+        if ((players !== null && players !== listing.said.players) || visibility !== listing.said.visibility) {
+            listing.said.players = Math.min(players ?? listing.said.players, listing.said.most);
+            listing.said.visibility = visibility;
             told(listing);
         }
 
@@ -617,6 +621,11 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
 
     return {
         listings,
+
+        /** The listings as one at `{ address, from }` sees them (the status card's `players`). */
+        seen(watcher) {
+            return [...listings.values()].map((listing) => seenBy(listing, watcher)).filter(Boolean);
+        },
 
         /** Everyone watching sent the list again (after the relaying setting changes), and told whether it relays. */
         refresh() {
