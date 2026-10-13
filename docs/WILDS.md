@@ -661,7 +661,8 @@ smaller, its colour a little different, its markings its own.
   basilisk's crown of spikes (`crest`); a knucker's great head with fins swept back from it, and
   a ridge of them down its back (`head`, `fins`); a giant centipede's pair of legs to each piece of
   its length, rippling as it goes, its feelers, and its footfalls a spider's skitter (`legs`,
-  `feet`).
+  `feet`). A snake narrows to a fine tail; a giant leech, a death worm and a centipede hardly at
+  all, blunt at both ends (`taper`).
 - **Eight-legged** (`arachnid.js`): each leg reaches for its own place on the ground, spread round
   the body like the spokes of a wheel so none crosses another or the body, and bends its two bones
   to reach it each moment (knee up); walking, the feet stay planted as the body goes over them,
