@@ -270,6 +270,8 @@ function report() {
         // rest of the machine)
         cpu: process.threadCpuUsage?.() ?? null,
         actors: host.battle.actors.length,
+        // (What's been made ahead between steps: chunks, and tiles of buildings' insides)
+        made: { chunks: ahead.made, rooms: ahead.rooms },
     });
 }
 

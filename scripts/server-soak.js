@@ -201,26 +201,29 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         }
 
         const end = started + minutes * 60000;
-        let before = { at: performance.now(), cpu: null };
+        let before = { at: performance.now(), cpu: null, rooms: 0 };
 
         for (let minute = 1; Date.now() < end; minute++) {
             await new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_SOAK.every, Math.max(0, end - Date.now()))));
 
             const health = await server.manage.health();
             const world = health.worlds.find((one) => one.id === made.world) ?? null;
-            const now = { at: performance.now(), cpu: world?.cpu ?? null };
+            const now = { at: performance.now(), cpu: world?.cpu ?? null, rooms: world?.made?.rooms ?? 0 };
             // (The share of one core the world's thread had this minute)
             const busy = now.cpu && before.cpu ? (now.cpu.user + now.cpu.system - before.cpu.user - before.cpu.system) / 1000 / (now.at - before.at) : null;
+            // (And the tiles of buildings' insides it baked ahead this minute: a few as players come
+            // near new buildings, none once they've stayed)
+            const rooms = now.rooms - before.rooms;
 
             before = now;
             const sample = {
                 minute,
-                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors, busy },
+                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors, busy, rooms },
                 server: health.server,
             };
 
             samples.push(sample);
-            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, its thread ${busy === null ? "?" : `${Math.round(busy * 100)}%`} busy, world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
+            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, its thread ${busy === null ? "?" : `${Math.round(busy * 100)}%`} busy (${rooms} insides' tiles baked), world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
         }
 
         const reports = [];
