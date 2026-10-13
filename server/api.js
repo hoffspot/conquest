@@ -5,8 +5,8 @@
 //
 //   GET    /status                          the server's card: its id, versions, addresses, listed worlds
 //   GET    /health                          "ok", or "slow" if any world's steps are
-//   POST   /enter {world, key?, ticket?}    into a world: { session, ticket?, role, world, player,
-//                                           heroes, life, position }
+//   POST   /enter {world, key?, ticket?}    into a world: { session, ticket?, role, world, card (as
+//                                           /status lists it), player, heroes, life, position }
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
@@ -77,7 +77,7 @@ export function apiHandler(server) {
         };
     };
 
-    // Into a world, for a principal the policy's identified: refused, or { session, ticket, role, world, player, heroes, life, position }
+    // Into a world, for a principal the policy's identified: refused, or { session, ticket, role, world, card, player, heroes, life, position }
     const enter = async (principal, world, body) => {
         const meta = server.metaOf(world);
         const allowed = policy.allows(principal, "world.enter", { world, meta });
@@ -101,7 +101,7 @@ export function apiHandler(server) {
         const heroes = meta.heroes === "kept" ? (await server.worlds.get(world).heroes.list(entered.player)).map(({ slot, name, race }) => ({ slot, name, race })) : [];
         const { life, position } = registry.lifeOf(world);
 
-        return { ...entered, world, heroes, life, position, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } };
+        return { ...entered, world, card: cardOf(world), heroes, life, position, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } };
     };
 
     // The owner's (or a trusted player's) principal for a world's management, from a session

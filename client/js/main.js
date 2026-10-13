@@ -62,7 +62,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, building: false };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
 
 window.pellagos = {
     get game() {
@@ -308,8 +308,8 @@ function openCharacters(mode) {
     }
 
     dialog.dataset.mode = mode;
-    $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" ? "Who comes" : "Saved characters";
-    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" ? "Choose who comes with you." : `Choose who to play. Up to ${MOST_CHARACTERS} are kept.`;
+    $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" || mode === "worlds" ? "Who comes" : "Saved characters";
+    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" || mode === "worlds" ? "Choose who comes with you." : `Choose who to play. Up to ${MOST_CHARACTERS} are kept.`;
     $("#charactersnew").hidden = mode !== "join" || kept.length >= MOST_CHARACTERS;
     $("#characterlist").replaceChildren(
         ...kept.map((save) => {
@@ -355,6 +355,13 @@ function chosen(mode, save) {
     if (mode === "join") {
         state.joinAs = save;
         showJoinWho();
+
+        return;
+    }
+
+    if (mode === "worlds") {
+        state.joinAs = save;
+        showWorldsWho();
 
         return;
     }
@@ -454,6 +461,7 @@ async function create({ replacing = null } = {}) {
 
     if (!hero) {
         state.joinAfter = null;
+        state.worldsAfter = null;
         title();
 
         return;
@@ -470,6 +478,18 @@ async function create({ replacing = null } = {}) {
     }
 
     state.joinAs = save;
+
+    // (Made to go into a world on a server: back to going into it)
+    if (state.worldsAfter) {
+        const { client, entered } = state.worldsAfter;
+
+        state.worldsAfter = null;
+        title();
+        await openWorlds();
+        chooseHero(client, entered);
+
+        return;
+    }
 
     // (Made to join someone's world: back to joining it)
     if (state.joinAfter !== null) {
@@ -650,6 +670,7 @@ function pause() {
     // another's world, it isn't this game's to open to others)
     state.game.pause();
     $("#invitebutton").hidden = Boolean(state.game.remote);
+    $("#worldbutton").hidden = !state.onServer;
     $("#invitebutton").textContent = state.together ? "Who's here" : "Invite others";
     menuPage("main");
     $("#menu").showModal();
@@ -1310,6 +1331,7 @@ function quit() {
     $("#invite").close();
     state.together?.close();
     setTogether(null);
+    state.onServer = null;
     state.game?.dispose();
     state.game = null;
     window.pellagos.playing = false;
@@ -1541,12 +1563,12 @@ function holdForLink(link) {
 // Into the world joined: made again from its seed, the host's copy of it restored (the player's
 // progress, standing and followers kept with their character as they go; the world's not theirs
 // to keep)
-async function playJoined(save, welcome, joining) {
+async function playJoined(save, welcome, joining, options = {}) {
     state.building = true;
     fullScreen.play();
 
     try {
-        await playingJoined(save, welcome, joining);
+        await playingJoined(save, welcome, joining, options);
     } catch (error) {
         failed(error);
     } finally {
@@ -1554,9 +1576,12 @@ async function playJoined(save, welcome, joining) {
     }
 }
 
-async function playingJoined(save, welcome, joining) {
+// (`server`: a world on a world server, told once the game's ready, so its clock goes on; `kept`:
+// one that keeps its heroes, whose hero's the world's, not this device's to keep)
+async function playingJoined(save, welcome, joining, { server = false, kept = false } = {}) {
     const { createJoinedGame } = state.modules;
     const { view, kit, sound } = state.session;
+    const keep = (write) => (kept || !save ? () => {} : write);
 
     $("#join").close();
     state.game?.dispose();
@@ -1572,18 +1597,18 @@ async function playingJoined(save, welcome, joining) {
         kit,
         sound,
         hud: state.hud,
-        hero: save.hero,
+        hero: save?.hero,
         welcome,
         joining,
-        onTalk: (talks) => saveTalks(save, talks),
-        onProgress: (progress) => saveProgress(save, progress),
-        onStanding: (standing) => saveStanding(save, standing),
-        onFollowers: (followers) => saveFollowers(save, followers),
-        wheels: loadWheels(save),
-        onWheels: (wheels) => saveWheels(save, wheels),
+        onTalk: keep((talks) => saveTalks(save, talks)),
+        onProgress: keep((progress) => saveProgress(save, progress)),
+        onStanding: keep((standing) => saveStanding(save, standing)),
+        onFollowers: keep((followers) => saveFollowers(save, followers)),
+        wheels: save ? loadWheels(save) : null,
+        onWheels: save ? (wheels) => saveWheels(save, wheels) : () => {},
         onWorldMap: openWorldMap,
-        told: loadTold(save),
-        onTold: (told) => saveTold(save, told),
+        told: save ? loadTold(save) : [],
+        onTold: save ? (told) => saveTold(save, told) : () => {},
     });
 
     state.worldMap?.dispose();
@@ -1610,6 +1635,10 @@ async function playingJoined(save, welcome, joining) {
     game.start();
     underway(game);
 
+    if (server) {
+        joining.ready();
+    }
+
     // (Nothing downloaded till the steps it keeps in hand have settled, 5 s at least, and 30 s at
     // most: a game that can't keep up with the host may never settle)
     fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.held - game.remote.delay) < 1, most: 30000 });
@@ -1618,6 +1647,8 @@ async function playingJoined(save, welcome, joining) {
 // Out of a world joined (its host gone, or the link lost): back to the title, saying why
 function leftWorld(why) {
     setTogether(null);
+    state.onServer = null;
+    $("#worldpanel").close();
 
     if (!state.game?.remote) {
         return;
@@ -1633,6 +1664,693 @@ function leftWorld(why) {
     $("#titlenote").textContent = why;
     $("#titlenote").hidden = false;
 }
+
+// --- Worlds on servers (generated/world_server_plan.md §8.1, §6) ---
+
+// The game's side of world servers (app/servers.js), loaded the first time it's wanted
+async function serversOf() {
+    const servers = await import("./app/servers.js");
+
+    state.servers ??= new servers.KnownServers();
+
+    return servers;
+}
+
+// How each known server last answered (its card, or why it couldn't), by its address's key
+const serverCards = new Map();
+
+/**
+ * The worlds on servers: those known, each's worlds; servers added; who comes (as joining a world
+ * does). `invite` (an invite link's, app/servers.js inviteOf) is followed at once.
+ */
+async function openWorlds({ note = "", invite = null } = {}) {
+    await serversOf();
+
+    const dialog = $("#worlds");
+    const kept = loadCharacters(WEAPONS);
+
+    state.joinAs = kept.find(({ id }) => id === state.joinAs?.id) ?? state.save;
+    showWorldsWho();
+    $("#worldsstatus").textContent = note;
+    showWorlds();
+
+    if (!dialog.open) {
+        dialog.showModal();
+    }
+
+    if (invite) {
+        await followInvite(invite);
+    } else {
+        refreshWorlds();
+    }
+}
+
+// Who comes, said (as Join a world says it)
+function showWorldsWho() {
+    const save = state.joinAs;
+
+    $("#worldswho").textContent = save ? `You'll come as ${save.hero.name} (${peopleOf(save.hero)}), or as one of your heroes a world keeps.` : "Worlds that keep heroes make you one; others ask you to make a character first.";
+    $("#worldschange").hidden = !loadCharacters(WEAPONS).length;
+}
+
+// Each known server asked how it is, and its worlds shown again as each answers
+async function refreshWorlds() {
+    const { ServerClient } = await serversOf();
+
+    await Promise.all(
+        state.servers.list().map(async (record) => {
+            try {
+                serverCards.set(record.key, { card: await new ServerClient(record, { servers: state.servers }).status() });
+            } catch (error) {
+                serverCards.set(record.key, { error });
+            }
+
+            showWorlds();
+        }),
+    );
+}
+
+// A card button in the worlds' list: its name, what it's about, and a third line
+function worldCard({ name, about = "", when = "", badge = "", className = "", disabled = false, onClick }) {
+    const pick = Object.assign(document.createElement("button"), { type: "button", className: `character ${className}`.trim(), disabled });
+
+    pick.append(Object.assign(document.createElement("span"), { className: "name", textContent: name }));
+
+    if (badge) {
+        pick.append(Object.assign(document.createElement("span"), { className: "badge", textContent: badge }));
+    }
+
+    pick.append(Object.assign(document.createElement("span"), { className: "about", textContent: about }), Object.assign(document.createElement("span"), { className: "when", textContent: when }));
+    pick.addEventListener("click", onClick);
+
+    return pick;
+}
+
+// The known servers and their worlds, as last heard
+async function showWorlds() {
+    const { NET_VERSION } = await import("./core/netplay.js");
+    const { baseOf } = await serversOf();
+    const rows = [];
+
+    for (const record of state.servers.list()) {
+        const { card, error } = serverCards.get(record.key) ?? {};
+        const matched = !card || card.server?.net === NET_VERSION;
+
+        // (A page from https, GitHub Pages's, can't reach a server at home over plain http: plan §9.5)
+        const walled = error?.error === "unreachable" && location.protocol === "https:" && !record.secure;
+        const head = document.createElement("li");
+        const about = card ? `${matched ? `Version ${card.server.version}` : "Another version of the game"} · ${Math.round(card.rtt)} ms` : walled ? "Browsers won't let a page opened over https reach a server at home over plain http." : error ? error.message : "Asking it how it is…";
+
+        head.className = `server${error ? " unreachable" : ""}`;
+        head.dataset.server = record.key;
+        head.append(Object.assign(document.createElement("span"), { className: "name", textContent: record.name ?? record.key }), Object.assign(document.createElement("span"), { className: "about", textContent: about }));
+
+        const actions = Object.assign(document.createElement("div"), { className: "actions" });
+        const action = (label, onClick) => {
+            const button = Object.assign(document.createElement("button"), { type: "button", className: "button quiet", textContent: label });
+
+            button.addEventListener("click", onClick);
+            actions.append(button);
+        };
+
+        if (!matched || walled) {
+            // (The game from the server itself always matches it, and always reaches it)
+            const open = Object.assign(document.createElement("a"), { href: `${baseOf(record)}/`, textContent: "Open the game from this server" });
+
+            actions.append(open);
+        } else {
+            action("Enter a code", () => askCode(record));
+            action("Make a world", () => askMake(record));
+        }
+
+        action("Forget", () => {
+            state.servers.forget(record.key);
+            serverCards.delete(record.key);
+            showWorlds();
+        });
+        head.append(actions);
+        rows.push(head);
+
+        // (Its worlds: those it lists, and those a key or ticket's held for here)
+        const listed = new Map((card?.worlds ?? []).map((world) => [world.id, world]));
+        const ids = new Set([...listed.keys(), ...Object.keys(record.worlds ?? {})]);
+
+        for (const id of ids) {
+            const world = listed.get(id);
+            const held = record.worlds?.[id];
+            const row = document.createElement("li");
+            const players = world ? ` · ${world.players} of ${world.most} in` : "";
+            const badge = world ? (world.heroes === "kept" ? "Heroes stay here" : "Bring your hero") : "";
+
+            row.dataset.world = id;
+            row.append(
+                worldCard({
+                    name: world?.name ?? held?.name ?? id,
+                    badge,
+                    about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
+                    when: held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : "Ask its owner for a key",
+                    className: matched ? "" : "unmatched",
+                    disabled: !matched,
+                    onClick: () => (held?.key || held?.ticket ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id)),
+                }),
+            );
+            rows.push(row);
+        }
+    }
+
+    $("#worldslist").replaceChildren(...rows);
+    $("#worldsnote").hidden = rows.length > 0;
+}
+
+// A server added by its address, or an invite link followed
+async function addServer(event) {
+    event.preventDefault();
+
+    const { addressOf, inviteOf } = await serversOf();
+    const text = $("#worldsaddress").value.trim();
+    const invite = text.includes("#") ? inviteOf(text) : null;
+
+    if (invite) {
+        $("#worldsaddress").value = "";
+        await followInvite(invite);
+
+        return;
+    }
+
+    const address = addressOf(text);
+
+    if (!address) {
+        $("#worldsstatus").textContent = "That isn't an address: try something like studio-mac.local or 192.168.1.20:8480.";
+
+        return;
+    }
+
+    state.servers.remember(address);
+    $("#worldsaddress").value = "";
+    $("#worldsstatus").textContent = "";
+    showWorlds();
+    refreshWorlds();
+}
+
+// An invite link followed: its server known (pinned to the id it carries), and its world entered
+async function followInvite(invite) {
+    const record = state.servers.remember(invite.address);
+
+    showWorlds();
+
+    if (invite.code) {
+        await enterServerWorld(record, null, { code: invite.code, expect: invite.id });
+    } else if (invite.world && invite.key) {
+        await enterServerWorld(record, invite.world, { key: invite.key, expect: invite.id });
+    } else {
+        refreshWorlds();
+    }
+}
+
+// Something asked of a server, in its own dialog: `fields` (elements), or `choices` (cards); `go`
+// (its button's label, or null for choices alone) and `onGo` (what's done, with the dialog's status
+// to say how it went: it closes once onGo resolves true)
+function askWorld({ title, note = "", fields = [], choices = null, go = "Go", onGo = async () => true }) {
+    const dialog = $("#worldask");
+
+    $("#worldasktitle").textContent = title;
+    $("#worldasknote").textContent = note;
+    $("#worldaskfields").replaceChildren(...fields);
+    $("#worldaskchoices").hidden = !choices;
+    $("#worldaskchoices").replaceChildren(
+        ...(choices ?? []).map((card) => {
+            const row = document.createElement("li");
+
+            row.append(card);
+
+            return row;
+        }),
+    );
+    $("#worldaskstatus").textContent = "";
+    $("#worldaskgo").hidden = !go;
+    $("#worldaskgo").textContent = go ?? "";
+    $("#worldaskgo").disabled = false;
+    state.worldAsk = onGo;
+
+    if (!dialog.open) {
+        dialog.showModal();
+    }
+
+    (fields.find((field) => field.matches?.("input, select, textarea")) ?? fields.flatMap((field) => [...(field.querySelectorAll?.("input, select, textarea") ?? [])])[0] ?? $("#worldaskchoices button") ?? $("#worldaskback"))?.focus();
+}
+
+// A labelled field for askWorld
+function worldField(label, element) {
+    const wrap = document.createElement("div");
+
+    wrap.append(Object.assign(document.createElement("label"), { className: "field", htmlFor: element.id, textContent: label }), element);
+
+    return wrap;
+}
+
+const textField = (id, options = {}) => Object.assign(document.createElement("input"), { type: "text", id, className: "text", autocomplete: "off", spellcheck: false, ...options });
+
+function selectField(id, options) {
+    const select = Object.assign(document.createElement("select"), { id });
+
+    select.append(...options.map(([value, label]) => Object.assign(document.createElement("option"), { value, textContent: label })));
+
+    return select;
+}
+
+$("#worldaskform").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    $("#worldaskgo").disabled = true;
+
+    // (Closed once it's done, unless what it did asked something else in its place: a hero chosen)
+    const asked = state.worldAsk;
+
+    try {
+        if ((await asked?.()) && state.worldAsk === asked) {
+            $("#worldask").close();
+        }
+    } finally {
+        $("#worldaskgo").disabled = false;
+    }
+});
+$("#worldaskback").addEventListener("click", () => $("#worldask").close());
+
+// A short code, traded for its world and its key
+function askCode(record) {
+    const code = textField("worldaskcode", { className: "text code-entry", maxLength: 9, placeholder: "ABCD-1234", autocapitalize: "characters" });
+
+    askWorld({
+        title: "Enter a code",
+        note: `A short code from ${record.name ?? record.key}'s world owner works once, for a little while.`,
+        fields: [worldField("Code", code)],
+        go: "Enter",
+        onGo: async () => {
+            const given = code.value.toUpperCase().replace(/[^0-9A-Z]/g, "");
+
+            if (given.length !== 8) {
+                $("#worldaskstatus").textContent = "A short code is eight letters and numbers.";
+
+                return false;
+            }
+
+            $("#worldask").close();
+            await enterServerWorld(record, null, { code: given });
+
+            return true;
+        },
+    });
+}
+
+// A world's key, for a world listed but not yet held
+function askKey(record, world, name) {
+    const key = textField("worldaskkey", { placeholder: "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", autocapitalize: "characters" });
+
+    askWorld({
+        title: `Into ${name}`,
+        note: "Its owner gives out keys to it (an invite link carries one).",
+        fields: [worldField("Key", key)],
+        go: "Enter",
+        onGo: async () => {
+            $("#worldask").close();
+            await enterServerWorld(record, world, { key: key.value.trim().toUpperCase() });
+
+            return true;
+        },
+    });
+}
+
+// A world made, with the server's admin key or a creator key (kept for next time), and gone into
+async function askMake(record) {
+    const { RACES } = await import("./core/worldplan/plan.js");
+    const { ServerClient } = await serversOf();
+    const maker = textField("worldaskmaker", { type: "password", value: record.maker ?? "", placeholder: "The key the server printed, or a creator key" });
+    const name = textField("worldaskname", { maxLength: 40, placeholder: "Thornwick", autocapitalize: "words" });
+    const people = selectField("worldaskpeople", RACES.map((race) => [race.id, race.name]));
+    const heroes = selectField("worldaskheroes", [
+        ["kept", "Heroes stay here (the world keeps them)"],
+        ["brought", "Bring your hero (from your device)"],
+    ]);
+    const first = selectField("worldaskfirst", [
+        ["new", "First heroes are made new here"],
+        ["bring", "A first hero may be brought in"],
+    ]);
+
+    people.value = state.joinAs?.hero.race ?? "human";
+    askWorld({
+        title: "Make a world",
+        note: `A new world on ${record.name ?? record.key}, set in a town of the people you choose. Only those you give a key come in.`,
+        fields: [worldField("Maker's key", maker), worldField("Name", name), worldField("Whose town it starts in", people), worldField("Heroes", heroes), worldField("First heroes", first)],
+        go: "Make it",
+        onGo: async () => {
+            if (!name.value.trim()) {
+                $("#worldaskstatus").textContent = "Give the world a name.";
+
+                return false;
+            }
+
+            $("#worldaskstatus").textContent = "Making it…";
+
+            try {
+                const client = new ServerClient(state.servers.get(record.key), { servers: state.servers });
+                const made = await client.makeWorld(maker.value.trim(), { name: name.value.trim(), race: people.value, heroes: heroes.value, firstHero: first.value });
+
+                state.servers.remember(state.servers.get(record.key), { maker: maker.value.trim() });
+                $("#worldask").close();
+                showWorlds();
+                await enterServerWorld(state.servers.get(record.key), made.world);
+
+                return true;
+            } catch (error) {
+                $("#worldaskstatus").textContent = error.message;
+
+                return false;
+            }
+        },
+    });
+}
+
+// The servers and tickets known, as a code to carry to another page or device; or one taken in
+async function askCarry() {
+    await serversOf();
+
+    const carried = state.servers.export();
+    const code = Object.assign(document.createElement("textarea"), { id: "worldaskcarry", value: carried, spellcheck: false });
+
+    askWorld({
+        title: "My servers and tickets",
+        note: "Copy this code to carry your servers, keys and tickets to another page or device (or to keep them safe), or paste one here and take it in. It opens your worlds: keep it to yourself.",
+        fields: [code],
+        go: "Take it in",
+        onGo: async () => {
+            if (code.value.trim() === carried) {
+                return true;
+            }
+
+            const taken = state.servers.import(code.value);
+
+            if (!taken) {
+                $("#worldaskstatus").textContent = "That isn't a code of servers and tickets.";
+
+                return false;
+            }
+
+            $("#worldsstatus").textContent = `${taken.added.length + taken.merged.length} server${taken.added.length + taken.merged.length === 1 ? "" : "s"} taken in.${taken.conflicts.length ? ` ${taken.conflicts.join(", ")} already known as another server: kept as it was.` : ""}`;
+            showWorlds();
+            refreshWorlds();
+
+            return true;
+        },
+    });
+}
+
+/**
+ * Into a world on a server (`world`, or the one a short code gives): its key or the player's ticket
+ * (what's held, or `key`), the server proved first (pinned, or to `expect`, an invite's id); then a
+ * hero chosen, and the world played in.
+ */
+async function enterServerWorld(record, world, { key = null, code = null, expect = null } = {}) {
+    const { ServerClient } = await serversOf();
+    const client = new ServerClient(record, { servers: state.servers, expect });
+
+    $("#worldsstatus").textContent = "Asking the server…";
+
+    let entered;
+
+    try {
+        entered = code ? await client.redeem(code) : await client.enter({ world, ...(key ? { key } : {}) });
+    } catch (error) {
+        $("#worldsstatus").textContent = error.message;
+        showWorlds();
+
+        return;
+    }
+
+    $("#worldsstatus").textContent = "";
+    showWorlds();
+    chooseHero(client, entered);
+}
+
+// Who goes into the world: in one that keeps heroes, one of theirs there or a new one (looking as
+// who comes looks; or, on a first visit where the world allows it, who comes, brought in); in
+// one that doesn't, who comes
+function chooseHero(client, entered) {
+    const save = state.joinAs;
+    const { card, heroes } = entered;
+    const name = card?.name ?? entered.world;
+
+    if (card?.heroes !== "kept") {
+        if (!save) {
+            state.worldsAfter = { client, entered };
+            $("#worlds").close();
+            create();
+
+            return;
+        }
+
+        playServerWorld(client, entered, { save });
+
+        return;
+    }
+
+    const bring = !heroes.length && card.firstHero === "bring";
+    const choices = heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => ($("#worldask").close(), playServerWorld(client, entered, { save, hero: hero.slot })) }));
+
+    if (heroes.length < 6) {
+        choices.push(
+            worldCard({
+                name: save ? (bring ? `Bring ${save.hero.name}` : "A new hero") : "A new hero",
+                about: save ? (bring ? `${save.hero.name} comes in as they are, and stays in ${name}` : `Starting afresh, looking as ${save.hero.name} does`) : "Made in the character maker first",
+                onClick: () => {
+                    $("#worldask").close();
+
+                    if (!save) {
+                        state.worldsAfter = { client, entered };
+                        $("#worlds").close();
+                        create();
+
+                        return;
+                    }
+
+                    playServerWorld(client, entered, { save, hero: "new" });
+                },
+            }),
+        );
+    }
+
+    askWorld({ title: `Who goes into ${name}`, note: heroes.length ? `${name} keeps its heroes: choose one of yours there, or start a new one.` : `${name} keeps its heroes. This is your first time in.`, choices, go: null });
+}
+
+/**
+ * Into a world on a server, on its play socket, as `hero` (a kept hero's slot, or "new") or, in a
+ * world that doesn't keep heroes, as `save`; then played as a joined world is.
+ */
+async function playServerWorld(client, entered, { save = null, hero = undefined }) {
+    const { SERVER_REFUSALS } = await serversOf();
+    const { NET_REFUSALS, NET_KICKS } = await import("./app/together.js");
+    const kept = entered.card?.heroes === "kept";
+    const character = save ? { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) } : {};
+
+    if (!$("#worlds").open) {
+        $("#worlds").showModal();
+    }
+
+    $("#worldsstatus").textContent = "Going in…";
+    fetcher.hold("joining");
+
+    let joined;
+
+    try {
+        joined = await client.play({
+            world: entered.world,
+            session: entered.session,
+            character,
+            hero,
+            onWaiting: (place) => ($("#worldsstatus").textContent = `The server's running as many worlds as it can: yours is ${place === 1 ? "next" : `number ${place}`} in line to open…`),
+            onClosed: (reason) => leftWorld(SERVER_REFUSALS[reason] ?? "You were sent out of the world."),
+            onLink: (link) => {
+                holdForLink(link);
+
+                if (state.game?.remote) {
+                    state.game.link = link;
+                }
+            },
+            onDrop: () => leftWorld("The link to the world was lost."),
+        });
+    } catch (error) {
+        fetcher.release("joining");
+        $("#worldsstatus").textContent = error.message;
+
+        return;
+    }
+
+    if (save && !kept) {
+        playedSave(save);
+        state.save = save;
+    }
+
+    setTogether(joined);
+    state.onServer = { client, entered, kept };
+    joined.joining.onRefused = (reason) => {
+        joined.close();
+        setTogether(null);
+        state.onServer = null;
+        $("#worldsstatus").textContent = NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world.";
+    };
+    joined.joining.onKicked = (reason) => {
+        joined.close();
+        leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
+    };
+    joined.joining.onWelcome = (welcome) => {
+        $("#worlds").close();
+        playJoined(save, welcome, joined.joining, { kept, server: true });
+    };
+    joined.joining.onState = () => {
+        fetcher.hold("the world again", { for: 5000 });
+        state.game?.rehost();
+    };
+
+    let delay = joined.joining.delay;
+
+    joined.joining.onPong = (rtt) => {
+        fetcher.measure(rtt, { strained: joined.joining.delay > delay });
+        delay = joined.joining.delay;
+    };
+}
+
+// In a world on a server: who's here; for its owner, invites and keys; leaving
+async function openWorldPanel() {
+    const { client, entered } = state.onServer ?? {};
+
+    if (!client || !state.game) {
+        return;
+    }
+
+    const owner = entered.role === "owner" || entered.role === "trusted";
+
+    $("#menu").close();
+    $("#worldpaneltitle").textContent = entered.card?.name ?? "World";
+    $("#worldpanelnote").textContent = `On ${client.record.name ?? client.record.key}. You came in as its ${entered.role}. It goes on while anyone's in it, and waits, still, while no one is.`;
+    $("#worldpanelpeople").replaceChildren(
+        ...[{ name: state.game.hero.name, people: "you" }, ...state.game.others()].map(({ name, people, hostile }) => {
+            const row = document.createElement("li");
+
+            row.append(Object.assign(document.createElement("span"), { textContent: name }), Object.assign(document.createElement("span"), { className: `people${hostile ? " hostile" : ""}`, textContent: people === "you" ? "(you)" : `the ${people}${hostile ? ", at war with yours" : ""}` }));
+
+            return row;
+        }),
+    );
+    $("#worldpanelowner").hidden = !owner;
+    $("#worldpanelstatus").textContent = "";
+    $("#worldpanelinvitecode").hidden = true;
+    $("#worldpanelinvitelink").hidden = true;
+    $("#worldpanel").showModal();
+
+    if (owner) {
+        showWorldKeys();
+    }
+}
+
+// A world's keys, for its owner: each revocable (but the owner's own)
+async function showWorldKeys() {
+    const { client, entered } = state.onServer;
+
+    try {
+        const { keys } = await client.keys(entered.world, entered.session);
+
+        $("#worldpanelkeys").replaceChildren(
+            ...keys.map((key) => {
+                const row = document.createElement("li");
+
+                row.append(worldCard({ name: key.label ?? key.id, about: `${key.role} · ${key.id}`, when: key.revoked ? "Revoked" : `Used ${key.used ?? 0} times`, onClick: () => {} }));
+
+                if (key.role !== "owner" && !key.revoked) {
+                    const revoke = Object.assign(document.createElement("button"), { type: "button", className: "forget", textContent: "Revoke" });
+
+                    revoke.addEventListener("click", async () => {
+                        try {
+                            await client.revokeKey(entered.world, entered.session, key.id);
+                            showWorldKeys();
+                        } catch (error) {
+                            $("#worldpanelstatus").textContent = error.message;
+                        }
+                    });
+                    row.append(revoke);
+                }
+
+                return row;
+            }),
+        );
+    } catch (error) {
+        $("#worldpanelstatus").textContent = error.message;
+    }
+}
+
+// A players' key to hand out: one the owner holds already (made with the world), or a new one
+async function playersKey() {
+    const { client, entered } = state.onServer;
+    const held = client.record.worlds?.[entered.world]?.playerKey;
+
+    if (held) {
+        return held;
+    }
+
+    const { key } = await client.issueKey(entered.world, entered.session, { label: "Invited", role: "player" });
+
+    state.servers.keepWorld(client.record.key, entered.world, { playerKey: key });
+
+    return key;
+}
+
+$("#worldpanellink").addEventListener("click", async () => {
+    const { inviteLink } = await serversOf();
+    const { client, entered } = state.onServer;
+
+    try {
+        const link = inviteLink(`${location.origin}${location.pathname}`, { address: client.record, id: client.record.id, world: entered.world, key: await playersKey() });
+        const anchor = $("#worldpanelinvitelink");
+
+        anchor.href = link;
+        anchor.textContent = link;
+        anchor.hidden = false;
+        navigator.clipboard?.writeText(link).catch(() => {});
+        $("#worldpanelstatus").textContent = "";
+    } catch (error) {
+        $("#worldpanelstatus").textContent = error.message;
+    }
+});
+
+$("#worldpanelcode").addEventListener("click", async () => {
+    const { client, entered } = state.onServer;
+
+    try {
+        const key = await playersKey();
+        const { keys } = await client.keys(entered.world, entered.session);
+        const shown = keys.find((one) => key.replace(/-/g, "").slice(0, 4) === one.id);
+        const { code } = await client.makeCode(entered.world, entered.session, { key: shown.id });
+
+        $("#worldpanelinvitecode").textContent = code;
+        $("#worldpanelinvitecode").hidden = false;
+        $("#worldpanelstatus").textContent = "";
+        showWorldKeys();
+    } catch (error) {
+        $("#worldpanelstatus").textContent = error.message;
+    }
+});
+
+$("#worldpanelback").addEventListener("click", () => {
+    $("#worldpanel").close();
+    resume();
+});
+$("#worldpanelleave").addEventListener("click", () => {
+    $("#worldpanel").close();
+    quit();
+});
+$("#worldbutton").addEventListener("click", openWorldPanel);
+$("#worldsbutton").addEventListener("click", () => openWorlds());
+$("#worldsaddform").addEventListener("submit", addServer);
+$("#worldsback").addEventListener("click", () => $("#worlds").close());
+$("#worldschange").addEventListener("click", () => openCharacters("worlds"));
+$("#worldscarry").addEventListener("click", askCarry);
 
 $("#joinbutton").addEventListener("click", () => openJoin());
 $("#joinform").addEventListener("submit", join);
@@ -1833,6 +2551,10 @@ window.addEventListener("pagehide", () => telemetry.closed());
 document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);
     state.together?.hosting?.pause(document.hidden);
+
+    if (state.onServer) {
+        state.together?.joining?.away(document.hidden);
+    }
 
     if (document.hidden) {
         pause();
@@ -2043,6 +2765,15 @@ async function start() {
 
     if (params.has("join")) {
         openJoin(params.get("join"));
+    } else if (/[#&]server=/.test(location.hash)) {
+        const { inviteOf } = await serversOf();
+        const invite = inviteOf(location.hash);
+
+        history.replaceState(null, "", `${location.pathname}${location.search}`);
+
+        if (invite) {
+            openWorlds({ invite });
+        }
     }
 }
 

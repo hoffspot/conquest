@@ -1,5 +1,6 @@
 // Playing together in the browser (docs/WAR.md M11): a world opened to others, or another's
-// joined, through the relay (server/relay.js), by a WebSocket. What's said over it, and what it
+// joined, through the relay (server/relay.js), by a WebSocket; or a world on a world server
+// entered, by its play socket (server/play.js: app/servers.js). What's said over it, and what it
 // means, is core/netplay.js's; this only carries it.
 //
 //   const world = await openWorld(game);                 // { code, hosting, close() }
@@ -54,13 +55,14 @@ export function cleanCode(text) {
     return String(text ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
 }
 
-// A WebSocket to the relay once it's open (rejects if it can't be reached in time)
-function connect(address) {
+// A WebSocket to the relay (or a world server's play socket, speaking `protocol`) once it's open
+// (rejects if it can't be reached in time)
+function connect(address, protocol) {
     return new Promise((resolve, reject) => {
         let socket;
 
         try {
-            socket = new WebSocket(address);
+            socket = protocol ? new WebSocket(address, protocol) : new WebSocket(address);
         } catch {
             reject(new Error("unreachable"));
 
@@ -86,19 +88,25 @@ function connect(address) {
 /**
  * The link to the relay: a WebSocket, what's said over it in the relay's lines (server/relay.js).
  * Hears: onPeer(peer), onFrom(peer, text), onGone(peer), onHere(peers) (who's still in, back
- * after a drop) as a host; onData(text), onClosed() (the host's gone), onAway() and onBack() (the
- * host's link dropped, and back) as one who's joined; onLost() when its own link's dropped, and it's
- * coming back on another; onFound() once it has; onDrop() when it's lost for good.
+ * after a drop) as a host; onData(text), onClosed(reason) (the host's gone, or the world server's
+ * sent this game out, saying why), onAway() and onBack() (the host's link dropped, and back) as one
+ * who's joined; onLost() when its own link's dropped, and it's coming back on another; onFound()
+ * once it has; onDrop() when it's lost for good.
+ *
+ * It's a world server's play socket too (`protocol` PLAY_PROTOCOL: server/play.js), whose lines
+ * differ only in its place's: prove() (`hi`), enter() (`entered`, after `waiting N`: onWaiting(n)),
+ * and `closed REASON`.
  */
 export class RelayLink {
-    /** A link to the relay at `address`, once it's open (rejects if it can't be reached). */
-    static async open(address = relayAddress(), timing = LINK_TIMING) {
-        return new RelayLink(await connect(address), address, timing);
+    /** A link to the relay at `address` (or a world server's play socket, speaking `protocol`), once it's open (rejects if it can't be reached). */
+    static async open(address = relayAddress(), timing = LINK_TIMING, protocol = undefined) {
+        return new RelayLink(await connect(address, protocol), address, timing, protocol);
     }
 
-    constructor(socket, address = null, timing = LINK_TIMING) {
+    constructor(socket, address = null, timing = LINK_TIMING, protocol = undefined) {
         this.address = address;
         this.timing = timing;
+        this.protocol = protocol;
         this.waiting = null;
         this.closing = false;
 
@@ -127,6 +135,9 @@ export class RelayLink {
         this.onLost = () => {};
         this.onFound = () => {};
         this.onDrop = () => {};
+
+        /** Told its place in the queue (1 first) while a world server's world waits its turn to run. */
+        this.onWaiting = () => {};
 
         /** Told how long the relay took to answer a ping (ms): the round trip over this game's own link. */
         this.onRtt = () => {};
@@ -182,6 +193,18 @@ export class RelayLink {
                 this.waiting?.resolve(about);
                 this.waiting = null;
                 break;
+            case "entered":
+                this.place = token ? { line: `reenter ${this.code} ${about} ${token}`, code: this.code } : null;
+                this.waiting?.resolve(about);
+                this.waiting = null;
+                break;
+            case "hi":
+                this.waiting?.resolve(line.split(" ").slice(1));
+                this.waiting = null;
+                break;
+            case "waiting":
+                this.onWaiting(Number(about));
+                break;
             case "error":
                 this.waiting?.reject(new Error(about));
                 this.waiting = null;
@@ -217,9 +240,22 @@ export class RelayLink {
                 this.onBack();
                 break;
             case "closed":
-                this.closing = true;
-                this.#stopBeating();
-                this.onClosed();
+                // (A world server's refusal of what it was asked is the ask's answer: coming back
+                // on a new link, `gone` gives the place up, as the relay's `error gone` does)
+                if (this.waiting) {
+                    if (!this.reconnecting) {
+                        this.closing = true;
+                        this.#stopBeating();
+                    }
+
+                    this.waiting.reject(new Error(about ?? "closed"));
+                    this.waiting = null;
+                } else {
+                    this.closing = true;
+                    this.#stopBeating();
+                    this.onClosed(about ?? null);
+                }
+
                 break;
             default:
                 break;
@@ -241,6 +277,29 @@ export class RelayLink {
         this.#beat();
 
         return code;
+    }
+
+    /**
+     * A world server's proof of who it is, for `nonce` (core/identity.js newNonce): resolves with
+     * [id, publicKey, signature], for core/identity.js verifyIdentity to check.
+     */
+    prove(nonce) {
+        return this.#ask(`hi ${nonce}`);
+    }
+
+    /**
+     * Into a world on a world server, by a session its /api/v1/enter gave: resolves with this
+     * game's name in it (onWaiting(n) meanwhile, while it waits its turn to run); rejects with the
+     * reason it's refused (server/play.js: key-revoked, banned, full, too-many, newer, broken...).
+     */
+    async enter(world, session) {
+        this.code = world;
+
+        const peer = await this.#ask(`enter ${world} ${session}`);
+
+        this.#beat();
+
+        return peer;
     }
 
     /** Join the room with a code: resolves with this one's name in it (rejects: "no-room", "full", "away"). */
@@ -336,7 +395,7 @@ export class RelayLink {
 
         this.retryTimer = setTimeout(async () => {
             try {
-                const socket = await connect(this.address);
+                const socket = await connect(this.address, this.protocol);
 
                 if (this.closing) {
                     socket.close();

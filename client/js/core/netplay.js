@@ -676,9 +676,13 @@ export class Joining {
         this.onUnsaid = () => {};
     }
 
-    /** Ask to join, as a character (as Host.join takes it). */
-    hello(character) {
-        this.send(encode({ kind: "hello", version: NET_VERSION, character }));
+    /**
+     * Ask to join, as a character (as Host.join takes it); in a world server's world that keeps its
+     * players' heroes, as one of theirs (`hero`: its slot) or a new one ("new", the character's
+     * looks taken alone: server/world-worker.js).
+     */
+    hello(character, { hero } = {}) {
+        this.send(encode({ kind: "hello", version: NET_VERSION, character, ...(hero !== undefined ? { hero } : {}) }));
     }
 
     /** What the host said. */
