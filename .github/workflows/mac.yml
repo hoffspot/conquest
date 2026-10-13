@@ -1,13 +1,13 @@
 name: Mac app
 
 # The menu-bar app (mac/) built on a Mac, put in its bundle with Node and the server and signed ad
-# hoc (scripts/build-mac-app.js), then opened: its server answering on the usual port, and on Quit
-# every world saved before it goes; and the Homebrew formula installed from a tap of its own and
-# its test run (generated/world_server_plan.md §11, Phase 2; docs/MAC_APP.md). Run by hand
-# (Actions, Mac app, Run workflow), and on a pull request that changes the app, its bundle, or how
-# the server runs for it. A public repository's Mac runners cost nothing. The zip, the server's
-# archive and the formula are kept with the run, for a release; and a picture of the screen with
-# the app running
+# hoc (scripts/build-mac-app.js), then opened: its item in the menu bar (mac/ci/status-item.swift),
+# its server answering on the usual port, and on Quit every world saved before it goes; and the
+# Homebrew formula installed from a tap of its own and its test run (generated/world_server_plan.md
+# §11, Phase 2; docs/MAC_APP.md). Run by hand (Actions, Mac app, Run workflow), and on a pull
+# request that changes the app, its bundle, or how the server runs for it. A public repository's
+# Mac runners cost nothing. The zip, the server's archive and the formula are kept with the run,
+# for a release; and pictures of the screen with the app running, and its menu open
 on:
   workflow_dispatch:
   pull_request:
@@ -41,7 +41,7 @@ jobs:
       - name: Make the bundle, sign it ad hoc and zip it; the server's archive and the formula
         run: node scripts/build-mac-app.js --executable "$(swift build -c release --arch arm64 --package-path mac --show-bin-path)/PellagosServer"
 
-      - name: Open the app, see its server answer, and quit it
+      - name: Open the app, find its item in the menu bar, see its server answer, and quit it
         run: |
           log="$HOME/Library/Logs/io.github.hoffspot.pellagos-server/server.log"
           open "dist/Pellagos Server.app"
@@ -49,11 +49,19 @@ jobs:
           curl -sf http://localhost:8480/api/v1/health
           curl -sf http://localhost:8481/ > /dev/null
           pgrep -f "Pellagos Server.app/Contents/Helpers/node"
+          # (Its item in the menu bar, found by where the app's windows are; then its menu, opened
+          # with a click if the runner lets one be posted, pictured, and closed again)
+          swiftc -O mac/ci/status-item.swift -o "$RUNNER_TEMP/status-item"
           sleep 2
+          "$RUNNER_TEMP/status-item" "$(pgrep -x PellagosServer)"
           screencapture -x dist/screen.png || true
+          "$RUNNER_TEMP/status-item" "$(pgrep -x PellagosServer)" click || true
+          sleep 1
+          screencapture -x dist/menu.png || true
+          "$RUNNER_TEMP/status-item" "$(pgrep -x PellagosServer)" click || true
           # (Quit as the menu's Quit does, by Apple Event; if the runner won't send one, SIGTERM:
           # the app goes at once, and its server, its pipe closed, saves and stops just the same)
-          perl -e 'alarm 30; exec @ARGV' osascript -e 'tell application id "io.github.hoffspot.pellagos-server" to quit' || pkill -TERM -x PellagosServer
+          if perl -e 'alarm 30; exec @ARGV' osascript -e 'tell application id "io.github.hoffspot.pellagos-server" to quit'; then echo "Quit, as the menu quits it"; else echo "Quit refused here: SIGTERM"; pkill -TERM -x PellagosServer; fi
           for try in $(seq 1 60); do pgrep -f "Pellagos Server.app/Contents/Helpers/node" > /dev/null || break; sleep 1; done
           ! pgrep -f "Pellagos Server.app/Contents/Helpers/node"
           ! pgrep -x PellagosServer
@@ -78,11 +86,11 @@ jobs:
             dist/pellagos-server.rb
           retention-days: 14
 
-      - name: Keep the picture of the screen
+      - name: Keep the pictures of the screen
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mac-screen
-          path: dist/screen.png
+          path: dist/*.png
           retention-days: 14
           if-no-files-found: ignore

@@ -316,7 +316,8 @@ class PellagosServer < Formula
 
   test do
     port = free_port
-    pid = spawn bin/"pellagos-server", "--port", port.to_s, "--admin", free_port.to_s, "--data", testpath/"data"
+    # (What it says goes to a file: its admin key isn't for a build's log)
+    pid = spawn bin/"pellagos-server", "--port", port.to_s, "--admin", free_port.to_s, "--data", testpath/"data", [:out, :err] => (testpath/"server.log").to_s
     sleep 10
     assert_match "ok", shell_output("curl -s http://127.0.0.1:#{port}/api/v1/health")
   ensure

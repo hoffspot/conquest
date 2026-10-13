@@ -111,17 +111,17 @@ system libraries, keeps its report with the run as `soak-report`, and is ended a
 pull request and 4 hours by hand. It isn't a required check: most pull requests never run it.
 
 `.github/workflows/mac.yml` builds the world server's Mac app on a Mac (a public repository's Mac
-runners cost nothing): the menu-bar app (`mac/`, Swift), put in its bundle with Node and the
-server and signed ad hoc (`npm run build:mac`, below); then it opens the app, sees its server
-answer on port 8480, quits it and checks every world was saved first; and installs the Homebrew
-formula from a tap of its own and runs its test. It runs by hand (Mac app, Run workflow) and on a
-pull request that changes `mac/`, `scripts/build-mac-app.js`, `server/world.js`,
-`server/platform/` or the workflow, keeps the zip, the server's archive and the formula with the
-run as `pellagos-server-mac` (and a picture of the screen as `mac-screen`), and is ended at 30
-minutes. It isn't a required check, but a pull request that runs it is merged only once it's
-green: nothing else compiles the Swift. This container has no Swift; the app's own checks on a Mac
-(first launch, the firewall's and Local Network's prompts, run at login, sleep) are the owner's
-(docs/MAC_APP.md).
+runners cost nothing): the menu-bar app (`mac/`, Swift), put in its bundle with Node and the server
+and signed ad hoc (`npm run build:mac`, below); then it opens the app, finds its item in the menu
+bar (`mac/ci/status-item.swift`), sees its server answer on port 8480, quits it and checks every
+world was saved first; and installs the Homebrew formula from a tap of its own and runs its test.
+It runs by hand (Mac app, Run workflow) and on a pull request that changes `mac/`,
+`scripts/build-mac-app.js`, `server/world.js`, `server/platform/` or the workflow, keeps the zip,
+the server's archive and the formula with the run as `pellagos-server-mac` (and pictures of the
+screen, its menu open, as `mac-screen`), and is ended at 30 minutes. It isn't a required check, but
+a pull request that runs it is merged only once it's green: nothing else compiles the Swift. This
+container has no Swift; the app's own checks on a Mac (first launch, the firewall's and Local
+Network's prompts, run at login, sleep) are the owner's (docs/MAC_APP.md).
 
 ### Every npm script
 
