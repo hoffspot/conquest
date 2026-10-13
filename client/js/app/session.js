@@ -64,5 +64,6 @@ export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining
 
     joining.attach(host);
 
-    return new Game({ view, kit, sound, world, hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, told, onTold });
+    // (Their hero as the world has them: in a world server's world that keeps heroes, the world's, not the device's)
+    return new Game({ view, kit, sound, world, hero: host.players.get(welcome.id)?.hero ?? hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, told, onTold });
 }

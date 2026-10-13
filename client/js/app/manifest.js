@@ -54,7 +54,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/partypanel.js", 20779],
             ["js/app/predict.js", 6326],
             ["js/app/quickbar.js", 14679],
-            ["js/app/session.js", 4045],
+            ["js/app/session.js", 4207],
             ["js/app/spellbook.js", 8125],
             ["js/app/spellicons.js", 54331],
             ["js/app/steering.js", 11341],

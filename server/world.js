@@ -30,7 +30,7 @@ console.log(`Worlds kept: ${server.worlds.size}`);
 
 if (server.adminKey) {
     console.log(`\nIts admin key, shown this once (keep it safe; it manages the server):\n\n    ${server.adminKey}\n`);
-    console.log(`Make a world with it:\n\n    curl -X POST http://localhost:${port}/api/v1/worlds -H "Authorization: Key ${server.adminKey}" -H "Content-Type: application/json" -d '{"name": "My world", "race": "human"}'\n`);
+    console.log(`Make a world with it: open the game from http://localhost:${port}, then Worlds on servers, add this server (localhost:${port}) and Make a world. Or:\n\n    curl -X POST http://localhost:${port}/api/v1/worlds -H "Authorization: Key ${server.adminKey}" -H "Content-Type: application/json" -d '{"name": "My world", "race": "human"}'\n`);
 }
 
 let stopping = false;

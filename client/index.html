@@ -65,6 +65,7 @@
                     <button type="button" id="newbutton" class="button">New character</button>
                     <button type="button" id="savedbutton" class="button" hidden>Saved character</button>
                     <button type="button" id="joinbutton" class="button">Join a world</button>
+                    <button type="button" id="worldsbutton" class="button">Worlds on servers</button>
                 </div>
                 <p class="note" id="savenote" hidden></p>
                 <p class="note warning" id="titlenote" role="status" hidden></p>
@@ -239,6 +240,71 @@
             </form>
         </dialog>
 
+        <!-- Worlds kept on world servers (generated/world_server_plan.md §8.1): the servers known,
+             each's worlds (those listed, and those a key or ticket's held for), servers added by an
+             address, and short codes and invite links; worlds made; servers and tickets carried -->
+        <dialog id="worlds" class="together characters worlds" aria-labelledby="worldstitle">
+            <h2 id="worldstitle">Worlds on servers</h2>
+            <p class="note" id="worldsnote">Worlds kept on a server, a Mac at home or a friend's, that go on when you leave and wait for you to come back.</p>
+            <ul class="character-list world-list" id="worldslist"></ul>
+            <form id="worldsaddform" class="worlds-add">
+                <label class="field" for="worldsaddress">Add a server, or paste an invite link</label>
+                <div class="worlds-row">
+                    <input type="text" id="worldsaddress" class="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="studio-mac.local:8480">
+                    <button type="submit" class="button" id="worldsadd">Add</button>
+                </div>
+            </form>
+            <p class="note" id="worldswho"></p>
+            <button type="button" class="button quiet" id="worldschange" hidden>Change who comes</button>
+            <p class="note warning" id="worldsstatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button quiet" id="worldscarry">My servers and tickets</button>
+                <button type="button" class="button" id="worldsback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- One thing asked of a world server: a short code or a world's key, a world made, servers
+             and tickets carried to another page, or a world's hero chosen -->
+        <dialog id="worldask" class="together characters worlds" aria-labelledby="worldasktitle">
+            <form method="dialog" id="worldaskform">
+                <h2 id="worldasktitle"></h2>
+                <p class="note" id="worldasknote"></p>
+                <div class="worlds-fields" id="worldaskfields"></div>
+                <ul class="character-list" id="worldaskchoices" hidden></ul>
+                <p class="note warning" id="worldaskstatus" role="status"></p>
+                <div class="menu">
+                    <button type="submit" class="button primary" id="worldaskgo">Go</button>
+                    <button type="button" class="button" id="worldaskback">Back</button>
+                </div>
+            </form>
+        </dialog>
+
+        <!-- In a world on a server: its name and server, who's here, and for its owner its keys and
+             invites; and leaving it -->
+        <dialog id="worldpanel" class="together characters worlds" aria-labelledby="worldpaneltitle">
+            <h2 id="worldpaneltitle">World</h2>
+            <p class="note" id="worldpanelnote"></p>
+            <h3 class="worlds-heading">Here now</h3>
+            <ul class="world-people" id="worldpanelpeople"></ul>
+            <div id="worldpanelowner" hidden>
+                <h3 class="worlds-heading">Invite others</h3>
+                <p class="note">An invite link carries this server and a key to the world. A short code works once, for half an hour.</p>
+                <div class="menu">
+                    <button type="button" class="button quiet" id="worldpanellink">Make an invite link</button>
+                    <button type="button" class="button quiet" id="worldpanelcode">Make a short code</button>
+                </div>
+                <p class="code" id="worldpanelinvitecode" hidden></p>
+                <a id="worldpanelinvitelink" hidden></a>
+                <h3 class="worlds-heading">Keys</h3>
+                <ul class="character-list" id="worldpanelkeys"></ul>
+            </div>
+            <p class="note warning" id="worldpanelstatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="worldpanelback">Back to the game</button>
+                <button type="button" class="button danger" id="worldpanelleave">Leave the world</button>
+            </div>
+        </dialog>
+
         <!-- The characters kept (up to six): one chosen to play or delete, to make way for a new one,
              or to bring to someone's world -->
         <dialog id="characters" class="together characters" aria-labelledby="characterstitle">
@@ -310,6 +376,7 @@
                 <div class="menu">
                     <button type="button" class="button primary" id="resumebutton">Resume</button>
                     <button type="button" class="button" id="invitebutton">Invite others</button>
+                    <button type="button" class="button" id="worldbutton" hidden>World</button>
                     <button type="button" class="button" id="optionsbutton">Game options</button>
                     <button type="button" class="button" id="quitbutton">Back to the title</button>
                 </div>
