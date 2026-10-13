@@ -12,7 +12,7 @@ import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Joining, NET_VERSION } from "../client/js/core/netplay.js";
 import { keepAwake } from "../server/platform/index.js";
-import { recommendedWorlds, Registry, WORLD_MEMORY } from "../server/registry.js";
+import { recommendation, recommendedWorlds, Registry, WORLD_MEMORY } from "../server/registry.js";
 import { WorldStore } from "../server/storage/worlds.js";
 import { WorldThread } from "../server/world-thread.js";
 import { encode } from "../client/js/core/wire.js";
@@ -233,10 +233,12 @@ describe("the worlds the server runs (server/registry.js)", () => {
         assert.ok(opened - before < 2 * WORLD_MEMORY, "two worlds within what's allowed for them");
     });
 
-    it("recommends as many worlds as half the memory holds and the cores can step, one at the least", () => {
-        assert.equal(recommendedWorlds({ memory: 16 * 2 ** 30, cores: 8 }), 7);
-        assert.equal(recommendedWorlds({ memory: 2 * 2 ** 30, cores: 8 }), 2 ** 30 / WORLD_MEMORY);
-        assert.equal(recommendedWorlds({ memory: 2 ** 30, cores: 1 }), 1);
+    it("recommends as many worlds as the memory past what's kept back holds and the cores can step, one at the least, saying what each allows", () => {
+        assert.deepEqual(recommendation({ memory: 16 * 2 ** 30, cores: 8 }), { most: 7, memory: (12 * 2 ** 30) / WORLD_MEMORY, cpu: 7 });
+        assert.deepEqual(recommendation({ memory: 64 * 2 ** 30, cores: 8 }), { most: 7, memory: (48 * 2 ** 30) / WORLD_MEMORY, cpu: 7 });
+        assert.deepEqual(recommendation({ memory: 8 * 2 ** 30, cores: 12, largest: 2 ** 30 }), { most: 4, memory: 4, cpu: 11 });
+        assert.equal(recommendedWorlds({ memory: 2 * 2 ** 30, cores: 8 }), 1);
+        assert.equal(recommendedWorlds({ memory: 32 * 2 ** 30, cores: 1 }), 1);
         assert.ok(recommendedWorlds() >= 1);
     });
 });

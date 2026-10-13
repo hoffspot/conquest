@@ -16,23 +16,62 @@
 //   POST   /worlds/:id/keys/:key/replace    a key replaced: { key, record }
 //   POST   /worlds/:id/codes {key, minutes?, uses?}                   a short code made: { code, record }
 //
+// A world's owner's (or the admin's) management of it (manage.js), the management page's:
+//
+//   GET    /worlds/:id                      all its owner's shown of it, and how it is in words
+//   PATCH  /worlds/:id {name?, description?, heroes?, firstHero?, settings?}   changed (its heroes mode only while it's set aside)
+//   DELETE /worlds/:id {confirm}            deleted, its name typed (its backups kept)
+//   POST   /worlds/:id/start, /aside, /save                          its life
+//   POST   /worlds/:id/keys/:key/show       a key that works, shown again: { key }
+//   DELETE /worlds/:id/codes/:code          a short code revoked
+//   GET    /worlds/:id/players              its players; POST …/players/:p/kick, /ban, /unban, /role {role}, /ticket
+//   GET    /worlds/:id/backups              its backups; POST makes one; POST …/backups/:b/restore; GET …/backups/:b/download
+//   GET    /worlds/:id/export               the world as one file (manage.js EXPORT_FORMAT)
+//
+// The server's, its admin's alone, from the computer itself or its Wi-Fi (never the internet),
+// answered to the server's own pages alone, each call carrying the management header (admin.js):
+//
+//   POST   /server/session                  the admin key traded for a session (the page, from the Wi-Fi)
+//   GET    /server                          its overview, settings (and what each is), the worlds' rules and peoples
+//   PATCH  /server {settings}               settings changed
+//   GET    /server/worlds                   every world, as GET /worlds/:id
+//   GET    /server/journal, /server/health  what's happened; how it's keeping up
+//   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
+//   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
+//
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
-// `Authorization: Key <key>` (the admin key, or a creator key), or a key in the body.
+// `Authorization: Key <key>` (the admin key, or a creator key), or a key in the body; on the
+// computer's own listener (admin.js), it's the server's admin.
 
 import { randomInt } from "node:crypto";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
+import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
 import { answer, bodyOf, guard, Refusal, urlOf } from "./guards.js";
+import { Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
+import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
+import { WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
 
 /** How many times a minute one address may ask for the server's card. */
 export const STATUS_PER_MINUTE = 60;
+
+/** The header every server-management call carries, and what it says (admin.js: a page on another site can't send it unasked). */
+export const MANAGE_HEADER = "x-pellagos";
+export const MANAGE_VALUE = "manage";
+
+/** A file to download, as a route answers it (an export, a backup). */
+export class Download {
+    constructor(name, body, type = "application/gzip") {
+        Object.assign(this, { name, body, type });
+    }
+}
 
 // What each refusal is, as HTTP says it
 const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429 });
@@ -52,12 +91,28 @@ function credentials(request, body = {}) {
 
 /**
  * The API's handler (for requests under API_PATH), over the world server (`server`: world-server.js
- * WorldServer). Returns a function (request, response) that answers.
+ * WorldServer). `mac`: on the computer's own listener (admin.js, which has guarded it), where
+ * whoever asks is the server's admin, and only management is answered. Returns a function
+ * (request, response) that answers.
  */
-export function apiHandler(server) {
+export function apiHandler(server, { mac = false } = {}) {
     const { access, registry } = server;
     const { policy } = access;
     const status = new Rate(STATUS_PER_MINUTE);
+
+    // Who's asking (a principal: access/policy.js), from what they showed, or the admin on the computer itself
+    const principalOf = (request, { world = null, body = {} } = {}) => {
+        if (request.from === "mac") {
+            return { kind: "admin", from: "mac", address: request.address };
+        }
+
+        const { session, key, ticket } = credentials(request, body);
+
+        return policy.identify({ world, session, key, ticket, address: request.address, from: request.from }).principal;
+    };
+
+    // Who did it, as the journals say it
+    const byOf = (principal) => (principal.kind === "admin" ? (principal.from === "mac" ? "the admin, on the server's computer" : "the admin") : principal.admin ? "the admin" : (principal.player?.id ?? "an owner"));
 
     // A world's card, as a listing shows it: its name, home people, heroes, players in it now and their heroes' names
     const cardOf = (id) => {
@@ -104,14 +159,13 @@ export function apiHandler(server) {
         return { ...entered, world, card: cardOf(world), heroes, life, position, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } };
     };
 
-    // The owner's (or a trusted player's) principal for a world's management, from a session
+    // The owner's (or a trusted player's, or the admin's) principal for a world's management
     const managing = (request, world, action, target = {}) => {
         if (!server.metaOf(world)) {
             throw refuse("no-world");
         }
 
-        const { session, key } = credentials(request);
-        const { principal } = policy.identify({ world, session, key, address: request.address, from: request.from });
+        const principal = principalOf(request, { world });
         const allowed = policy.allows(principal, action, { world, meta: server.metaOf(world), ...target });
 
         if (!allowed.yes) {
@@ -122,8 +176,40 @@ export function apiHandler(server) {
         return principal;
     };
 
+    // The server's admin's principal, for the server's management (from the computer or its Wi-Fi alone)
+    const admin = (request) => {
+        const principal = principalOf(request);
+        const allowed = policy.allows(principal, "server.manage");
+
+        if (!allowed.yes) {
+            const { why } = allowed;
+
+            policy.on("refused", { why, address: request.address });
+            throw new Refusal(STATUS[why] ?? 403, why, why === "home" ? REFUSED.home : why === "key" ? "That isn't this server's admin key (or no longer is)." : "Only the server's admin can do that.");
+        }
+
+        return principal;
+    };
+
+    // A world's management, as manage.js does it: its refusals as the API's
+    const doing = async (work) => {
+        try {
+            return await work();
+        } catch (error) {
+            if (error instanceof Refused) {
+                throw new Refusal(error.status, error.error, error.message);
+            }
+
+            throw error;
+        }
+    };
+
+    const { manage } = server;
+    const WORLD = "([a-z0-9]{10})";
+    const PLAYER = "([0-9A-Z]{10})";
+
     const routes = [
-        ["GET", /^\/status$/, async (request) => {
+        ["GET", /^\/status$/, { game: true }, async (request) => {
             if (!status.allow(request.address)) {
                 throw refuse("wait", { message: "Asked too often: wait a moment." });
             }
@@ -138,12 +224,12 @@ export function apiHandler(server) {
                 players: [],
             };
         }],
-        ["GET", /^\/health$/, async () => {
+        ["GET", /^\/health$/, { game: true }, async () => {
             const slow = registry.going.some((entry) => (entry.thread?.state?.steps?.p99 ?? 0) > 50);
 
             return { health: slow ? "slow" : "ok" };
         }],
-        ["POST", /^\/enter$/, async (request, body) => {
+        ["POST", /^\/enter$/, { game: true }, async (request, body) => {
             const { world } = body;
 
             if (typeof world !== "string" || !server.metaOf(world)) {
@@ -155,7 +241,7 @@ export function apiHandler(server) {
 
             return enter(principal, world, body);
         }],
-        ["POST", /^\/codes\/redeem$/, async (request, body) => {
+        ["POST", /^\/codes\/redeem$/, { game: true }, async (request, body) => {
             const redeemed = await access.redeem(body.code, { address: request.address });
 
             if (!redeemed.ok) {
@@ -167,8 +253,7 @@ export function apiHandler(server) {
             return { key: redeemed.key, ...(await enter(principal, redeemed.world, body)) };
         }],
         ["GET", /^\/worlds$/, async (request) => {
-            const { session, key } = credentials(request);
-            const { principal } = policy.identify({ session, key, address: request.address, from: request.from });
+            const principal = principalOf(request);
 
             if (principal.kind === "refused" || principal.kind === "anyone") {
                 throw refuse(principal.why ?? "key");
@@ -180,8 +265,7 @@ export function apiHandler(server) {
             return { worlds: [...ids].map(cardOf) };
         }],
         ["POST", /^\/worlds$/, async (request, body) => {
-            const { session, key } = credentials(request, body);
-            const { principal } = policy.identify({ session, key, address: request.address, from: request.from });
+            const principal = principalOf(request, { body });
             const allowed = policy.allows(principal, "world.create");
 
             if (!allowed.yes) {
@@ -194,7 +278,7 @@ export function apiHandler(server) {
             }
 
             try {
-                return await server.createWorld({ ...body, seed: Number.isSafeInteger(body.seed) ? body.seed : randomInt(2 ** 31) }, { creator: principal.kind === "creator" ? principal.creator.label : "the server's admin" });
+                return await server.createWorld({ ...body, seed: Number.isSafeInteger(body.seed) ? body.seed : randomInt(2 ** 31) }, { creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) });
             } catch (error) {
                 throw new Refusal(400, "bad-request", error.message);
             }
@@ -249,16 +333,168 @@ export function apiHandler(server) {
 
             return made;
         }],
+
+        // ---- A world's management (manage.js)
+
+        ["GET", new RegExp(`^/worlds/${WORLD}$`), async (request, body, [, world]) => {
+            managing(request, world, "world.manage");
+
+            return doing(() => manage.details(world));
+        }],
+        ["PATCH", new RegExp(`^/worlds/${WORLD}$`), async (request, body, [, world]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => manage.change(world, body, { by: byOf(principal) }));
+        }],
+        ["DELETE", new RegExp(`^/worlds/${WORLD}$`), async (request, body, [, world]) => {
+            const principal = managing(request, world, "world.delete");
+
+            return doing(() => manage.delete(world, body.confirm, { by: byOf(principal) }));
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/(start|aside|save)$`), async (request, body, [, world, what]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => (what === "start" ? manage.start(world) : what === "aside" ? manage.setAside(world, `set aside by ${byOf(principal)}`) : manage.save(world)));
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/keys/([0-9A-Z]{4})/show$`), async (request, body, [, world, id]) => {
+            managing(request, world, "world.manage");
+
+            const key = access.world(world).showKey(id, new Date(access.clock()));
+
+            if (!key) {
+                throw new Refusal(404, "no-key", "There's no such key working in that world.");
+            }
+
+            return { key };
+        }],
+        ["DELETE", new RegExp(`^/worlds/${WORLD}/codes/([0-9A-Z]{6})$`), async (request, body, [, world, id]) => {
+            managing(request, world, "key.revoke");
+
+            return { revoked: await access.revokeCodes(world, [id]) };
+        }],
+        ["GET", new RegExp(`^/worlds/${WORLD}/players$`), async (request, body, [, world]) => {
+            managing(request, world, "world.manage");
+
+            return { players: await doing(() => manage.players(world)) };
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/players/${PLAYER}/(kick|ban|unban|role|ticket)$`), async (request, body, [, world, player, what]) => {
+            const principal = managing(request, world, { kick: "player.kick", ban: "player.ban", unban: "player.ban" }[what] ?? "world.manage");
+            const by = byOf(principal);
+
+            return doing(() => (what === "role" ? manage.role(world, player, body.role, { by }) : manage[what](world, player, { by })));
+        }],
+        ["GET", new RegExp(`^/worlds/${WORLD}/backups$`), async (request, body, [, world]) => {
+            managing(request, world, "world.manage");
+
+            return { backups: await doing(() => manage.backups(world)) };
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/backups$`), async (request, body, [, world]) => {
+            managing(request, world, "world.manage");
+
+            return { backups: await doing(() => manage.backUp(world)) };
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/backups/([A-Za-z0-9-]{1,64})/restore$`), async (request, body, [, world, backup]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => manage.restore(world, backup, { by: byOf(principal) }));
+        }],
+        ["GET", new RegExp(`^/worlds/${WORLD}/backups/([A-Za-z0-9-]{1,64})/download$`), async (request, body, [, world, backup]) => {
+            managing(request, world, "world.manage");
+
+            const { name, body: file } = await doing(() => manage.export(world, backup));
+
+            return new Download(name, file);
+        }],
+        ["GET", new RegExp(`^/worlds/${WORLD}/export$`), async (request, body, [, world]) => {
+            managing(request, world, "world.manage");
+
+            const { name, body: file } = await doing(() => manage.export(world));
+
+            return new Download(name, file);
+        }],
+
+        // ---- The server's management (its admin's)
+
+        ["POST", /^\/server\/session$/, { server: true }, async (request) => {
+            const principal = admin(request);
+
+            return { session: access.sessionFor(principal) };
+        }],
+        ["GET", /^\/server$/, { server: true }, async (request) => {
+            admin(request);
+
+            return {
+                overview: { ...manage.overview(), adminKey: request.from === "mac" ? (server.adminKey ?? null) : null, mac: request.from === "mac" },
+                settings: manage.settings(),
+                schema: SETTINGS,
+                worldSchema: WORLD_SETTINGS,
+                peoples: Object.entries(RACE).map(([id, { name }]) => ({ id, name })),
+            };
+        }],
+        ["PATCH", /^\/server$/, { server: true }, async (request, body) => {
+            const principal = admin(request);
+
+            return doing(() => manage.changeSettings(body.settings ?? {}, { by: byOf(principal) }));
+        }],
+        ["GET", /^\/server\/worlds$/, { server: true }, async (request) => {
+            admin(request);
+
+            return { worlds: await manage.worlds() };
+        }],
+        ["GET", /^\/server\/journal$/, { server: true }, async (request) => {
+            admin(request);
+
+            return { activity: await manage.activity() };
+        }],
+        ["GET", /^\/server\/health$/, { server: true }, async (request) => {
+            admin(request);
+
+            return manage.health();
+        }],
+        ["GET", /^\/server\/creators$/, { server: true }, async (request) => {
+            admin(request);
+
+            return { creators: manage.creators() };
+        }],
+        ["POST", /^\/server\/creators$/, { server: true }, async (request, body) => {
+            const principal = admin(request);
+
+            return manage.issueCreator(body.label ?? null, { by: byOf(principal) });
+        }],
+        ["DELETE", /^\/server\/creators\/([0-9A-Z]{4})$/, { server: true }, async (request, body, [, id]) => {
+            const principal = admin(request);
+
+            return doing(() => manage.revokeCreator(id, { by: byOf(principal) }));
+        }],
+        ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
+            admin(request);
+
+            if (what === "admin-key") {
+                return manage.newAdminKey();
+            }
+
+            setTimeout(() => server.onStop?.(), 100);
+
+            return { stopping: true };
+        }],
     ];
+
+    // Whether a page's origin is the server's own (one of its names, over http): not the game's on GitHub Pages
+    const own = (origin) => mac || [...server.hosts].some((host) => origin === `http://${host}`);
 
     return async (request, response) => {
         const origin = request.headers.origin;
         let allowedOrigin = null;
 
         try {
-            request.address = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin }, server);
-            request.from = "home";
-            allowedOrigin = origin ?? null;
+            if (mac) {
+                request.address = plainAddress(request.socket.remoteAddress);
+                request.from = "mac";
+            } else {
+                request.address = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin }, server);
+                request.from = "home";
+                allowedOrigin = origin ?? null;
+            }
 
             const url = urlOf(request.url);
 
@@ -272,10 +508,18 @@ export function apiHandler(server) {
 
             const route = url.pathname.slice(API_PATH.length) || "/";
 
+            // (The server's management answers pages from the server alone: never the game's on GitHub Pages)
+            const managed = route.startsWith("/server");
+
+            if (managed && origin !== undefined && !own(origin)) {
+                allowedOrigin = null;
+            }
+
             if (request.method === "OPTIONS") {
                 response.writeHead(204, {
                     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin, Vary: "Origin" } : {}),
-                    "Access-Control-Allow-Methods": "GET, POST, DELETE",
+                    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE",
+                    // (Never the management header: the server's own pages needn't ask, and no other's may send it)
                     "Access-Control-Allow-Headers": "Content-Type, Authorization",
                     "Access-Control-Max-Age": "600",
                 });
@@ -284,16 +528,49 @@ export function apiHandler(server) {
                 return;
             }
 
-            for (const [method, pattern, handle] of routes) {
+            for (const [method, pattern, ...rest] of routes) {
+                const handle = rest.at(-1);
+                const flags = rest.length > 1 ? rest[0] : {};
                 const matched = pattern.exec(route);
 
-                if (matched && method === request.method) {
-                    const body = method === "GET" || method === "DELETE" ? {} : await bodyOf(request);
+                if (!matched || method !== request.method) {
+                    continue;
+                }
 
-                    answer(response, 200, await handle(request, body, matched), { origin: allowedOrigin });
+                // (The game's own calls aren't the management page's; the computer's own are on its listener alone)
+                if ((flags.game && mac) || (flags.mac && !mac)) {
+                    break;
+                }
+
+                if (flags.server) {
+                    if (origin !== undefined && !own(origin)) {
+                        throw new Refusal(403, "origin", "The server's management answers its own pages alone.");
+                    }
+
+                    if (request.headers[MANAGE_HEADER] !== MANAGE_VALUE) {
+                        throw new Refusal(403, "csrf", "Management calls come from the management page itself.");
+                    }
+                }
+
+                const body = method === "GET" ? {} : await bodyOf(request);
+                const answered = await handle(request, body, matched);
+
+                if (answered instanceof Download) {
+                    response.writeHead(200, {
+                        "Content-Type": answered.type,
+                        "Content-Length": answered.body.length,
+                        "Content-Disposition": `attachment; filename="${answered.name.replace(/"/g, "")}"`,
+                        "Cache-Control": "no-store",
+                        ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin, Vary: "Origin" } : {}),
+                    });
+                    response.end(answered.body);
 
                     return;
                 }
+
+                answer(response, 200, answered, { origin: allowedOrigin });
+
+                return;
             }
 
             throw new Refusal(404, "not-found", "There's nothing here by that name.");

@@ -116,7 +116,7 @@ pull request and 4 hours by hand. It isn't a required check: most pull requests 
 | --- | --- |
 | `npm start` | Serves the game and the multiplayer relay on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`) |
 | `npm run dev` | The same, restarting the server when its code changes |
-| `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi alone for now. `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once; make a world with it from the game it serves (the title's **Worlds on servers**: add the server, then Make a world), or by `POST /api/v1/worlds` (it prints how) |
+| `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi alone for now. `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once. Its management page is at `http://localhost:8481` on the same computer, needing no key (`-- --admin 9001` for another port), and at `/admin` on the play port from the Wi-Fi, with the admin key: its worlds (made, started, set aside, backed up, restored, exported, deleted), their keys, codes and players, its settings, what's happened, and its health. Worlds can also be made from the game it serves (the title's **Worlds on servers**: add the server, then Make a world) |
 | `npm test` | Every change. The unit tests take a few minutes |
 | `npm run lint` | Every change. ESLint must be clean |
 | `npm run check` | Lint and the unit tests together: run it before every push |
@@ -139,6 +139,7 @@ pull request and 4 hours by hand. It isn't a required check: most pull requests 
 | `npm run vendor:three` | Only after changing the `three` version in `package.json`, or which of its add-ons the game uses (`ADDONS` in `scripts/vendor-three.js`). Then `npm run build:manifest` |
 | `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
 | `npm run vendor:ed25519` | Only after changing the `@noble/ed25519` or `@noble/hashes` version: bundles the verifier the game checks a world server's identity with (`client/js/core/identity.js`). Then update its import path and `npm run build:manifest` |
+| `npm run vendor:qrcode` | Only after changing the `qrcode-generator` version: copies the QR code maker the world server's management page draws its invites with (`client/admin.html`). Then update its path in `client/js/admin/page.js` and `npm run build:manifest` |
 | `npm run vendor:recast` | Only after changing the recast-navigation version. It also makes Recast's WebAssembly start with 16 MB of memory, not the 64 MB it's built with (`STARTING_MEMORY`, by `scripts/wasm-memory.js`); `test/release.test.js` checks it. Then `npm run build:manifest` |
 
 ### The browser tests

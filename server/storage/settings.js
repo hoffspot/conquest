@@ -21,7 +21,8 @@ export const SETTINGS_STEPS = Object.freeze({});
  * for (as the management page says it).
  */
 export const SETTINGS = Object.freeze({
-    port: { kind: "integer", min: 1, max: 65535, default: 8480, about: "The port players and the management page reach the server on" },
+    port: { kind: "integer", min: 1, max: 65535, default: 8480, about: "The port players reach the server on (and the management page, from the Wi-Fi, at /admin)" },
+    adminPort: { kind: "integer", min: 1, max: 65535, default: 8481, about: "The port the management page answers on, on this computer alone, needing no key" },
     worldsAtOnce: { kind: "integer", min: 1, max: 64, default: 2, about: "How many worlds may be running or loading at once" },
     setAsideMinutes: { kind: "number", min: 0, max: 1440, default: 2, about: "How long a world with nobody in it waits before it's saved and set aside (minutes)" },
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },

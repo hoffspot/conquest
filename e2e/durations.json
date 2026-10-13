@@ -1,4 +1,6 @@
 {
+    "admin.spec.js › from the Wi-Fi, the page at /admin asks for the admin key first": 0.7,
+    "admin.spec.js › the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, and deleted with its name typed": 6.9,
     "building-lab.spec.js › builds a street of every style of house in a few draw calls, and the town": 11.1,
     "building-lab.spec.js › builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, and barracks and a guardhouse": 6.3,
     "building-lab.spec.js › draws a people's homeland: its own ground, its own trees, and its own things lying about": 11,

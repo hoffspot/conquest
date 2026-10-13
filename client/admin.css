@@ -1,0 +1,561 @@
+/* The world server's management page (admin.html): the game's menus' colours and type
+   (styles.css), on a page that scrolls like any other. */
+
+:root {
+    --ink: #f1e6cf;
+    --muted: #b8a887;
+    --faint: #8a7d66;
+    --gold: #dcb46a;
+    --gold-bright: #f3cf82;
+    --gold-deep: #8f6a2c;
+    --panel: rgba(22, 18, 14, 0.86);
+    --panel-solid: #1a1510;
+    --panel-border: rgba(220, 180, 106, 0.32);
+    --field: rgba(255, 244, 220, 0.06);
+    --field-border: rgba(220, 180, 106, 0.22);
+    --good: #86c35c;
+    --warn: #ec8a1c;
+    --bad: #d4533b;
+    --background: #15120e;
+
+    --font-display: "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(120, 90, 50, 0.3), transparent 55%),
+        var(--background);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.45;
+    padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+}
+
+h1,
+h2,
+h3 {
+    font-family: var(--font-display);
+    color: var(--gold-bright);
+    font-weight: 600;
+    margin: 0 0 6px;
+    text-wrap: balance;
+}
+
+h1 {
+    font-size: 26px;
+    letter-spacing: 0.04em;
+}
+
+h2 {
+    font-size: 21px;
+}
+
+h3 {
+    font-size: 17px;
+    color: var(--gold);
+}
+
+p {
+    margin: 0 0 8px;
+}
+
+a {
+    color: var(--gold-bright);
+}
+
+code,
+.code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    word-break: break-all;
+    user-select: all;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.small {
+    font-size: 13px;
+}
+
+.warning {
+    color: var(--warn);
+    min-height: 0;
+}
+
+.warning:empty,
+.status:empty {
+    display: none;
+}
+
+.status {
+    padding: 8px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: var(--panel);
+    margin: 0 0 14px;
+}
+
+.good {
+    color: var(--good);
+}
+
+.bad {
+    color: var(--bad);
+}
+
+/* --- The top: its name, and the sections --- */
+
+#top {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px 24px;
+    padding: 16px 20px 10px;
+    background: linear-gradient(rgba(21, 18, 14, 0.97), rgba(21, 18, 14, 0.9));
+    border-bottom: 1px solid var(--panel-border);
+    backdrop-filter: blur(6px);
+}
+
+#top .brand p {
+    margin: 0;
+    font-size: 13px;
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+nav button {
+    appearance: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+}
+
+nav button:hover {
+    color: var(--ink);
+    border-color: var(--field-border);
+}
+
+nav button:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+}
+
+nav button[aria-current="page"] {
+    color: var(--gold-bright);
+    background: var(--field);
+    border-color: var(--panel-border);
+}
+
+main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 18px 20px 60px;
+}
+
+/* --- Panels, cards and the like --- */
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+}
+
+.panel.narrow {
+    max-width: 480px;
+    margin: 40px auto;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+.card {
+    background: var(--panel-solid);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.card header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.card .life {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 99px;
+    border: 1px solid var(--field-border);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.card .life[data-life="running"] {
+    color: var(--good);
+    border-color: rgba(134, 195, 92, 0.5);
+}
+
+.card .life[data-life="empty"],
+.card .life[data-life="loading"],
+.card .life[data-life="waiting"],
+.card .life[data-life="stopping"] {
+    color: var(--gold);
+}
+
+dl.facts {
+    display: grid;
+    grid-template-columns: fit-content(50%) minmax(0, 1fr);
+    gap: 2px 12px;
+    margin: 0;
+    font-size: 13px;
+}
+
+dl.facts dt {
+    color: var(--faint);
+}
+
+dl.facts dd {
+    margin: 0;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* --- Buttons and fields --- */
+
+button,
+.button {
+    appearance: none;
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 9px;
+    padding: 7px 13px;
+    min-height: 36px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+button:hover {
+    background: rgba(255, 244, 220, 0.12);
+    border-color: rgba(220, 180, 106, 0.5);
+}
+
+button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+button.primary {
+    color: #23190b;
+    background: linear-gradient(var(--gold-bright), var(--gold));
+    border-color: var(--gold-bright);
+}
+
+button.danger {
+    color: #ffd9cf;
+    background: rgba(212, 83, 59, 0.22);
+    border-color: rgba(212, 83, 59, 0.6);
+}
+
+button.quiet {
+    background: transparent;
+}
+
+fieldset {
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 14px 12px;
+    margin: 0 0 12px;
+}
+
+legend {
+    color: var(--gold);
+    font-family: var(--font-display);
+    padding: 0 6px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 10px;
+    flex: 1;
+    min-width: 140px;
+}
+
+.check {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.row.end {
+    justify-content: flex-end;
+}
+
+input,
+select,
+textarea {
+    font: inherit;
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-height: 36px;
+}
+
+input[type="checkbox"] {
+    min-height: auto;
+    accent-color: var(--gold);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+}
+
+/* --- Tables --- */
+
+.table {
+    width: 100%;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+th {
+    text-align: left;
+    color: var(--faint);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--field-border);
+    padding: 6px 8px;
+}
+
+td {
+    padding: 7px 8px;
+    border-bottom: 1px solid rgba(220, 180, 106, 0.1);
+    vertical-align: top;
+}
+
+td.actions {
+    display: table-cell;
+    white-space: nowrap;
+}
+
+td.actions button {
+    margin: 0 4px 4px 0;
+}
+
+tr.gone td {
+    color: var(--faint);
+}
+
+/* --- Addresses and QR codes --- */
+
+.addresses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+}
+
+.address {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.qr {
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px;
+    line-height: 0;
+}
+
+.qr img,
+.qr svg {
+    width: 150px;
+    height: 150px;
+    image-rendering: pixelated;
+}
+
+/* --- What's happened --- */
+
+ol.activity {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+}
+
+ol.activity li {
+    display: grid;
+    grid-template-columns: 150px 140px 1fr;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(220, 180, 106, 0.1);
+}
+
+ol.activity time {
+    color: var(--faint);
+}
+
+ol.activity .who {
+    color: var(--gold);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- Dialogs --- */
+
+dialog {
+    background: var(--panel-solid);
+    color: var(--ink);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    width: min(760px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.7);
+}
+
+dialog::backdrop {
+    background: rgba(8, 6, 4, 0.7);
+}
+
+#confirm,
+#shown {
+    width: min(480px, calc(100% - 24px));
+}
+
+#world > header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+#worldtabs {
+    margin: 10px 0 14px;
+    border-bottom: 1px solid var(--field-border);
+    padding-bottom: 8px;
+}
+
+.shown-value {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0 10px;
+    word-break: break-all;
+    user-select: all;
+}
+
+.shown-code {
+    font-family: var(--font-display);
+    font-size: 30px;
+    letter-spacing: 0.25em;
+    text-align: center;
+    color: var(--gold-bright);
+    margin: 6px 0 10px;
+}
+
+@media (max-width: 560px) {
+    #top {
+        padding: 12px 14px 8px;
+    }
+
+    main {
+        padding: 14px 12px 50px;
+    }
+
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    ol.activity li {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}

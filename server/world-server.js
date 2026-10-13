@@ -1,7 +1,9 @@
 // The world server (generated/world_server_plan.md §2): its supervisor, on the main thread. It
 // owns everything durable (the data folder, the worlds and who may come into them, the server's
-// identity) and the network edge (the one port: the game's own files, /api/v1 and the play
-// socket), and runs each world in a thread of its own (registry.js). It never steps a world.
+// identity) and the network edge (the one port: the game's own files, the management page at
+// /admin, /api/v1 and the play socket; and the management page's own listener on the computer
+// itself, admin.js), and runs each world in a thread of its own (registry.js). It never steps a
+// world.
 //
 // For now the port answers home addresses alone, over plain http and ws (guards.js); the internet
 // gets TLS on the same port with S6.
@@ -11,10 +13,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isHome } from "./access/addresses.js";
+import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { answer, guard, hostsOf, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
+import { Management } from "./manage.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
 import { createStaticHandler } from "./static.js";
@@ -26,7 +30,7 @@ const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const JOURNAL = Object.freeze({
     entered: ({ player, role, label, new: first }) => `${first ? "A new player" : "A player"} (${player}) came in, as ${role === "owner" ? "an owner" : `a ${role}`}, by the key "${label}".`,
     left: ({ player }) => `A player (${player}) left.`,
-    keyIssued: ({ label, role, by }) => `A ${role}'s key, "${label}", was made${by ? ` by ${by}` : ""}.`,
+    keyIssued: ({ label, role, by }) => `${role === "owner" ? "An" : "A"} ${role}'s key, "${label}", was made${by ? ` by ${by}` : ""}.`,
     keyRevoked: ({ label, by }) => `The key "${label}" was revoked${by ? ` by ${by}` : ""}.`,
     keyReplaced: ({ label, by }) => `The key "${label}" was replaced${by ? ` by ${by}` : ""}.`,
     codeMade: ({ by }) => `A short code was made${by ? ` by ${by}` : ""}.`,
@@ -39,9 +43,10 @@ const JOURNAL = Object.freeze({
 export class WorldServer {
     /**
      * The world server on its data folder (`root`), not yet listening: made the first time, with
-     * its admin key (`adminKey`, shown then alone) and identity. `options` are for the tests:
-     * `cost` (short codes' hashing), `clock`, `awake` (keeping the machine awake), `interfaces`
-     * and `hostname` (the machine's), `clientDirectory`.
+     * its admin key (`adminKey`, shown then alone) and identity. `options.onStop` is what stops
+     * it when the management page asks (server/world.js: every world saved, then the process
+     * ended); the rest are for the tests: `cost` (short codes' hashing), `clock`, `awake`
+     * (keeping the machine awake), `interfaces` and `hostname` (the machine's), `clientDirectory`.
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -56,8 +61,8 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), clientDirectory = CLIENT_DIRECTORY, names = [] }) {
-        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names });
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
         this.settings = folder.settings;
         this.store = folder.worlds;
 
@@ -79,6 +84,9 @@ export class WorldServer {
         });
 
         this.static = createStaticHandler(clientDirectory);
+
+        /** What its owners and admin can do (manage.js), and the API (both listeners' own). */
+        this.manage = new Management(this);
         this.api = apiHandler(this);
         this.access.policy.listeners.push((event, detail) => this.#journal(event, detail));
 
@@ -86,6 +94,10 @@ export class WorldServer {
         this.http = null;
         this.play = null;
         this.port = null;
+
+        /** The management page's listener on the computer itself (admin.js), once it's listening; its port. */
+        this.admin = null;
+        this.adminPort = null;
         this.hosts = new Set();
         this.origins = new Set();
     }
@@ -158,7 +170,15 @@ export class WorldServer {
         return this.port;
     }
 
-    // A request: the API's, or one of the game's own files (both behind the guards)
+    /** The management page listening on the computer itself, on `port` (the server's adminPort setting, unless given; 0 for any free one). */
+    async listenAdmin(port = this.settings.get("adminPort")) {
+        this.admin = await listenAdmin(this, port);
+        this.adminPort = this.admin.port;
+
+        return this.adminPort;
+    }
+
+    // A request: the API's, the management page, or one of the game's own files (all behind the guards)
     #request(request, response) {
         const pathname = urlOf(request.url)?.pathname;
 
@@ -174,6 +194,12 @@ export class WorldServer {
             if (pathname === undefined) {
                 throw new Refusal(400, "bad-request", "That isn't an address on this server.");
             }
+
+            // (The management page, from the Wi-Fi: it asks for the admin key)
+            if (pathname === "/admin" || pathname === "/admin/") {
+                request.url = ADMIN_PAGE;
+                response.setHeader("Cache-Control", "no-store");
+            }
         } catch (error) {
             if (error instanceof Refusal) {
                 answer(response, error.status, { error: error.error, message: error.message });
@@ -187,10 +213,11 @@ export class WorldServer {
         this.static(request, response);
     }
 
-    /** Stopped: everyone told, every world saved and set aside, the port closed. */
+    /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
         this.play?.close("server-stopping");
         await this.registry.shutdown();
+        await this.admin?.close();
 
         if (this.http) {
             this.http.closeAllConnections?.();

@@ -4,7 +4,8 @@
 //   worlds/<id>/
 //     world.json                 what it is: name, description, seed, home people, made when and
 //                                by whom, heroes kept or brought in, its settings, time played,
-//                                the world's time, the versions it was saved at (formatVersion)
+//                                the world's time (its battle's, and its days': elapsed), the
+//                                versions it was saved at (formatVersion)
 //     state/now.json.gz          the latest snapshot of it (core/host.js snapshot, as core/wire.js
 //                                writes it, gzipped)
 //     state/auto-1..5.json.gz    the five before it, newest first
@@ -16,8 +17,9 @@
 // short, or spoilt), the newest that does is carried on from, and the journal says so.
 
 import { randomBytes } from "node:crypto";
-import { appendFile, cp, readdir, rename } from "node:fs/promises";
+import { appendFile, cp, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { elapsedOf } from "../../client/js/core/daytime.js";
 import { decode, encode } from "../../client/js/core/wire.js";
 import { RACE } from "../../client/js/core/worldplan/plan.js";
 import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip, writeJSON } from "./files.js";
@@ -44,6 +46,23 @@ export const JOURNAL = "journal.log";
 
 /** The autosave `n` (1, the newest, to AUTOSAVES)'s file. */
 export const autosaveName = (n) => `auto-${n}.json.gz`;
+
+/**
+ * The backups made as it's saved, besides the autosaves (generated/world_server_plan.md §5): one an
+ * hour, the last 12 kept, and one a day, the last 7. Those made before something that can't be
+ * undone (a restore, a fresh start, a deletion), or by hand, are kept till they're deleted.
+ */
+export const LADDER = Object.freeze({ hourly: { every: 3600000, keep: 12 }, daily: { every: 86400000, keep: 7 } });
+
+/** A backup's folder's name: when it was made (files.js stampOf), and why. */
+export const BACKUP_NAME = /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-z0-9-]+)$/;
+
+/** When a backup was made, from its folder's name (or null if it isn't one's). */
+export function backupWhen(name) {
+    const stamp = BACKUP_NAME.exec(name)?.[1];
+
+    return stamp ? new Date(stamp.replace(/T(\d{2})-(\d{2})-(\d{2})Z$/, "T$1:$2:$3Z")) : null;
+}
 
 /** Whose heroes a world keeps: the world's (kept), or the players' own, brought in each time. */
 export const HERO_MODES = Object.freeze(["kept", "brought"]);
@@ -155,19 +174,63 @@ export class StoredWorld {
         return null;
     }
 
-    /**
-     * A copy of everything kept of it, made before something's done to it that can't be undone:
-     * in the data folder's backups, backups/<id>/<when>-<why>/ (its journal says so). Returns
-     * where.
-     */
-    async backUp(why, when = new Date()) {
-        const into = path.join(path.dirname(path.dirname(this.folder)), BACKUPS, this.id, `${stampOf(when)}-${why}`);
+    /** Where its backups are: the data folder's backups/<id>/. */
+    get backupsFolder() {
+        return path.join(path.dirname(path.dirname(this.folder)), BACKUPS, this.id);
+    }
 
-        await ensureFolder(path.dirname(into));
+    /**
+     * A copy of everything kept of it, made before something's done to it that can't be undone,
+     * by hand, or on the hour and the day (LADDER): in the data folder's backups,
+     * backups/<id>/<when>-<why>/ (its journal says so). It waits for the saves asked for before it,
+     * so it's never copied while one's written. Returns where.
+     */
+    backUp(why, when = new Date()) {
+        const backing = this.#saving.then(() => this.#copy(why, when));
+
+        this.#saving = backing.catch(() => {});
+
+        return backing;
+    }
+
+    async #copy(why, when) {
+        const into = path.join(this.backupsFolder, `${stampOf(when)}-${why}`);
+
+        await ensureFolder(this.backupsFolder);
         await cp(this.folder, into, { recursive: true });
         await this.journal(`Backed up (${why}).`, when);
 
         return into;
+    }
+
+    /** Its backups (besides the autosaves), newest first: [{ id (its folder's name), when, why, folder }]. */
+    async backups() {
+        if (!(await exists(this.backupsFolder))) {
+            return [];
+        }
+
+        return (await readdir(this.backupsFolder))
+            .map((name) => ({ id: name, when: backupWhen(name), why: BACKUP_NAME.exec(name)?.[2], folder: path.join(this.backupsFolder, name) }))
+            .filter((backup) => backup.when)
+            .sort((a, b) => b.when - a.when);
+    }
+
+    // The hourly and daily backups (LADDER): one made if the last is that long ago, the oldest past
+    // those kept let go
+    async #ladder(when) {
+        const backups = await this.backups();
+
+        for (const [why, { every, keep }] of Object.entries(LADDER)) {
+            const rung = backups.filter((backup) => backup.why === why);
+
+            if (!rung.length || when - rung[0].when >= every) {
+                rung.unshift({ folder: await this.#copy(why, when) });
+            }
+
+            for (const old of rung.slice(keep)) {
+                await rm(old.folder, { recursive: true, force: true });
+            }
+        }
     }
 
     /** world.json written again, as `meta` now is (and changes, if any). */
@@ -212,6 +275,7 @@ export class StoredWorld {
 
         await this.writeMeta({
             worldTime: snapshot.battle?.time ?? 0,
+            elapsed: elapsedOf(snapshot.war),
             versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null },
             savedAt: at.toISOString(),
             ...(played === null ? {} : { played }),
@@ -220,6 +284,8 @@ export class StoredWorld {
         if (why !== "turn") {
             await this.journal(`Saved (${why}).`, at);
         }
+
+        await this.#ladder(at);
     }
 
     /**
@@ -325,6 +391,7 @@ export class WorldStore {
             settings: { ...defaults, ...settings },
             played: 0,
             worldTime: 0,
+            elapsed: 0,
             versions: null,
             savedAt: null,
         });

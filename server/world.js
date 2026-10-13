@@ -3,9 +3,9 @@
 //   npm run world-server                         its data where this system keeps an app's (platform/)
 //   node server/world.js --port 8480 --data <folder>
 //
-// It says where it can be reached at home, its id, and, the first time, its admin key (shown then
-// alone: keep it). Until the management page comes (S4), worlds are made with the admin key by
-// /api/v1/worlds. Ctrl-C saves every world and stops.
+// It says where it can be reached at home, its id, its management page (on this computer, needing
+// no key; from the Wi-Fi at /admin, with the admin key), and, the first time, its admin key (shown
+// then alone: keep it). Ctrl-C, or Stop on the management page, saves every world and stops.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -13,10 +13,11 @@ import { folders } from "./platform/index.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { WorldServer } from "./world-server.js";
 
-const { values } = parseArgs({ options: { port: { type: "string" }, data: { type: "string" } } });
+const { values } = parseArgs({ options: { port: { type: "string" }, admin: { type: "string" }, data: { type: "string" } } });
 const root = path.resolve(values.data ?? folders().data);
-const server = await WorldServer.open(root);
+const server = await WorldServer.open(root, { onStop: () => stop() });
 const port = await server.listen(values.port === undefined ? undefined : Number(values.port));
+const adminPort = await server.listenAdmin(values.admin === undefined ? undefined : Number(values.admin));
 
 console.log(`Pellagos Server ${SERVER_VERSION}, keeping its worlds in ${root}`);
 console.log(`Its id: ${server.identity.id}`);
@@ -26,11 +27,13 @@ for (const address of server.addresses()) {
 }
 
 console.log(`On this machine: http://localhost:${port}`);
+console.log(`Its management page, on this computer (no key needed): http://localhost:${adminPort}`);
+console.log(`From the Wi-Fi, with the admin key: ${server.addresses()[0] ?? `http://localhost:${port}`}/admin`);
 console.log(`Worlds kept: ${server.worlds.size}`);
 
 if (server.adminKey) {
-    console.log(`\nIts admin key, shown this once (keep it safe; it manages the server):\n\n    ${server.adminKey}\n`);
-    console.log(`Make a world with it: open the game from http://localhost:${port}, then Worlds on servers, add this server (localhost:${port}) and Make a world. Or:\n\n    curl -X POST http://localhost:${port}/api/v1/worlds -H "Authorization: Key ${server.adminKey}" -H "Content-Type: application/json" -d '{"name": "My world", "race": "human"}'\n`);
+    console.log(`\nIts admin key, shown this once (keep it safe; it manages the server from the Wi-Fi, and makes worlds from the game):\n\n    ${server.adminKey}\n`);
+    console.log(`Make a world on the management page (http://localhost:${adminPort}, New world), or in the game: open it from http://localhost:${port}, then Worlds on servers, add this server (localhost:${port}) and Make a world.\n`);
 }
 
 let stopping = false;

@@ -143,7 +143,8 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
         assert.equal(host.players.size, 0);
         assert.equal((await stored.heroes.get("p-ada", 1)).progress.gold, 5, "(its kept heroes kept)");
 
-        const backups = await readdir(path.join(folder.root, "backups", stored.id));
+        // (Its first save after also began its hourly and daily backups: worlds.js LADDER)
+        const backups = (await readdir(path.join(folder.root, "backups", stored.id))).filter((name) => !/-(hourly|daily)$/.test(name));
 
         assert.equal(backups.length, 1);
         assert.match(backups[0], /-before-fresh-start$/);

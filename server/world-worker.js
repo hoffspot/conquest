@@ -23,8 +23,9 @@
 //                          { type: "data", peer, text }            what their game said
 //                          { type: "drop", peer } / "back"         their link dropped, or came back
 //                          { type: "leave", peer }                 they've gone
-//                          { type: "settings", settings }          the world's settings changed
+//                          { type: "meta", changes }               its name, description or settings changed
 //                          { type: "save", why, id } / "stop"      saved (and, stopping, ended)
+//                          { type: "backup", why, id }             saved, then backed up
 //   worker -> supervisor   { type: "opened", from, forwarded, ms } / { type: "failed", name, message }
 //                          { type: "send", peer, text }            to a player's game
 //                          { type: "close", peer, reason }         sent out of the world (afk)
@@ -35,6 +36,7 @@ import { performance } from "node:perf_hooks";
 import { parentPort, workerData } from "node:worker_threads";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { elapsedOf } from "../client/js/core/daytime.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { decode } from "../client/js/core/wire.js";
 import { Ahead } from "./ahead.js";
@@ -243,7 +245,12 @@ function look() {
 function report() {
     reported = clock();
 
-    const players = [...peers.values()].map(({ peer, player, slot, linked, ready, hidden }) => ({ peer, player, slot, id: hosting.players.get(peer) ?? null, linked, ready, hidden }));
+    const players = [...peers.values()].map(({ peer, player, slot, linked, ready, hidden }) => {
+        const id = hosting.players.get(peer) ?? null;
+        const playing = id === null ? null : host.players.get(id);
+
+        return { peer, player, slot, id, name: playing?.hero?.name ?? null, away: Boolean(playing?.away), linked, ready, hidden };
+    });
     const memory = process.memoryUsage();
 
     post({
@@ -253,6 +260,7 @@ function report() {
         players,
         worldTime: host.battle.time,
         turn: host.war?.turn ?? 0,
+        elapsed: elapsedOf(host.war),
         played: keeper.played,
         saved: keeper.saved,
         failed: keeper.failed ? { why: keeper.failed.why, message: keeper.failed.error.message } : null,
@@ -300,15 +308,29 @@ parentPort.on("message", async (message) => {
             peers.delete(message.peer);
             look();
             break;
-        case "settings":
-            settings = { ...settings, ...message.settings };
+        case "meta": {
+            const { settings: changed = {}, ...rest } = message.changes;
+
+            Object.assign(stored.meta, rest);
+            stored.meta.settings = { ...stored.meta.settings, ...changed };
+            settings = { ...settings, ...changed };
             hosting.most = settings.mostPlayers;
             look();
             break;
+        }
         case "save":
             await keeper.save(message.why);
             post({ type: "saved", id: message.id, ok: !keeper.failed });
             break;
+        case "backup": {
+            // (Saved first, then copied: the copy waits for the save, so it's never taken mid-write)
+            await keeper.save(message.why);
+
+            const ok = await stored.backUp(message.why).then(() => !keeper.failed, () => false);
+
+            post({ type: "saved", id: message.id, ok });
+            break;
+        }
         case "stop":
             for (const peer of [...peers.keys()]) {
                 hosting.gone(peer);

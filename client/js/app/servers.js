@@ -18,14 +18,14 @@
 
 import { newNonce, verifyIdentity } from "../core/identity.js";
 import { Joining, NET_VERSION } from "../core/netplay.js";
+import { addressOf, DEFAULT_PORT, inviteLink, inviteOf } from "./invites.js";
 import { LINK_TIMING, RelayLink } from "./together.js";
+
+export { addressOf, DEFAULT_PORT, inviteLink, inviteOf };
 
 /** Where the game remembers the servers its player knows, and the shape that's in (bumped with a step forward). */
 export const SERVERS_KEY = "pellagos.servers";
 export const SERVERS_VERSION = 1;
-
-/** A world server's port, unless an address says otherwise (server/storage/settings.js port). */
-export const DEFAULT_PORT = 8480;
 
 /** Where a server's API and play socket are, and the play socket's subprotocol (server/api.js, server/play.js). */
 export const API_PATH = "/api/v1";
@@ -58,6 +58,7 @@ export const SERVER_REFUSALS = Object.freeze({
     afk: "You were away too long, so you were sent out of the world.",
     "key-revoked": "The key you came in by was revoked.",
     "world-deleted": "That world was deleted.",
+    "set-aside": "The world's owner set it aside for now: it's saved, and you can come back in.",
     "server-stopping": "The server's stopping.",
     internet: "That server only answers its own Wi-Fi for now.",
     host: "That address isn't one the server answers to.",
@@ -75,62 +76,6 @@ export class ServerRefusal extends Error {
     }
 }
 
-// (A host name, or an IPv4 address; or an IPv6 one, bracketed)
-const HOST = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.?$/;
-const V6 = /^\[[0-9A-Fa-f:.]+\]$/;
-
-/**
- * A server's address from what a player typed: `host`, `host:port`, `[v6]:port`, a bare IPv6
- * address, or an http(s)/ws(s) address. Returns { host (IPv6 bracketed), port, secure, key (its
- * "host:port", how the game knows it) }, or null if it isn't one.
- */
-export function addressOf(text) {
-    let given = String(text ?? "").trim();
-    let secure = false;
-    let schemed = false;
-
-    if (!given) {
-        return null;
-    }
-
-    const scheme = /^(https?|wss?):\/\//i.exec(given);
-
-    if (scheme) {
-        schemed = true;
-        secure = /^(https|wss)$/i.test(scheme[1]);
-        given = given.slice(scheme[0].length).replace(/[/?#].*$/, "");
-    }
-
-    let host;
-    let port;
-
-    if (given.startsWith("[")) {
-        const end = given.indexOf("]");
-
-        host = given.slice(0, end + 1);
-        port = given.slice(end + 1).replace(/^:/, "");
-    } else if ((given.match(/:/g) ?? []).length > 1) {
-        host = `[${given}]`;
-        port = "";
-    } else {
-        [host, port = ""] = given.split(":");
-    }
-
-    if (!(HOST.test(host) || V6.test(host)) || (port && !/^\d{1,5}$/.test(port))) {
-        return null;
-    }
-
-    const number = port ? Number(port) : schemed ? (secure ? 443 : 80) : DEFAULT_PORT;
-
-    if (number < 1 || number > 65535) {
-        return null;
-    }
-
-    host = host.toLowerCase().replace(/\.$/, "");
-
-    return { host, port: number, secure, key: `${host}:${number}` };
-}
-
 /** A server's own web address (its page, and its API under API_PATH). */
 export function baseOf({ host, port, secure }) {
     return `${secure ? "https" : "http"}://${host}:${port}`;
@@ -139,31 +84,6 @@ export function baseOf({ host, port, secure }) {
 /** Its play socket's address. */
 export function playOf({ host, port, secure }) {
     return `${secure ? "wss" : "ws"}://${host}:${port}${PLAY_PATH}`;
-}
-
-/**
- * An invite to a world on a server: the game's page (`page`, where it's played from: the server's
- * own, or GitHub Pages) with what's needed in its fragment (never sent anywhere): the server's
- * address and id (pinned on following it), the world, and a key or short code.
- */
-export function inviteLink(page, { address, id, world, key = null, code = null }) {
-    const fragment = new URLSearchParams({ server: address.key, ...(address.secure ? { secure: "1" } : {}), ...(id ? { id } : {}), ...(world ? { world } : {}), ...(key ? { key } : {}), ...(code ? { code } : {}) });
-
-    return `${String(page).replace(/#.*$/, "")}#${fragment}`;
-}
-
-/** An invite from a link (or just its fragment): { address, id, world, key, code }, or null if it isn't one. */
-export function inviteOf(link) {
-    const at = String(link ?? "").indexOf("#");
-    const fragment = new URLSearchParams(at < 0 ? String(link ?? "") : String(link).slice(at + 1));
-    const server = fragment.get("server");
-    const address = server ? addressOf(`${fragment.get("secure") === "1" ? "https" : "http"}://${server}`) : null;
-
-    if (!address) {
-        return null;
-    }
-
-    return { address, id: fragment.get("id"), world: fragment.get("world"), key: fragment.get("key"), code: fragment.get("code") };
 }
 
 // base64url, of text (UTF-8)
@@ -431,11 +351,11 @@ export class ServerClient {
     }
 
     // What it says of entering: the world's key, ticket and who the player is there remembered
-    #entered(world, answer, key) {
+    #entered(world, answer, key, ticket = null) {
         this.servers?.keepWorld(this.record.key, world, {
             name: answer.card?.name,
             ...(key ? { key } : {}),
-            ...(answer.ticket ? { ticket: answer.ticket } : {}),
+            ...(answer.ticket || ticket ? { ticket: answer.ticket ?? ticket } : {}),
             player: answer.player,
             role: answer.role,
         });
@@ -452,7 +372,7 @@ export class ServerClient {
     async enter({ world, key = this.record.worlds?.[world]?.key ?? null, ticket = this.record.worlds?.[world]?.ticket ?? null }) {
         await this.prove();
 
-        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), net: NET_VERSION } }), key);
+        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), net: NET_VERSION } }), key, ticket);
     }
 
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
