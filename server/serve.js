@@ -62,6 +62,42 @@ if (process.env.PELLAGOS_TRYING === "1") {
 const port = await server.listen(values.port === undefined ? undefined : Number(values.port));
 const adminPort = await server.listenAdmin(values.admin === undefined ? undefined : Number(values.admin));
 
+// (Stopped by a signal from the moment it's listening, before it says so: a signal that came
+// before the handlers would end it there and then, every world unsaved)
+let stopping = false;
+let restarting = false;
+
+// (How it stands, for the menu-bar app: a line whenever that changes, looked at every second)
+const SAYING = "@pellagos ";
+let told = null;
+
+const tell = (state = restarting ? "updating" : stopping ? "stopping" : "running") => {
+    const players = [...server.registry.entries.values()].reduce((sum, entry) => sum + (entry.thread?.state?.present ?? 0), 0);
+    const line = JSON.stringify({ state, players, worlds: server.registry.going.length, awake: Boolean(server.registry.holding), page: `http://localhost:${adminPort}/`, play: `http://localhost:${port}/`, version: SERVER_VERSION });
+
+    if (values.app && line !== told) {
+        told = line;
+        console.log(`${SAYING}${line}`);
+    }
+};
+
+const stop = async (code = 0) => {
+    if (stopping) {
+        return;
+    }
+
+    stopping = true;
+    restarting = code === RESTART;
+    tell();
+    console.log(restarting ? "Saving every world and stopping, to start again as the new version..." : "Saving every world and stopping...");
+    await server.close();
+    tell(restarting ? "updating" : "stopped");
+    process.exit(code);
+};
+
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
+
 console.log(`Pellagos Server ${SERVER_VERSION}, keeping its worlds in ${root}`);
 console.log(`Its id: ${server.identity.id}`);
 
@@ -137,44 +173,10 @@ server.nearby.onChange = () => {
 };
 server.nearby.onChange();
 
-let stopping = false;
-let restarting = false;
-
-// (How it stands, for the menu-bar app: a line whenever that changes, looked at every second)
-const SAYING = "@pellagos ";
-let told = null;
-
-const tell = (state = restarting ? "updating" : stopping ? "stopping" : "running") => {
-    const players = [...server.registry.entries.values()].reduce((sum, entry) => sum + (entry.thread?.state?.present ?? 0), 0);
-    const line = JSON.stringify({ state, players, worlds: server.registry.going.length, awake: Boolean(server.registry.holding), page: `http://localhost:${adminPort}/`, play: `http://localhost:${port}/`, version: SERVER_VERSION });
-
-    if (values.app && line !== told) {
-        told = line;
-        console.log(`${SAYING}${line}`);
-    }
-};
-
 if (values.app) {
     tell();
     setInterval(() => tell(), 1000).unref();
 }
-
-const stop = async (code = 0) => {
-    if (stopping) {
-        return;
-    }
-
-    stopping = true;
-    restarting = code === RESTART;
-    tell();
-    console.log(restarting ? "Saving every world and stopping, to start again as the new version..." : "Saving every world and stopping...");
-    await server.close();
-    tell(restarting ? "updating" : "stopped");
-    process.exit(code);
-};
-
-process.on("SIGINT", () => stop());
-process.on("SIGTERM", () => stop());
 
 if (values.app) {
     process.stdin.on("end", () => stop());
