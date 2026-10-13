@@ -8,9 +8,11 @@
 // behind, with long claws; a crocodile's sprawling out to the sides to splayed, clawed toes; a
 // dragon's with great hooked talons; hooves. A tail: a dog's brush of fur, slim at its root, full
 // and drawn to a point; a cat's long hanging curve; a crocodile's deep flat one with its double
-// ridge of scutes; a spade or a sting at a dragon's or wyvern's tip. What makes each kind itself
-// is added: a mane, a crest, tusks, horns, a frill of spikes, quills, armour plates, a bear's hump,
-// spots and stripes, bands across the belly, and wings (as a bat's: below).
+// ridge of scutes; a spade or a sting at a dragon's or wyvern's tip, a hand at an ahuizotl's, a
+// serpent's head at a chimera's. What makes each kind itself is added: a mane (a lion's, or a
+// horse's along the top of the neck), a crest, tusks, horns, a hart's antlers, a frill of spikes,
+// quills, armour plates, a bear's hump, spots and stripes, bands across the belly, and wings (as a
+// bat's: below).
 //
 // It moves itself (pose): walking in a trot, running in a gallop (each leg swinging and folding
 // as it comes through, each footfall told; a crocodile's swung round forward and back, its body
@@ -286,8 +288,11 @@ export function quadruped(look, random, key = null) {
         sculpt.paint(torso, look.stripes ? [width * 0.06, girth * 0.5, width * 0.05] : [girth * 0.12, girth * 0.12, girth * 0.12], dark, { at, turn: [0, 0, -round], soft: girth * 0.05, strength: 0.85 });
     }
 
-    if (look.mane) {
-        sculpt.add(torso, { ellipsoid: [width * 1.15, girth * 1.15, length * 0.17] }, colours.mane ?? shade(colours.fur, -0.35).getHex(), { at: [0, girth * 0.3, length * 0.34] });
+    const maneColour = colours.mane ?? shade(colours.fur, -0.35).getHex();
+    const horse = look.mane === "horse";
+
+    if (look.mane && !horse) {
+        sculpt.add(torso, { ellipsoid: [width * 1.15, girth * 1.15, length * 0.17] }, maneColour, { at: [0, girth * 0.3, length * 0.34] });
     }
 
     // A crest: a ridge of dark bristles down the neck and back (a boar's, a hyena's)
@@ -335,8 +340,12 @@ export function quadruped(look, random, key = null) {
     neck.rotation.x = -neckUp;
     sculpt.add(neck, { limb: [neckLength, width * 0.62, hx * 0.78] }, fur, { turn: [-Math.PI / 2, 0, 0], blend: girth * 0.3 });
 
-    if (look.mane) {
-        sculpt.add(neck, { limb: [neckLength * 0.9, width * 0.95, hx * 1.05] }, colours.mane ?? shade(colours.fur, -0.35).getHex(), { turn: [-Math.PI / 2, 0, 0], at: [0, girth * 0.12, 0] });
+    // (A lion's mane all round its neck; a horse's a ridge of long hair along the top of it,
+    // falling to one side)
+    if (horse) {
+        sculpt.add(neck, { limb: [neckLength * 1.05, width * 0.32, width * 0.24] }, maneColour, { turn: [-Math.PI / 2, 0, 0], at: [width * 0.1, width * 0.42, -neckLength * 0.05], scale: [0.6, 1, 2] });
+    } else if (look.mane) {
+        sculpt.add(neck, { limb: [neckLength * 0.9, width * 0.95, hx * 1.05] }, maneColour, { turn: [-Math.PI / 2, 0, 0], at: [0, girth * 0.12, 0] });
     }
 
     for (let k = 0; look.spines && k < 5; k++) {
@@ -480,7 +489,7 @@ export function quadruped(look, random, key = null) {
             // (Curving as it goes: a few pieces, each turned a little more)
             let from = horn;
 
-            const thick = hx * (out ? 0.3 : 0.17);
+            const thick = hx * (out ? 0.3 : 0.17) * (look.hornGirth ?? 1);
 
             for (let k = 0; k < 3; k++) {
                 const long = look.horns / 3;
@@ -501,6 +510,31 @@ export function quadruped(look, random, key = null) {
                 part(head, cone(look.horns * 0.4, hx * 0.1, 6), ivory, { at: onSurface([hx, hy, hz], [0, 0, hz * 0.3], [side * 0.7, 0.45, -0.45], 0.9), turn: aim([side * 0.35, 0.25, -1], UP) });
                 part(head, cone(look.horns * 0.25, hx * 0.07, 5), ivory, { at: onSurface([hx, hy, hz], [0, 0, hz * 0.3], [side * 0.25, 0.95, -0.1], 0.9), turn: aim([side * 0.2, 0.6, -1], UP) });
             }
+        }
+
+        if (look.antlers) {
+            // (A hart's: a beam from the crown, up, out and back, a tine forward from it at each
+            // bend and a brow tine low down; forking at its top)
+            const beam = look.antlers / 3;
+            const thick = hx * 0.3;
+            let from = joint(head, `antler-${side}`, onSurface([hx, hy, hz], [0, 0, hz * 0.3], [side * 0.4, 0.85, -0.3], 0.9));
+
+            from.rotation.set(-0.85, 0, -side * 0.7);
+            part(from, cone(beam * 0.75, thick * 0.75, 5), ivory, { turn: aim([side * 0.15, 0.35, 1], UP), shadow: false });
+
+            for (let k = 0; k < 3; k++) {
+                part(from, limb(beam, thick * (1 - k * 0.2), thick * (1 - (k + 1) * 0.2), 6), ivory, { turn: [Math.PI, 0, 0] });
+                from = joint(from, `antler-${side}-${k}`, [0, beam, 0]);
+                from.rotation.set(k === 0 ? 0.45 : 0.2, 0, side * 0.18);
+                part(from, cone(beam * (0.8 - k * 0.12), thick * 0.6, 5), ivory, { turn: aim([side * 0.2, 0.55, 1], UP), shadow: false });
+            }
+
+            part(from, cone(beam * 0.55, thick * 0.5, 5), ivory, { turn: aim([side * 0.35, 1, -0.25], UP), shadow: false });
+        }
+
+        // (A horse's forelock, between its ears)
+        if (horse && side > 0) {
+            part(head, cone(hy * 0.85, hx * 0.32, 5), skin(maneColour, { roughness: 1, clear }), { at: onSurface([hx, hy, hz], [0, 0, hz * 0.3], [0, 0.95, -0.1], 0.9), turn: aim([0, -0.15, 1], UP), shadow: false });
         }
     }
 
@@ -635,6 +669,37 @@ export function quadruped(look, random, key = null) {
 
         part(from, membrane([[0, tail.spade * 0.1], [w, -tail.spade * 0.35], [w * 0.35, -tail.spade * 0.55], [0, -tail.spade], [-w * 0.35, -tail.spade * 0.55], [-w, -tail.spade * 0.35]]), skin(colours.wings ?? dark, { roughness: 0.7, side: THREE.DoubleSide, clear }), { shadow: false });
         part(from, membrane([[0, tail.spade * 0.1], [w * 0.2, -tail.spade * 0.4], [0, -tail.spade * 0.85], [-w * 0.2, -tail.spade * 0.4]]), hard, { turn: [0, 0, Math.PI / 2], shadow: false });
+    }
+
+    // (A hand at its tip, an ahuizotl's: a palm, four fingers curling under and a thumb)
+    if (tail.hand) {
+        const h = tail.hand;
+        const hand = skin(colours.hand ?? colours.tail ?? colours.fur, { roughness: 0.6, clear });
+
+        part(from, ellipsoid(h * 0.42, h * 0.16, h * 0.5, 8), hand, { at: [0, 0, -h * 0.4] });
+
+        for (let k = 0; k < 4; k++) {
+            const across = (k - 1.5) * 0.2;
+
+            part(from, limb(h * (0.6 - Math.abs(k - 1.5) * 0.08), h * 0.075, h * 0.05, 5), hand, { at: [across * h, -h * 0.03, -h * 0.82], turn: aim([across * 0.6, -0.55, -1]), shadow: false });
+        }
+
+        part(from, limb(h * 0.42, h * 0.08, h * 0.055, 5), hand, { at: [h * 0.38, 0, -h * 0.3], turn: aim([1, -0.35, -0.55]), shadow: false });
+    }
+
+    // (A serpent for a tail, a chimera's: its head at the tip, eyes alight, fangs bared)
+    if (tail.head) {
+        const s = tail.head;
+        const tint = colours.tail ?? fur;
+        const fangs = skin(0xf0ead8, { roughness: 0.4, clear });
+
+        sculpt.add(from, { ellipsoid: [s * 0.55, s * 0.4, s * 0.8] }, tint, { at: [0, s * 0.05, -s * 0.6], blend: s * 0.3 });
+        sculpt.add(from, { ellipsoid: [s * 0.38, s * 0.26, s * 0.5] }, tint, { at: [0, -s * 0.02, -s * 1.25], blend: s * 0.25 });
+
+        for (const side of [-1, 1]) {
+            part(from, ellipsoid(s * 0.12, s * 0.11, s * 0.1, 8), eyes, { at: [side * s * 0.36, s * 0.2, -s * 0.95] });
+            part(from, cone(s * 0.32, s * 0.05, 5), fangs, { at: [side * s * 0.16, -s * 0.2, -s * 1.5], turn: [Math.PI, 0, 0], shadow: false });
+        }
     }
 
     // Wings (a wyvern's, a dragon's), as a bat's: from each shoulder an arm (upper arm and

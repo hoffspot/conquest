@@ -24,7 +24,8 @@
 // shuck, the shadow stalkers),
 // gone to ground by day; some hunt by night, met more often then (`night` "more": the wolves, the
 // big cats, the hyenas and jackals, the scorpions, the badgers, the hounds of Annwn, the Nandi
-// bear, the bloodflies, the giant centipedes, the cultists at their rites); and some see in the
+// bear, the bloodflies, the giant centipedes, the kelpies, the ahuizotls, the cultists at their
+// rites); and some see in the
 // dark as by day (`darkSight`), so out of the light they see a hero before the hero sees them.
 // Pure data and arithmetic, no DOM.
 
@@ -109,6 +110,8 @@ export const CREATURES = Object.freeze({
     mandrake: { name: "Mandrake", hp: 20, weapon: "mandrake", speed: 0.8, chase: 1.6, temper: "defensive", roam: 4, leash: 10, pack: [1, 2], tiers: [1, 4], biomes: ["elfwood"], people: "elf", blood: "sap" },
     cwnAnnwn: { name: "Hound of Annwn", hp: 28, weapon: "cwnAnnwn", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [2, 4], tiers: [3, 7], biomes: null, people: "elf", blood: "red", night: "more", darkSight: true },
     pixies: { name: "Pixie swarm", hp: 20, weapon: "pixies", speed: 1.5, chase: 3, temper: "territorial", guard: 5, roam: 10, leash: 18, pack: [1, 1], tiers: [1, 4], biomes: ["elfwood", "meadow"], people: "elf", blood: "none", steady: true },
+    hart: { name: "Hart", hp: 40, weapon: "hart", speed: 1.4, chase: 3, temper: "territorial", guard: 6, roam: 12, leash: 20, pack: [1, 3], tiers: [2, 5], biomes: ["meadow", "elfwood"], people: "elf", blood: "red" },
+    kelpie: { name: "Kelpie", hp: 62, weapon: "kelpie", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: null, people: "elf", blood: "red", night: "more", darkSight: true, steady: true },
     caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [1, 7], biomes: null, people: "darkElf", blood: "ichor", darkSight: true },
     shadowStalker: { name: "Shadow stalker", hp: 50, weapon: "shadowStalker", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [4, 9], biomes: null, people: "darkElf", blood: "none", night: "only", darkSight: true },
     olm: { name: "Cave olm", hp: 26, weapon: "olm", speed: 0.8, chase: 2, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [1, 4], biomes: null, people: "darkElf", blood: "red", darkSight: true },
@@ -127,12 +130,14 @@ export const CREATURES = Object.freeze({
     jaguar: { name: "Jaguar", hp: 42, weapon: "jaguar", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [2, 6], biomes: ["jungle"], people: "lizard", blood: "red", night: "more", darkSight: true },
     boa: { name: "Great boa", hp: 58, weapon: "boa", speed: 0.8, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 1], tiers: [4, 8], biomes: null, people: "lizard", blood: "red", steady: true },
     bloodflies: { name: "Bloodfly swarm", hp: 18, weapon: "bloodflies", speed: 1.6, chase: 3.4, temper: "aggressive", roam: 10, leash: 20, pack: [1, 1], tiers: [1, 4], biomes: ["jungle", "marsh"], people: "lizard", blood: "red", night: "more", darkSight: true, steady: true },
+    ahuizotl: { name: "Ahuizotl", hp: 38, weapon: "ahuizotl", speed: 1.2, chase: 2.8, temper: "territorial", guard: 5, roam: 6, leash: 14, pack: [1, 2], tiers: [3, 7], biomes: ["marsh", "jungle"], people: "lizard", blood: "red", night: "more", darkSight: true },
     magmaSlime: { name: "Magma slime", hp: 45, weapon: "magmaSlime", speed: 0.7, chase: 1.4, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [1, 8], biomes: null, people: "orc", blood: "none", armor: 0.1 },
     rockTusker: { name: "Rock tusker", hp: 80, weapon: "rockTusker", speed: 1.1, chase: 2.8, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [4, 9], biomes: null, people: "orc", blood: "none", armor: 0.2 , steady: true },
     gilaMonster: { name: "Gila monster", hp: 30, weapon: "gilaMonster", speed: 0.6, chase: 1.4, temper: "defensive", roam: 5, leash: 10, pack: [1, 1], tiers: [1, 4], biomes: ["badlands", "heath"], people: "orc", blood: "red" },
     salamander: { name: "Salamander", hp: 32, weapon: "salamander", speed: 0.9, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 6], biomes: ["volcanic", "badlands"], people: "orc", blood: "red" },
     deathWorm: { name: "Death worm", hp: 40, weapon: "deathWorm", speed: 0.8, chase: 2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 1], tiers: [2, 6], biomes: ["badlands"], people: "orc", blood: "red" },
     vultureFlock: { name: "Vulture flock", hp: 30, weapon: "vultureFlock", speed: 1.4, chase: 3, temper: "aggressive", roam: 12, leash: 22, pack: [1, 1], tiers: [1, 4], biomes: ["badlands", "heath"], people: "orc", blood: "red", steady: true },
+    chimera: { name: "Chimera", hp: 85, weapon: "chimera", speed: 1.3, chase: 3, temper: "aggressive", roam: 10, leash: 24, pack: [1, 1], tiers: [5, 9], biomes: ["volcanic", "badlands"], people: "orc", blood: "red", steady: true },
     // The mightiest: only in the perilous places
     dragon: { name: "Dragon", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
     // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
