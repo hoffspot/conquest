@@ -884,6 +884,14 @@ export class Management {
         this.server.closeToInternet();
         this.server.followRouter();
         this.server.followFunnel();
+
+        // (The broker turned off, everyone on it let go; relaying turned on or off, its lists told again)
+        if (changes.broker === false) {
+            this.server.broker?.closeWhere(() => true);
+        } else if (Object.hasOwn(changes, "relaying")) {
+            this.server.broker?.refresh();
+        }
+
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };

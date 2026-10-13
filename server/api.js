@@ -58,6 +58,7 @@ import { RACE } from "../client/js/core/worldplan/plan.js";
 import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
+import { BROKER_PATH, BROKER_PROTOCOL } from "./broker.js";
 import { answer, bodyOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
@@ -233,12 +234,21 @@ export function apiHandler(server, { mac = false } = {}) {
             const atHome = request.from === "home" || (!request.tunnel && Boolean(request.address) && [router?.external, router?.seen].includes(request.address));
 
             return {
-                server: { id: server.identity.id, name: server.name, publicKey: server.identity.publicKey, version: SERVER_VERSION, net: NET_VERSION, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } },
+                server: {
+                    id: server.identity.id,
+                    name: server.name,
+                    publicKey: server.identity.publicKey,
+                    version: SERVER_VERSION,
+                    net: NET_VERSION,
+                    play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL },
+                    broker: server.broker && server.settings.get("broker") !== false ? { path: BROKER_PATH, protocol: BROKER_PROTOCOL, relaying: server.settings.get("relaying") !== false } : null,
+                },
                 addresses: [...server.addresses(), ...server.internetAddresses()],
                 you: { address: request.address, from: request.from, home: atHome },
                 worlds: listed.map(cardOf),
                 nearby: server.nearby.list(),
-                players: [],
+                // (Players' own worlds listed on its broker, as this caller would see them)
+                players: server.broker && server.settings.get("broker") !== false ? server.broker.seen({ address: request.address, from: request.from }) : [],
             };
         }],
         ["POST", /^\/reachability$/, { game: true }, async (request, body) => {

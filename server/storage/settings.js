@@ -31,6 +31,8 @@ export const SETTINGS = Object.freeze({
     router: { kind: "boolean", default: true, about: "Ask the router to let the internet in (PCP, NAT-PMP or UPnP), while the internet's answered" },
     funnel: { kind: "boolean", default: false, about: "Let the internet in through Tailscale Funnel (for a home whose provider shares its address), while the internet's answered" },
     tunnelPort: { kind: "integer", min: 1, max: 65535, default: 8482, about: "The port a tunnel (Tailscale Funnel) brings the internet to, on this computer alone" },
+    broker: { kind: "boolean", default: true, about: "List players' own worlds (hosted in their browsers) here, and help their games connect to them" },
+    relaying: { kind: "boolean", default: true, about: "Relay a player's own world through this server when games can't connect to it directly (about 2 KB/s for each who's joined)" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
 });
 

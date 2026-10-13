@@ -62,7 +62,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
 
 window.pellagos = {
     get game() {
@@ -1358,9 +1358,11 @@ async function invite() {
     }
 
     const { openWorld, RELAY_ERRORS } = await import("./app/together.js");
+    const broker = await brokerFor();
 
     try {
         const world = await openWorld(game, {
+            ...(broker ? { broker: { address: broker.address, listing: await listingOf(game) } } : {}),
             // (Someone come or gone: shown; and the world goes on, for them, even with the menu open;
             // nothing downloaded while the world's sent them)
             onChange: () => {
@@ -1392,27 +1394,91 @@ async function invite() {
         });
 
         // (The downloader timing the round trip over the host's own link, to the relay)
+        world.via = broker;
+        $("#invitelist").checked = false;
         setTogether(world);
         world.link.onRtt = (rtt) => fetcher.measure(rtt);
         fetcher.probe = () => world.link.measure();
         showInvite();
     } catch (error) {
-        showInvite(RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable);
+        showInvite(RELAY_ERRORS[error.message] ?? (broker ? `Couldn't reach ${broker.name}'s broker.` : RELAY_ERRORS.unreachable));
     }
+}
+
+// What's said of a world opened to others, for a broker's listing (plan §8.3)
+async function listingOf(game) {
+    const { MOST_PLAYERS, NET_VERSION } = await import("./core/netplay.js");
+    const hero = state.save?.hero ?? game.host?.players?.get?.("player")?.hero ?? {};
+
+    return { name: `${hero.name ?? "A player"}'s world`, people: hero.race ?? "human", most: MOST_PLAYERS, net: NET_VERSION, listed: false };
+}
+
+// The world server whose broker a world's opened through (plan §8.3): the one the game came from,
+// if it is one; else the first known server whose card says it brokers; else none (the old relay,
+// at the page's own server, which ?relay= asks for too). { name, address (its broker's), at (the
+// server's address), own (the page's own) }
+async function brokerFor() {
+    if (new URLSearchParams(location.search).has("relay")) {
+        return null;
+    }
+
+    const { addressOf, baseOf, ServerClient } = await serversOf();
+    const { brokerOf } = await import("./app/peer.js");
+    const own = await pageServer();
+
+    if (own?.server?.broker) {
+        const at = addressOf(location.origin);
+
+        return { name: own.server.name ?? location.host, address: brokerOf(at), at: baseOf(at), own: true };
+    }
+
+    for (const record of state.servers?.list() ?? []) {
+        const known = serverCards.get(record.key);
+        let card = known?.card ?? null;
+        let via = known?.via ?? record;
+
+        if (!card) {
+            const client = new ServerClient(record, { servers: state.servers });
+
+            card = await client.status().catch(() => null);
+            via = client.via ?? record;
+        }
+
+        if (card?.server?.broker) {
+            return { name: card.server.name ?? record.name ?? record.key, address: brokerOf(via), at: baseOf(via), own: false };
+        }
+    }
+
+    return null;
+}
+
+// The card of the world server this page came from (null if it's no world server: GitHub Pages,
+// or `npm start`), asked once
+function pageServer() {
+    state.pageServer ??= fetch(new URL("api/v1/status", new URL("/", location.href)))
+        .then((response) => (response.ok ? response.json() : null))
+        .then((card) => (card?.server?.id ? card : null))
+        .catch(() => null);
+
+    return state.pageServer;
 }
 
 function showInvite(problem = "") {
     const code = state.together?.code;
+    const via = state.together?.via ?? null;
     const others = code && state.game ? state.game.others() : [];
 
-    $("#invitestatus").textContent = problem || (code ? "Your world's open to others. Give them this code:" : "Opening your world to others…");
+    $("#invitestatus").textContent = problem || (code ? `Your world's open to others${via ? ` through ${via.name}` : ""}. Give them this code:` : "Opening your world to others…");
+    $("#invitelisting").hidden = !(code && via);
+    $("#invitelistname").textContent = via ? `List it on ${via.name}` : "List it on the server";
     $("#invitecode").hidden = !code;
     $("#invitecode").textContent = code ?? "";
     $("#invitehow").hidden = !code;
     $("#invitestop").hidden = !code;
 
     if (code) {
-        const link = `${location.origin}${location.pathname}?join=${code}`;
+        // (Joined through a server other than the page's own: it's named in the link)
+        const link = `${location.origin}${location.pathname}?join=${code}${via && !via.own ? `&at=${encodeURIComponent(via.at)}` : ""}`;
 
         $("#invitelink").href = link;
         $("#invitelink").textContent = link;
@@ -1434,9 +1500,11 @@ function closeInvite() {
 
 // Joining a world someone else has opened: its code, and who comes (the character played last,
 // or another kept, chosen: Change; with none kept, one's made first)
-function openJoin(code = "") {
+function openJoin(code = "", { at = null } = {}) {
     const kept = loadCharacters(WEAPONS);
 
+    // (Through which server's broker: the link's, or a player's world chosen on the Worlds screen)
+    state.joinAt = at;
     state.joinAs = kept.find(({ id }) => id === state.joinAs?.id) ?? state.save;
     $("#joincode").value = String(code).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
     showJoinWho();
@@ -1489,8 +1557,11 @@ async function join(event) {
 
     let joined;
 
+    const broker = await joinBroker();
+
     try {
         joined = await joinWorld({
+            ...(broker ? { broker } : {}),
             code,
             character: { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) },
             onClosed: () => leftWorld("The world's host has closed it to others."),
@@ -1536,6 +1607,25 @@ async function join(event) {
         fetcher.measure(rtt, { strained: joined.joining.delay > delay });
         delay = joined.joining.delay;
     };
+}
+
+// The broker a world's joined through (plan §8.3): the server named for it (an invite link's `at`,
+// or the one a player's world was chosen from); else the page's own server's, if it's a world
+// server; else none (the old relay)
+async function joinBroker() {
+    const { addressOf } = await serversOf();
+    const { brokerOf } = await import("./app/peer.js");
+    const at = typeof state.joinAt === "string" ? addressOf(state.joinAt) : state.joinAt;
+
+    if (at) {
+        return { address: brokerOf(at) };
+    }
+
+    if (new URLSearchParams(location.search).has("relay")) {
+        return null;
+    }
+
+    return (await pageServer())?.server?.broker ? { address: brokerOf(addressOf(location.origin)) } : null;
 }
 
 // Playing together or not (a world opened or joined, app/together.js; or null): the downloader
@@ -1754,7 +1844,9 @@ async function refreshWorlds() {
     await Promise.all(
         state.servers.list().map(async (record) => {
             try {
-                serverCards.set(record.key, { card: await new ServerClient(record, { servers: state.servers }).status() });
+                const client = new ServerClient(record, { servers: state.servers });
+
+                serverCards.set(record.key, { card: await client.status(), via: client.via });
             } catch (error) {
                 serverCards.set(record.key, { error });
             }
@@ -1787,7 +1879,7 @@ async function showWorlds() {
     const rows = [];
 
     for (const record of state.servers.list()) {
-        const { card, error } = serverCards.get(record.key) ?? {};
+        const { card, error, via } = serverCards.get(record.key) ?? {};
         const matched = !card || card.server?.net === NET_VERSION;
 
         // (A page from https, GitHub Pages's, can't reach a server at home over plain http: plan
@@ -1853,6 +1945,31 @@ async function showWorlds() {
                     className: matched ? "" : "unmatched",
                     disabled: !matched,
                     onClick: () => (walled ? location.assign(handOff(id)) : held?.key || held?.ticket ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id)),
+                }),
+            );
+            rows.push(row);
+        }
+
+        // (Players' own worlds listed on its broker, joined through it: plan §8.3)
+        for (const listing of walled ? [] : (card?.players ?? [])) {
+            const row = document.createElement("li");
+            const fits = listing.net === NET_VERSION;
+            const how = listing.direct ? "linked directly" : listing.near && listing.local ? "on your network" : "through the server";
+
+            row.className = "player-world";
+            row.dataset.listing = listing.id;
+            row.append(
+                worldCard({
+                    name: listing.name,
+                    badge: "A player's world",
+                    about: `${listing.players} of ${listing.most} in · ${how}${listing.temporary ? " · on a phone, for a while" : ""}`,
+                    when: fits ? "Join it" : "Another version of the game",
+                    className: fits ? "" : "unmatched",
+                    disabled: !fits,
+                    onClick: () => {
+                        $("#worlds").close();
+                        openJoin(listing.id, { at: via ?? record });
+                    },
                 }),
             );
             rows.push(row);
@@ -2458,6 +2575,8 @@ $("#joincancel").addEventListener("click", () => $("#join").close());
 $("#joinchange").addEventListener("click", () => openCharacters("join"));
 $("#invitebutton").addEventListener("click", invite);
 $("#inviteback").addEventListener("click", closeInvite);
+// (Listed on its broker's server for players there to see, or for its code alone)
+$("#invitelist").addEventListener("change", (event) => state.together?.link?.list?.(event.target.checked));
 $("#invitestop").addEventListener("click", () => {
     state.together?.close();
     setTogether(null);
@@ -2864,7 +2983,7 @@ async function start() {
     title();
 
     if (params.has("join")) {
-        openJoin(params.get("join"));
+        openJoin(params.get("join"), { at: params.get("at") });
     } else if (location.hash === "#test") {
         history.replaceState(null, "", `${location.pathname}${location.search}`);
         openWorlds({ test: true });

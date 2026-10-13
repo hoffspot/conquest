@@ -1,12 +1,14 @@
 // Playing together in the browser (docs/WAR.md M11): a world opened to others, or another's
-// joined, through the relay (server/relay.js), by a WebSocket; or a world on a world server
-// entered, by its play socket (server/play.js: app/servers.js). What's said over it, and what it
-// means, is core/netplay.js's; this only carries it.
+// joined, through a world server's broker (point to point, or relayed by it: app/peer.js), or
+// the old relay (server/relay.js, kept for one release); or a world on a world server entered, by
+// its play socket (server/play.js: app/servers.js). What's said over it, and what it means, is
+// core/netplay.js's; this only carries it.
 //
-//   const world = await openWorld(game);                 // { code, hosting, close() }
-//   const joined = await joinWorld({ code, character }); // { joining, close() }
+//   const world = await openWorld(game, { broker });          // { code, hosting, close() }
+//   const joined = await joinWorld({ code, character, broker }); // { joining, close() }
 
 import { Hosting, Joining } from "../core/netplay.js";
+import { BROKER_ERRORS, BrokerHost, BrokerJoin, reachability } from "./peer.js";
 
 export { NET_KICKS, NET_REFUSALS } from "../core/netplay.js";
 
@@ -27,8 +29,9 @@ export const LINK_TIMING = Object.freeze({ ping: 4000, patience: 10000, first: 5
 /** The close code of a link given up on to come back on another (server/relay.js RECONNECTING). */
 const RECONNECTING = 4000;
 
-/** Why the relay turned a game away: shown to its player. */
+/** Why the relay (or a broker) turned a game away: shown to its player. */
 export const RELAY_ERRORS = Object.freeze({
+    ...BROKER_ERRORS,
     "no-room": "There's no world open with that code.",
     full: "That world's full.",
     busy: "Too many worlds are open just now. Try again soon.",
@@ -471,16 +474,41 @@ export class RelayLink {
     }
 }
 
+// The peer links' options a broker's given with (its RTC and timing, for the tests)
+const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}), ...(timing ? { timing } : {}) });
+
 /**
  * Open a game's world to others (its host being this game's): resolves with { code (for others
- * to join by), hosting (core/netplay.js), link (the RelayLink), close() (closed to others again) }. Hears onChange()
- * when someone comes or goes; onLink("lost") when its link's dropped and it's coming back on
- * another, onLink(null) once it has (everyone sent the world again); and onDrop() if the link's
- * lost for good.
+ * to join by), hosting (core/netplay.js), link (the RelayLink, or BrokerHost), close() (closed to
+ * others again) }. Through `broker` ({ address (app/peer.js brokerOf), listing: { name, people,
+ * most, net, listed }, and for the tests RTC, timing }) if it's given, else the relay at `address`. Hears onChange() when
+ * someone comes or goes; onLink("lost") when its link's dropped and it's coming back on another,
+ * onLink(null) once it has (everyone sent the world again); and onDrop() if the link's lost for good.
  */
-export async function openWorld(game, { address = relayAddress(), onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING } = {}) {
-    const link = await RelayLink.open(address, timing);
-    const code = await link.host();
+export async function openWorld(game, { address = null, broker = null, onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING } = {}) {
+    let link;
+    let code;
+
+    if (broker) {
+        const { listed = false, ...listing } = broker.listing;
+
+        link = await BrokerHost.open(broker.address, peerOptions(broker));
+        link.playersNow = () => 1 + (game.others?.().length ?? 0);
+
+        try {
+            // (Whether it can be reached, from here and from its own network: the listing rule's)
+            const reach = await reachability({ ice: link.ice, ...peerOptions(broker) });
+
+            code = await link.host({ ...listing, players: link.playersNow(), visibility: listed ? "listed" : "code", ...reach, temporary: /iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") });
+        } catch (error) {
+            link.close();
+            throw error;
+        }
+    } else {
+        link = await RelayLink.open(address ?? relayAddress(), timing);
+        code = await link.host();
+    }
+
     const hosting = new Hosting(game.host, { send: (peer, text) => link.to(peer, text) });
 
     hosting.onJoin = () => onChange();
@@ -517,13 +545,15 @@ export async function openWorld(game, { address = relayAddress(), onChange = () 
 
 /**
  * Join the world open with `code`, as a character (as Host.join takes it): resolves once the
- * relay's let it in, with { joining (core/netplay.js: its onWelcome, onState and onRefused to be
- * heard), link (the RelayLink), close() }. Hears onClosed() if the host closes the world; onLink("lost") when its link's
- * dropped and it's coming back on another, onLink("away") when the host's has, onLink(null) once
- * all's well again (the world asked for again); and onDrop() if the link's lost for good.
+ * relay's let it in (or, through `broker`, { address, RTC, timing }, once it's linked to the host, point
+ * to point or relayed), with { joining (core/netplay.js: its onWelcome, onState and onRefused to be
+ * heard), link (the RelayLink, or BrokerJoin), close() }. Hears onClosed() if the host closes the
+ * world; onLink("lost") when its link's dropped and it's coming back on another, onLink("away")
+ * when the host's has, onLink(null) once all's well again (the world asked for again); and
+ * onDrop() if the link's lost for good.
  */
-export async function joinWorld({ code, character, address = relayAddress(), onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
-    const link = await RelayLink.open(address, timing);
+export async function joinWorld({ code, character, address = null, broker = null, onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
+    const link = broker ? await BrokerJoin.open(broker.address, peerOptions(broker)) : await RelayLink.open(address ?? relayAddress(), timing);
 
     try {
         await link.join(cleanCode(code));
