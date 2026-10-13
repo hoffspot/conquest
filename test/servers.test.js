@@ -2,17 +2,20 @@
 // addresses as players type them, invite links, the servers it remembers (and carries to another
 // page as a code), the server's identity checked as the server makes it and pinned, nothing secret
 // sent to a server that isn't the one pinned, and a world made, entered and played in, over real
-// sockets to a world server in this process
+// sockets to a world server in this process. Home and away (§9.1): a server's addresses kept from its
+// card and tried in turn, at home first when it said so; Test this server (§9.3) trying its
+// internet addresses and telling it how that went.
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
-import { addressOf, inviteLink, inviteOf, KnownServers, ServerClient, ServerRefusal, SERVERS_KEY } from "../client/js/app/servers.js";
+import { addressesOf, addressOf, candidatesOf, homeHost, inviteLink, inviteOf, KnownServers, ServerClient, ServerRefusal, SERVERS_KEY } from "../client/js/app/servers.js";
 import { fingerprintOf, newNonce, verifyIdentity } from "../client/js/core/identity.js";
 import { fingerprintOf as serverFingerprintOf } from "../server/access/identity.js";
 import { WorldServer } from "../server/world-server.js";
+import { fakeTailscale } from "./fake-tailscale.js";
 
 // Short codes hashed cheaply in the tests
 const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1024 * 1024 });
@@ -227,12 +230,15 @@ describe("a world on a world server, from the game (app/servers.js ServerClient,
 
         pinned.keepWorld(address.key, made.world, { key: made.playerKey });
         await assert.rejects(new ServerClient(record, { servers: pinned, fetch, timing: QUICK }).enter({ world: made.world }), (error) => error.error === "identity");
-        assert.deepEqual(asked, [], "nothing asked of its API");
+        assert.ok(
+            asked.every((call) => call === "GET /api/v1/status"),
+            `nothing asked of its API but its public card (where it's reached): ${asked}`,
+        );
         assert.equal(pinned.get(address.key).id, "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA", "the pin's kept");
 
         // (An invite's id that isn't the server's: the same)
         await assert.rejects(new ServerClient(theirs.remember(addressOf(`localhost:${server.port}`)), { expect: "BBBBB-BBBBB-BBBBB-BBBBB-BBBBB", fetch, timing: QUICK }).redeem("ABCD1234"), (error) => error.error === "identity");
-        assert.deepEqual(asked, []);
+        assert.ok(asked.every((call) => call === "GET /api/v1/status"), `${asked}`);
     });
 
     it("is told it's sent out, and why; and gives a place up that the server no longer keeps", async () => {
@@ -261,5 +267,105 @@ describe("a world on a world server, from the game (app/servers.js ServerClient,
         second.link.socket.close(4000);
         await until(() => dropped, "given up");
         assert.deepEqual(lost, ["lost"]);
+    });
+});
+
+describe("home and away (app/servers.js homeHost, addressesOf, candidatesOf, ServerClient reach)", () => {
+    it("tells home addresses from the internet's, and keeps a card's addresses as the server says them", () => {
+        for (const host of ["studio-mac.local", "localhost", "192.168.1.20", "10.0.0.5", "172.16.4.1", "169.254.1.1", "127.0.0.1", "[fd00::20]", "fe80::1", "::1"]) {
+            assert.equal(homeHost(host), true, host);
+        }
+
+        for (const host of ["sam.duckdns.org", "203.0.113.9", "100.64.1.1", "172.32.0.1", "[2001:db8::7]", "studio-mac.tail1234.ts.net"]) {
+            assert.equal(homeHost(host), false, host);
+        }
+
+        const known = addressesOf({ addresses: ["http://studio-mac.local:8480", "http://192.168.1.20:8480", "https://sam.duckdns.org:8480", "https://studio-mac.tail1234.ts.net", "not an address"] });
+
+        assert.deepEqual(
+            known.map(({ url, key, secure, home }) => [url, key, secure, home]),
+            [
+                ["http://studio-mac.local:8480", "studio-mac.local:8480", false, true],
+                ["http://192.168.1.20:8480", "192.168.1.20:8480", false, true],
+                ["https://sam.duckdns.org:8480", "sam.duckdns.org:8480", true, false],
+                ["https://studio-mac.tail1234.ts.net", "studio-mac.tail1234.ts.net:443", true, false],
+            ],
+        );
+    });
+
+    it("tries a server's addresses in turn: the one that last answered, then home ones first when it was last at home, else its own and the internet's; a bare one secure first unless it's at home; plain ones last from a secure page", () => {
+        const addresses = addressesOf({ addresses: ["http://studio-mac.local:8480", "https://sam.duckdns.org:8480"] });
+        const order = (record, secure = false) => candidatesOf(record, { secure }).map((one) => `${one.secure ? "https" : "http"}://${one.key}`);
+        const away = { ...addressOf("https://sam.duckdns.org:8480"), addresses };
+
+        assert.deepEqual(order(away), ["https://sam.duckdns.org:8480", "http://studio-mac.local:8480"]);
+        assert.deepEqual(order({ ...away, home: true }), ["http://studio-mac.local:8480", "https://sam.duckdns.org:8480"]);
+        assert.deepEqual(order({ ...away, home: true, via: "ssam.duckdns.org:8480" }), ["https://sam.duckdns.org:8480", "http://studio-mac.local:8480"]);
+
+        // (Typed bare: the internet's secure first; a home one plain first, unless this page is secure)
+        assert.deepEqual(order({ ...addressOf("sam.duckdns.org"), bare: true }), ["https://sam.duckdns.org:8480", "http://sam.duckdns.org:8480"]);
+        assert.deepEqual(order({ ...addressOf("192.168.1.20"), bare: true }), ["http://192.168.1.20:8480", "https://192.168.1.20:8480"]);
+        assert.deepEqual(order({ ...addressOf("192.168.1.20"), bare: true }, true), ["https://192.168.1.20:8480", "http://192.168.1.20:8480"]);
+
+        // (From a secure page, plain ones last: browsers won't let it reach them)
+        assert.deepEqual(order({ ...away, home: true }, true), ["https://sam.duckdns.org:8480", "http://studio-mac.local:8480"]);
+    });
+
+    it("reaches a server by another of its addresses when the one it was added by doesn't answer, remembers which, and passes over another server's", async () => {
+        const { server, address } = await serve();
+        const servers = new KnownServers(memory());
+        const works = { ...address, url: `http://${address.key}`, home: true };
+
+        // (Added by an address that answers nothing; its card's addresses kept with it, at home)
+        const record = servers.remember(addressOf("127.0.0.1:9"), { addresses: [works], home: true });
+        const client = new ServerClient(record, { servers, timing: QUICK, secure: false });
+        const card = await client.status();
+
+        assert.equal(card.server.id, server.identity.id);
+        assert.equal(client.via.key, address.key);
+        assert.equal(servers.get("127.0.0.1:9").via, address.key);
+        assert.equal(servers.get("127.0.0.1:9").home, true, "the card said this device is at the server's home");
+        assert.ok(servers.get("127.0.0.1:9").addresses.some((one) => one.key === address.key));
+
+        // (Pinned to another id: an address answering as another server is passed over)
+        const pinned = servers.remember(addressOf("127.0.0.1:9"), { id: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA", via: null });
+
+        await assert.rejects(new ServerClient(pinned, { servers, timing: QUICK, secure: false }).status(), (error) => error instanceof ServerRefusal && error.error === "unreachable");
+    });
+});
+
+describe("Test this server (app/servers.js ServerClient test, server POST /reachability)", () => {
+    it("tries each of the server's internet addresses, and tells the server how it went", async () => {
+        const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-servers-"));
+
+        made.push(folder);
+
+        const server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), router: false, funnel: { run: fakeTailscale() }, tunnelPort: 0 });
+
+        await server.settings.change({ internet: true, funnel: true });
+        await server.listen(0, "127.0.0.1");
+        running.push(server);
+        await until(() => server.funnel.state().url, "Funnel open");
+
+        // (Funnel's name brought to the tunnel, as Tailscale would: the test's fetch sends it there)
+        const funnel = "https://studio-mac.tail1234.ts.net";
+        const fetch = (url, options) => globalThis.fetch(String(url).replace(`${funnel}:443`, `http://127.0.0.1:${server.tunnelPort}`), options);
+        const servers = new KnownServers(memory());
+        const client = new ServerClient(servers.remember(addressOf(`127.0.0.1:${server.port}`)), { servers, fetch, timing: QUICK, secure: false });
+        const tested = await client.test();
+
+        assert.equal(tested.home, true, "tested from the server's own computer");
+        assert.equal(tested.reported, true);
+        assert.deepEqual(
+            tested.results.map(({ address, ok }) => [address, ok]),
+            [[funnel, true]],
+        );
+        assert.equal(server.reports[0].results[0].address, funnel);
+        assert.equal(server.reports[0].tunnel, true, "reported through the tunnel, where it reached");
+        assert.match(server.manage.internet().tests.words, /reached it at https:\/\/studio-mac\.tail1234\.ts\.net/);
+
+        // (Closed to the internet: nothing to try, and nothing reported)
+        await server.manage.changeSettings({ internet: false });
+        assert.deepEqual(await new ServerClient(servers.get(`127.0.0.1:${server.port}`), { servers, fetch, timing: QUICK, secure: false }).test(), { results: [], reported: false, home: true });
     });
 });
