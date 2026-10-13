@@ -9,17 +9,83 @@ Phase 2).
 It needs a Mac with Apple silicon, on macOS 13 or later. It's made for macOS 27, which runs on
 nothing else.
 
-## Getting it
+## Installing it
 
-The app comes as a zip, `Pellagos-Server-<version>-arm64.zip`, from a run of the **Mac app**
-workflow (the repository's Actions tab: Mac app, the latest run, `pellagos-server-mac` under
-Artifacts), or from a release. Open the zip, and move **Pellagos Server** into Applications.
+The installer, `scripts/install-mac.sh`, does it from Terminal (Applications › Utilities ›
+Terminal). Paste this line, press Return, and wait for it to say it's installed:
 
-## Opening it the first time: Open Anyway
+```sh
+curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash
+```
 
-The app is signed "ad hoc": signed, but by no one Apple knows. Apple's Developer ID costs $99 a
-year, and the project chose not to pay it. So the first time it's opened, macOS won't open it until
-you say so. Since macOS 15, Control-click › Open no longer does this; it's done in System Settings:
+It finds the project's newest release, downloads the app, checks it, puts it in Applications and
+opens it. Nothing else is needed: Node and the game come inside the app. It asks for no password,
+and it never uses `sudo`: if Applications can't be changed from your account, the app goes in
+the Applications folder in your home folder instead. When it's done, the app's dot is in the menu
+bar; what macOS asks next is [below](#what-macos-asks-next).
+
+**Before the project's first release**, or to build it from the source yourself, the installer
+builds it on this Mac. That needs Apple's Command Line Tools, which are free (about 1 GB). If
+they're missing, the installer opens their installer and asks you to run it again once they're in:
+
+```sh
+xcode-select --install          # Apple's Command Line Tools, once
+curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --build
+```
+
+That downloads the project's source (about 40 MB) and builds the app, which takes a few minutes. The
+first build also downloads Node from nodejs.org, checked against the SHA-256 kept in
+`scripts/build-mac-app.js`. It uses the Node already on the Mac instead, if that's version 22 or
+later. From a copy of this repository, `scripts/install-mac.sh --build` builds that copy.
+
+**From a zip you have**: a release's `Pellagos-Server-<version>-arm64.zip`, or the **Mac app**
+workflow's (the repository's Actions tab: Mac app, the latest run, `pellagos-server-mac` under
+Artifacts):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --zip ~/Downloads/Pellagos-Server-2.0.0-arm64.zip
+```
+
+Each way, the installer:
+
+- checks the Mac: Apple silicon, macOS 13 or later;
+- checks a release's zip is the one GitHub has (the SHA-256 GitHub keeps for each file of a
+  release), and that the app in it is Pellagos Server (its bundle id), unchanged since it was
+  signed (`codesign --verify`); anything else, it refuses, and leaves the app there as it was;
+- stops Pellagos Server if it's running, as Quit does: its server first, which saves every world,
+  then the app;
+- puts the new app in place of the old one and opens it. Your worlds and settings aren't touched:
+  a newer server brings them forward as it starts.
+
+Run it again to update to the newest release, the same way: a new app in place of the old one.
+
+| Add after `bash -s --` | Does |
+| --- | --- |
+| *(nothing)* | The newest release |
+| `--version 2.1.0` | That release |
+| `--build` | Built on this Mac from the project's source (`--ref <branch or tag>` for another than `main`) |
+| `--zip <file>` | A zip you have |
+| `--to <folder>` | Into that folder, not Applications |
+| `--no-open` | Not opened once it's installed |
+| `--uninstall` | Stopped and taken away; its worlds kept ([below](#updating-and-taking-it-off)) |
+| `--help` | All of these |
+
+**Why no Open Anyway.** A file downloaded by a browser is marked as downloaded, and macOS
+checks an app with that mark with Apple before it opens it. Pellagos Server is signed, but not with
+an Apple Developer ID (that costs $99 a year, and the project chose not to pay it), so macOS won't
+open it until you say so in System Settings (Open Anyway, below). The installer downloads the app
+itself, with `curl`, so it isn't marked. A zip given with `--zip` has the mark taken off once the
+app in it has been checked. Either way, what you're trusting is the project's releases on GitHub,
+or its source if you build it.
+
+**By hand**, without the installer: open the zip, move **Pellagos Server** into Applications, and
+open it with Open Anyway.
+
+## Opening it by hand the first time: Open Anyway
+
+The app is signed "ad hoc": signed, but by no one Apple knows. Opened from a zip downloaded in a
+browser, macOS won't open it the first time until you say so. Since macOS 15, Control-click ›
+Open no longer does this; it's done in System Settings:
 
 1. Double-click **Pellagos Server** in Applications. macOS says it was "Not Opened", because Apple
    can't check it. Click **Done**, not Move to Trash.
@@ -83,12 +149,19 @@ it: every world is backed up first, the new version is unpacked beside the app i
 it, bringing every world forward. If it can't, it goes back to the version before, with everything
 as it was. The menu says **Updating** meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
 
-A new app can also be put in by hand: Quit the app, put the new one in Applications in place of
-the old, and open it. Its worlds carry on: a newer server brings them forward as it starts. As
-it's a new app to macOS, the firewall and the local network may ask again.
+The installer puts in a new app too ([above](#installing-it)): the newest release, a zip, or one
+built on the Mac. So can you, by hand: Quit the app, put the new one in Applications in place of the
+old, and open it. Either way its worlds carry on: a newer server brings them forward as it
+starts. As it's a new app to macOS, the firewall and the local network may ask again.
 
-To take it off, turn **Run at login** off, Quit, and move the app to the Trash. Its worlds stay in
-the folder above until you delete that too.
+To take it off, turn **Run at login** off in its menu, then:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --uninstall
+```
+
+That stops it (every world saved) and takes the app away. Or, by hand: Quit, and move the app to
+the Trash. Either way its worlds stay in the folder above until you delete that too.
 
 ## Without the app: Terminal and Homebrew
 
@@ -126,6 +199,8 @@ formula (`scripts/build-mac-app.js` says what's inside). The **Mac app** workflo
 GitHub's Macs, then opens the app, sees its server answer, quits it, and installs and tests the
 formula.
 
+Or build it and install it in one go: `scripts/install-mac.sh --build` ([Installing it](#installing-it)).
+
 The app (`mac/`) is small: `ServerProcess.swift` runs the bundle's Node on
 `server/world.js --app` and reads how it stands from the lines it prints (`@pellagos {...}`), and
 `LoginItem.swift` registers the bundle's launch agent with `SMAppService`, which launchd runs with
@@ -133,8 +208,14 @@ The app (`mac/`) is small: `ServerProcess.swift` runs the bundle's Node on
 
 ## Checking it on a Mac
 
-GitHub's Macs can't answer macOS's questions or sleep, so the owner checks these by hand on
-macOS 27.0.1, with each new version of the app:
+The **Mac app** workflow runs the installer on GitHub's Macs each way it installs (a zip marked as
+downloaded, a release, built there) and takes it away again. GitHub's Macs can't answer macOS's
+questions or sleep, so the owner checks these by hand on macOS 27.0.1, with each new version of
+the app:
+
+- [ ] **The installer.** In Terminal, the installer's line (above): it installs the newest
+      release, says so, and the app opens with no Open Anyway. Run again, it stops the running
+      app (its worlds saved) and puts the new one in. `--uninstall` takes it away.
 
 - [ ] **First launch.** The zip downloaded in Safari, the app moved to Applications and opened
       with Open Anyway (above). The menu-bar dot shows; **Open the management page** opens it.

@@ -17,7 +17,7 @@ at a time.
 
 | How | Start it | Stop it |
 | --- | --- | --- |
-| **The Mac app** (menu bar) | Open **Pellagos Server** ([MAC_APP.md](MAC_APP.md): getting it, Open Anyway) | Its menu's **Stop** or **Quit** |
+| **The Mac app** (menu bar) | Installed with `curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh \| bash` in Terminal, which opens it ([MAC_APP.md](MAC_APP.md#installing-it)); after that, open **Pellagos Server** | Its menu's **Stop** or **Quit** |
 | **Homebrew** | `brew install hoffspot/pellagos/pellagos-server`, then `pellagos-server`, or `brew services start pellagos-server` to run it at login | Ctrl-C, or `brew services stop pellagos-server` |
 | **A copy of this repository** | `npm run world-server` (Node 22 or newer) | Ctrl-C |
 
@@ -169,8 +169,10 @@ the owner keeps:
 3. Make a GitHub release tagged `server-v<version>` with the zip, the archive and its `.sig`
    attached, and put the formula in the tap (MAC_APP.md, "Homebrew").
 
-Servers find it on their next check. A server without the public key (made before the key was)
-shows new versions but can't install them: install that one by hand.
+Servers find it on their next check, and the Mac installer (`scripts/install-mac.sh`) installs the
+newest release's zip, so the zip goes with every release, named as the workflow names it. A server
+without the public key (made before the key was) shows new versions but can't install them:
+install that one by hand, or with the installer.
 
 ## Where things are
 

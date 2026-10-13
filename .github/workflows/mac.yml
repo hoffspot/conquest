@@ -3,8 +3,9 @@ name: Mac app
 # The menu-bar app (mac/) built on a Mac, put in its bundle with Node and the server and signed ad
 # hoc (scripts/build-mac-app.js), then opened: its item in the menu bar (mac/ci/status-item.swift),
 # its server answering on the usual port, and on Quit every world saved before it goes; and the
-# Homebrew formula installed from a tap of its own and its test run (generated/world_server_plan.md
-# §11, Phase 2; docs/MAC_APP.md). Run by hand (Actions, Mac app, Run workflow), and on a pull
+# Homebrew formula installed from a tap of its own and its test run; and the installer
+# (scripts/install-mac.sh) run as a Mac's owner runs it, each way it installs, then taking it away
+# (generated/world_server_plan.md §11, Phase 2; docs/MAC_APP.md). Run by hand (Actions, Mac app, Run workflow), and on a pull
 # request that changes the app, its bundle, or how the server runs for it. A public repository's
 # Mac runners cost nothing. The zip, the server's archive (signed with the project's release key,
 # scripts/release-key.js, if the repository has it as the secret PELLAGOS_RELEASE_KEY) and the
@@ -16,6 +17,7 @@ on:
     paths:
       - mac/**
       - scripts/build-mac-app.js
+      - scripts/install-mac.sh
       - server/world.js
       - server/serve.js
       - server/launch.js
@@ -80,10 +82,48 @@ jobs:
           # the app goes at once, and its server, its pipe closed, saves and stops just the same)
           if perl -e 'alarm 30; exec @ARGV' osascript -e 'tell application id "io.github.hoffspot.pellagos-server" to quit'; then echo "Quit, as the menu quits it"; else echo "Quit refused here: SIGTERM"; pkill -TERM -x PellagosServer; fi
           for try in $(seq 1 60); do pgrep -f "Pellagos Server.app/Contents/Helpers/node" > /dev/null || break; sleep 1; done
-          ! pgrep -f "Pellagos Server.app/Contents/Helpers/node"
-          ! pgrep -x PellagosServer
+          # (A negated command never fails a step, so each is checked with if)
+          if pgrep -f "Pellagos Server.app/Contents/Helpers/node"; then echo "Its server is still running"; exit 1; fi
+          if pgrep -x PellagosServer; then echo "The app is still running"; exit 1; fi
           grep -E "^@pellagos|Saving every world" "$log"
           grep -q '"state":"stopped"' "$log"
+
+      - name: Install it with the installer as a Mac's owner would (a zip from a browser, the newest release, built here), and take it away again
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          zip="$PWD/dist/Pellagos-Server-$version-arm64.zip"
+          apps="$RUNNER_TEMP/Applications"
+          app="$apps/Pellagos Server.app"
+          log="$HOME/Library/Logs/io.github.hoffspot.pellagos-server/server.log"
+          answers() { for try in $(seq 1 60); do curl -sf http://localhost:8480/api/v1/health > /dev/null && return 0; sleep 1; done; echo "Its server doesn't answer"; exit 1; }
+          # (How many times its server has said it stopped, every world saved)
+          stops() { grep -c '"state":"stopped"' "$log" || true; }
+          # (A zip as a browser leaves it, marked as downloaded: checked, the mark taken off, installed, opened)
+          cp "$zip" "$RUNNER_TEMP/downloaded.zip"
+          xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$RUNNER_TEMP/downloaded.zip"
+          scripts/install-mac.sh --zip "$RUNNER_TEMP/downloaded.zip" --to "$apps"
+          answers
+          if xattr -p com.apple.quarantine "$app" 2> /dev/null; then echo "Still marked as downloaded"; exit 1; fi
+          pgrep -f "$app/Contents/Helpers/node"
+          sleep 2
+          screencapture -x dist/installed.png || true
+          # (The newest release, from an answer as GitHub's, read by osascript: the one running
+          # stopped as Quit stops it, every world saved, and replaced)
+          node -e 'const [zip, version, sha] = process.argv.slice(1); console.log(JSON.stringify([{ tag_name: "server-v" + version, draft: false, prerelease: false, assets: [{ name: "Pellagos-Server-" + version + "-arm64.zip", browser_download_url: "file://" + zip, digest: "sha256:" + sha }] }]))' "$zip" "$version" "$(shasum -a 256 "$zip" | cut -d' ' -f1)" > "$RUNNER_TEMP/releases.json"
+          before=$(stops)
+          PELLAGOS_RELEASES="file://$RUNNER_TEMP/releases.json" scripts/install-mac.sh --to "$apps"
+          [ "$(stops)" -gt "$before" ]
+          answers
+          # (Built here from this copy: Swift's build and Node's archive kept from the steps before)
+          scripts/install-mac.sh --build --source . --to "$apps"
+          answers
+          # (Taken away: stopped, every world saved, its worlds kept)
+          before=$(stops)
+          scripts/install-mac.sh --uninstall --to "$apps"
+          test ! -e "$app"
+          if pgrep -x PellagosServer || pgrep -f "Pellagos Server.app/Contents/Helpers/node"; then echo "It's still running"; exit 1; fi
+          [ "$(stops)" -gt "$before" ]
+          test -d "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/worlds"
 
       - name: Install the formula from a tap of its own, and run its test
         run: |
