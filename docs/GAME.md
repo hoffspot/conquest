@@ -3187,10 +3187,15 @@ they wear.
 A field battle of a hundred a side couldn't be drawn character by character: each soldier is a
 dozen meshes and a skin of its own, posed every frame, and built a few a second (a hundred took
 about a minute to come). So with a battle's soldiers about the player (more than 24, which a town's
-own guards never are: `MARSHAL.from`), those nearest, and whoever's fighting the player, are drawn
-in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10), and the
-rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the crowd
-only once it's 3 places past the last drawn in full). Fewer soldiers than a battle's are drawn in
+own guards never are: `MARSHAL.from`), those nearest the camera, and whoever's fighting the player,
+are drawn in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10),
+and the rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the
+crowd only once it's 3 places past the last drawn in full). However few there are, those more than
+45 metres from the camera are drawn in their crowds too (`DETAIL.reach`; but whoever's fighting the
+player), their bodies in full let go, and built in full again as they come within it: that far
+off, a body's drawn at its lowest detail anyway (a person's under 50 pixels tall on a phone held
+upright). One drawn in full goes to its crowd only once it's 10 metres further than that
+(`DETAIL.slack`), so none goes back and forth at the edge. Fewer soldiers than a battle's are drawn in
 their crowds too once there's no room for them in full: a phone holds only so many bodies drawn
 in full, each about ten megabytes between the page and its graphics card (an iPhone's tab was
 let go with 54 of them on Low, by a capital's guards and townsfolk and a caravan's escort passing;
@@ -3240,18 +3245,23 @@ frame's JavaScript spends its time on. A crowd's figure's drawn with the fewer t
 
 ### Standing in (app/game.js #thronging, app/throng.js)
 
-With Adaptive on, a crowded fight that comes too slowly (*A crowded fight first*, above) has those
-least seen of the players' hired adventurers, the wild's people-shaped creatures (bandits,
-goblins, cultists, trolls...) and its beasts (wolves, boars, bears, spiders, serpents, frogs,
-skeletons...: WILDS.md *In a crowd*) drawn in their kind's crowd, as the soldiers are, as many as the
-throng leaves in full (`Throng.full`; all of them without Adaptive). Looked at a couple of times a
-second (`MARSHAL.every`), and at once when the throng changes:
+The players' hired adventurers, the wild's people-shaped creatures (bandits, goblins, cultists,
+trolls...) and its beasts (wolves, boars, bears, spiders, serpents, frogs, skeletons...: WILDS.md
+*In a crowd*) more than 45 metres from the camera are drawn in their kind's crowd, as the soldiers
+are, however quick the frames (`DETAIL.reach`, as the soldiers': lowest detail drawn in full that
+far off, and posed on the graphics card with the rest of their kind). Nearer, with Adaptive on, a
+crowded fight that comes too slowly (*A crowded fight first*, above) has those least seen of them
+drawn so too, as many as the throng leaves in full (`Throng.full`, judged by those within the
+reach only; all of them without Adaptive): so a quicker machine, or a phone of a later year,
+draws more of them in full. Looked at a couple of times a second (`MARSHAL.every`), and at once
+when the throng changes:
 
-- **Who stays in full.** Whoever's fighting the player or the player's fighting, the four of the
-  players' allies nearest them (`MANY.full`), one thrown by a blast, then the biggest on the
-  screen (those out of view last); never a dungeon's boss or mini-boss, nor an elite. One drawn in
-  full goes to its crowd only once it's 3 places past the last (`MARSHAL.margin`), and once its
-  kind's figure's made.
+- **Who stays in full.** Whoever's fighting the player or the player's fighting (however far
+  off), the four of the players' allies nearest them (`MANY.full`), one thrown by a blast, then
+  the biggest on the screen (the nearest the camera, as big as they are; those out of view last);
+  never a dungeon's boss or mini-boss, nor an elite. One drawn in full goes to its crowd only once
+  it's 3 places past the last (`MARSHAL.margin`), or 10 metres past the reach (`DETAIL.slack`), and
+  once its kind's figure's made.
 - **Their kinds.** A hired adventurer's their own (as they look, with their weapon: there are a
   few, named, on the party's icons); a creature's as one of its kind looks (`humanoidLook`: a bandit's or cultist's sex), holding its
   weapon, drawn as big as it is (`CrowdAvatar.size`); a beast's as the one of the three of its kind
