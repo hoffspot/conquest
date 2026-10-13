@@ -205,7 +205,13 @@ a step late.
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
 where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the
 players were all in. Run it with nothing else on the computer: the players' copies of the world
-share its cores.
+share its cores (they're run at a lower priority, as if each were on a device of its own). Each
+minute it says how many are in the world's battle, how busy the world's thread was, and how many
+tiles of buildings' insides it baked ahead (a few as players come near new buildings, none once
+they've stayed). On a 4-core Linux machine, with 8 players each in their own people's town and
+each starting a field battle every four minutes, the world took 136 MB an hour in and 130 MB at
+the end, its steps 4.4 ms on the mean and 30.4 ms at the worst minute's 99th percentile, its
+thread a fifth of a core.
 
 ## When something's wrong
 
