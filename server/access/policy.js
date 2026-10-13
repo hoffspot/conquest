@@ -60,7 +60,8 @@ export class KeyPolicy {
         if (session) {
             const going = this.access.sessions.use(session);
 
-            if (!going || (world && going.world !== world)) {
+            // (The admin's and a creator's sessions are for no world in particular: what they may do in one, allows says)
+            if (!going || (world && going.world !== null && going.world !== world)) {
                 return { principal: { kind: "refused", why: "key", ...where }, proofs: [] };
             }
 

@@ -28,13 +28,28 @@ export const LIFE = Object.freeze(["stored", "waiting", "loading", "running", "e
  */
 export const WORLD_MEMORY = 256 * 1024 * 1024;
 
+/** What's kept back from the worlds for the machine's own system and its owner's apps (bytes): the larger of this and a quarter of its memory. */
+export const RESERVED_MEMORY = 4 * 2 ** 30;
+
 /**
- * How many worlds the server may run at once without the machine struggling: as many as half its
- * memory holds (WORLD_MEMORY each), and one fewer than its cores (a world steps on one, and bakes
- * on others while players move), at the least one.
+ * How many worlds the server may run at once without the machine struggling (generated/
+ * world_server_plan.md §10), and why: as many as its memory holds, less what's kept back
+ * (RESERVED_MEMORY), at the most a world has used here (`largest`; WORLD_MEMORY until one's run),
+ * and one fewer than its cores (a world steps on one; the server and the owner want one too); the
+ * smaller of the two, one at the least. Returns { most, memory, cpu }: the last two what each
+ * allows.
  */
-export function recommendedWorlds({ memory = os.totalmem(), cores = os.availableParallelism?.() ?? os.cpus().length } = {}) {
-    return Math.max(1, Math.min(Math.floor(memory / 2 / WORLD_MEMORY), cores - 1));
+export function recommendation({ memory = os.totalmem(), cores = os.availableParallelism?.() ?? os.cpus().length, largest = 0 } = {}) {
+    const usable = Math.max(0, memory - Math.max(RESERVED_MEMORY, memory / 4));
+    const byMemory = Math.floor(usable / Math.max(largest, WORLD_MEMORY));
+    const byCpu = Math.max(1, cores - 1);
+
+    return { most: Math.max(1, Math.min(byMemory, byCpu)), memory: byMemory, cpu: byCpu };
+}
+
+/** How many worlds the server may run at once without the machine struggling (recommendation's most). */
+export function recommendedWorlds(machine = {}) {
+    return recommendation(machine).most;
 }
 
 export class Registry {
@@ -234,6 +249,31 @@ export class Registry {
         this.#next();
         this.#awake();
         this.onChange(entry.id);
+    }
+
+    /** The worlds waiting started, while there's room (worldsAtOnce raised, say). */
+    refill() {
+        this.#next();
+    }
+
+    /**
+     * A world forgotten (deleted): set aside first if it's going, and out of the queue. Returns
+     * once it's stored.
+     */
+    async forget(id) {
+        await this.setAside(id, "deleted");
+
+        const entry = this.entries.get(id);
+
+        clearTimeout(entry?.timer);
+        this.queue = this.queue.filter((each) => each !== id);
+
+        for (const { reject } of entry?.waiters.splice(0) ?? []) {
+            reject(new Error(`World ${id} was deleted.`));
+        }
+
+        this.entries.delete(id);
+        this.#next();
     }
 
     // The next waiting started, while there's room

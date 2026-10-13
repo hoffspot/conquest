@@ -1860,8 +1860,8 @@ async function followInvite(invite) {
 
     if (invite.code) {
         await enterServerWorld(record, null, { code: invite.code, expect: invite.id });
-    } else if (invite.world && invite.key) {
-        await enterServerWorld(record, invite.world, { key: invite.key, expect: invite.id });
+    } else if (invite.world && (invite.key || invite.ticket)) {
+        await enterServerWorld(record, invite.world, { key: invite.key, ticket: invite.ticket, expect: invite.id });
     } else {
         refreshWorlds();
     }
@@ -2068,7 +2068,7 @@ async function askCarry() {
  * (what's held, or `key`), the server proved first (pinned, or to `expect`, an invite's id); then a
  * hero chosen, and the world played in.
  */
-async function enterServerWorld(record, world, { key = null, code = null, expect = null } = {}) {
+async function enterServerWorld(record, world, { key = null, code = null, ticket = null, expect = null } = {}) {
     const { ServerClient } = await serversOf();
     const client = new ServerClient(record, { servers: state.servers, expect });
 
@@ -2077,7 +2077,7 @@ async function enterServerWorld(record, world, { key = null, code = null, expect
     let entered;
 
     try {
-        entered = code ? await client.redeem(code) : await client.enter({ world, ...(key ? { key } : {}) });
+        entered = code ? await client.redeem(code) : await client.enter({ world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}) });
     } catch (error) {
         $("#worldsstatus").textContent = error.message;
         showWorlds();

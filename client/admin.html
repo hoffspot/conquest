@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#14110d">
+        <meta name="description" content="Pellagos Server: the world server's management page (its worlds, keys, players, backups, settings, activity and health)">
+
+        <title>Pellagos Server</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="admin.css">
+        <script type="module" src="js/admin/page.js"></script>
+    </head>
+    <body>
+        <!-- The world server's management page (generated/world_server_plan.md §10), served by the
+             server itself: on its computer at localhost:8481, needing no key; from the Wi-Fi at
+             /admin on the play port, with the admin key; never from the internet (server/admin.js) -->
+        <header id="top">
+            <div class="brand">
+                <h1>Pellagos Server</h1>
+                <p id="who" class="muted">Opening…</p>
+            </div>
+            <nav id="tabs" aria-label="Sections" hidden>
+                <button type="button" data-tab="overview" aria-current="page">Overview</button>
+                <button type="button" data-tab="worlds">Worlds</button>
+                <button type="button" data-tab="new">New world</button>
+                <button type="button" data-tab="settings">Settings</button>
+                <button type="button" data-tab="activity">Activity</button>
+                <button type="button" data-tab="health">Health</button>
+            </nav>
+        </header>
+
+        <main>
+            <p id="status" class="status" role="status"></p>
+
+            <!-- From the Wi-Fi: the admin key, traded for a session kept in this tab alone -->
+            <form id="signin" class="panel narrow" hidden>
+                <h2>The admin key</h2>
+                <p class="muted">This is the server's management page. From the Wi-Fi it needs the server's admin key: it was shown once, in Terminal, when the server first started (and stays on the page on the server's own computer, at localhost:8481).</p>
+                <label class="field">Admin key <input id="signinkey" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
+                <p id="signinstatus" class="warning" role="status"></p>
+                <button type="submit" class="primary">Open</button>
+            </form>
+
+            <section id="overview" class="tab" hidden></section>
+            <section id="worlds" class="tab" hidden></section>
+
+            <form id="new" class="tab panel" hidden>
+                <h2>A new world</h2>
+                <p class="muted">Made from its seed when someone first comes in. Unlisted unless you list it: only those you give a key come in.</p>
+                <fieldset>
+                    <legend>Basics</legend>
+                    <label class="field">Name <input name="name" required maxlength="60" placeholder="Thornwick"></label>
+                    <label class="field">Description <textarea name="description" maxlength="500" rows="2" placeholder="What it's for, who plays in it"></textarea></label>
+                    <div class="row">
+                        <label class="field">Seed <input name="seed" inputmode="numeric" pattern="\d*" placeholder="At random"></label>
+                        <label class="field">Home people <select name="race" id="newrace"></select></label>
+                        <label class="field">Most players <input name="mostPlayers" type="number" min="1" max="8" value="8"></label>
+                    </div>
+                    <label class="check"><input name="listed" type="checkbox"> Listed: shown to anyone who asks the server what worlds it has</label>
+                </fieldset>
+                <fieldset>
+                    <legend>Heroes</legend>
+                    <label class="field">Whose heroes
+                        <select name="heroes">
+                            <option value="kept">Kept by the world: each player's heroes stay here</option>
+                            <option value="brought">Brought in: players come as the characters they have</option>
+                        </select>
+                    </label>
+                    <label class="field">First heroes (in a world that keeps them)
+                        <select name="firstHero">
+                            <option value="new">Made new here</option>
+                            <option value="bring">May be brought in, once</option>
+                        </select>
+                    </label>
+                </fieldset>
+                <fieldset>
+                    <legend>Rules</legend>
+                    <label class="check"><input name="pauseWhenHidden" type="checkbox" checked> Stop while every player's page is hidden</label>
+                    <label class="check"><input name="holdWhileJoining" type="checkbox"> Hold the world while someone's coming in</label>
+                    <label class="check"><input name="trustedMayInvite" type="checkbox"> Trusted players may give others keys</label>
+                    <label class="check"><input name="debugCommands" type="checkbox"> Its owners may use the debug commands</label>
+                    <p class="muted small">A player away 10 minutes is marked away; after 30 they're sent out. Resting always needs everyone there.</p>
+                </fieldset>
+                <p id="newstatus" class="warning" role="status"></p>
+                <button type="submit" class="primary">Make it</button>
+            </form>
+
+            <section id="settings" class="tab" hidden></section>
+            <section id="activity" class="tab" hidden></section>
+            <section id="health" class="tab" hidden></section>
+        </main>
+
+        <!-- A world: its settings, keys, players and backups -->
+        <dialog id="world" aria-labelledby="worldname">
+            <header>
+                <div>
+                    <h2 id="worldname"></h2>
+                    <p id="worldwords" class="muted"></p>
+                </div>
+                <button type="button" class="quiet" id="worldclose" aria-label="Close">Close</button>
+            </header>
+            <nav id="worldtabs" aria-label="The world's sections">
+                <button type="button" data-world-tab="settings" aria-current="page">Settings</button>
+                <button type="button" data-world-tab="keys">Keys</button>
+                <button type="button" data-world-tab="players">Players</button>
+                <button type="button" data-world-tab="backups">Backups</button>
+            </nav>
+            <div id="worldbody"></div>
+            <p id="worldstatus" class="status" role="status"></p>
+        </dialog>
+
+        <!-- Something shown once: a key, a ticket, a code, with its link and QR code -->
+        <dialog id="shown" aria-labelledby="showntitle">
+            <h2 id="showntitle"></h2>
+            <p id="shownnote" class="muted"></p>
+            <div id="shownbody"></div>
+            <button type="button" class="primary" id="shownclose">Done</button>
+        </dialog>
+
+        <!-- Something that can't be undone, asked again -->
+        <dialog id="confirm" aria-labelledby="confirmtitle">
+            <form method="dialog" id="confirmform">
+                <h2 id="confirmtitle"></h2>
+                <p id="confirmnote" class="muted"></p>
+                <label class="field" id="confirmtyped" hidden>Type its name <input id="confirmname" autocomplete="off" spellcheck="false"></label>
+                <p id="confirmstatus" class="warning" role="status"></p>
+                <div class="row end">
+                    <button type="button" class="quiet" id="confirmback">Back</button>
+                    <button type="submit" class="danger" id="confirmgo"></button>
+                </div>
+            </form>
+        </dialog>
+    </body>
+</html>

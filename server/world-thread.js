@@ -128,14 +128,23 @@ export class WorldThread {
         this.#post({ type: "leave", peer });
     }
 
-    /** The world's settings changed (storage/worlds.js WORLD_SETTINGS). */
-    settings(settings) {
-        this.#post({ type: "settings", settings });
+    /**
+     * What the world is changed (its name, description and settings: storage/worlds.js
+     * WORLD_SETTINGS), so its thread's copy of world.json, which it writes as it saves, has them
+     * too, and its settings are followed at once.
+     */
+    meta(changes) {
+        this.#post({ type: "meta", changes });
     }
 
     /** The world saved, now (`why`). Returns { ok } once it's on the disk. */
     save(why) {
         return this.#ask("save", { why });
+    }
+
+    /** The world saved, then backed up (`why`: storage/worlds.js StoredWorld.backUp). Returns { ok } once both are on the disk. */
+    backUp(why) {
+        return this.#ask("backup", { why });
     }
 
     /** Everyone out, the world saved, and its thread ended. Returns { ok } (whether the save reached the disk). */

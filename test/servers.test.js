@@ -84,12 +84,13 @@ describe("addresses and invites (app/servers.js)", () => {
         }
     });
 
-    it("carries the server, its id, the world and a key in an invite link's fragment, and reads them back", () => {
+    it("carries the server, its id, the world and a key (or a reissued ticket) in an invite link's fragment, and reads them back", () => {
         const address = addressOf("studio-mac.local:8480");
         const link = inviteLink("http://studio-mac.local:8480/?x=1#old", { address, id: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", world: "abcdefghij", key: "K7Q2M-XD4RT-AAAAA-BBBBB-CCCCC-DDDDD" });
 
         assert.ok(link.startsWith("http://studio-mac.local:8480/?x=1#server="), link);
-        assert.deepEqual(inviteOf(link), { address, id: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", world: "abcdefghij", key: "K7Q2M-XD4RT-AAAAA-BBBBB-CCCCC-DDDDD", code: null });
+        assert.deepEqual(inviteOf(link), { address, id: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", world: "abcdefghij", key: "K7Q2M-XD4RT-AAAAA-BBBBB-CCCCC-DDDDD", code: null, ticket: null });
+        assert.equal(inviteOf(inviteLink("http://studio-mac.local:8480/", { address, id: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", world: "abcdefghij", ticket: "aZ_09-aZ_09-aZ_09-aZ_9" })).ticket, "aZ_09-aZ_09-aZ_09-aZ_9");
         assert.equal(inviteOf(inviteLink("https://hoffspot.github.io/conquest/", { address: addressOf("https://far.example.org:8480"), world: "w", code: "ABCD1234" })).address.secure, true);
         assert.equal(inviteOf("https://hoffspot.github.io/conquest/"), null);
         assert.equal(inviteOf("#server=not%20an%20address"), null);

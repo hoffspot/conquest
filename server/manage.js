@@ -1,0 +1,654 @@
+// What a world's owners, and the server's admin, can do besides letting people in (generated/
+// world_server_plan.md §10, §12.1): what the management page shows and the API it calls does.
+//
+// - A world: what it is and how it is, in words; its settings changed (its heroes mode too, while
+//   nobody's in it); started, set aside, saved; its players sent out, banned, given another part or
+//   a new ticket; its backups listed, made, restored; exported; deleted (its name typed).
+// - The server: where it can be reached, its settings, how many worlds it may run, creator keys,
+//   what's happened (the server's journal, and each world's), and how it's keeping up.
+//
+// Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
+// it aside first, or is refused; whatever can't be undone is backed up before it's done.
+
+import { appendFile, cp, readdir, readFile, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { gzip } from "node:zlib";
+import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
+import { RACE } from "../client/js/core/worldplan/plan.js";
+import { isRole } from "./access/world.js";
+import { recommendation, WORLD_MEMORY } from "./registry.js";
+import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip } from "./storage/files.js";
+import { schemaReason } from "./storage/settings.js";
+import { SERVER_VERSION } from "./storage/versions.js";
+import { BACKUP_NAME, FIRST_HEROES, HERO_MODES, HEROES, JOURNAL, NOW, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+
+/** The server's own journal (in its data folder): what's done to the server, not to one world. */
+export const SERVER_JOURNAL = "journal.log";
+
+/** An export's (and a downloaded backup's) format: a world, its latest snapshot and its kept heroes, as one gzipped JSON file. */
+export const EXPORT_FORMAT = "pellagos.world.1";
+
+/** How much of the journals the Activity section's shown (lines). */
+export const ACTIVITY_LINES = 300;
+
+/** A step slower than this (ms, at the 99th percentile) makes a world "slow" (§10 Health). */
+export const SLOW_STEP = 50;
+
+const gzipped = promisify(gzip);
+
+/** A refusal of something asked of the management API: its HTTP status, a code, and what to say. */
+export class Refused extends Error {
+    constructor(status, error, message) {
+        super(message);
+        Object.assign(this, { status, error });
+    }
+}
+
+// How much a folder holds (bytes), everything in it
+async function sizeOf(folder) {
+    let size = 0;
+
+    for (const entry of await readdir(folder, { withFileTypes: true }).catch(() => [])) {
+        const file = path.join(folder, entry.name);
+
+        size += entry.isDirectory() ? await sizeOf(file) : ((await stat(file).catch(() => null))?.size ?? 0);
+    }
+
+    return size;
+}
+
+/** The world's day (1 the first) and the time of day ("14:05"), when it's been going `elapsed` ms. */
+export function clockOf(elapsed = 0) {
+    const time = timeOfDay(elapsed);
+    const hours = Math.floor(time / HOUR);
+    const minutes = Math.floor(((time % HOUR) / HOUR) * 60);
+
+    return { day: dayOf(elapsed) + 1, hour: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}` };
+}
+
+// "3 players", "1 player", "nobody"
+const count = (n, one, many = `${one}s`) => (n ? `${n} ${n === 1 ? one : many}` : `no ${many}`);
+
+export class Management {
+    /** @param {object} server - The world server (world-server.js WorldServer). */
+    constructor(server) {
+        this.server = server;
+
+        /** When it started (ms), and the most memory any world's used here (bytes: for the recommendation). */
+        this.started = Date.now();
+        this.largest = 0;
+    }
+
+    #world(id) {
+        const stored = this.server.worlds.get(id);
+
+        if (!stored) {
+            throw new Refused(404, "no-world", "There's no world here by that name.");
+        }
+
+        return stored;
+    }
+
+    #going(id) {
+        return Boolean(this.server.registry.entries.get(id)?.thread);
+    }
+
+    /** A line in the server's own journal. */
+    async journal(text, when = new Date()) {
+        await ensureFolder(this.server.root);
+        await appendFile(path.join(this.server.root, SERVER_JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+    }
+
+    // ---- A world
+
+    /** How a world is, in words (§10): "Running: 3 players, day 4, 14:00", "Set aside: saved, using nothing"... */
+    wordsOf(id) {
+        const { life, state, position } = this.server.registry.lifeOf(id);
+        const meta = this.server.metaOf(id);
+        const { day, hour } = clockOf(state?.elapsed ?? meta.elapsed ?? 0);
+        const players = state?.players.filter((one) => one.id).length ?? 0;
+
+        switch (life) {
+            case "waiting":
+                return `Waiting its turn to open (${position === 1 ? "next" : `number ${position}`}): as many worlds are running as the server's set to run.`;
+            case "loading":
+                return "Opening.";
+            case "running":
+                return state?.running ? `Running: ${count(players, "player")}, day ${day}, ${hour}.` : `Stopped while its ${count(players, "player")} ${players === 1 ? "is" : "are"} away or loading: day ${day}, ${hour}.`;
+            case "empty":
+                return `Empty: its clock stopped at day ${day}, ${hour}. It's set aside if nobody comes in within ${count(this.server.settings.get("setAsideMinutes"), "minute")}.`;
+            case "stopping":
+                return "Saving, then set aside.";
+            default:
+                return meta.savedAt ? `Set aside: saved at day ${day}, ${hour}, using nothing till someone comes in.` : "Never played: made from its seed when someone first comes in.";
+        }
+    }
+
+    /** All a world's owner is shown of it (the Worlds section's card). */
+    async details(id) {
+        const stored = this.#world(id);
+        const { meta } = stored;
+        const { life, state, position } = this.server.registry.lifeOf(id);
+        const elapsed = state?.elapsed ?? meta.elapsed ?? 0;
+
+        return {
+            id,
+            name: meta.name,
+            description: meta.description,
+            race: meta.race,
+            people: RACE[meta.race]?.name ?? meta.race,
+            seed: meta.seed,
+            created: meta.created,
+            creator: meta.creator,
+            heroes: meta.heroes,
+            firstHero: meta.firstHero,
+            settings: meta.settings,
+            played: state?.played ?? meta.played ?? 0,
+            elapsed,
+            ...clockOf(elapsed),
+            savedAt: meta.savedAt,
+            life,
+            position,
+            words: this.wordsOf(id),
+            players: (state?.players ?? []).filter((one) => one.id).map(({ player, name, away, linked, ready, hidden }) => ({ player, name, away, linked, ready, hidden })),
+            size: await sizeOf(stored.folder),
+        };
+    }
+
+    /** Every world, most recently played first. */
+    async worlds() {
+        const all = await Promise.all([...this.server.worlds.keys()].map((id) => this.details(id)));
+
+        return all.sort((a, b) => String(b.savedAt ?? b.created).localeCompare(String(a.savedAt ?? a.created)));
+    }
+
+    /**
+     * A world's name, description, heroes mode, first-hero rule or settings changed (`changes`:
+     * those to change). Each's checked first: refused, with the reasons, and nothing changed if any
+     * can't be. Its heroes mode and first-hero rule change only while it's set aside (nobody's in
+     * it, and its thread isn't holding the old). A running world's thread is told the rest at once.
+     */
+    async change(id, changes, { by = null } = {}) {
+        const stored = this.#world(id);
+        const { name, description, heroes, firstHero, settings } = changes;
+        const reasons = [
+            name === undefined || (typeof name === "string" && name.trim() && name.trim().length <= 60) ? null : "A world needs a name, of 60 characters at most.",
+            description === undefined || (typeof description === "string" && description.length <= 500) ? null : "A world's description is 500 characters at most.",
+            heroes === undefined || HERO_MODES.includes(heroes) ? null : `Heroes are kept or brought in, not ${JSON.stringify(heroes)}.`,
+            firstHero === undefined || FIRST_HEROES.includes(firstHero) ? null : `A first hero is made new or brought in, not ${JSON.stringify(firstHero)}.`,
+            ...(settings === undefined ? [] : settings !== null && typeof settings === "object" && !Array.isArray(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
+            ...Object.keys(changes)
+                .filter((key) => !["name", "description", "heroes", "firstHero", "settings"].includes(key))
+                .map((key) => `A world has nothing called "${key}" to change.`),
+        ].filter(Boolean);
+
+        if (reasons.length) {
+            throw new Refused(400, "bad-request", reasons.join(" "));
+        }
+
+        const modes = (heroes !== undefined && heroes !== stored.meta.heroes) || (firstHero !== undefined && firstHero !== stored.meta.firstHero);
+
+        if (modes && this.#going(id)) {
+            throw new Refused(409, "running", "Set the world aside first: whose heroes it keeps changes only while nobody's in it.");
+        }
+
+        const meta = {
+            ...(name === undefined ? {} : { name: name.trim() }),
+            ...(description === undefined ? {} : { description }),
+            ...(heroes === undefined ? {} : { heroes }),
+            ...(firstHero === undefined ? {} : { firstHero }),
+            ...(settings === undefined ? {} : { settings: { ...stored.meta.settings, ...settings } }),
+        };
+
+        await stored.writeMeta(meta);
+        this.server.registry.entries.get(id)?.thread?.meta(meta);
+
+        const what = [name !== undefined && `named "${meta.name}"`, description !== undefined && "described anew", heroes !== undefined && `its heroes ${heroes === "kept" ? "kept by the world" : "brought in by their players"}`, firstHero !== undefined && `first heroes ${firstHero === "bring" ? "may be brought in" : "made new"}`, settings && `its settings (${Object.entries(settings).map(([key, value]) => `${key} ${value}`).join(", ")})`].filter(Boolean);
+
+        await stored.journal(`Changed${by ? ` by ${by}` : ""}: ${what.join("; ")}.`);
+
+        return this.details(id);
+    }
+
+    /** A world started (opened, as if someone were coming in): it's set aside again if nobody comes. Returns its details once it's open, or waiting. */
+    async start(id) {
+        this.#world(id);
+
+        const opening = this.server.registry.enter(id);
+
+        if (this.server.registry.lifeOf(id).life !== "waiting") {
+            await opening.catch((error) => {
+                throw new Refused(409, "broken", `It couldn't be opened: ${error.message}`);
+            });
+        } else {
+            opening.catch(() => {});
+        }
+
+        return this.details(id);
+    }
+
+    /** A world set aside now: everyone in it sent out ("set-aside"), saved, its thread ended. */
+    async setAside(id, why = "set aside") {
+        this.#world(id);
+        this.server.closePlaces((place) => place.world === id, "set-aside");
+
+        const { ok } = await this.server.registry.setAside(id, why);
+
+        if (!ok) {
+            throw new Refused(500, "unsaved", "It was set aside, but its last save didn't reach the disk: its journal says why.");
+        }
+
+        return this.details(id);
+    }
+
+    /** A world saved now, if it's going. */
+    async save(id) {
+        this.#world(id);
+
+        const thread = this.server.registry.entries.get(id)?.thread;
+        const { ok } = thread ? await thread.save("saved by hand") : { ok: true };
+
+        if (!ok) {
+            throw new Refused(500, "unsaved", "Its save didn't reach the disk: its journal says why.");
+        }
+
+        return this.details(id);
+    }
+
+    /**
+     * A world deleted, its name typed to say so (`confirm`): everyone in it sent out
+     * ("world-deleted"), set aside, backed up once more (its backups are kept, in the data
+     * folder's backups/<id>/), and gone.
+     */
+    async delete(id, confirm, { by = null } = {}) {
+        const stored = this.#world(id);
+
+        if (typeof confirm !== "string" || confirm.trim() !== stored.meta.name) {
+            throw new Refused(400, "confirm", `Type the world's name, "${stored.meta.name}", to delete it.`);
+        }
+
+        this.server.closePlaces((place) => place.world === id, "world-deleted");
+        await this.server.registry.forget(id);
+        await stored.backUp("before-delete");
+        this.server.access.removeWorld(id);
+        this.server.worlds.delete(id);
+        await rm(stored.folder, { recursive: true, force: true });
+        await this.journal(`The world "${stored.meta.name}" (${id}) was deleted${by ? ` by ${by}` : ""}: its backups are kept in backups/${id}/.`);
+
+        return { deleted: id };
+    }
+
+    // ---- Its players
+
+    /** A world's players (§10 Players): everyone who's been, with their heroes there, who's in now and who's away. */
+    async players(id) {
+        const stored = this.#world(id);
+        const access = this.server.access.world(id);
+        const { state } = this.server.registry.lifeOf(id);
+        const here = new Map((state?.players ?? []).filter((one) => one.id).map((one) => [one.player, one]));
+        const kept = stored.meta.heroes === "kept";
+        const players = [];
+
+        for (const player of access.players()) {
+            const now = here.get(player.id);
+
+            players.push({
+                ...player,
+                via: player.via === "admin" ? "the admin key" : (access.key(player.via)?.label ?? player.via),
+                heroes: kept ? (await stored.heroes.list(player.id)).map(({ slot, name, race }) => ({ slot, name, race })) : [],
+                name: now?.name ?? null,
+                here: Boolean(now),
+                away: Boolean(now?.away),
+            });
+        }
+
+        return players.sort((a, b) => Number(b.here) - Number(a.here) || String(b.seen).localeCompare(String(a.seen)));
+    }
+
+    #player(id, player) {
+        this.#world(id);
+
+        if (typeof player !== "string" || !this.server.access.world(id).player(player)) {
+            throw new Refused(404, "no-player", "There's no such player in that world.");
+        }
+    }
+
+    /** A player sent out (they can come back). Returns how many of their links were closed. */
+    async kick(id, player, { by = null } = {}) {
+        this.#player(id, player);
+
+        const sent = this.server.closePlaces((place) => place.world === id && place.player === player, "kicked");
+
+        await this.#world(id).journal(`A player (${player}) was sent out${by ? ` by ${by}` : ""}.`);
+
+        return { kicked: sent };
+    }
+
+    /** A player banned: their ticket for good, their address for a day; sent out. */
+    async ban(id, player, { by = null } = {}) {
+        this.#player(id, player);
+        await this.server.access.ban(id, player, { by });
+        this.server.closePlaces((place) => place.world === id && place.player === player, "banned");
+
+        return { banned: player };
+    }
+
+    /** A player's ban lifted. */
+    async unban(id, player, { by = null } = {}) {
+        this.#player(id, player);
+
+        return { unbanned: await this.server.access.unban(id, player, { by }) };
+    }
+
+    /** A player given another part (access/world.js ROLES). */
+    async role(id, player, role, { by = null } = {}) {
+        this.#player(id, player);
+
+        if (!isRole(role)) {
+            throw new Refused(400, "bad-request", `There's no part called ${JSON.stringify(role)}.`);
+        }
+
+        if (this.server.access.world(id).player(player).role === "banned") {
+            throw new Refused(409, "banned", "Lift their ban first.");
+        }
+
+        await this.server.access.world(id).setRole(player, role);
+        await this.#world(id).journal(`A player (${player}) was made ${role === "owner" ? "an owner" : `a ${role}`}${by ? ` by ${by}` : ""}.`);
+
+        return { player, role };
+    }
+
+    /** A new return ticket for a player who's lost theirs (their old one no longer works). Returns it: shown this once. */
+    async ticket(id, player, { by = null } = {}) {
+        this.#player(id, player);
+
+        const ticket = await this.server.access.world(id).reissueTicket(player);
+
+        await this.#world(id).journal(`A player (${player}) was given a new ticket${by ? ` by ${by}` : ""}.`);
+
+        return { player, ticket };
+    }
+
+    // ---- Its backups
+
+    /**
+     * A world's backups (§10 Backups), newest first: its autosaves (now and the five before it:
+     * `kind` "autosave"), and the copies of it in the data folder's backups (kind "backup": hourly,
+     * daily, by hand, before a restore...). Each { id, kind, why, when, size }.
+     */
+    async backups(id) {
+        const stored = this.#world(id);
+        const saves = [];
+
+        for (const name of StoredWorld.saves) {
+            const file = path.join(stored.folder, STATE, name);
+            const found = await stat(file).catch(() => null);
+
+            if (found) {
+                saves.push({ id: name.replace(/\.json\.gz$/, ""), kind: "autosave", why: name === NOW ? "the latest save" : "an autosave", when: found.mtime.toISOString(), size: found.size });
+            }
+        }
+
+        const copies = await Promise.all((await stored.backups()).map(async ({ id: name, when, why, folder }) => ({ id: name, kind: "backup", why, when: when.toISOString(), size: await sizeOf(folder) })));
+
+        return [...saves, ...copies].sort((a, b) => b.when.localeCompare(a.when));
+    }
+
+    /** A world backed up now (saved first, if it's going). Returns its backups. */
+    async backUp(id) {
+        const stored = this.#world(id);
+        const thread = this.server.registry.entries.get(id)?.thread;
+
+        if (thread) {
+            const { ok } = await thread.backUp("by-hand");
+
+            if (!ok) {
+                throw new Refused(500, "unsaved", "It couldn't be backed up: its journal says why.");
+            }
+        } else {
+            await stored.backUp("by-hand");
+        }
+
+        return this.backups(id);
+    }
+
+    // A backup, by its id: an autosave's file, or a backup's folder
+    async #backup(stored, backup) {
+        const save = StoredWorld.saves.find((name) => name.replace(/\.json\.gz$/, "") === backup);
+
+        if (save && (await exists(path.join(stored.folder, STATE, save)))) {
+            return { save: path.join(stored.folder, STATE, save) };
+        }
+
+        const copy = BACKUP_NAME.test(backup ?? "") ? path.join(stored.backupsFolder, backup) : null;
+
+        if (copy && (await exists(path.join(copy, WORLD_FILE)))) {
+            return { folder: copy };
+        }
+
+        throw new Refused(404, "no-backup", "There's no such backup of that world.");
+    }
+
+    /**
+     * A world restored from one of its backups (`backup`: an id backups() gave): set aside first
+     * (everyone in it sent out), backed up as it is ("before-restore"), then its state, its
+     * world.json and its kept heroes put back as the backup has them. Who may come in (its keys,
+     * its players, their bans) and its journal stay as they are now.
+     */
+    async restore(id, backup, { by = null } = {}) {
+        const stored = this.#world(id);
+        const from = await this.#backup(stored, backup);
+
+        if (this.#going(id)) {
+            await this.setAside(id, "set aside for a restore");
+        }
+
+        await stored.backUp("before-restore");
+
+        if (from.save) {
+            const text = await readGzip(from.save);
+
+            await writeGzip(path.join(stored.folder, STATE, NOW), text);
+        } else {
+            for (const part of [STATE, HEROES]) {
+                await rm(path.join(stored.folder, part), { recursive: true, force: true });
+
+                if (await exists(path.join(from.folder, part))) {
+                    await cp(path.join(from.folder, part), path.join(stored.folder, part), { recursive: true });
+                }
+            }
+
+            // (Its world.json brought forward, if an older server wrote it)
+            const { meta } = await StoredWorld.open(from.folder);
+
+            await stored.writeMeta({ ...meta, id });
+        }
+
+        await stored.reload();
+
+        // (What the world's time was when it was saved, as world.json says it, from the save put back)
+        const loaded = await stored.load().catch(() => null);
+
+        if (loaded?.snapshot) {
+            await stored.writeMeta({ worldTime: loaded.snapshot.battle?.time ?? 0, elapsed: elapsedOf(loaded.snapshot.war) });
+        }
+
+        await stored.journal(`Restored from ${backup}${by ? ` by ${by}` : ""}: what it was before is in the backup made just now (before-restore).`);
+
+        return this.details(id);
+    }
+
+    // ---- Moving it
+
+    /**
+     * A world as one file (EXPORT_FORMAT, gzipped JSON): what it is (world.json), its latest
+     * snapshot (as storage/worlds.js keeps it, encoded), and the heroes it keeps; from a backup
+     * (`backup`: an id backups() gave) if one's named, else as it is now. Nothing of who may come in.
+     * Returns { name (a file name for it), body (bytes) }.
+     */
+    async export(id, backup = null) {
+        const stored = this.#world(id);
+        const from = backup ? await this.#backup(stored, backup) : { folder: stored.folder };
+        const folder = from.folder ?? stored.folder;
+        const meta = from.folder ? await readJSON(path.join(folder, WORLD_FILE)) : { ...stored.meta };
+        const snapshotFile = from.save ?? path.join(folder, STATE, NOW);
+        const snapshot = (await exists(snapshotFile)) ? await readGzip(snapshotFile) : null;
+        const heroes = {};
+
+        for (const player of await readdir(path.join(folder, HEROES)).catch(() => [])) {
+            for (const file of await readdir(path.join(folder, HEROES, player)).catch(() => [])) {
+                heroes[player] ??= {};
+                heroes[player][file] = JSON.parse(await readFile(path.join(folder, HEROES, player, file), "utf8"));
+            }
+        }
+
+        const body = await gzipped(Buffer.from(JSON.stringify({ format: EXPORT_FORMAT, exportedBy: SERVER_VERSION, exported: new Date().toISOString(), world: { ...meta, id }, snapshot, heroes })));
+        const safe = String(meta.name ?? id).replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/\s+/g, "-") || id;
+
+        return { name: `${safe}-${backup ?? stampOf(new Date())}.pellagos.json.gz`, body };
+    }
+
+    // ---- The server
+
+    /** The server's overview (§10 Overview): who it is, where it's reached, how long it's been up, the machine and how many worlds it may run. */
+    overview() {
+        const { server } = this;
+        const states = [...server.registry.entries.values()].map((entry) => entry.thread?.state).filter(Boolean);
+
+        for (const state of states) {
+            this.largest = Math.max(this.largest, (state.memory?.heap ?? 0) + (state.memory?.external ?? 0));
+        }
+
+        const advice = recommendation({ largest: this.largest });
+
+        return {
+            id: server.identity.id,
+            name: server.hostname.replace(/\.local$/, ""),
+            version: SERVER_VERSION,
+            started: new Date(this.started).toISOString(),
+            uptime: Date.now() - this.started,
+            addresses: [`http://localhost:${server.port}`, ...server.addresses()],
+            admin: server.adminPort ? `http://localhost:${server.adminPort}` : null,
+            adminKey: null,
+            internet: { open: false, why: "Opening to the internet (a certificate, the router) comes later: for now the server answers its own Wi-Fi alone." },
+            power: { keepAwake: server.settings.get("keepAwake"), holding: Boolean(server.registry.holding), platform: process.platform },
+            worlds: { kept: server.worlds.size, going: server.registry.going.length, waiting: server.registry.queue.length, atOnce: server.settings.get("worldsAtOnce") },
+            recommended: { ...advice, words: `Recommended: up to ${advice.most} at once (memory allows ${advice.memory}, the processor ${advice.cpu}).`, worldMemory: Math.max(this.largest, WORLD_MEMORY) },
+            machine: { memory: os.totalmem(), cores: os.availableParallelism?.() ?? os.cpus().length },
+            blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
+        };
+    }
+
+    /** The server's settings, each with what it's for, its range and its default (storage/settings.js SETTINGS). */
+    settings() {
+        return this.server.settings.all();
+    }
+
+    /** The server's settings changed: each checked first. Some wait for a restart (the ports). */
+    async changeSettings(changes, { by = null } = {}) {
+        const changed = await this.server.settings.change(changes);
+
+        if (!changed.ok) {
+            throw new Refused(400, "bad-request", changed.reasons.join(" "));
+        }
+
+        this.server.registry.refill();
+        await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
+
+        return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };
+    }
+
+    /** The creator keys (they make worlds). */
+    creators() {
+        return this.server.access.secrets.creators();
+    }
+
+    /** A new creator key, labelled. Returns { key (shown this once), creator }. */
+    async issueCreator(label, { by = null } = {}) {
+        const made = await this.server.access.secrets.issueCreator(label);
+
+        await this.journal(`A creator key, "${made.creator.label}", was made${by ? ` by ${by}` : ""}.`);
+
+        return made;
+    }
+
+    /** A creator key revoked. */
+    async revokeCreator(id, { by = null } = {}) {
+        if (!(await this.server.access.secrets.revokeCreator(id))) {
+            throw new Refused(404, "no-key", "There's no such creator key working.");
+        }
+
+        await this.journal(`A creator key (${id}) was revoked${by ? ` by ${by}` : ""}.`);
+
+        return { revoked: id };
+    }
+
+    /** A new admin key (the old no longer works). Returns it: shown this once. */
+    async newAdminKey() {
+        const key = await this.server.access.secrets.newAdminKey();
+
+        this.server.adminKey = key;
+        await this.journal("A new admin key was made, on the server's own computer: the old one no longer works.");
+
+        return { key };
+    }
+
+    /**
+     * What's happened (§10 Activity): the server's journal and every world's, newest first, at
+     * most `lines` of them; each { when, world (its id, or null for the server's), name, text }.
+     */
+    async activity(lines = ACTIVITY_LINES) {
+        const read = async (file, world, name) =>
+            (await readFile(file, "utf8").catch(() => ""))
+                .split("\n")
+                .slice(-lines - 1)
+                .map((line) => /^(\S+) (.*)$/.exec(line))
+                .filter(Boolean)
+                .map(([, when, text]) => ({ when, world, name, text }));
+
+        const all = [
+            ...(await read(path.join(this.server.root, SERVER_JOURNAL), null, "The server")),
+            ...(await Promise.all([...this.server.worlds.values()].map((stored) => read(path.join(stored.folder, JOURNAL), stored.id, stored.meta.name)))).flat(),
+        ];
+
+        return all.sort((a, b) => b.when.localeCompare(a.when)).slice(0, lines);
+    }
+
+    /**
+     * How the server's keeping up (§10 Health): for each world going, its steps (mean, 99th
+     * percentile, worst), its memory, its players, its latest save's size, and whether it's slow;
+     * and the server's own memory and the machine's load.
+     */
+    async health() {
+        const worlds = [];
+
+        for (const entry of this.server.registry.going) {
+            const state = entry.thread.state;
+            const save = await stat(path.join(entry.stored.folder, STATE, NOW)).catch(() => null);
+            const steps = state?.steps ?? null;
+
+            worlds.push({
+                id: entry.id,
+                name: entry.stored.meta.name,
+                life: entry.life,
+                steps,
+                slow: (steps?.p99 ?? 0) > SLOW_STEP,
+                memory: state?.memory ?? null,
+                players: state?.players.filter((one) => one.id).length ?? 0,
+                present: state?.present ?? 0,
+                save: save?.size ?? null,
+            });
+        }
+
+        const memory = process.memoryUsage();
+
+        return {
+            health: worlds.some((world) => world.slow) ? "slow" : "ok",
+            worlds,
+            server: { rss: memory.rss, heap: memory.heapUsed, uptime: Date.now() - this.started },
+            machine: { memory: os.totalmem(), free: os.freemem(), load: os.loadavg(), cores: os.availableParallelism?.() ?? os.cpus().length },
+        };
+    }
+}
