@@ -1,27 +1,49 @@
 // Small things of the wilds that aren't four-legged: a swarm of bats, each flapping its own way
-// round the swarm's middle; a will-o'-wisp, a hovering light in a glowing haze with motes circling
-// it; and a bog frog as big as a hound, sculpted in one piece (sculpt.js).
+// round the swarm's middle (or of birds, insects or sprites, as it's of: `kind`); a will-o'-wisp,
+// a hovering light in a glowing haze with motes circling it; and a bog frog as big as a hound,
+// sculpted in one piece (sculpt.js).
 //
-// Each has its own ways of attacking and resting: the bats dive together or swirl round their
-// prey, settle low or scatter wide, and drop when the swarm's killed; the wisp flares or looses a
+// Each has its own ways of attacking and resting: a swarm dives together or swirls round its
+// prey, settles low or scatters wide, and drops when it's killed; the wisp flares or looses a
 // bolt of its light, dims and sinks or drifts in wide loops, and gutters out; the frog shoots its
 // tongue, leaps on its prey or spits, puffs its throat to croak, hunkers down or looks about, and
 // rolls over when it dies.
 
 import * as THREE from "three";
 import { Sculpt } from "./sculpt.js";
-import { ellipsoid, joint, limb, membrane, part, shade, skin } from "./shapes.js";
+import { cone, ellipsoid, joint, limb, membrane, part, shade, skin } from "./shapes.js";
 
 const TAU = Math.PI * 2;
 const smooth = (u) => u * u * (3 - 2 * u);
 
-/** Build a swarm of bats from its look ({ size (a bat's), count, colours: { fur, wings, eyes } }). */
+// What each kind of swarm's made of: how fast its wings beat (beats a second, from), and the shape
+// of a wing (x out from the body, z along it, forward +, in its size)
+const SWARMS = Object.freeze({
+    bat: { flap: [10, 14], wing: [[0, -0.2], [1.1, -0.35], [0.9, 0.1], [0.55, -0.05], [0.3, 0.25], [0, 0.25]] },
+    bird: { flap: [5, 7], wing: [[0, -0.15], [0.7, -0.22], [1.25, -0.3], [1.4, -0.12], [1.2, 0.05], [0.6, 0.18], [0, 0.2]] },
+    insect: { flap: [28, 36], wing: [[0, 0.02], [0.35, 0.02], [0.95, -0.25], [0.85, -0.38], [0.2, -0.18], [0, -0.1]] },
+    sprite: { flap: [16, 20], wing: [[0, 0], [0.55, 0.35], [0.85, 0.1], [0.7, -0.3], [0.3, -0.4], [0, -0.1]] },
+});
+
+/**
+ * Build a swarm from its look ({ size (one of them's), count, `kind` (SWARMS: bats, the default;
+ * birds, insects or sprites), `spread` (how far round its middle they fly, as bats' are 1),
+ * colours: { fur, wings, eyes, beak, glow } }): bats with their ears; birds with a beak and a fanned
+ * tail; insects long-bodied with two pairs of clear wings; sprites small and glowing, with clear
+ * wings.
+ */
 export function swarm(look, random) {
     const size = look.size;
     const colours = look.colours;
-    const fur = skin(colours.fur, { roughness: 0.95 });
-    const wing = skin(colours.wings ?? shade(colours.fur, -0.2).getHex(), { roughness: 0.8, side: THREE.DoubleSide });
-    const eyes = skin(colours.eyes ?? 0xff4020, { glow: colours.eyes ?? 0xff4020, glowing: 1.5 });
+    const kind = look.kind ?? "bat";
+    const spread = look.spread ?? 1;
+    const { flap, wing: outline } = SWARMS[kind];
+    // (A sprite's soft glow kept under what folds into a glowing piece, sculpt.js fold: its body
+    // stays the lit stuff a flush of red shows on when it's struck, beast.js)
+    const fur = skin(colours.fur, { roughness: kind === "insect" ? 0.45 : 0.95, glow: colours.glow ?? null, glowing: 0.32 });
+    const wing = skin(colours.wings ?? shade(colours.fur, -0.2).getHex(), { roughness: 0.8, side: THREE.DoubleSide, clear: kind === "insect" || kind === "sprite" ? 0.55 : 0, glow: kind === "sprite" ? (colours.glow ?? null) : null, glowing: 0.3 });
+    const eyes = skin(colours.eyes ?? 0xff4020, { glow: colours.eyes ?? 0xff4020, glowing: kind === "bird" ? 0.3 : 1.5 });
+    const beak = skin(colours.beak ?? 0x2a2420, { roughness: 0.5 });
 
     const object = new THREE.Group();
     const middle = joint(object, "middle", [0, 1.4, 0]);
@@ -30,20 +52,47 @@ export function swarm(look, random) {
     for (let k = 0; k < (look.count ?? 5); k++) {
         const bat = joint(middle, `bat-${k}`);
 
-        part(bat, ellipsoid(size * 0.22, size * 0.2, size * 0.32), fur);
-        part(bat, ellipsoid(size * 0.15, size * 0.15, size * 0.14), fur, { at: [0, size * 0.1, size * 0.3] });
-
-        for (const side of [-1, 1]) {
-            part(bat, ellipsoid(size * 0.03, size * 0.03, size * 0.03, 5), eyes, { at: [side * size * 0.06, size * 0.14, size * 0.42], shadow: false });
-            part(bat, ellipsoid(size * 0.05, size * 0.1, size * 0.03, 5), fur, { at: [side * size * 0.08, size * 0.26, size * 0.28], turn: [0, 0, -side * 0.3], shadow: false });
-
-            const pivot = joint(bat, `wing-${side}`, [side * size * 0.15, size * 0.05, 0]);
-
-            part(pivot, membrane([[0, -0.2], [side * 1.1, -0.35], [side * 0.9, 0.1], [side * 0.55, -0.05], [side * 0.3, 0.25], [0, 0.25]].map(([x, z]) => [x * size, z * size])), wing, { shadow: false });
-            bat.userData[`wing${side}`] = pivot;
+        if (kind === "bird") {
+            part(bat, ellipsoid(size * 0.16, size * 0.15, size * 0.36), fur);
+            part(bat, ellipsoid(size * 0.11, size * 0.11, size * 0.12), colours.head ? skin(colours.head, { roughness: 0.9 }) : fur, { at: [0, size * 0.08, size * 0.38] });
+            part(bat, cone(size * 0.2, size * 0.045, 5), beak, { at: [0, size * 0.06, size * 0.48], turn: [Math.PI / 2, 0, 0], shadow: false });
+            part(bat, membrane([[-0.12, -0.3], [-0.2, -0.62], [0.2, -0.62], [0.12, -0.3]].map(([x, z]) => [x * size, z * size])), wing, { shadow: false });
+        } else if (kind === "insect") {
+            part(bat, ellipsoid(size * 0.1, size * 0.1, size * 0.14), fur);
+            part(bat, ellipsoid(size * 0.08, size * 0.08, size * 0.3), fur, { at: [0, -size * 0.02, -size * 0.36] });
+            part(bat, ellipsoid(size * 0.08, size * 0.08, size * 0.08), fur, { at: [0, size * 0.02, size * 0.18] });
+        } else if (kind === "sprite") {
+            part(bat, ellipsoid(size * 0.07, size * 0.16, size * 0.07), fur);
+            part(bat, ellipsoid(size * 0.08, size * 0.08, size * 0.08), fur, { at: [0, size * 0.22, 0] });
+        } else {
+            part(bat, ellipsoid(size * 0.22, size * 0.2, size * 0.32), fur);
+            part(bat, ellipsoid(size * 0.15, size * 0.15, size * 0.14), fur, { at: [0, size * 0.1, size * 0.3] });
         }
 
-        bats.push({ bat, speed: 1.5 + random() * 1.2, radius: 0.35 + random() * 0.35, lift: random() * TAU, flap: 10 + random() * 4, offset: random() * TAU });
+        for (const side of [-1, 1]) {
+            const head = kind === "bird" ? [side * size * 0.06, size * 0.12, size * 0.44] : kind === "insect" ? [side * size * 0.06, size * 0.05, size * 0.22] : kind === "sprite" ? [side * size * 0.035, size * 0.24, size * 0.07] : [side * size * 0.06, size * 0.14, size * 0.42];
+
+            part(bat, ellipsoid(size * 0.03, size * 0.03, size * 0.03, 5), eyes, { at: head, shadow: false });
+
+            if (kind === "bat") {
+                part(bat, ellipsoid(size * 0.05, size * 0.1, size * 0.03, 5), fur, { at: [side * size * 0.08, size * 0.26, size * 0.28], turn: [0, 0, -side * 0.3], shadow: false });
+            }
+
+            // (An insect's two pairs of wings, the one behind the other, beating together)
+            for (const [pair, back] of (kind === "insect" ? [[0, 0], [1, -0.16]] : [[0, 0]])) {
+                const pivot = joint(bat, `wing-${side}${pair ? "-hind" : ""}`, [side * size * (kind === "bird" ? 0.12 : kind === "sprite" ? 0.05 : 0.15), size * (kind === "sprite" ? 0.12 : 0.05), size * back]);
+
+                part(pivot, membrane(outline.map(([x, z]) => [side * x * size * (pair ? 0.85 : 1), z * size])), wing, { shadow: false });
+
+                if (!pair) {
+                    bat.userData[`wing${side}`] = pivot;
+                } else {
+                    bat.userData[`hind${side}`] = pivot;
+                }
+            }
+        }
+
+        bats.push({ bat, speed: (1.5 + random() * 1.2) / Math.sqrt(spread), radius: (0.35 + random() * 0.35) * spread, lift: random() * TAU, flap: flap[0] + random() * (flap[1] - flap[0]), offset: random() * TAU });
     }
 
     return {
@@ -55,8 +104,9 @@ export function swarm(look, random) {
         attacks: ["dive", "swirl"],
         rests: ["settle", "scatter"],
         // (Where its bats fly, round its middle: as far out as 0.7 m, twice that and more scattered,
-        // and more again startled; drawn if any of that's in view, beast.js BOUNDS)
-        spread: { centre: [0, 1.4, 0], radius: 3 },
+        // and more again startled, as far again for a wider swarm; drawn if any of that's in view,
+        // beast.js BOUNDS)
+        spread: { centre: [0, 1.4, 0], radius: 3 * spread },
 
         pose({ t, speed, attack, react, dead, rest }) {
             const style = attack?.style ?? "dive";
@@ -83,10 +133,15 @@ export function swarm(look, random) {
                     one.bat.rotation.set(0, -a - Math.PI, Math.sin(t * 3 + k) * 0.3);
                 }
 
-                const beat = dead ? 0.2 : Math.sin(t * one.flap * (1 - settle * 0.3) + one.offset) * 0.9;
+                const beat = dead ? 0.2 : Math.sin(t * one.flap * (1 - settle * 0.3) + one.offset) * (kind === "bird" ? 0.7 : 0.9);
 
                 one.bat.userData["wing-1"].rotation.z = -beat;
                 one.bat.userData.wing1.rotation.z = beat;
+
+                if (one.bat.userData.hind1) {
+                    one.bat.userData["hind-1"].rotation.z = -beat * 0.8;
+                    one.bat.userData.hind1.rotation.z = beat * 0.8;
+                }
             });
         },
     };
