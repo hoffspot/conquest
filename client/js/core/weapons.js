@@ -164,6 +164,24 @@ export const NATURAL = Object.freeze({
     bear: { label: "Claws", attacks: [melee({ id: "maul", damage: [5, 10], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
     direWolf: { label: "Fangs", attacks: [melee({ id: "bite", damage: [3, 6], hitAt: 350, duration: 700, interval: 1100, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.25 } })] },
     skeleton: { label: "Rusty sword", attacks: [melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "melee", afflict: { kind: "disease", chance: 0.15 } })] },
+    // (A hodmedod reaps with its sickle; a draugr hacks with its barrow blade, and lays a curse as
+    // the wight lord does, weaker; a mare's weight on whoever it's on staggers and slows them, and
+    // it sends them nightmares that wither)
+    hodmedod: { label: "Sickle", attacks: [melee({ id: "reap", damage: [4, 8], hitAt: 420, duration: 850, interval: 1250, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
+    draugr: {
+        label: "Barrow blade and grave-curse",
+        attacks: [
+            melee({ id: "slash", damage: [6, 11], hitAt: 420, duration: 850, interval: 1300, stagger: 300, reaction: "slash", animation: "melee", afflict: { kind: "disease", chance: 0.25 } }),
+            ranged({ id: "curse", reach: 6, damage: [3, 6], hitAt: 700, duration: 1300, interval: 3600, reaction: "arcane", animation: "curse", projectile: { kind: "curse", speed: 8 }, afflict: { kind: "wither", chance: 0.6 } }),
+        ],
+    },
+    mare: {
+        label: "Weight and nightmares",
+        attacks: [
+            melee({ id: "press", damage: [3, 6], hitAt: 450, duration: 900, interval: 1300, stagger: 350, reaction: "arcane", animation: "melee", afflict: { kind: "slow", chance: 0.45 } }),
+            ranged({ id: "nightmare", reach: 6, damage: [2, 5], hitAt: 650, duration: 1300, interval: 3400, reaction: "arcane", animation: "drain", projectile: { kind: "curse", speed: 8 }, afflict: { kind: "wither", chance: 0.6 } }),
+        ],
+    },
     wyvern: {
         label: "Fangs and sting",
         attacks: [

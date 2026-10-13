@@ -140,7 +140,8 @@ export const LOOKS = Object.freeze({
     // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite; an
     // old badger, white-faced, holding its ground; a white wild bull of an old park's herd, dark
     // at the ears and muzzle, its horns sweeping out and up; a flock of rooks, black, pale-beaked;
-    // the knucker, the water dragon of the Sussex pools, a great dark serpent with a finned head)
+    // the knucker, the water dragon of the Sussex pools, a great dark serpent with a finned head; a
+    // hodmedod, a scarecrow come alive in the fields at night)
     blackShuck: {
         body: "quadruped",
         scale: [1, 1.1],
@@ -182,6 +183,13 @@ export const LOOKS = Object.freeze({
         length: 5, thickness: 0.22, segments: 24, head: 1.5, fins: true,
         colours: { scales: 0x3a4a3a, bands: 0x2a3428, belly: 0x8a9a6a, fins: 0x5a7a5a, eyes: 0xe0c040 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
+    },
+    hodmedod: {
+        body: "biped",
+        scale: [0.95, 1.08],
+        kind: "scarecrow", height: 1.85, weapon: "sickle",
+        colours: { coat: 0x4a4a3a, breeches: 0x5e4c34, sack: 0xb89c6a, patch: 0x6a5a40, straw: 0xd8b860, twine: 0x8a7a50, hat: 0x2a241c, eyes: 0xffa020, dark: 0x1a140e, metal: 0x8a847a, handle: 0x6a4a2a },
+        attacks: ["slash", "thrust", "chop"], rests: ["slump", "rattle", "look"],
     },
     // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
     // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
@@ -244,7 +252,8 @@ export const LOOKS = Object.freeze({
     },
     // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
     // a blind cave salamander grown big, pale pink, its gills a frill behind its head; a giant
-    // centipede, red-brown, its yellow legs rippling; the basilisk, a small serpent crowned)
+    // centipede, red-brown, its yellow legs rippling; the basilisk, a small serpent crowned; a
+    // draugr, the barrow's dead risen in its mail; a mare, hunched, riding sleepers' dreams)
     caveSpider: {
         body: "arachnid",
         scale: [0.9, 1.15],
@@ -283,6 +292,20 @@ export const LOOKS = Object.freeze({
         length: 1.3, thickness: 0.07, segments: 16, crest: 3, zigzag: true,
         colours: { scales: 0x3a4a2a, bands: 0x1a2214, belly: 0xa8b080, crown: 0xf0ecd8, eyes: 0xe8d040 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
+    },
+    draugr: {
+        body: "biped",
+        scale: [0.98, 1.08],
+        kind: "skeleton", height: 2.05, weapon: "sword", flesh: true, mail: true,
+        colours: { bone: 0x9a9284, flesh: 0x3e4650, hair: 0x2e2c28, mail: 0x6a6660, metal: 0x5a5448, eyes: 0x80b8ff, dark: 0x2c323a },
+        attacks: ["slash", "thrust", "chop"], rests: ["slump", "look"], specials: ["curse"],
+    },
+    mare: {
+        body: "spectre",
+        scale: [0.92, 1.05],
+        kind: "wraith", height: 1.4, hunch: 0.55,
+        colours: { shroud: 0x2a2430, glow: 0x4a2a6a, bone: 0x9a8a90, eyes: 0xd0a8ff },
+        attacks: ["rake", "claw"], rests: ["hover", "turn"], specials: ["drain"],
     },
     // (Cat folk: the hyena, in packs; the sand scorpion; the black-backed jackal, slight and big-
     // eared; the Cape buffalo, heavy-horned and near black; the Nandi bear, a great sloping beast

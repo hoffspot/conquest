@@ -167,8 +167,8 @@ the Mystic Emporium has the Tome of Explosion in as its daily special, as if it 
 rarest (`SHOPS.emporium.daily.specials`: about one day in ten). (The elements' first spells'
 tomes, above, are the guild's to sell, never found or given.)
 
-- **Found**: on those with hands (bandits, goblins, skeletons, cultists, trolls, ogres, boggarts,
-  the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:
+- **Found**: on those with hands (bandits, goblins, skeletons, draugar, cultists, trolls, ogres,
+  boggarts, the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:
   from tier 4, 3 in 100 of them, half a percent likelier each tier beyond; one of the perilous
   places' own, 1 in 5 (spoils.js `TOME_DROP`).
 - **Given**: by the adventurers' guilds for their harder work, from their libraries: breaking up a
