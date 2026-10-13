@@ -53,6 +53,8 @@ two tiers above it, up to their most.
 | Mandrake | 20 | defensive | 1–2 | 1–4 | the elves' wilds only: elfwood |
 | Hound of Annwn | 28 | aggressive | 2–4 | 3–7 | the elves' wilds only |
 | Pixie swarm | 20 | territorial | 1 | 1–4 | the elves' wilds only: elfwood, meadow |
+| Hart | 40 | territorial | 1–3 | 2–5 | the elves' wilds only: meadow, elfwood |
+| Kelpie | 62 | aggressive | 1 | 3–8 | the elves' wilds only |
 | Cave spider | 24 | territorial | 1–4 | 1–7 | the dark elves' wilds only |
 | Shadow stalker | 50 | aggressive | 1 | 4–9 | the dark elves' wilds only |
 | Cave olm | 26 | territorial | 1–2 | 1–4 | the dark elves' wilds only |
@@ -71,12 +73,14 @@ two tiers above it, up to their most.
 | Jaguar | 42 | territorial | 1 | 2–6 | the lizard folk's wilds only: jungle |
 | Great boa | 58 | territorial | 1 | 4–8 | the lizard folk's wilds only |
 | Bloodfly swarm | 18 | aggressive | 1 | 1–4 | the lizard folk's wilds only: jungle, marsh |
+| Ahuizotl | 38 | territorial | 1–2 | 3–7 | the lizard folk's wilds only: marsh, jungle |
 | Magma slime | 45 | territorial | 1–2 | 1–8 | the orcs' wilds only |
 | Rock tusker | 80 | territorial | 1 | 4–9 | the orcs' wilds only |
 | Gila monster | 30 | defensive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
 | Salamander | 32 | territorial | 1–2 | 2–6 | the orcs' wilds only: volcanic, badlands |
 | Death worm | 40 | territorial | 1 | 2–6 | the orcs' wilds only: badlands |
 | Vulture flock | 30 | aggressive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
+| Chimera | 85 | aggressive | 1 | 5–9 | the orcs' wilds only: volcanic, badlands |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
@@ -88,13 +92,15 @@ death worm and knucker spit (venom, venom, lava, fire, acid, venom), a spitting 
 in the eyes (staggering whoever it catches, and leaving none lying), a mandrake shrieks
 (staggering whoever's near), a pixie swarm dazzles (staggering and slowing whoever's near: led
 astray), a basilisk's glare staggers and slows whoever meets it, a great boa and a knucker throw
-their coils round whoever they're after (crushing and slowing them), the
+their coils round whoever they're after (crushing and slowing them), a kelpie's bite and an
+ahuizotl's tail-hand drag whoever they hold (slowing them), a chimera's serpent tail strikes
+(venomous) and it breathes fire as the dragon does, the
 will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
 spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
 whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
 as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws wither.
-The bog frog's tongue reaches two squares off. The rock tusker's charge, and a Cape buffalo's,
-knocks whoever it catches off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
+The bog frog's tongue reaches two squares off. The rock tusker's charge, a Cape buffalo's, and a
+kelpie's hooves knock whoever they catch off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
 bleeding wound, a web or roots holding them (below: "What lingers").
 
 ### Goblins
@@ -115,7 +121,8 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
-buffalo, Nandi bears, great boas, knuckers, dragons, ghosts, wraiths, frost trolls: creatures.js
+buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, dragons, ghosts, wraiths, frost
+trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
@@ -453,8 +460,9 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
   put out by day. The skeletons of the undead camps and the ruined castles are always there.
 - **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions,
-  badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies, giant centipedes and
-  cultists are met twice as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
+  badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies, giant centipedes, kelpies,
+  ahuizotls and cultists are met twice as often after dark, and the night's own three times
+  (`NIGHT_WEIGHT`).
 - **More of them:** after dark the host keeps one more (`WILDS.night`) about each player out in
   the world, five in all.
 - **Seeing in the dark** (`darkSight`): out of the light everyone sees less far at night (a third
@@ -490,12 +498,12 @@ an adder's near home.
 
 | Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
 | --- | --- | --- | --- | --- | --- |
-| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom | Cure poison draught, 12 gold |
+| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom, a chimera's serpent tail | Cure poison draught, 12 gold |
 | Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, boggarts | Cure disease draught, 18 gold |
 | Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite, a wraith's claws and draining | Invigorating draught, 22 gold |
-| Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
-| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, the dragon's bite... | Bandage, 5 gold |
-| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare | Quickening draught, 10 gold |
+| Burning | 4 s | 1 every 0.8 s | | the dragon's fire and a chimera's, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
+| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, harts' antlers, ahuizotls, chimeras' claws, the dragon's bite... | Bandage, 5 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare, a kelpie's bite, an ahuizotl's tail-hand | Quickening draught, 10 gold |
 
 Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
 **Diseased** too, for an hour: stamina comes back at 40%, but it doesn't hurt; the Cure disease
@@ -623,12 +631,16 @@ smaller, its colour a little different, its markings its own.
 - **Four-legged** (`quadruped.js`): a deep chest, a waist and haunch (sloping down behind for a
   hyena); a neck and head with a muzzle and jaw, or a cat's short face with whisker pads and
   whiskers, or a crocodile's long flat jaws with rows of teeth and its eyes and nostrils raised on
-  top; ears of their kind; brows, horns, a cheek frill of spikes. Legs of three bones: a dog's on
+  top; ears of their kind; brows, horns, a cheek frill of spikes; a hart's antlers (a beam up, out
+  and back from the crown, a tine forward at each bend and a brow tine, forking at the top); a
+  lion's mane all round the neck, or a horse's ridge of long hair along its top and a forelock.
+  Legs of three bones: a dog's on
   its toes; a bear's pillars in front and flat-footed behind, with long claws; a crocodile's
   sprawling out to the sides, swung round forward and back as it walks while its body and tail
   sway; a dragon's with great hooked talons. Tails from a dog's brush (slim at the root, full,
   drawn to a point) to a cat's long hanging curve, a crocodile's deep flattened one with its double
-  ridge of scutes, and a dragon's spade. Wings as a bat's: an upper arm and forearm, three long
+  ridge of scutes, and a dragon's spade; an ahuizotl's ends in a hand, its fingers curled; a
+  chimera's is a serpent, its head at the tip. Wings as a bat's: an upper arm and forearm, three long
   fingers fanning from the wrist, skin stretched between them and back to the flank (a mesh of its
   own bound to the finger bones either side, so it stretches as they spread), folded along the
   flank at rest and beating when it runs or strikes. It flies too (`fly`): legs tucked up under

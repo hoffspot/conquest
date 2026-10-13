@@ -185,7 +185,8 @@ export const LOOKS = Object.freeze({
     },
     // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
     // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
-    // head; a hound of Annwn, white and red-eared, its eyes alight; a swarm of pixies, glowing)
+    // head; a hound of Annwn, white and red-eared, its eyes alight; a swarm of pixies, glowing; a
+    // hart, a red stag, antlered; the kelpie, a black water-horse, weed in its mane)
     wisp: {
         body: "wisp",
         scale: [0.9, 1.1],
@@ -222,6 +223,24 @@ export const LOOKS = Object.freeze({
         kind: "sprite", size: 0.32, count: 6, spread: 1.3,
         colours: { fur: 0xe8fff0, wings: 0x8ae8c0, glow: 0x7ae8a8, eyes: 0x1a3a2a },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"], specials: ["swirl"],
+    },
+    hart: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 1.5, height: 1.3, girth: 0.21, width: 0.17, chest: 1.12, haunch: 1, neck: 0.42, neckUp: 0.8,
+        head: [0.085, 0.095, 0.15], snout: { length: 0.2, radius: 0.05, taper: 0.7 }, ears: "big", legs: 0.045, hooves: true, antlers: 0.6,
+        tail: { length: 0.14, radius: 0.04, lift: -0.5, curl: 0.1 },
+        colours: { fur: 0x8a5634, belly: 0xc8a882, dark: 0x2a1a10, mask: 0x7a4c2e, saddle: 0x6a4228, ivory: 0xd8c8a4, eyes: 0x140c08 },
+        attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie", "root"],
+    },
+    kelpie: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 1.9, height: 1.6, girth: 0.3, width: 0.24, chest: 1.15, haunch: 1.05, neck: 0.62, neckUp: 0.85,
+        head: [0.1, 0.12, 0.18], snout: { length: 0.34, radius: 0.075, taper: 0.85 }, ears: "pointed", legs: 0.07, hooves: true, mane: "horse",
+        tail: { length: 0.9, radius: 0.08, bushy: true, lift: -1.35, curl: 0.05 }, roughness: 0.35,
+        colours: { fur: 0x1e2422, belly: 0x262e2a, dark: 0x0a0c0a, mane: 0x2a5a3a, tail: 0x2a5a3a, mask: 0x1a201e, eyes: 0x70e0c0, glow: 0x50d0a0 },
+        attacks: ["bite", "stamp", "toss"], rests: ["sniff", "shake", "root"],
     },
     // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
     // a blind cave salamander grown big, pale pink, its gills a frill behind its head; a giant
@@ -328,7 +347,7 @@ export const LOOKS = Object.freeze({
     },
     // (Lizard folk: the bog frog, big as a hound; the marsh crocodile; the giant leech, dark and
     // banded; the jaguar, gold and rosetted; the great boa, banded in brown saddles; a whining
-    // swarm of bloodflies)
+    // swarm of bloodflies; the ahuizotl, a sleek black water-dog with a hand at its tail's tip)
     bogFrog: {
         body: "frog",
         scale: [0.9, 1.15],
@@ -375,9 +394,19 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x2a2a2e, wings: 0xb8c0c8, eyes: 0xc02020 },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
     },
+    ahuizotl: {
+        body: "quadruped",
+        scale: [0.92, 1.1],
+        length: 1, height: 0.42, girth: 0.13, width: 0.13, chest: 1.05, haunch: 1.05, neck: 0.16, neckUp: 0.2,
+        head: [0.075, 0.065, 0.09], snout: { length: 0.08, radius: 0.042, taper: 0.8, flat: 1.25 }, ears: "small", legs: 0.042, claws: 1.2,
+        tail: { length: 0.8, radius: 0.045, lift: -0.25, curl: 0.04, taper: 0.45, hand: 0.11 }, roughness: 0.35,
+        colours: { fur: 0x16161a, belly: 0x222228, dark: 0x060608, mask: 0x1a1a1e, hand: 0x3a2c26, eyes: 0xd8a020 },
+        attacks: ["bite", "snap", "tailSlap", "shake"], rests: ["sit", "lie", "sniff", "groom"],
+    },
     // (Orcs: the magma slime, glowing from inside; the rock tusker, a boar of stone; the Gila
     // monster, beaded orange and black; the salamander, black with spots of fire; the death worm,
-    // fat and red; a flock of great vultures, dark, bare-headed)
+    // fat and red; a flock of great vultures, dark, bare-headed; the chimera, a lion with a goat's
+    // horns and a serpent for a tail, breathing fire)
     magmaSlime: {
         body: "blob",
         scale: [0.9, 1.2],
@@ -425,6 +454,15 @@ export const LOOKS = Object.freeze({
         kind: "bird", size: 0.72, count: 4, spread: 1.9,
         colours: { fur: 0x2a241e, wings: 0x1e1a16, beak: 0xc8c0b0, head: 0xb8908a, eyes: 0x2a1a0a },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
+    chimera: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 2, height: 1.15, girth: 0.28, width: 0.25, chest: 1.15, haunch: 1.02, neck: 0.26, neckUp: 0.3,
+        head: [0.17, 0.155, 0.16], face: "cat", snout: { length: 0.09, radius: 0.085 }, ears: "round", legs: 0.095, claws: 1.35, mane: true, horns: 0.6, hornGirth: 1.8,
+        tail: { length: 1.2, radius: 0.055, lift: -0.4, curl: 0.22, taper: 0.35, head: 0.18 },
+        colours: { fur: 0xb8874a, belly: 0xd8b888, mask: 0xc89a5e, dark: 0x2a1a0a, mane: 0x5a3216, tail: 0x4a5a2a, ivory: 0x9a8a70, eyes: 0xffa020, glow: 0xff8010 },
+        attacks: ["pounce", "swipe", "bite", "maul"], rests: ["lie", "stretch", "yawn", "sniff", "sit"], specials: ["breath"],
     },
 
     // --- In the perilous places, for the mightiest ---
