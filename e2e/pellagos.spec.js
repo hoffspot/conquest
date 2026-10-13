@@ -10381,3 +10381,119 @@ test("past 45 metres from the camera, a bandit's drawn in its kind's crowd howev
     expect(await playUntil(page, () => !window.pellagos.game.thronged.has("reach-far"), { seconds: 10 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.avatars.get("reach-far").every !== Infinity)).toBe(true);
 });
+
+test("a beast's look is let go of three minutes after the last of it's drawn: its body off the graphics card, and sculpted again when another comes", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // A wolf out in the open west of the start town, 8 metres ahead of the player facing north,
+    // not set on a fight
+    const add = (id) =>
+        page.evaluate((id) => {
+            const { game } = window.pellagos;
+            const { host, battle } = game;
+            const me = battle.actor(game.me);
+            const square = [Math.floor(me.x) + 2, Math.floor(me.y) - 8];
+
+            host.wild.set(id, { creature: "wolf", tier: 2, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square, ai: "wild", hp: 1e6, speed: 1.4, chase: 2, wild: { creature: "wolf", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: id, leader: null, menace: false } });
+            game.enlisting.push(id);
+        }, id);
+
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { world, host, battle } = game;
+        const [mx, my] = world.stamp.middle;
+
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+    });
+    await add("forget-wolf");
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("forget-wolf"), { seconds: 60 })).toBe(true);
+
+    // Drawn: its look's body and folded pieces on the graphics card, held by it
+    const drawn = await page.evaluate(async () => {
+        const { kept } = await import("/js/beasts/sculpt.js");
+        const { game, session } = window.pellagos;
+        const wolf = game.avatars.get("forget-wolf");
+        const shared = [];
+
+        wolf.object.traverse((node) => node.isSkinnedMesh && !shared.includes(node.geometry) && shared.push(node.geometry));
+
+        for (const geometry of shared) {
+            geometry.addEventListener("dispose", () => (geometry.userData.gone = true));
+        }
+
+        session.view.render();
+        window.forgotten = { shared, body: wolf.body };
+
+        return { body: wolf.body, shared: shared.length, kept: kept(), geometries: session.view.renderer.info.memory.geometries };
+    });
+
+    expect(drawn.body).toMatch(/^wolf:[012]$/);
+    expect(drawn.shared).toBeGreaterThanOrEqual(2);
+    expect(drawn.kept.looks).toBeGreaterThan(0);
+
+    // Gone from the battle, as the host lets one go that's wandered off (its "gone"): let go of by
+    // the game, its look kept, none drawn on it, through the game's own sweeps (every five
+    // seconds) for as long as it's played on here
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const advance = game.host.advance.bind(game.host);
+
+        game.host.advance = (ms) => {
+            const events = advance(ms);
+
+            game.host.advance = advance;
+            game.host.wild.delete("forget-wolf");
+            game.host.battle.remove("forget-wolf");
+
+            return [...events, { type: "gone", id: "forget-wolf" }];
+        };
+    });
+    expect(await playUntil(page, () => !window.pellagos.game.avatars.has("forget-wolf"), { seconds: 10 })).toBe(true);
+    await playUntil(page, () => false, { seconds: 12 });
+
+    const kept = await page.evaluate(async () => {
+        const { kept } = await import("/js/beasts/sculpt.js");
+
+        return { kept: kept(), gone: window.forgotten.shared.some((geometry) => geometry.userData.gone) };
+    });
+
+    expect(kept.gone).toBe(false);
+    expect(kept.kept.unheld).toBeGreaterThanOrEqual(1);
+
+    // Three minutes on: let go of, off the graphics card
+    const forgotten = await page.evaluate(async () => {
+        const { forget, kept, LINGER } = await import("/js/beasts/sculpt.js");
+        const { session } = window.pellagos;
+        const before = session.view.renderer.info.memory.geometries;
+
+        forget(performance.now() + LINGER + 1000);
+
+        return { kept: kept(), gone: window.forgotten.shared.every((geometry) => geometry.userData.gone), fewer: before - session.view.renderer.info.memory.geometries };
+    });
+
+    expect(forgotten.gone).toBe(true);
+    expect(forgotten.kept.looks).toBeLessThan(kept.kept.looks);
+    expect(forgotten.fewer).toBeGreaterThanOrEqual(drawn.shared);
+
+    // Another of it comes: sculpted again, drawn on bodies of its own
+    await add("forget-wolf");
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("forget-wolf"), { seconds: 60 })).toBe(true);
+
+    const again = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const wolf = game.avatars.get("forget-wolf");
+        const shared = [];
+
+        wolf.object.traverse((node) => node.isSkinnedMesh && shared.push(node.geometry));
+        session.view.render();
+
+        return { body: wolf.body, fresh: shared.every((geometry) => !window.forgotten.shared.includes(geometry) && geometry.attributes.position.count > 0) };
+    });
+
+    expect(again).toEqual({ body: drawn.body, fresh: true });
+});

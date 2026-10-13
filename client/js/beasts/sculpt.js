@@ -11,13 +11,16 @@
 // with markings painted on (spots, stripes, a pale belly: `paint`), a grain to the colour (fur,
 // scales, bark) and a darker back and paler underside, as animals have.
 //
-// A body's made once for each kind (`key`) and shared by every one of it after.
+// A body's made once for each kind (`key`) and shared by every one of it after, as long as any of
+// it is drawn, and a while after (hold, release, forget).
 
 import * as THREE from "three";
 import { allAtOnce } from "../core/steps.js";
 import { ellipsoid, limb, part, skin } from "./shapes.js";
 
+// Bodies sculpted, and pieces folded (fold), by key, shared by every one built on them
 const bodies = new Map();
+const folds = new Map();
 
 // About how many points a body's skin has (twice as many triangles)
 const BUDGET = 4200;
@@ -32,6 +35,89 @@ const PIECES = 32;
 // so now: what isn't made yet isn't made there and then, but given back to be (Unmade)
 const making = new Map();
 let staging = false;
+
+// How many drawn are built on each body and its folded pieces (by key: BeastAvatar's, one of a
+// kind's three looks), and since when none has been (performance.now()'s), each kept that long
+// for another of its kind to be built at once before it's let go (forget)
+const holders = new Map();
+const unheld = new Map();
+
+/**
+ * How long a body none is drawn on is kept (ms), for another of its kind to be built at once: a
+ * kind met lately is likely met again, and one that isn't costs its body's sculpting again (in
+ * steps: sculpting) if it is.
+ */
+export const LINGER = 3 * 60 * 1000;
+
+/** One more drawn on the body (and folded pieces) kept under `key`. */
+export function hold(key) {
+    holders.set(key, (holders.get(key) ?? 0) + 1);
+    unheld.delete(key);
+}
+
+/** One fewer drawn on the body kept under `key` (at `now`): none left, it's let go LINGER after (forget). */
+export function release(key, now = performance.now()) {
+    const left = (holders.get(key) ?? 0) - 1;
+
+    if (left > 0) {
+        holders.set(key, left);
+
+        return;
+    }
+
+    holders.delete(key);
+    unheld.set(key, now);
+}
+
+/**
+ * Let go of the bodies and folded pieces none has been drawn on for `linger` ms (at `now`): out of
+ * what's kept, and off the graphics card (disposed: whatever's made of them, their lower levels
+ * with them, beast.js). Any wanted after are made again. Returns how many looks were let go.
+ */
+export function forget(now = performance.now(), linger = LINGER) {
+    let gone = 0;
+
+    for (const [key, since] of unheld) {
+        // (Not one being made again meanwhile: let go of when it's made, if none holds it then)
+        if (now - since < linger || making.has(key) || making.has(`fold:${key}`)) {
+            continue;
+        }
+
+        unheld.delete(key);
+        bodies.get(key)?.geometry.dispose();
+        bodies.delete(key);
+
+        for (const [name, geometry] of folds) {
+            if (name.startsWith(`${key}:`)) {
+                geometry.dispose();
+                folds.delete(name);
+            }
+        }
+
+        gone++;
+    }
+
+    return gone;
+}
+
+/** What's kept: how many looks' bodies and folded pieces, how many of them none's drawn on now, and their arrays' bytes. */
+export function kept() {
+    const bytes = (geometry) => Object.values(geometry.attributes).reduce((sum, { array }) => sum + array.byteLength, geometry.index?.array.byteLength ?? 0);
+    const looks = new Set(bodies.keys());
+    let total = 0;
+
+    for (const { geometry } of bodies.values()) {
+        total += bytes(geometry);
+    }
+
+    // (A fold's kept under its look's key and its kind of material: "wolf:1:smooth|0|solid")
+    for (const [name, geometry] of folds) {
+        looks.add(name.slice(0, name.lastIndexOf(":")));
+        total += bytes(geometry);
+    }
+
+    return { looks: looks.size, unheld: unheld.size, bytes: total };
+}
 
 /** What's not yet made, given back to be made a step at a time (`steps`), until it's `made()`. */
 class Unmade {
@@ -647,8 +733,6 @@ export class Sculpt {
         geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
     }
 }
-
-const folds = new Map();
 
 // Is a piece animated on its own (its own transform or material changing: a slime's bubbles, a
 // wisp's light), so it has to stay a piece of its own?
