@@ -27,6 +27,7 @@ export const SETTINGS = Object.freeze({
     setAsideMinutes: { kind: "number", min: 0, max: 1440, default: 2, about: "How long a world with nobody in it waits before it's saved and set aside (minutes)" },
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
+    internet: { kind: "boolean", default: false, about: "Answer the internet (over TLS alone, once the server has a certificate)" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
 });
 

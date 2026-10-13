@@ -37,6 +37,7 @@
 //   GET    /server/worlds                   every world, as GET /worlds/:id
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
+//   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
@@ -218,7 +219,7 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return {
                 server: { id: server.identity.id, name: server.name, publicKey: server.identity.publicKey, version: SERVER_VERSION, net: NET_VERSION, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } },
-                addresses: server.addresses(),
+                addresses: [...server.addresses(), ...(server.internetClosed ? [] : server.secureAddresses())],
                 worlds: listed.map(cardOf),
                 nearby: server.nearby.list(),
                 players: [],
@@ -466,6 +467,16 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.revokeCreator(id, { by: byOf(principal) }));
         }],
+        ["PUT", /^\/server\/certificate$/, { server: true }, async (request, body) => {
+            const principal = admin(request);
+
+            return doing(() => manage.useCertificate(body, { by: byOf(principal) }));
+        }],
+        ["DELETE", /^\/server\/certificate$/, { server: true }, async (request) => {
+            const principal = admin(request);
+
+            return doing(() => manage.dropCertificate({ by: byOf(principal) }));
+        }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);
 
@@ -479,8 +490,8 @@ export function apiHandler(server, { mac = false } = {}) {
         }],
     ];
 
-    // Whether a page's origin is the server's own (one of its names, over http): not the game's on GitHub Pages
-    const own = (origin) => mac || [...server.hosts].some((host) => origin === `http://${host}`);
+    // Whether a page's origin is the server's own (one of its names, over http or https): not the game's on GitHub Pages
+    const own = (origin) => mac || [...server.hosts].some((host) => origin === `http://${host}` || origin === `https://${host}`);
 
     return async (request, response) => {
         const origin = request.headers.origin;
@@ -491,8 +502,7 @@ export function apiHandler(server, { mac = false } = {}) {
                 request.address = plainAddress(request.socket.remoteAddress);
                 request.from = "mac";
             } else {
-                request.address = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin }, server);
-                request.from = "home";
+                ({ address: request.address, from: request.from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted) }, server));
                 allowedOrigin = origin ?? null;
             }
 
@@ -518,7 +528,7 @@ export function apiHandler(server, { mac = false } = {}) {
             if (request.method === "OPTIONS") {
                 response.writeHead(204, {
                     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin, Vary: "Origin" } : {}),
-                    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE",
                     // (Never the management header: the server's own pages needn't ask, and no other's may send it)
                     "Access-Control-Allow-Headers": "Content-Type, Authorization",
                     "Access-Control-Max-Age": "600",

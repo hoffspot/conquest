@@ -1,0 +1,157 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { addressOf, inviteLink } from "../client/js/app/invites.js";
+import { newKey, pem, pemOfKey, selfSigned } from "../server/net/x509.js";
+import { WorldServer } from "../server/world-server.js";
+import { expect, test } from "./fixtures.js";
+
+// The world server from the internet, over TLS (generated/world_server_plan.md §9.1, §15 S6): a
+// server open to the internet (here no address is home, so the browser on loopback is the
+// internet), its certificate one the browser's told to take. A page asked for plainly is sent on
+// to https; the game, as the server serves it securely, follows an invite link into a world and
+// plays in it over wss; its management page isn't there to be had. And on the server's own
+// computer, the management page says how it stands with the internet, and takes a certificate of
+// the owner's own.
+
+// (A world drawn without a GPU: more than the usual time)
+test.setTimeout(300000);
+test.describe.configure({ mode: "default" });
+
+// Short codes hashed cheaply (the server's own cost is for a Mac, not a test)
+const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1024 * 1024 });
+
+const hero = {
+    version: 1,
+    seed: 777,
+    created: "2026-10-13T12:00:00.000Z",
+    hero: {
+        name: "Brand",
+        weapon: "sword",
+        race: "human",
+        parts: [],
+        shape: { macro: { gender: 0.5, muscle: 0.5, weight: 0.4, height: 0.5, bust: 0.4, african: 0.2, asian: 0.2, caucasian: 0.6 }, details: {} },
+        look: { skin: { tone: "#d9b394" }, eyes: { iris: "#5a7a3a" }, hair: { style: "short", beard: "none", colour: "#3a2a1a" } },
+    },
+};
+
+/** A key and a certificate signed by it, for `names`. */
+function pair(names) {
+    const { privateKey } = newKey();
+
+    return { key: pemOfKey(privateKey), cert: pem("CERTIFICATE", selfSigned({ key: privateKey, names, days: 7 })) };
+}
+
+const made = [];
+const servers = [];
+
+async function serve(options = {}) {
+    const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-e2e-secure-"));
+
+    made.push(folder);
+
+    const server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), ...options });
+
+    await server.settings.change({ setAsideMinutes: 0 });
+    await server.listen(0, "127.0.0.1");
+    servers.push(server);
+
+    return server;
+}
+
+test.afterAll(async () => {
+    await Promise.all(servers.map((server) => server.close()));
+    await Promise.all(made.map((folder) => rm(folder, { recursive: true, force: true })));
+});
+
+test("from the internet, over TLS alone: a page asked for plainly sent on to https; the game there follows an invite into a world and plays over wss; no management page", async ({ ownBrowser: browser }) => {
+    const server = await serve({ home: () => false });
+
+    await server.useCertificate(pair(["127.0.0.1", "localhost"]));
+    await server.manage.changeSettings({ internet: true });
+
+    const world = await server.createWorld({ name: "Farhold", seed: 4, race: "human" });
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+
+    await page.addInitScript(
+        ({ settings, character }) => {
+            localStorage.setItem("pellagos.settings", JSON.stringify(settings));
+            localStorage.setItem("pellagos.save", JSON.stringify(character));
+        },
+        { settings: { quality: "low", renderScale: 0.5, shadows: false }, character: hero },
+    );
+    page.on("pageerror", (error) => {
+        throw error;
+    });
+
+    // (Asked for plainly: sent on to the same page over TLS, a secure context)
+    const secure = `https://127.0.0.1:${server.port}/`;
+
+    await page.goto(`http://127.0.0.1:${server.port}/`);
+    expect(page.url()).toBe(secure);
+    expect(await page.evaluate(() => window.isSecureContext)).toBe(true);
+
+    // (An invite to the server's secure address: into the world, a new hero, over wss)
+    const link = inviteLink(secure, { address: addressOf(`https://127.0.0.1:${server.port}`), id: server.identity.id, world: world.world, key: world.playerKey });
+
+    expect(link).toContain("secure=1");
+    await page.goto(link);
+    await expect(page.locator("#worldask #worldasktitle")).toHaveText("Who goes into Farhold", { timeout: 60000 });
+    await page.locator("#worldask").getByRole("button", { name: /A new hero/ }).click();
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 180000, polling: 250 });
+
+    const [place] = server.play.places.values();
+
+    expect(place.from).toBe("internet");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].secure)).toBe(true);
+
+    // (The management page isn't to be had from there)
+    const admin = await page.request.get(`${secure}admin`);
+
+    expect(admin.status()).toBe(403);
+    expect((await admin.json()).error).toBe("home");
+
+    await context.close();
+});
+
+test("on the server's computer, the management page says how it stands with the internet, takes a certificate of the owner's own, and turns the internet on", async ({ page }) => {
+    const server = await serve();
+
+    await server.listenAdmin(0);
+    page.on("pageerror", (error) => {
+        throw error;
+    });
+    await page.goto(`http://localhost:${server.adminPort}/`);
+
+    const internet = page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+    await expect(internet).toContainText("Answers its own Wi-Fi alone");
+
+    // (A certificate of the owner's own, put in from its files)
+    const own = pair(["pellagos.example.com", "127.0.0.1"]);
+
+    await internet.locator("summary").click();
+    await internet.locator('input[name="key"]').setInputFiles({ name: "privkey.pem", mimeType: "application/x-pem-file", buffer: Buffer.from(own.key) });
+    await internet.locator('input[name="cert"]').setInputFiles({ name: "fullchain.pem", mimeType: "application/x-pem-file", buffer: Buffer.from(own.cert) });
+    await internet.getByRole("button", { name: "Use it" }).click();
+
+    const after = page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+    await expect(after).toContainText("It has a certificate for pellagos.example.com, 127.0.0.1");
+    await expect(after).toContainText("Fingerprint (SHA-256)");
+    expect(server.certificate.names).toEqual(["pellagos.example.com", "127.0.0.1"]);
+
+    // (Turned on in Settings: it says where the internet reaches it)
+    await page.locator('#tabs [data-tab="settings"]').click();
+    await page.getByLabel("Answer the internet (over TLS alone, once the server has a certificate)").check();
+    await page.locator("#settings").getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#status")).toHaveText("Saved.");
+    await page.locator('#tabs [data-tab="overview"]').click();
+
+    const open = page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+    await expect(open).toContainText("Answers the internet, over TLS alone");
+    await expect(open).toContainText(`https://pellagos.example.com:${server.port}/`);
+    expect(server.internetClosed).toBe(null);
+});

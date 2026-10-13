@@ -111,6 +111,8 @@
     "pellagos.spec.js › walks out of the town into the world, drawn round the player as they go, with no loading; the wild's creatures about them there": 84.3,
     "pellagos.spec.js › what lingers after a creature's blow shows on the player's plate, and its cure from the guild ends it": 37.5,
     "pellagos.spec.js › with six characters kept, New character asks which is to make way, and to be sure; backed out of making them, the one chosen's kept; made, the new one takes their place": 63.1,
+    "secure.spec.js › from the internet, over TLS alone: a page asked for plainly sent on to https; the game there follows an invite into a world and plays over wss; no management page": 45.0,
+    "secure.spec.js › on the server's computer, the management page says how it stands with the internet, takes a certificate of the owner's own, and turns the internet on": 1.3,
     "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 102.2,
     "together.spec.js › two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds": 88.4,
     "together.spec.js › two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured": 94.8,

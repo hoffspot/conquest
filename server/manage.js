@@ -4,8 +4,9 @@
 // - A world: what it is and how it is, in words; its settings changed (its heroes mode too, while
 //   nobody's in it); started, set aside, saved; its players sent out, banned, given another part or
 //   a new ticket; its backups listed, made, restored; exported; deleted (its name typed).
-// - The server: where it can be reached, its settings, how many worlds it may run, creator keys,
-//   what's happened (the server's journal, and each world's), and how it's keeping up.
+// - The server: where it can be reached (the Wi-Fi, and the internet with its certificate), its
+//   settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
+//   each world's), and how it's keeping up.
 //
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
 // it aside first, or is refused; whatever can't be undone is backed up before it's done.
@@ -532,7 +533,7 @@ export class Management {
             addresses: [`http://localhost:${server.port}`, ...server.addresses()],
             admin: server.adminPort ? `http://localhost:${server.adminPort}` : null,
             adminKey: null,
-            internet: { open: false, why: "Opening to the internet (a certificate, the router) comes later: for now the server answers its own Wi-Fi alone." },
+            internet: this.internet(),
             power: { keepAwake: server.settings.get("keepAwake"), holding: Boolean(server.registry.holding), platform: process.platform },
             bonjour: this.bonjour(),
             nearby: server.nearby.list(),
@@ -541,6 +542,55 @@ export class Management {
             machine: { memory: os.totalmem(), cores: os.availableParallelism?.() ?? os.cpus().length },
             blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
         };
+    }
+
+    /**
+     * Whether it answers the internet (§9.1), in words: { on (the `internet` setting), open (it
+     * answers there now), certificate (what it says of itself: x509.js describe; or null),
+     * addresses (its secure ones: https), words }.
+     */
+    internet() {
+        const { server } = this;
+        const on = server.settings.get("internet");
+        const certificate = server.certificate;
+        const day = (when) => when.slice(0, 10);
+        const open = on && Boolean(certificate);
+        const words = open
+            ? `Answers the internet, over TLS alone, at ${server.secureAddresses().join(" and ")}. Its certificate, from ${certificate.issuer}, runs till ${day(certificate.notAfter)}. Plain http from the internet is refused; a page asked for that way is sent on to https.`
+            : certificate
+              ? `Doesn't answer the internet: “Answer the internet” is off in Settings. It has a certificate for ${certificate.names.join(", ")}, till ${day(certificate.notAfter)}.`
+              : on
+                ? "“Answer the internet” is on, but the server has no certificate yet, so it can't be reached securely and the internet isn't answered."
+                : "Answers its own Wi-Fi alone: “Answer the internet” is off in Settings, and it has no certificate.";
+
+        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words };
+    }
+
+    /** A certificate of the owner's own kept and taken up (PEM: its key, and its chain). Refused, saying why, if they can't be used together. */
+    async useCertificate({ key, cert }, { by = null } = {}) {
+        if (typeof key !== "string" || typeof cert !== "string") {
+            throw new Refused(400, "bad-request", "A certificate comes as its key and its chain, each PEM.");
+        }
+
+        let info;
+
+        try {
+            info = await this.server.useCertificate({ key, cert });
+        } catch (error) {
+            throw new Refused(400, "certificate", error.message);
+        }
+
+        await this.journal(`A certificate for ${info.names.join(", ")} was put in${by ? ` by ${by}` : ""}, running till ${info.notAfter.slice(0, 10)}.`);
+
+        return { internet: this.internet() };
+    }
+
+    /** Its certificate let go: the internet's no longer answered. */
+    async dropCertificate({ by = null } = {}) {
+        await this.server.dropCertificate();
+        await this.journal(`The server's certificate was taken out${by ? ` by ${by}` : ""}: it no longer answers the internet.`);
+
+        return { internet: this.internet() };
     }
 
     /**
@@ -578,6 +628,7 @@ export class Management {
 
         this.server.registry.refill();
         this.server.nearby.follow(this.server.settings.get("bonjour"));
+        this.server.closeToInternet();
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };

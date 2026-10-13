@@ -427,6 +427,35 @@ tr.gone td {
     color: var(--faint);
 }
 
+/* --- The internet: its certificate --- */
+
+.panel details {
+    margin-top: 10px;
+}
+
+.panel summary {
+    color: var(--gold);
+    cursor: pointer;
+    margin-bottom: 6px;
+}
+
+form.certificate {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    align-items: flex-end;
+    margin: 8px 0;
+}
+
+form.certificate input[type="file"] {
+    color: var(--ink);
+    max-width: 100%;
+}
+
+dl.facts code {
+    overflow-wrap: anywhere;
+}
+
 /* --- Addresses and QR codes --- */
 
 .addresses {
