@@ -56,6 +56,8 @@ const ABOUT = {
     mandrake: ["Mandrake", "Only in the elves' wilds"],
     cwnAnnwn: ["Hound of Annwn", "Only in the elves' wilds, in packs"],
     pixies: ["Pixie swarm", "Only in the elves' wilds"],
+    hart: ["Hart", "Only in the elves' wilds, in the meadows and elfwood"],
+    kelpie: ["Kelpie", "Only in the elves' wilds"],
     caveSpider: ["Cave spider", "Only in the dark elves' wilds"],
     shadowStalker: ["Shadow stalker", "Only in the dark elves' wilds"],
     olm: ["Cave olm", "Only in the dark elves' wilds"],
@@ -74,12 +76,14 @@ const ABOUT = {
     jaguar: ["Jaguar", "Only in the lizard folk's wilds, in the jungle"],
     boa: ["Great boa", "Only in the lizard folk's wilds"],
     bloodflies: ["Bloodfly swarm", "Only in the lizard folk's wilds, in the jungle and marshes"],
+    ahuizotl: ["Ahuizotl", "Only in the lizard folk's wilds, in the marshes and jungle"],
     magmaSlime: ["Magma slime", "Only in the orcs' wilds"],
     rockTusker: ["Rock tusker", "Only in the orcs' wilds"],
     gilaMonster: ["Gila monster", "Only in the orcs' wilds"],
     salamander: ["Salamander", "Only in the orcs' wilds"],
     deathWorm: ["Death worm", "Only in the orcs' wilds, in the badlands"],
     vultureFlock: ["Vulture flock", "Only in the orcs' wilds, over the badlands"],
+    chimera: ["Chimera", "Only in the orcs' wilds, in the volcanic lands and badlands"],
     dragon: ["Dragon", "The dragon's lair: for the mightiest"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
@@ -328,7 +332,7 @@ function advance(seconds, step = 1 / 60) {
 
 const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
-    ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock"]],
+    ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],
 ];

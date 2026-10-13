@@ -227,7 +227,7 @@ export const GAITS = Object.freeze({
  * with a body's thud for its size (`fall`; null: none heard, a slime's, a ghost's, the bats', the
  * bones of a skeleton and the crash of a treant are in their deaths; none said: as a person
  * falls, game.js); a dragon's and a wyvern's wings are heard beating in the air (`wings`); a
- * dragon breathes fire (`fire`); and what's heard under its call, attack and death (`with`): a
+ * dragon and a chimera breathe fire (`fire`); and what's heard under its call, attack and death (`with`): a
  * magma slime's sizzle, the bats' fluttering. A woman's voice isn't recorded yet: a woman among
  * the bandits and cultists is silent (game.js).
  */
@@ -245,6 +245,7 @@ export const CREATURE_VOICES = Object.freeze({
     hyena: { family: "wolf", rate: 1.1, fall: "deathThudMid" },
     jackal: { family: "wolf", rate: 1.2, fall: "deathThudSmall" },
     cwnAnnwn: { family: "wolf", rate: 0.9, fall: "deathThudMid" },
+    ahuizotl: { family: "wolf", rate: 1.15, fall: "deathThudSmall" },
     boar: { family: "boar", fall: "deathThudMid" },
     rockTusker: { family: "boar", rate: 0.8, fall: "deathThudBig" },
     badger: { family: "boar", rate: 1.2, fall: "deathThudSmall" },
@@ -256,9 +257,11 @@ export const CREATURE_VOICES = Object.freeze({
     basilisk: { family: "snake", rate: 0.9, fall: "deathThudSmall" },
     bear: { family: "bear", fall: "deathThudBig" },
     nandiBear: { family: "bear", rate: 0.9, fall: "deathThudBig" },
+    hart: { family: "bear", rate: 1.2, fall: "deathThudMid" },
     puma: { family: "bigCat", fall: "deathThudMid" },
     shadowStalker: { family: "bigCat", rate: 0.85, fall: "deathThudMid" },
     jaguar: { family: "bigCat", rate: 0.95, fall: "deathThudMid" },
+    chimera: { family: "bigCat", rate: 0.8, fall: "deathThudBig", fire: "dragonBreath" },
     caveSpider: { family: "spider", fall: "deathThudSmall" },
     centipede: { family: "spider", rate: 1.1, fall: "deathThudSmall" },
     scorpion: { family: "spider", rate: 0.85, fall: "deathThudSmall" },
@@ -274,6 +277,7 @@ export const CREATURE_VOICES = Object.freeze({
     dragon: { family: "dragon", fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
     wildBull: { family: "dragon", rate: 1.2, fall: "deathThudBig" },
     capeBuffalo: { family: "dragon", rate: 1.1, fall: "deathThudBig" },
+    kelpie: { family: "dragon", rate: 1.24, fall: "deathThudBig" },
     treant: { family: "treant", fall: null },
     wisp: { family: "ghost", rate: 1.2, fall: null },
     mandrake: { family: "ghost", rate: 1.2, fall: "deathThudSmall" },

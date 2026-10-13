@@ -186,6 +186,18 @@ export const NATURAL = Object.freeze({
     boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch", afflict: { kind: "disease", chance: 0.15 } })] },
     badger: { label: "Teeth and claws", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 350, duration: 750, interval: 1150, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     wildBull: { label: "Horns", attacks: [melee({ id: "gore", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 400, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
+    // (A hart's antlers gore; a kelpie bites and drags whoever it has towards the water, slowing
+    // them, or rears and strikes down with its hooves, knocking them off their feet)
+    hart: { label: "Antlers", attacks: [melee({ id: "gore", damage: [4, 8], hitAt: 450, duration: 900, interval: 1400, stagger: 350, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
+    kelpie: {
+        label: "Teeth and hooves",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [5, 9], hitAt: 400, duration: 850, interval: 1400, reaction: "hack", animation: "melee", afflict: { kind: "slow", chance: 0.4 } }),
+                melee({ id: "stamp", damage: [6, 10], hitAt: 550, duration: 1100, interval: 1700, stagger: 400, knockdown: 1000, reaction: "crush", animation: "melee" }),
+            ),
+        ],
+    },
     rookFlock: { label: "Beaks", attacks: [melee({ id: "peck", damage: [2, 4], hitAt: 250, duration: 600, interval: 900, stagger: 80, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.1 } })] },
     wisp: {
         label: "Light",
@@ -287,6 +299,17 @@ export const NATURAL = Object.freeze({
             ),
         ],
     },
+    // (An ahuizotl bites, or takes hold with the hand at its tail's tip and drags whoever it has
+    // under, slowing them)
+    ahuizotl: {
+        label: "Jaws and tail-hand",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [4, 7], hitAt: 350, duration: 750, interval: 1200, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } }),
+                melee({ id: "grab", damage: [3, 6], hitAt: 450, duration: 950, interval: 1500, stagger: 300, reaction: "punch", animation: "melee", afflict: { kind: "slow", chance: 0.6 } }),
+            ),
+        ],
+    },
     // (A knucker, the water dragon of the Sussex pools, bites or throws its coils round whoever
     // it's after, as a boa does, and spits venom that lies a while)
     knucker: {
@@ -310,6 +333,18 @@ export const NATURAL = Object.freeze({
     rockTusker: { label: "Tusks", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, knockdown: 1500, reaction: "pierce", animation: "melee" })] },
     gilaMonster: { label: "Venomous bite", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 400, duration: 850, interval: 1300, reaction: "hack", animation: "melee", afflict: { kind: "poison", chance: 0.5 } })] },
     vultureFlock: { label: "Beaks and talons", attacks: [melee({ id: "rip", damage: [3, 5], hitAt: 350, duration: 800, interval: 1100, stagger: 100, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.25 } })] },
+    // (A chimera mauls with a lion's claws, or its serpent tail strikes, venomous; and it breathes
+    // fire, as a dragon does)
+    chimera: {
+        label: "Claws, serpent and fire",
+        attacks: [
+            eitherOf(
+                melee({ id: "maul", damage: [7, 12], hitAt: 550, duration: 1050, interval: 1600, stagger: 400, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } }),
+                melee({ id: "bite", damage: [5, 9], hitAt: 400, duration: 800, interval: 1400, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.5 } }),
+            ),
+            ranged({ id: "breath", reach: 5, damage: [5, 10], hitAt: 650, duration: 1300, interval: 3400, stagger: 200, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 13 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
     // (A salamander's bite burns, and it spits fire that lies burning a while, as a magma slime's
     // lava does)
     salamander: {
