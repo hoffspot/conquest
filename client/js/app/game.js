@@ -597,6 +597,7 @@ const SPILLS = Object.freeze({
     blackShuck: ["shadows"],
     shadowStalker: ["shadows"],
     wisp: ["wither"],
+    pixies: ["wither"],
     magmaSlime: ["lavaSplash", "embers"],
     rockTusker: ["stoneChips", "dust"],
 });

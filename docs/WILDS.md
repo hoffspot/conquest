@@ -46,10 +46,12 @@ two tiers above it, up to their most.
 | Boggart | 30 | territorial | 1 | 1–6 | the humans' wilds only |
 | Badger | 30 | territorial | 1 | 1–4 | the humans' wilds only: woods, heath, meadow |
 | Wild bull | 56 | territorial | 1–2 | 2–6 | the humans' wilds only: meadow, farmland |
+| Rook flock | 24 | territorial | 1 | 1–4 | the humans' wilds only: farmland, meadow |
 | Will-o'-wisp | 22 | aggressive | 1–2 | 1–7 | the elves' wilds only |
 | Blighted treant | 80 | territorial | 1 | 4–9 | the elves' wilds only |
 | Mandrake | 20 | defensive | 1–2 | 1–4 | the elves' wilds only: elfwood |
 | Hound of Annwn | 28 | aggressive | 2–4 | 3–7 | the elves' wilds only |
+| Pixie swarm | 20 | territorial | 1 | 1–4 | the elves' wilds only: elfwood, meadow |
 | Cave spider | 24 | territorial | 1–4 | 1–7 | the dark elves' wilds only |
 | Shadow stalker | 50 | aggressive | 1 | 4–9 | the dark elves' wilds only |
 | Cave olm | 26 | territorial | 1–2 | 1–4 | the dark elves' wilds only |
@@ -58,16 +60,19 @@ two tiers above it, up to their most.
 | Jackal | 18 | aggressive | 2–4 | 1–4 | the cat folk's wilds only |
 | Cape buffalo | 64 | territorial | 1–3 | 3–7 | the cat folk's wilds only |
 | Nandi bear | 62 | aggressive | 1 | 4–8 | the cat folk's wilds only |
+| Locust swarm | 22 | aggressive | 1 | 1–4 | the cat folk's wilds only |
 | Bog frog | 28 | territorial | 1–2 | 1–6 | the lizard folk's wilds only |
 | Marsh crocodile | 60 | territorial | 1 | 3–8 | the lizard folk's wilds only |
 | Giant leech | 20 | territorial | 1–2 | 1–3 | the lizard folk's wilds only: marsh |
 | Jaguar | 42 | territorial | 1 | 2–6 | the lizard folk's wilds only: jungle |
 | Great boa | 58 | territorial | 1 | 4–8 | the lizard folk's wilds only |
+| Bloodfly swarm | 18 | aggressive | 1 | 1–4 | the lizard folk's wilds only: jungle, marsh |
 | Magma slime | 45 | territorial | 1–2 | 1–8 | the orcs' wilds only |
 | Rock tusker | 80 | territorial | 1 | 4–9 | the orcs' wilds only |
 | Gila monster | 30 | defensive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
 | Salamander | 32 | territorial | 1–2 | 2–6 | the orcs' wilds only: volcanic, badlands |
 | Death worm | 40 | territorial | 1 | 2–6 | the orcs' wilds only: badlands |
+| Vulture flock | 30 | aggressive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
@@ -76,6 +81,7 @@ two tiers above it, up to their most.
 
 A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander and
 death worm spit (venom, venom, lava, fire, acid), a mandrake shrieks (staggering whoever's near),
+a pixie swarm dazzles (staggering and slowing whoever's near: led astray),
 a great boa throws its coils round whoever it's after (crushing and slowing them), the
 will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
 spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
@@ -101,9 +107,9 @@ from its heart, 3 metres from its heart and half that from its edge, as far as t
 clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the air 0.55 s and
 0.09 s more a metre, and down and getting up 2.6 seconds in all (they can't move, fight, cast or
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
-thrown as anyone is; never the heavy or the unsolid (bats, bears, trolls, ogres, wyverns, wisps,
-treants, crocodiles, rock tuskers, wild bulls, Cape buffalo, Nandi bears, great boas, dragons,
-ghosts, wraiths, frost trolls: creatures.js
+thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
+bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
+buffalo, Nandi bears, great boas, dragons, ghosts, wraiths, frost trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
@@ -441,8 +447,8 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
   put out by day. The skeletons of the undead camps and the ruined castles are always there.
 - **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions,
-  badgers, hounds of Annwn, jackals, Nandi bears, jaguars and cultists are met twice as often after
-  dark, and the night's own three times (`NIGHT_WEIGHT`).
+  badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies and cultists are met twice
+  as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
 - **More of them:** after dark the host keeps one more (`WILDS.night`) about each player out in
   the world, five in all.
 - **Seeing in the dark** (`darkSight`): out of the light everyone sees less far at night (a third
@@ -478,12 +484,12 @@ an adder's near home.
 
 | Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
 | --- | --- | --- | --- | --- | --- |
-| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite | Cure poison draught, 12 gold |
-| Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, skeletons, boggarts | Cure disease draught, 18 gold |
+| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid | Cure poison draught, 12 gold |
+| Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, boggarts | Cure disease draught, 18 gold |
 | Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite, a wraith's claws and draining | Invigorating draught, 22 gold |
-| Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam | Burn salve, 8 gold |
+| Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
 | Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, the dragon's bite... | Bandage, 5 gold |
-| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch | Quickening draught, 10 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's coils, pixies' dazzle | Quickening draught, 10 gold |
 
 Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
 **Diseased** too, for an hour: stamina comes back at 40%, but it doesn't hurt; the Cure disease
@@ -627,6 +633,11 @@ smaller, its colour a little different, its markings its own.
   the body like the spokes of a wheel so none crosses another or the body, and bends its two bones
   to reach it each moment (knee up); walking, the feet stay planted as the body goes over them,
   then step forward, four at a time.
+- **Swarms** (`flyers.js` `swarm`): a few to a dozen and more of the one kind, each flying its own
+  round the swarm's middle (as far out as its `spread`): bats with their ears; birds (rooks,
+  vultures) with a beak, a fanned tail and long wings beating slower; insects (locusts,
+  bloodflies) long-bodied, with two pairs of clear wings beating fast; sprites (pixies) small and
+  softly glowing, with clear wings.
 - **Slimes** (`blob.js`): a see-through jelly; the magma slime a lumpy crust whose cracks glow
   (white-hot in the deepest, orange, dull red at their edges: how molten each point is is worked
   out once from noise, and its glow pulses slowly across it in the shader), spitting sparks now

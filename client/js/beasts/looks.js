@@ -139,7 +139,7 @@ export const LOOKS = Object.freeze({
     // --- Only in the wilds of each people's own lands ---
     // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite; an
     // old badger, white-faced, holding its ground; a white wild bull of an old park's herd, dark
-    // at the ears and muzzle, its horns sweeping out and up)
+    // at the ears and muzzle, its horns sweeping out and up; a flock of rooks, black, pale-beaked)
     blackShuck: {
         body: "quadruped",
         scale: [1, 1.1],
@@ -168,9 +168,16 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0xe8e2d4, belly: 0xdcd4c4, dark: 0x2a2420, mask: 0xd2c8b8, ears: 0x2a2420, ivory: 0xe0d4b8, eyes: 0x140c08 },
         attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie", "root"],
     },
+    rookFlock: {
+        body: "swarm",
+        scale: [0.9, 1.1],
+        kind: "bird", size: 0.42, count: 8, spread: 1.5,
+        colours: { fur: 0x16161c, wings: 0x1c1c24, beak: 0xc8c0b8, head: 0x2a2a30, eyes: 0x2a1a0a },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
     // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
     // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
-    // head; a hound of Annwn, white and red-eared, its eyes alight)
+    // head; a hound of Annwn, white and red-eared, its eyes alight; a swarm of pixies, glowing)
     wisp: {
         body: "wisp",
         scale: [0.9, 1.1],
@@ -201,6 +208,13 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0xeceae4, belly: 0xf6f4ee, dark: 0x6a1a14, mask: 0xe4e0d8, ears: 0xa82a20, eyes: 0xd84030, glow: 0xd84030 },
         attacks: ["bite", "snap", "pounce", "shake"], rests: ["sit", "lie", "sniff", "howl"],
     },
+    pixies: {
+        body: "swarm",
+        scale: [0.9, 1.1],
+        kind: "sprite", size: 0.32, count: 6, spread: 1.3,
+        colours: { fur: 0xe8fff0, wings: 0x8ae8c0, glow: 0x7ae8a8, eyes: 0x1a3a2a },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"], specials: ["swirl"],
+    },
     // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
     // a blind cave salamander grown big, pale pink, its gills a frill behind its head)
     caveSpider: {
@@ -230,7 +244,7 @@ export const LOOKS = Object.freeze({
     },
     // (Cat folk: the hyena, in packs; the sand scorpion; the black-backed jackal, slight and big-
     // eared; the Cape buffalo, heavy-horned and near black; the Nandi bear, a great sloping beast
-    // with a hyena's back and a bear's head and claws)
+    // with a hyena's back and a bear's head and claws; a locust swarm)
     hyena: {
         body: "quadruped",
         scale: [0.92, 1.08],
@@ -274,8 +288,16 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x6e5c48, belly: 0x7e6c56, dark: 0x1e1812, mane: 0x2e241c, mask: 0x5a4a3a, eyes: 0xd8a030, glow: 0xd8a030 },
         attacks: ["maul", "swipe", "bite", "shake"], rests: ["sit", "lie", "sniff", "scratch", "yawn"],
     },
+    locustSwarm: {
+        body: "swarm",
+        scale: [0.9, 1.1],
+        kind: "insect", size: 0.22, count: 14, spread: 1.2,
+        colours: { fur: 0x8a8436, wings: 0xd8cc9a, eyes: 0x2a2410 },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
     // (Lizard folk: the bog frog, big as a hound; the marsh crocodile; the giant leech, dark and
-    // banded; the jaguar, gold and rosetted; the great boa, banded in brown saddles)
+    // banded; the jaguar, gold and rosetted; the great boa, banded in brown saddles; a whining
+    // swarm of bloodflies)
     bogFrog: {
         body: "frog",
         scale: [0.9, 1.15],
@@ -315,9 +337,16 @@ export const LOOKS = Object.freeze({
         colours: { scales: 0x8c7a58, bands: 0x5a3422, belly: 0xd8caa4, eyes: 0xc8a040 },
         attacks: ["strike", "double"], rests: ["coil", "taste", "bask"],
     },
+    bloodflies: {
+        body: "swarm",
+        scale: [0.9, 1.1],
+        kind: "insect", size: 0.18, count: 12,
+        colours: { fur: 0x2a2a2e, wings: 0xb8c0c8, eyes: 0xc02020 },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
     // (Orcs: the magma slime, glowing from inside; the rock tusker, a boar of stone; the Gila
     // monster, beaded orange and black; the salamander, black with spots of fire; the death worm,
-    // fat and red)
+    // fat and red; a flock of great vultures, dark, bare-headed)
     magmaSlime: {
         body: "blob",
         scale: [0.9, 1.2],
@@ -358,6 +387,13 @@ export const LOOKS = Object.freeze({
         length: 2.2, thickness: 0.13, segments: 16, banded: true,
         colours: { scales: 0xa83a2a, bands: 0x7a2418, belly: 0xd88a6a, eyes: 0x3a0a08 },
         attacks: ["strike", "double"], rests: ["coil", "bask"], specials: ["spit"],
+    },
+    vultureFlock: {
+        body: "swarm",
+        scale: [0.9, 1.1],
+        kind: "bird", size: 0.72, count: 4, spread: 1.9,
+        colours: { fur: 0x2a241e, wings: 0x1e1a16, beak: 0xc8c0b0, head: 0xb8908a, eyes: 0x2a1a0a },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
     },
 
     // --- In the perilous places, for the mightiest ---
