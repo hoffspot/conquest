@@ -266,6 +266,7 @@ function report() {
         failed: keeper.failed ? { why: keeper.failed.why, message: keeper.failed.error.message } : null,
         steps: runner.times?.toJSON() ?? null,
         memory: { heap: memory.heapUsed, external: memory.external },
+        actors: host.battle.actors.length,
     });
 }
 

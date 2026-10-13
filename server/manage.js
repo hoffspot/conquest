@@ -1072,7 +1072,8 @@ export class Management {
 
     /**
      * How the server's keeping up (§10 Health): for each world going, its steps (mean, 99th
-     * percentile, worst), its memory, its players, its latest save's size, and whether it's slow;
+     * percentile, worst), its memory, how many are in its battle (actors), its players, its latest
+     * save's size, and whether it's slow;
      * and the server's own memory and the machine's load.
      */
     async health() {
@@ -1090,6 +1091,7 @@ export class Management {
                 steps,
                 slow: (steps?.p99 ?? 0) > SLOW_STEP,
                 memory: state?.memory ?? null,
+                actors: state?.actors ?? null,
                 players: state?.players.filter((one) => one.id).length ?? 0,
                 present: state?.present ?? 0,
                 save: save?.size ?? null,

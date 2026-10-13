@@ -4644,9 +4644,13 @@ army's mixed as a standing army's is (core/formation.js `MIX`: two fifths shield
 archers, the rest two-handers, casters and healers), each soldier carrying what its people's carry
 in its role (`ROLE_ARMS`), casters casting their people's school's spells and healers healing
 (`soldierOf`). The two march to meet halfway and close with each other. The player's people's
-fight beside them; the others are everyone's enemies. It's for seeing how many this device draws
-and plays smoothly, out on open ground: in the world, and only in a world the player opened (not
-one they've joined).
+fight beside them; the others are everyone's enemies. Once either side's all fallen, those left
+stand 20 seconds, then go as soon as they're not fighting, their lines with them; and five minutes
+after it was mustered, everyone left in it goes (`FIELD_BATTLE.linger`, `lasts`, the host's
+`fields`: kept in its snapshot), so a world a server keeps for weeks isn't left holding every field
+battle's victors. It's for seeing how many this device draws and plays smoothly, out on open
+ground: in the world, and only in a world the player opened (not one they've joined), or in a world
+server's world by its owners, if its rules allow them the debug commands.
 
 ## The debug log
 

@@ -88,6 +88,9 @@ async function play({ port, world, key, name, race, seed }) {
             process.send({ ...bot.report(), closed, dropped });
         }
     });
+
+    // (The soak gone, however it went: so is its player)
+    process.on("disconnect", () => process.exit(0));
     process.send("ready");
 }
 
@@ -194,12 +197,12 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
             const world = health.worlds.find((one) => one.id === made.world) ?? null;
             const sample = {
                 minute,
-                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present },
+                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors },
                 server: health.server,
             };
 
             samples.push(sample);
-            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
+            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
         }
 
         const reports = [];

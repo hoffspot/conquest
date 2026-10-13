@@ -111,7 +111,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
         assert.equal(forwarded, 26);
         assert.equal(host.battle.time, kept.battle.time);
         assert.equal(host.war.turn, kept.war.turn);
-        assert.match(await readFile(path.join(stored.folder, "journal.log"), "utf8"), /brought forward from version 26 of the game to 27\./);
+        assert.match(await readFile(path.join(stored.folder, "journal.log"), "utf8"), new RegExp(`brought forward from version 26 of the game to ${SNAPSHOT_VERSION}\\.`));
     });
 
     it("makes a world never saved from its seed, by the server's rules", async () => {
