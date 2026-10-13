@@ -46,7 +46,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(test, what, ms = 30000) {
     const end = Date.now() + ms;
 
-    while (!test()) {
+    while (!(await test())) {
         assert.ok(Date.now() < end, `waited for ${what}`);
         await wait(25);
     }
@@ -219,7 +219,13 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(game.line("closed"), "closed key-revoked");
         assert.equal((await server.call("POST", "/enter", { body: { world: world.world, key: world.playerKey, ticket: entered.json.ticket } })).json.error, "key");
 
-        const journal = await readFile(path.join(server.worlds.get(world.world).folder, "journal.log"), "utf8");
+        // (The journal's line is written as the key's revoked, not waited for: read till it's there)
+        const file = path.join(server.worlds.get(world.world).folder, "journal.log");
+        const readJournal = () => readFile(file, "utf8");
+
+        await until(async () => /The key "Players' key" was revoked/.test(await readJournal()), "the key's revoking in the journal");
+
+        const journal = await readJournal();
 
         assert.match(journal, /The key "Players' key" was revoked/);
         assert.ok(!journal.includes(world.playerKey) && !journal.includes(world.playerKey.replace(/-/g, "")), "no key in the journal");
