@@ -146,6 +146,31 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
         ahead.dispose();
     });
 
+    it("keeps every open building's insides' meshes, however many are open, so baking them ahead never lets one go to make another", async () => {
+        const world = buildWorld({ seed: 2 });
+        const keys = Array.from({ length: AHEAD.rooms + 8 }, (_, k) => `room:${k}`);
+        const rooms = keys.map(() => ({ blocked: Array.from({ length: 8 }, () => new Array(8).fill(0)) }));
+        const opened = { ...world, maps: { ...world.maps, ...Object.fromEntries(keys.map((key, k) => [key, rooms[k]])) }, interiors: { buildings: new Map(keys.map((key) => [key, { maps: [key] }])) } };
+        const ahead = new Ahead(opened, { host: { open: new Map(keys.map((key) => [key, []])) } });
+
+        assert.ok(await until(() => (ahead.pump(), ahead.settled), 20000), "settled, every one baked");
+
+        const meshes = rooms.map((map) => navigatorOf(map));
+        const baked = ahead.rooms;
+
+        for (let k = 0; k < 20; k++) {
+            ahead.pump();
+        }
+
+        assert.equal(ahead.rooms, baked, "(none baked again)");
+        assert.ok(
+            rooms.every((map, k) => navigatorOf(map) === meshes[k]),
+            "(none let go of)",
+        );
+        ahead.dispose();
+        keepRooms(AHEAD.rooms);
+    });
+
     it("keeps as many buildings' insides' meshes as it's told (core/navigation.js keepRooms), the longest unused let go of", () => {
         const room = () => ({ blocked: Array.from({ length: 8 }, () => new Array(8).fill(0)) });
         const rooms = Array.from({ length: KEEP_ROOMS + 4 }, room);

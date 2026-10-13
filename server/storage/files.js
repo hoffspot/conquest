@@ -13,6 +13,9 @@ import { gunzip, gzip } from "node:zlib";
 /** The data folder's backups (folder.js lays it out; a world's go in a folder named by its id). */
 export const BACKUPS = "backups";
 
+/** The server's own journal, in the data folder: what's happened to it, a line each (manage.js). */
+export const SERVER_JOURNAL = "journal.log";
+
 /** Who may open what the server keeps: its owner alone. */
 export const FOLDER_MODE = 0o700;
 export const FILE_MODE = 0o600;

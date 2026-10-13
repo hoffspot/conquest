@@ -447,7 +447,31 @@ form.certificate {
     margin: 8px 0;
 }
 
-form.certificate input[type="file"] {
+/* (A new version's notes, and the commands that update a server run from a copy or Homebrew) */
+.panel .notes {
+    white-space: pre-wrap;
+    border-left: 3px solid var(--field-border);
+    padding: 4px 12px;
+    margin: 8px 0;
+    color: var(--muted);
+    max-height: 16em;
+    overflow: auto;
+}
+
+pre.commands {
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    overflow-x: auto;
+}
+
+fieldset.bring {
+    margin-top: 20px;
+}
+
+form.certificate input[type="file"],
+fieldset.bring input[type="file"] {
     color: var(--ink);
     max-width: 100%;
 }

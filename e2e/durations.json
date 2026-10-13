@@ -1,6 +1,7 @@
 {
     "admin.spec.js › from the Wi-Fi, the page at /admin asks for the admin key first": 0.7,
-    "admin.spec.js › the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, and deleted with its name typed": 6.9,
+    "admin.spec.js › its Updates: a newer version found, with its notes, and how this copy of the repository is updated": 0.7,
+    "admin.spec.js › the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, exported, deleted with its name typed, and brought in again": 8.5,
     "broker.spec.js › a host no direct link gets through to is joined relayed by the server; and hidden from its list once the server doesn't relay": 95.3,
     "broker.spec.js › a player's own world through the server's broker: listed on it, joined from the Worlds screen point to point; its listing gone when it's closed": 103.8,
     "building-lab.spec.js › builds a street of every style of house in a few draw calls, and the town": 11.1,

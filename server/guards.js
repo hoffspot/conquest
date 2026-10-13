@@ -157,6 +157,24 @@ export async function bodyOf(request, limit = LIMITS_HTTP.body) {
     }
 }
 
+/** A request's body as it came (bytes), refused if it's bigger than `limit` (a world brought in: manage.js IMPORT_LIMIT). */
+export async function bytesOf(request, limit) {
+    const parts = [];
+    let length = 0;
+
+    for await (const part of request) {
+        length += part.length;
+
+        if (length > limit) {
+            throw new Refusal(413, "too-big", `That's more than this server takes (${Math.round(limit / 1048576)} MB).`);
+        }
+
+        parts.push(part);
+    }
+
+    return Buffer.concat(parts);
+}
+
 /** A request's address (its target, as a URL), or null if it isn't one (`GET http://[` parses as no URL). */
 export function urlOf(target) {
     try {

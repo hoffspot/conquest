@@ -85,6 +85,15 @@
                 </fieldset>
                 <p id="newstatus" class="warning" role="status"></p>
                 <button type="submit" class="primary">Make it</button>
+                <fieldset class="bring">
+                    <legend>Or bring a world in</legend>
+                    <p class="muted small">A world exported from a Pellagos server (its Export, under Worlds), as it was when it was saved. It's a new world here, with keys of its own: the keys it had don't work here.</p>
+                    <div class="row">
+                        <label class="field">The exported file <input id="importfile" type="file" accept=".gz,.json,application/gzip,application/json"></label>
+                        <button type="button" id="importbutton">Bring it in</button>
+                    </div>
+                    <p id="importstatus" class="warning" role="status"></p>
+                </fieldset>
             </form>
 
             <section id="settings" class="tab" hidden></section>

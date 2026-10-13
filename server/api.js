@@ -13,6 +13,7 @@
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
+//   POST   /worlds/import (a world's file)  a world brought in from an export (manage.js importWorld; a creator key or the admin key)
 //   GET    /worlds/:id/keys                 its keys (owners)
 //   POST   /worlds/:id/keys {label, role, expires?, uses?}            a key made: { key, record }
 //   DELETE /worlds/:id/keys/:key            a key revoked (its players' sockets closed, "key-revoked")
@@ -46,6 +47,8 @@
 //          route set up (certify.js), one asked for at once; POST …/acme/renew asks now; DELETE forgets it
 //   POST   /server/router                   the router asked again to let the internet in (router.js)
 //   POST   /server/funnel                   Tailscale Funnel asked for again (funnel.js)
+//   GET    /server/update                   how updating stands: the version, a newer one, the last update (update/updater.js)
+//   POST   /server/update {check} | {version}   asked again whether there's a newer one; or updated to it
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
@@ -59,8 +62,8 @@ import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
 import { BROKER_PATH, BROKER_PROTOCOL } from "./broker.js";
-import { answer, bodyOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
-import { Refused } from "./manage.js";
+import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
+import { IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
@@ -317,6 +320,18 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw new Refusal(400, "bad-request", error.message);
             }
         }],
+        // (The file as it's sent, not JSON: a world's export, up to IMPORT_LIMIT)
+        ["POST", /^\/worlds\/import$/, { raw: IMPORT_LIMIT }, async (request, bytes) => {
+            const principal = principalOf(request, { body: {} });
+            const allowed = policy.allows(principal, "world.create");
+
+            if (!allowed.yes) {
+                policy.on("refused", { why: allowed.why, address: request.address });
+                throw refuse(allowed.why);
+            }
+
+            return doing(() => manage.importWorld(bytes, { by: byOf(principal), creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) }));
+        }],
         ["GET", /^\/worlds\/([a-z0-9]{10})\/keys$/, async (request, body, [, world]) => {
             managing(request, world, "key.issue");
 
@@ -540,6 +555,20 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.askFunnel());
         }],
+        ["GET", /^\/server\/update$/, { server: true }, async (request) => {
+            admin(request);
+
+            return server.updater.state();
+        }],
+        ["POST", /^\/server\/update$/, { server: true }, async (request, body) => {
+            const principal = admin(request);
+
+            if (body?.check) {
+                return server.updater.check();
+            }
+
+            return doing(() => server.updater.update({ version: String(body?.version ?? ""), by: byOf(principal) }));
+        }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);
 
@@ -625,7 +654,7 @@ export function apiHandler(server, { mac = false } = {}) {
                     }
                 }
 
-                const body = method === "GET" ? {} : await bodyOf(request);
+                const body = method === "GET" ? {} : flags.raw ? await bytesOf(request, flags.raw) : await bodyOf(request);
                 const answered = await handle(request, body, matched);
 
                 if (answered instanceof Download) {
