@@ -50,6 +50,7 @@ const ABOUT = {
     badger: ["Badger", "Only in the humans' wilds"],
     wildBull: ["Wild bull", "Only in the humans' wilds, in the meadows and fields"],
     rookFlock: ["Rook flock", "Only in the humans' wilds, over the fields"],
+    knucker: ["Knucker", "Only in the humans' wilds, by woods and pools"],
     wisp: ["Will-o'-wisp", "Only in the elves' wilds"],
     treant: ["Blighted treant", "Only in the elves' wilds"],
     mandrake: ["Mandrake", "Only in the elves' wilds"],
@@ -58,12 +59,15 @@ const ABOUT = {
     caveSpider: ["Cave spider", "Only in the dark elves' wilds"],
     shadowStalker: ["Shadow stalker", "Only in the dark elves' wilds"],
     olm: ["Cave olm", "Only in the dark elves' wilds"],
+    centipede: ["Giant centipede", "Only in the dark elves' wilds"],
+    basilisk: ["Basilisk", "Only in the dark elves' wilds"],
     hyena: ["Hyena", "Only in the cat folk's wilds"],
     scorpion: ["Sand scorpion", "Only in the cat folk's wilds"],
     jackal: ["Jackal", "Only in the cat folk's wilds, in packs"],
     capeBuffalo: ["Cape buffalo", "Only in the cat folk's wilds"],
     nandiBear: ["Nandi bear", "Only in the cat folk's wilds"],
     locustSwarm: ["Locust swarm", "Only in the cat folk's wilds"],
+    spittingCobra: ["Spitting cobra", "Only in the cat folk's wilds"],
     bogFrog: ["Bog frog", "Only in the lizard folk's wilds"],
     crocodile: ["Marsh crocodile", "Only in the lizard folk's wilds"],
     giantLeech: ["Giant leech", "Only in the lizard folk's wilds, in the marshes"],
@@ -324,7 +328,7 @@ function advance(seconds, step = 1 / 60) {
 
 const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
-    ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "caveSpider", "shadowStalker", "olm", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock"]],
+    ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],
 ];

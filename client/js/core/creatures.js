@@ -24,9 +24,9 @@
 // shuck, the shadow stalkers),
 // gone to ground by day; some hunt by night, met more often then (`night` "more": the wolves, the
 // big cats, the hyenas and jackals, the scorpions, the badgers, the hounds of Annwn, the Nandi
-// bear, the cultists at their rites); and some see in the dark as
-// by day (`darkSight`), so out of the light they see a hero before the hero sees them. Pure data
-// and arithmetic, no DOM.
+// bear, the bloodflies, the giant centipedes, the cultists at their rites); and some see in the
+// dark as by day (`darkSight`), so out of the light they see a hero before the hero sees them.
+// Pure data and arithmetic, no DOM.
 
 import { landAt, SETTLEMENTS } from "./worldplan/plan.js";
 import { cos, hypot, pow, sin } from "./exact.js";
@@ -103,6 +103,7 @@ export const CREATURES = Object.freeze({
     badger: { name: "Badger", hp: 30, weapon: "badger", speed: 1, chase: 2.4, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 1], tiers: [1, 4], biomes: ["woods", "heath", "meadow"], people: "human", blood: "red", night: "more", darkSight: true },
     wildBull: { name: "Wild bull", hp: 56, weapon: "wildBull", speed: 1.1, chase: 2.8, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 2], tiers: [2, 6], biomes: ["meadow", "farmland"], people: "human", blood: "red", steady: true },
     rookFlock: { name: "Rook flock", hp: 24, weapon: "rookFlock", speed: 1.6, chase: 3.2, temper: "territorial", guard: 6, roam: 10, leash: 18, pack: [1, 1], tiers: [1, 4], biomes: ["farmland", "meadow"], people: "human", blood: "red", steady: true },
+    knucker: { name: "Knucker", hp: 70, weapon: "knucker", speed: 0.9, chase: 2.4, temper: "territorial", guard: 6, roam: 6, leash: 14, pack: [1, 1], tiers: [3, 8], biomes: ["woods", "marsh", "meadow"], people: "human", blood: "red", steady: true },
     wisp: { name: "Will-o'-wisp", hp: 22, weapon: "wisp", speed: 1, chase: 2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 2], tiers: [1, 7], biomes: null, people: "elf", blood: "none", night: "only", darkSight: true , steady: true },
     treant: { name: "Blighted treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [4, 9], biomes: null, people: "elf", blood: "sap", armor: 0.15 , steady: true },
     mandrake: { name: "Mandrake", hp: 20, weapon: "mandrake", speed: 0.8, chase: 1.6, temper: "defensive", roam: 4, leash: 10, pack: [1, 2], tiers: [1, 4], biomes: ["elfwood"], people: "elf", blood: "sap" },
@@ -111,12 +112,15 @@ export const CREATURES = Object.freeze({
     caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [1, 7], biomes: null, people: "darkElf", blood: "ichor", darkSight: true },
     shadowStalker: { name: "Shadow stalker", hp: 50, weapon: "shadowStalker", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [4, 9], biomes: null, people: "darkElf", blood: "none", night: "only", darkSight: true },
     olm: { name: "Cave olm", hp: 26, weapon: "olm", speed: 0.8, chase: 2, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [1, 4], biomes: null, people: "darkElf", blood: "red", darkSight: true },
+    centipede: { name: "Giant centipede", hp: 26, weapon: "centipede", speed: 1.3, chase: 2.8, temper: "aggressive", roam: 10, leash: 18, pack: [1, 2], tiers: [1, 5], biomes: null, people: "darkElf", blood: "ichor", night: "more", darkSight: true },
+    basilisk: { name: "Basilisk", hp: 44, weapon: "basilisk", speed: 0.9, chase: 2.2, temper: "territorial", guard: 5, roam: 6, leash: 12, pack: [1, 1], tiers: [3, 7], biomes: null, people: "darkElf", blood: "red", darkSight: true },
     hyena: { name: "Hyena", hp: 22, weapon: "hyena", speed: 1.4, chase: 3, temper: "aggressive", roam: 14, leash: 24, pack: [2, 5], tiers: [1, 7], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true },
     scorpion: { name: "Sand scorpion", hp: 30, weapon: "scorpion", speed: 1, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [1, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1, night: "more" },
     jackal: { name: "Jackal", hp: 18, weapon: "jackal", speed: 1.5, chase: 3.2, temper: "aggressive", roam: 14, leash: 24, pack: [2, 4], tiers: [1, 4], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true },
     capeBuffalo: { name: "Cape buffalo", hp: 64, weapon: "capeBuffalo", speed: 1.1, chase: 3, temper: "territorial", guard: 6, roam: 10, leash: 18, pack: [1, 3], tiers: [3, 7], biomes: null, people: "cat", blood: "red", steady: true },
     nandiBear: { name: "Nandi bear", hp: 62, weapon: "nandiBear", speed: 1.3, chase: 3.2, temper: "aggressive", roam: 12, leash: 24, pack: [1, 1], tiers: [4, 8], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true, steady: true },
     locustSwarm: { name: "Locust swarm", hp: 22, weapon: "locustSwarm", speed: 1.6, chase: 3.2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 1], tiers: [1, 4], biomes: null, people: "cat", blood: "ichor", steady: true },
+    spittingCobra: { name: "Spitting cobra", hp: 30, weapon: "spittingCobra", speed: 1, chase: 2.4, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 1], tiers: [2, 6], biomes: null, people: "cat", blood: "red" },
     bogFrog: { name: "Bog frog", hp: 28, weapon: "bogFrog", speed: 1, chase: 2, temper: "territorial", guard: 3, roam: 6, leash: 12, pack: [1, 2], tiers: [1, 6], biomes: null, people: "lizard", blood: "red" },
     crocodile: { name: "Marsh crocodile", hp: 60, weapon: "crocodile", speed: 0.8, chase: 2.4, temper: "territorial", guard: 5, roam: 6, leash: 12, pack: [1, 1], tiers: [3, 8], biomes: null, people: "lizard", blood: "red", armor: 0.15 , steady: true },
     giantLeech: { name: "Giant leech", hp: 20, weapon: "giantLeech", speed: 0.6, chase: 1.4, temper: "territorial", guard: 3, roam: 4, leash: 8, pack: [1, 2], tiers: [1, 3], biomes: ["marsh"], people: "lizard", blood: "red" },
