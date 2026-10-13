@@ -20,7 +20,7 @@ import { frog, swarm, wisp } from "./flyers.js";
 import { humanoidLook, LOOKS } from "./looks.js";
 import { quadruped } from "./quadruped.js";
 import { serpent } from "./serpent.js";
-import { fold, sculpting } from "./sculpt.js";
+import { fold, hold, release, sculpting } from "./sculpt.js";
 import { spectre } from "./spectre.js";
 import { seeded } from "./shapes.js";
 
@@ -69,23 +69,29 @@ function levelsOf(geometry, lods) {
         const uvs = geometry.attributes.uv?.array ?? new Float32Array((positions.length / 3) * 2);
         const key = keyOf(`creature:${positions.length}`, indices);
         const levels = LODS.map(({ share, error }, k) => lods.of(`${key}@${k + 1}`, () => ({ indices, positions, uvs, share, error })));
+        const made = Promise.all(levels).then((lows) =>
+            lows.map((low) => {
+                const lower = new THREE.BufferGeometry();
 
-        lowered.set(
-            geometry,
-            Promise.all(levels).then((lows) =>
-                lows.map((low) => {
-                    const lower = new THREE.BufferGeometry();
+                for (const [name, attribute] of Object.entries(geometry.attributes)) {
+                    lower.setAttribute(name, attribute);
+                }
 
-                    for (const [name, attribute] of Object.entries(geometry.attributes)) {
-                        lower.setAttribute(name, attribute);
-                    }
+                lower.setIndex(new THREE.BufferAttribute(low, 1));
+                lower.boundingSphere = geometry.boundingSphere;
+                lower.boundingBox = geometry.boundingBox;
 
-                    lower.setIndex(new THREE.BufferAttribute(low, 1));
-                    lower.boundingSphere = geometry.boundingSphere;
-                    lower.boundingBox = geometry.boundingBox;
+                return lower;
+            }),
+        );
 
-                    return lower;
-                }),
+        lowered.set(geometry, made);
+
+        // (Let go of with the whole one: its look let go of, none of it drawn for a while, sculpt.js forget)
+        geometry.addEventListener("dispose", () =>
+            made.then(
+                (lows) => lows.forEach((lower) => lower.dispose()),
+                () => {},
             ),
         );
     }
@@ -138,6 +144,10 @@ export class BeastAvatar {
 
         // (Its pieces folded into a few things to draw; its skin, whatever it became)
         const became = fold(this.plan.object, `${id}:${variant}`);
+
+        // (Its look's body and pieces kept while it's drawn: let go of with it, dispose)
+        this.body = `${id}:${variant}`;
+        hold(this.body);
 
         this.plan.materials.body = became.get(this.plan.materials.body) ?? this.plan.materials.body;
         this.plan.materials.body.color?.multiplyScalar(0.9 + own() * 0.2);
@@ -725,8 +735,16 @@ export class BeastAvatar {
         return this.character.rig.bone(`${side}Hand`).getWorldPosition(target);
     }
 
-    /** Let go of what it's made of (its materials: its shapes are shared by its kind). */
+    /**
+     * Let go of what it's made of (its materials), and of its hold on its look's body and pieces,
+     * shared by its kind (let go of a while after none of its look is drawn: sculpt.js forget).
+     */
     dispose() {
+        if (this.body) {
+            release(this.body);
+            this.body = null;
+        }
+
         const materials = new Set();
         const skeletons = new Set();
 

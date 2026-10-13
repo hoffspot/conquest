@@ -4719,7 +4719,9 @@ recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a 
 *Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
 tiles are baked and gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
 kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), all of them
-together, and how many bodies, chunks, interiors and crowd kinds are kept. Where the heap isn't
+together, and how many bodies, chunks, interiors and crowd kinds are kept, and the beasts' looks
+kept (how many, their sculpted bodies' and folded pieces' size, and how many none is drawn on:
+beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). Where the heap isn't
 told, the bodies' copies stand in for it in the total, the least of it: in Chromium, playing on
 in a town while 30 bodies were dressed took the heap from 325 to 485 MB and the page's own
 resident memory to 1.2 GB, the bodies' copies growing about 4.5 MB a body, three-quarters of the

@@ -137,7 +137,9 @@ export const LOOKS = Object.freeze({
     },
 
     // --- Only in the wilds of each people's own lands ---
-    // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite)
+    // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite; an
+    // old badger, white-faced, holding its ground; a white wild bull of an old park's herd, dark
+    // at the ears and muzzle, its horns sweeping out and up)
     blackShuck: {
         body: "quadruped",
         scale: [1, 1.1],
@@ -148,7 +150,27 @@ export const LOOKS = Object.freeze({
         attacks: ["bite", "pounce", "snap", "shake"], rests: ["sit", "lie", "sniff", "howl"],
     },
     boggart: { body: "humanoid", scale: [0.66, 0.74] },
-    // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad)
+    badger: {
+        body: "quadruped",
+        scale: [0.9, 1.1],
+        length: 0.8, height: 0.34, girth: 0.17, width: 0.17, chest: 1.05, haunch: 1.05, neck: 0.1, neckUp: 0.12,
+        head: [0.08, 0.075, 0.11], snout: { length: 0.12, radius: 0.04, taper: 0.5 }, ears: "small", legs: 0.05, plantigrade: true, claws: 1.3,
+        tail: { length: 0.16, radius: 0.04, lift: -0.4 }, muzzleMarks: true,
+        colours: { fur: 0x5e5b56, saddle: 0x45423e, belly: 0x1a1816, dark: 0x100e0c, mask: 0xece8e0, eyes: 0x0a0806 },
+        attacks: ["bite", "shake", "swipe"], rests: ["sniff", "root", "scratch", "lie"],
+    },
+    wildBull: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 2, height: 1.4, girth: 0.33, width: 0.27, chest: 1.2, haunch: 0.95, neck: 0.32, neckUp: 0.12,
+        head: [0.13, 0.16, 0.24], snout: { length: 0.24, radius: 0.095, taper: 0.95, flat: 1.1 }, ears: "round", legs: 0.1, hooves: true,
+        horns: 0.5, hornSweep: "out", tail: { length: 0.8, radius: 0.026, lift: -1.4, curl: 0.05, taper: 0.5 }, tipColour: 0x2a2420,
+        colours: { fur: 0xe8e2d4, belly: 0xdcd4c4, dark: 0x2a2420, mask: 0xd2c8b8, ears: 0x2a2420, ivory: 0xe0d4b8, eyes: 0x140c08 },
+        attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie", "root"],
+    },
+    // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
+    // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
+    // head; a hound of Annwn, white and red-eared, its eyes alight)
     wisp: {
         body: "wisp",
         scale: [0.9, 1.1],
@@ -163,7 +185,24 @@ export const LOOKS = Object.freeze({
         colours: { bark: 0x4a4038, leaves: 0x5a5e3a, eyes: 0xb8e040, fungus: 0x8a4a9a, moss: 0x3a4a2a },
         attacks: ["slam", "sweep"], rests: ["root", "sway", "creak"], specials: ["roots"],
     },
-    // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow)
+    mandrake: {
+        body: "biped",
+        scale: [0.9, 1.1],
+        kind: "treant", height: 0.7,
+        colours: { bark: 0xa88a5e, leaves: 0x4a8a3a, eyes: 0x2a1a0a, fungus: 0xc8a050, moss: 0x6a8a3a },
+        attacks: ["slam", "sweep"], rests: ["sway", "creak"], specials: ["roots"],
+    },
+    cwnAnnwn: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 1.1, height: 0.84, girth: 0.17, width: 0.15, chest: 1.18, haunch: 0.9, neck: 0.32, neckUp: 0.55,
+        head: [0.115, 0.1, 0.13], snout: { length: 0.22, radius: 0.048, taper: 0.55 }, ears: "big", legs: 0.055,
+        tail: { length: 0.5, radius: 0.045, lift: -0.95, curl: 0.15 },
+        colours: { fur: 0xeceae4, belly: 0xf6f4ee, dark: 0x6a1a14, mask: 0xe4e0d8, ears: 0xa82a20, eyes: 0xd84030, glow: 0xd84030 },
+        attacks: ["bite", "snap", "pounce", "shake"], rests: ["sit", "lie", "sniff", "howl"],
+    },
+    // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
+    // a blind cave salamander grown big, pale pink, its gills a frill behind its head)
     caveSpider: {
         body: "arachnid",
         scale: [0.9, 1.15],
@@ -180,7 +219,18 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x221a2e, aura: 0x2a1e3a, belly: 0x362c48, dark: 0x120c1c, eyes: 0xa060ff, glow: 0xa060ff },
         attacks: ["pounce", "swipe", "bite"], rests: ["lie", "stretch", "sniff", "sit", "yawn"],
     },
-    // (Cat folk: the hyena, in packs; the sand scorpion)
+    olm: {
+        body: "quadruped",
+        scale: [0.9, 1.15],
+        length: 1.2, height: 0.24, girth: 0.08, width: 0.12, chest: 1, haunch: 1, neck: 0.1, neckUp: 0, lowSlung: true, clearance: 1.5,
+        head: [0.08, 0.045, 0.1], face: "croc", snout: { length: 0.12, radius: 0.04, taper: 0.75, flat: 1.4 }, ears: "none", legs: 0.022, fangs: false, eyeSize: 0.35, frill: 3,
+        tail: { length: 0.55, radius: 0.06, lift: -0.1, curl: 0.02, taper: 0.9, flatten: [0.4, 1, 1.3] }, flat: true, roughness: 0.25,
+        colours: { fur: 0xead0c6, belly: 0xf2ddd4, dark: 0xd8807e, eyes: 0xd8b8b0 },
+        attacks: ["bite", "tailSlap"], rests: ["bask", "lie"],
+    },
+    // (Cat folk: the hyena, in packs; the sand scorpion; the black-backed jackal, slight and big-
+    // eared; the Cape buffalo, heavy-horned and near black; the Nandi bear, a great sloping beast
+    // with a hyena's back and a bear's head and claws)
     hyena: {
         body: "quadruped",
         scale: [0.92, 1.08],
@@ -197,7 +247,35 @@ export const LOOKS = Object.freeze({
         colours: { shell: 0xb89458, dark: 0x6a5030, marks: 0xd8b878, eyes: 0x202020 },
         attacks: ["pinch", "grab"], rests: ["crouch", "twitch", "raise"], specials: ["sting"],
     },
-    // (Lizard folk: the bog frog, big as a hound; the marsh crocodile)
+    jackal: {
+        body: "quadruped",
+        scale: [0.9, 1.08],
+        length: 0.85, height: 0.6, girth: 0.12, width: 0.105, chest: 1.12, haunch: 0.92, neck: 0.26, neckUp: 0.45,
+        head: [0.085, 0.08, 0.1], snout: { length: 0.16, radius: 0.034, taper: 0.55 }, ears: "big", legs: 0.04,
+        tail: { length: 0.34, radius: 0.045, bushy: true, lift: -0.9, curl: 0.1 }, tipColour: 0x1a1410,
+        colours: { fur: 0xb47c42, saddle: 0x2a2420, belly: 0xe4ccaa, mask: 0xc8a070, dark: 0x1e1814, eyes: 0x8a5a20 },
+        attacks: ["bite", "snap", "shake"], rests: ["sit", "lie", "sniff", "howl", "scratch"],
+    },
+    capeBuffalo: {
+        body: "quadruped",
+        scale: [0.95, 1.08],
+        length: 2.1, height: 1.4, girth: 0.44, width: 0.35, chest: 1.25, haunch: 1, neck: 0.28, neckUp: 0.05,
+        head: [0.14, 0.17, 0.24], snout: { length: 0.22, radius: 0.1, taper: 0.95, flat: 1.15 }, ears: "big", legs: 0.11, hooves: true,
+        horns: 0.55, hornSweep: "out", tail: { length: 0.75, radius: 0.025, lift: -1.4, curl: 0.05, taper: 0.5 }, tipColour: 0x0e0c0a,
+        colours: { fur: 0x2c2622, belly: 0x3a322c, dark: 0x120e0c, mask: 0x2a2420, ivory: 0x4a4238, eyes: 0x0a0806 },
+        attacks: ["gore", "toss", "stamp"], rests: ["sniff", "shake", "lie"],
+    },
+    nandiBear: {
+        body: "quadruped",
+        scale: [0.95, 1.1],
+        length: 1.55, height: 1.1, girth: 0.3, width: 0.26, chest: 1.28, haunch: 0.82, neck: 0.3, neckUp: 0.35, slope: 0.78,
+        head: [0.18, 0.17, 0.19], snout: { length: 0.17, radius: 0.08, taper: 0.8, flat: 1.1 }, ears: "round", legs: 0.11, claws: 1.4,
+        tail: { length: 0.2, radius: 0.06, lift: -0.6 }, mane: true, crest: true, hump: true, spots: 16,
+        colours: { fur: 0x6e5c48, belly: 0x7e6c56, dark: 0x1e1812, mane: 0x2e241c, mask: 0x5a4a3a, eyes: 0xd8a030, glow: 0xd8a030 },
+        attacks: ["maul", "swipe", "bite", "shake"], rests: ["sit", "lie", "sniff", "scratch", "yawn"],
+    },
+    // (Lizard folk: the bog frog, big as a hound; the marsh crocodile; the giant leech, dark and
+    // banded; the jaguar, gold and rosetted; the great boa, banded in brown saddles)
     bogFrog: {
         body: "frog",
         scale: [0.9, 1.15],
@@ -214,7 +292,32 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x3e4a2c, belly: 0xb8b088, dark: 0x1e2616, eyes: 0xc8b030, ivory: 0xe8e0c0 },
         attacks: ["bite", "shake", "tailSlap"], rests: ["bask", "lie", "yawn"],
     },
-    // (Orcs: the magma slime, glowing from inside; the rock tusker, a boar of stone)
+    giantLeech: {
+        body: "serpent",
+        scale: [0.9, 1.2],
+        length: 0.75, thickness: 0.08, segments: 10, banded: true,
+        colours: { scales: 0x2e3020, bands: 0x7a6a30, belly: 0x5a5236, eyes: 0x1a1a10 },
+        attacks: ["strike", "double"], rests: ["coil", "bask"],
+    },
+    jaguar: {
+        body: "quadruped",
+        scale: [0.92, 1.1],
+        length: 1.4, height: 0.7, girth: 0.18, width: 0.16, chest: 1.08, haunch: 1.08, neck: 0.2, neckUp: 0.28,
+        head: [0.115, 0.105, 0.11], face: "cat", snout: { length: 0.065, radius: 0.058 }, ears: "cat", legs: 0.064, claws: 1.25, muzzleMarks: true,
+        tail: { length: 0.62, radius: 0.045, lift: -1.05, curl: 0.2, taper: 0.4 }, spots: 40, tipColour: 0x1a120a,
+        colours: { fur: 0xb8782a, belly: 0xeedcbc, mask: 0xd8b88a, dark: 0x140e08, eyes: 0xc8a030 },
+        attacks: ["pounce", "swipe", "bite", "shake"], rests: ["lie", "stretch", "groom", "sit", "yawn", "sniff"],
+    },
+    boa: {
+        body: "serpent",
+        scale: [0.9, 1.1],
+        length: 4.6, thickness: 0.15, segments: 24, banded: true,
+        colours: { scales: 0x8c7a58, bands: 0x5a3422, belly: 0xd8caa4, eyes: 0xc8a040 },
+        attacks: ["strike", "double"], rests: ["coil", "taste", "bask"],
+    },
+    // (Orcs: the magma slime, glowing from inside; the rock tusker, a boar of stone; the Gila
+    // monster, beaded orange and black; the salamander, black with spots of fire; the death worm,
+    // fat and red)
     magmaSlime: {
         body: "blob",
         scale: [0.9, 1.2],
@@ -230,6 +333,31 @@ export const LOOKS = Object.freeze({
         tail: { length: 0.25, radius: 0.04, lift: -0.4, curl: 0.3 }, tusks: 0.38, plates: 8, plateRows: 2, flat: true, grain: "stone", roughness: 1,
         colours: { fur: 0x6a6258, belly: 0x7a7266, dark: 0x3a342e, ivory: 0xd8c8a0, eyes: 0xff7020, glow: 0xff7020 },
         attacks: ["gore", "toss", "stamp"], rests: ["root", "lie", "shake", "sniff"],
+    },
+    gilaMonster: {
+        body: "quadruped",
+        scale: [0.9, 1.15],
+        length: 0.75, height: 0.2, girth: 0.09, width: 0.13, chest: 1, haunch: 1, neck: 0.08, neckUp: 0, lowSlung: true, clearance: 1.4,
+        head: [0.065, 0.05, 0.075], snout: { length: 0.06, radius: 0.045, taper: 0.9, flat: 1.3 }, ears: "none", legs: 0.035, fangs: false,
+        tail: { length: 0.3, radius: 0.06, lift: -0.1, curl: 0.02, taper: 0.7 }, stripes: 9, flat: true, roughness: 0.8,
+        colours: { fur: 0x2a1e18, belly: 0x3a2a20, dark: 0xe8845a, eyes: 0x0a0806 },
+        attacks: ["bite", "shake"], rests: ["bask", "lie"],
+    },
+    salamander: {
+        body: "quadruped",
+        scale: [0.9, 1.15],
+        length: 1.1, height: 0.24, girth: 0.09, width: 0.13, chest: 1, haunch: 1, neck: 0.1, neckUp: 0, lowSlung: true, clearance: 1.5,
+        head: [0.075, 0.05, 0.09], snout: { length: 0.08, radius: 0.045, taper: 0.85, flat: 1.35 }, ears: "none", legs: 0.035, fangs: false,
+        tail: { length: 0.55, radius: 0.06, lift: -0.1, curl: 0.03, taper: 0.9 }, spots: 26, flat: true, roughness: 0.3,
+        colours: { fur: 0x1a1412, belly: 0x2a1e18, dark: 0xf0a020, eyes: 0xffa020, glow: 0xff7010 },
+        attacks: ["bite", "tailSlap"], rests: ["bask", "lie"], specials: ["spit"],
+    },
+    deathWorm: {
+        body: "serpent",
+        scale: [0.9, 1.15],
+        length: 2.2, thickness: 0.13, segments: 16, banded: true,
+        colours: { scales: 0xa83a2a, bands: 0x7a2418, belly: 0xd88a6a, eyes: 0x3a0a08 },
+        attacks: ["strike", "double"], rests: ["coil", "bask"], specials: ["spit"],
     },
 
     // --- In the perilous places, for the mightiest ---

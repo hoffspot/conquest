@@ -184,6 +184,8 @@ export const NATURAL = Object.freeze({
         ],
     },
     boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch", afflict: { kind: "disease", chance: 0.15 } })] },
+    badger: { label: "Teeth and claws", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 350, duration: 750, interval: 1150, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
+    wildBull: { label: "Horns", attacks: [melee({ id: "gore", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 400, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     wisp: {
         label: "Light",
         attacks: [
@@ -198,6 +200,16 @@ export const NATURAL = Object.freeze({
             ranged({ id: "roots", reach: 6, damage: [2, 5], hitAt: 600, duration: 1100, interval: 2600, stagger: 600, reaction: "crush", animation: "roots", projectile: { kind: "roots", speed: 7 }, afflict: { kind: "slow", chance: 1, look: "roots" } }),
         ],
     },
+    // (A mandrake scratches, and shrieks now and then at whoever's near, staggering them, its arms
+    // flung up as a treant's are calling up roots)
+    mandrake: {
+        label: "Twigs and shriek",
+        attacks: [
+            melee({ id: "scratch", damage: [2, 4], hitAt: 400, duration: 800, interval: 1200, reaction: "slash", animation: "melee" }),
+            ranged({ id: "shriek", reach: 4, damage: [1, 3], hitAt: 600, duration: 1200, interval: 3600, stagger: 450, reaction: "arcane", animation: "roots", projectile: { kind: "wail", speed: 9 } }),
+        ],
+    },
+    cwnAnnwn: { label: "Fangs", attacks: [melee({ id: "bite", damage: [3, 6], hitAt: 350, duration: 700, interval: 1100, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     caveSpider: {
         label: "Fangs",
         attacks: [
@@ -207,7 +219,12 @@ export const NATURAL = Object.freeze({
     },
     puma: { label: "Claws", attacks: [melee({ id: "rake", damage: [3, 7], hitAt: 350, duration: 750, interval: 1150, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.25 } })] },
     shadowStalker: { label: "Claws", attacks: [melee({ id: "rake", damage: [5, 9], hitAt: 350, duration: 750, interval: 1100, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
+    olm: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 400, duration: 800, interval: 1200, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
     hyena: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 300, duration: 700, interval: 1000, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.2 } })] },
+    jackal: { label: "Teeth", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 300, duration: 650, interval: 950, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
+    // (A buffalo's charge, as a rock tusker's, knocks whoever it catches off their feet)
+    capeBuffalo: { label: "Horns", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, knockdown: 1200, reaction: "pierce", animation: "melee" })] },
+    nandiBear: { label: "Claws", attacks: [melee({ id: "maul", damage: [6, 11], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })] },
     scorpion: {
         label: "Pincers and sting",
         attacks: [
@@ -226,6 +243,18 @@ export const NATURAL = Object.freeze({
         ],
     },
     crocodile: { label: "Jaws", attacks: [melee({ id: "bite", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 350, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })] },
+    giantLeech: { label: "Sucker", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 400, duration: 800, interval: 1100, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })] },
+    jaguar: { label: "Fangs and claws", attacks: [melee({ id: "bite", damage: [4, 8], hitAt: 350, duration: 750, interval: 1200, stagger: 200, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
+    // (A boa bites, or throws its coils round whoever it's after, crushing and holding them)
+    boa: {
+        label: "Jaws and coils",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [4, 8], hitAt: 350, duration: 750, interval: 1300, reaction: "pierce", animation: "melee" }),
+                melee({ id: "crush", damage: [5, 9], hitAt: 600, duration: 1200, interval: 1800, stagger: 500, reaction: "crush", animation: "melee", afflict: { kind: "slow", chance: 0.6 } }),
+            ),
+        ],
+    },
     magmaSlime: {
         label: "Molten rock",
         attacks: [
@@ -235,6 +264,23 @@ export const NATURAL = Object.freeze({
     },
     // (Its charge knocks whoever it catches off their feet)
     rockTusker: { label: "Tusks", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, knockdown: 1500, reaction: "pierce", animation: "melee" })] },
+    gilaMonster: { label: "Venomous bite", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 400, duration: 850, interval: 1300, reaction: "hack", animation: "melee", afflict: { kind: "poison", chance: 0.5 } })] },
+    // (A salamander's bite burns, and it spits fire that lies burning a while, as a magma slime's
+    // lava does)
+    salamander: {
+        label: "Jaws and fire",
+        attacks: [
+            melee({ id: "bite", damage: [3, 6], hitAt: 350, duration: 750, interval: 1200, reaction: "fire", animation: "melee", afflict: { kind: "burn", chance: 0.3 } }),
+            ranged({ id: "flame", reach: 5, damage: [2, 5], hitAt: 500, duration: 1000, interval: 2400, reaction: "fire", animation: "spit", projectile: { kind: "lava", speed: 8 }, afflict: { kind: "burn", chance: 0.6 }, pool: { kind: "lava", ms: 3000, radius: 0.7 } }),
+        ],
+    },
+    deathWorm: {
+        label: "Maw and acid",
+        attacks: [
+            melee({ id: "bite", damage: [4, 7], hitAt: 400, duration: 800, interval: 1300, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.4 } }),
+            ranged({ id: "spit", reach: 5, damage: [3, 5], hitAt: 450, duration: 900, interval: 2200, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.6 }, pool: { kind: "venom", ms: 4000, radius: 0.9 } }),
+        ],
+    },
     dragon: {
         label: "Fangs and fire",
         attacks: [

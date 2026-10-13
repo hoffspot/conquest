@@ -44,29 +44,45 @@ two tiers above it, up to their most.
 | Wyvern | 60 | aggressive | 1–2 | 5–9 | mountain, badlands, volcanic, snow |
 | Black shuck | 50 | aggressive | 1 | 3–8 | the humans' wilds only |
 | Boggart | 30 | territorial | 1 | 1–6 | the humans' wilds only |
+| Badger | 30 | territorial | 1 | 1–4 | the humans' wilds only: woods, heath, meadow |
+| Wild bull | 56 | territorial | 1–2 | 2–6 | the humans' wilds only: meadow, farmland |
 | Will-o'-wisp | 22 | aggressive | 1–2 | 1–7 | the elves' wilds only |
 | Blighted treant | 80 | territorial | 1 | 4–9 | the elves' wilds only |
+| Mandrake | 20 | defensive | 1–2 | 1–4 | the elves' wilds only: elfwood |
+| Hound of Annwn | 28 | aggressive | 2–4 | 3–7 | the elves' wilds only |
 | Cave spider | 24 | territorial | 1–4 | 1–7 | the dark elves' wilds only |
 | Shadow stalker | 50 | aggressive | 1 | 4–9 | the dark elves' wilds only |
+| Cave olm | 26 | territorial | 1–2 | 1–4 | the dark elves' wilds only |
 | Hyena | 22 | aggressive | 2–5 | 1–7 | the cat folk's wilds only |
 | Sand scorpion | 30 | territorial | 1–2 | 1–7 | the cat folk's wilds only |
+| Jackal | 18 | aggressive | 2–4 | 1–4 | the cat folk's wilds only |
+| Cape buffalo | 64 | territorial | 1–3 | 3–7 | the cat folk's wilds only |
+| Nandi bear | 62 | aggressive | 1 | 4–8 | the cat folk's wilds only |
 | Bog frog | 28 | territorial | 1–2 | 1–6 | the lizard folk's wilds only |
 | Marsh crocodile | 60 | territorial | 1 | 3–8 | the lizard folk's wilds only |
+| Giant leech | 20 | territorial | 1–2 | 1–3 | the lizard folk's wilds only: marsh |
+| Jaguar | 42 | territorial | 1 | 2–6 | the lizard folk's wilds only: jungle |
+| Great boa | 58 | territorial | 1 | 4–8 | the lizard folk's wilds only |
 | Magma slime | 45 | territorial | 1–2 | 1–8 | the orcs' wilds only |
 | Rock tusker | 80 | territorial | 1 | 4–9 | the orcs' wilds only |
+| Gila monster | 30 | defensive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
+| Salamander | 32 | territorial | 1–2 | 2–6 | the orcs' wilds only: volcanic, badlands |
+| Death worm | 40 | territorial | 1 | 2–6 | the orcs' wilds only: badlands |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
-A few do something besides biting and clawing: the adder, bog frog and magma slime spit (venom,
-venom, lava), the will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
+A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander and
+death worm spit (venom, venom, lava, fire, acid), a mandrake shrieks (staggering whoever's near),
+a great boa throws its coils round whoever it's after (crushing and slowing them), the
+will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
 spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
 whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
 as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws wither.
-The bog frog's tongue reaches two squares off. The rock tusker's charge knocks whoever it catches
-off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
+The bog frog's tongue reaches two squares off. The rock tusker's charge, and a Cape buffalo's,
+knocks whoever it catches off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
 bleeding wound, a web or roots holding them (below: "What lingers").
 
 ### Goblins
@@ -86,7 +102,8 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 0.09 s more a metre, and down and getting up 2.6 seconds in all (they can't move, fight, cast or
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats, bears, trolls, ogres, wyverns, wisps,
-treants, crocodiles, rock tuskers, dragons, ghosts, wraiths, frost trolls: creatures.js
+treants, crocodiles, rock tuskers, wild bulls, Cape buffalo, Nandi bears, great boas, dragons,
+ghosts, wraiths, frost trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
@@ -423,13 +440,15 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   the dusk to half through the dawn, when the guards' torches are lit). At daybreak those out of
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
   put out by day. The skeletons of the undead camps and the ruined castles are always there.
-- **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions and
-  cultists are met twice as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
+- **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions,
+  badgers, hounds of Annwn, jackals, Nandi bears, jaguars and cultists are met twice as often after
+  dark, and the night's own three times (`NIGHT_WEIGHT`).
 - **More of them:** after dark the host keeps one more (`WILDS.night`) about each player out in
   the world, five in all.
 - **Seeing in the dark** (`darkSight`): out of the light everyone sees less far at night (a third
-  to a half as far: docs/GAME.md, *Seeing at night*), but the night's own, the wolves, the big
-  cats, the hyenas, the cave spiders and the wight lord see as far as by day. So out in the dark
+  to a half as far: docs/GAME.md, *Seeing at night*), but the night's own, the night's hunters but
+  the scorpions and cultists, the cave spiders, the blind cave olms and the wight lord see as far as
+  by day. So out in the dark
   they see a hero long before the hero sees them; a torch or a lit road evens it.
 
 ## How they behave
@@ -444,7 +463,7 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
 - **The people's soldiers** go after any creature near them that's a menace (aggressive or
   territorial) or that's fighting, and leave the harmless be. Followers fight beside their player.
 - **Knocked down.** A blow that knocks its target off its feet (`knockdown` on an attack, in ms:
-  the rock tusker's charge, 1.5 s) stuns them for that long. They fall (quicker than a death), lie
+  the rock tusker's charge, 1.5 s; a Cape buffalo's, 1.2 s) stuns them for that long. They fall (quicker than a death), lie
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
 
@@ -492,10 +511,11 @@ action wheel, as a draught can.
 whoever it's at, smoke rolling off it; venom and lava are spat in an arc and splash where they
 land (spattering sparks and smoke, for lava); a web's thrown and bursts; roots burrow along the
 ground and break it up at their feet; a curse bursts in shadow; a ghost's wail flies pale and
-swirling, a wraith's draining green and dark, bursting in shadow. What doesn't bleed red spills its
-own when struck: a slime's gel, a spider's or scorpion's ichor, a treant's sap, a skeleton's and a
-wight lord's bone chips, a rock tusker's stone chips, lava from a magma slime, shadow from a
-black shuck or a shadow stalker or a wraith, a ghost's pale motes.
+swirling, a wraith's draining green and dark, bursting in shadow; a mandrake's shriek flies as a
+ghost's wail does, a salamander's fire as lava, a death worm's acid as venom. What doesn't bleed
+red spills its own when struck: a slime's gel, a spider's or scorpion's ichor, a treant's or a
+mandrake's sap, a skeleton's and a wight lord's bone chips, a rock tusker's stone chips, lava from
+a magma slime, shadow from a black shuck or a shadow stalker or a wraith, a ghost's pale motes.
 
 ## What they leave
 
@@ -585,7 +605,8 @@ smaller, its colour a little different, its markings its own.
   point to the nearest few, weighted by distance) so it bends where they do. The rest of its
   pieces (claws, teeth, horns, quills) are folded into a few meshes on the same bones (`fold`),
   so a creature's two to eight things to draw, 12,000 to 21,000 triangles. Both are made once
-  for each of a kind's three looks and shared by every one of it after.
+  for each of a kind's three looks and shared by every one of it after, until none of that look
+  has been drawn for three minutes (*Let go of when none is drawn*).
 - **Four-legged** (`quadruped.js`): a deep chest, a waist and haunch (sloping down behind for a
   hyena); a neck and head with a muzzle and jaw, or a cat's short face with whisker pads and
   whiskers, or a crocodile's long flat jaws with rows of teeth and its eyes and nostrils raised on
@@ -671,6 +692,30 @@ playing, its body is made a step at a time within the frame's budget, as everyon
 - **Folding** a creature's pieces gathers their points into arrays made once, counted first,
   rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
   folding, went from 54 to 102 ms to 17 to 47 (in Node).
+
+### Let go of when none is drawn
+
+A look's sculpted body and folded pieces (and its body's fewer triangles when it's drawn smaller,
+`lowerDetail`: *A ceiling*) were kept for the whole session once made, whether any of it was
+still about or not: every look of every kind met, never given back. Every beast's three looks
+(the convoys' ox among them), built in Node, hold 76.6 MB, and as much again on the graphics card
+once drawn. Now (`sculpt.js`):
+
+- **Held while drawn.** Each creature built holds its look's body (`hold`, as `BeastAvatar` is
+  made) and lets go of it when it's let go of itself (`release`, its `dispose`: gone from the
+  battle, a flier landed or gone, a crowd figure recorded), once however often it's disposed.
+- **Kept a while after** (`LINGER`, three minutes since the last of its look was let go of): a
+  kind met lately is likely met again, and another of it built meanwhile holds it again.
+- **Then let go of** (`forget`, every five seconds: the game's `FORGET_EVERY`): out of what's kept,
+  and its geometries disposed, so the graphics card lets go of them too, and its body's lower
+  levels with it. Not while it's being made again. One wanted after is sculpted again, a step at
+  a time, as the first was (45 to 170 ms of steps), the same as it was.
+- **Told** in the debug overlay and log, under *Held*: how many looks are kept, their arrays' size,
+  and how many of them none is drawn on (`kept`).
+
+So what's kept is the looks of the creatures about and those met in the last three minutes,
+rather than every look met since the game began: in Node, all 81 looks with something to keep
+(76.6 MB) built and let go of, then kept for three minutes, then none.
 
 ### Drawn only in view
 

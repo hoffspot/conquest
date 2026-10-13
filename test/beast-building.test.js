@@ -23,7 +23,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { BeastAvatar, BUILDERS, dressingCreature } = await import("../client/js/beasts/beast.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
-const { fold, sculpting } = await import("../client/js/beasts/sculpt.js");
+const { fold, forget, kept, LINGER, sculpting } = await import("../client/js/beasts/sculpt.js");
 const { seeded } = await import("../client/js/beasts/shapes.js");
 const { GAITS } = await import("../client/js/audio/sound.js");
 
@@ -126,6 +126,115 @@ describe("creatures built a step at a time (sculpt.js, beast.js)", () => {
         const boar = new BeastAvatar("boar", { seed: 3 });
 
         assert.ok(geometriesOf(boar.object).length > 1);
+    });
+});
+
+// The geometries a creature shares with its look (its sculpted body and its folded pieces: its
+// skinned meshes), each marked when it's disposed
+function sharedOf(beast) {
+    const shared = geometriesOf(beast.object).filter((geometry, k, all) => all.indexOf(geometry) === k && geometry.attributes.skinIndex);
+
+    for (const geometry of shared) {
+        geometry.addEventListener("dispose", () => (geometry.userData.disposed = true));
+    }
+
+    return shared;
+}
+
+describe("a look's body let go of once none of it's been drawn for a while (sculpt.js hold, release, forget)", () => {
+    it("keeps it while any of its look is drawn, and LINGER after the last is let go of, then lets it go and makes it again if wanted", () => {
+        // (Seeds 1, 4 and 7 are one look of a hyena)
+        const [one, two] = [new BeastAvatar("hyena", { seed: 1 }), new BeastAvatar("hyena", { seed: 4 })];
+        const shared = sharedOf(one);
+        const before = meshesOf(one.object);
+        const looks = kept().looks;
+
+        assert.ok(shared.length >= 2, `${shared.length} shared`);
+
+        one.dispose();
+        forget(performance.now() + LINGER * 2);
+        assert.ok(shared.every((geometry) => !geometry.userData.disposed), "another of its look still drawn");
+
+        two.dispose();
+        forget(performance.now() + LINGER - 1000);
+        assert.ok(shared.every((geometry) => !geometry.userData.disposed), "not yet");
+        assert.equal(kept().looks, looks);
+
+        forget(performance.now() + LINGER + 1000);
+        assert.ok(shared.every((geometry) => geometry.userData.disposed));
+        assert.equal(kept().looks, looks - 1);
+
+        // (Wanted again: sculpted again, a step at a time, the same as it was)
+        const [steps, again] = stepsOf(sculpting(() => new BeastAvatar("hyena", { seed: 1 })));
+
+        assert.ok(steps > 5, `${steps} steps`);
+        assert.deepEqual(meshesOf(again.object), before);
+        assert.ok(geometriesOf(again.object).every((geometry) => !shared.includes(geometry)));
+        again.dispose();
+    });
+
+    it("counts each drawn once, however often it's let go of, and keeps a look met again meanwhile", () => {
+        // (Seeds 2, 5 and 8 are one look of a boar)
+        const [one, two] = [new BeastAvatar("boar", { seed: 2 }), new BeastAvatar("boar", { seed: 5 })];
+        const shared = sharedOf(one);
+
+        one.dispose();
+        one.dispose();
+        forget(performance.now() + LINGER * 2);
+        assert.ok(shared.every((geometry) => !geometry.userData.disposed), "the other still drawn");
+
+        // (None drawn, then another of the look built before LINGER is up: kept for it, and after)
+        two.dispose();
+
+        const three = new BeastAvatar("boar", { seed: 8 });
+
+        forget(performance.now() + LINGER * 2);
+        assert.ok(shared.every((geometry) => !geometry.userData.disposed), "met again");
+        assert.ok(geometriesOf(three.object).some((geometry) => shared.includes(geometry)));
+
+        three.dispose();
+        forget(performance.now() + LINGER * 2);
+        assert.ok(shared.every((geometry) => geometry.userData.disposed));
+    });
+
+    it("lets go of its lower levels with it", async () => {
+        // (Fewer triangles: the first tenth of the whole one's, made at once)
+        const lods = { of: (key, mesh) => Promise.resolve(mesh().indices.slice(0, Math.floor(mesh().indices.length / 30) * 3)) };
+        const wolf = new BeastAvatar("wolf", { seed: 2 });
+
+        wolf.lowerDetail(lods);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const lower = wolf.levels.flatMap(({ lower: levels }) => levels ?? []);
+
+        assert.ok(lower.length >= 2, `${lower.length} lower levels`);
+
+        for (const geometry of lower) {
+            geometry.addEventListener("dispose", () => (geometry.userData.disposed = true));
+        }
+
+        wolf.dispose();
+        forget(performance.now() + LINGER * 2);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.ok(lower.every((geometry) => geometry.userData.disposed));
+    });
+
+    it("tells what's kept: how many looks, how many none's drawn on, and their bytes", () => {
+        // (A look of a puma not built before: seeds 1, 4 and 7)
+        const before = kept();
+        const puma = new BeastAvatar("puma", { seed: 1 });
+        const held = kept();
+
+        puma.dispose();
+
+        const unheld = kept();
+
+        assert.equal(held.looks, before.looks + 1);
+        assert.ok(held.bytes > before.bytes + 100000, `${held.bytes - before.bytes} bytes`);
+        assert.equal(unheld.unheld, held.unheld + 1);
+        forget(performance.now() + LINGER * 2);
+        assert.equal(kept().unheld, 0);
+        assert.ok(kept().bytes < unheld.bytes);
     });
 });
 
