@@ -548,7 +548,8 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
     const upgrade = (request, socket, head) => {
         const key = request.headers["sec-websocket-key"];
 
-        if (new URL(request.url, "http://relay").pathname !== path || String(request.headers.upgrade).toLowerCase() !== "websocket" || !key) {
+        // (An address that isn't one, `GET http://[` say, refused like any other: not thrown, which would end the server)
+        if (!URL.canParse(request.url, "http://relay") || new URL(request.url, "http://relay").pathname !== path || String(request.headers.upgrade).toLowerCase() !== "websocket" || !key) {
             socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
 
             return;

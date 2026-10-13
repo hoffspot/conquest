@@ -2,8 +2,9 @@
 // between operating systems, behind one small interface, so that nothing else in the server
 // changes from one to another. A file for each (darwin.js first; linux.js and win32.js fill in
 // the same functions), chosen by `process.platform`. For now, where the server keeps its data,
-// logs and caches; keeping the machine awake, Bonjour, secrets and running at login come with the
-// server itself (S2, S5, S8).
+// logs and caches, and keeping the machine awake while players are in; Bonjour, secrets and
+// running at login come later (S5, S6, S8). Nothing outside this folder may run a command only
+// one system has (test/registry.test.js checks).
 
 import os from "node:os";
 import * as darwin from "./darwin.js";
@@ -31,4 +32,13 @@ export function folders({ system = process.platform, env = process.env, home = o
     const found = platformFor(system).folders({ env, home });
 
     return env[DATA_OVERRIDE] ? { ...found, data: env[DATA_OVERRIDE] } : found;
+}
+
+/**
+ * The machine kept from sleeping while players are in (generated/world_server_plan.md §11):
+ * returns { command (what it runs, or null if this system can't yet), stop() }. `system` is this
+ * machine's, and `spawn` Node's, unless given.
+ */
+export function keepAwake({ system = process.platform, ...options } = {}) {
+    return platformFor(system).keepAwake(options);
 }

@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import http from "node:http";
+import net from "node:net";
 import { after, before, describe, it } from "node:test";
 import { EventEmitter } from "node:events";
 import { attachRelay, CODE_LENGTH, CODE_LETTERS, RECONNECTING, RELAY_LIMITS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
@@ -350,6 +351,19 @@ describe("the relay (server/relay.js)", () => {
             elsewhere.addEventListener("close", resolve);
         });
         assert.notEqual(elsewhere.readyState, WebSocket.OPEN);
+
+        // (An upgrade to an address that isn't one, `http://[`: refused, the server still there)
+        const heard = await new Promise((resolve) => {
+            let text = "";
+            const raw = net.connect(port, "127.0.0.1", () => raw.write(`GET http://[ HTTP/1.1\r\nHost: localhost:${port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`));
+
+            raw.setTimeout(5000, () => raw.destroy());
+            raw.on("data", (data) => (text += data));
+            raw.on("error", () => {});
+            raw.on("close", () => resolve(text));
+        });
+
+        assert.match(heard, /^HTTP\/1.1 400 /);
 
         const stranger = await connect();
 
