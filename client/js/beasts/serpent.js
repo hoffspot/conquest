@@ -1,6 +1,9 @@
 // A snake, sculpted in one piece (sculpt.js): a body of bones down its length that the skin's
 // bound to, tapering to the tail, banded or zig-zagged along its back and pale beneath; a head
-// with a jaw that opens on its fangs and a flickering tongue.
+// with a jaw that opens on its fangs and a flickering tongue. Some are more than a snake: a hood
+// spread beside the neck (a cobra's); a crown of spikes on the head (a basilisk's); a great head
+// with fins, and a ridge of them down the back (a knucker's); a pair of legs to each piece of its
+// length, rippling as it goes (a centipede's). A cobra rears up high, its hood spread.
 //
 // It slithers (a wave down its length, quicker the faster it goes), stands with its front raised
 // in an S, and rests coiled up, tasting the air with its head raised high, or stretched out
@@ -13,10 +16,18 @@ import { cone, ellipsoid, joint, limb, part, shade, skin } from "./shapes.js";
 
 const smooth = (u) => u * u * (3 - 2 * u);
 
-/** Build a snake from its look ({ length, thickness, segments, banded, zigzag, colours }). */
+/**
+ * Build a snake from its look ({ length, thickness, segments, banded, zigzag, colours }; and `hood`,
+ * how wide a hood spreads beside its neck, as many times its body's width; `crest`, how many
+ * spikes crown its head; `fins` on its head and down its back; `legs`, a pair to each piece of its
+ * length; `head`, how much bigger its head is than a snake's; `rear`, how many times as high as a
+ * snake's it holds its front up when it's still).
+ */
 export function serpent(look, random, key = null) {
     const { length, thickness } = look;
     const colours = look.colours;
+    const hs = thickness * (look.head ?? 1);
+    const rear = look.rear ?? 1;
     const count = look.segments ?? 16;
     const spacing = length / count;
     const scales = new THREE.Color(colours.scales);
@@ -32,6 +43,10 @@ export function serpent(look, random, key = null) {
     const object = new THREE.Group();
     const body = joint(object, "body");
     const beads = [];
+    const legs = [];
+    const finSkin = skin(colours.fins ?? bands, { roughness: 0.6, side: THREE.DoubleSide });
+    const legSkin = skin(colours.legs ?? bands, { roughness: 0.5 });
+    const crown = skin(colours.crown ?? 0xe8e0c8, { roughness: 0.4 });
 
     // Its length: a bone every so far along, each with its piece of body, tapering to the tail
     for (let k = 0; k < count; k++) {
@@ -51,6 +66,27 @@ export function serpent(look, random, key = null) {
             sculpt.paint(bead, [radius * 0.3, radius * 0.3, spacing * 0.45], bands, { at: [(k % 2 ? 1 : -1) * radius * 0.25, radius * 0.75, 0], turn: [0, (k % 2 ? 0.6 : -0.6), 0], soft: radius * 0.12, strength: 0.95 });
         }
 
+        // (A cobra's hood: spread wide and flat beside the neck, widest a little behind the head)
+        if (look.hood && k >= 1 && k <= 4) {
+            sculpt.add(bead, { ellipsoid: [radius * look.hood * [0, 0.75, 1, 0.85, 0.5][k], radius * 0.6, spacing * 0.9] }, scales, { at: [0, radius * 0.1, 0], blend: radius * 0.4 });
+        }
+
+        // (A ridge of fins down its back, smaller towards the tail)
+        if (look.fins && k < count - 2) {
+            part(bead, cone(radius * 0.9, radius * 0.22, 4), finSkin, { at: [0, radius * 0.75, 0], turn: [-0.7, 0, 0], shadow: false });
+        }
+
+        // (A centipede's legs, a pair to each piece of its length, each from a joint of its own to
+        // ripple as it goes)
+        if (look.legs && k >= 1 && k < count - 1) {
+            for (const side of [-1, 1]) {
+                const leg = joint(bead, `leg-${k}-${side}`, [side * radius * 0.75, -radius * 0.25, 0]);
+
+                part(leg, limb(radius * 2.4, radius * 0.16, radius * 0.08, 5), legSkin, { turn: [0, 0, side * 1.15], shadow: false });
+                legs.push({ leg, side, k });
+            }
+        }
+
         beads.push(bead);
     }
 
@@ -58,22 +94,40 @@ export function serpent(look, random, key = null) {
     const head = joint(body, "head", [0, thickness * 0.85, 0]);
 
     head.rotation.order = "YXZ";
-    sculpt.add(head, { ellipsoid: [thickness * 1.25, thickness * 0.7, thickness * 1.8] }, scales, { at: [0, thickness * 0.1, thickness * 0.9], blend: thickness * 0.5 });
-    sculpt.add(head, { ellipsoid: [thickness * 0.8, thickness * 0.55, thickness * 1.1] }, scales, { at: [0, thickness * 0.05, thickness * 2.2], blend: thickness * 0.5 });
-    part(head, ellipsoid(thickness * 0.8, thickness * 0.25, thickness * 1.2, 8), mouthSkin, { at: [0, -thickness * 0.35, thickness * 1.6], shadow: false });
+    sculpt.add(head, { ellipsoid: [hs * 1.25, hs * 0.7, hs * 1.8] }, scales, { at: [0, hs * 0.1, hs * 0.9], blend: hs * 0.5 });
+    sculpt.add(head, { ellipsoid: [hs * 0.8, hs * 0.55, hs * 1.1] }, scales, { at: [0, hs * 0.05, hs * 2.2], blend: hs * 0.5 });
+    part(head, ellipsoid(hs * 0.8, hs * 0.25, hs * 1.2, 8), mouthSkin, { at: [0, -hs * 0.35, hs * 1.6], shadow: false });
 
-    const jaw = joint(head, "jaw", [0, -thickness * 0.4, thickness * 0.3]);
+    const jaw = joint(head, "jaw", [0, -hs * 0.4, hs * 0.3]);
 
-    sculpt.add(jaw, { ellipsoid: [thickness * 1.0, thickness * 0.28, thickness * 1.6] }, belly, { at: [0, -thickness * 0.05, thickness * 1.2], blend: thickness * 0.2, group: 1 });
+    sculpt.add(jaw, { ellipsoid: [hs * 1.0, hs * 0.28, hs * 1.6] }, belly, { at: [0, -hs * 0.05, hs * 1.2], blend: hs * 0.2, group: 1 });
 
     for (const side of [-1, 1]) {
-        part(head, cone(thickness * 0.55, thickness * 0.08, 5), ivory, { at: [side * thickness * 0.35, -thickness * 0.3, thickness * 2.5], turn: [Math.PI, 0, 0], shadow: false });
-        part(head, ellipsoid(thickness * 0.24, thickness * 0.24, thickness * 0.2, 8), eyes, { at: [side * thickness * 0.8, thickness * 0.35, thickness * 1.5] });
+        part(head, cone(hs * 0.55, hs * 0.08, 5), ivory, { at: [side * hs * 0.35, -hs * 0.3, hs * 2.5], turn: [Math.PI, 0, 0], shadow: false });
+        part(head, ellipsoid(hs * 0.24, hs * 0.24, hs * 0.2, 8), eyes, { at: [side * hs * 0.8, hs * 0.35, hs * 1.5] });
     }
 
-    const flick = joint(head, "tongue", [0, -thickness * 0.2, thickness * 2.9]);
+    // (A crown of spikes standing up on its head, swept back)
+    for (let k = 0; k < (look.crest ?? 0); k++) {
+        const across = k - (look.crest - 1) / 2;
 
-    part(flick, limb(thickness * 1.3, thickness * 0.08, thickness * 0.05, 5), tongueSkin, { turn: [-Math.PI / 2, 0, 0], shadow: false });
+        part(head, cone(hs * (0.7 - Math.abs(across) * 0.15), hs * 0.12, 5), crown, { at: [across * hs * 0.38, hs * 0.6, hs * 1.1], turn: [-0.45, 0, -across * 0.35], shadow: false });
+    }
+
+    // (Fins swept back from the sides of its head; and, a centipede's, feelers)
+    for (const side of [-1, 1]) {
+        if (look.fins) {
+            part(head, cone(hs * 1.4, hs * 0.18, 4), finSkin, { at: [side * hs * 1.05, hs * 0.15, hs * 0.9], turn: [-1.35, 0, -side * 0.6], shadow: false });
+        }
+
+        if (look.legs) {
+            part(head, limb(hs * 3, hs * 0.08, hs * 0.04, 5), legSkin, { at: [side * hs * 0.4, hs * 0.3, hs * 2.3], turn: [-1.1, 0, -side * 0.4], shadow: false });
+        }
+    }
+
+    const flick = joint(head, "tongue", [0, -hs * 0.2, hs * 2.9]);
+
+    part(flick, limb(hs * 1.3, hs * 0.08, hs * 0.05, 5), tongueSkin, { turn: [-Math.PI / 2, 0, 0], shadow: false });
 
     const mesh = sculpt.build(object, material, key);
 
@@ -141,7 +195,7 @@ export function serpent(look, random, key = null) {
             const tasting = rest?.name === "taste" ? rest.w : 0;
             const basking = rest?.name === "bask" ? rest.w : 0;
             const coiling = rest?.name === "coil" ? rest.w : 0;
-            const raise = thickness * (3 + Math.max(0, strike) * 1.5 + tasting * 4) * ((1 - moving) * 0.8 + Math.max(0, strike) * 0.4 + tasting * 0.5) * (1 - basking);
+            const raise = thickness * (3 * rear + Math.max(0, strike) * 1.5 + tasting * 4) * ((1 - moving) * 0.8 + Math.max(0, strike) * 0.4 + tasting * 0.5) * (1 - basking);
 
             for (let k = 0; k <= count; k++) {
                 const along = k / count;
@@ -163,6 +217,11 @@ export function serpent(look, random, key = null) {
                 bead.position.copy(a).lerp(b, 0.5);
                 bead.rotation.set(-Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z)), Math.atan2(b.x - a.x, b.z - a.z), 0);
             });
+
+            // (Its legs rippling down its length as it goes, a wave behind its body's)
+            for (const { leg, side, k } of legs) {
+                leg.rotation.y = Math.sin(wave * 2.2 - k * 0.9) * (0.15 + moving * 0.45) * side * (dead ? 0 : 1);
+            }
 
             const heading = Math.atan2(points[0].x - points[1].x, points[0].z - points[1].z);
 

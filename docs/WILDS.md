@@ -47,6 +47,7 @@ two tiers above it, up to their most.
 | Badger | 30 | territorial | 1 | 1–4 | the humans' wilds only: woods, heath, meadow |
 | Wild bull | 56 | territorial | 1–2 | 2–6 | the humans' wilds only: meadow, farmland |
 | Rook flock | 24 | territorial | 1 | 1–4 | the humans' wilds only: farmland, meadow |
+| Knucker | 70 | territorial | 1 | 3–8 | the humans' wilds only: woods, marsh, meadow |
 | Will-o'-wisp | 22 | aggressive | 1–2 | 1–7 | the elves' wilds only |
 | Blighted treant | 80 | territorial | 1 | 4–9 | the elves' wilds only |
 | Mandrake | 20 | defensive | 1–2 | 1–4 | the elves' wilds only: elfwood |
@@ -55,12 +56,15 @@ two tiers above it, up to their most.
 | Cave spider | 24 | territorial | 1–4 | 1–7 | the dark elves' wilds only |
 | Shadow stalker | 50 | aggressive | 1 | 4–9 | the dark elves' wilds only |
 | Cave olm | 26 | territorial | 1–2 | 1–4 | the dark elves' wilds only |
+| Giant centipede | 26 | aggressive | 1–2 | 1–5 | the dark elves' wilds only |
+| Basilisk | 44 | territorial | 1 | 3–7 | the dark elves' wilds only |
 | Hyena | 22 | aggressive | 2–5 | 1–7 | the cat folk's wilds only |
 | Sand scorpion | 30 | territorial | 1–2 | 1–7 | the cat folk's wilds only |
 | Jackal | 18 | aggressive | 2–4 | 1–4 | the cat folk's wilds only |
 | Cape buffalo | 64 | territorial | 1–3 | 3–7 | the cat folk's wilds only |
 | Nandi bear | 62 | aggressive | 1 | 4–8 | the cat folk's wilds only |
 | Locust swarm | 22 | aggressive | 1 | 1–4 | the cat folk's wilds only |
+| Spitting cobra | 30 | territorial | 1 | 2–6 | the cat folk's wilds only |
 | Bog frog | 28 | territorial | 1–2 | 1–6 | the lizard folk's wilds only |
 | Marsh crocodile | 60 | territorial | 1 | 3–8 | the lizard folk's wilds only |
 | Giant leech | 20 | territorial | 1–2 | 1–3 | the lizard folk's wilds only: marsh |
@@ -79,10 +83,12 @@ two tiers above it, up to their most.
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
-A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander and
-death worm spit (venom, venom, lava, fire, acid), a mandrake shrieks (staggering whoever's near),
-a pixie swarm dazzles (staggering and slowing whoever's near: led astray),
-a great boa throws its coils round whoever it's after (crushing and slowing them), the
+A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander,
+death worm and knucker spit (venom, venom, lava, fire, acid, venom), a spitting cobra spits venom
+in the eyes (staggering whoever it catches, and leaving none lying), a mandrake shrieks
+(staggering whoever's near), a pixie swarm dazzles (staggering and slowing whoever's near: led
+astray), a basilisk's glare staggers and slows whoever meets it, a great boa and a knucker throw
+their coils round whoever they're after (crushing and slowing them), the
 will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
 spits webs, the dragon breathes fire, the wight lord lays a curse, a ghost wails (staggering
 whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
@@ -109,7 +115,7 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
-buffalo, Nandi bears, great boas, dragons, ghosts, wraiths, frost trolls: creatures.js
+buffalo, Nandi bears, great boas, knuckers, dragons, ghosts, wraiths, frost trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
@@ -447,14 +453,14 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
   put out by day. The skeletons of the undead camps and the ruined castles are always there.
 - **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions,
-  badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies and cultists are met twice
-  as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
+  badgers, hounds of Annwn, jackals, Nandi bears, jaguars, bloodflies, giant centipedes and
+  cultists are met twice as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
 - **More of them:** after dark the host keeps one more (`WILDS.night`) about each player out in
   the world, five in all.
 - **Seeing in the dark** (`darkSight`): out of the light everyone sees less far at night (a third
   to a half as far: docs/GAME.md, *Seeing at night*), but the night's own, the night's hunters but
-  the scorpions and cultists, the cave spiders, the blind cave olms and the wight lord see as far as
-  by day. So out in the dark
+  the scorpions and cultists, the cave spiders, the blind cave olms, the basilisks and the wight
+  lord see as far as by day. So out in the dark
   they see a hero long before the hero sees them; a torch or a lit road evens it.
 
 ## How they behave
@@ -484,12 +490,12 @@ an adder's near home.
 
 | Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
 | --- | --- | --- | --- | --- | --- |
-| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid | Cure poison draught, 12 gold |
+| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom | Cure poison draught, 12 gold |
 | Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, boggarts | Cure disease draught, 18 gold |
 | Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite, a wraith's claws and draining | Invigorating draught, 22 gold |
 | Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
-| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, the dragon's bite... | Bandage, 5 gold |
-| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's coils, pixies' dazzle | Quickening draught, 10 gold |
+| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, the dragon's bite... | Bandage, 5 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare | Quickening draught, 10 gold |
 
 Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
 **Diseased** too, for an hour: stamina comes back at 40%, but it doesn't hurt; the Cure disease
@@ -518,8 +524,9 @@ whoever it's at, smoke rolling off it; venom and lava are spat in an arc and spl
 land (spattering sparks and smoke, for lava); a web's thrown and bursts; roots burrow along the
 ground and break it up at their feet; a curse bursts in shadow; a ghost's wail flies pale and
 swirling, a wraith's draining green and dark, bursting in shadow; a mandrake's shriek flies as a
-ghost's wail does, a salamander's fire as lava, a death worm's acid as venom. What doesn't bleed
-red spills its own when struck: a slime's gel, a spider's or scorpion's ichor, a treant's or a
+ghost's wail does, a salamander's fire as lava, a death worm's acid as venom, a basilisk's glare
+as a curse. What doesn't bleed red spills its own when struck: a slime's gel, a spider's,
+scorpion's or centipede's ichor, a treant's or a
 mandrake's sap, a skeleton's and a wight lord's bone chips, a rock tusker's stone chips, lava from
 a magma slime, shadow from a black shuck or a shadow stalker or a wraith, a ghost's pale motes.
 
@@ -629,6 +636,15 @@ smaller, its colour a little different, its markings its own.
   (slower the bigger they are) or held out to glide, rising a little with each downstroke; so
   wyverns and the dragon are seen in the air near where they hunt and come down out of the sky to
   fight (GAME.md, *What flies*). The creature lab's Fly and Land show it.
+- **Serpents** (`serpent.js`): a body of bones down its length, the skin bound to them, tapering
+  to the tail, banded or zig-zagged and pale beneath; a head with a jaw that opens on its fangs and
+  a flickering tongue. It slithers (a wave down its length), stands with its front raised in an S
+  and rests coiled, tasting the air, or stretched out basking. Some are more than a snake: a
+  spitting cobra's hood spread wide beside its neck, and it rears up high (`hood`, `rear`); a
+  basilisk's crown of spikes (`crest`); a knucker's great head with fins swept back from it, and
+  a ridge of them down its back (`head`, `fins`); a giant centipede's pair of legs to each piece of
+  its length, rippling as it goes, its feelers, and its footfalls a spider's skitter (`legs`,
+  `feet`).
 - **Eight-legged** (`arachnid.js`): each leg reaches for its own place on the ground, spread round
   the body like the spokes of a wheel so none crosses another or the body, and bends its two bones
   to reach it each moment (knee up); walking, the feet stay planted as the body goes over them,
