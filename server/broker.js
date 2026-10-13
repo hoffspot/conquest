@@ -31,9 +31,10 @@
 //                                                  listing expires to come back), and it's back
 //                    "closed"                      the world's gone
 //
-// A listing (as watchers see it): { id, name, people, players, most, net, direct, through (relayed
-// by the server, not direct), near (probably on the watcher's own network: the same public
-// address, or both at home; a hint, never a grant), temporary (an iPhone's: dropped quickly) }.
+// A listing (as watchers see it): { id, name, people, players, most, net, direct, local (it can
+// be reached on its own network), through (relayed by the server, not direct), near (probably on
+// the watcher's own network: the same public address, or both at home; a hint, never a grant),
+// temporary (an iPhone's: dropped quickly) }.
 // A world's listed if it asks to be (visibility "listed", not "code" alone), and its host can be
 // reached directly, or the server relays, or it's on the watcher's own network (`local`); else it's
 // hidden. One that's code alone is joined by its code, and never listed.
@@ -159,7 +160,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             return null;
         }
 
-        return { id: listing.id, name: said.name, people: said.people, players: said.players, most: said.most, net: said.net, direct: said.direct, through: !said.direct && relaying(), near: close, temporary: said.temporary };
+        return { id: listing.id, name: said.name, people: said.people, players: said.players, most: said.most, net: said.net, direct: said.direct, local: said.local, through: !said.direct && relaying(), near: close, temporary: said.temporary };
     };
 
     // Each watcher told of a listing as it is now (or that it's gone, or hidden from them)

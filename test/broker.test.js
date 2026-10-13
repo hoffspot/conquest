@@ -120,7 +120,7 @@ describe("the broker", () => {
 
         const listed = JSON.parse((await watcher.next("+ ", 0)).slice(2));
 
-        assert.deepEqual(listed, { id, name: "Ada's world", people: "human", players: 1, most: 8, net: 113, direct: true, through: false, near: true, temporary: false });
+        assert.deepEqual(listed, { id, name: "Ada's world", people: "human", players: 1, most: 8, net: 113, direct: true, local: true, through: false, near: true, temporary: false });
 
         // (Kept, saying how many are in it now: the watchers told)
         host.send(`keep ${id} ${token}\n${JSON.stringify({ players: 3 })}`);
