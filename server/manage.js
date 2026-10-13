@@ -566,7 +566,67 @@ export class Management {
                 ? "“Answer the internet” is on, but the server has no certificate yet, so it can't be reached securely and the internet isn't answered."
                 : "Answers its own Wi-Fi alone: “Answer the internet” is off in Settings, and it has no certificate.";
 
-        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words, acme: acme && { ...acme, words: this.#acmeWords(acme) } };
+        const router = server.router?.state() ?? null;
+
+        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words, acme: acme && { ...acme, words: this.#acmeWords(acme) }, router: router && { ...router, asking: server.settings.get("router"), words: this.#routerWords(router) } };
+    }
+
+    // How the router stands, in words (router.js): what it forwards, how the internet sees this
+    // home, whether the server reached itself; or why it won't, and how to forward it by hand
+    #routerWords({ on, working, methodLabel, gateway, lan, mappings, pinhole, external, seen, sharing, hairpin, error, retryAt }) {
+        const { server } = this;
+        const port = server.port;
+        const byHand = `Forward it by hand: in the router's settings${gateway ? ` (at http://${gateway}/)` : ""}, send TCP port ${port} to this computer${lan ? ` (${lan})` : ""}, port ${port}.`;
+        const listed = (ports) => (ports.length > 1 ? `${ports.slice(0, -1).join(", ")} and ${ports.at(-1)}` : ports[0]);
+
+        if (!server.settings.get("internet")) {
+            return "The router isn't asked: the internet isn't answered.";
+        }
+
+        if (!server.settings.get("router")) {
+            return `The router isn't asked (“Ask the router” is off in Settings). ${byHand}`;
+        }
+
+        if (working && !mappings.length) {
+            return "Asking the router to let the internet in…";
+        }
+
+        if (!on || error) {
+            return `The router wouldn't let the internet in: ${error?.message ?? "it wasn't asked."} ${byHand}${retryAt ? ` It asks again at ${retryAt.slice(11, 16)} (UTC).` : ""}`;
+        }
+
+        const lines = [`The router (${methodLabel}) sends the internet's port ${listed(mappings.map(({ external }) => external))} to this computer${mappings.some(({ lifetime }) => lifetime) ? ", asked again as it runs out" : ""}. Its public address is ${external ?? "unknown"}.`];
+
+        if (sharing === "carrier") {
+            lines.push(`But that's an address a provider shares between homes (CGNAT): the internet can't reach the server through the router. Ask the provider for a public address of your own, or use a tunnel.`);
+        } else if (sharing === "double") {
+            lines.push(`But that's a private address: another router stands between this one and the internet. Forward the port on that one too.`);
+        } else if (sharing === "beyond") {
+            lines.push(`But the internet sees this home as ${seen}: another NAT (a provider's) stands beyond the router, and the internet can't reach the server this way.`);
+        } else if (hairpin === true) {
+            lines.push("The server reached itself by its public address: the port is open.");
+        } else if (hairpin === false) {
+            lines.push("The server couldn't reach itself by its public address. Many routers can't do that, so it proves nothing: try from a phone on its cellular data.");
+        }
+
+        if (pinhole) {
+            lines.push(`Over IPv6, the router's firewall lets the internet in to ${pinhole.address}.`);
+        }
+
+        return lines.join(" ");
+    }
+
+    /** The router asked again (what it forwards, and how far the internet gets), now. */
+    async askRouter() {
+        const { server } = this;
+
+        if (!server.router || !server.settings.get("internet") || !server.settings.get("router")) {
+            throw new Refused(409, "no-router", "The router's asked only while the internet's answered and “Ask the router” is on in Settings.");
+        }
+
+        await server.router.refresh();
+
+        return { internet: this.internet() };
     }
 
     // How getting free certificates stands, in words
@@ -696,6 +756,7 @@ export class Management {
         this.server.registry.refill();
         this.server.nearby.follow(this.server.settings.get("bonjour"));
         this.server.closeToInternet();
+        this.server.followRouter();
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };

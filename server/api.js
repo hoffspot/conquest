@@ -41,6 +41,7 @@
 //   GET    /server/certificate/acme         what a free certificate needs: routes, DNS hosts, the CA's terms
 //   POST   /server/certificate/acme {route, name?, host?, token?, address?, email?, agree}   a free one's
 //          route set up (certify.js), one asked for at once; POST …/acme/renew asks now; DELETE forgets it
+//   POST   /server/router                   the router asked again to let the internet in (router.js)
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
@@ -499,6 +500,11 @@ export function apiHandler(server, { mac = false } = {}) {
             const principal = admin(request);
 
             return doing(() => manage.forgetAcme({ by: byOf(principal) }));
+        }],
+        ["POST", /^\/server\/router$/, { server: true }, async (request) => {
+            admin(request);
+
+            return doing(() => manage.askRouter());
         }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);

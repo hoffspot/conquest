@@ -5,6 +5,7 @@ import { addressOf, inviteLink } from "../client/js/app/invites.js";
 import { newKey, pem, pemOfKey, selfSigned } from "../server/net/x509.js";
 import { WorldServer } from "../server/world-server.js";
 import { dnsHosts, FakeAcme, lookupOf, TOKENS } from "../test/fake-acme.js";
+import { FakeRouter } from "../test/fake-router.js";
 import { expect, test } from "./fixtures.js";
 
 // The world server from the internet, over TLS (generated/world_server_plan.md §9.1, §15 S6): a
@@ -14,7 +15,8 @@ import { expect, test } from "./fixtures.js";
 // plays in it over wss; its management page isn't there to be had. And on the server's own
 // computer, the management page says how it stands with the internet, and takes a certificate of
 // the owner's own, or sets the server up to get free ones from Let's Encrypt itself (here from a
-// certificate authority of the tests' own, DuckDNS's API faked).
+// certificate authority of the tests' own, DuckDNS's API faked); and what the home's router
+// forwards (a router of the tests' own), or why it won't and how to forward the port by hand.
 
 // (A world drawn without a GPU: more than the usual time)
 test.setTimeout(300000);
@@ -52,7 +54,8 @@ async function serve(options = {}) {
 
     made.push(folder);
 
-    const server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), ...options });
+    // (Its router never asked: test/router.test.js asks one of its own)
+    const server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), router: false, ...options });
 
     await server.settings.change({ setAsideMinutes: 0 });
     await server.listen(0, "127.0.0.1");
@@ -201,6 +204,45 @@ test("on the server's computer, the management page sets it up to get free certi
         expect(kept.size).toBe(0);
         expect(server.certificate.names).toEqual(["sam.duckdns.org"]);
     } finally {
+        fake.close();
+    }
+});
+
+test("on the server's computer, the management page says what the router forwards and how the internet sees the home; or why it won't, and how to forward the port by hand", async ({ page }) => {
+    const fake = await new FakeRouter({ speaks: ["natpmp", "stun"] }).start();
+    const router = { gateways: async () => ({ v4: "127.0.0.1", v6: null }), lan: "127.0.0.1", v6: null, port: fake.port, ssdp: { address: "127.0.0.1", port: fake.ssdpPort }, stun: [{ host: "127.0.0.1", port: fake.stunPort }], reach: () => "127.0.0.1", quick: true };
+    const server = await serve({ router });
+
+    try {
+        await server.listenAdmin(0);
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+        await page.goto(`http://localhost:${server.adminPort}/`);
+
+        const internet = () => page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+        // (Not asked while the internet isn't answered: nothing said of the router)
+        await expect(internet().getByRole("heading", { name: "The router" })).toHaveCount(0);
+
+        // (Turned on in Settings: the router asked, by NAT-PMP here)
+        await page.locator('#tabs [data-tab="settings"]').click();
+        await page.getByLabel("Answer the internet (over TLS alone, once the server has a certificate)").check();
+        await page.locator("#settings").getByRole("button", { name: "Save" }).click();
+        await expect(page.locator("#status")).toHaveText("Saved.");
+        await page.locator('#tabs [data-tab="overview"]').click();
+        await expect(internet()).toContainText(`The router (NAT-PMP) sends the internet's port ${server.port} to this computer`, { timeout: 20000 });
+        await expect(internet()).toContainText("The server reached itself by its public address: the port is open.");
+        await expect(internet()).toContainText("203.0.113.9");
+        expect(fake.mappings.has(`natpmp ${server.port}`)).toBe(true);
+
+        // (The router turned stubborn: asked again, it says why, and how to forward the port by hand)
+        fake.refuse.natpmp = 2;
+        await internet().getByRole("button", { name: "Ask the router again" }).click();
+        await expect(internet()).toContainText("The router wouldn't let the internet in: NAT-PMP: The router refused (forwarding may be turned off in its settings).", { timeout: 20000 });
+        await expect(internet()).toContainText(`Forward it by hand: in the router's settings (at http://127.0.0.1/), send TCP port ${server.port} to this computer (127.0.0.1), port ${server.port}.`);
+    } finally {
+        await server.close();
         fake.close();
     }
 });

@@ -114,6 +114,7 @@
     "secure.spec.js › from the internet, over TLS alone: a page asked for plainly sent on to https; the game there follows an invite into a world and plays over wss; no management page": 45.0,
     "secure.spec.js › on the server's computer, the management page says how it stands with the internet, takes a certificate of the owner's own, and turns the internet on": 1.3,
     "secure.spec.js › on the server's computer, the management page sets it up to get free certificates (a DuckDNS name), shows how that goes, never the token, and stops it": 2.5,
+    "secure.spec.js › on the server's computer, the management page says what the router forwards and how the internet sees the home; or why it won't, and how to forward the port by hand": 3.0,
     "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 102.2,
     "together.spec.js › two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds": 88.4,
     "together.spec.js › two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured": 94.8,

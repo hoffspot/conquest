@@ -461,6 +461,48 @@ function acmeForm({ routes, hosts, terms, tokens }, status) {
     ];
 }
 
+// The home's router (server/router.js), while the internet's answered: what it forwards, how the
+// internet sees this home, whether the server reached itself; or why it won't, and how to forward
+// the port by hand. Asked again on demand
+function routerPart(router, on) {
+    if (!router || !on) {
+        return null;
+    }
+
+    const status = h("p", { class: "warning", role: "status" });
+    const failing = router.error || router.sharing || !router.asking;
+    const ports = router.mappings.map(({ external, internal }) => (external === internal ? String(external) : `${external} (to ${internal})`)).join(", ");
+
+    return h(
+        "div",
+        { class: "acme" },
+        h("h3", {}, "The router"),
+        h("p", { class: failing ? "warning" : router.hairpin ? "good" : "" }, router.words),
+        router.mappings.length
+            ? facts([
+                  ["Asked by", router.methodLabel],
+                  ["Its public address", router.external ?? "unknown"],
+                  router.seen && router.seen !== router.external ? ["The internet sees", router.seen] : null,
+                  ["Ports forwarded", ports],
+                  router.pinhole ? ["IPv6", `${router.pinhole.address}, port ${router.pinhole.port}`] : null,
+                  router.checkedAt ? ["Looked", when(router.checkedAt)] : null,
+              ])
+            : null,
+        router.asking
+            ? h(
+                  "div",
+                  { class: "actions" },
+                  button(router.working ? "Asking…" : "Ask the router again", async () => {
+                      if (await doing(() => call("POST", "/server/router", {}), { status, done: "Asked." })) {
+                          await renderOverview();
+                      }
+                  }),
+              )
+            : null,
+        status,
+    );
+}
+
 function internetPanel({ internet }) {
     const { certificate } = internet;
     const status = h("p", { class: "warning", role: "status" });
@@ -495,6 +537,7 @@ function internetPanel({ internet }) {
               ])
             : null,
         h("p", { class: "muted small" }, "On the Wi-Fi, plain http is still taken, and what's sent there isn't encrypted. From the internet, nothing but TLS: never the admin key, nor this page."),
+        routerPart(internet.router, internet.on),
         acmePart(internet.acme),
         h(
             "details",

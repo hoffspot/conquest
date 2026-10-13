@@ -2,7 +2,7 @@
 // one (%LOCALAPPDATA%), each in a folder named for the server; under the home folder where
 // Windows keeps them if they aren't set. Keeping it awake needs SetThreadExecutionState, which
 // Node can't call without native code: not yet. Nor Bonjour, which Windows has only as Apple's
-// own installer.
+// own installer, nor the router's address (the router's protocols then go unasked).
 
 import path from "node:path";
 import { refusedHandle } from "./bonjour.js";
@@ -37,4 +37,9 @@ export function bonjour() {
         browse: () => refusedHandle("unsupported"),
         resolve: () => Promise.reject({ code: "unsupported", message: "Bonjour isn't supported on Windows yet." }),
     };
+}
+
+/** The default gateways: not yet on Windows. */
+export function gateways() {
+    return Promise.resolve({ v4: null, v6: null });
 }
