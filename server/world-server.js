@@ -37,6 +37,7 @@ import { attachBroker, BROKER_PATH } from "./broker.js";
 import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
+import { Updater } from "./update/updater.js";
 import { ACME_TLS, reverseNameOf } from "./net/acme.js";
 import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
 import { computerName, tokenStore } from "./platform/index.js";
@@ -87,6 +88,9 @@ export class WorldServer {
      * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
      * (router.js, funnel.js: false for none), `tunnelPort` (the tunnel listener's, 0 for any free
      * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js).
+     * `options.onRestart` is what stops it to be started again as a new version, once an update's
+     * installed (server/serve.js); `options.update` where it looks for new versions and the key
+     * they're checked with (update/updater.js).
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -103,8 +107,8 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, ice = null }) {
-        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, ice });
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {} }) {
+        Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, onRestart, ice });
 
         /** Whether an address is at home (the guards ask it). */
         this.isHome = home;
@@ -189,6 +193,9 @@ export class WorldServer {
 
         /** The other servers on the Wi-Fi, and its own advertising (nearby.js): on with the `bonjour` setting, once it's listening. */
         this.nearby = new Nearby({ bonjour, card: () => this.bonjourCard() });
+
+        /** Its updates (update/updater.js): new versions looked for once a day, once it's started; installed when its owner asks. */
+        this.updater = new Updater(this, update);
     }
 
     /** What it advertises on the Wi-Fi (nearby.js): { id, name, version, net, port, worlds (how many it lists) }. */
@@ -266,8 +273,14 @@ export class WorldServer {
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
      */
     async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", settings = {} }, { creator = null } = {}) {
-        const stored = await this.store.create({ name, description, seed, race, creator, heroes, firstHero, settings });
+        return this.adopt(await this.store.create({ name, description, seed, race, creator, heroes, firstHero, settings }), { creator });
+    }
 
+    /**
+     * A world kept in the store (made, or brought in: manage.js importWorld) taken on: its access
+     * opened, and an owner's key and a player's key made. Returns { world, ownerKey, playerKey }.
+     */
+    async adopt(stored, { creator = null } = {}) {
         await this.#add(stored);
 
         const owner = await this.access.issueKey(stored.id, { label: "The owner's key", role: "owner" }, { by: creator });
@@ -633,6 +646,7 @@ export class WorldServer {
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
         clearInterval(this.looking);
+        this.updater.close();
         this.nearby.stop();
         await this.certifier.close();
         await this.router?.close();

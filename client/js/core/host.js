@@ -475,9 +475,11 @@ export const UNDO_MS = 8000;
  * smoothly): `most` a side at most, each an army in a line of battle (core/formation.js: its mix
  * of roles, its places), the rear of the player's people's `near` metres ahead of them and the
  * two fronts `apart` metres apart, facing each other, marching to meet halfway at `march` metres
- * a second.
+ * a second. Once either side's all fallen, those left stand `linger` ms, then go as soon as
+ * they're not fighting; and `lasts` ms after it was mustered, everyone left in it goes (ms of
+ * the battle's time): a world kept for weeks isn't left holding every field battle's victors.
  */
-export const FIELD_BATTLE = Object.freeze({ most: 200, near: 8, apart: 48, march: 1.1 });
+export const FIELD_BATTLE = Object.freeze({ most: 200, near: 8, apart: 48, march: 1.1, linger: 20000, lasts: 300000 });
 
 /**
  * What each people's soldiers fight with in a line of battle, by their role (core/formation.js
@@ -548,7 +550,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 27;
+export const SNAPSHOT_VERSION = 28;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -564,6 +566,14 @@ export const SNAPSHOT_STEPS = Object.freeze({
         rules: { ...RULES },
         players: snapshot.players.map((player) => ({ role: "player", lastCommand: snapshot.battle.time, away: false, out: false, resting: null, ...player })),
     }),
+    // 28: the field battles out (Host #fieldBattle), so they're let go: any soldiers left from
+    // one, and their lines of battle, as one mustered now
+    27: (snapshot) => {
+        const ids = (snapshot.soldiers ?? []).filter(([, soldier]) => soldier.field).map(([id]) => id);
+        const formations = Object.keys(snapshot.battle.formations ?? {}).filter((id) => id.startsWith("field-"));
+
+        return { ...snapshot, version: 28, fields: ids.length || formations.length ? [{ ids, formations, at: snapshot.battle.time, over: null }] : [] };
+    },
 });
 
 /**
@@ -795,8 +805,11 @@ export class Host {
         this.soldiers = new Map();
         this.fallen = [];
 
-        // How many have been mustered for field battles (#fieldBattle: each by its number)
+        // How many have been mustered for field battles (#fieldBattle: each by its number); and
+        // those out, till they're let go (#fieldsDone): [{ ids (both sides' soldiers), formations
+        // (their lines'), at (when it was mustered), over (when a side was all fallen, or null) }]
         this.fielded = 0;
+        this.fields = [];
 
         /**
          * The works whose guards are out near a player, or the brigands holding them (by the
@@ -1868,6 +1881,10 @@ export class Host {
             this.#gone(this.fallen.shift().id);
         }
 
+        if (this.fields.length) {
+            this.#fieldsDone();
+        }
+
         this.#warOn(ms);
 
         // (The players' camps' fires burnt out)
@@ -2064,6 +2081,7 @@ export class Host {
             summonings: structuredClone([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
             fielded: this.fielded,
+            fields: structuredClone(this.fields),
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
@@ -2231,6 +2249,7 @@ export class Host {
         host.summonings = new Map(structuredClone(snapshot.summonings ?? []));
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fielded = snapshot.fielded ?? 0;
+        host.fields = structuredClone(snapshot.fields ?? []);
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
 
@@ -3790,6 +3809,7 @@ export class Host {
         const front = FIELD_BATTLE.near + Math.max(0, ...lines[0].places.map(([, back]) => back));
         const meet = at(front + FIELD_BATTLE.apart / 2);
         const ids = [];
+        const formations = [];
 
         for (const [side, people, from, faces, { roles, places }] of [
             ["friend", player.realm, front, facing, lines[0]],
@@ -3798,6 +3818,8 @@ export class Host {
             const formation = `field-${side}-${this.fielded}`;
             const anchor = at(from);
             const counts = {};
+
+            formations.push(formation);
 
             this.battle.formation(formation, { anchor, facing: faces, to: [meet[0] - sin(faces) * 1.5, meet[1] - cos(faces) * 1.5], speed: FIELD_BATTLE.march, advance: true });
 
@@ -3818,9 +3840,47 @@ export class Host {
             });
         }
 
+        this.fields.push({ ids, formations, at: this.battle.time, over: null });
         this.#event("fieldBattle", { ids, size });
 
         return { ok: true };
+    }
+
+    // The field battles out let go when they're done (FIELD_BATTLE): once either side's all
+    // fallen, those left in it stand a while (`linger`), then each goes once it isn't fighting;
+    // and when it's gone on `lasts`, everyone left in it goes. Its lines go with the last of them
+    #fieldsDone() {
+        const now = this.battle.time;
+
+        for (const field of [...this.fields]) {
+            const left = field.ids.filter((id) => this.battle.actor(id));
+            const standing = (side) => left.some((id) => this.soldiers.get(id)?.field === side && !this.battle.actor(id).dead);
+
+            if (field.over === null && !(standing("friend") && standing("foe"))) {
+                field.over = now;
+            }
+
+            const ended = now - field.at >= FIELD_BATTLE.lasts;
+            const going = ended ? left : field.over !== null && now - field.over >= FIELD_BATTLE.linger ? left.filter((id) => this.battle.actor(id).dead || this.battle.actor(id).target === null) : [];
+
+            if (going.length) {
+                this.fallen = this.fallen.filter(({ id }) => !going.includes(id));
+
+                for (const id of going) {
+                    this.#gone(id);
+                }
+            }
+
+            field.ids = left.filter((id) => !going.includes(id));
+
+            if (!field.ids.length) {
+                for (const formation of field.formations) {
+                    this.battle.formation(formation, null);
+                }
+
+                this.fields.splice(this.fields.indexOf(field), 1);
+            }
+        }
     }
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken

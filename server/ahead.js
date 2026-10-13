@@ -26,9 +26,12 @@ export const AHEAD = Object.freeze({
     // where they're wanted, not waited for
     chunks: 3,
     reach: 160,
-    // How many buildings' insides keep their navigation (core/navigation.js keepRooms): the open
-    // buildings of a few towns, players in each
+    // How many buildings' insides keep their navigation (core/navigation.js keepRooms) at the
+    // least: the open buildings of a few towns, players in each. More are kept while more are open
+    // (every open building's, and `spare` besides: a dungeon's levels, a building walked into), or
+    // baking them ahead would let one go to make another, over and over
     rooms: 64,
+    spare: 16,
     // How long (ms) each pump may spend making chunks; and how many navigation tiles it sends off
     budget: 8,
     tiles: 8,
@@ -130,6 +133,8 @@ export class Ahead {
     // The next tile not baked yet of the insides of the buildings the host has open, baked
     // (Recast's tens of milliseconds: one at a time); whether there was one
     #inside() {
+        this.#keepOpen();
+
         for (const key of this.host?.open.keys() ?? []) {
             for (const id of this.world.interiors?.buildings.get(key)?.maps ?? []) {
                 const map = this.world.maps[id];
@@ -146,6 +151,18 @@ export class Ahead {
         }
 
         return false;
+    }
+
+    // Every open building's insides' meshes kept (AHEAD.rooms at the least, `spare` more besides),
+    // so none is let go of while it's open
+    #keepOpen() {
+        let maps = 0;
+
+        for (const key of this.host?.open.keys() ?? []) {
+            maps += this.world.interiors?.buildings.get(key)?.maps?.length ?? 0;
+        }
+
+        keepRooms(Math.max(AHEAD.rooms, maps + AHEAD.spare));
     }
 
     // A tile of a building's inside's mesh not baked yet ([tx, ty]), or null
@@ -176,6 +193,8 @@ export class Ahead {
 
     // Whether any open building's inside has a tile not baked yet
     #insideWaiting() {
+        this.#keepOpen();
+
         for (const key of this.host?.open.keys() ?? []) {
             for (const id of this.world.interiors?.buildings.get(key)?.maps ?? []) {
                 const map = this.world.maps[id];

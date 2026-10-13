@@ -14,13 +14,14 @@ let Host;
 let HOST_PLAYER;
 let FIELD_BATTLE;
 let ROLE_ARMS;
+let SNAPSHOT_STEPS;
 let buildWorld;
 let squaresOf;
 let world;
 
 before(async () => {
     ({ Battle, STEP_MS } = await import("../client/js/core/battle.js"));
-    ({ Host, HOST_PLAYER, FIELD_BATTLE, ROLE_ARMS } = await import("../client/js/core/host.js"));
+    ({ Host, HOST_PLAYER, FIELD_BATTLE, ROLE_ARMS, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
     ({ buildWorld } = await import("../client/js/core/overworld.js"));
     ({ squaresOf } = await import("../client/js/core/grid.js"));
     world = buildWorld({ seed: 2 });
@@ -198,5 +199,78 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
         assert.equal(again.soldiers.get("field-9").field, "foe");
         again.command(HOST_PLAYER, { type: "fieldBattle", size: 1 });
         assert.ok(again.battle.actor("field-10") && again.battle.actor("field-11"));
+    });
+
+    // (Its soldiers, by side, and the lines they're in)
+    const fieldOf = (host) => {
+        const fielded = host.battle.actors.filter(({ id }) => id.startsWith("field-"));
+
+        return { fielded, foes: fielded.filter(({ id }) => host.soldiers.get(id).field === "foe"), lines: [...new Set(fielded.map(({ formation }) => formation.id))] };
+    };
+
+    it("is let go once it's done: a side all fallen, the rest stand a while, then go, their lines with them", () => {
+        const { host } = outOfTown();
+
+        host.command(HOST_PLAYER, { type: "fieldBattle", size: 4 });
+
+        const { fielded, foes, lines } = fieldOf(host);
+
+        assert.equal(lines.length, 2);
+        assert.deepEqual(host.fields, [{ ids: fielded.map(({ id }) => id), formations: lines, at: host.battle.time, over: null }]);
+
+        // (The others all fallen: it's over, and the victors stand a while)
+        for (const foe of foes) {
+            Object.assign(foe, { dead: true, respawnAt: Infinity });
+        }
+
+        run(host, STEP_MS);
+
+        const over = host.battle.time;
+
+        assert.equal(host.fields[0].over, over);
+        run(host, FIELD_BATTLE.linger - 2 * STEP_MS);
+        assert.equal(fieldOf(host).fielded.length, fielded.length);
+
+        // (Then they go, the fallen with them, and their lines)
+        const events = run(host, 2 * STEP_MS);
+
+        assert.equal(fieldOf(host).fielded.length, 0);
+        assert.deepEqual(events.filter(({ type }) => type === "gone").map(({ id }) => id).sort(), fielded.map(({ id }) => id).sort());
+        assert.deepEqual(host.fields, []);
+        assert.ok(lines.every((id) => !host.battle.formations[id]));
+    });
+
+    it("is let go when it's gone on too long, whoever's left", () => {
+        const { host } = outOfTown();
+
+        host.command(HOST_PLAYER, { type: "fieldBattle", size: 3 });
+        run(host, 10 * STEP_MS);
+        assert.equal(host.fields[0].over, null, "(both sides standing)");
+
+        host.fields[0].at = host.battle.time + STEP_MS - FIELD_BATTLE.lasts;
+        run(host, STEP_MS);
+
+        assert.equal(fieldOf(host).fielded.length, 0);
+        assert.deepEqual(host.fields, []);
+        assert.equal(host.battle.actors.filter(({ formation }) => formation?.id.startsWith("field-")).length, 0);
+    });
+
+    it("is kept in the host's snapshot till it's let go; and a world kept before then has its field soldiers let go too", () => {
+        const { host } = outOfTown();
+
+        host.command(HOST_PLAYER, { type: "fieldBattle", size: 2 });
+        run(host, STEP_MS);
+
+        const snapshot = host.snapshot();
+
+        assert.deepEqual(Host.restore(world, snapshot).fields, host.fields);
+
+        // (Version 27 kept no field battles: those it had, as one mustered as it's brought forward)
+        const { fields, ...older } = snapshot;
+        const forward = SNAPSHOT_STEPS[27]({ ...older, version: 27 });
+
+        assert.equal(forward.version, 28);
+        assert.deepEqual(forward.fields, [{ ids: fields[0].ids, formations: fields[0].formations, at: snapshot.battle.time, over: null }]);
+        assert.deepEqual(SNAPSHOT_STEPS[27]({ ...older, soldiers: [], battle: { ...older.battle, formations: {} }, version: 27 }).fields, []);
     });
 });

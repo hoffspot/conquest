@@ -156,9 +156,9 @@ function say(text = "", { bad = false } = {}) {
 
 // ---- The API
 
-/** A call to the server's API: its answer (JSON), or the response itself for a download. Throws, saying why, if it's refused. */
-async function call(method, route, body, { key = null } = {}) {
-    const headers = { ...MANAGE, ...(body === undefined ? {} : { "Content-Type": "application/json" }) };
+/** A call to the server's API: its answer (JSON), or the response itself for a download. Throws, saying why, if it's refused. A `raw` body (a file) is sent as it is. */
+async function call(method, route, body, { key = null, raw = false } = {}) {
+    const headers = { ...MANAGE, ...(body === undefined ? {} : { "Content-Type": raw ? "application/octet-stream" : "application/json" }) };
 
     if (key) {
         headers.Authorization = `Key ${key}`;
@@ -169,7 +169,7 @@ async function call(method, route, body, { key = null } = {}) {
     let response;
 
     try {
-        response = await fetch(`${API}${route}`, { method, headers, credentials: "same-origin", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+        response = await fetch(`${API}${route}`, { method, headers, credentials: "same-origin", ...(body === undefined ? {} : { body: raw ? body : JSON.stringify(body) }) });
     } catch {
         throw Object.assign(new Error("The server isn't answering: is it still running?"), { status: 0 });
     }
@@ -1400,20 +1400,47 @@ function setUpNewWorld() {
         }
 
         form.reset();
-        showOnce({
-            title: `${made.name} is made`,
-            note: "Two keys to start with: the owner's (yours) and the players'. Both are shown again under the world's Keys while they work.",
-            more: [
-                h("h3", {}, "The owner's key"),
-                h("p", { class: "shown-value" }, made.ownerKey),
-                h("p", {}, h("a", { href: linkTo(made.world, { key: made.ownerKey }, playPage()), target: "_blank", rel: "noopener" }, "Play it now, as its owner")),
-                h("h3", {}, "The players' key"),
-                h("p", { class: "shown-value" }, made.playerKey),
-                h("div", { class: "address" }, qr(linkTo(made.world, { key: made.playerKey })), copyable(linkTo(made.world, { key: made.playerKey }), { link: true })),
-            ],
-        });
-        show("worlds");
+        showKeys(made, `${made.name} is made`);
     };
+
+    // (A world exported from a server, brought in: the file sent as it is, its keys shown as a new world's)
+    $("#importbutton").onclick = async () => {
+        const file = $("#importfile").files[0];
+        const status = $("#importstatus");
+
+        if (!file) {
+            status.textContent = "Choose the exported file first (a .json.gz).";
+            status.classList.add("bad");
+
+            return;
+        }
+
+        const brought = await doing(() => call("POST", "/worlds/import", file, { raw: true }), { status });
+
+        if (!brought?.world) {
+            return;
+        }
+
+        form.reset();
+        showKeys(brought, `${brought.name} is brought in`);
+    };
+}
+
+/** A world's first keys (made, or brought in), shown once; then the worlds. */
+function showKeys(made, title) {
+    showOnce({
+        title,
+        note: "Two keys to start with: the owner's (yours) and the players'. Both are shown again under the world's Keys while they work.",
+        more: [
+            h("h3", {}, "The owner's key"),
+            h("p", { class: "shown-value" }, made.ownerKey),
+            h("p", {}, h("a", { href: linkTo(made.world, { key: made.ownerKey }, playPage()), target: "_blank", rel: "noopener" }, "Play it now, as its owner")),
+            h("h3", {}, "The players' key"),
+            h("p", { class: "shown-value" }, made.playerKey),
+            h("div", { class: "address" }, qr(linkTo(made.world, { key: made.playerKey })), copyable(linkTo(made.world, { key: made.playerKey }), { link: true })),
+        ],
+    });
+    show("worlds");
 }
 
 // ---- The server's settings, and creator keys
@@ -1484,6 +1511,7 @@ async function renderSettings() {
 
     $("#settings").replaceChildren(
         panel("The server's settings", form),
+        await updatesPanel(),
         panel(
             "Creator keys",
             h("p", { class: "muted" }, "Whoever holds one makes worlds on this server, and owns them; nothing more."),
@@ -1530,6 +1558,118 @@ async function renderSettings() {
             creatorStatus,
         ),
     );
+}
+
+// ---- Updates (server/update/updater.js)
+
+const UPDATING = Object.freeze({
+    downloading: "Downloading the new version…",
+    checking: "Checking it's signed by the project…",
+    "backing-up": "Backing up every world and the server's settings…",
+    unpacking: "Unpacking it beside this one…",
+    restarting: "Saving every world, then starting again as the new version…",
+});
+
+// The version it is; a newer one, its notes, and Update (or the commands that update a server
+// run from a copy of the repository, or Homebrew's); how the last update went; Check now
+async function updatesPanel() {
+    const updates = await call("GET", "/server/update");
+    const status = h("p", { class: "warning", role: "status" });
+    const { last, newer, checked } = updates;
+    const asked = checked ? `Last asked ${when(checked.at)}${checked.error ? `: ${checked.error}` : "."}` : updates.checks ? "It asks once a day, from a minute after it starts." : "It doesn't ask (its setting's off): check by hand.";
+    const update = async () => {
+        const note = [
+            "Every world is set aside and backed up first, with the server's settings. Nobody can be in.",
+            "The server stops, then starts again as the new version, bringing every world forward. If it can't, it goes back to this version, with everything as it was.",
+            onMac() ? 'macOS may ask again whether "node" may accept incoming network connections: allow it.' : "",
+        ].join(" ");
+
+        if (await confirmIt({ title: `Update to ${newer.version}`, note, go: "Update" })) {
+            if (await doing(() => call("POST", "/server/update", { version: newer.version }), { status })) {
+                await followUpdate(newer.version, status);
+            }
+        }
+    };
+
+    return panel(
+        "Updates",
+        h("p", {}, `This is version ${updates.version}.`),
+        last
+            ? last.outcome === "updated"
+                ? h("p", { class: "muted small" }, `Updated from ${last.from} to ${last.to}, ${when(last.when)}.`)
+                : h("p", { class: "warning bad" }, `The update to ${last.to} (${when(last.when)}) didn't start: ${last.why}. It went back to ${last.from}, with every world and the settings as they were.`)
+            : null,
+        updates.failed ? h("p", { class: "warning bad" }, `The update to ${updates.failed.version} stopped: ${updates.failed.why}`) : null,
+        updates.busy ? h("p", { class: "warning" }, UPDATING[updates.busy.stage] ?? "Updating…") : null,
+        newer
+            ? [
+                  h("h3", {}, `Version ${newer.version} is out`),
+                  newer.notes ? h("div", { class: "notes" }, newer.notes) : null,
+                  newer.page ? h("p", { class: "small" }, h("a", { href: newer.page, target: "_blank", rel: "noopener" }, "Its release page")) : null,
+                  updates.install.commands
+                      ? [h("p", {}, `This server is run from ${updates.install.kind === "homebrew" ? "Homebrew" : "a copy of the repository"}: update it in Terminal.`), h("pre", { class: "commands" }, updates.install.commands.join("\n"))]
+                      : !updates.key
+                        ? h("p", { class: "muted" }, "This version has no key to check new versions with, so it can't update itself: install the new one by hand.")
+                        : updates.playersIn
+                          ? [h("p", { class: "muted" }, `${updates.playersIn === 1 ? "A player is" : `${updates.playersIn} players are`} in: update when nobody's in, or set their worlds aside.`), button(`Update to ${newer.version}`, update, "primary")]
+                          : button(`Update to ${newer.version}`, update, "primary"),
+              ]
+            : checked && !checked.error
+              ? h("p", { class: "muted small" }, "It's the newest version.")
+              : null,
+        h("p", { class: "muted small" }, asked),
+        h(
+            "div",
+            { class: "row" },
+            button("Check now", async () => {
+                if (await doing(() => call("POST", "/server/update", { check: true }), { status })) {
+                    await renderSettings();
+                }
+            }),
+        ),
+        status,
+    );
+}
+
+/** An update followed till it's done: the server restarting as `version`, or why it didn't (said in `status`). */
+async function followUpdate(version, status) {
+    const end = Date.now() + 15 * 60000;
+
+    while (Date.now() < end) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        let updates;
+
+        try {
+            updates = await call("GET", "/server/update");
+        } catch (error) {
+            // (Its session gone with the server it was made by: signed in again)
+            if (error.status === 401) {
+                location.reload();
+
+                return;
+            }
+
+            status.textContent = "Starting again as the new version…";
+            continue;
+        }
+
+        if (updates.version === version) {
+            await renderSettings();
+            say(`Updated to ${version}.`);
+
+            return;
+        }
+
+        if (updates.failed?.version === version || (updates.last?.outcome === "rolled-back" && updates.last.to === version && !updates.busy)) {
+            await renderSettings();
+            say(`The update to ${version} didn't go: see Updates.`, { bad: true });
+
+            return;
+        }
+
+        status.textContent = UPDATING[updates.busy?.stage] ?? "Updating…";
+    }
 }
 
 // ---- What's happened

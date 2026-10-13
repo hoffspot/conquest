@@ -53,7 +53,7 @@ The dot in the menu bar says how the server stands:
 | ● a filled circle | Players are in: the Mac is kept awake for them |
 | … in a circle | Starting, or saving every world and stopping |
 
-Its menu says the same in words, then:
+Its menu says the same in words (and **Updating** while it starts again as a new version), then:
 
 - **Open the management page.** The server's own page, in your browser (`http://localhost:8481`
   on this Mac, no key needed): worlds, keys, players, backups, settings, the internet.
@@ -77,10 +77,15 @@ one or the other.
 
 ## Updating, and taking it off
 
-To update, Quit the app, put the new one in Applications in place of the old, and open it. Its
-worlds carry on: a newer server brings them forward as it starts. As it's a new app to macOS, the
-firewall and the local network may ask again. Updating itself from the management page comes
-later (milestone S9).
+The management page says when a new version is out (Settings, Updates), and **Update** installs
+it: every world is backed up first, the new version is unpacked beside the app in its data folder
+(the app itself isn't changed, so its signature stays as it was), and the server starts again as
+it, bringing every world forward. If it can't, it goes back to the version before, with everything
+as it was. The menu says **Updating** meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
+
+A new app can also be put in by hand: Quit the app, put the new one in Applications in place of
+the old, and open it. Its worlds carry on: a newer server brings them forward as it starts. As
+it's a new app to macOS, the firewall and the local network may ask again.
 
 To take it off, turn **Run at login** off, Quit, and move the app to the Trash. Its worlds stay in
 the folder above until you delete that too.
