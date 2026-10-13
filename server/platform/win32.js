@@ -43,3 +43,6 @@ export function bonjour() {
 export function gateways() {
     return Promise.resolve({ v4: null, v6: null });
 }
+
+/** Where Tailscale's command may be, in turn. */
+export const TAILSCALE = Object.freeze(["C:\\Program Files\\Tailscale\\tailscale.exe", "tailscale"]);

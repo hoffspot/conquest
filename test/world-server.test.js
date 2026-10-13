@@ -323,9 +323,9 @@ describe("what the port refuses (server/guards.js)", () => {
         const ask = (address, { secure = false, internetClosed, host = "studio-mac.local:8480" } = {}) => guard({ address, host, secure }, { hosts, origins, ...(internetClosed === undefined ? {} : { internetClosed }) });
 
         // (Home: plain or TLS alike, as it's counted)
-        assert.deepEqual(ask("192.168.1.20"), { address: "192.168.1.20", from: "home" });
-        assert.deepEqual(ask("::ffff:10.0.0.4", { secure: true }), { address: "10.0.0.4", from: "home" });
-        assert.deepEqual(ask("fe80::1%en0"), { address: "fe80::1", from: "home" });
+        assert.deepEqual(ask("192.168.1.20"), { address: "192.168.1.20", from: "home", tunnel: false });
+        assert.deepEqual(ask("::ffff:10.0.0.4", { secure: true }), { address: "10.0.0.4", from: "home", tunnel: false });
+        assert.deepEqual(ask("fe80::1%en0"), { address: "fe80::1", from: "home", tunnel: false });
 
         // (The internet, the carrier-grade NAT range among it: refused while it's closed, saying why, plain or TLS)
         for (const address of ["203.0.113.7", "100.64.1.1", "2001:db8::1"]) {
@@ -337,7 +337,7 @@ describe("what the port refuses (server/guards.js)", () => {
         // (Open: over TLS it's taken, by the certificate's name; plain it's refused, naming the secure address)
         const open = { internetClosed: null, host: "pellagos-sam.duckdns.org:8480" };
 
-        assert.deepEqual(ask("203.0.113.7", { ...open, secure: true }), { address: "203.0.113.7", from: "internet" });
+        assert.deepEqual(ask("203.0.113.7", { ...open, secure: true }), { address: "203.0.113.7", from: "internet", tunnel: false });
         assert.throws(() => ask("203.0.113.7", open), (error) => refused("secure")(error) && /https:\/\/pellagos-sam\.duckdns\.org:8480/.test(error.message));
 
         // (Still another site's name is refused before it's told anything: DNS rebinding)
@@ -346,6 +346,18 @@ describe("what the port refuses (server/guards.js)", () => {
         // (The secure origins are the server's own too, and a server on 443 is reached without its port)
         assert.ok(origins.has("https://pellagos-sam.duckdns.org:8480") && origins.has("http://studio-mac.local:8480"));
         assert.ok(hostsOf(443, { interfaces: {}, hostname: "studio-mac", names: ["pellagos.example.com"] }).has("pellagos.example.com"));
+
+        // (Through a tunnel: the internet's, whatever loopback address it comes from, from
+        // X-Forwarded-For's last address (earlier ones are anyone's say); plain is its own TLS; by the
+        // tunnel's names alone; refused while the tunnel's closed)
+        const tunnelHosts = new Set(["studio-mac.tail1234.ts.net", "127.0.0.1:8482"]);
+        const through = (forwarded, extra = {}) => guard({ address: "127.0.0.1", host: "studio-mac.tail1234.ts.net", tunnel: true, forwarded, ...extra }, { hosts, tunnelHosts, origins, tunnelClosed: null, ...extra });
+
+        assert.deepEqual(through("198.51.100.7"), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.deepEqual(through("10.0.0.9, 198.51.100.7"), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.deepEqual(through(undefined), { address: "tunnel", from: "internet", tunnel: true });
+        assert.throws(() => through("198.51.100.7", { host: "studio-mac.local:8480" }), refused("host"));
+        assert.throws(() => through("198.51.100.7", { tunnelClosed: "Closed." }), (error) => refused("internet")(error) && error.message === "Closed.");
     });
 
     it("closes a socket that hasn't entered a world, or speaks no sense; and stands up to garbage", async () => {

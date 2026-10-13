@@ -4,10 +4,11 @@
 // the same functions), chosen by `process.platform`. For now, where the server keeps its data,
 // logs and caches, keeping the machine awake while players are in, the computer's own name, and
 // Bonjour (bonjour.js: what each system's tool shares), and where tokens for others' services are
-// kept (the Keychain on macOS), and the router's address (the default gateway); running at login
-// comes later (S8). Nothing outside this folder may run a command only one system has
+// kept (the Keychain on macOS), the router's address (the default gateway), and where Tailscale's
+// command is (for Funnel); running at login comes later (S8). Nothing outside this folder may run a command only one system has
 // (test/registry.test.js checks).
 
+import { execFile as execFileProcess } from "node:child_process";
 import os from "node:os";
 import { TokenFile } from "../storage/tokens.js";
 import * as darwin from "./darwin.js";
@@ -72,4 +73,28 @@ export function tokenStore({ system = process.platform, file, ...options } = {})
 /** The router: the default gateways, for IPv4 and IPv6 ({ v4, v6 }, each an address or null). */
 export function gateways({ system = process.platform, ...options } = {}) {
     return platformFor(system).gateways(options);
+}
+
+/**
+ * Tailscale's command (generated/world_server_plan.md §9.4), wherever this system keeps it (each of
+ * its platform's TAILSCALE tried in turn): run(args, { timeout }) resolves { ok, stdout, stderr,
+ * timedOut } once it's run (ok false if it failed), or { missing: true } if it isn't installed.
+ * `execFile` for the tests.
+ */
+export function tailscale({ system = process.platform, execFile = execFileProcess } = {}) {
+    const commands = platformFor(system).TAILSCALE;
+
+    return async (args, { timeout = 15000 } = {}) => {
+        for (const command of commands) {
+            const done = await new Promise((resolve) => execFile(command, args, { timeout, maxBuffer: 1 << 20 }, (error, stdout, stderr) => resolve({ error, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") })));
+
+            if (done.error?.code === "ENOENT" || done.error?.code === "EACCES") {
+                continue;
+            }
+
+            return { ok: !done.error, stdout: done.stdout, stderr: done.stderr, timedOut: Boolean(done.error?.killed) };
+        }
+
+        return { missing: true };
+    };
 }

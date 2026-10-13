@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { addressOf, inviteLink } from "../client/js/app/invites.js";
@@ -6,6 +7,7 @@ import { newKey, pem, pemOfKey, selfSigned } from "../server/net/x509.js";
 import { WorldServer } from "../server/world-server.js";
 import { dnsHosts, FakeAcme, lookupOf, TOKENS } from "../test/fake-acme.js";
 import { FakeRouter } from "../test/fake-router.js";
+import { fakeTailscale } from "../test/fake-tailscale.js";
 import { expect, test } from "./fixtures.js";
 
 // The world server from the internet, over TLS (generated/world_server_plan.md §9.1, §15 S6): a
@@ -15,8 +17,10 @@ import { expect, test } from "./fixtures.js";
 // plays in it over wss; its management page isn't there to be had. And on the server's own
 // computer, the management page says how it stands with the internet, and takes a certificate of
 // the owner's own, or sets the server up to get free ones from Let's Encrypt itself (here from a
-// certificate authority of the tests' own, DuckDNS's API faked); and what the home's router
-// forwards (a router of the tests' own), or why it won't and how to forward the port by hand.
+// certificate authority of the tests' own, DuckDNS's API faked); what the home's router forwards
+// (a router of the tests' own), or why it won't and how to forward the port by hand; and, with one
+// switch, opens the server to the internet, lets it in through Tailscale Funnel (a Tailscale of
+// the tests' own), shows what a game found testing it from outside, and closes it again.
 
 // (A world drawn without a GPU: more than the usual time)
 test.setTimeout(300000);
@@ -245,4 +249,54 @@ test("on the server's computer, the management page says what the router forward
         await server.close();
         fake.close();
     }
+});
+
+test("on the server's computer, the management page opens to the internet, lets it in through Tailscale Funnel, shows a game's test from outside, and closes it again", async ({ page }) => {
+    const run = fakeTailscale({ allowed: false });
+    const server = await serve({ funnel: { run }, tunnelPort: 0 });
+    const name = "studio-mac.tail1234.ts.net";
+
+    await server.listenAdmin(0);
+    page.on("pageerror", (error) => {
+        throw error;
+    });
+    await page.goto(`http://localhost:${server.adminPort}/`);
+
+    const internet = () => page.locator("section.panel", { has: page.getByRole("heading", { name: "The internet" }) });
+
+    // (Closed: one switch opens it; with no way in yet, it says so)
+    await expect(internet()).toContainText("Answers its own Wi-Fi alone");
+    await internet().getByRole("button", { name: "Open to the internet" }).click();
+    await expect(internet()).toContainText("It's open to the internet, but has no certificate yet");
+
+    // (Tailscale Funnel: on a tailnet that hasn't allowed it, where to allow it; allowed, asked again)
+    await internet().getByText("Tailscale Funnel", { exact: true }).click();
+    await internet().getByRole("button", { name: "Use Tailscale Funnel" }).click();
+    await expect(internet()).toContainText("Funnel isn't allowed for this computer on its tailnet yet", { timeout: 20000 });
+    await expect(internet().getByRole("link", { name: "Put it right in Tailscale" })).toHaveAttribute("href", "https://login.tailscale.com/f/funnel?node=nX1y2Z3");
+    run.allowed = true;
+    await internet().getByRole("button", { name: "Ask Tailscale again" }).click();
+    await expect(internet()).toContainText(`Answers the internet through Tailscale Funnel, at https://${name}`, { timeout: 20000 });
+    await expect(internet()).toContainText(`Players type ${name} in the game.`);
+    expect(run.target).toBe(`http://127.0.0.1:${server.tunnelPort}`);
+
+    // (A game's test from outside, through the tunnel: shown once the page looks again)
+    await new Promise((resolve, reject) => {
+        const body = JSON.stringify({ results: [{ address: `https://${name}`, ok: true, ms: 240, socket: true }] });
+        const asked = http.request({ host: "127.0.0.1", port: server.tunnelPort, path: "/api/v1/reachability", method: "POST", agent: false, headers: { Host: name, "X-Forwarded-For": "198.51.100.7", "Content-Type": "application/json" } }, (response) => {
+            response.resume();
+            response.on("end", () => (response.statusCode === 200 ? resolve() : reject(new Error(`reported: ${response.statusCode}`))));
+        });
+
+        asked.on("error", reject);
+        asked.end(body);
+    });
+    await expect(internet()).toContainText(`from the internet (through Tailscale Funnel, from 198.51.100.7): reached it at https://${name} (240 ms, and played there)`, { timeout: 20000 });
+
+    // (Closed with the one switch: Funnel let go, the internet no longer answered)
+    await internet().getByRole("button", { name: "Close to the internet" }).click();
+    await page.locator("#confirmgo").click();
+    await expect(internet()).toContainText("Answers its own Wi-Fi alone");
+    await expect.poll(() => run.target).toBe(null);
+    expect(server.tunnel).toBe(null);
 });

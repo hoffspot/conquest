@@ -547,28 +547,147 @@ export class Management {
     }
 
     /**
-     * Whether it answers the internet (§9.1), in words: { on (the `internet` setting), open (it
-     * answers there now), certificate (what it says of itself: x509.js describe; or null),
-     * addresses (its secure ones: https), words }.
+     * Whether it answers the internet (§9.1, §9.4), in words: { on (the `internet` setting), open
+     * (it answers there now: `direct`ly, with its certificate, or `tunneled`, through Tailscale
+     * Funnel), certificate (what it says of itself: x509.js describe; or null), addresses (where
+     * the internet reaches it), words, acme, router, funnel (each as it stands, in words), tests
+     * (what games have said of reaching it from elsewhere, the latest first, in words) }.
      */
     internet() {
         const { server } = this;
         const on = server.settings.get("internet");
         const certificate = server.certificate;
         const day = (when) => when.slice(0, 10);
-        const open = on && Boolean(certificate);
+        const funnel = server.funnel?.state() ?? null;
+        const direct = on && Boolean(certificate);
+        const tunneled = on && server.settings.get("funnel") && Boolean(funnel?.url);
+        const open = direct || tunneled;
         const acme = server.certifier?.state() ?? null;
-        const words = open
-            ? `Answers the internet, over TLS alone, at ${server.secureAddresses().join(" and ")}. Its certificate, from ${certificate.issuer}, runs till ${day(certificate.notAfter)}. Plain http from the internet is refused; a page asked for that way is sent on to https.`
-            : certificate
-              ? `Doesn't answer the internet: “Answer the internet” is off in Settings. It has a certificate for ${certificate.names.join(", ")}, till ${day(certificate.notAfter)}.`
-              : on
-                ? "“Answer the internet” is on, but the server has no certificate yet, so it can't be reached securely and the internet isn't answered."
-                : "Answers its own Wi-Fi alone: “Answer the internet” is off in Settings, and it has no certificate.";
+        const through = tunneled ? `through Tailscale Funnel, at ${funnel.url} (Tailscale's certificate)` : "";
+        const words = direct
+            ? `Answers the internet, over TLS alone, at ${server.secureAddresses().join(" and ")}${tunneled ? `, and ${through}` : ""}. Its certificate, from ${certificate.issuer}, runs till ${day(certificate.notAfter)}. Plain http from the internet is refused; a page asked for that way is sent on to https.`
+            : tunneled
+              ? `Answers the internet ${through}. Plain http from the internet is refused.`
+              : certificate
+                ? `Doesn't answer the internet: it's closed to it (“Answer the internet” is off in Settings). It has a certificate for ${certificate.names.join(", ")}, till ${day(certificate.notAfter)}.`
+                : on
+                  ? `It's open to the internet, but has no certificate yet${server.settings.get("funnel") ? ", and Tailscale Funnel isn't open," : ""} so it can't be reached securely and the internet isn't answered. Set up a way in below.`
+                  : "Answers its own Wi-Fi alone: it's closed to the internet (“Answer the internet” is off in Settings), and has no certificate.";
 
         const router = server.router?.state() ?? null;
 
-        return { on, open, certificate, addresses: open ? server.secureAddresses() : [], words, acme: acme && { ...acme, words: this.#acmeWords(acme) }, router: router && { ...router, asking: server.settings.get("router"), words: this.#routerWords(router) } };
+        return {
+            on,
+            open,
+            direct,
+            tunneled,
+            certificate,
+            addresses: server.internetAddresses(),
+            words,
+            acme: acme && { ...acme, words: this.#acmeWords(acme) },
+            router: router && { ...router, asking: server.settings.get("router"), words: this.#routerWords(router) },
+            funnel: funnel && { ...funnel, asking: server.settings.get("funnel"), words: this.#funnelWords(funnel) },
+            tests: { words: this.#testWords(server.reports[0] ?? null), reports: server.reports },
+        };
+    }
+
+    // How Tailscale Funnel stands, in words (funnel.js)
+    #funnelWords({ working, url, port, error, retryAt }) {
+        const { server } = this;
+
+        if (!server.settings.get("funnel")) {
+            return "Tailscale Funnel isn't asked for. It's the way in for a home whose provider shares its address (CGNAT), where no router setting helps: free, with a Tailscale account.";
+        }
+
+        if (!server.settings.get("internet")) {
+            return "Tailscale Funnel isn't asked for while the server's closed to the internet.";
+        }
+
+        if (server.tunnelError) {
+            return server.tunnelError;
+        }
+
+        if (working && !url) {
+            return "Asking Tailscale for Funnel…";
+        }
+
+        if (error || !url) {
+            return `Tailscale Funnel isn't open: ${error?.message ?? "it wasn't asked."}${retryAt ? ` It asks again at ${retryAt.slice(11, 16)} (UTC), or now if you ask.` : ""}`;
+        }
+
+        return `Tailscale Funnel brings the internet to the server at ${url}, with Tailscale's own certificate, through the tunnel on this computer alone (port ${port}). Players type ${url.replace(/^https:\/\//, "")} in the game.`;
+    }
+
+    /** Tailscale Funnel asked for again, now (after allowing it, or signing in to Tailscale). */
+    async askFunnel() {
+        const { server } = this;
+
+        if (!server.funnel || !server.settings.get("internet") || !server.settings.get("funnel")) {
+            throw new Refused(409, "no-funnel", "Tailscale Funnel is asked for only while the server's open to the internet and “Tailscale Funnel” is on in Settings.");
+        }
+
+        await server.followFunnel();
+        await server.funnel.refresh();
+
+        return { internet: this.internet() };
+    }
+
+    // What the latest test of reaching the server from elsewhere said, in words
+    #testWords(report) {
+        if (!report) {
+            return "Not tested from outside yet. On a phone on its cellular data (not this Wi-Fi), open the game, add the server by its internet address, and use “Test this server”: what it finds comes back here.";
+        }
+
+        const at = `${report.at.slice(0, 10)} ${report.at.slice(11, 16)} (UTC)`;
+        const reached = report.results.filter((one) => one.ok);
+        const missed = report.results.filter((one) => !one.ok);
+        const list = (ones, say) => ones.map(say).join("; ");
+        const found = [
+            reached.length ? `reached it at ${list(reached, (one) => `${one.address}${one.ms !== null ? ` (${one.ms} ms${one.socket ? ", and played there" : ""})` : ""}`)}` : null,
+            missed.length ? `couldn't at ${list(missed, (one) => `${one.address}${one.error ? ` (${one.error})` : ""}`)}` : null,
+        ]
+            .filter(Boolean)
+            .join(", and ");
+
+        if (report.from === "home") {
+            return `Last tested ${at} from this server's own Wi-Fi: ${found}. From here that doesn't show the internet can reach it: test from a phone on its cellular data.`;
+        }
+
+        return `Last tested ${at} from the internet (${report.tunnel ? "through Tailscale Funnel, " : ""}from ${report.address}): ${found}.`;
+    }
+
+    /**
+     * What a game found trying to reach the server ("Test this server", from anywhere: the game
+     * says what it tried, `results` [{ address, ok, ms, socket, error }], and it's kept if they're
+     * this server's own addresses), with where the report came from (`request`: the guards' say).
+     * The last 5 are kept. Returns { report, words }.
+     */
+    async report(body, { address, from, tunnel = false }) {
+        const { server } = this;
+        const own = new Set([...server.addresses(), ...server.secureAddresses(), ...server.internetAddresses()].map((one) => one.toLowerCase()));
+        const given = Array.isArray(body?.results) ? body.results.slice(0, 8) : [];
+        const results = given
+            .filter((one) => typeof one?.address === "string" && one.address.length <= 200)
+            .map((one) => ({
+                address: one.address.toLowerCase().replace(/\/+$/, ""),
+                ok: one.ok === true,
+                socket: one.socket === true,
+                ms: Number.isFinite(one.ms) ? Math.round(Math.min(Math.max(one.ms, 0), 60000)) : null,
+                error: typeof one.error === "string" ? one.error.replace(/[^\x20-\x7e]/g, "").slice(0, 120) || null : null,
+            }))
+            .filter((one) => own.has(one.address));
+
+        if (!results.length) {
+            throw new Refused(400, "bad-request", "A test's report says which of this server's addresses it tried.");
+        }
+
+        const report = { at: new Date().toISOString(), from, tunnel: Boolean(tunnel), address, results };
+        const reached = results.filter((one) => one.ok).length;
+
+        server.reports = [report, ...server.reports].slice(0, 5);
+        await this.journal(`A game tested reaching the server from ${from === "home" ? "its own Wi-Fi" : `the internet (${address})`}: it reached ${reached} of the ${results.length} address${results.length === 1 ? "" : "es"} it tried.`);
+
+        return { report, words: this.#testWords(report) };
     }
 
     // How the router stands, in words (router.js): what it forwards, how the internet sees this
@@ -755,8 +874,13 @@ export class Management {
 
         this.server.registry.refill();
         this.server.nearby.follow(this.server.settings.get("bonjour"));
+        if (Object.hasOwn(changes, "tunnelPort")) {
+            await this.server.closeTunnel();
+        }
+
         this.server.closeToInternet();
         this.server.followRouter();
+        this.server.followFunnel();
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };

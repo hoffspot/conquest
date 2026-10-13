@@ -250,3 +250,6 @@ export function bonjour({ spawn = spawnProcess } = {}) {
         },
     };
 }
+
+/** Where Tailscale's command may be, in turn: the app's own (from tailscale.com or the App Store), Homebrew's open-source client, or on the PATH. */
+export const TAILSCALE = Object.freeze(["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale", "tailscale"]);
