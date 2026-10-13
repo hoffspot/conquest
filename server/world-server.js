@@ -12,6 +12,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { NET_VERSION } from "../client/js/core/netplay.js";
 import { isHome } from "./access/addresses.js";
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
@@ -19,10 +20,13 @@ import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { answer, guard, hostsOf, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
+import { Nearby } from "./nearby.js";
+import { computerName } from "./platform/index.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
 import { createStaticHandler } from "./static.js";
 import { DataFolder } from "./storage/folder.js";
+import { SERVER_VERSION } from "./storage/versions.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
@@ -45,8 +49,11 @@ export class WorldServer {
      * The world server on its data folder (`root`), not yet listening: made the first time, with
      * its admin key (`adminKey`, shown then alone) and identity. `options.onStop` is what stops
      * it when the management page asks (server/world.js: every world saved, then the process
-     * ended); the rest are for the tests: `cost` (short codes' hashing), `clock`, `awake`
-     * (keeping the machine awake), `interfaces` and `hostname` (the machine's), `clientDirectory`.
+     * ended); `options.bonjour` the machine's Bonjour (platform/ bonjour(): server/world.js gives
+     * it; without one it's never shown to others nor finds them). The rest are for the tests:
+     * `cost` (short codes' hashing), `clock`, `awake` (keeping the machine awake), `interfaces`,
+     * `hostname` and `name` (the machine's: its name is the computer's own, else its host name's),
+     * `clientDirectory`.
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -61,8 +68,12 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
+
+        /** Its name, as others see it (its status, Bonjour, the management page): the computer's own, once it's listening, unless given. */
+        this.name = name ?? hostname.replace(/\.local$/, "");
+        this.named = Boolean(name);
         this.settings = folder.settings;
         this.store = folder.worlds;
 
@@ -99,7 +110,15 @@ export class WorldServer {
         this.admin = null;
         this.adminPort = null;
         this.hosts = new Set();
-        this.origins = new Set();
+        this.origins = { has: () => false };
+
+        /** The other servers on the Wi-Fi, and its own advertising (nearby.js): on with the `bonjour` setting, once it's listening. */
+        this.nearby = new Nearby({ bonjour, card: () => this.bonjourCard() });
+    }
+
+    /** What it advertises on the Wi-Fi (nearby.js): { id, name, version, net, port, worlds (how many it lists) }. */
+    bonjourCard() {
+        return { id: this.identity.id, name: this.name, version: SERVER_VERSION, net: NET_VERSION, port: this.port, worlds: [...this.worlds.values()].filter((stored) => stored.meta.settings.listed).length };
     }
 
     async #add(stored) {
@@ -164,8 +183,18 @@ export class WorldServer {
         });
         this.port = this.http.address().port;
         this.hosts = hostsOf(this.port, { names: this.names, ...(this.interfaces ? { interfaces: this.interfaces } : {}), hostname: this.hostname });
-        this.origins = originsOf(this.hosts);
+        // (Its own pages' origins and the game's, and the pages of the servers it's found near it on
+        // the Wi-Fi, each by its exact address: the game from any of them plays here too)
+        const own = originsOf(this.hosts);
+
+        this.origins = { has: (origin) => own.has(origin) || this.nearby.allows(origin) };
         this.play = attachPlay(this.http, this);
+
+        if (!this.named) {
+            this.name = (await computerName().catch(() => null)) ?? this.name;
+        }
+
+        this.nearby.follow(this.settings.get("bonjour"));
 
         return this.port;
     }
@@ -215,6 +244,7 @@ export class WorldServer {
 
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
+        this.nearby.stop();
         this.play?.close("server-stopping");
         await this.registry.shutdown();
         await this.admin?.close();

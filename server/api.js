@@ -217,10 +217,10 @@ export function apiHandler(server, { mac = false } = {}) {
             const listed = [...server.worlds.keys()].filter((id) => server.metaOf(id).settings.listed);
 
             return {
-                server: { id: server.identity.id, publicKey: server.identity.publicKey, version: SERVER_VERSION, net: NET_VERSION, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } },
+                server: { id: server.identity.id, name: server.name, publicKey: server.identity.publicKey, version: SERVER_VERSION, net: NET_VERSION, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } },
                 addresses: server.addresses(),
                 worlds: listed.map(cardOf),
-                nearby: [],
+                nearby: server.nearby.list(),
                 players: [],
             };
         }],

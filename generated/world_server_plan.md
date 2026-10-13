@@ -1,6 +1,6 @@
 # The world server: the plan
 
-A plan, being built: S0 to S4 are done, and S5 is next ([§15](#15-milestones)). It is a living
+A plan, being built: S0 to S5 are done, and S6 is next ([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -654,6 +654,18 @@ The game's **Worlds** screen merges three sources.
 - **Why the server does it.** Browsers can't browse Bonjour, so any player who reaches any server
   on the Wi-Fi sees the rest.
 - **On the Mac itself**, the game asks `localhost`.
+- **Its name** is the computer's own (macOS's ComputerName, "Studio Mac"), else its host name. The
+  responder may change it to make it unique on the network ("Studio Mac (2)").
+- **The TXT record's values** are percent-encoded, letters, digits and `. _ - %` alone, so no tool's
+  escaping can change them: `txtvers`, `id`, `name`, `version`, `net`, `port`, `worlds`.
+- **Added from the game.** A player who reaches one server sees the others it found, "Nearby", and
+  adds one with a tap: by its `.local` name when their page was reached by one, else by its IPv4
+  address. The id it advertised is expected, so the server must prove it before anything secret is
+  sent ([§7.6](#76-the-servers-identity)).
+- **Their pages.** Each server's page is its own origin, with its own storage, so a player's
+  characters and known servers live where they first opened the game. A server therefore lets the
+  game from a nearby server's page use its play routes, by that server's exact addresses
+  ([§13](#13-security)). It's no wider: those routes carry their keys themselves, never cookies.
 - **No permission needed for play.** Bonjour needs macOS's Local Network permission, while serving
   players doesn't. So Bonjour is a setting ("Show this Mac to others on the Wi-Fi", on by default).
   If macOS refuses it, play carries on, and the page shows the address to type instead, with a QR
@@ -988,7 +1000,7 @@ and brokering. All of it is versioned: the API by its path (`/api/v1`), the sock
 
 | Method and path | Needs | Does |
 |---|---|---|
-| `GET /status` | nothing (rate-limited) | The server's card and addresses, its listed worlds with player counts and hero names, nearby servers, listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
+| `GET /status` | nothing (rate-limited) | The server's card (its id, name, public key, version, `NET_VERSION`, play socket) and addresses, its listed worlds with player counts and hero names, nearby servers (`[{name, id, version, net, worlds, address, ip}]`: [§8.2](#82-nearby-macs)), listed players' worlds, and versions ([§8.1](#81-servers-the-player-knows)) |
 | `GET /health` | nothing | `ok` or `slow` |
 | `POST /enter` `{world, key?, ticket?, net?}` | a key or ticket | `{session, ticket?, role, world, card, player, heroes, life, position}`, where `card` is the world's as `/status` lists it (its heroes mode and first-hero rule among it) and `heroes` lists the player's kept heroes in kept worlds (up to 6). Refusals say why: `no-world`, `key`, `banned`, `full`, `locked`, `version` (`net` isn't the server's `NET_VERSION`), `wait n`. Too many worlds running isn't a refusal: `life` says `waiting` and `position` its place, and the play socket waits its turn |
 | `POST /codes/redeem` `{code}` | a short code | Trades it, once, for `{world, key}`, then as `/enter` |
@@ -1075,8 +1087,10 @@ A Node server opened to the internet needs these from its first day.
 - **The server proves itself first.** No key or ticket is sent until the server has proved its
   pinned identity ([§7.6](#76-the-servers-identity)).
 - **Origin checks** on both sockets and on cross-origin API calls, as an exact allowlist with no
-  wildcards and `null` refused. Allowed: the server's own origins, `https://hoffspot.github.io`, and
-  any origins the owner adds. This stops cross-site WebSocket hijacking; it doesn't stop bots, which
+  wildcards and `null` refused. Allowed: the server's own origins, `https://hoffspot.github.io`,
+  any origins the owner adds, and the pages of the Pellagos servers it's found nearby, each by the
+  exact addresses it found them at ([§8.2](#82-nearby-macs)): never for its management, which
+  answers its own pages alone. This stops cross-site WebSocket hijacking; it doesn't stop bots, which
   is what keys are for.
 - **Guarding against DNS rebinding** on every listener. Requests whose `Host` isn't one of the
   server's own names or addresses are refused.
@@ -1217,6 +1231,19 @@ in the user's order:
   key and invite (qrcode-generator, vendored: `npm run vendor:qrcode`). Measured: the page's e2e
   (a world made, started, set aside, backed up, restored, a ticket reissued, its heroes mode
   switched, deleted) in 7 s.
+- **S5, done.** Nearby Macs ([§8.2](#82-nearby-macs)): Bonjour in the platform layer
+  (`server/platform/bonjour.js`, with `dns-sd` on macOS and Avahi's tools on Linux, each read as it
+  talks; Windows refuses, saying so), and `server/nearby.js`: the server advertised as
+  `_pellagos._tcp` under the computer's own name, the others browsed for, resolved and listed under
+  `nearby` in its status (never itself), lost when they go; advertised again (at most every 10 s)
+  when what its TXT record carries changes. Refused (the Local Network permission's codes, a
+  responder not running, no tools), it says what to do, on the page and in Terminal, and tries
+  again a minute later; play carries on. The `bonjour` setting turns it on and off as the server
+  runs. The game lists the servers a known one finds, "Nearby", each added with a tap, the id it
+  advertised expected; and a nearby server's own pages may use this one (by their exact addresses:
+  [§13](#13-security)), since the game from any of them plays on all. Measured: the unit tests with
+  a fake responder, and the game adding a nearby server in a browser in 6 s. The manual check on two
+  Macs is the owner's: it needs macOS.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1291,3 +1318,4 @@ questions go here as they come up.
 | 2026-10-13 | **S2c built, and S2 with it:** the one port (`server/world-server.js`): the game's files, `/api/v1` (`api.js`: status, health, enter, codes/redeem, worlds, a world's keys and codes) and the play socket (`play.js`: `hi`, `enter`, `reenter`, `data`, `waiting`, `closed`), each behind the guards (`guards.js`: home addresses only until TLS, the server's own Host names, an exact list of Origins, blocked addresses, 64 KB bodies, nothing in query strings). A world someone's let into is held for them (`ARRIVAL`, 15 s) so it isn't set aside before they arrive; a world's thread writes its `world.json`, and the supervisor reads it again once the thread's ended. `npm run world-server` prints the addresses, the id and, the first time, the admin key. `test/world-server.test.js` is §15's proof over real sockets, with the socket fuzzed. The server's tests run in `npm test`, so no new CI job. | §15's S2. Where §12 changed: `/enter`'s too-many-worlds is a wait, not a refusal; `hello` gains `hero`, not `ticket` (the session says who); `Authorization: Key` for the admin and creator keys. |
 | 2026-10-13 | **S3 built:** the game's side of world servers. `client/js/core/identity.js` checks a server's `hi` proof as the server makes it (the same fingerprint), always with noble-ed25519 and noble-hashes bundled small into `client/vendor/` (`npm run vendor:ed25519`), as a game opened from a server on the Wi-Fi is a plain-http page without WebCrypto. `client/js/app/servers.js`: addresses as typed, invite links (the server, its id, the world and a key or code in the fragment, cleared from the address bar once read), the servers known (`pellagos.servers`, with each world's key and ticket, exported and imported as a code), and `ServerClient`: the server's card, its proof before anything secret's sent (pinned the first time, or to an invite's id; a different id stops everything), `/enter`, `/codes/redeem`, worlds made, keys and short codes, and the play socket. `RelayLink` speaks the play socket too. The title's **Worlds on servers**: servers with their status (another version greyed, with the server's own page offered; a server at home unreachable from an https page said so), worlds listed and held, a code, a key, a world made, servers and tickets carried; a kept world's heroes chosen among, or a new one (brought in whole on a first visit where the world allows). In a world that keeps heroes the game's hero is the world's, and nothing of it's saved on the device. The game tells the world it's `ready` once it's loaded, and `away` while its page is hidden. The in-game **World** panel: who's here, invite links and short codes, the world's keys (revoked there), leaving. `/enter` answers with the world's card. `e2e/worlds.spec.js` is §15's proof. | §15's S3. Switching a world's heroes mode moved to S4, with the world's other settings. The game always uses the vendored verifier, not WebCrypto where there is one: one way of checking, the same everywhere. |
 | 2026-10-13 | **S4 built:** the management page, `client/admin.html` with `client/js/admin/page.js` and `admin.css` (the game's colours and type), served on the server's computer by its own listener on loopback (`server/admin.js`, the new `adminPort` setting, 8481), needing no key, each call carrying the page's cookie (SameSite=Strict) and the `x-pellagos` header, its own two names alone and its own origin alone; and from the Wi-Fi at `/admin` on the play port, the admin key traded for a session (`POST /server/session`). What owners and the admin can do is `server/manage.js`: a world's details and state in words with its day and hour (the world's `elapsed` now kept in `world.json` and reported by its thread), its settings changed (`PATCH /worlds/:id`: its heroes mode and first-hero rule while it's set aside, the rest at once, its thread told so its copy of `world.json` keeps them), started, set aside (everyone sent out, `set-aside`), saved, deleted with its name typed (`world-deleted`, a last backup kept in `backups/<id>/`); its players sent out, banned and unbanned, given another part or a new ticket (an invite link can carry a ticket now); its backups: the autosaves, and the ladder made as it's saved (one an hour, the last 12; one a day, the last 7), by hand (a running world saves, then copies itself in its own thread, never mid-write), restored (set aside and backed up first; its keys, players and journal kept as they are) and downloaded; exported as one gzipped file (`pellagos.world.1`: `world.json`, the latest snapshot, its kept heroes; nothing of who may come in). The server's settings, creator keys, a new admin key and stopping (these two on the computer alone), its own journal (`journal.log`) with every world's, health, and the recommended worlds at once now as §10 has it (what's kept back, the largest world seen, the cores). QR codes from qrcode-generator 2.0.4 (MIT), vendored small (`npm run vendor:qrcode`). The address and invite helpers moved to `client/js/app/invites.js` so the page needn't load the game's netcode. `test/admin.test.js` and `e2e/admin.spec.js` are §15's proof. | §15's S4. Three things came early, as the page's sections needed them: the backup ladder, exporting, and the journal (from S9), and the QR codes (from S5). Importing and updating stay with S9. The plan's same-site cookie is the Mac listener's alone: from the Wi-Fi the session goes in a header, which no other site's page can send. |
+| 2026-10-13 | **S5 built:** nearby servers on the Wi-Fi. Bonjour in the platform layer: `server/platform/bonjour.js` (the service, the TXT record and its percent-encoded values, the refusals named for the owner, a tool's handle read a line at a time), `dns-sd -R/-B/-L` on macOS (`darwin.js`, with the computer's own name from `scutil`), `avahi-publish-service` and `avahi-browse -rpk` on Linux (`linux.js`), and a refusal on Windows. `server/nearby.js`: advertised under the server's name, advertised again when its TXT changes (at most every 10 s, looked at every 30 s), the others resolved (their IPv4 address looked up) and listed in `/status`'s `nearby`, never itself, lost when they go; refused or stopped, said and tried again a minute later; on and off with the `bonjour` setting. The status card carries the server's name. The guards let a nearby server's pages use the play routes, by exact address. The game's Worlds screen lists the servers a known one finds, "Nearby", added with a tap; the management page's overview says whether it's shown on the Wi-Fi (or why not) and lists the servers near it; `npm run world-server` says so in Terminal. `test/nearby.test.js` (a fake responder: `test/fake-bonjour.js`) and `e2e/nearby.spec.js` are §15's proof. | §15's S5. The nearby servers' origins weren't in the plan: without them, the game from one server's page couldn't use another's, though it found it. The manual check on two Macs needs macOS, so it's the owner's. |

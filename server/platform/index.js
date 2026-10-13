@@ -2,15 +2,17 @@
 // between operating systems, behind one small interface, so that nothing else in the server
 // changes from one to another. A file for each (darwin.js first; linux.js and win32.js fill in
 // the same functions), chosen by `process.platform`. For now, where the server keeps its data,
-// logs and caches, and keeping the machine awake while players are in; Bonjour, secrets and
-// running at login come later (S5, S6, S8). Nothing outside this folder may run a command only
-// one system has (test/registry.test.js checks).
+// logs and caches, keeping the machine awake while players are in, the computer's own name, and
+// Bonjour (bonjour.js: what each system's tool shares); secrets and running at login come later
+// (S6, S8). Nothing outside this folder may run a command only one system has
+// (test/registry.test.js checks).
 
 import os from "node:os";
 import * as darwin from "./darwin.js";
 import * as linux from "./linux.js";
 import * as win32 from "./win32.js";
 
+export { cardOfTxt, REFUSALS, SERVICE, txtOf } from "./bonjour.js";
 export { APP_FOLDER, APP_ID, APP_NAME } from "./names.js";
 
 /** Where its data goes instead (one folder), if set: as the tests and `--data` have it. */
@@ -41,4 +43,18 @@ export function folders({ system = process.platform, env = process.env, home = o
  */
 export function keepAwake({ system = process.platform, ...options } = {}) {
     return platformFor(system).keepAwake(options);
+}
+
+/** The computer's own name as its owner set it (macOS's "Studio Mac"), or null where there's none apart from its host name. */
+export function computerName({ system = process.platform, ...options } = {}) {
+    return platformFor(system).computerName(options);
+}
+
+/**
+ * Bonjour on this machine (generated/world_server_plan.md §8.2): { advertise({ name, port, txt }),
+ * browse(), resolve(name) } (bonjour.js says what each gives). `system` is this machine's, and
+ * `spawn` Node's, unless given (as the tests give them: a fake responder).
+ */
+export function bonjour({ system = process.platform, ...options } = {}) {
+    return platformFor(system).bonjour(options);
 }

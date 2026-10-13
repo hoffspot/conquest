@@ -296,6 +296,31 @@ function confirmIt({ title, note = "", go, typed = null }) {
 
 // ---- Overview
 
+/** Whether it's shown to others on the Wi-Fi (Bonjour), and the servers it's found near it there. */
+function nearbyPanel({ bonjour, nearby }) {
+    const rows = nearby.map((near) =>
+        h(
+            "tr",
+            { dataset: { nearby: near.id } },
+            h("td", {}, near.name),
+            h("td", {}, near.version ?? "—"),
+            h("td", {}, Number.isFinite(near.worlds) ? String(near.worlds) : "—"),
+            h("td", {}, [...new Set([near.ip, near.address].filter(Boolean))].map((where) => h("div", {}, h("a", { href: `http://${where}/`, target: "_blank", rel: "noopener" }, where)))),
+        ),
+    );
+
+    return panel(
+        "On the Wi-Fi",
+        h("p", { class: bonjour.refused ? "warning" : "" }, bonjour.words),
+        bonjour.on && !bonjour.refused
+            ? rows.length
+                ? h("div", { class: "table" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Nearby server"), h("th", {}, "Version"), h("th", {}, "Worlds listed"), h("th", {}, "Where"))), h("tbody", {}, rows)))
+                : h("p", { class: "muted" }, "No other Pellagos servers found near it yet.")
+            : null,
+        h("p", { class: "muted small" }, "Players who reach this server see the others it finds, under Worlds on servers, and add them with a tap."),
+    );
+}
+
 async function renderOverview() {
     state.server = await call("GET", "/server");
 
@@ -315,6 +340,7 @@ async function renderOverview() {
                 addresses.map((address) => h("div", { class: "address" }, qr(`${address}/`), copyable(`${address}/`, { link: true }))),
             ),
         ),
+        nearbyPanel(overview),
         panel(
             "This page",
             h("p", {}, mac ? "You're on the server's own computer: the page needs no key here." : "You're on the server's Wi-Fi, with the admin key."),
