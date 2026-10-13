@@ -5,10 +5,15 @@
 // itself, admin.js), and runs each world in a thread of its own (registry.js). It never steps a
 // world.
 //
-// For now the port answers home addresses alone, over plain http and ws (guards.js); the internet
-// gets TLS on the same port with S6.
+// The one port takes two kinds of connection (§9.1): it looks at each one's first byte, and a TLS
+// handshake (0x16) goes to its https half, anything else to its plain http half; both answer the
+// same. Home addresses may use either. The internet is answered only when the owner's turned on
+// `internet` and the server has a certificate (storage/certificates.js), and over TLS alone
+// (guards.js); without a certificate, TLS isn't answered at all.
 
 import http from "node:http";
+import https from "node:https";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,17 +23,24 @@ import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
-import { answer, guard, hostsOf, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
+import { answer, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
 import { computerName } from "./platform/index.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
 import { createStaticHandler } from "./static.js";
+import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
+
+/** How often the certificate's looked at again (ms): one put in its folder by hand taken up, one run out let go. */
+export const CERTIFICATE_LOOK = 10 * 60 * 1000;
+
+// A TLS handshake's first byte (a TLS record of type handshake: RFC 8446 §5.1)
+const HANDSHAKE = 0x16;
 
 // What's journalled of each event the access hooks are told of (keys by their labels, never as they are)
 const JOURNAL = Object.freeze({
@@ -53,7 +65,8 @@ export class WorldServer {
      * it; without one it's never shown to others nor finds them). The rest are for the tests:
      * `cost` (short codes' hashing), `clock`, `awake` (keeping the machine awake), `interfaces`,
      * `hostname` and `name` (the machine's: its name is the computer's own, else its host name's),
-     * `clientDirectory`.
+     * `home` (which addresses are home: access/addresses.js isHome; the tests make loopback the
+     * internet with it), `clientDirectory`.
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -68,8 +81,11 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
+
+        /** Whether an address is at home (the guards ask it). */
+        this.isHome = home;
 
         /** Its name, as others see it (its status, Bonjour, the management page): the computer's own, once it's listening, unless given. */
         this.name = name ?? hostname.replace(/\.local$/, "");
@@ -101,10 +117,23 @@ export class WorldServer {
         this.api = apiHandler(this);
         this.access.policy.listeners.push((event, detail) => this.#journal(event, detail));
 
-        /** The HTTP server and the play socket on it, once it's listening; the port it listens on. */
+        /**
+         * The one port, once it's listening: its listener (`tcp`), which hands each connection to
+         * its plain half (`http`) or its TLS half (`https`); the play socket on both; the port.
+         */
+        this.tcp = null;
         this.http = null;
+        this.https = null;
         this.play = null;
         this.port = null;
+
+        /** Every connection on the port, sorted or not (each closed with it: TLS's halves don't close the socket under them). */
+        this.connections = new Set();
+
+        /** Its certificate (storage/certificates.js): what it says of itself (x509.js describe), once it's taken up; null if there's none. */
+        this.certificates = new CertificateStore(root);
+        this.certificate = null;
+        this.looking = null;
 
         /** The management page's listener on the computer itself (admin.js), once it's listening; its port. */
         this.admin = null;
@@ -131,6 +160,19 @@ export class WorldServer {
         return this.access.blocks;
     }
 
+    /** Why the internet isn't answered (a sentence), or null when it is: the `internet` setting on, and a certificate (the guards ask it). */
+    get internetClosed() {
+        if (!this.settings.get("internet")) {
+            return INTERNET_CLOSED;
+        }
+
+        if (!this.certificate) {
+            return "This server isn't open to the internet yet: it has no certificate, so it can't be reached securely.";
+        }
+
+        return null;
+    }
+
     /** A world's world.json (as it was last written), or null. */
     metaOf(id) {
         return this.worlds.get(id)?.meta ?? null;
@@ -144,6 +186,11 @@ export class WorldServer {
         if (line && world) {
             world.journal(line).catch(() => {});
         }
+    }
+
+    /** Where it can be reached securely: an https URL for each name its certificate carries (none without one). */
+    secureAddresses() {
+        return (this.certificate?.names ?? []).map((name) => `https://${name.includes(":") ? `[${name}]` : name}:${this.port}`);
     }
 
     /** Where it can be reached at home (each of its home addresses, and its .local name): http URLs. */
@@ -176,19 +223,28 @@ export class WorldServer {
 
     /** Listening on `port` (the server's setting, unless given; 0 for any free one), on every address. */
     async listen(port = this.settings.get("port"), host = undefined) {
-        this.http = http.createServer({ requestTimeout: LIMITS_HTTP.request, headersTimeout: LIMITS_HTTP.headers, keepAliveTimeout: LIMITS_HTTP.keepAlive }, (request, response) => this.#request(request, response));
-        await new Promise((resolve, reject) => {
-            this.http.once("error", reject);
-            this.http.listen(port, host, resolve);
-        });
-        this.port = this.http.address().port;
-        this.hosts = hostsOf(this.port, { names: this.names, ...(this.interfaces ? { interfaces: this.interfaces } : {}), hostname: this.hostname });
-        // (Its own pages' origins and the game's, and the pages of the servers it's found near it on
-        // the Wi-Fi, each by its exact address: the game from any of them plays here too)
-        const own = originsOf(this.hosts);
+        const limits = { requestTimeout: LIMITS_HTTP.request, headersTimeout: LIMITS_HTTP.headers, keepAliveTimeout: LIMITS_HTTP.keepAlive, connectionsCheckingInterval: 1000 };
+        const handle = (request, response) => this.#request(request, response);
 
-        this.origins = { has: (origin) => own.has(origin) || this.nearby.allows(origin) };
-        this.play = attachPlay(this.http, this);
+        this.http = http.createServer(limits, handle);
+        // (Its certificate's set on it when there's one: loadCertificate. A handshake gets as long as headers do)
+        this.https = https.createServer({ ...limits, minVersion: "TLSv1.2", handshakeTimeout: LIMITS_HTTP.headers }, handle);
+        this.https.on("tlsClientError", (error, socket) => socket.destroy());
+        this.tcp = net.createServer((socket) => this.#sort(socket));
+        await new Promise((resolve, reject) => {
+            this.tcp.once("error", reject);
+            this.tcp.listen(port, host, resolve);
+        });
+        this.port = this.tcp.address().port;
+
+        // (The halves never listen themselves, the port does: told it's listening, each keeps its
+        // request and header time limits, which an HTTP server starts checking only then)
+        this.http.emit("listening");
+        this.https.emit("listening");
+        await this.loadCertificate();
+        this.play = attachPlay([this.http, this.https], this);
+        this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
+        this.looking.unref?.();
 
         if (!this.named) {
             this.name = (await computerName().catch(() => null)) ?? this.name;
@@ -197,6 +253,89 @@ export class WorldServer {
         this.nearby.follow(this.settings.get("bonjour"));
 
         return this.port;
+    }
+
+    // A connection on the one port, handed on by its first byte: a TLS handshake to the https half
+    // (refused if there's no certificate), anything else to the plain half. Its byte's put back
+    // first, so the half it goes to reads it whole.
+    #sort(socket) {
+        const drop = () => socket.destroy();
+
+        this.connections.add(socket);
+        socket.on("error", drop);
+        socket.setTimeout(LIMITS_HTTP.headers, drop);
+        socket.once("close", () => this.connections.delete(socket));
+        socket.once("data", (chunk) => {
+            const secure = chunk[0] === HANDSHAKE;
+
+            socket.setTimeout(0);
+
+            if (secure && !this.certificate) {
+                drop();
+
+                return;
+            }
+
+            socket.pause();
+            socket.unshift(chunk);
+            socket.off("error", drop);
+            (secure ? this.https : this.http).emit("connection", socket);
+            process.nextTick(() => socket.resume());
+        });
+    }
+
+    /**
+     * Its certificate taken up (storage/certificates.js: at listening, every CERTIFICATE_LOOK, and
+     * when one's kept): TLS answers with it, and the names it carries are the server's too. One
+     * that's gone (or run out) is let go: TLS is no longer answered, nor the internet, and anyone
+     * in from there is sent out. Returns what it says of itself (x509.js describe), or null.
+     */
+    async loadCertificate() {
+        const found = await this.certificates.current().catch(() => null);
+
+        if (found && this.https) {
+            this.https.setSecureContext({ key: found.key, cert: found.cert });
+        }
+
+        this.certificate = found?.info ?? null;
+        this.#reach();
+        this.closeToInternet();
+
+        return this.certificate;
+    }
+
+    /** A certificate (PEM key and chain) kept and taken up; refused, saying why, if they can't be used together. Returns what it says of itself. */
+    async useCertificate({ key, cert }) {
+        await this.certificates.save({ key, cert });
+
+        return this.loadCertificate();
+    }
+
+    /** Its certificate let go (TLS no longer answered, nor the internet). */
+    async dropCertificate() {
+        await this.certificates.remove();
+
+        return this.loadCertificate();
+    }
+
+    /** If the internet isn't answered now, everyone in from there sent out ("internet-closed"). Returns how many. */
+    closeToInternet() {
+        return this.internetClosed ? this.closePlaces((place) => place.from === "internet", "internet-closed") : 0;
+    }
+
+    // The names it answers to and the pages it answers (guards.js): its own, its certificate's, and
+    // the game's; and the pages of the servers it's found near it on the Wi-Fi, each by its exact
+    // address (the game from any of them plays here too)
+    #reach() {
+        if (this.port === null) {
+            return;
+        }
+
+        this.hosts = hostsOf(this.port, { names: [...this.names, ...(this.certificate?.names ?? [])], ...(this.interfaces ? { interfaces: this.interfaces } : {}), hostname: this.hostname });
+
+        const own = originsOf(this.hosts);
+
+        this.origins = { has: (origin) => own.has(origin) || this.nearby.allows(origin) };
     }
 
     /** The management page listening on the computer itself, on `port` (the server's adminPort setting, unless given; 0 for any free one). */
@@ -218,25 +357,40 @@ export class WorldServer {
         }
 
         try {
-            guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: undefined }, this);
+            const { from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: undefined, secure: Boolean(request.socket.encrypted) }, this);
 
             if (pathname === undefined) {
                 throw new Refusal(400, "bad-request", "That isn't an address on this server.");
             }
 
-            // (The management page, from the Wi-Fi: it asks for the admin key)
+            // (The management page, from the Wi-Fi: it asks for the admin key. Never from the internet)
             if (pathname === "/admin" || pathname === "/admin/") {
+                if (from === "internet") {
+                    throw new Refusal(403, "home", "The server's management page answers at home alone: on the server's computer, or its Wi-Fi.");
+                }
+
                 request.url = ADMIN_PAGE;
                 response.setHeader("Cache-Control", "no-store");
             }
         } catch (error) {
-            if (error instanceof Refusal) {
-                answer(response, error.status, { error: error.error, message: error.message });
+            if (!(error instanceof Refusal)) {
+                throw error;
+            }
+
+            // (A page asked for plainly from the internet: sent on to the same page over TLS. Its
+            // Host is one of the server's own: the guards checked it before saying "secure")
+            const target = urlOf(request.url);
+
+            if (error.error === "secure" && target && (request.method === "GET" || request.method === "HEAD")) {
+                response.writeHead(308, { Location: `https://${String(request.headers.host).toLowerCase()}${target.pathname}${target.search}`, "Content-Length": 0, "Cache-Control": "no-store" });
+                response.end();
 
                 return;
             }
 
-            throw error;
+            answer(response, error.status, { error: error.error, message: error.message });
+
+            return;
         }
 
         this.static(request, response);
@@ -244,14 +398,23 @@ export class WorldServer {
 
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
+        clearInterval(this.looking);
         this.nearby.stop();
         this.play?.close("server-stopping");
         await this.registry.shutdown();
         await this.admin?.close();
 
-        if (this.http) {
-            this.http.closeAllConnections?.();
-            await new Promise((resolve) => this.http.close(() => resolve()));
+        if (this.tcp) {
+            const closed = new Promise((resolve) => this.tcp.close(() => resolve()));
+
+            for (const socket of this.connections) {
+                socket.destroy();
+            }
+
+            // (Each half's time limits stopped checking)
+            this.http.close(() => {});
+            this.https.close(() => {});
+            await closed;
         }
     }
 }

@@ -46,15 +46,16 @@ function split(text) {
 }
 
 /**
- * The play socket on an HTTP server. `server` gives what it needs: { policy, access, registry,
- * identity, hosts, origins, metaOf(world) (its world.json, or null) }. Returns { places, close(),
- * closeWhere(test, reason), send(world, peer, text), kicked(world, peer, reason) }.
+ * The play socket on HTTP servers (`httpServers`: one, or several, as the one port's plain and TLS
+ * halves). `server` gives what it needs: { access, registry, identity, and what guards.js asks,
+ * metaOf(world) (its world.json, or null) }. Returns { places, close(), closeWhere(test, reason),
+ * send(world, peer, text), kicked(world, peer, reason) }.
  */
-export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = Date.now } = {}) {
+export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = Date.now } = {}) {
     const { registry, identity } = server;
     const { policy } = server.access;
 
-    /** Those in a world, by `${world} ${peer}`: { world, peer, player, role, via, socket, token, away }. */
+    /** Those in a world, by `${world} ${peer}`: { world, peer, player, role, via, socket, token, address, from ("home" or "internet"), away }. */
     const places = new Map();
     const sockets = new Set();
     const perAddress = new Counts(LIMITS.socketsPerAddress);
@@ -126,7 +127,7 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
 
     // Into a world, by a session: let in (waiting its turn if it must), given a place
     const enter = async (socket, address, world, session) => {
-        const { principal } = policy.identify({ world, session, address, from: "home" });
+        const { principal } = policy.identify({ world, session, address, from: socket.from });
         const allowed = policy.allows(principal, "world.enter", { world, meta: server.metaOf(world) });
 
         if (!allowed.yes) {
@@ -168,7 +169,7 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
 
         const peer = `p${next++}`;
         const token = newToken();
-        const place = { world, peer, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, away: null };
+        const place = { world, peer, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, away: null };
 
         places.set(placeKey(world, peer), place);
         thread.enter(peer, { player: place.player, role: place.role });
@@ -193,6 +194,7 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
         place.away = null;
         place.socket = socket;
         place.address = address;
+        place.from = socket.from;
 
         if (old !== socket && old.open) {
             old.onMessage = () => {};
@@ -259,9 +261,10 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
         const key = request.headers["sec-websocket-key"];
         const protocols = String(request.headers["sec-websocket-protocol"] ?? "").split(",").map((one) => one.trim());
         let address;
+        let from;
 
         try {
-            address = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: request.headers.origin }, server);
+            ({ address, from } = guard({ address: request.socket.remoteAddress, host: request.headers.host, origin: request.headers.origin, secure: Boolean(request.socket.encrypted) }, server));
         } catch (error) {
             if (error instanceof Refusal) {
                 policy.on("refused", { why: error.error, address: request.socket.remoteAddress });
@@ -292,11 +295,16 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
         const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog });
 
         socket.address = address;
+        socket.from = from;
         sockets.add(socket);
         welcome(socket, address);
     };
 
-    httpServer.on("upgrade", upgrade);
+    const listeners = [httpServers].flat();
+
+    for (const listener of listeners) {
+        listener.on("upgrade", upgrade);
+    }
 
     // Each still there? (Those that don't answer for a while are let go)
     const pinging = setInterval(() => {
@@ -348,7 +356,9 @@ export function attachPlay(httpServer, server, { limits = PLAY_LIMITS, clock = D
 
         close(reason = "server-stopping") {
             clearInterval(pinging);
-            httpServer.off("upgrade", upgrade);
+            for (const listener of listeners) {
+                listener.off("upgrade", upgrade);
+            }
 
             for (const place of [...places.values()]) {
                 clearTimeout(place.away);

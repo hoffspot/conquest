@@ -321,6 +321,69 @@ function nearbyPanel({ bonjour, nearby }) {
     );
 }
 
+/**
+ * Whether it answers the internet (§9.1: over TLS alone, with the `internet` setting on and a
+ * certificate), its secure addresses, its certificate, and a certificate of the owner's own put in
+ * (its key and chain, PEM) or taken out.
+ */
+function internetPanel({ internet }) {
+    const { certificate } = internet;
+    const status = h("p", { class: "warning", role: "status" });
+    const own = h(
+        "form",
+        { class: "certificate" },
+        field("Its key (PEM: server.key, privkey.pem)", h("input", { type: "file", name: "key", accept: ".key,.pem,.txt", required: true })),
+        field("Its certificate and chain (PEM: fullchain.pem)", h("input", { type: "file", name: "cert", accept: ".crt,.pem,.cer,.txt", required: true })),
+        h("button", { type: "submit" }, certificate ? "Use this one instead" : "Use it"),
+    );
+
+    own.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const [key, cert] = await Promise.all([own.elements.key.files[0]?.text(), own.elements.cert.files[0]?.text()]);
+
+        if (await doing(() => call("PUT", "/server/certificate", { key, cert }), { status, done: "Put in." })) {
+            await renderOverview();
+        }
+    });
+
+    return panel(
+        "The internet",
+        h("p", { class: internet.open ? "good" : "" }, internet.words),
+        internet.addresses.length ? h("div", { class: "addresses" }, internet.addresses.map((address) => h("div", { class: "address" }, qr(`${address}/`), copyable(`${address}/`, { link: true })))) : null,
+        certificate
+            ? facts([
+                  ["Its certificate's names", certificate.names.join(", ")],
+                  ["From", certificate.issuer],
+                  ["Runs till", when(certificate.notAfter)],
+                  ["Fingerprint (SHA-256)", h("code", { class: "small" }, certificate.fingerprint)],
+              ])
+            : null,
+        h("p", { class: "muted small" }, "On the Wi-Fi, plain http is still taken, and what's sent there isn't encrypted. From the internet, nothing but TLS: never the admin key, nor this page."),
+        h(
+            "details",
+            {},
+            h("summary", {}, "A certificate of your own"),
+            h("p", { class: "muted small" }, "One for this server's name (or address) from any certificate authority browsers trust. It's checked first: the key must be the certificate's, and it mustn't have run out."),
+            own,
+            certificate
+                ? button(
+                      "Take the certificate out",
+                      async () => {
+                          if (await confirmIt({ title: "Take the certificate out", note: "The server stops answering the internet at once, and anyone in from there is sent out.", go: "Take it out" })) {
+                              if (await doing(() => call("DELETE", "/server/certificate"), { status })) {
+                                  await renderOverview();
+                              }
+                          }
+                      },
+                      "danger",
+                  )
+                : null,
+            status,
+        ),
+    );
+}
+
 async function renderOverview() {
     state.server = await call("GET", "/server");
 
@@ -368,7 +431,7 @@ async function renderOverview() {
                   }),
               )
             : null,
-        panel("The internet", h("p", {}, overview.internet.why)),
+        internetPanel(overview),
         panel(
             "About",
             facts([

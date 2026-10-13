@@ -6,8 +6,9 @@
 // It says where it can be reached at home, its id, its management page (on this computer, needing
 // no key; from the Wi-Fi at /admin, with the admin key), and, the first time, its admin key (shown
 // then alone: keep it). It shows itself to others on the Wi-Fi with Bonjour (its `bonjour`
-// setting), saying so, or why macOS refused. Ctrl-C, or Stop on the management page, saves every
-// world and stops.
+// setting), saying so, or why macOS refused. With a certificate and its `internet` setting on, it
+// says where the internet reaches it (over TLS alone). Ctrl-C, or Stop on the management page,
+// saves every world and stops.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -27,6 +28,10 @@ console.log(`Its id: ${server.identity.id}`);
 
 for (const address of server.addresses()) {
     console.log(`On the Wi-Fi: ${address}`);
+}
+
+for (const address of server.internetClosed ? [] : server.secureAddresses()) {
+    console.log(`From the internet (over TLS alone): ${address}`);
 }
 
 console.log(`On this machine: http://localhost:${port}`);
