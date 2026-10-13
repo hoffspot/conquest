@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import * as der from "../server/net/der.js";
-import { canonical, certificate, derOf, describe as describeCert, newKey, pem, pemOfKey, readRequest, request, selfSigned } from "../server/net/x509.js";
+import { canonical, certificate, derOf, describe as describeCert, keyIdOf, newKey, pem, pemOfKey, readRequest, request, selfSigned } from "../server/net/x509.js";
 import { CERT_FILE, certificateReason, CertificateStore, CERTIFICATES, KEY_FILE } from "../server/storage/certificates.js";
 
 const made = [];
@@ -89,6 +89,24 @@ describe("certificates and their requests (server/net/x509.js)", () => {
         assert.ok(made.keyUsage.includes("1.3.6.1.5.5.7.3.1"), "for TLS servers");
         assert.ok(made.checkHost("pellagos-sam.duckdns.org") && made.checkIP("203.0.113.7") && made.checkIP("2001:db8::7"));
         assert.equal(made.checkHost("evil.example"), undefined);
+    });
+
+    it("makes a certificate authority's own, and those it signs name its key (subject and authority key identifiers, RFC 5280 §4.2.1.1-2)", () => {
+        const authority = newKey();
+        const spkiOf = (key) => (key.type === "public" ? key : createPublicKey(key)).export({ type: "spki", format: "der" });
+        const ca = new X509Certificate(pem("CERTIFICATE", certificate({ publicKey: authority.publicKey, names: ["Pellagos Test CA"], issuer: "Pellagos Test CA", issuerKey: authority.privateKey, days: 365, ca: true })));
+        const leaf = new X509Certificate(pem("CERTIFICATE", certificate({ publicKey: privateKey, names, issuer: "Pellagos Test CA", issuerKey: authority.privateKey })));
+        const extension = (cert, id) => der.read(cert.raw).children[0].children.find((child) => child.tag === 0xa3).children[0].children.find((ext) => der.oidOf(ext.children[0].content) === id);
+        const keyId = keyIdOf(spkiOf(authority.publicKey));
+
+        assert.equal(ca.ca, true);
+        assert.equal(ca.subject, "CN=Pellagos Test CA", "its name as given, not lowered as a server's");
+        assert.equal(ca.verify(authority.publicKey), true);
+        assert.equal(leaf.checkIssued(ca), true);
+        assert.equal(keyId.length, 20, "SHA-1 of the key's bits");
+        assert.deepEqual(der.read(extension(ca, "2.5.29.14").children[1].content).content, keyId);
+        assert.deepEqual(der.read(extension(leaf, "2.5.29.35").children[1].content).children[0].content, keyId);
+        assert.deepEqual(der.read(extension(leaf, "2.5.29.14").children[1].content).content, keyIdOf(spkiOf(privateKey)));
     });
 
     it("signs its own for TLS-ALPN-01, the key authorization's SHA-256 in the critical acmeIdentifier extension", () => {

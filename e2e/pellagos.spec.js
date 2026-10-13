@@ -10000,7 +10000,17 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
         // (And the nearest built in full, in the crowd till they are)
         const building = [...game.enlisting, ...game.enlistees.keys()].some((id) => id.startsWith("field-"));
 
-        return fielded.length === 80 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building;
+        // (And sorted since (app/game.js #marshal, a couple of times a second): any built in full
+        // while their kind's figure was being made, past the margin, put in their crowd)
+        if (!(fielded.length === 80 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building)) {
+            window.drawnAt = null;
+
+            return false;
+        }
+
+        window.drawnAt ??= { marshalled: game.marshalled };
+
+        return game.marshalled !== window.drawnAt.marshalled;
     };
 
     expect(await playUntil(page, drawn, { seconds: 120 })).toBe(true);
@@ -10150,7 +10160,16 @@ test("soldiers about the player past the bodies the quality's memory can hold in
         const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
         const building = [...game.enlisting, ...game.enlistees.keys()].some((id) => game.battle.actor(id)?.kind === "soldier");
 
-        return fielded.length === 12 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building && game.crowdWaiting.size === 0;
+        // (And sorted since, as the field battle's: app/game.js #marshal)
+        if (!(fielded.length === 12 && fielded.every(({ id }) => game.avatars.has(id)) && !game.crowds?.busy && !building && game.crowdWaiting.size === 0)) {
+            window.drawnAt = null;
+
+            return false;
+        }
+
+        window.drawnAt ??= { marshalled: game.marshalled };
+
+        return game.marshalled !== window.drawnAt.marshalled;
     };
 
     expect(await playUntil(page, drawn, { seconds: 150 })).toBe(true);

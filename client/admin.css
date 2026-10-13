@@ -456,6 +456,32 @@ dl.facts code {
     overflow-wrap: anywhere;
 }
 
+/* (Free certificates: how getting them goes, or the form that sets it up) */
+div.acme {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--panel-border);
+}
+
+div.acme h3 {
+    margin: 0 0 6px;
+}
+
+form.acme {
+    display: flex;
+    flex-direction: column;
+    max-width: 34rem;
+    margin: 8px 0;
+}
+
+form.acme .field {
+    flex: none;
+}
+
+form.acme button[type="submit"] {
+    align-self: flex-start;
+}
+
 /* --- Addresses and QR codes --- */
 
 .addresses {

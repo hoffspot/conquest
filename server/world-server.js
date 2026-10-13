@@ -9,12 +9,14 @@
 // handshake (0x16) goes to its https half, anything else to its plain http half; both answer the
 // same. Home addresses may use either. The internet is answered only when the owner's turned on
 // `internet` and the server has a certificate (storage/certificates.js), and over TLS alone
-// (guards.js); without a certificate, TLS isn't answered at all.
+// (guards.js); without a certificate, TLS isn't answered at all, but for a certificate
+// authority's TLS-ALPN-01 check while one's being got (certify.js).
 
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
 import os from "node:os";
+import tls from "node:tls";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NET_VERSION } from "../client/js/core/netplay.js";
@@ -23,10 +25,13 @@ import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
+import { Certifier, tokensFileOf } from "./certify.js";
 import { answer, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
-import { computerName } from "./platform/index.js";
+import { ACME_TLS, reverseNameOf } from "./net/acme.js";
+import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
+import { computerName, tokenStore } from "./platform/index.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
 import { createStaticHandler } from "./static.js";
@@ -66,7 +71,8 @@ export class WorldServer {
      * `cost` (short codes' hashing), `clock`, `awake` (keeping the machine awake), `interfaces`,
      * `hostname` and `name` (the machine's: its name is the computer's own, else its host name's),
      * `home` (which addresses are home: access/addresses.js isHome; the tests make loopback the
-     * internet with it), `clientDirectory`.
+     * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
+     * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `clientDirectory`.
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
@@ -78,10 +84,12 @@ export class WorldServer {
             await server.#add(await folder.worlds.open(id));
         }
 
+        await server.certifier.open();
+
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
 
         /** Whether an address is at home (the guards ask it). */
@@ -134,6 +142,10 @@ export class WorldServer {
         this.certificates = new CertificateStore(root);
         this.certificate = null;
         this.looking = null;
+
+        /** Free certificates got and renewed (certify.js), and the TLS-ALPN-01 checks it's answering meanwhile (by the reverse name asked for). */
+        this.certifier = new Certifier(this, { ...acme, tokens: tokens ?? tokenStore({ file: tokensFileOf(root) }) });
+        this.challenges = new Map();
 
         /** The management page's listener on the computer itself (admin.js), once it's listening; its port. */
         this.admin = null;
@@ -227,9 +239,26 @@ export class WorldServer {
         const handle = (request, response) => this.#request(request, response);
 
         this.http = http.createServer(limits, handle);
-        // (Its certificate's set on it when there's one: loadCertificate. A handshake gets as long as headers do)
-        this.https = https.createServer({ ...limits, minVersion: "TLSv1.2", handshakeTimeout: LIMITS_HTTP.headers }, handle);
+        // (Its certificate's set on it when there's one: loadCertificate. A handshake gets as long as
+        // headers do. A certificate authority's TLS-ALPN-01 check asks by the reverse name of the
+        // address it's checking, for acme-tls/1 alone: it's answered with that check's own
+        // certificate, and let go once the handshake's done)
+        this.https = https.createServer(
+            {
+                ...limits,
+                minVersion: "TLSv1.2",
+                handshakeTimeout: LIMITS_HTTP.headers,
+                SNICallback: (servername, done) => done(null, this.challenges.get(servername)),
+                ALPNCallback: ({ servername, protocols }) => (protocols.includes(ACME_TLS) && this.challenges.has(servername) ? ACME_TLS : protocols.includes("http/1.1") ? "http/1.1" : undefined),
+            },
+            handle,
+        );
         this.https.on("tlsClientError", (error, socket) => socket.destroy());
+        this.https.on("secureConnection", (socket) => {
+            if (socket.alpnProtocol === ACME_TLS) {
+                socket.end();
+            }
+        });
         this.tcp = net.createServer((socket) => this.#sort(socket));
         await new Promise((resolve, reject) => {
             this.tcp.once("error", reject);
@@ -245,6 +274,8 @@ export class WorldServer {
         this.play = attachPlay([this.http, this.https], this);
         this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
         this.looking.unref?.();
+        this.certifier.start();
+        this.certifier.renew().catch(() => {});
 
         if (!this.named) {
             this.name = (await computerName().catch(() => null)) ?? this.name;
@@ -270,7 +301,7 @@ export class WorldServer {
 
             socket.setTimeout(0);
 
-            if (secure && !this.certificate) {
+            if (secure && !this.certificate && !this.challenges.size) {
                 drop();
 
                 return;
@@ -316,6 +347,22 @@ export class WorldServer {
         await this.certificates.remove();
 
         return this.loadCertificate();
+    }
+
+    /**
+     * A certificate authority's TLS-ALPN-01 check answered for `address` (RFC 8737, RFC 8738): a
+     * certificate of its own naming the address and carrying the key authorization's SHA-256,
+     * given to a TLS connection that asks by the address's reverse name for acme-tls/1. Returns
+     * what stops answering it.
+     */
+    answerChallenge(address, keyAuthorization) {
+        const { privateKey } = newKey();
+        const name = reverseNameOf(address);
+        const context = tls.createSecureContext({ key: pemOfKey(privateKey), cert: pem("CERTIFICATE", selfSigned({ key: privateKey, names: [address], hours: 1, acme: keyAuthorization })) });
+
+        this.challenges.set(name, context);
+
+        return () => this.challenges.delete(name);
     }
 
     /** If the internet isn't answered now, everyone in from there sent out ("internet-closed"). Returns how many. */
@@ -400,6 +447,7 @@ export class WorldServer {
     async close() {
         clearInterval(this.looking);
         this.nearby.stop();
+        await this.certifier.close();
         this.play?.close("server-stopping");
         await this.registry.shutdown();
         await this.admin?.close();
