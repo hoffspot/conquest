@@ -69,7 +69,7 @@ import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
-import { nearestFree, squaresOf } from "../core/grid.js";
+import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
@@ -749,31 +749,15 @@ export class Game {
         this.together = null;
 
         if (!remote) {
-            // (Where they were when it last stopped, if it's somewhere that can be stood on still:
-            // else the nearest square that can, near it; else where the world puts them)
-            let square;
-
-            try {
-                square = place ? nearestFree(world.maps?.town ?? world, [Math.floor(place.x), Math.floor(place.y)], { within: 8 }) : undefined;
-            } catch {
-                place = null;
-            }
-
-            this.host.join({ id: me, hero, talks, explored, progress, standing, followers, ...(square ? { square } : {}) });
+            // (Where they were when it last stopped, and as they were: core/host.js join)
+            this.host.join({ id: me, hero, talks, explored, progress, standing, followers, place, vitals });
 
             const actor = place ? this.host.battle.actor(me) : null;
-
-            if (actor && actor.square[0] === Math.floor(place.x) && actor.square[1] === Math.floor(place.y)) {
-                Object.assign(actor, { x: place.x, y: place.y, facing: place.facing });
-            }
 
             // (Getting up at home still, if they fall)
             if (actor && world.spawns?.player) {
                 actor.spawn = [...world.spawns.player];
             }
-
-            // (As they were: hurt, poisoned, blessed, a spell still on them)
-            this.host.restoreVitals(me, vitals);
         }
 
         this.onFollowers = onFollowers;
@@ -5970,24 +5954,7 @@ export class Game {
      * get up if they're down; null if it's someone else's world.
      */
     place() {
-        const actor = this.battle.actor(this.me);
-
-        if (!actor || this.remote) {
-            return null;
-        }
-
-        if (actor.dead) {
-            return actor.spawnMap === "town" && actor.spawn ? { x: actor.spawn[0] + 0.5, y: actor.spawn[1] + 0.5, facing: actor.facing } : null;
-        }
-
-        if (actor.map === "town") {
-            return { x: actor.x, y: actor.y, facing: actor.facing };
-        }
-
-        const entrance = this.world.interiors?.of(actor.map)?.entrance;
-        const outside = entrance?.outside ?? this.world.tavern?.outside;
-
-        return outside ? { x: outside[0] + 0.5, y: outside[1] + 0.5, facing: entrance?.facing ?? actor.facing } : null;
+        return this.remote ? null : this.host.placeOf(this.me);
     }
 
     /**

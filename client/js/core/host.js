@@ -1069,14 +1069,26 @@ export class Host {
     /**
      * A player comes into the world: { id, hero, talks, explored } (their character, as kept:
      * app/save.js), at `square` on `map` (the world's start, to begin with; the nearest free
-     * square to it), in their `role` in it (PLAYER_ROLES: an owner, trusted, or a player). Returns their
-     * record (players).
+     * square to it), in their `role` in it (PLAYER_ROLES: an owner, trusted, or a player). Or, if
+     * they're coming back, where they were when they left (`place`: placeOf's), if it can be
+     * stood on still (else the nearest square that can, near it), and as they were (`vitals`:
+     * vitalsOf's). Returns their record (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player" }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player", place = null, vitals = null }) {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
         const as = PLAYER_ROLES.includes(role) ? role : "player";
+        let back = place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
 
-        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map, ...(as === "player" ? {} : { role: as }) }]);
+        if (back) {
+            try {
+                square = nearestFree(this.world.maps?.town ?? this.world, [Math.floor(back.x), Math.floor(back.y)], { within: 8 });
+                map = "town";
+            } catch {
+                back = null;
+            }
+        }
+
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
 
         if (this.players.has(id)) {
             return this.players.get(id);
@@ -1129,9 +1141,48 @@ export class Host {
         }
 
         this.#scoutsSee([player]);
+
+        // (Just where they were, facing as they were, if that square was free; and as they were:
+        // hurt, poisoned, blessed, a spell still on them)
+        const actor = this.battle.actor(id);
+
+        if (back && actor.square[0] === Math.floor(back.x) && actor.square[1] === Math.floor(back.y)) {
+            Object.assign(actor, back);
+        }
+
+        if (vitals) {
+            this.restoreVitals(id, vitals);
+        }
+
         this.#event("join", { id, name: hero.name, realm: player.realm });
 
         return player;
+    }
+
+    /**
+     * Where a player is, to come back to when they next come in (join's `place`): { x, y, facing }
+     * out in the world, or outside the door of the building they're in, or where they'll get up
+     * if they're down; null if there's no such player, or nowhere to say.
+     */
+    placeOf(id) {
+        const actor = this.battle.actor(id);
+
+        if (!actor) {
+            return null;
+        }
+
+        if (actor.dead) {
+            return actor.spawnMap === "town" && actor.spawn ? { x: actor.spawn[0] + 0.5, y: actor.spawn[1] + 0.5, facing: actor.facing } : null;
+        }
+
+        if (actor.map === "town") {
+            return { x: actor.x, y: actor.y, facing: actor.facing };
+        }
+
+        const entrance = this.world.interiors?.of(actor.map)?.entrance;
+        const outside = entrance?.outside ?? this.world.tavern?.outside;
+
+        return outside ? { x: outside[0] + 0.5, y: outside[1] + 0.5, facing: entrance?.facing ?? actor.facing } : null;
     }
 
     /**

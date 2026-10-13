@@ -5,9 +5,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { BOUGHT, COMPANY, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { nearestFree } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { ABILITIES, ITEMS } from "../client/js/core/progress.js";
 import { SPELLS } from "../client/js/core/spells.js";
+import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -156,5 +158,43 @@ describe("how a player is kept between visits (host.js vitalsOf, restoreVitals)"
         assert.deepEqual(kept(), [["Afterglow: stamina back 100% faster", 2, COMPANY.ms]]);
         again.restoreVitals(HOST_PLAYER, { boons: [{ id: "afterglow", left: 5000, faster: "lots" }, { id: "constructor", left: 5000 }] });
         assert.deepEqual(kept(), [["Afterglow: stamina back 50% faster", 1.5, 5000]]);
+    });
+    it("brings a player coming back in where they left (placeOf) and as they were, the same on every copy of the world: their join's recorded with it", () => {
+        const host = hosted();
+        const town = host.world.maps.town;
+        const actor = host.battle.actor(HOST_PLAYER);
+        const [x, y] = nearestFree(town, [actor.square[0] + 3, actor.square[1] + 2]);
+
+        Object.assign(actor, { x: x + 0.3, y: y + 0.7, square: [x, y], facing: 1.25, hp: actor.maxHp - 15 });
+
+        const place = host.placeOf(HOST_PLAYER);
+        const vitals = host.vitalsOf(HOST_PLAYER);
+        const character = host.leave(HOST_PLAYER);
+
+        assert.deepEqual(place, { x: x + 0.3, y: y + 0.7, facing: 1.25 });
+
+        // (A copy of the world, as one who'd joined has it; then the host's join, recorded, and played on it)
+        const copy = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+        const ops = [];
+
+        host.recorder = (op) => ops.push(decode(encode(op)));
+        run(host, 500);
+        run(copy, 500);
+        host.join({ id: "ADA0000001", ...character, place, vitals });
+        copy.join(ops.find(([kind]) => kind === "j")[1]);
+
+        for (const world of [host, copy]) {
+            const back = world.battle.actor("ADA0000001");
+
+            assert.deepEqual([back.x, back.y, back.facing, back.hp], [x + 0.3, y + 0.7, 1.25, actor.maxHp - 15]);
+        }
+
+        assert.equal(copy.checksum(), host.checksum());
+
+        // (Somewhere that can't be stood on any more: the nearest that can, near it)
+        const gone = hosted();
+
+        gone.join({ id: "ADA0000002", ...character, place: { x: -5000, y: -5000, facing: 0 } });
+        assert.ok(gone.battle.actor("ADA0000002"));
     });
 });

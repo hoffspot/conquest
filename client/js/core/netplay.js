@@ -39,6 +39,8 @@
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
 //   joiner -> host   { kind: "hello", version, character }   (character: as Host.join takes it)
+//                    { kind: "ready" }                         (its copy of the world made: playing)
+//                    { kind: "away", hidden }                  (its page hidden, or shown again)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again)
 //                    { kind: "ping", t }                       (t: the joiner's clock, ms)
@@ -64,7 +66,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 112;
+export const NET_VERSION = 113;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -99,6 +101,7 @@ export const NET_REFUSALS = Object.freeze({
     version: "That world's being played in another version of the game.",
     full: "That world's full.",
     character: "Your character couldn't be brought into that world.",
+    here: "You're in that world already, on another device.",
 });
 
 /** Why a player was sent out of a world (Hosting.kick), as they're told it. */
@@ -205,6 +208,27 @@ export class Hosting {
         /** Told when one's sent out (peer), once they've been told why: to close their link. */
         this.onKick = () => {};
 
+        /** The most players in the world at once (on the world server: its owner's setting). */
+        this.most = MOST_PLAYERS;
+
+        /**
+         * The id each who joins plays under (peer): a guest's, unless whoever runs it says
+         * otherwise (the world server: the player its tickets know, and which of their heroes).
+         */
+        this.idOf = () => `guest-${this.nextGuest++}`;
+
+        /**
+         * The character each who joins brings into the world (peer, and the character they sent:
+         * as Host.join takes it), made safe (characterFrom); or null if it can't come in. Unless
+         * whoever runs it says otherwise (the world server: a hero it keeps, where they left it,
+         * as they were).
+         */
+        this.characterOf = (_peer, character) => characterFrom(character);
+
+        /** Told when one who's joined has made their copy of the world and is playing (peer); and when their page is hidden or shown again (peer, hidden). */
+        this.onReady = () => {};
+        this.onAway = () => {};
+
         /**
          * The part each who joins plays in the world (peer: core/host.js PLAYER_ROLES): a player,
          * unless whoever runs it says otherwise (the world server, by the key they came with).
@@ -305,6 +329,18 @@ export class Hosting {
             case "again":
                 this.#again(peer);
                 break;
+            case "ready":
+                if (this.players.has(peer)) {
+                    this.onReady(peer);
+                }
+
+                break;
+            case "away":
+                if (this.players.has(peer)) {
+                    this.onAway(peer, message.hidden === true);
+                }
+
+                break;
             case "ping":
                 // (At once: how long a word takes to come and go, not how long till the next flush)
                 if (this.players.has(peer) && Number.isFinite(message.t)) {
@@ -394,13 +430,13 @@ export class Hosting {
             return;
         }
 
-        if (this.host.players.size >= MOST_PLAYERS) {
+        if (this.host.players.size >= this.most) {
             refuse("full");
 
             return;
         }
 
-        const brought = characterFrom(character);
+        const brought = this.characterOf(peer, character);
 
         if (!brought) {
             refuse("character");
@@ -408,7 +444,13 @@ export class Hosting {
             return;
         }
 
-        const id = `guest-${this.nextGuest++}`;
+        const id = this.idOf(peer);
+
+        if (this.host.players.has(id)) {
+            refuse("here");
+
+            return;
+        }
         const { world } = this.host;
 
         // (What's been done so far, to those already in; then their coming)
@@ -518,7 +560,10 @@ export class Hosting {
         return true;
     }
 
-    /** One who'd joined has gone: out of the world. */
+    /**
+     * One who'd joined has gone: out of the world. Whoever runs it is told, with their character
+     * as it's to be kept, where they were and as they were (Host.placeOf, vitalsOf: to come back to).
+     */
     gone(peer) {
         const id = this.players.get(peer);
 
@@ -529,10 +574,12 @@ export class Hosting {
         this.players.delete(peer);
         this.said.delete(id);
 
+        const place = this.host.placeOf(id);
+        const vitals = this.host.vitalsOf(id);
         const character = this.host.leave(id);
 
         this.flush();
-        this.onLeave(id, peer, character);
+        this.onLeave(id, peer, character && { ...character, place, vitals });
     }
 
     /** The world closed to others again: everyone who'd joined out of it, and nothing more recorded. */
@@ -764,6 +811,16 @@ export class Joining {
     /** How many of the host's steps are waiting to be played. */
     get behind() {
         return this.#waiting;
+    }
+
+    /** Tell the host its copy of the world is made, and it's playing (on the world server: the world's clock starts, if it's stopped). */
+    ready() {
+        this.send(encode({ kind: "ready" }));
+    }
+
+    /** Tell the host its page is hidden (`hidden`), or shown again (on the world server: the world stops while everyone's is). */
+    away(hidden) {
+        this.send(encode({ kind: "away", hidden: Boolean(hidden) }));
     }
 
     /** Ask the host how long a word takes to it and back (rtt, once its pong comes). */

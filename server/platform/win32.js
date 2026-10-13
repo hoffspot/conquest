@@ -1,6 +1,7 @@
 // Windows: the data in the roaming application data (%APPDATA%), the logs and caches in the local
 // one (%LOCALAPPDATA%), each in a folder named for the server; under the home folder where
-// Windows keeps them if they aren't set.
+// Windows keeps them if they aren't set. Keeping it awake needs SetThreadExecutionState, which
+// Node can't call without native code: not yet.
 
 import path from "node:path";
 import { APP_NAME } from "./names.js";
@@ -15,4 +16,9 @@ export function folders({ env, home }) {
         logs: path.win32.join(local, APP_NAME, "Logs"),
         cache: path.win32.join(local, APP_NAME, "Cache"),
     };
+}
+
+/** The machine kept from sleeping while players are in: not yet on Windows. Returns { command, stop() }. */
+export function keepAwake() {
+    return { command: null, stop: () => {} };
 }
