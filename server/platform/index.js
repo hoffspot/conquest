@@ -4,8 +4,9 @@
 // the same functions), chosen by `process.platform`. For now, where the server keeps its data,
 // logs and caches, keeping the machine awake while players are in, the computer's own name, and
 // Bonjour (bonjour.js: what each system's tool shares), and where tokens for others' services are
-// kept (the Keychain on macOS); running at login comes later (S8). Nothing outside this folder may
-// run a command only one system has (test/registry.test.js checks).
+// kept (the Keychain on macOS), and the router's address (the default gateway); running at login
+// comes later (S8). Nothing outside this folder may run a command only one system has
+// (test/registry.test.js checks).
 
 import os from "node:os";
 import { TokenFile } from "../storage/tokens.js";
@@ -66,4 +67,9 @@ export function bonjour({ system = process.platform, ...options } = {}) {
  */
 export function tokenStore({ system = process.platform, file, ...options } = {}) {
     return system === "darwin" ? darwin.keychain(options) : new TokenFile(file);
+}
+
+/** The router: the default gateways, for IPv4 and IPv6 ({ v4, v6 }, each an address or null). */
+export function gateways({ system = process.platform, ...options } = {}) {
+    return platformFor(system).gateways(options);
 }

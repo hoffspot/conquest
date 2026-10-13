@@ -57,7 +57,8 @@ async function serve({ internet = false, settings = {} } = {}) {
 
     made.push(root);
 
-    const server = await WorldServer.open(root, { cost: CHEAP, awake: () => ({ stop() {} }), ...(internet ? { home: () => false } : {}) });
+    // (Its router never asked: router.js has tests of its own, against a router of their own)
+    const server = await WorldServer.open(root, { cost: CHEAP, awake: () => ({ stop() {} }), router: false, ...(internet ? { home: () => false } : {}) });
 
     await server.settings.change({ setAsideMinutes: 0, ...settings });
     await server.listen(0, "127.0.0.1");

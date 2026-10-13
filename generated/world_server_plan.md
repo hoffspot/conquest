@@ -1,7 +1,8 @@
 # The world server: the plan
 
-A plan, being built: S0 to S5 are done, and S6 is under way: TLS on the one port (S6a) and the
-free certificates (S6b) are done, and opening the router (S6c) is next ([§15](#15-milestones)). It is a living
+A plan, being built: S0 to S5 are done, and S6 is under way: TLS on the one port (S6a), the free
+certificates (S6b) and opening the router (S6c) are done, and the page's internet setup (S6d) is
+next ([§15](#15-milestones)). It is a living
 document. Each milestone updates it as it lands, and the [change log](#18-change-log) at the end
 records every change and why.
 
@@ -784,19 +785,24 @@ yet offer in a stable form. Revisit when it does.
 
 ### 9.3 Opening the router
 
-- **Asking the router.** When the owner turns on **Open to the internet**, the server asks the
-  router for a mapping. It tries, in order:
-  - PCP (RFC 6887);
+- **Asking the router.** While the server answers the internet (**Answer the internet**) and may
+  ask (**Ask the router**, on at first), it asks the router (the default gateway: `route` on
+  macOS, the kernel's routing tables on Linux) for a mapping. It tries, in order:
+  - PCP (RFC 6887: a mapping renewed by the nonce it was made with);
   - NAT-PMP (RFC 6886: UDP 5351, a 2-hour lifetime renewed at half-life; it's in Apple's own
     routers);
-  - UPnP-IGD.
+  - UPnP-IGD (found by SSDP, believed only at a home address; a router that takes only mappings
+    that don't run out is asked for one).
 
-  It maps TCP 8480, plus 443 for an IP certificate.
+  It maps TCP 8480 the same outside, plus 443 for an IP certificate. PCP and NAT-PMP forward one
+  outside port to each inside one, so 443 goes to a second listener the server opens on any free
+  port, which takes the same connections as 8480.
 - **IPv6.** Addresses need no mapping, but home routers firewall inbound IPv6. The server asks for
   a pinhole through PCP or UPnP-IGD v2's IPv6 firewall control where the router offers it.
 - **While running.** Mappings are renewed, and removed when the owner turns internet access off or
-  the server stops. **Close to the internet** is one switch on the page: the mapping goes, and
-  internet connections are refused from that moment.
+  the server stops. A router that won't is asked again after a minute, then 5, then 30. **Close
+  to the internet** is one switch on the page: the mapping goes, and internet connections are
+  refused from that moment.
 - **macOS permission.** Talking to the router counts as reaching the local network. A Terminal
   launch is exempt; the Phase 2 app needs macOS's Local Network permission ([§11](#11-on-the-mac)).
 - **When the router won't.** The page shows manual steps: the router's admin address (the
@@ -806,8 +812,10 @@ yet offer in a stable form. Revisit when it does.
     `stun.l.google.com`. These are free, with no service promise.
   - **CGNAT.** Spotted when the router's external address falls in `100.64.0.0/10` or differs from
     the STUN answer ([§9.4](#94-behind-cgnat)).
-  - **Hairpin check.** The server tries its own public address through the router. Success proves
-    the port is open; failure proves nothing, as many routers don't hairpin.
+  - **Hairpin check.** The server tries its own public address through the router (a connection
+    that starts `PELLAGOS-HAIRPIN` and a one-time token, which its own port recognizes). Success
+    proves the port is open; failure proves nothing, as many routers don't hairpin. It isn't tried
+    behind a provider's NAT.
   - **Free extra proof.** A Let's Encrypt IP certificate can only be issued if the port is reachable.
   - **From outside.** The definitive test is the game's **"Test this server"** button on any device
     on another network (a phone on cellular), which reports back to the server's page.
@@ -1287,6 +1295,23 @@ in the user's order:
   on every system): each route's certificate got and taken up on a running server, renewed when
   it's due naming the one it replaces, failures backed off, and the token never in a reply, a file
   beside it, or the journal.
+- **S6c, done.** The router asked ([§9.3](#93-opening-the-router)) while the internet's answered:
+  PCP, then NAT-PMP, then UPnP-IGD (`server/net/pcp.js`, `natpmp.js`, `upnp.js`, over
+  `server/net/udp.js`), each mapping asked for 2 hours and renewed at half-life (a PCP mapping by
+  its own nonce); the play port the same outside, and the internet's 443 to the server's second
+  port while the certificate's route is the IP address. An IPv6 pinhole for this computer's global
+  address, by PCP over IPv6 or UPnP's IPv6 firewall, kept the same way (PCP's by its nonce, UPnP's
+  by UpdatePinhole). Let go when the internet's no longer answered
+  or the server stops. The gateway from the platform layer (`route` on macOS, `/proc/net/route`
+  and `ipv6_route` on Linux, none yet on Windows). Then how far it got (`server/router.js`): the
+  public address by STUN (`server/net/stun.js`), a provider's sharing told apart (100.64/10, a
+  private address, or not the one the internet sees), and the hairpin. The management page says
+  what the router forwards, or why it won't and how to forward the port by hand, and asks again
+  on demand (`POST /server/router`); Terminal says it as it changes; **Ask the router** in
+  Settings turns it off. Measured against a router of the tests' own (`test/fake-router.js`:
+  PCP and NAT-PMP on one UDP port, SSDP, the IGD's description and SOAP control, STUN), each
+  protocol's fallback and refusal, the pinholes, 443's second port, and CGNAT, in unit tests and on
+  the page in a browser. The manual check on a real router is the owner's.
 
 | # | Milestone | Proven by |
 |---|---|---|
@@ -1364,3 +1389,4 @@ questions go here as they come up.
 | 2026-10-13 | **S6a built:** TLS on the one port. `server/world-server.js` listens with a plain TCP listener that hands each connection, by its first byte, to an https half (its certificate set with `setSecureContext`, TLS 1.2 or later, a handshake given 5 s) or a plain http half, both answering alike; told they're listening so their own time limits run (checked every second); every connection closed with the port. Certificates: `server/net/der.js` (DER, written and read), `server/net/x509.js` (ECDSA P-256 keys, certificate requests, certificates signed by another key or their own, TLS-ALPN-01's acmeIdentifier, a certificate described), `server/storage/certificates.js` (kept, checked, `0600`). The `internet` setting (off at first); `guard()` returns where a request is from (`home` or `internet`; the tests make loopback the internet with the `home` option) and takes TLS into account: the internet refused while it's closed (no setting, or no certificate), and over TLS alone once it's open (`secure`; page loads sent on with 308). `api.js` and `play.js` carry where each is from to the access hooks, so the admin key is never taken from the internet; `/admin` is refused there too. Secure addresses (`https://name:port`, one per name the certificate carries) are listed in `/status` once the internet's answered, said in Terminal, and on the management page with the certificate's facts; an owner's own certificate is put in from the page (`PUT /server/certificate`) or its files. The game words `secure` and `internet-closed`. `test/x509.test.js`, `test/tls.test.js` and `e2e/secure.spec.js` are §15's proof so far. | §15's S6, its first part. The owner's own certificate wasn't one of §9.2's routes: it's the plainest way to the internet for an owner who already has one, and it's how the server's TLS is proved before ACME (S6b) gets certificates for it. |
 | 2026-10-13 | **S5 built:** nearby servers on the Wi-Fi. Bonjour in the platform layer: `server/platform/bonjour.js` (the service, the TXT record and its percent-encoded values, the refusals named for the owner, a tool's handle read a line at a time), `dns-sd -R/-B/-L` on macOS (`darwin.js`, with the computer's own name from `scutil`), `avahi-publish-service` and `avahi-browse -rpk` on Linux (`linux.js`), and a refusal on Windows. `server/nearby.js`: advertised under the server's name, advertised again when its TXT changes (at most every 10 s, looked at every 30 s), the others resolved (their IPv4 address looked up) and listed in `/status`'s `nearby`, never itself, lost when they go; refused or stopped, said and tried again a minute later; on and off with the `bonjour` setting. The status card carries the server's name. The guards let a nearby server's pages use the play routes, by exact address. The game's Worlds screen lists the servers a known one finds, "Nearby", added with a tap; the management page's overview says whether it's shown on the Wi-Fi (or why not) and lists the servers near it; `npm run world-server` says so in Terminal. `test/nearby.test.js` (a fake responder: `test/fake-bonjour.js`) and `e2e/nearby.spec.js` are §15's proof. | §15's S5. The nearby servers' origins weren't in the plan: without them, the game from one server's page couldn't use another's, though it found it. The manual check on two Macs needs macOS, so it's the owner's. |
 | 2026-10-13 | **S6b built:** free certificates. `server/net/acme.js` (RFC 8555 on `node:crypto`: ES256 JWS with jwk then kid, nonces and one retry of a stale one, POST-as-GET, orders with a profile and `replaces`, renewal information by RFC 9773's certificate id, TLS-ALPN-01's reverse names), `server/net/dns-hosts.js` (DuckDNS, Cloudflare and deSEC, each by its own API; a record waited for at its zone's own nameservers), `server/certify.js` (the three routes, the account key, `acme.json` without the token, renewal by the CA's window else a third of the life left, retries after 1, 6 and 24 hours, a DuckDNS name pointed home every 5 minutes), TLS-ALPN-01 answered on the one port (`answerChallenge`: SNI and ALPN callbacks on the https half), tokens in the Keychain through `security -i` on its standard input or `certificates/tokens.json`; x509.js's certificates name their key and their issuer's (subject and authority key identifiers), as a renewal's id needs. The API (`GET`, `POST`, `DELETE /server/certificate/acme`, `POST …/renew`), the page's form and how it goes, and Terminal's lines. The page's overview no longer refreshes over an open form. `test/fake-acme.js` is the CA the tests use, `test/acme.test.js` and a third case in `e2e/secure.spec.js` the proof. And the field battle's two crowd tests wait for a sort of the soldiers after everything's drawn: they could look in the half second before it and see more drawn in full than the margin (seen on CI, #372). | §15's S6, its second part. §9.2 had renewal "30 days before expiry" and "every 3 days": Let's Encrypt now says when (renewal information), and a third of the life left is the fallback. DuckDNS's place on the Public Suffix List was checked (§16). Pebble, named in §15, is a Go program: a CA in the tests' own JavaScript runs everywhere `npm test` does, checking the same things. |
+| 2026-10-13 | **S6c built:** the router asked to let the internet in. `server/net/udp.js` (a UDP question asked again, 250 ms doubling, answered only from where it was asked; addresses as 16 bytes), `pcp.js` (MAP, its nonce kept; a NAT-PMP router answering told apart), `natpmp.js`, `upnp.js` (SSDP, the description's services, SOAP: AddPortMapping, AddAnyPortMapping on IGD v2, DeletePortMapping, GetExternalIPAddress, the IPv6 firewall's AddPinhole, UpdatePinhole and DeletePinhole), `stun.js` (binding requests, XOR-MAPPED-ADDRESS); `server/router.js` (the order, the mappings and their renewal, the pinhole, the checks, the words); the platform layer's `gateways()`; the world server's second port, its hairpin check, and the `router` setting; the page's **The router** and `POST /server/router`. `test/fake-router.js` and `test/router.test.js`, and a fourth case in `e2e/secure.spec.js`, are the proof. | §15's S6, its third part. Found while building: PCP and NAT-PMP forward one outside port to each inside one, so the IP certificate's 443 can't share the play port's mapping; a second listener takes it. |

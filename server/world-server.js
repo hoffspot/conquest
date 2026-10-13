@@ -12,6 +12,7 @@
 // (guards.js); without a certificate, TLS isn't answered at all, but for a certificate
 // authority's TLS-ALPN-01 check while one's being got (certify.js).
 
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
@@ -34,6 +35,7 @@ import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
 import { computerName, tokenStore } from "./platform/index.js";
 import { attachPlay } from "./play.js";
 import { Registry } from "./registry.js";
+import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
@@ -46,6 +48,9 @@ export const CERTIFICATE_LOOK = 10 * 60 * 1000;
 
 // A TLS handshake's first byte (a TLS record of type handshake: RFC 8446 §5.1)
 const HANDSHAKE = 0x16;
+
+// What the server's own hairpin check begins with (then its token): router.js check
+const HAIRPIN = "PELLAGOS-HAIRPIN ";
 
 // What's journalled of each event the access hooks are told of (keys by their labels, never as they are)
 const JOURNAL = Object.freeze({
@@ -89,7 +94,7 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop });
 
         /** Whether an address is at home (the guards ask it). */
@@ -145,6 +150,12 @@ export class WorldServer {
 
         /** Free certificates got and renewed (certify.js), and the TLS-ALPN-01 checks it's answering meanwhile (by the reverse name asked for). */
         this.certifier = new Certifier(this, { ...acme, tokens: tokens ?? tokenStore({ file: tokensFileOf(root) }) });
+
+        /** The home's router, asked to let the internet in while it's answered (router.js; none if `router` is false, as most tests have it). */
+        this.router = router === false ? null : new Router(this, router);
+
+        /** Hairpin checks waiting for their own connection to come back (router.js check). */
+        this.hairpins = new Map();
         this.challenges = new Map();
 
         /** The management page's listener on the computer itself (admin.js), once it's listening; its port. */
@@ -265,6 +276,7 @@ export class WorldServer {
             this.tcp.listen(port, host, resolve);
         });
         this.port = this.tcp.address().port;
+        this.host = host;
 
         // (The halves never listen themselves, the port does: told it's listening, each keeps its
         // request and header time limits, which an HTTP server starts checking only then)
@@ -276,6 +288,7 @@ export class WorldServer {
         this.looking.unref?.();
         this.certifier.start();
         this.certifier.renew().catch(() => {});
+        this.followRouter();
 
         if (!this.named) {
             this.name = (await computerName().catch(() => null)) ?? this.name;
@@ -300,6 +313,14 @@ export class WorldServer {
             const secure = chunk[0] === HANDSHAKE;
 
             socket.setTimeout(0);
+
+            // (The server reaching itself by its public address: router.js check)
+            if (chunk.subarray(0, HAIRPIN.length).toString("latin1") === HAIRPIN) {
+                this.hairpins.get(chunk.subarray(HAIRPIN.length).toString("latin1").trim())?.();
+                drop();
+
+                return;
+            }
 
             if (secure && !this.certificate && !this.challenges.size) {
                 drop();
@@ -363,6 +384,49 @@ export class WorldServer {
         this.challenges.set(name, context);
 
         return () => this.challenges.delete(name);
+    }
+
+    /** The router asked to let the internet in, or not: while the internet's answered and the `router` setting's on. */
+    followRouter() {
+        return this.router?.follow(this.settings.get("internet") && this.settings.get("router") && this.port !== null).catch(() => {});
+    }
+
+    /**
+     * A second listener for the same connections, on any free port: where the router sends the
+     * internet's 443 while the certificate's for the IP address (PCP and NAT-PMP forward one outside
+     * port to each inside one, and the play port has its own). Returns its port.
+     */
+    async secondPort() {
+        if (!this.second) {
+            const second = net.createServer((socket) => this.#sort(socket));
+
+            await new Promise((resolve, reject) => {
+                second.once("error", reject);
+                second.listen(0, this.host, resolve);
+            });
+            this.second = second;
+        }
+
+        return this.second.address().port;
+    }
+
+    /** Whether the server reaches itself at `address`:`port` (through the router, its public address) within `within` ms. */
+    async hairpin(address, port, within = 3000) {
+        const token = randomBytes(12).toString("base64url");
+        const seen = new Promise((resolve) => this.hairpins.set(token, () => resolve(true)));
+        const socket = net.connect({ host: address, port });
+        let timer;
+
+        socket.on("error", () => {});
+        socket.write(`${HAIRPIN}${token}\n`);
+
+        const reached = await Promise.race([seen, new Promise((resolve) => (timer = setTimeout(() => resolve(false), within)))]);
+
+        clearTimeout(timer);
+        this.hairpins.delete(token);
+        socket.destroy();
+
+        return reached;
     }
 
     /** If the internet isn't answered now, everyone in from there sent out ("internet-closed"). Returns how many. */
@@ -448,6 +512,8 @@ export class WorldServer {
         clearInterval(this.looking);
         this.nearby.stop();
         await this.certifier.close();
+        await this.router?.close();
+        this.second?.close();
         this.play?.close("server-stopping");
         await this.registry.shutdown();
         await this.admin?.close();

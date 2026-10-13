@@ -28,6 +28,7 @@ export const SETTINGS = Object.freeze({
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
     internet: { kind: "boolean", default: false, about: "Answer the internet (over TLS alone, once the server has a certificate)" },
+    router: { kind: "boolean", default: true, about: "Ask the router to let the internet in (PCP, NAT-PMP or UPnP), while the internet's answered" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
 });
 

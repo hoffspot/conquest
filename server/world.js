@@ -8,8 +8,8 @@
 // then alone: keep it). It shows itself to others on the Wi-Fi with Bonjour (its `bonjour`
 // setting), saying so, or why macOS refused. With a certificate and its `internet` setting on, it
 // says where the internet reaches it (over TLS alone); getting free certificates (certify.js), how
-// that stands, and each one got or refused. Ctrl-C, or Stop on the management page, saves every
-// world and stops.
+// that stands, and each one got or refused; and what the router forwards, or why it won't.
+// Ctrl-C, or Stop on the management page, saves every world and stops.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -43,6 +43,21 @@ if (certificates()) {
 }
 
 server.certifier.onChange = () => console.log(certificates() ?? "");
+
+// (The router: what it forwards, or why it won't, said as it changes)
+let routerSaid = null;
+
+if (server.router) {
+    server.router.onChange = () => {
+        const saying = server.manage.internet().router?.words;
+
+        if (saying && saying !== routerSaid) {
+            console.log(saying);
+        }
+
+        routerSaid = saying ?? routerSaid;
+    };
+}
 
 console.log(`On this machine: http://localhost:${port}`);
 console.log(`Its management page, on this computer (no key needed): http://localhost:${adminPort}`);

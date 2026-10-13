@@ -253,6 +253,11 @@ export class Certifier {
                 this.token = await this.tokens.get(`acme:${this.config.host}`);
             }
 
+            // (The internet's 443 forwarded first, where the router can be asked: TLS-ALPN-01 comes there)
+            if (route === "ip") {
+                await this.server.router?.refresh().catch(() => {});
+            }
+
             const accountKey = await this.#accountKey();
             const client = this.#client(accountKey);
             const host = this.#host();

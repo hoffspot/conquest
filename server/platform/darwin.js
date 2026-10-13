@@ -4,7 +4,8 @@
 // dns-sd, macOS's own tool for its responder (mDNSResponder): run from Terminal it needs no Local
 // Network permission of its own (Terminal's children are exempt); refused, it says so with one of
 // DNSServiceErrorType's codes, which are named for the owner here. Tokens for others' services
-// (a DNS host's) in the login Keychain, through `security`.
+// (a DNS host's) in the login Keychain, through `security`. The router (the default gateway, for
+// IPv4 and IPv6) as `route` tells it.
 
 import { execFile as execFileProcess, spawn as spawnProcess } from "node:child_process";
 import path from "node:path";
@@ -54,6 +55,27 @@ export function computerName({ execFile = execFileProcess } = {}) {
             resolve(null);
         }
     });
+}
+
+/** What `route -n get default` says the gateway is (its `gateway:` line), or null. */
+export function routeGateway(text) {
+    return /^\s*gateway:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
+}
+
+/** The default gateways, for IPv4 and IPv6, as `route` tells them: { v4, v6 } (each an address, or null). */
+export async function gateways({ execFile = execFileProcess } = {}) {
+    const ask = (args) =>
+        new Promise((resolve) => {
+            try {
+                execFile("/sbin/route", args, { timeout: 2000 }, (error, stdout) => resolve(error ? null : routeGateway(stdout)));
+            } catch {
+                resolve(null);
+            }
+        });
+
+    const [v4, v6] = await Promise.all([ask(["-n", "get", "default"]), ask(["-n", "get", "-inet6", "default"])]);
+
+    return { v4, v6 };
 }
 
 /**

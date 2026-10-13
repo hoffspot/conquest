@@ -2,9 +2,11 @@
 // data in $XDG_DATA_HOME, the logs in $XDG_STATE_HOME, the caches in $XDG_CACHE_HOME), each
 // where the specification puts it under the home folder if it isn't set (or isn't absolute).
 // Kept awake by systemd-inhibit where there's systemd (and nothing where there isn't). Bonjour
-// through Avahi's tools (avahi-utils), where avahi-daemon runs.
+// through Avahi's tools (avahi-utils), where avahi-daemon runs. The router (the default gateway)
+// from the kernel's routing tables, /proc/net/route and /proc/net/ipv6_route.
 
 import { spawn as spawnProcess } from "node:child_process";
+import { readFile as readFileAsync } from "node:fs/promises";
 import path from "node:path";
 import { refusal, SERVICE, ToolHandle } from "./bonjour.js";
 import { APP_FOLDER, APP_NAME } from "./names.js";
@@ -134,4 +136,44 @@ export function bonjour({ spawn = spawnProcess } = {}) {
             return Promise.reject({ code: "unsupported", message: `${name} is resolved as it's browsed here.` });
         },
     };
+}
+
+/** The IPv4 default gateway in /proc/net/route's table (its lowest metric), or null. */
+export function routeTable(text) {
+    const routes = String(text)
+        .split("\n")
+        .slice(1)
+        .map((line) => line.trim().split(/\s+/))
+        .filter((fields) => fields.length >= 8 && fields[1] === "00000000" && parseInt(fields[3], 16) & 0x2)
+        .sort((a, b) => Number(a[6]) - Number(b[6]));
+    const hex = routes[0]?.[2];
+
+    // (The gateway's bytes, as the kernel holds them: least significant first)
+    return hex ? [6, 4, 2, 0].map((at) => parseInt(hex.slice(at, at + 2), 16)).join(".") : null;
+}
+
+/** The IPv6 default gateway in /proc/net/ipv6_route's table (its lowest metric; a link-local one with its interface), or null. */
+export function routeTable6(text) {
+    const routes = String(text)
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/))
+        .filter((fields) => fields.length >= 10 && /^0{32}$/.test(fields[0]) && fields[1] === "00" && !/^0{32}$/.test(fields[4]))
+        .sort((a, b) => parseInt(a[5], 16) - parseInt(b[5], 16));
+    const [route] = routes;
+
+    if (!route) {
+        return null;
+    }
+
+    // (Written short, as URLs write it)
+    const address = new URL(`http://[${route[4].match(/.{4}/g).join(":")}]`).hostname.slice(1, -1);
+
+    return address.startsWith("fe80:") ? `${address}%${route[9]}` : address;
+}
+
+/** The default gateways, for IPv4 and IPv6, from the kernel's tables: { v4, v6 } (each an address, or null). */
+export async function gateways({ readFile = readFileAsync } = {}) {
+    const [v4, v6] = await Promise.all([readFile("/proc/net/route", "utf8").then(routeTable, () => null), readFile("/proc/net/ipv6_route", "utf8").then(routeTable6, () => null)]);
+
+    return { v4, v6 };
 }
