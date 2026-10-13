@@ -2,6 +2,7 @@
 //
 //   npm run world-server                         its data where this system keeps an app's (platform/)
 //   node server/world.js --port 8480 --data <folder>
+//   node server/world.js --app                   as the menu-bar app runs it (plan §11, Phase 2)
 //
 // It says where it can be reached at home, its id, its management page (on this computer, needing
 // no key; from the Wi-Fi at /admin, with the admin key), and, the first time, its admin key (shown
@@ -10,7 +11,15 @@
 // says where the internet reaches it (over TLS alone); getting free certificates (certify.js), how
 // that stands, and each one got or refused; what the router forwards, or why it won't; and where
 // Tailscale Funnel brings the internet in, or why it won't.
-// Ctrl-C, or Stop on the management page, saves every world and stops.
+// Ctrl-C (or SIGTERM: the menu-bar app's Stop and Quit), or Stop on the management page, saves
+// every world and stops.
+//
+// With --app, it also says how it stands for the menu-bar app (mac/), on lines of their own, each
+// time that changes: "@pellagos " then { state ("running", "stopping", "stopped"), players (in
+// any world now), worlds (going), awake (the machine kept awake for them), page (its management
+// page), play (where the game is), version }. And it stops (saving every world) when what it reads
+// from ends: the app gives it a pipe, so if the app's gone (quit, or crashed), so is it, and the
+// port's free for the app's next start.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -18,7 +27,7 @@ import { bonjour, folders } from "./platform/index.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { WorldServer } from "./world-server.js";
 
-const { values } = parseArgs({ options: { port: { type: "string" }, admin: { type: "string" }, data: { type: "string" } } });
+const { values } = parseArgs({ options: { port: { type: "string" }, admin: { type: "string" }, data: { type: "string" }, app: { type: "boolean" } } });
 const root = path.resolve(values.data ?? folders().data);
 const server = await WorldServer.open(root, { onStop: () => stop(), bonjour: bonjour() });
 
@@ -102,16 +111,42 @@ server.nearby.onChange();
 
 let stopping = false;
 
+// (How it stands, for the menu-bar app: a line whenever that changes, looked at every second)
+const SAYING = "@pellagos ";
+let told = null;
+
+const tell = (state = stopping ? "stopping" : "running") => {
+    const players = [...server.registry.entries.values()].reduce((sum, entry) => sum + (entry.thread?.state?.present ?? 0), 0);
+    const line = JSON.stringify({ state, players, worlds: server.registry.going.length, awake: Boolean(server.registry.holding), page: `http://localhost:${adminPort}/`, play: `http://localhost:${port}/`, version: SERVER_VERSION });
+
+    if (values.app && line !== told) {
+        told = line;
+        console.log(`${SAYING}${line}`);
+    }
+};
+
+if (values.app) {
+    tell();
+    setInterval(() => tell(), 1000).unref();
+}
+
 const stop = async () => {
     if (stopping) {
         return;
     }
 
     stopping = true;
+    tell();
     console.log("Saving every world and stopping...");
     await server.close();
+    tell("stopped");
     process.exit(0);
 };
 
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
+
+if (values.app) {
+    process.stdin.on("end", stop);
+    process.stdin.resume();
+}

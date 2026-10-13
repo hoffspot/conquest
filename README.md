@@ -65,7 +65,9 @@ from a seed and a theme, how each kind is dug and what's put in them; their ways
 wilds, who wakes in them, their chests and bosses' hoards, how they're drawn, how they're made
 again once cleared, and how to add a theme. [docs/MAGIC.md](docs/MAGIC.md) describes
 magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
-the host works, the spellbook, and how every spell looks.
+the host works, the spellbook, and how every spell looks. [docs/MAC_APP.md](docs/MAC_APP.md) is
+the guide to Pellagos Server for the Mac, the menu-bar app that keeps worlds for players to come
+and go in: opening it the first time (Open Anyway), what macOS asks, its menu, and building it.
 
 ## How to play
 
