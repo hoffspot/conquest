@@ -20,6 +20,7 @@
     "balance": "node scripts/balance.js",
     "step-budget": "node scripts/step-budget.js",
     "soak": "node scripts/soak.js",
+    "soak:server": "node scripts/server-soak.js",
     "snapshot-fixture": "node scripts/snapshot-fixture.js",
     "vendor:three": "node scripts/vendor-three.js",
     "vendor:meshopt": "node scripts/vendor-meshopt.js",
@@ -35,6 +36,7 @@
     "build:clips": "node scripts/build-clips.js",
     "build:footprints": "node scripts/build-footprints.js",
     "build:mac": "node scripts/build-mac-app.js",
+    "release-key": "node scripts/release-key.js",
     "vendor:recast": "node scripts/vendor-recast.js"
   },
   "devDependencies": {

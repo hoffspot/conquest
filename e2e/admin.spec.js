@@ -1,6 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { SERVER_VERSION } from "../server/storage/versions.js";
 import { WorldServer } from "../server/world-server.js";
 import { expect, test } from "./fixtures.js";
 
@@ -8,7 +10,8 @@ import { expect, test } from "./fixtures.js";
 // its owner uses it on the server's own computer: a world made, started and set aside, backed up by
 // hand and restored, a player's lost ticket reissued (the old one no longer works, the new one
 // does), exported, deleted with its name typed, and brought in again from its export. And from
-// the Wi-Fi, the page asks for the admin key first.
+// the Wi-Fi, the page asks for the admin key first. And its Updates: a newer version found, with
+// its notes, and the commands that update a server run from a copy of the repository.
 
 test.describe.configure({ mode: "default" });
 
@@ -17,16 +20,28 @@ const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1
 
 let server;
 let folder;
+let releases;
 
 test.beforeAll(async () => {
     folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-e2e-admin-"));
-    server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }) });
+
+    // (The project's releases, as GitHub lists them: a newer server)
+    releases = http.createServer((request, response) => {
+        const asset = (name) => ({ name, browser_download_url: `http://127.0.0.1:${releases.address().port}/${name}` });
+
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify([{ tag_name: "server-v99.0.0", body: "Worlds bring their weather with them.", html_url: "https://example.invalid/99.0.0", assets: [asset("pellagos-server-99.0.0.tar.gz"), asset("pellagos-server-99.0.0.tar.gz.sig")] }]));
+    });
+    await new Promise((resolve) => releases.listen(0, "127.0.0.1", resolve));
+
+    server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), update: { releases: `http://127.0.0.1:${releases.address().port}/releases` } });
     await server.listen(0, "127.0.0.1");
     await server.listenAdmin(0);
 });
 
 test.afterAll(async () => {
     await server?.close();
+    await new Promise((resolve) => releases?.close(resolve) ?? resolve());
     await rm(folder, { recursive: true, force: true });
 });
 
@@ -200,4 +215,19 @@ test("from the Wi-Fi, the page at /admin asks for the admin key first", async ({
     await expect(page.locator("#who")).toContainText("from the Wi-Fi");
     await expect(page.locator("#overview")).toContainText("with the admin key");
     await expect(page.locator("#overview")).not.toContainText(server.adminKey);
+});
+
+test("its Updates: a newer version found, with its notes, and how this copy of the repository is updated", async ({ page }) => {
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="settings"]').click();
+
+    const updates = page.locator("#settings .panel", { hasText: "Updates" });
+
+    await expect(updates).toContainText(`This is version ${SERVER_VERSION}.`);
+    await updates.getByRole("button", { name: "Check now" }).click();
+    await expect(updates.locator("h3")).toHaveText("Version 99.0.0 is out");
+    await expect(updates.locator(".notes")).toHaveText("Worlds bring their weather with them.");
+    await expect(updates).toContainText("This server is run from a copy of the repository: update it in Terminal.");
+    await expect(updates.locator("pre.commands")).toContainText("git pull");
+    await expect(updates.getByRole("button", { name: /Update to/ })).toHaveCount(0);
 });

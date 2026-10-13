@@ -47,6 +47,8 @@
 //          route set up (certify.js), one asked for at once; POST …/acme/renew asks now; DELETE forgets it
 //   POST   /server/router                   the router asked again to let the internet in (router.js)
 //   POST   /server/funnel                   Tailscale Funnel asked for again (funnel.js)
+//   GET    /server/update                   how updating stands: the version, a newer one, the last update (update/updater.js)
+//   POST   /server/update {check} | {version}   asked again whether there's a newer one; or updated to it
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
@@ -552,6 +554,20 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return doing(() => manage.askFunnel());
+        }],
+        ["GET", /^\/server\/update$/, { server: true }, async (request) => {
+            admin(request);
+
+            return server.updater.state();
+        }],
+        ["POST", /^\/server\/update$/, { server: true }, async (request, body) => {
+            const principal = admin(request);
+
+            if (body?.check) {
+                return server.updater.check();
+            }
+
+            return doing(() => server.updater.update({ version: String(body?.version ?? ""), by: byOf(principal) }));
         }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);

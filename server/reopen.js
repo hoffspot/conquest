@@ -72,6 +72,45 @@ export async function openWorld(stored, { build = buildWorld } = {}) {
 }
 
 /**
+ * A kept world's latest save brought forward to this version of the game, and saved so (as a new
+ * version of the server does to every world as it's first started, before anyone's let in):
+ * { from (the save, or null if it's never been saved), forwarded (the version it was brought
+ * forward from, or null if it was this one's) }. Refused if a newer version kept it; one whose
+ * saves don't read, or that's older than any step goes back to, is left as it was (it was
+ * already, before this version: its owner's offered a fresh start when it's opened), and says so
+ * ({ stuck: why }).
+ */
+export async function bringForward(stored) {
+    let loaded;
+
+    try {
+        loaded = await stored.load();
+    } catch (error) {
+        return { from: null, forwarded: null, stuck: error.message };
+    }
+
+    const { snapshot, from } = loaded;
+
+    if (!snapshot || snapshot.version === SNAPSHOT_VERSION) {
+        return { from: from ?? null, forwarded: null };
+    }
+
+    if (snapshot.version > SNAPSHOT_VERSION) {
+        throw new NewerDataError(`World ${stored.id}'s save (${from})`, { found: snapshot.version, reads: SNAPSHOT_VERSION, needs: stored.writtenBy });
+    }
+
+    if (snapshot.version < OLDEST) {
+        return { from, forwarded: null, stuck: `its save (${from}) was kept by version ${snapshot.version} of the game, older than any this one can bring forward (${OLDEST}).` };
+    }
+
+    const forwarded = snapshot.version;
+
+    await stored.save(Host.forward(snapshot), { why: `brought forward from version ${forwarded} of the game` });
+
+    return { from, forwarded };
+}
+
+/**
  * A kept world started afresh from its seed (its owner having said so, generated/world_server_plan.md
  * §5.1): a copy of everything kept of it made first; its war carried on from the newest save
  * whose war reads (a new war if none does, or this version can't take it); its kept heroes left

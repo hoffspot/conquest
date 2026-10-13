@@ -6,8 +6,10 @@ name: Mac app
 # Homebrew formula installed from a tap of its own and its test run (generated/world_server_plan.md
 # §11, Phase 2; docs/MAC_APP.md). Run by hand (Actions, Mac app, Run workflow), and on a pull
 # request that changes the app, its bundle, or how the server runs for it. A public repository's
-# Mac runners cost nothing. The zip, the server's archive and the formula are kept with the run,
-# for a release; and pictures of the screen with the app running, and its menu open
+# Mac runners cost nothing. The zip, the server's archive (signed with the project's release key,
+# scripts/release-key.js, if the repository has it as the secret PELLAGOS_RELEASE_KEY) and the
+# formula are kept with the run, for a release; and pictures of the screen with the app running,
+# and its menu open
 on:
   workflow_dispatch:
   pull_request:
@@ -15,6 +17,9 @@ on:
       - mac/**
       - scripts/build-mac-app.js
       - server/world.js
+      - server/serve.js
+      - server/launch.js
+      - server/update/**
       - server/platform/**
       - .github/workflows/mac.yml
 
@@ -40,6 +45,18 @@ jobs:
 
       - name: Make the bundle, sign it ad hoc and zip it; the server's archive and the formula
         run: node scripts/build-mac-app.js --executable "$(swift build -c release --arch arm64 --package-path mac --show-bin-path)/PellagosServer"
+
+      - name: Sign the server's archive with the project's release key, if the repository has it
+        env:
+          PELLAGOS_RELEASE_KEY: ${{ secrets.PELLAGOS_RELEASE_KEY }}
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ -n "$PELLAGOS_RELEASE_KEY" ]; then
+            node scripts/release-key.js --sign "dist/pellagos-server-$version.tar.gz"
+            node scripts/release-key.js --verify "dist/pellagos-server-$version.tar.gz"
+          else
+            echo "No release key (the PELLAGOS_RELEASE_KEY secret): the archive isn't signed, so servers won't update to it."
+          fi
 
       - name: Open the app, find its item in the menu bar, see its server answer, and quit it
         run: |
@@ -83,6 +100,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            dist/*.tar.gz.sig
             dist/pellagos-server.rb
           retention-days: 14
 

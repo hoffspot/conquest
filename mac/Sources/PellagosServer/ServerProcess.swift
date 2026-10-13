@@ -77,6 +77,10 @@ final class ServerProcess: ObservableObject {
             return "Starting…"
         }
 
+        if standing.state == "updating" {
+            return "Updating: saving every world, then starting the new version…"
+        }
+
         if standing.state != "running" {
             return "Saving every world and stopping…"
         }

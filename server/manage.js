@@ -23,13 +23,14 @@ import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
-import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip } from "./storage/files.js";
+import { bringForward } from "./reopen.js";
+import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
 import { BACKUP_NAME, FIRST_HEROES, HERO_MODES, HEROES, JOURNAL, NOW, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
-export const SERVER_JOURNAL = "journal.log";
+export { SERVER_JOURNAL };
 
 /** An export's (and a downloaded backup's) format: a world, its latest snapshot and its kept heroes, as one gzipped JSON file. */
 export const EXPORT_FORMAT = "pellagos.world.1";
@@ -608,6 +609,25 @@ export class Management {
         await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought in${by ? ` by ${by}` : ""}, from a file exported by Pellagos server ${bundle.exportedBy ?? "(unknown)"}.`);
 
         return adopted;
+    }
+
+    /**
+     * Every world's latest save brought forward to this version of the game (reopen.js
+     * bringForward), as a new version of the server does when it's first started: [{ id, name,
+     * from, forwarded, stuck }]. Throws, naming the world, if one can't be.
+     */
+    async bringForward() {
+        const done = [];
+
+        for (const [id, stored] of this.server.worlds) {
+            try {
+                done.push({ id, name: stored.meta.name, ...(await bringForward(stored)) });
+            } catch (error) {
+                throw new Error(`world ${id} ("${stored.meta.name}"): ${error.message}`);
+            }
+        }
+
+        return done;
     }
 
     // ---- The server
