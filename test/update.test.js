@@ -447,6 +447,9 @@ describe("an update, for real", () => {
             await running("99.0.0", mark);
             assert.ok(told.slice(mark).some((one) => one.state === "updating"), "said it was updating");
 
+            // (The launcher keeps the update, and says how it went, once the new version's said it's
+            // running: after that line, not with it)
+            await until(() => /Updated from 98\.0\.0 to 99\.0\.0/.test(said), () => `the launcher to keep the update: ${said.slice(-3000)}`);
             call = await page();
 
             const updated = (await call("GET", "/server/update")).json;
