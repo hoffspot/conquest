@@ -114,8 +114,9 @@ export function sizeOf(id, seed) {
 
 // What each body steps on (audio/sound.js GAITS): a four-legged beast's paws or hooves, a
 // two-legged one's feet, a spider's many legs, a slime's belly, a serpent's scales, a frog's
-// webbed feet; nothing for what floats (spectres, wisps) or flies in a swarm. And how tall one of
-// it stands that's about as heavy as a person (m), to weigh its steps by: on all fours, lower
+// webbed feet; nothing for what floats (spectres, wisps) or flies in a swarm. (A look may say its
+// own: a centipede, a serpent's body, skitters on its legs.) And how tall one of it stands that's
+// about as heavy as a person (m), to weigh its steps by: on all fours, lower
 const FEET = Object.freeze({ quadruped: "paws", biped: "feet", arachnid: "legs", blob: "slime", serpent: "scales", frog: "webbed" });
 const AS_HEAVY = Object.freeze({ person: 1.75, quadruped: 1.2 });
 
@@ -243,9 +244,10 @@ export class BeastAvatar {
 
         /**
          * How its footfalls sound (audio/sound.js step): as heavy as it's big (`size`, a person's
-         * 1: AS_HEAVY), on the feet it has (`feet`: FEET; none for what floats or flies in a swarm).
+         * 1: AS_HEAVY), on the feet it has (`feet`: its look's, or FEET; none for what floats or
+         * flies in a swarm).
          */
-        this.gait = { size: (this.plan.height * this.scale) / (AS_HEAVY[look.body] ?? AS_HEAVY.person), feet: FEET[look.body] ?? null };
+        this.gait = { size: (this.plan.height * this.scale) / (AS_HEAVY[look.body] ?? AS_HEAVY.person), feet: look.feet ?? FEET[look.body] ?? null };
 
         const doing = this.doing;
 

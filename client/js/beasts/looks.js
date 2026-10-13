@@ -139,7 +139,8 @@ export const LOOKS = Object.freeze({
     // --- Only in the wilds of each people's own lands ---
     // (Humans: the black shuck, a great black spectral hound; the boggart, a small hairy spite; an
     // old badger, white-faced, holding its ground; a white wild bull of an old park's herd, dark
-    // at the ears and muzzle, its horns sweeping out and up; a flock of rooks, black, pale-beaked)
+    // at the ears and muzzle, its horns sweeping out and up; a flock of rooks, black, pale-beaked;
+    // the knucker, the water dragon of the Sussex pools, a great dark serpent with a finned head)
     blackShuck: {
         body: "quadruped",
         scale: [1, 1.1],
@@ -174,6 +175,13 @@ export const LOOKS = Object.freeze({
         kind: "bird", size: 0.42, count: 8, spread: 1.5,
         colours: { fur: 0x16161c, wings: 0x1c1c24, beak: 0xc8c0b8, head: 0x2a2a30, eyes: 0x2a1a0a },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
+    knucker: {
+        body: "serpent",
+        scale: [0.92, 1.1],
+        length: 5, thickness: 0.22, segments: 24, head: 1.5, fins: true,
+        colours: { scales: 0x3a4a3a, bands: 0x2a3428, belly: 0x8a9a6a, fins: 0x5a7a5a, eyes: 0xe0c040 },
+        attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
     },
     // (Elves: the will-o'-wisp, a light that leads astray; the blighted treant, a tree gone bad; the
     // mandrake, a root the shape of a little man pulled up out of the earth, a tuft of leaves on its
@@ -216,7 +224,8 @@ export const LOOKS = Object.freeze({
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"], specials: ["swirl"],
     },
     // (Dark elves: a cave spider as big as a dog; the shadow stalker, a great cat of shadow; the olm,
-    // a blind cave salamander grown big, pale pink, its gills a frill behind its head)
+    // a blind cave salamander grown big, pale pink, its gills a frill behind its head; a giant
+    // centipede, red-brown, its yellow legs rippling; the basilisk, a small serpent crowned)
     caveSpider: {
         body: "arachnid",
         scale: [0.9, 1.15],
@@ -242,9 +251,24 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0xead0c6, belly: 0xf2ddd4, dark: 0xd8807e, eyes: 0xd8b8b0 },
         attacks: ["bite", "tailSlap"], rests: ["bask", "lie"],
     },
+    centipede: {
+        body: "serpent",
+        scale: [0.9, 1.15],
+        length: 1.4, thickness: 0.06, segments: 16, legs: true, banded: true, feet: "legs",
+        colours: { scales: 0x5a1a14, bands: 0x2a0c0a, belly: 0xa86030, legs: 0xd8a040, eyes: 0x0a0806 },
+        attacks: ["strike", "double"], rests: ["coil", "bask"],
+    },
+    basilisk: {
+        body: "serpent",
+        scale: [0.9, 1.1],
+        length: 1.3, thickness: 0.07, segments: 16, crest: 3, zigzag: true,
+        colours: { scales: 0x3a4a2a, bands: 0x1a2214, belly: 0xa8b080, crown: 0xf0ecd8, eyes: 0xe8d040 },
+        attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
+    },
     // (Cat folk: the hyena, in packs; the sand scorpion; the black-backed jackal, slight and big-
     // eared; the Cape buffalo, heavy-horned and near black; the Nandi bear, a great sloping beast
-    // with a hyena's back and a bear's head and claws; a locust swarm)
+    // with a hyena's back and a bear's head and claws; a locust swarm; a spitting cobra, its hood
+    // spread)
     hyena: {
         body: "quadruped",
         scale: [0.92, 1.08],
@@ -294,6 +318,13 @@ export const LOOKS = Object.freeze({
         kind: "insect", size: 0.22, count: 14, spread: 1.2,
         colours: { fur: 0x8a8436, wings: 0xd8cc9a, eyes: 0x2a2410 },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
+    spittingCobra: {
+        body: "serpent",
+        scale: [0.9, 1.12],
+        length: 1.9, thickness: 0.06, segments: 18, hood: 2.2, rear: 2.6,
+        colours: { scales: 0x6a5a40, bands: 0x2a2218, belly: 0xd8c090, eyes: 0x1a1410 },
+        attacks: ["strike", "double"], rests: ["coil", "taste", "bask"], specials: ["spit"],
     },
     // (Lizard folk: the bog frog, big as a hound; the marsh crocodile; the giant leech, dark and
     // banded; the jaguar, gold and rosetted; the great boa, banded in brown saddles; a whining

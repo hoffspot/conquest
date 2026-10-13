@@ -230,9 +230,29 @@ export const NATURAL = Object.freeze({
     puma: { label: "Claws", attacks: [melee({ id: "rake", damage: [3, 7], hitAt: 350, duration: 750, interval: 1150, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.25 } })] },
     shadowStalker: { label: "Claws", attacks: [melee({ id: "rake", damage: [5, 9], hitAt: 350, duration: 750, interval: 1100, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
     olm: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 400, duration: 800, interval: 1200, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
+    // (A giant centipede's fangs are venomous)
+    centipede: { label: "Venomous fangs", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 300, duration: 650, interval: 1100, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.4 } })] },
+    // (A basilisk bites; and its glare, the stare said to turn to stone, staggers whoever meets
+    // it and slows them)
+    basilisk: {
+        label: "Fangs and glare",
+        attacks: [
+            melee({ id: "bite", damage: [4, 7], hitAt: 350, duration: 750, interval: 1300, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.5 } }),
+            ranged({ id: "glare", reach: 6, damage: [2, 4], hitAt: 600, duration: 1200, interval: 3400, stagger: 500, reaction: "arcane", animation: "spit", projectile: { kind: "curse", speed: 9 }, afflict: { kind: "slow", chance: 0.8 } }),
+        ],
+    },
     hyena: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 300, duration: 700, interval: 1000, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.2 } })] },
     jackal: { label: "Teeth", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 300, duration: 650, interval: 950, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
     locustSwarm: { label: "Mandibles", attacks: [melee({ id: "bite", damage: [1, 3], hitAt: 200, duration: 500, interval: 700, reaction: "slash", animation: "melee" })] },
+    // (A spitting cobra spits its venom at the eyes, staggering whoever it catches; no pool of it
+    // left lying, as an adder's is)
+    spittingCobra: {
+        label: "Fangs and venom",
+        attacks: [
+            melee({ id: "bite", damage: [3, 6], hitAt: 300, duration: 700, interval: 1200, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.5 } }),
+            ranged({ id: "spit", reach: 6, damage: [1, 3], hitAt: 450, duration: 900, interval: 2200, stagger: 300, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 11 }, afflict: { kind: "poison", chance: 0.5 } }),
+        ],
+    },
     // (A buffalo's charge, as a rock tusker's, knocks whoever it catches off their feet)
     capeBuffalo: { label: "Horns", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, knockdown: 1200, reaction: "pierce", animation: "melee" })] },
     nandiBear: { label: "Claws", attacks: [melee({ id: "maul", damage: [6, 11], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })] },
@@ -265,6 +285,18 @@ export const NATURAL = Object.freeze({
                 melee({ id: "bite", damage: [4, 8], hitAt: 350, duration: 750, interval: 1300, reaction: "pierce", animation: "melee" }),
                 melee({ id: "crush", damage: [5, 9], hitAt: 600, duration: 1200, interval: 1800, stagger: 500, reaction: "crush", animation: "melee", afflict: { kind: "slow", chance: 0.6 } }),
             ),
+        ],
+    },
+    // (A knucker, the water dragon of the Sussex pools, bites or throws its coils round whoever
+    // it's after, as a boa does, and spits venom that lies a while)
+    knucker: {
+        label: "Jaws, coils and venom",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [5, 9], hitAt: 450, duration: 900, interval: 1400, stagger: 300, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } }),
+                melee({ id: "crush", damage: [6, 10], hitAt: 600, duration: 1200, interval: 1800, stagger: 500, reaction: "crush", animation: "melee", afflict: { kind: "slow", chance: 0.6 } }),
+            ),
+            ranged({ id: "spit", reach: 5, damage: [3, 6], hitAt: 500, duration: 1000, interval: 2600, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.6 }, pool: { kind: "venom", ms: 4000, radius: 1 } }),
         ],
     },
     magmaSlime: {
