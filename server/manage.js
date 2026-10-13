@@ -635,7 +635,7 @@ export class Management {
     // What the latest test of reaching the server from elsewhere said, in words
     #testWords(report) {
         if (!report) {
-            return "Not tested from outside yet. On a phone on its cellular data (not this Wi-Fi), open the game, add the server by its internet address, and use “Test this server”: what it finds comes back here.";
+            return `Not tested from outside yet. On a phone on its cellular data (not this Wi-Fi), ${this.server.internetAddresses().length ? "scan the code below, or " : ""}open the game, add the server by its internet address and use “Test this server”: what it finds comes back here.`;
         }
 
         const at = `${report.at.slice(0, 10)} ${report.at.slice(11, 16)} (UTC)`;
@@ -653,7 +653,10 @@ export class Management {
             return `Last tested ${at} from this server's own Wi-Fi: ${found}. From here that doesn't show the internet can reach it: test from a phone on its cellular data.`;
         }
 
-        return `Last tested ${at} from the internet (${report.tunnel ? "through Tailscale Funnel, " : ""}from ${report.address}): ${found}.`;
+        // (Through Funnel, from wherever Tailscale says it came from; "tunnel" if it didn't say)
+        const where = [report.tunnel ? "through Tailscale Funnel" : null, report.address !== "tunnel" ? `from ${report.address}` : null].filter(Boolean).join(", ");
+
+        return `Last tested ${at} from the internet (${where}): ${found}.`;
     }
 
     /**

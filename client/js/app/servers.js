@@ -9,6 +9,13 @@
 // The first time, the id's pinned (or taken from the invite link, which is better); after that a
 // different one stops everything, and only a fresh invite link pins again.
 //
+// Home and away (§9.1): a server's card lists all its addresses, at home and on the internet, and
+// says whether the one asking seems to be at the server's home. The game keeps them with the server
+// and reaches it by whichever answers: the one that last did first, then (at home) its home
+// addresses, else the one it was added by and its internet ones. An address typed bare is tried
+// secure first, unless it's at home and the page isn't. **Test this server** tries each internet
+// address (its card, and its play socket proving it's the server), and tells the server how it went.
+//
 //   const servers = new KnownServers();                      // localStorage pellagos.servers
 //   const record = servers.remember(addressOf("studio-mac.local"));
 //   const client = new ServerClient(record, { servers });
@@ -32,8 +39,9 @@ export const API_PATH = "/api/v1";
 export const PLAY_PATH = "/play";
 export const PLAY_PROTOCOL = "pellagos.play.1";
 
-/** How long a call to a server's API may take (ms). */
+/** How long a call to a server's API may take (ms); and asking one of a server's addresses when there's another to try. */
 export const CALL_TIMEOUT = 10000;
+export const REACH_TIMEOUT = 4000;
 
 /** What a code of servers and tickets starts with (KnownServers export). */
 const EXPORTED = "pellagos-servers.1.";
@@ -66,6 +74,7 @@ export const SERVER_REFUSALS = Object.freeze({
     host: "That address isn't one the server answers to.",
     origin: "That server won't take games opened from this page. Open the game from the server's own page.",
     unreachable: "Couldn't reach that server.",
+    walled: "This page was opened over https, and browsers won't let it reach a server at home over plain http. Open the game from the server instead.",
     identity: "This isn't the server you played on before. Nothing was sent to it. If it should be, follow a fresh invite link from its owner.",
     proof: "That server couldn't prove who it is, so nothing was sent to it.",
 });
@@ -86,6 +95,74 @@ export function baseOf({ host, port, secure }) {
 /** Its play socket's address. */
 export function playOf({ host, port, secure }) {
     return `${secure ? "wss" : "ws"}://${host}:${port}${PLAY_PATH}`;
+}
+
+// (Home: the Wi-Fi's private IPv4 ranges, link-local, the machine itself, IPv6 unique-local and
+// link-local, and .local names: as the server counts them, server/access/addresses.js)
+const HOME_V4 = Object.freeze([
+    ["10.0.0.0", 8],
+    ["172.16.0.0", 12],
+    ["192.168.0.0", 16],
+    ["169.254.0.0", 16],
+    ["127.0.0.0", 8],
+]);
+const v4Value = (text) => text.split(".").reduce((all, part) => all * 256 + Number(part), 0);
+
+/** Whether a host (a name or an address, IPv6 bracketed or not) is at home: a .local name, localhost, or a home address. */
+export function homeHost(host) {
+    const bare = String(host ?? "")
+        .toLowerCase()
+        .replace(/^\[|\]$/g, "");
+
+    if (bare === "localhost" || bare.endsWith(".local") || bare === "::1") {
+        return true;
+    }
+
+    const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(bare);
+
+    if (v4) {
+        const value = v4Value(bare);
+
+        return HOME_V4.some(([base, bits]) => Math.floor(value / 2 ** (32 - bits)) === Math.floor(v4Value(base) / 2 ** (32 - bits)));
+    }
+
+    return /^f[cd][0-9a-f]{0,2}:/.test(bare) || /^fe[89ab][0-9a-f]?:/.test(bare);
+}
+
+/**
+ * A server's addresses from its card (/status `addresses`: URLs), as the game knows them: [{ host,
+ * port, secure, key, url (as the server says it), home }].
+ */
+export function addressesOf(card) {
+    return (card?.addresses ?? [])
+        .map((url) => ({ url: String(url).replace(/\/+$/, ""), address: addressOf(url) }))
+        .filter(({ address }) => address)
+        .map(({ url, address }) => ({ ...address, url, home: homeHost(address.host) }));
+}
+
+/**
+ * The addresses a server's tried at, in turn (`record`, as KnownServers keeps it): the one that
+ * last answered; then, if it was last seen at home, its home addresses, the one it was added by and
+ * its internet ones; else the one it was added by (secure first, if it was typed bare and isn't at
+ * home or this page is secure), its internet addresses and its home ones. Plain ones a secure page
+ * can't reach go last. `secure`: whether this page is.
+ */
+export function candidatesOf(record, { secure = globalThis.location?.protocol === "https:" } = {}) {
+    const as = (secured) => ({ host: record.host, port: record.port, secure: secured, key: record.key });
+    const own = record.bare ? (homeHost(record.host) && !secure ? [as(false), as(true)] : [as(true), as(false)]) : [as(Boolean(record.secure))];
+    const known = record.addresses ?? [];
+    const home = known.filter((one) => one.home);
+    const away = known.filter((one) => !one.home);
+    const last = record.via ? [...own, ...known].filter((one) => `${one.secure ? "s" : ""}${one.key}` === record.via) : [];
+    const ordered = [...last, ...(record.home ? [...home, ...own, ...away] : [...own, ...away, ...home])];
+    const seen = new Set();
+    const unique = ordered.filter((one) => {
+        const id = `${one.secure ? "s" : ""}${one.key}`;
+
+        return !seen.has(id) && seen.add(id);
+    });
+
+    return [...unique.filter((one) => one.secure || !secure), ...unique.filter((one) => !one.secure && secure)];
 }
 
 // base64url, of text (UTF-8)
@@ -243,21 +320,27 @@ export class KnownServers {
  * pinned (a fresh invite link is the only way a pin's moved). `fetch`, `timing` are for the tests.
  */
 export class ServerClient {
-    constructor(record, { servers = null, expect = null, fetch = globalThis.fetch?.bind(globalThis), timing = LINK_TIMING } = {}) {
-        Object.assign(this, { record, servers, expect, fetch, timing });
+    constructor(record, { servers = null, expect = null, fetch = globalThis.fetch?.bind(globalThis), timing = LINK_TIMING, secure = globalThis.location?.protocol === "https:" } = {}) {
+        Object.assign(this, { record, servers, expect, fetch, timing, secure });
 
         /** The id it's proved this time (null until it has). */
         this.proven = null;
+
+        /** Where it's reached this time (one of candidatesOf: null until it's been), and its card from there. */
+        this.via = null;
+        this.card = null;
     }
 
-    // A call to its API: the answer, or throws a ServerRefusal
-    async #call(method, path, { body = null, session = null, key = null } = {}) {
+    // A call to its API (`at` one of its addresses: where it's reached, unless given): the answer,
+    // or throws a ServerRefusal
+    async #call(method, path, { body = null, session = null, key = null, at = null, timeout = CALL_TIMEOUT } = {}) {
+        const target = at ?? this.via ?? (await this.reach());
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT);
+        const timer = setTimeout(() => controller.abort(), timeout);
         let response;
 
         try {
-            response = await this.fetch(`${baseOf(this.record)}${API_PATH}${path}`, {
+            response = await this.fetch(`${baseOf(target)}${API_PATH}${path}`, {
                 method,
                 headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(session ? { Authorization: `Bearer ${session}` } : key ? { Authorization: `Key ${key}` } : {}) },
                 ...(body ? { body: JSON.stringify(body) } : {}),
@@ -284,15 +367,146 @@ export class ServerClient {
         return answer;
     }
 
-    /** Its card (anyone may ask): { server: { id, version, net... }, addresses, worlds (listed), ... }. Its name and when it was seen remembered. */
-    async status() {
-        const started = performance.now();
-        const answer = await this.#call("GET", "/status");
+    /**
+     * Where it's reached (candidatesOf: the first of its addresses whose card answers, a card that's
+     * another server's passed over unless it's at the address it was added by, where proving it
+     * says so). Throws ServerRefusal ("unreachable" if none answers).
+     */
+    async reach() {
+        if (this.via) {
+            return this.via;
+        }
 
-        answer.rtt = performance.now() - started;
-        this.record = this.servers?.remember(this.record, { seen: Date.now(), name: answer.server?.name ?? this.record.name }) ?? this.record;
+        const tried = candidatesOf(this.record, { secure: this.secure });
+        const pinned = this.expect ?? this.record.id;
+        let failed = null;
+
+        for (const [index, address] of tried.entries()) {
+            const started = performance.now();
+
+            try {
+                const answer = await this.#call("GET", "/status", { at: address, timeout: index < tried.length - 1 ? REACH_TIMEOUT : CALL_TIMEOUT });
+
+                if (pinned && answer.server?.id !== pinned && address.key !== this.record.key) {
+                    continue;
+                }
+
+                answer.rtt = performance.now() - started;
+                Object.assign(this, { via: address, card: answer });
+
+                return address;
+            } catch (error) {
+                failed = error;
+
+                // (A refusal is an answer: it's there)
+                if (error instanceof ServerRefusal && error.error !== "unreachable") {
+                    this.via = address;
+                    throw error;
+                }
+            }
+        }
+
+        throw failed ?? new ServerRefusal("unreachable");
+    }
+
+    /**
+     * Its card (anyone may ask): { server: { id, version, net... }, addresses, you, worlds (listed),
+     * ... }, from wherever it's reached. Its name, when it was seen, its addresses (at home and on the
+     * internet), whether this device seemed to be at its home, and where it answered, remembered.
+     */
+    async status() {
+        let answer;
+
+        if (this.via && !this.card) {
+            const started = performance.now();
+
+            answer = await this.#call("GET", "/status");
+            answer.rtt = performance.now() - started;
+        } else {
+            await this.reach();
+            answer = this.card;
+        }
+
+        // (Where it answered kept among its addresses, though its card may not name it)
+        const id = (one) => `${one.secure ? "s" : ""}${one.key}`;
+        const listed = addressesOf(answer);
+        const reached = this.via.key === this.record.key || listed.some((one) => id(one) === id(this.via)) ? [] : [{ ...this.via, url: baseOf(this.via), home: homeHost(this.via.host) }];
+
+        this.card = null;
+        this.record =
+            this.servers?.remember(this.record, {
+                seen: Date.now(),
+                name: answer.server?.name ?? this.record.name,
+                addresses: [...listed, ...reached],
+                home: Boolean(answer.you?.home),
+                via: `${this.via.secure ? "s" : ""}${this.via.key}`,
+            }) ?? this.record;
 
         return answer;
+    }
+
+    /**
+     * Test this server (§9.3): each of its internet addresses tried from here (its card, and its play
+     * socket, the server proving it's the one meant), and how it went sent to the server's page.
+     * Returns { results: [{ address (as the server says it), ok, ms, socket, error }], reported,
+     * home (this device seemed to be at the server's home, which proves nothing of the internet) }.
+     */
+    async test({ timeout = CALL_TIMEOUT } = {}) {
+        const card = await this.status();
+        const internet = addressesOf(card)
+            .filter((one) => !one.home)
+            .slice(0, 8);
+        const pinned = this.expect ?? this.record.id ?? card.server?.id ?? null;
+        const results = [];
+
+        for (const address of internet) {
+            const started = performance.now();
+
+            try {
+                const answer = await this.#call("GET", "/status", { at: address, timeout });
+
+                if (pinned && answer.server?.id !== pinned) {
+                    throw new ServerRefusal("identity");
+                }
+
+                const ms = Math.round(performance.now() - started);
+
+                results.push({ address: address.url, ok: true, ms, socket: await this.#proves(address, pinned) });
+            } catch (error) {
+                results.push({ address: address.url, ok: false, error: error.error ?? "unreachable" });
+            }
+        }
+
+        let reported = false;
+
+        if (results.length) {
+            const to = internet.find((one, index) => results[index].ok) ?? this.via;
+
+            reported = await this.#call("POST", "/reachability", { at: to, body: { results } }).then(
+                () => true,
+                () => false,
+            );
+        }
+
+        return { results, reported, home: Boolean(card.you?.home) };
+    }
+
+    // Whether the server at `address` proves on its play socket that it's the one meant
+    async #proves(address, pinned) {
+        let link = null;
+
+        try {
+            link = await RelayLink.open(playOf(address), this.timing, PLAY_PROTOCOL);
+
+            const nonce = newNonce();
+            const [id, publicKey, signature] = await link.prove(nonce);
+
+            return verifyIdentity({ id, publicKey, nonce, signature }) && (!pinned || id === pinned);
+        } catch {
+            return false;
+        } finally {
+            link?.close();
+        }
     }
 
     /**
@@ -307,8 +521,10 @@ export class ServerClient {
 
         let link;
 
+        await this.reach();
+
         try {
-            link = await RelayLink.open(playOf(this.record), this.timing, PLAY_PROTOCOL);
+            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_PROTOCOL);
         } catch {
             throw new ServerRefusal("unreachable");
         }
@@ -439,8 +655,10 @@ export class ServerClient {
     async play({ world, session, character, hero, onWaiting = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {} }) {
         let link;
 
+        await this.reach();
+
         try {
-            link = await RelayLink.open(playOf(this.record), this.timing, PLAY_PROTOCOL);
+            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_PROTOCOL);
         } catch {
             throw new ServerRefusal("unreachable");
         }

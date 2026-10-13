@@ -1681,9 +1681,10 @@ const serverCards = new Map();
 
 /**
  * The worlds on servers: those known, each's worlds; servers added; who comes (as joining a world
- * does). `invite` (an invite link's, app/servers.js inviteOf) is followed at once.
+ * does). `invite` (an invite link's, app/servers.js inviteOf) is followed at once; `test`, this
+ * page's own server tested (its management page's #test link, opened on a phone elsewhere).
  */
-async function openWorlds({ note = "", invite = null } = {}) {
+async function openWorlds({ note = "", invite = null, test = false } = {}) {
     await serversOf();
 
     const dialog = $("#worlds");
@@ -1700,8 +1701,41 @@ async function openWorlds({ note = "", invite = null } = {}) {
 
     if (invite) {
         await followInvite(invite);
+    } else if (test) {
+        const { addressOf } = await serversOf();
+        const record = state.servers.remember(addressOf(location.origin));
+
+        showWorlds();
+        await testServer(record);
+        refreshWorlds();
     } else {
         refreshWorlds();
+    }
+}
+
+// Test this server (plan §9.3): each of its internet addresses tried from here, and how it went said
+// (and sent to the server's page)
+async function testServer(record) {
+    const { ServerClient } = await serversOf();
+    const status = $("#worldsstatus");
+
+    status.textContent = `Testing ${record.name ?? record.key} from here…`;
+
+    try {
+        const { results, reported, home } = await new ServerClient(state.servers.get(record.key) ?? record, { servers: state.servers }).test();
+
+        if (!results.length) {
+            status.textContent = "This server doesn't answer the internet yet: its owner opens it to the internet on its management page.";
+
+            return;
+        }
+
+        const said = results.map(({ address, ok, ms, socket }) => (ok ? `reached at ${address} (${ms} ms${socket ? ", and it proved it's the server" : ""})` : `not reached at ${address}`));
+        const where = home ? " This device seems to be on the server's own network: test from a phone on its cellular data to be sure." : "";
+
+        status.textContent = `Tested: ${said.join("; ")}.${reported ? " Its owner sees this on its management page." : ""}${where}`;
+    } catch (error) {
+        status.textContent = `Couldn't test it: ${error.message}`;
     }
 }
 
@@ -1749,17 +1783,20 @@ function worldCard({ name, about = "", when = "", badge = "", className = "", di
 // The known servers and their worlds, as last heard
 async function showWorlds() {
     const { NET_VERSION } = await import("./core/netplay.js");
-    const { baseOf } = await serversOf();
+    const { baseOf, homeHost, inviteLink, SERVER_REFUSALS } = await serversOf();
     const rows = [];
 
     for (const record of state.servers.list()) {
         const { card, error } = serverCards.get(record.key) ?? {};
         const matched = !card || card.server?.net === NET_VERSION;
 
-        // (A page from https, GitHub Pages's, can't reach a server at home over plain http: plan §9.5)
-        const walled = error?.error === "unreachable" && location.protocol === "https:" && !record.secure;
+        // (A page from https, GitHub Pages's, can't reach a server at home over plain http: plan
+        // §9.5. The game from the server's own page can, and is handed what's needed in the link)
+        const walled = error?.error === "unreachable" && location.protocol === "https:" && (homeHost(record.host) || !record.secure);
+        const own = { ...record, secure: false };
+        const handOff = (world = null) => inviteLink(`${baseOf(own)}/`, { address: own, id: record.id, world, ...(world ? { key: record.worlds?.[world]?.key ?? null, ticket: record.worlds?.[world]?.ticket ?? null } : {}) });
         const head = document.createElement("li");
-        const about = card ? `${matched ? `Version ${card.server.version}` : "Another version of the game"} · ${Math.round(card.rtt)} ms` : walled ? "Browsers won't let a page opened over https reach a server at home over plain http." : error ? error.message : "Asking it how it is…";
+        const about = card ? `${matched ? `Version ${card.server.version}` : "Another version of the game"} · ${Math.round(card.rtt)} ms` : walled ? SERVER_REFUSALS.walled : error ? error.message : "Asking it how it is…";
 
         head.className = `server${error ? " unreachable" : ""}`;
         head.dataset.server = record.key;
@@ -1775,12 +1812,16 @@ async function showWorlds() {
 
         if (!matched || walled) {
             // (The game from the server itself always matches it, and always reaches it)
-            const open = Object.assign(document.createElement("a"), { href: `${baseOf(record)}/`, textContent: "Open the game from this server" });
+            const open = Object.assign(document.createElement("a"), { href: walled ? handOff() : `${baseOf(record)}/`, textContent: walled ? `Open the game from the server: ${baseOf(own)}` : "Open the game from this server" });
 
             actions.append(open);
         } else {
             action("Enter a code", () => askCode(record));
             action("Make a world", () => askMake(record));
+        }
+
+        if (!walled) {
+            action("Test this server", () => testServer(record));
         }
 
         action("Forget", () => {
@@ -1811,7 +1852,7 @@ async function showWorlds() {
                     when: held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : "Ask its owner for a key",
                     className: matched ? "" : "unmatched",
                     disabled: !matched,
-                    onClick: () => (held?.key || held?.ticket ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id)),
+                    onClick: () => (walled ? location.assign(handOff(id)) : held?.key || held?.ticket ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id)),
                 }),
             );
             rows.push(row);
@@ -1900,7 +1941,11 @@ async function addServer(event) {
         return;
     }
 
-    state.servers.remember(address);
+    // (Typed bare: tried secure first unless it's at home, plan §9.5; and plain as well)
+    const { homeHost } = await serversOf();
+    const bare = !/^[a-z]+:\/\//i.test(text);
+
+    state.servers.remember(address, bare ? { bare: true, secure: !homeHost(address.host) } : {});
     $("#worldsaddress").value = "";
     $("#worldsstatus").textContent = "";
     showWorlds();
@@ -2820,6 +2865,9 @@ async function start() {
 
     if (params.has("join")) {
         openJoin(params.get("join"));
+    } else if (location.hash === "#test") {
+        history.replaceState(null, "", `${location.pathname}${location.search}`);
+        openWorlds({ test: true });
     } else if (/[#&]server=/.test(location.hash)) {
         const { inviteOf } = await serversOf();
         const invite = inviteOf(location.hash);

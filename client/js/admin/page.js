@@ -566,11 +566,15 @@ function funnelPart(funnel, { sharing = null } = {}) {
     );
 }
 
-// What games found reaching the server from elsewhere ("Test this server"), the latest first
-function testsPart(tests) {
+// What games found reaching the server from elsewhere ("Test this server"), the latest first; and,
+// while the internet reaches it, a code a phone on its cellular data scans to test it (the game
+// opened at its internet address, testing it at once: #test)
+function testsPart(tests, addresses = []) {
     if (!tests) {
         return null;
     }
+
+    const scan = addresses[0] ? `${addresses[0]}/#test` : null;
 
     const latest = tests.reports[0];
     const proved = latest && latest.from === "internet" && latest.results.some((one) => one.ok);
@@ -580,12 +584,20 @@ function testsPart(tests) {
         { class: "acme" },
         h("h3", {}, "Tested from outside"),
         h("p", { class: proved ? "good" : latest ? "warning" : "muted" }, tests.words),
+        scan
+            ? h(
+                  "div",
+                  { class: "addresses" },
+                  h("div", { class: "address" }, qr(scan), copyable(scan, { link: true })),
+                  h("p", { class: "muted small" }, "On a phone with the Wi-Fi turned off (its cellular data, so it's really the internet), scan this: the game opens at the server's internet address and tests it, and what it finds comes back here."),
+              )
+            : null,
         tests.reports.length > 1
             ? h(
                   "details",
                   {},
                   h("summary", {}, "Earlier tests"),
-                  facts(tests.reports.slice(1).map((report) => [when(report.at), `from ${report.from === "home" ? "the Wi-Fi" : report.address}: ${report.results.map((one) => `${one.address} ${one.ok ? "reached" : "not reached"}`).join(", ")}`])),
+                  facts(tests.reports.slice(1).map((report) => [when(report.at), `from ${report.from === "home" ? "the Wi-Fi" : report.address === "tunnel" ? "the internet, through Tailscale Funnel" : report.address}: ${report.results.map((one) => `${one.address} ${one.ok ? "reached" : "not reached"}`).join(", ")}`])),
               )
             : null,
     );
@@ -673,7 +685,7 @@ function internetPanel({ internet }) {
         ),
         funnelPart(internet.funnel, { sharing }),
         routerPart(internet.router, internet.on),
-        internet.on ? testsPart(internet.tests) : null,
+        internet.on ? testsPart(internet.tests, internet.addresses) : null,
     );
 }
 
