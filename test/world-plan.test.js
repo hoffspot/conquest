@@ -7,6 +7,7 @@ import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
 import { createRandom } from "../client/js/core/random.js";
+import { quickEnough } from "./helpers.js";
 
 const SEEDS = [1, 2, 3];
 const plans = new Map();
@@ -24,15 +25,24 @@ describe("the world plan (worldplan/plan.js)", () => {
     });
 
     it("lays out the same world from the same seed, and another from another, quickly; once, shared and frozen", () => {
-        const start = performance.now();
-        const again = layOutWorld(1);
-        const took = performance.now() - start;
+        let again;
+
+        quickEnough(
+            8000,
+            () => {
+                const start = performance.now();
+
+                again = layOutWorld(1);
+
+                return performance.now() - start;
+            },
+            (ms) => `${ms.toFixed(0)} ms`,
+        );
 
         assert.deepEqual(again.places, plans.get(1).places);
         assert.deepEqual([...again.biome], [...plans.get(1).biome]);
         assert.notDeepEqual(plans.get(2).places.map(({ name }) => name), plans.get(1).places.map(({ name }) => name));
         assert.equal(plans.get(1).size, 8192);
-        assert.ok(took < 8000, `${took.toFixed(0)} ms`);
 
         // (Asked for again, the same plan: frozen, so nothing changes it for everyone else)
         assert.equal(planWorld(1), plans.get(1));

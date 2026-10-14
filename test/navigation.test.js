@@ -12,7 +12,7 @@ import { propOutlines } from "../client/js/core/setpieces/standing.js";
 import { onWalk, WALK_LAYERS } from "../client/js/core/setpieces/town.js";
 import { WADE } from "../client/js/core/terrain/waters.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
-import { parseGrid } from "./helpers.js";
+import { parseGrid, quickEnough } from "./helpers.js";
 
 // The world of seed 1: its start town, the middle of the river to its south (2 m deep), and the
 // road's stone bridge over the river to the town's south-east, up a ramp from each bank (found by
@@ -622,41 +622,58 @@ describe("navigation meshes (navigation.js)", () => {
     });
 
     it("bakes and finds ways within its budgets", () => {
-        const navigation = new Navigation(recast, town);
         const [tx, ty] = tileOf(...middle);
-        const bakes = [];
-
-        // (The chunks made already: the tiles' own work only)
-        for (let dx = -2; dx <= 2; dx++) {
-            const input = tileInput(town, tx + dx, ty + 1);
-            const start = performance.now();
-
-            navigation.add(tx + dx, ty + 1, bakeTile(recast, input, tx + dx, ty + 1));
-            bakes.push(performance.now() - start);
-        }
-
-        // (Every tile a way below could ask for baked first: the ways' own work only)
-        navigation.around(...middle, 40 + TILE * 1.5);
-
-        const times = [];
-
-        for (let k = 0; k < 100; k++) {
-            const from = [middle[0] - 40 + ((k * 37) % 80), middle[1] - 40 + ((k * 53) % 80)];
-            const to = [middle[0] - 40 + ((k * 71) % 80), middle[1] - 40 + ((k * 29) % 80)];
-            const start = performance.now();
-            const path = navigation.path(from, to);
-
-            if (path.length && Math.hypot(path.at(-1)[0] - to[0], path.at(-1)[1] - to[1]) < 1) {
-                times.push(performance.now() - start);
-            }
-        }
-
-        bakes.sort((p, q) => p - q);
-        times.sort((p, q) => p - q);
 
         // (Generous for slow machines: about 4.5 ms a tile and 0.12 ms a way at the 95th centile here)
-        assert.ok(bakes[2] < 25, `a tile in ${bakes[2].toFixed(1)} ms`);
-        assert.ok(times.length > 50 && times[Math.floor(times.length * 0.95)] < 2, `a way in ${times[Math.floor(times.length * 0.95)]?.toFixed(2)} ms`);
+        // (The chunks made already: the tiles' own work only, into a mesh of their own each time)
+        quickEnough(
+            25,
+            () => {
+                const mesh = new Navigation(recast, town);
+                const bakes = [];
+
+                for (let dx = -2; dx <= 2; dx++) {
+                    const input = tileInput(town, tx + dx, ty + 1);
+                    const start = performance.now();
+
+                    mesh.add(tx + dx, ty + 1, bakeTile(recast, input, tx + dx, ty + 1));
+                    bakes.push(performance.now() - start);
+                }
+
+                mesh.dispose();
+
+                return bakes.sort((p, q) => p - q)[2];
+            },
+            (ms) => `a tile in ${ms.toFixed(1)} ms`,
+        );
+
+        // (Every tile a way below could ask for baked first: the ways' own work only)
+        const navigation = new Navigation(recast, town);
+
+        navigation.around(...middle, 40 + TILE * 1.5);
+        quickEnough(
+            2,
+            () => {
+                const times = [];
+
+                for (let k = 0; k < 100; k++) {
+                    const from = [middle[0] - 40 + ((k * 37) % 80), middle[1] - 40 + ((k * 53) % 80)];
+                    const to = [middle[0] - 40 + ((k * 71) % 80), middle[1] - 40 + ((k * 29) % 80)];
+                    const start = performance.now();
+                    const path = navigation.path(from, to);
+
+                    if (path.length && Math.hypot(path.at(-1)[0] - to[0], path.at(-1)[1] - to[1]) < 1) {
+                        times.push(performance.now() - start);
+                    }
+                }
+
+                assert.ok(times.length > 50, `${times.length} ways found`);
+
+                return times.sort((p, q) => p - q)[Math.floor(times.length * 0.95)];
+            },
+            (ms) => `a way in ${ms.toFixed(2)} ms`,
+        );
+        navigation.dispose();
     });
 
     it("gives a map of squares a mesh of its own: through a doorway a square wide, a body's width from walls", () => {

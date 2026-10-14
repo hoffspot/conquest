@@ -337,7 +337,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      holds, and nothing else.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
    rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
-   screen. Never skip, disable or loosen a test to get CI green: fix the cause.
+   screen. Never skip, disable or loosen a test to get CI green: fix the cause. A test that
+   checks how long something takes times it with `quickEnough` (`test/helpers.js`): the other
+   test files run beside it, and a busy or slow CI machine can take the cores for a while, so
+   it's timed again once if it's over and fails only if it's over both times. Each timing does
+   the work from the start, nothing kept from the one before (a fresh mesh, world or battle).
 6. **Show it.** For anything that changes how the game looks, take before and after pictures
    from the same place, and put them in the pull request. Picture sheets and scratch scripts
    aren't committed.

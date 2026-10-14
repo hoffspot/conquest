@@ -11,10 +11,13 @@
 
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { launch, WORLD_OPTIONS } from "./launch.js";
+import { ignoreBrokenPipes, launch, WORLD_OPTIONS } from "./launch.js";
 import { folders } from "./platform/index.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { CODE } from "./update/installed.js";
+
+// (Seeing the server through once nobody's left reading what it passes on from it)
+ignoreBrokenPipes();
 
 const { values } = parseArgs({ options: WORLD_OPTIONS });
 const root = path.resolve(values.data ?? folders().data);

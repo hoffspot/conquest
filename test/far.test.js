@@ -13,6 +13,7 @@ import { FADE, FAR_FOG, farHaze, hazeAt } from "../client/js/world/fog.js";
 import { groundMaterial, UNREPEATED } from "../client/js/world/ground.js";
 import { primingWater, STILL_WATER } from "../client/js/world/water.js";
 import { QUALITY } from "../client/js/world/view.js";
+import { quickEnough } from "./helpers.js";
 
 // (The ground's textures paint a canvas: enough of one for them to in Node, every other drawing
 // call doing nothing)
@@ -233,13 +234,19 @@ describe("the far land (world/far)", () => {
     it("works out a level quickly enough to be done off the page's thread as the player walks", () => {
         sampleLevel(plan, 0, middleOf(0, 2000, 4000));
 
-        const start = performance.now();
+        quickEnough(
+            60,
+            () => {
+                const start = performance.now();
 
-        for (let level = 0; level < 4; level++) {
-            sampleLevel(plan, level, middleOf(level, 2928, 5072));
-        }
+                for (let level = 0; level < 4; level++) {
+                    sampleLevel(plan, level, middleOf(level, 2928, 5072));
+                }
 
-        assert.ok((performance.now() - start) / 4 < 60, `${((performance.now() - start) / 4).toFixed(1)} ms a level`);
+                return (performance.now() - start) / 4;
+            },
+            (ms) => `${ms.toFixed(1)} ms a level`,
+        );
     });
 
     it("draws within the plan's budget (about 35k triangles on medium), in one draw a level, and moves its levels as the player walks", () => {

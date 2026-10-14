@@ -7,6 +7,7 @@ import { simplex } from "../client/js/core/terrain/simplex.js";
 import { FORDS, REACH, RIVER_HALF, RUNNING, STREAMS, wadeable, watersOf } from "../client/js/core/terrain/waters.js";
 import { BIOMES, CELL, CELLS, CHUNK, planWorld, WATER } from "../client/js/core/worldplan/plan.js";
 import { MOUNTAIN, SEA_LEVEL } from "../client/js/core/worldplan/terrain.js";
+import { quickEnough } from "./helpers.js";
 
 const plan = planWorld(1);
 
@@ -152,18 +153,23 @@ describe("the ground's height (terrain/height.js)", () => {
     });
 
     test("is quick enough to make a chunk's heights as it's needed", () => {
-        const times = [];
-
-        for (let k = 0; k < 12; k++) {
-            const started = performance.now();
-
-            heightsOf(plan, (20 + k * 7) * CHUNK, (30 + k * 5) * CHUNK, CHUNK + 1, 1);
-            times.push(performance.now() - started);
-        }
-
-        times.sort((a, b) => a - b);
         // (About 6 ms on a desktop; generous, for slow test machines)
-        assert.ok(times[6] < 60, `median ${times[6]} ms`);
+        quickEnough(
+            60,
+            () => {
+                const times = [];
+
+                for (let k = 0; k < 12; k++) {
+                    const started = performance.now();
+
+                    heightsOf(plan, (20 + k * 7) * CHUNK, (30 + k * 5) * CHUNK, CHUNK + 1, 1);
+                    times.push(performance.now() - started);
+                }
+
+                return times.sort((a, b) => a - b)[6];
+            },
+            (ms) => `median ${ms.toFixed(1)} ms`,
+        );
     });
 });
 

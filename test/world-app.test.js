@@ -2,20 +2,45 @@
 // §11, Phase 2): how it stands said on lines of its own ("@pellagos " then JSON) when it starts,
 // and on SIGTERM (the app's Stop and Quit) stopping, then stopped once every world's saved; stopped
 // the same way when the app's pipe to it closes (the app gone), and so with a world going and
-// nobody left reading what it says (its saying failing, EPIPE); and without --app, none of those
-// lines.
+// nobody left reading what it says (its saying failing, EPIPE), its launcher seeing it through
+// the same way; and without --app, none of those lines.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
+import { SERVER_VERSION } from "../server/storage/versions.js";
 import { JOURNAL, NOW, STATE, WORLDS } from "../server/storage/worlds.js";
+import { ENTRY, versionFolder, writeCurrent } from "../server/update/installed.js";
 
 const WORLD = fileURLToPath(new URL("../server/world.js", import.meta.url));
 const SAYING = "@pellagos ";
+
+// A stand-in for the server, run by its launcher as a version an update installed: it says it's
+// running; then, once its input ends, a line on stderr every 50 ms as it "saves" (each passed on by
+// the launcher), and it saves (a file) and stops
+const STAND_IN = `const { writeFileSync } = require("node:fs");
+const path = require("node:path");
+const data = process.argv[process.argv.indexOf("--data") + 1];
+
+console.log(${JSON.stringify(SAYING)} + JSON.stringify({ state: "running" }));
+process.stdin.on("end", () => {
+    let said = 0;
+    const saying = setInterval(() => {
+        console.error("Saving... " + ++said);
+
+        if (said === 5) {
+            clearInterval(saying);
+            writeFileSync(path.join(data, "saved"), "saved");
+            process.exit(0);
+        }
+    }, 50);
+});
+process.stdin.resume();
+`;
 const made = [];
 
 after(async () => {
@@ -136,6 +161,30 @@ describe("the world server for the menu-bar app (--app)", () => {
         assert.equal(await server.stop({ how: "gone" }), 0, server.errors);
         assert.match(await readFile(path.join(server.folder, WORLDS, world, JOURNAL), "utf8"), /Saved \(the server stopped\)\./);
         assert.ok((await stat(path.join(server.folder, WORLDS, world, STATE, NOW))).size > 0);
+    });
+
+    it("and its launcher sees the server through when nobody's left reading what it passes on", async () => {
+        const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-app-"));
+        const version = "999.0.0";
+
+        made.push(folder);
+        await writeCurrent(folder, { version, previous: SERVER_VERSION, state: "kept" });
+        await mkdir(path.dirname(path.join(versionFolder(folder, version), ENTRY)), { recursive: true });
+        await writeFile(path.join(versionFolder(folder, version), ENTRY), STAND_IN);
+
+        const child = spawn(process.execPath, [WORLD, "--app", "--data", folder], { stdio: ["pipe", "pipe", "pipe"] });
+        const exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
+
+        await Promise.race([new Promise((resolve) => child.stdout.once("data", resolve)), exited]);
+
+        // (The app gone: nobody reading either, its pipe to them closed. Once, what the launcher
+        // passed on next ended it there and then, with exit code 1, the server left to itself)
+        child.stdout.destroy();
+        child.stderr.destroy();
+        child.stdin.end();
+
+        assert.equal(await exited, 0);
+        assert.equal(await readFile(path.join(folder, "saved"), "utf8"), "saved");
     });
 
     it("says none of that without --app", async () => {
