@@ -6688,7 +6688,8 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
 
     // The reeve: work, taken on. (Turned to look at him behind his desk first, as the player would
     // to tap him: indoors the camera's close behind them, under the ceiling, and they came up to it
-    // stepping east)
+    // stepping east. Tapped on his head: the hero's random, and a tall one's head is just under his
+    // chest, seen from behind them)
     const reeve = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const [player, at] = [game.battle.actor("player"), game.battle.actor("home:hall-1/reeve")];
@@ -6697,7 +6698,7 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
         game.cameraFollow.yaw = Math.atan2(-Math.sin(toward), -Math.cos(toward));
         game.advance(0.5);
 
-        const spot = session.view.toScreen(game.avatars.get("home:hall-1/reeve").point(0.6));
+        const spot = session.view.toScreen(game.avatars.get("home:hall-1/reeve").point(0.8));
 
         game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
         game.advance(8);

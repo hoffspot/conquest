@@ -4424,7 +4424,10 @@ it.
    what's in hand; Attack, at the top of an enemy's wheel, walks up to them. Tapping whoever the
    player's going after, or the player themselves, while they're walking or running anywhere,
    stops them where they are (game.js `#halt`: still set on whoever they were after, where they
-   stand). The attackers' icons down the right side do the same for whoever each is, held
+   stand). Where the player and someone else overlap on the screen, a tap's the other's: the
+   player's counted 6 pixels further off (`#whoIsAt`), whichever's looked at first, so a tap on
+   whoever stands just beyond their head, the camera behind them, is theirs. The attackers'
+   icons down the right side do the same for whoever each is, held
    walking up to them (*Those attacking the player*). A drag turns the camera round the player
    (and tilts it). A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
    turns them the way the camera looks (over the ground) and sends them straight ahead that way,
