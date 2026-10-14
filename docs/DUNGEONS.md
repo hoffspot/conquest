@@ -182,6 +182,10 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **Each level's foes woken while a player's on it or on the level over it**, the first level's as
   soon as a player's near; let go once no one is. Each pack is a wild pack of its own (territorial,
   keeping near where it stood), its leader the boss or mini-boss if it has one.
+- **Drawn only once a player's among them** (app/game.js `#walledOff`, GAME.md): a level's foes
+  aren't dressed while the player's on the level above, nor the first level's while the player's
+  outside, nor the world outside's while the player's down in it; coming to a level, its foes are
+  dressed the nearest first.
 - **The boss and the mini-bosses stand out** (`CHAMPIONS`): the boss with four times its kind's
   hit points and blows 1.3 times as hard, a mini-boss twice the hit points and 1.12 times as hard,
   each named by its title (the Troll King, a Tomb champion).
