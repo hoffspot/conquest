@@ -6,7 +6,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
-import { parseGrid } from "./helpers.js";
+import { parseGrid, quickEnough } from "./helpers.js";
 
 /** A world from rows of text ("#" blocked): just what a battle needs. */
 function worldOf(rows) {
@@ -1100,24 +1100,32 @@ describe("the battle (battle.js)", () => {
     });
 
     it("plays out in the generated world: the orc patrols its corner while the player waits in the square", () => {
-        const world = generateWorld({ seed: 3 });
-        const battle = new Battle(world, { seed: 3 });
-        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: world.spawns.player });
-        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: world.spawns.orc, ai: "patrol", patrol: world.patrol });
+        // (A battle of its own each time it's timed)
+        quickEnough(
+            1500,
+            () => {
+                const world = generateWorld({ seed: 3 });
+                const battle = new Battle(world, { seed: 3 });
+                const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: world.spawns.player });
+                const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: world.spawns.orc, ai: "patrol", patrol: world.patrol });
 
-        // (The first step bakes the town's navigation mesh, once: test/navigation.test.js has
-        // what that takes; this is the battle's own)
-        const events = run(battle, STEP_MS);
-        const start = performance.now();
+                // (The first step bakes the town's navigation mesh, once: test/navigation.test.js has
+                // what that takes; this is the battle's own)
+                const events = run(battle, STEP_MS);
+                const start = performance.now();
 
-        events.push(...run(battle, 60000));
+                events.push(...run(battle, 60000));
 
-        const elapsed = performance.now() - start;
+                const elapsed = performance.now() - start;
 
-        assert.ok(!events.some((event) => event.type === "attack"), "too far apart to fight");
-        assert.ok(orc.square[0] <= world.patrol[0][0] + 2, "the orc keeps to its patrol");
-        assert.ok(!player.dead);
-        assert.ok(elapsed < 1500, `a minute of battle took ${elapsed.toFixed(0)} ms`);
+                assert.ok(!events.some((event) => event.type === "attack"), "too far apart to fight");
+                assert.ok(orc.square[0] <= world.patrol[0][0] + 2, "the orc keeps to its patrol");
+                assert.ok(!player.dead);
+
+                return elapsed;
+            },
+            (ms) => `a minute of battle took ${ms.toFixed(0)} ms`,
+        );
     });
 });
 

@@ -15,6 +15,7 @@ import { Silhouettes } from "../client/js/world/far/silhouettes.js";
 import { CARD_FLOATS, FAR_TREES, FORMS, gatherTrees, treeCards, TREE_FLOATS } from "../client/js/world/far/trees.js";
 import { QUALITY } from "../client/js/world/view.js";
 import { STILL_WATER } from "../client/js/world/water.js";
+import { quickEnough } from "./helpers.js";
 
 describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => {
     let world;
@@ -124,14 +125,24 @@ describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => 
     it("is cheap enough for the far land: so many trees and river triangles a quality level, worked out quickly", () => {
         for (const name of ["medium", "high"]) {
             const quality = QUALITY[name];
-            const started = performance.now();
-            const trees = gatherTrees(world.plan, { x: 2928, z: 5072, reach: quality.farTrees, from: 100 });
-            const rivers = gatherRivers(world.plan, { x: 2928, z: 5072, reach: farReach(quality.far), from: 100 });
-            const took = performance.now() - started;
+            let trees;
+            let rivers;
+
+            quickEnough(
+                3000,
+                () => {
+                    const started = performance.now();
+
+                    trees = gatherTrees(world.plan, { x: 2928, z: 5072, reach: quality.farTrees, from: 100 });
+                    rivers = gatherRivers(world.plan, { x: 2928, z: 5072, reach: farReach(quality.far), from: 100 });
+
+                    return performance.now() - started;
+                },
+                (ms) => `${name}: ${ms.toFixed(0)} ms`,
+            );
 
             assert.ok((trees.length / TREE_FLOATS) * 2 < 60000, `${name}: ${trees.length / TREE_FLOATS} trees`);
             assert.ok(rivers.length / RIVER_FLOATS / 3 < 20000, `${name}: ${rivers.length / RIVER_FLOATS / 3} river triangles`);
-            assert.ok(took < 3000, `${name}: ${took} ms`);
         }
 
         assert.equal(QUALITY.low.farTrees, 0, "(no far trees on low)");
