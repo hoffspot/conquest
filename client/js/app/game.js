@@ -10025,10 +10025,12 @@ export class Game {
 
             for (const share of [0.2, 0.5, 0.8]) {
                 const point = this.view.toScreen(avatar.point(share));
-                const distance = point ? Math.hypot(point.x - clientX, point.y - clientY) : Infinity;
+                // (Enemies first, where they and the player overlap: the player counted a little
+                // further off than they are, whichever's looked at first, so a tap on whoever's
+                // just beyond their head, the camera behind them, is that one's)
+                const distance = point ? Math.hypot(point.x - clientX, point.y - clientY) + (mine ? 6 : 0) : Infinity;
 
-                // (Enemies first, where they and the player overlap)
-                if (distance < bestDistance - (mine ? 6 : 0)) {
+                if (distance < bestDistance) {
                     best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? (this.#ownUnit(actor.id) ? "unit" : "ally") : "talk" };
                     bestDistance = distance;
                 }
