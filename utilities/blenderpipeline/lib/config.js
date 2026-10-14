@@ -4,6 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { checkInvented } from "./invent.js";
 
 export const DEFAULTS = Object.freeze({
     // What it's called (the files written: <name>.glb, <name>.report.json); the config file's name
@@ -22,9 +23,10 @@ export const DEFAULTS = Object.freeze({
     // Which of the armature's actions are exported (`include`, `exclude`: names, * and ?
     // wildcards), and what they're called (`rename`: { "Blender name": "clip name" }); clips to
     // play in place (`inPlace`: names or true, their travel taken out of `rootBone`, by default
-    // the topmost bone that moves); and `trimStill`: channels that never move a bone from where
-    // it stands at rest left out (a clip only says what moves)
-    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null, trimStill: false },
+    // the topmost bone that moves); `trimStill`: channels that never move a bone from where it
+    // stands at rest left out (a clip only says what moves); and `invent`: clips made up from
+    // those there are (lib/invent.js)
+    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null, trimStill: false, invent: [] },
     // Only the bones that deform the mesh: no control bones, IK targets or widgets, and no bones
     // flagged to deform that move no vertex and carry none that do (the tips of chains)...
     deformBonesOnly: true,
@@ -194,6 +196,8 @@ export function resolveConfig(raw, file) {
     if (typeof config.clips.trimStill !== "boolean") {
         fail("clips.trimStill is true or false");
     }
+
+    checkInvented(config.clips.invent, fail);
 
     if (config.simplify !== null) {
         unknownKeys(config.simplify, { ratio: 0, error: 0 }, "simplify.", fail);

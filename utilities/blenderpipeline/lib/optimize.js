@@ -9,6 +9,7 @@ import { Logger } from "@gltf-transform/core";
 import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, duration, loops, playInPlace, rootMotion, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
+import { inventClip } from "./invent.js";
 import { encodeTextures } from "./ktx2.js";
 import { moveDocument, scaleDocument } from "./transform.js";
 import { validate } from "./validate.js";
@@ -263,6 +264,17 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
         moveDocument(document, { offset: [-(box.min[0] + box.max[0]) / 2, -box.min[1], -(box.min[2] + box.max[2]) / 2] });
     }
+
+    // Clips made up from those there are, sized and turned as the rest are now
+    for (const spec of config.clips.invent) {
+        if (root.listAnimations().some((animation) => animation.getName() === spec.name)) {
+            throw new Error(`clips.invent ${spec.name}: there's a clip ${spec.name} already`);
+        }
+
+        inventClip(document, spec);
+    }
+
+    result.invented = config.clips.invent.map(({ name, from }) => ({ name, from }));
 
     // Each clip's travel, measured, or taken out to play in place
     const { inPlace, rootBone } = config.clips;

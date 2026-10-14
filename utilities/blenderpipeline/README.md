@@ -79,32 +79,36 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
 2. Turns it (`turn`) to face +z, sizes it in metres (`size`), stands it on its origin
    (`origin: "feet"`). All are baked into the data, skinned meshes included, not put on a node
    over it.
-3. Measures each clip's root motion (the bone carried across the ground, how far, how fast), and
+3. Makes up the clips it's asked for (`clips.invent`, `lib/invent.js`) from those there are: a
+   stretch of one, with bones turned or moved over it, eased from key to key, or with their motion
+   taken from another clip. A bite is an idle with the neck thrown forward and the jaw snapped
+   shut; a death, a flinch held still while the body sinks and rolls (*Clips made up*, below).
+4. Measures each clip's root motion (the bone carried across the ground, how far, how fast), and
    takes it out of the clips to be played in place (`clips.inPlace`): the drift from start to
    end, spread evenly, comes off the root bone; its sway and bounce stay. The report gives the
    speed, so the game can match a clip's playing speed to how fast the creature moves.
-4. Takes out keyframes a straight line gives anyway, duplicates, and anything unused (a texture
+5. Takes out keyframes a straight line gives anyway, duplicates, and anything unused (a texture
    of one colour becomes the material's colour), and the material extensions the game doesn't
    draw (`stripMaterialExtensions`). A mesh's parts that share a material are joined into one
    draw call (separate objects keep their names).
-5. Leaves out every channel that holds a bone where it stands at rest (`clips.trimStill`): a
+6. Leaves out every channel that holds a bone where it stands at rest (`clips.trimStill`): a
    clip need only say what moves, and a baked rig keys every bone in every clip. Three.js holds a
    bone no clip moves where it stands.
-6. Encodes the textures as KTX2 (`textures.format: "ktx2"`, `lib/ktx2.js`), which the GPU keeps
+7. Encodes the textures as KTX2 (`textures.format: "ktx2"`, `lib/ktx2.js`), which the GPU keeps
    compressed: a 2048-pixel texture takes 4 to 5 MB on a phone's GPU, mipmaps and all, where a
    WebP takes 21 MB once decoded. Each is encoded as what it's used for: colour (sRGB) and data
    (occlusion, roughness, metal) in ETC1S, small; normals in UASTC, sharper (`textures.ktx2`).
    Encoding is in WebAssembly ([ktx2-encoder](https://github.com/gz65555/ktx2-encoder), Basis
    Universal), so it needs nothing installed.
-7. Works out whether each clip loops, and how far out the creature reaches at any moment of any
+8. Works out whether each clip loops, and how far out the creature reaches at any moment of any
    clip (for culling).
-8. Packs the lower-detail copies (`lods`) into the same GLB when `packLods` is set: each a mesh
+9. Packs the lower-detail copies (`lods`) into the same GLB when `packLods` is set: each a mesh
    of its own beside the full one ("<mesh>.lod1"..., `extras.lod`), on the same skeleton, with
    the same materials, textures and clips, which otherwise each copy's file carries again. Then
    simplifies the full mesh itself, if `simplify` asks.
-9. Validates it with the glTF Validator, before it's compressed (the validator can't read
-   meshopt's compression) and after.
-10. Makes lower-detail copies as files of their own (`lods`, without `packLods`), and compresses
+10. Validates it with the glTF Validator, before it's compressed (the validator can't read
+    meshopt's compression) and after.
+11. Makes lower-detail copies as files of their own (`lods`, without `packLods`), and compresses
     (`compress`).
 
 Then it reads the GLB back as the game would, and writes `<name>.report.json` beside it.
@@ -128,6 +132,7 @@ error, so a misspelt one isn't silently ignored.
 | `clips.inPlace` | `[]` | Clips to play in place (names, or `true` for all) |
 | `clips.rootBone` | the topmost bone that's carried | The bone carrying the creature's travel |
 | `clips.trimStill` | `false` | Leaves out channels that never move a bone from where it stands at rest |
+| `clips.invent` | `[]` | Clips made up from those there are (*Clips made up*, below) |
 | `deformBonesOnly` | `true` | Only bones that deform the mesh (above) |
 | `keepBones` | `[]` | Bones to keep even if they move nothing (points to attach things to: a mouth for fire, a claw for footprints) |
 | `applyModifiers` | `true` | Applies modifiers (mirror, subdivision...) except the armature |
@@ -162,7 +167,8 @@ error, so a misspelt one isn't silently ignored.
 - `lods`: each lower-detail copy's file and size, or, packed in, its level, meshes and triangles;
 - `materials` and `textures`: each texture's size, format, kilobytes and GPU megabytes;
 - `clips`: each clip's length, whether it loops, its root motion (bone, distance, speed,
-  direction) and whether that was taken out, and the file it came from;
+  direction) and whether that was taken out, and the file it came from (or, made up, the clip
+  it was made from: `madeFrom`);
 - `bounds`: its box at rest, its box over every clip, and how far from its origin it ever reaches;
 - `exported`: what Blender exported, how each mesh was baked and why, what was left out, the
   channels left out for not moving, and each texture made KTX2 (its kind, mode, size and bytes);
@@ -224,6 +230,40 @@ crawling.play();
   (`readKtx2With` in `client/js/world/art/engine/models.js`).
 - **Packed lower detail** loads as meshes beside the full one, each with `userData.lod` (1, 2...):
   show one level at a time (`mesh.visible`), as the viewer's `lod(level)` does.
+
+## Clips made up
+
+A bought model rarely has every clip a game wants: the Dreadthorn Dragon came with fourteen,
+none of them a bite or a death. `clips.invent` makes them from those it has, after it's turned
+and sized, so turns are the creature's own and moves are in metres:
+
+```json
+"invent": [
+    { "name": "Bite", "from": "Idling", "start": 1, "seconds": 1.6, "layers": [
+        { "bones": ["Neck", "Neck.001", "Neck.002"], "turn": "pitch", "keys": [[0, 0], [0.45, 3], [0.72, -2], [1.6, 0]] },
+        { "bones": ["Jaw"], "turn": "pitch", "keys": [[0, 0], [0.62, -34], [0.76, 0]] },
+        { "bone": "Hip", "move": [[0, [0, 0, 0]], [0.72, [0, -0.05, 0.45]], [1.6, [0, 0, 0]]] }
+    ] }
+]
+```
+
+- **`from`**, **`start`** and **`seconds`**: the stretch of a clip it's made from (by default
+  all of it). **`hold`**: seconds in, from which that clip is held still (a death: the flinch
+  held while the body falls).
+- **A turn** (`bones`, `turn`, `keys`: `[seconds, degrees]`): each bone turned so many degrees,
+  eased from key to key, about the creature's axes as the bone lies where the stretch starts.
+  `pitch` raises the bone's tip (nose up, tail down), `yaw` turns it to the creature's left,
+  `roll` turns it about the way the creature faces (its right side down), and `lift` raises its
+  tip whichever way it points (a wing held out to the side). `weights`: a weight for each bone
+  (a share of the degrees); `lag`: seconds each bone is held back on the one before it, as a tail
+  whips.
+- **A move** (`bone`, `move`: `[seconds, [left, up, forward]]`): metres along the creature's
+  axes, added to where the clip has the bone (the hips lunging, sinking).
+- **A graft** (`graft`, `bones`, `start`): those bones moved as another clip moves them (a
+  hover's wings with a breath's neck).
+
+The report says which clip each was made from (`madeFrom`). Check them by eye in the viewer, and
+with the browser tests (each moves, stays inside its bounds).
 
 ## For a bought asset
 
@@ -339,7 +379,7 @@ After changing the pipeline, `npm run build` and commit `dist/`: the tests check
 | `udim-creature.json` | The test creature (`fixtures/make_udim_creature.py`) | Four UDIM tiles, a procedural metal horn with a bump and glowing eyes, three materials baked onto one 512 px atlas (colour, normals, occlusion with roughness and metal, emission); an action from another file; one left out, one renamed; a crawl's 1.5 m/s travel taken out; cameras, lights, a hidden collider, a widget and a control bone left out |
 | `udim-creature-split.json` | The test creature | UDIM tiles split by the exporter instead; its warning for a material it can't carry unbaked; one clip kept; quantized |
 | `udim-creature-phone.json` | The test creature | KTX2: colour, occlusion with roughness and metal, and emission in ETC1S, normals in UASTC shrunk to 256 px; still channels left out |
-| `dragon-phone.json` | Mesh2Motion's dragon, as `dragon.json` | Made for phones: KTX2, still channels left out, the full mesh simplified to 70%, and two lower-detail copies packed into the one GLB |
+| `dragon-phone.json` | Mesh2Motion's dragon, as `dragon.json` | Made for phones: KTX2, still channels left out, the full mesh simplified to 70%, and two lower-detail copies packed into the one GLB; two clips made up from its idle, a bite and a death (`clips.invent`) |
 
 The test creature and crate are made by scripts, so they're known exactly: what colour each tile
 is, where each segment is, how fast it crawls.

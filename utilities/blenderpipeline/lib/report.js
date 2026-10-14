@@ -137,7 +137,9 @@ export async function makeReport(config, { blender, optimized, glb }) {
         const done = optimized.clips.find((one) => one.name === clip.name) ?? {};
         const action = blender.actions?.find((one) => one.name === clip.name);
 
-        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from: action?.from ?? null };
+        const invented = optimized.invented?.find((one) => one.name === clip.name);
+
+        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from: action?.from ?? null, ...(invented ? { madeFrom: invented.from } : {}) };
     });
 
     const warnings = [...(blender.warnings ?? [])];
@@ -243,7 +245,7 @@ export function summarize(report) {
 }
 
 function describeClip(clip) {
-    const parts = [];
+    const parts = clip.madeFrom ? [`made from ${clip.madeFrom}`] : [];
 
     if (clip.loops) {
         parts.push("loops");

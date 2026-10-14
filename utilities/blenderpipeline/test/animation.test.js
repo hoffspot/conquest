@@ -2,7 +2,9 @@
 // lower details, and lib/ktx2.js, on a document made in code (test/helpers.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "../lib/animation.js";
+import { Quaternion, Vector3 } from "three";
+import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
+import { eased, inventClip } from "../lib/invent.js";
 import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
 import { mendTangents, packLod, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
@@ -193,6 +195,70 @@ describe("leaving out what doesn't move", () => {
             ["root translation", "spine rotation"],
         );
         assert.equal(trimStill(document), 0);
+    });
+});
+
+describe("clips made up from others", () => {
+    const bone = (document, name) => document.getRoot().listNodes().find((node) => node.getName() === name);
+    const tip = (document, animation, time) => new Vector3(0, 1, 0).transformDirection(worldMatrix(bone(document, "spine"), channelsByNode(animation), time));
+    const turnOf = (document, animation, name, time) => new Quaternion().fromArray(sampleChannel(channelsByNode(animation).get(bone(document, name)).rotation, time));
+
+    it("eases from key to key, holding each", () => {
+        const keys = [[0, 0], [1, 10], [2, 10]];
+
+        assert.equal(eased(keys, -1), 0);
+        assert.equal(eased(keys, 0.5), 5);
+        assert.ok(eased(keys, 0.25) < 2.5);
+        assert.equal(eased(keys, 1.5), 10);
+        assert.deepEqual(eased([[0, [0, 0, 0]], [1, [2, 4, 6]]], 0.5), [1, 2, 3]);
+    });
+
+    it("is a stretch of the clip it's made from, with bones turned about the creature's axes", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const made = inventClip(document, { name: "Rear", from: "Walk", start: 0.5, seconds: 0.5, hold: 0, layers: [{ bones: ["spine"], turn: "pitch", keys: [[0, 0], [0.25, 90], [0.5, 90]] }] });
+
+        assert.equal(made.getName(), "Rear");
+        assert.ok(near(duration(made), 0.5));
+
+        // (Where it starts, as the walk is there; then its spine, standing up, pitched back a quarter turn)
+        assert.ok(near(tip(document, made, 0).toArray(), tip(document, walk, 0.5).toArray()));
+        assert.ok(near(tip(document, made, 0.5).toArray(), [0, 0, -1]));
+    });
+
+    it("holds each bone back on the one before by its lag, and turns each by its weight", () => {
+        const document = skinnedDocument();
+        const made = inventClip(document, { name: "Whip", from: "Walk", hold: 0, seconds: 1, layers: [{ bones: ["root", "spine"], turn: "yaw", lag: 0.5, weights: [1, 2], keys: [[0, 0], [0.5, 10], [1, 10]] }] });
+        const turned = (name, time) => (turnOf(document, made, name, time).angleTo(turnOf(document, made, name, 0)) * 180) / Math.PI;
+
+        assert.ok(near(turned("root", 0.5), 10, 1e-3));
+        assert.ok(near(turned("spine", 0.5), 0, 1e-3));
+        assert.ok(near(turned("spine", 1), 20, 1e-3));
+    });
+
+    it("moves a bone along the creature's axes, in its parent's frame, however that's turned", () => {
+        const document = skinnedDocument({ armatureTurn: Math.PI / 2 });
+        const walk = clip(document, "Walk");
+        const made = inventClip(document, { name: "Sink", from: "Walk", seconds: 1, layers: [{ bone: "root", move: [[0, [0, 0, 0]], [1, [0.5, -0.25, 2]]] }] });
+        const at = (animation, time) => new Vector3().setFromMatrixPosition(worldMatrix(bone(document, "root"), channelsByNode(animation), time));
+
+        assert.ok(near(at(made, 1).sub(at(walk, 1)).toArray(), [0.5, -0.25, 2]));
+    });
+
+    it("grafts another clip's motion onto some of its bones", () => {
+        const document = skinnedDocument();
+        const wave = clip(document, "Wave");
+        const made = inventClip(document, { name: "Walk and wave", from: "Walk", layers: [{ graft: "Wave", bones: ["spine"] }] });
+
+        assert.ok(near(turnOf(document, made, "spine", 0.75).toArray(), turnOf(document, wave, "spine", 0.75).toArray()));
+        assert.ok(near(sampleChannel(channelsByNode(made).get(bone(document, "root")).translation, 1), [0, 0, 2]));
+    });
+
+    it("says which clip or bone isn't there", () => {
+        const document = skinnedDocument();
+
+        assert.throws(() => inventClip(document, { name: "Odd", from: "Swim", layers: [] }), /Odd: there's no clip Swim/);
+        assert.throws(() => inventClip(document, { name: "Odd", from: "Walk", layers: [{ bones: ["tail"], turn: "yaw", keys: [[0, 0]] }] }), /there's no bone tail/);
     });
 });
 
