@@ -245,6 +245,32 @@ describe("clips made up from others", () => {
         assert.ok(near(at(made, 1).sub(at(walk, 1)).toArray(), [0.5, -0.25, 2]));
     });
 
+    it("keys as often as the clip it's made from does, though its first bone is still", () => {
+        const document = skinnedDocument();
+        const buffer = document.getRoot().listBuffers()[0];
+        const stand = document.createAnimation("Stand");
+        const times = Array.from({ length: 21 }, (_, i) => i / 10);
+
+        // (A baked rig's: the root held still, its first and last keys only; the spine swaying)
+        for (const [name, path, at, values] of [
+            ["root", "translation", [0, 2], [0, 0, 0, 0, 0, 0]],
+            ["spine", "rotation", times, times.flatMap((t) => new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.1 * Math.sin(t * Math.PI)).toArray())],
+        ]) {
+            const sampler = document
+                .createAnimationSampler()
+                .setInput(document.createAccessor().setType("SCALAR").setArray(new Float32Array(at)).setBuffer(buffer))
+                .setOutput(document.createAccessor().setType(path === "rotation" ? "VEC4" : "VEC3").setArray(new Float32Array(values)).setBuffer(buffer));
+
+            stand.addSampler(sampler).addChannel(document.createAnimationChannel().setTargetNode(bone(document, name)).setTargetPath(path).setSampler(sampler));
+        }
+
+        const made = inventClip(document, { name: "Look", from: "Stand", layers: [{ bones: ["spine"], turn: "yaw", keys: [[0, 0], [1, 30], [2, 0]] }] });
+        const turned = (turnOf(document, made, "spine", 1).angleTo(turnOf(document, stand, "spine", 1)) * 180) / Math.PI;
+
+        assert.equal(channelsByNode(made).get(bone(document, "spine")).rotation.getSampler().getInput().getCount(), 21);
+        assert.ok(near(turned, 30, 1e-2));
+    });
+
     it("grafts another clip's motion onto some of its bones", () => {
         const document = skinnedDocument();
         const wave = clip(document, "Wave");

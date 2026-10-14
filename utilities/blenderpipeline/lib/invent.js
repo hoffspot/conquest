@@ -37,15 +37,18 @@ export function eased(keys, time) {
     return keys[keys.length - 1][1];
 }
 
-// How far apart a clip's keyframes are (the shortest step in its first channel; a 30th of a
-// second if it hasn't two)
+// How far apart a clip's keyframes are (the shortest step in any of its channels: a bone held
+// still may have only its first and last; a 30th of a second if none has two)
 function stepOf(animation) {
-    const times = animation.listChannels()[0]?.getSampler()?.getInput()?.getArray() ?? [];
     let step = Infinity;
 
-    for (let i = 1; i < times.length; i++) {
-        if (times[i] - times[i - 1] > 1e-6) {
-            step = Math.min(step, times[i] - times[i - 1]);
+    for (const channel of animation.listChannels()) {
+        const times = channel.getSampler()?.getInput()?.getArray() ?? [];
+
+        for (let i = 1; i < times.length; i++) {
+            if (times[i] - times[i - 1] > 1e-6) {
+                step = Math.min(step, times[i] - times[i - 1]);
+            }
         }
     }
 

@@ -8,7 +8,7 @@
     "gltfExporter": "4.5.51",
     "sourceSavedWith": "5.1.29"
   },
-  "kilobytes": 226.1,
+  "kilobytes": 234.6,
   "compression": "meshopt",
   "extensionsRequired": [
     "EXT_meshopt_compression",
@@ -121,8 +121,8 @@
     {
       "name": "Biting",
       "seconds": 1.2,
-      "channels": 58,
-      "keyframes": 116,
+      "channels": 61,
+      "keyframes": 794,
       "loops": false,
       "inPlace": false,
       "rootMotion": {
@@ -138,7 +138,7 @@
       "name": "Dying",
       "seconds": 1.5,
       "channels": 55,
-      "keyframes": 110,
+      "keyframes": 288,
       "loops": false,
       "inPlace": false,
       "rootMotion": {
@@ -248,7 +248,7 @@
     "materialExtensionsLeftOut": [],
     "texturesOfOneColourMadeFactors": 0,
     "tangentsMended": 0,
-    "stillChannelsTrimmed": 1263,
+    "stillChannelsTrimmed": 1260,
     "ktx2": [
       {
         "name": "DragonTexture",
@@ -289,7 +289,7 @@
     {
       "budget": "kilobytes",
       "limit": 1024,
-      "value": 226.1,
+      "value": 234.6,
       "ok": true
     },
     {

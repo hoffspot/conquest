@@ -9318,7 +9318,11 @@ test("six quick actions across (Game options): only their icons on a phone held 
     const quick = () => page.evaluate(() => window.pellagos.game.wheels.quick);
 
     // A finger down on a slot, moved up or down a little way (more than a tap's stray), and lifted
+    // (once the bar's done rising, or the finger's set where the slot was a moment ago, and moved
+    // off the bottom of the screen)
     const flick = async (n, way) => {
+        await page.waitForFunction(() => document.querySelector(".quickbar").getAnimations().length === 0);
+
         const at = await slot(n).boundingBox();
         const [x, y] = [at.x + at.width / 2, at.y + at.height / 2];
 
@@ -9371,6 +9375,11 @@ test("six quick actions across (Game options): only their icons on a phone held 
     expect(upright.right).toBeLessThanOrEqual(402);
     expect(upright.label).toBe("none");
     expect(upright.icon).toBeGreaterThanOrEqual(29);
+
+    // (The sound started first, as the title's Play would have: the page's first tap or key starts
+    // it, which keeps the page busy long enough for a finger set down then to count as held)
+    await page.keyboard.press("Shift");
+    await page.waitForFunction(() => window.pellagos.session.sound.context?.state === "running");
 
     // Flicked down: Mend Wounds rolls out, Vigor in, its name said over it a moment; kept
     await flick(0, "down");
