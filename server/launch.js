@@ -130,6 +130,22 @@ export async function launch({ root, args = [], own, node = process.execPath, tr
     }
 }
 
+/**
+ * What this process says (stdout, stderr) let go nowhere once whoever read it is gone (the menu-bar
+ * app quit or crashed; for the server, its launcher gone), so it carries on: the server saving every
+ * world and stopping, the launcher seeing it through. Without this, the second line said after that
+ * ended it there and then (EPIPE). Any other trouble saying things still ends it, as it did.
+ */
+export function ignoreBrokenPipes() {
+    for (const output of [process.stdout, process.stderr]) {
+        output.on("error", (error) => {
+            if (error.code !== "EPIPE") {
+                throw error;
+            }
+        });
+    }
+}
+
 // Why a server failed, from what it said last on stderr: its last error's line
 function reasonIn(said) {
     const lines = said.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
