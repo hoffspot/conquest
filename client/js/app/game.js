@@ -651,6 +651,18 @@ const _seen = new THREE.Frustum();
 const _seenMatrix = new THREE.Matrix4();
 const _round = new THREE.Sphere();
 
+// What a step of the world brought, for the debug log: each kind of news, how many of it, in the
+// order it came (a few kinds)
+const newsOf = (events) => {
+    const counts = new Map();
+
+    for (const { type } of events) {
+        counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+
+    return [...counts].slice(0, 8).map(([type, count]) => (count > 1 ? `${type} ${count}` : type)).join(", ") || "nothing new";
+};
+
 export class Game {
     #begin = null;
 
@@ -1024,9 +1036,11 @@ export class Game {
 
         // (A building gone into before its folk were all dressed, dressed while the screen's dark:
         // { visit, until (performance.now()'s: the dark held no longer, however slow the frames) },
-        // #entering; and whether the screen's kept dark)
+        // #entering; and whether the screen's kept dark; and when the player last came to another
+        // map (performance.now()'s: #arrive)
         this.arriving = null;
         this.curtainHeld = false;
+        this.arrivedAt = -Infinity;
 
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
@@ -1038,6 +1052,10 @@ export class Game {
         // Those of them begun, being drawn a step at a time (the nearest the player first: one
         // further off put by for one nearer, and taken up again after): id -> { actor, steps }
         this.enlistees = new Map();
+
+        // Those put aside, a dungeon's walls between them and the player, till the player comes to
+        // them (#walledOff): their ids
+        this.aside = new Set();
 
         // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
         // while playing on at once, advance)
@@ -1727,7 +1745,27 @@ export class Game {
 
         for (const actor of this.battle.actors) {
             if (!this.avatars.has(actor.id) && actor.kind !== "folk" && actor.kind !== "soldier" && actor.kind !== "wagon") {
+                // (The wild's creatures, put out a pack at a time, drawn a few a frame with the
+                // rest, the nearest the player first (#visit): all dressed here at once, a pack
+                // just put out, or a level of a dungeon, held the frame up for seconds on a phone)
+                if (actor.kind === "beast") {
+                    if (!this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.aside.has(actor.id)) {
+                        this.enlisting.push(actor.id);
+                    }
+
+                    continue;
+                }
+
+                const started = performance.now();
+
                 this.#dress(actor);
+
+                const took = performance.now() - started;
+
+                if (took > Steps.SLOW) {
+                    Steps.slow?.(`dressing ${actor.kind} ${actor.id} at once`, took);
+                }
+
                 this.#place(actor);
                 this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
             }
@@ -2561,14 +2599,22 @@ export class Game {
                     break;
                 }
 
-                this.#handle(events);
+                this.#handleTimed(events);
                 this.accumulator -= STEP_MS;
                 steps++;
             }
         } else {
             // (Playing its own world: the runner moves it on, and sends what's done to any who've
-            // joined it as that's due)
-            steps = this.runner.advance(played * 1000, { before: () => this.#remember(), after: (events) => this.#handle(events) });
+            // joined it as that's due; each step timed, as its news is handled)
+            let began = 0;
+
+            steps = this.runner.advance(played * 1000, {
+                before: () => {
+                    this.#remember();
+                    began = performance.now();
+                },
+                after: (events) => this.#handleTimed(events, began),
+            });
         }
 
         telemetry.mark(PHASE.steps);
@@ -2589,7 +2635,7 @@ export class Game {
                 break;
             }
 
-            this.#handle(events);
+            this.#handleTimed(events);
             steps++;
         }
 
@@ -5505,6 +5551,7 @@ export class Game {
         // (Up from black; or kept dark while the folk of a building gone into before they were
         // all dressed are dressed: #entering)
         this.#curtain(Boolean(this.arriving) && this.world.interiors?.of(actor.map)?.key === this.arriving.visit.key);
+        this.arrivedAt = performance.now();
     }
 
     // The screen black, kept so (`held`), or coming up from it
@@ -5674,6 +5721,7 @@ export class Game {
 
         for (const id of ids) {
             this.enlistees.delete(id);
+            this.aside.delete(id);
         }
     }
 
@@ -5689,8 +5737,36 @@ export class Game {
         const later = (actor) => this.host.folk.get(actor.id)?.role === "townsfolk";
         let nearest = null;
 
-        // (Those gone, or drawn some other way meanwhile, off the list)
+        // (Those gone, or drawn some other way meanwhile, off the list; and those a dungeon's walls
+        // stand between the player and put aside till they don't, the player come to them or
+        // they to the player, any begun to be begun again then)
+        for (const id of this.aside) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || this.avatars.has(id)) {
+                this.aside.delete(id);
+            } else if (!this.#walledOff(actor, me)) {
+                this.aside.delete(id);
+                this.enlisting.push(id);
+            }
+        }
+
         this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.#drawnInFull(id) && !this.enlistees.has(id));
+
+        for (const { actor } of [...this.enlistees.values()]) {
+            if (this.#walledOff(actor, me)) {
+                this.enlistees.delete(actor.id);
+                this.aside.add(actor.id);
+            }
+        }
+
+        for (const id of this.enlisting) {
+            if (this.#walledOff(this.battle.actor(id), me)) {
+                this.aside.add(id);
+            }
+        }
+
+        this.enlisting = this.enlisting.filter((id) => !this.aside.has(id));
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {
@@ -5710,6 +5786,22 @@ export class Game {
         return nearest ? this.enlistees.get(nearest.id) : null;
     }
 
+    // Whether a dungeon's walls stand between the player (`me`) and someone: one on another of its
+    // levels, or outside the one the player's down in, or down in one the player isn't. Not
+    // dressed till the player comes to them (#nextEnlistee), never seen meanwhile: a level's foes
+    // are woken while the player's on the level above (core/host.js #dungeons), and the wild's
+    // creatures round a dungeon's way in come and go while the player's below, each a body held
+    // (a level's at once, more than a phone had room for)
+    #walledOff(actor, me) {
+        if (!me || actor.map === me.map) {
+            return false;
+        }
+
+        const interiors = this.world.interiors;
+
+        return interiors?.of(actor.map)?.kind === "dungeon" || interiors?.of(me.map)?.kind === "dungeon";
+    }
+
     // Every frame, a little more of the buildings being got ready built (the host says which:
     // those near any player, core/host.js); and every so often, the doors of the settlements come
     // to since picked up
@@ -5722,7 +5814,10 @@ export class Game {
         // the screen dark meanwhile)
         this.#entering();
 
-        const until = performance.now() + VISITS.budget;
+        // (Just come to another map, the screen still coming up from black: more of the frame
+        // too, for those there, a level of a dungeon's foes, dressed only now, the nearest first)
+        const arriving = performance.now() - this.arrivedAt < FADE_IN * 1000;
+        const until = performance.now() + (arriving ? ENTERING.budget : VISITS.budget);
         let busy = false;
 
         for (const visit of this.visits.values()) {
@@ -7820,6 +7915,27 @@ export class Game {
     }
 
     // --- What happened in the battle ---
+
+    // A step of the world's news handled (#handle), and the step's own time (from `began`,
+    // performance.now()'s, when this game played it) and the handling's each told to the debug
+    // log if it took long (Steps.slow: a freeze's jobs), by the news it brought: so a freeze in
+    // the battle's steps says what took its time
+    #handleTimed(events, began = null) {
+        const stepped = performance.now();
+
+        this.#handle(events);
+
+        const handled = performance.now();
+        const step = began === null ? 0 : stepped - began;
+
+        if (step > Steps.SLOW) {
+            Steps.slow?.(`a step of the world (${newsOf(events)})`, step);
+        }
+
+        if (handled - stepped > Steps.SLOW) {
+            Steps.slow?.(`handling the world's news (${newsOf(events)})`, handled - stepped);
+        }
+    }
 
     #handle(events) {
         const { battle, hud, effects } = this;

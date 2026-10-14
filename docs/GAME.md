@@ -4704,7 +4704,10 @@ time in the 30 seconds before it: each step of one taking over 20 ms is named (c
 `Steps.slow`: a crowd's figure, a character dressed, a building got ready, the minimap painted, a
 beast sculpted; and the fortifications and stockades drawn, twice a second, when that's slow;
 and in the battle's steps, a player's way's navigation tiles baked on the spot, and a dungeon's
-levels made, as it's come near), with when (`at`, ms since the page loaded). Where
+levels made, as it's come near; and each of the battle's steps itself, and the handling of what
+it brought, by the news it brought, `a step of the world (roused 23, open 5, join)` and
+`handling the world's news (gone)`: app/game.js `#handleTimed`; and anyone dressed at once,
+`dressing player p2 at once`), with when (`at`, ms since the page loaded). Where
 the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
 longest first: each one's file and place in it, its function and what called it; that's the
 nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch
@@ -4804,6 +4807,14 @@ frames and a tavern's folk in about 3 (headless Chromium on "high"). Soldiers an
 drawn the nearest the player first (`#nextEnlistee`): one begun further off is put by for one
 nearer, and taken up again after, and one waiting on its skin lets the next nearest be built
 meanwhile, so an enemy by the player isn't left undrawn while guards across the town are built.
+The wild's creatures are always drawn so, never all at once: drawing everyone the host has
+(`#mirror`: a player come or gone, a building let go, a corpse taken away) leaves them to it, as
+a pack just put out dressed in one go held a frame up for seconds on an iPhone. And no one a
+dungeon's walls stand between is drawn till the player comes to them (`#walledOff`): a level's
+foes, woken while the player's on the level above, nor the world outside's while the player's
+down in one; a level's own are drawn as the player comes to it, with more of the frame while
+the screen comes up from black (an iPhone that went down into a cave dressed the 36 foes of the
+level below at once, none of them seen, and Safari closed the page).
 Someone still being built when the player comes onto their map is put where they are when
 they're drawn. A beast's body is sculpted and its pieces folded a step at a time too, the first
 time each of its kind's three looks is wanted (WILDS.md, *Built a step at a time*): about 70 ms
