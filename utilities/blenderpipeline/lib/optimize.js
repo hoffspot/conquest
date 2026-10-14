@@ -35,6 +35,61 @@ export function wildcard(pattern, name) {
 export const round = (value, places = 4) => (typeof value === "number" ? Number(value.toFixed(places)) : Array.isArray(value) ? value.map((v) => round(v, places)) : value);
 
 /**
+ * Tangents that aren't a unit long made so. MikkTSpace gives none (no length) where a triangle's UVs
+ * have no area, as a few of a bought model's may: the glTF Validator counts each as an error, and
+ * a normal map shades it as a black speck. Each of those gets a direction at right angles to its
+ * normal (any: UVs with no area have no direction to follow), keeping its handedness; any other
+ * that's too long or short is scaled to a unit. Returns how many were mended.
+ */
+export function mendTangents(document) {
+    const done = new Set();
+    const tangent = [0, 0, 0, 0];
+    const normal = [0, 0, 0];
+    let mended = 0;
+
+    for (const mesh of document.getRoot().listMeshes()) {
+        for (const primitive of mesh.listPrimitives()) {
+            const tangents = primitive.getAttribute("TANGENT");
+            const normals = primitive.getAttribute("NORMAL");
+
+            if (!tangents || !normals || done.has(tangents)) {
+                continue;
+            }
+
+            done.add(tangents);
+
+            for (let i = 0; i < tangents.getCount(); i++) {
+                tangents.getElement(i, tangent);
+
+                let length = Math.hypot(tangent[0], tangent[1], tangent[2]);
+
+                if (Math.abs(length - 1) < 1e-3) {
+                    continue;
+                }
+
+                if (length < 1e-6) {
+                    // (The axis least along the normal, less its part along the normal)
+                    normals.getElement(i, normal);
+
+                    const axis = [1, 2].reduce((best, k) => (Math.abs(normal[k]) < Math.abs(normal[best]) ? k : best), 0);
+
+                    for (let k = 0; k < 3; k++) {
+                        tangent[k] = (k === axis ? 1 : 0) - normal[k] * normal[axis];
+                    }
+
+                    length = Math.hypot(tangent[0], tangent[1], tangent[2]);
+                }
+
+                tangents.setElement(i, [tangent[0] / length, tangent[1] / length, tangent[2] / length, tangent[3] < 0 ? -1 : 1]);
+                mended++;
+            }
+        }
+    }
+
+    return mended;
+}
+
+/**
  * Makes the Blender stage's GLB (`raw`) ready for the game, written to `glb` (and its
  * lower-detail copies to `lodFile(1)`, `lodFile(2)`...). Returns what it did and found.
  */
@@ -57,6 +112,8 @@ export async function optimize(config, { raw, glb, lodFile }) {
             node.setTranslation([0, 0, 0]).setRotation([0, 0, 0, 1]).setScale([1, 1, 1]);
         }
     }
+
+    result.tangentsMended = mendTangents(document);
 
     if (config.turn) {
         moveDocument(document, { turn: (config.turn * Math.PI) / 180 });

@@ -150,6 +150,7 @@ export async function makeReport(config, { blender, optimized, glb }) {
             texturesShrunk: blender.images,
             materialExtensionsLeftOut: optimized.strippedExtensions ?? [],
             texturesOfOneColourMadeFactors: optimized.texturesMadeFactors ?? 0,
+            tangentsMended: optimized.tangentsMended ?? 0,
         },
         budgets,
         validation: { beforeCompression: optimized.validation, final: optimized.finalValidation },

@@ -1,7 +1,9 @@
-// lib/animation.js and lib/transform.js on a document made in code (test/helpers.js)
+// lib/animation.js, lib/transform.js and lib/optimize.js's tangent mending on a document made in
+// code (test/helpers.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "../lib/animation.js";
+import { mendTangents } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -141,5 +143,34 @@ describe("resizing and turning a whole document", () => {
         moveDocument(document, { turn: 1, offset: [5, 0, 0] });
         assert.deepEqual(body.getTranslation(), [0, 0, 0]);
         assert.deepEqual(body.getRotation(), [0, 0, 0, 1]);
+    });
+});
+
+describe("mending tangents", () => {
+    it("gives a tangent of no length one along the surface, and scales one too long, leaving the rest", () => {
+        const document = skinnedDocument();
+        const body = document.getRoot().listMeshes()[0].listPrimitives()[0];
+        const accessor = (array) => document.createAccessor().setType(array.length === 24 ? "VEC4" : "VEC3").setArray(array).setBuffer(document.getRoot().listBuffers()[0]);
+        const up = Math.SQRT1_2;
+
+        body.setAttribute("NORMAL", accessor(new Float32Array([0, 0, 1, 0, 0, 1, 0, up, up, 0, 0, 1, 0, 0, 1, 0, 0, 1])));
+        body.setAttribute("TANGENT", accessor(new Float32Array([1, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 2, 0, 1, 1, 0, 0, -1, 1, 0, 0, 1])));
+
+        assert.equal(mendTangents(document), 3);
+
+        const tangents = Array.from({ length: 6 }, (_, i) => body.getAttribute("TANGENT").getElement(i, []));
+        const normals = Array.from({ length: 6 }, (_, i) => body.getAttribute("NORMAL").getElement(i, []));
+
+        for (const [i, tangent] of tangents.entries()) {
+            assert.ok(near(Math.hypot(tangent[0], tangent[1], tangent[2]), 1), `tangent ${i} a unit long`);
+            assert.ok(near(tangent[0] * normals[i][0] + tangent[1] * normals[i][1] + tangent[2] * normals[i][2], 0), `tangent ${i} along the surface`);
+        }
+
+        // (Its handedness kept; one with none made right-handed)
+        assert.equal(tangents[1][3], -1);
+        assert.equal(tangents[2][3], 1);
+        assert.ok(near(tangents[3], [0, 1, 0, 1]));
+        assert.ok(near(tangents[0], [1, 0, 0, 1]));
+        assert.equal(mendTangents(document), 0);
     });
 });

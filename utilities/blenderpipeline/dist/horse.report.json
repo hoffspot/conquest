@@ -334,7 +334,8 @@
       "KHR_materials_ior",
       "KHR_materials_specular"
     ],
-    "texturesOfOneColourMadeFactors": 0
+    "texturesOfOneColourMadeFactors": 0,
+    "tangentsMended": 0
   },
   "budgets": [
     {
